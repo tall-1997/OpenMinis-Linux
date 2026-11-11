@@ -28,14 +28,64 @@ object ToolOutputSpill {
     const val HEAD = 6_000
     const val TAIL = 4_000
 
+    /**
+     * [T-tool-output-offload-loop GH#343] Every marker this object (and
+     * ProgressiveTrim's L2 stub, which writes through here) puts at the start
+     * of a bounded placeholder. A result that already starts with one has
+     * ALREADY been offloaded: re-spilling it produces a placeholder pointing
+     * at a copy of a placeholder, and the model that asked for the content
+     * never receives it — the observed ping-pong loop.
+     */
+    private val PLACEHOLDER_PREFIXES = listOf(
+        "[tool-output-spill]",
+        "[tool output offloaded to save context",
+        "[tool output trimmed for context",
+    )
+
+    fun isOffloadPlaceholder(content: String): Boolean =
+        PLACEHOLDER_PREFIXES.any { content.startsWith(it) }
+
+    /**
+     * [T-tool-output-offload-loop GH#343] True when [guestPath] points INTO the
+     * spill directory — i.e. the model is trying to read back an offload file
+     * it was handed. Offloading that read a second time is never useful: the
+     * content is already the bounded payload the first pass decided the model
+     * may have, and the new placeholder would just point at another copy.
+     */
+    fun isSpillGuestPath(guestPath: String?): Boolean {
+        val p = guestPath?.trim().orEmpty()
+        return p.startsWith("/var/minis/workspace/tool-spill/")
+    }
+
     fun maybeSpill(
         context: Context,
         sessionId: String,
         toolName: String,
         toolId: String,
         output: String,
+        /**
+         * [T-tool-output-offload-loop GH#343] For `file_read`, the guest path it
+         * read. When that path is already a spill file, the read-back must not
+         * spawn another spill (see [alreadySpilledPreview]).
+         */
+        sourcePath: String? = null,
     ): String {
         if (output.length <= LIMIT) return output
+        // [T-tool-output-offload-loop GH#343] Never wrap a placeholder in
+        // another placeholder. This is the idempotency guard: any pass that
+        // sees an already-offloaded body (spill preview, trim stub) returns it
+        // verbatim, so repeated processing converges instead of growing a
+        // chain of files and headers.
+        if (isOffloadPlaceholder(output)) return output
+        // [T-tool-output-offload-loop GH#343] Reading a spill file back is the
+        // other half of the loop: the full text is still over LIMIT, so the
+        // naive path would write `<toolId>.txt` next to the file just read and
+        // hand the model yet another placeholder. Page through the existing
+        // file instead — the preview keeps the head/tail and says where the
+        // content already lives.
+        if (isSpillGuestPath(sourcePath)) {
+            return alreadySpilledPreview(toolName, sourcePath!!, output)
+        }
         // Oversized and no session to hang the spill file on: still capped, the
         // model just gets no path to page through.
         if (sessionId.isBlank()) return cappedPreview(toolName, output)
@@ -90,6 +140,30 @@ object ToolOutputSpill {
                 append("Full output could not be saved to the session workspace, ")
                 append("so only this bounded preview is available.\n\n")
             }
+            append(head)
+            if (tail.isNotEmpty()) {
+                append("\n\n…(${output.length - head.length - tail.length} chars omitted)…\n\n")
+                append(tail)
+            }
+        }
+    }
+
+    /**
+     * [T-tool-output-offload-loop GH#343] Bounded answer for a READ-BACK of an
+     * existing spill file. It must not create a new spill: the file it names
+     * already holds the same bytes, so a second hop only burns disk and hands
+     * the model a path chain it can never finish walking. The model is told
+     * the read was already at an offload target and how to page the rest
+     * (`file_read` offset/limit, or a shell range read).
+     */
+    fun alreadySpilledPreview(toolName: String, guestPath: String, output: String): String {
+        val head = ToolOutputPolicy.safeSubstring(output, 0, HEAD)
+        val tail = if (output.length > HEAD + TAIL)
+            ToolOutputPolicy.safeSubstring(output, output.length - TAIL, output.length) else ""
+        return buildString {
+            append("[tool-output-spill] $toolName returned ${output.length} chars from $guestPath, ")
+            append("which is already an offloaded tool-output file — it is NOT being offloaded again.\n")
+            append("Page it with file_read offset/limit (or a shell range read) instead of re-reading it whole.\n\n")
             append(head)
             if (tail.isNotEmpty()) {
                 append("\n\n…(${output.length - head.length - tail.length} chars omitted)…\n\n")

@@ -468,7 +468,18 @@ internal suspend fun ChatViewModel.finalizePlannedCall(
             } else {
                 result.output
             }
-            val mergedContent = if (existingContent.length > resultContent.length) existingContent else resultContent
+            // [T-shell-detail-stale-output GH#339] The streamed preview stops
+            // updating at process exit and is capped to its last 50 lines; the
+            // old "keep whichever is longer" rule could therefore keep the
+            // STALE preview over the final result whenever the preview happened
+            // to be longer than the head-trimmed result, leaving the completed
+            // card showing an out-of-order tail. For shell_execute the result
+            // is authoritative — use it whenever it says anything.
+            val mergedContent = when {
+                name == "shell_execute" && resultContent.isNotBlank() -> resultContent
+                existingContent.length > resultContent.length -> existingContent
+                else -> resultContent
+            }
             val childPrefix = "$id#sub-"
             val childCount = ctx.allToolBlocks.count { it.id.startsWith(childPrefix) }
             val finalContent = if (childCount > 0) {
@@ -549,12 +560,24 @@ internal suspend fun ChatViewModel.finalizePlannedCall(
     } else {
         outputForLLM
     }
+    // [T-tool-output-offload-loop GH#343] A file_read that pages through an
+    // existing spill file must not be re-spilled (the full text is still over
+    // the limit, so the naive call would hand the model another placeholder
+    // pointing at a copy). Surface the path we read so ToolOutputSpill can
+    // recognise the offload target and answer from it instead.
+    val spillSourcePath = if (name == "file_read" || call.canonicalName == "file_read") {
+        runCatching { JSONObject(call.argsStr).optString("path", "") }
+            .getOrNull()?.takeIf { it.isNotBlank() }
+    } else {
+        null
+    }
     val outputSpilled = ToolOutputSpill.maybeSpill(
         context = context,
         sessionId = ctx.activeSessionId,
         toolName = name,
         toolId = id,
         output = outputForLLMWithNote,
+        sourcePath = spillSourcePath,
     )
     return AgentContentPart.ToolResult(
         id = id,

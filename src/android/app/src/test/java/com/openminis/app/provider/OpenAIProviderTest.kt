@@ -195,6 +195,29 @@ class OpenAIProviderTest {
         assertTrue(!body.has("max_tokens"))
     }
 
+    /**
+     * [T-android-dashscope-max-tokens #35] DashScope / Bailian compatible-mode
+     * rejects `max_completion_tokens` with a 400 and only reads the legacy
+     * `max_tokens`. The gate is host-matched (`isDashScope`), so pointing
+     * MockWebServer's path at a `dashscope` segment exercises it without a key.
+     */
+    @Test
+    fun `sendMessage uses max_tokens for DashScope`() = runBlocking {
+        val dashscopeProvider = OpenAIProvider(
+            apiKey = "test-key",
+            model = LLMModel.gpt4oMini,
+            basePath = server.url("/dashscope/v1").toString().trimEnd('/'),
+        )
+        server.enqueue(MockResponse().setBody("""{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":0,"completion_tokens":0}}"""))
+
+        dashscopeProvider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "test")), null, 2048)
+
+        val request = server.takeRequest()
+        val body = JSONObject(request.body.readUtf8())
+        assertEquals(2048, body.getInt("max_tokens"))
+        assertTrue(!body.has("max_completion_tokens"))
+    }
+
     @Test
     fun `sendMessage sets stream false for non-streaming`() = runBlocking {
         server.enqueue(MockResponse().setBody("""{"choices":[{"message":{"content":"ok"}}],"usage":{"prompt_tokens":0,"completion_tokens":0}}"""))

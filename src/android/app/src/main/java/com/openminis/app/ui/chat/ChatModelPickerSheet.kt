@@ -1,6 +1,6 @@
 package com.openminis.app.ui.chat
 
-// [T-android-split-chat] ModelPickerSheet (+ its private helpers fuzzyMatch /
+// [T-android-split-chat] ModelPickerSheet (+ its private helpers fuzzyMatchLower /
 // ModelPickerSheet is internal so ChatScreen can call it.
 //
 // [R4+R10] The sheet chrome (drag handle, title bar, search capsule, 0.9f
@@ -87,20 +87,27 @@ import com.openminis.app.ui.RoutingStrategyUi
 /**
  * Fuzzy match: substring first, then all query chars appear in order.
  * Matches iOS SessionModelPicker.fuzzyMatch.
+ *
+ * [T-android-modelpicker-search-index GH#271] Both inputs must already be
+ * lowercase: the picker caches a lowered key per entry instead of re-lowering
+ * every display name and id on each keystroke, which is where most of the
+ * per-keystroke cost in a large catalog went.
  */
-private fun fuzzyMatch(text: String, query: String): Boolean {
-    if (query.isEmpty()) return true
-    val q = query.lowercase()
-    val t = text.lowercase()
-    if (t.contains(q)) return true
+private fun fuzzyMatchLower(lowerText: String, lowerQuery: String): Boolean {
+    if (lowerQuery.isEmpty()) return true
+    if (lowerText.contains(lowerQuery)) return true
     var idx = 0
-    for (ch in q) {
-        val found = t.indexOf(ch, idx)
+    for (ch in lowerQuery) {
+        val found = lowerText.indexOf(ch, idx)
         if (found < 0) return false
         idx = found + 1
     }
     return true
 }
+
+/** [T-android-modelpicker-search-debounce GH#271] Quiet period before a keystroke filters. */
+private const val SEARCH_DEBOUNCE_MS = 180L
+
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -132,6 +139,30 @@ internal fun ModelPickerSheet(
 
     var searchText by remember { mutableStateOf("") }
     var expandedGroupIds by remember { mutableStateOf(setOf<String>()) }
+    // [T-android-modelpicker-search-debounce GH#271] The field stays bound to
+    // `searchText` (typing never waits), but the expensive list filter runs on
+    // the debounced value. Without this, every keystroke rebuilt the whole
+    // provider→entries projection synchronously on the UI thread; a directory
+    // with hundreds of models dropped frames mid-word. Clearing the field
+    // applies immediately so the list never lags behind an empty query.
+    var debouncedSearchText by remember { mutableStateOf("") }
+    LaunchedEffect(searchText) {
+        if (searchText.isEmpty()) {
+            debouncedSearchText = ""
+        } else {
+            kotlinx.coroutines.delay(SEARCH_DEBOUNCE_MS)
+            debouncedSearchText = searchText
+        }
+    }
+    val lowerQuery = remember(debouncedSearchText) { debouncedSearchText.lowercase() }
+    // [T-android-modelpicker-search-index GH#271] Pre-lowered display name + id
+    // per entry, rebuilt only when the catalog changes. The filter then does
+    // pure comparisons instead of lowercasing every name/id on every keystroke.
+    val entrySearchKeys = remember(config.modelEntries) {
+        config.modelEntries.associate { entry ->
+            entry.id to (entry.model.displayName.lowercase() to entry.model.id.lowercase())
+        }
+    }
     // Note: the non-text-output "may not work as an Agent" confirmation lives
     // in ChatScreen's callback wrappers (ee828dba), NOT here — the sheet stays
     // a dumb list and the caller owns selection policy.
@@ -153,11 +184,11 @@ internal fun ModelPickerSheet(
     var quickTestEntry by remember { mutableStateOf<ModelEntry?>(null) }
 
     // Filtered groups
-    val filteredGroups = remember(groups, searchText) {
-        if (searchText.isEmpty()) groups
+    val filteredGroups = remember(groups, lowerQuery) {
+        if (lowerQuery.isEmpty()) groups
         else {
             val t0 = System.nanoTime()
-            val result = groups.filter { fuzzyMatch(it.name, searchText) }
+            val result = groups.filter { fuzzyMatchLower(it.name.lowercase(), lowerQuery) }
             val ms = (System.nanoTime() - t0) / 1_000_000.0
             AppLogger.info("ModelPicker", "[ModelPicker] filter groups: ${result.size}/${groups.size}, ${"%.1f".format(ms)}ms")
             result
@@ -165,7 +196,7 @@ internal fun ModelPickerSheet(
     }
 
     // Filtered entries by instance
-    val allInstancesWithEntries = remember(config, searchText) {
+    val allInstancesWithEntries = remember(config, lowerQuery) {
         val t0 = System.nanoTime()
         var totalCount = 0
         val result = config.instances
@@ -175,9 +206,13 @@ internal fun ModelPickerSheet(
                 val entries = config.modelEntries.filter {
                     it.providerInstanceId == instance.id && !it.isHidden
                 }
-                val filtered = if (searchText.isEmpty()) entries
+                val filtered = if (lowerQuery.isEmpty()) entries
                 else entries.filter {
-                    fuzzyMatch(it.model.displayName, searchText) || fuzzyMatch(it.model.id, searchText)
+                    // [T-android-modelpicker-search-index GH#271] Lowered keys
+                    // come from the catalog cache, not from per-keystroke work.
+                    val key = entrySearchKeys[it.id]
+                        ?: (it.model.displayName.lowercase() to it.model.id.lowercase())
+                    fuzzyMatchLower(key.first, lowerQuery) || fuzzyMatchLower(key.second, lowerQuery)
                 }
                 val pms = (System.nanoTime() - pt) / 1_000_000.0
                 if (filtered.isNotEmpty()) {
