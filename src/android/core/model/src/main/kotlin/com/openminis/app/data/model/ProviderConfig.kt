@@ -289,6 +289,15 @@ data class ProviderInstance(
     // so existing OpenAI instances are completely unaffected. Field name
     // matches iOS for cross-platform export/import interop.
     var azureMode: Boolean = false,
+    // [OpenMinis#311] Anthropic-compatible relays (DeepSeek / Bailian / a
+    // self-hosted gateway speaking /v1/messages) can be forced to accept
+    // extended thinking even when their catalog entry declares
+    // `supportsReasoning = false` (or the catalog has no entry at all). The
+    // provider-level switch bypasses the capability clamp and always emits the
+    // legacy `thinking:{type:"enabled",budget_tokens:N}` shape. Off by default
+    // so existing Anthropic instances (and the official endpoint) are
+    // byte-identical. iOS-compatible name: `forceThinkingEnabled`.
+    var forceThinkingEnabled: Boolean = false,
     // Favorites: pinned instances render in a dedicated section at the top of
     // the provider list. Default false so older JSON still deserializes.
     var pinned: Boolean = false,

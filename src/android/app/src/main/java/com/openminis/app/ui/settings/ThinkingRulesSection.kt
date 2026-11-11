@@ -108,6 +108,31 @@ fun ThinkingRulesSection(
         header = stringResource(R.string.thinking_rules_section),
         footer = stringResource(R.string.thinking_rules_footer),
     ) {
+        // [OpenMinis#306] Visible status for the cold-start / failed cache,
+        // NEVER a silent fallback: while customRules are not loaded the request
+        // path resolves built-in defaults, so a rule the user just created can
+        // appear to do nothing. Shown in the section itself so the explanation
+        // sits next to the rules it affects.
+        rulesSnapshot.loadError?.let { reason ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(14.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Icon(
+                    m3Icon(Icons.Default.Info),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    text = stringResource(R.string.thinking_rules_cache_not_ready, reason),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+
         // --- Custom rules (editable, reorderable) ---
         customRules.forEachIndexed { idx, rule ->
             val ruleId = customIds.getOrNull(idx)

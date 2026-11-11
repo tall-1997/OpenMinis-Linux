@@ -248,7 +248,7 @@ val LLMModel.catalogMaxThinkingLevel: ThinkingLevel
  * [T-thinking-levels-data-driven] The thinking levels worth OFFERING for this
  * model, derived from the catalog's declared effort tiers.
  *
- * The wire path ([com.openminis.app.provider.thinking.ThinkingRuleResolver.clampEffort])
+ * The wire path ([com.openminis.app.provider.thinking.ThinkingEffort.clampEffort])
  * snaps any request onto the declared set, so when a model declares a sparse
  * set — `["high","max"]` is the single most common sparse shape in the bundled
  * catalog (79 of the 339 deepseek-v4/glm-5.x entries that declare effort tiers,
@@ -267,7 +267,7 @@ val LLMModel.catalogMaxThinkingLevel: ThinkingLevel
  * [T-thinking-levels-data-driven] ULTRA is likewise never included, and that is
  * by design rather than an omission: ULTRA is a client-side "MAX +
  * orchestration" concept, never a wire effort (see
- * [com.openminis.app.provider.thinking.ThinkingRuleResolver.wireEffort], where
+ * [com.openminis.app.provider.thinking.ThinkingEffort.wireEffort], where
  * both MAX and ULTRA serialize as `"max"`). A second rung spelling the same wire
  * value would be precisely the lie this function exists to stop telling.
  *

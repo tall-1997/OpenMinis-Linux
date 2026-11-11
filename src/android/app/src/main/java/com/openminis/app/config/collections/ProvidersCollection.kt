@@ -59,6 +59,8 @@ class ProvidersCollection(
             appendV1Suffix(forId),
             useResponsesAPI(forId),
             azureMode(forId),
+            // [OpenMinis#311] Force extended thinking on an Anthropic-compatible relay.
+            forceThinkingEnabled(forId),
             customUserAgent(forId),
             apiKeyField(forId),
             // OAuth token stays fully hidden — the flow is browser-driven
@@ -85,6 +87,7 @@ class ProvidersCollection(
      *     "appendV1Suffix":   true,                                     // optional, default true
      *     "useResponsesAPI":  false,                                    // optional, default false
      *     "azureMode":        false,                                    // optional, default false (OpenAI api-key only)
+     *     "forceThinkingEnabled": false,                                // optional, default false (Anthropic-compat relays)
      *     "apiKey":           "sk-…" | "$\$DEEPSEEK_KEY",                 // optional; literal OR env ref
      *   }
      *
@@ -120,6 +123,8 @@ class ProvidersCollection(
         val appendV1Suffix = (obj["appendV1Suffix"] as? ConfigValue.Bool)?.value ?: true
         val useResponsesAPI = (obj["useResponsesAPI"] as? ConfigValue.Bool)?.value ?: false
         val azureMode = (obj["azureMode"] as? ConfigValue.Bool)?.value ?: false
+        // [OpenMinis#311] Optional force-thinking flag for Anthropic-compatible relays.
+        val forceThinkingEnabled = (obj["forceThinkingEnabled"] as? ConfigValue.Bool)?.value ?: false
 
         // Resolve apiKey BEFORE addInstance, so a bad $$ENV ref aborts
         // the whole operation without leaving a half-created instance.
@@ -135,6 +140,7 @@ class ProvidersCollection(
             appendV1Suffix = appendV1Suffix,
             useResponsesAPI = useResponsesAPI,
             azureMode = azureMode,
+            forceThinkingEnabled = forceThinkingEnabled,
         )
         repo.addInstance(instance)
         if (apiKeyValue != null) repo.saveApiKey(instance.id, apiKeyValue)
@@ -316,6 +322,25 @@ class ProvidersCollection(
             writer = { v ->
                 val b = (v as? ConfigValue.Bool)?.value ?: throw ConfigError.TypeMismatch("bool")
                 mutate(id) { it.copy(azureMode = b) }
+            },
+        )
+
+    // [OpenMinis#311] Force extended thinking on Anthropic-compatible relays.
+    private fun forceThinkingEnabled(id: String): ConfigField =
+        ClosureField(
+            path = "providers.$id.forceThinkingEnabled",
+            displayName = "Force extended thinking",
+            description = "Anthropic-compatible providers only: emit thinking:{type:enabled,budget_tokens} even when the model catalog says the model cannot reason.",
+            valueSchema = ConfigSchema.Bool,
+            risk = ConfigRisk.NORMAL,
+            revertable = true,
+            reader = {
+                val inst = repo.instance(id) ?: return@ClosureField ConfigValue.Null
+                ConfigValue.Bool(inst.forceThinkingEnabled)
+            },
+            writer = { v ->
+                val b = (v as? ConfigValue.Bool)?.value ?: throw ConfigError.TypeMismatch("bool")
+                mutate(id) { it.copy(forceThinkingEnabled = b) }
             },
         )
 
