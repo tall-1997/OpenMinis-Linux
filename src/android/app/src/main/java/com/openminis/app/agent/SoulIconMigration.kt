@@ -5,10 +5,9 @@ import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.SampledDecode
 import com.openminis.app.tools.AtomicFileWrite
 import java.io.File
-import java.io.IOException
 
 /**
- * [GH#299] SOUL.md inline-icon migration + body payload scrubbing.
+ * [GH#299] SOUL.md 内联图标的落盘迁移 + prompt 侧 body 清洗。
  *
  * ## 为什么
  *
@@ -21,23 +20,56 @@ import java.io.IOException
  *  2. **body 内联图片**：用户把截图 base64 粘进 personality 正文时，正文是
  *     原样注入 system prompt 的（[SystemPromptBuilder]），每一轮都烧 token。
  *
- * ## 修法
+ * ## 修法（第二轮对抗复审后的最终形态）
  *
- *  - **icon → 文件**：解析出 data URI 后按 [SoulIcon.STORED_PIXELS] 重新编码
- *    成 PNG，写到 `filesDir/soul-icons/soul.png`，frontmatter 改成
- *    `file:soul-icons/soul.png`。读取路径（[SoulStore.load]）和写入路径
- *    （[SoulStore.save]）都会迁移；迁移失败保留原值并写日志，绝不丢图标。
- *  - **body → 占位符**：prompt 构建时把 `data:image/...;base64,...` 换成
- *    [INLINE_IMAGE_PLACEHOLDER]；保存前也剥掉，避免下一次读取又带着它。
+ *  - **icon → 文件，且必须落在备份类别内**：解析出 data URI 后按
+ *    [SoulIcon.STORED_PIXELS] 重新编码成 PNG，写到
+ *    `filesDir/minis-global/memory/soul-icons/soul.png`，frontmatter 改成
+ *    `file:minis-global/memory/soul-icons/soul.png`（见 [ICON_RELATIVE_PATH]）。
  *
- * 迁移是幂等的：`file:` 值原样返回，不会重复重写 SOUL.md。
+ *    选方案 A（放进 memory 备份根）而不是方案 B（给 `filesDir/soul-icons` 新增
+ *    备份类别）的原因：`BackupExporter`/`BackupImporter` 的 MEMORY 类别本来就是
+ *    `minis-global/memory` 整树 `walkTopDown()` 打包/还原（见
+ *    `BackupMemoryTree`），头像和 SOUL.md 同根即自动同生共死；不需要新增备份
+ *    类别、不改 `.minisbak` 格式，也自动进入 `BackupUndoPaths` 的恢复撤销快照。
+ *    第二轮补修把图标写到 `filesDir/soul-icons/`，而备份只打包 memory 树，于是
+ *    恢复后 `SoulIcon.decode` 找不到文件、头像回退 sparkle —— 这正是要根因修掉
+ *    的回归。[LEGACY_ICON_RELATIVE_PATH] 仅用于把已经落在旧位置的图标搬进来。
+ *
+ *  - **只在保存时迁移 frontmatter**：[SoulStore.save] 调用 [prepareForSave]；
+ *    [SoulStore.load] 是纯读，不写 SOUL.md。旧实现的"读后整文件重写"与并发
+ *    `save` 竞争时会用旧快照覆盖用户刚写入的内容（lost-update），删除写路径
+ *    是根因修法。
+ *
+ *  - **body 原样保留**：磁盘上的 SOUL.md 永远保留用户原文（包括 base64 图片）；
+ *    `data:image/...;base64,...` 只在 prompt 构建的**内存副本**里替换成
+ *    [INLINE_IMAGE_PLACEHOLDER]（[SoulStore.save] 不再剥 body，见
+ *    [SystemPromptBuilder.identitySection] 的两处 [stripInlineImageDataUris]）。
+ *
+ * 迁移是幂等的：`file:` 值（新路径）原样返回，不会重复重写 SOUL.md。
  */
 internal object SoulIconMigration {
 
     private const val TAG = "SoulStore"
 
-    /** `filesDir`-relative path of the single migrated Soul icon. */
-    internal const val ICON_RELATIVE_PATH = "soul-icons/soul.png"
+    /**
+     * `filesDir`-relative path of the single migrated Soul icon.
+     *
+     * [GH#299] 必须位于 [SoulStore.MEMORY_SUBDIR] 之下：备份/恢复的 MEMORY
+     * 类别按这个根整树递归打包，图标放在这里才能和 SOUL.md 一起进出备份包。
+     */
+    internal const val ICON_RELATIVE_PATH = "minis-global/memory/soul-icons/soul.png"
+
+    /**
+     * [GH#299] 第二轮补修写入的旧位置（`filesDir/soul-icons/soul.png`）。
+     *
+     * 它不在任何备份类别内，备份/恢复后头像会丢。保留这个常量只为一件事：
+     * 已经在这条分支上落过盘的 `file:soul-icons/soul.png` 引用，在下一次
+     * [SoulStore.save] 时把文件搬进 [ICON_RELATIVE_PATH] 并改写引用。读取路径
+     * 仍然能解码旧位置（[SoulIcon.fileFor] 相对 filesDir），所以迁移失败也不会
+     * 让头像立刻消失。
+     */
+    internal const val LEGACY_ICON_RELATIVE_PATH = "soul-icons/soul.png"
 
     /** Injected into a personality body in place of an inline base64 image. */
     internal const val INLINE_IMAGE_PLACEHOLDER = "[inline image stripped]"
@@ -58,9 +90,14 @@ internal object SoulIconMigration {
         RegexOption.IGNORE_CASE,
     )
 
-    /** `filesDir/soul-icons/soul.png`. */
+    /**
+     * `filesDir/minis-global/memory/soul-icons/soul.png`.
+     *
+     * [GH#299] 用 [ICON_RELATIVE_PATH] 直接拼 filesDir（而不是再手写一段目录名），
+     * 备份类别根与常量之间只有这一处定义。
+     */
     fun iconFile(context: Context): File =
-        File(File(context.applicationContext.filesDir, "soul-icons"), "soul.png")
+        File(context.applicationContext.filesDir, ICON_RELATIVE_PATH)
 
     /**
      * Replace every inline image data URI in [body] with
@@ -73,72 +110,39 @@ internal object SoulIconMigration {
     }
 
     /**
-     * Read path: migrate an inline data-URI icon to a file reference and
-     * rewrite SOUL.md once. Returns [file] unchanged when there is nothing to
-     * migrate or any step fails (the inline value keeps working).
+     * 保存路径：只迁移 frontmatter 里的 icon，**完全不动 body**。
+     *
+     * [GH#299] 第二轮补修在这里把 body 内 base64 永久替换成
+     * [INLINE_IMAGE_PLACEHOLDER]，用户原文被无声改写；现在磁盘保留原文，
+     * 清洗只发生在 prompt 构建的内存副本上（[SystemPromptBuilder]）。
+     *
+     * 迁移失败返回原值并写日志，绝不丢图标；body 不参与本函数。
      */
-    fun migrateOnRead(context: Context, file: SoulFile): SoulFile {
-        if (!SoulIcon.isInlineImageDataUri(file.metadata.icon)) return file
-        val original = file.metadata.icon
-        val ref = writeIconFile(context, original) ?: return file
-        val migrated = file.copy(metadata = file.metadata.copy(icon = ref))
-        return try {
-            val target = SoulStore.fileLocation(context)
-            val text = SoulMDParser.serialize(migrated)
-            if (AtomicFileWrite.write(
-                    target,
-                    text,
-                    temp = File(target.parentFile, "${target.name}.tmp"),
-                ) == null
-            ) {
-                throw IOException("SOUL.md rewrite failed")
-            }
-            AppLogger.info(
-                TAG,
-                "[GH#299] migrated inline icon to $ref " +
-                    "(${original.length} chars removed from SOUL.md)",
-            )
-            migrated
-        } catch (t: Throwable) {
-            AppLogger.warning(
-                TAG,
-                "[GH#299] icon migration could not rewrite SOUL.md; inline value kept: ${t.message}",
-            )
-            file
-        }
-    }
+    fun prepareForSave(context: Context, file: SoulFile): SoulFile {
+        val current = file.metadata.icon
+        val next = when {
+            // 内联 data URI → PNG 文件（新位置，备份类别内）。
+            SoulIcon.isInlineImageDataUri(current) -> writeIconFile(context, current)
 
-    /**
-     * Write path: strip inline images from the body and migrate a data-URI
-     * icon, exactly as [migrateOnRead] would — but without a separate SOUL.md
-     * rewrite, because [SoulStore.save] is about to serialize this result
-     * anyway.
-     */
-    fun sanitizeForSave(context: Context, file: SoulFile): SoulFile {
-        val strippedBody = stripInlineImageDataUris(file.body)
-        if (strippedBody != file.body) {
-            AppLogger.warning(
-                TAG,
-                "[GH#299] stripped an inline image payload from the SOUL.md body before saving",
-            )
-        }
-        val currentIcon = file.metadata.icon
-        val nextIcon = if (SoulIcon.isInlineImageDataUri(currentIcon)) {
-            writeIconFile(context, currentIcon) ?: currentIcon
-        } else {
-            currentIcon
-        }
-        return file.copy(
-            metadata = file.metadata.copy(icon = nextIcon),
-            body = strippedBody,
+            // 第二轮补修的旧 file: 位置 → 搬进备份类别根。
+            current == SoulIcon.fileRefFor(LEGACY_ICON_RELATIVE_PATH) ->
+                migrateLegacyIconFile(context, current)
+
+            else -> null
+        } ?: current
+        if (next == current) return file
+        AppLogger.info(
+            TAG,
+            "[GH#299] migrated SOUL icon reference to $next (file is now inside the memory backup root)",
         )
+        return file.copy(metadata = file.metadata.copy(icon = next))
     }
 
     /**
      * Decode → downscale to [SoulIcon.STORED_PIXELS] → PNG →
-     * `filesDir/soul-icons/soul.png`, returning the frontmatter reference.
-     * Every failure is logged and returns null so the caller keeps the
-     * original value.
+     * `filesDir/minis-global/memory/soul-icons/soul.png`, returning the
+     * frontmatter reference. Every failure is logged and returns null so the
+     * caller keeps the original value.
      */
     private fun writeIconFile(context: Context, inline: String): String? {
         if (inline.length > MAX_MIGRATABLE_CHARS) {
@@ -191,6 +195,60 @@ internal object SoulIconMigration {
         } catch (t: Throwable) {
             runCatching { temp.delete() }
             AppLogger.warning(TAG, "[GH#299] could not write migrated icon: ${t.message}")
+            return null
+        }
+        return SoulIcon.fileRefFor(ICON_RELATIVE_PATH)
+    }
+
+    /**
+     * [GH#299] 把第二轮补修写到 `filesDir/soul-icons/soul.png` 的旧图标搬进
+     * 备份类别根。只有精确的旧引用（[LEGACY_ICON_RELATIVE_PATH]）才迁移，用户
+     * 手改的其它 `file:` 值不碰。
+     *
+     * 顺序保证"先落新、后删旧"：新文件短写/搬移失败时旧文件保留，引用维持原值，
+     * `SoulIcon.decode` 继续能读到旧位置；删除旧文件失败也只是留一份副本。
+     */
+    private fun migrateLegacyIconFile(context: Context, legacyRef: String): String? {
+        val legacy = SoulIcon.fileFor(context, legacyRef) ?: return null
+        if (!legacy.isFile) {
+            AppLogger.warning(
+                TAG,
+                "[GH#299] legacy icon file is missing (${legacy.absolutePath}); keeping the reference as-is",
+            )
+            return null
+        }
+        if (legacy.length() > SoulIcon.MAX_ICON_FILE_BYTES) {
+            AppLogger.warning(
+                TAG,
+                "[GH#299] legacy icon is ${legacy.length()} bytes, above the file cap; keeping it as-is",
+            )
+            return null
+        }
+
+        val target = iconFile(context)
+        val temp = File(target.parentFile, "${target.name}.tmp")
+        try {
+            target.parentFile?.mkdirs()
+            legacy.copyTo(temp, overwrite = true)
+            if (temp.length() != legacy.length()) {
+                temp.delete()
+                AppLogger.warning(TAG, "[GH#299] legacy icon copy short write; keeping the old reference")
+                return null
+            }
+            if (!AtomicFileWrite.moveIntoPlace(temp, target)) {
+                AppLogger.warning(TAG, "[GH#299] could not move legacy icon into ${target.name}")
+                return null
+            }
+            // New bytes are in place; dropping the old copy is best-effort only.
+            if (!runCatching { legacy.delete() }.getOrDefault(false)) {
+                AppLogger.info(
+                    TAG,
+                    "[GH#299] legacy icon left in place after migration: ${legacy.absolutePath}",
+                )
+            }
+        } catch (t: Throwable) {
+            runCatching { temp.delete() }
+            AppLogger.warning(TAG, "[GH#299] could not migrate legacy icon: ${t.message}")
             return null
         }
         return SoulIcon.fileRefFor(ICON_RELATIVE_PATH)

@@ -32,9 +32,10 @@ import com.openminis.app.ui.theme.m3Icon
  * under its architecture line ceiling.
  *
  * [GH#299] `icon` can be an emoji, the model sentinel, a legacy inline data
- * URI, or the migrated `file:soul-icons/soul.png` reference. Image values that
- * fail to decode (missing file, over-cap legacy URI) fall back to the default
- * sparkle instead of being printed as text.
+ * URI, or the migrated `file:minis-global/memory/soul-icons/soul.png`
+ * reference (inside the memory backup root, so restores keep it). Image values
+ * that fail to decode (missing file, over-cap legacy URI) fall back to the
+ * default sparkle instead of being printed as text.
  */
 @Composable
 internal fun SoulIconGlyph(

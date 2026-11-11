@@ -98,7 +98,13 @@ internal object ProviderMutationMethods {
         // addInstance already applies the built-in seeding rule internally, so
         // nothing is lost by dropping the inline copy; the seedBuiltInModels
         // opt-out is still honoured by the sweep below.
-        repo.addInstance(instance)
+        // [OpenMinis#306] Refused while the config is unloaded (unreadable
+        // store; this handler runs off Main so the benign cold-start window is
+        // normally a blocking load). Report it instead of continuing to write a
+        // credential + seeding sweep for a provider that was never persisted.
+        if (!repo.addInstance(instance)) {
+            throw RPCException(-32000, "Provider configuration is not loaded — retry")
+        }
         if (!seedBuiltInModels) {
             // addInstance always seeds — if user opted out, sweep the seeds.
             for (entry in repo.entriesFor(instance.id).toList()) repo.removeEntry(entry.id)

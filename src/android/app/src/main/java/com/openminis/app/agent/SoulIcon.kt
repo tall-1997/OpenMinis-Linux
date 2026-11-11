@@ -44,7 +44,14 @@ object SoulIcon {
      */
     const val MAX_DATA_URI_CHARS = 64 * 1024
 
-    /** [GH#299] File-backed icon reference, relative to `filesDir`. */
+    /**
+     * [GH#299] File-backed icon reference, relative to `filesDir`.
+     *
+     * The migrated icon lives at
+     * `file:minis-global/memory/soul-icons/soul.png` — deliberately INSIDE the
+     * memory backup root, so a backup/restore round trip carries the avatar
+     * together with SOUL.md (see [SoulIconMigration.ICON_RELATIVE_PATH]).
+     */
     const val FILE_REF_PREFIX = "file:"
 
     /** [GH#299] Hard cap on a file-backed icon; a 96px PNG is only a few KB. */
@@ -76,6 +83,10 @@ object SoulIcon {
      * Containment is checked on canonical paths (same helper the icon import
      * uses), so a hand-edited `file:../databases/x` cannot read outside the
      * app files tree. Returns null for a non-file value or an escaping path.
+     *
+     * The migrated value is the nested
+     * `file:minis-global/memory/soul-icons/soul.png`; nesting does not change
+     * the rule — it is still resolved under `filesDir` and bounded there.
      */
     fun fileFor(context: Context, value: String): java.io.File? {
         if (!isFileRef(value)) return null
@@ -174,6 +185,11 @@ object SoulIcon {
      * [GH#299] The file form is what the SOUL.md migration writes, so this is
      * the render-side half of the token fix: the 85 KB base64 line is gone from
      * the document and the bitmap comes from a small on-disk PNG.
+     *
+     * A missing / unreadable file returns null — the caller falls back to the
+     * default sparkle. That fallback is exactly why the migrated PNG must live
+     * inside the memory backup root: if a backup/restore loses the file, every
+     * restored profile silently shows the sparkle instead of the user's avatar.
      */
     fun decode(value: String, context: Context? = null): Bitmap? {
         if (isInlineImageDataUri(value)) {

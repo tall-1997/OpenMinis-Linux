@@ -86,12 +86,28 @@ class PhoneBackupFolderStore(private val context: Context) {
      * [GH#367] Delete one package from a phone folder. Returns false only when
      * the folder is unreachable or the SAF provider refuses the delete; a file
      * that is already gone counts as success (idempotent cleanup).
+     *
+     * The reachability check is the fix for the "delete succeeded but the file
+     * is still there" case: when the persisted tree permission was revoked,
+     * `DocumentFile.listFiles()` can throw (the old body let it escape into the
+     * caller's runCatching) or, worse, report an EMPTY list. An empty list then
+     * read as "package already deleted" -> the caller deleted the local
+     * fallback too, destroying the last copy. So:
+     *  - resolve and `exists()` the tree first; unreachable -> false (failure);
+     *  - a `listFiles()`/permission failure -> false (query failure, NOT
+     *    "absent");
+     *  - only a reachable tree with no matching file is treated as success.
      */
     fun deletePackage(folder: Folder, displayName: String): Boolean {
-        val tree = DocumentFile.fromTreeUri(context, Uri.parse(folder.treeUri)) ?: return false
-        val matches = tree.listFiles().filter { it.isFile && it.name == displayName }
+        val tree = runCatching {
+            DocumentFile.fromTreeUri(context, Uri.parse(folder.treeUri))
+        }.getOrNull() ?: return false
+        // exists() itself can throw SecurityException after a permission revoke.
+        if (!runCatching { tree.exists() }.getOrDefault(false)) return false
+        val files = runCatching { tree.listFiles() }.getOrNull() ?: return false
+        val matches = files.filter { it.isFile && it.name == displayName }
         if (matches.isEmpty()) return true
-        return matches.all { it.delete() }
+        return matches.all { file -> runCatching { file.delete() }.getOrDefault(false) }
     }
 
     private fun save(list: List<Folder>) {

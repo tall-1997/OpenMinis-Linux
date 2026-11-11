@@ -2,6 +2,10 @@ package com.openminis.app.provider
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
@@ -29,11 +33,12 @@ import org.json.JSONObject
  *
  * ## 缓存
  *
- * [prime] 在 MinisApp.onCreate 里调用一次，只保存 app context；首次真正读写时
- * 才打开 EncryptedSharedPreferences（keystore 初始化不应压在主线程启动路径上）。
- * [ProviderFactory.create] 在后台线程首次读取后，缓存常驻内存。
- * 保存后 bump [revision]，ProviderFactory 的 memo key 带上 header 哈希，
- * 已缓存的 provider 会在下一次 create 时重建。
+ * [prime] 在 MinisApp.onCreate 里调用一次，只保存 app context；随后同一启动
+ * 流程在 IO 协程里调用 [preload] 完成首次 EncryptedSharedPreferences
+ * （keystore 初始化不应压在主线程启动路径上）。[headersFor] 被
+ * [ProviderFactory.create] 从 Main 调用时，若预热尚未完成则返回空 map 而不再
+ * 同步打开 Keystore；加载完成后 revision +1，ProviderFactory 的 memo key 带上
+ * header 哈希，已缓存的 provider 会在下一次 create 时重建。
  *
  * ## 存储安全
  *
@@ -87,11 +92,22 @@ object ProviderHeaderStore {
     private var loaded: Boolean = false
     private val loadLock = Any()
 
-    /** 单调递增，保存后 +1；保留给需要“配置代”语义的调用点。 */
-    @Volatile
-    private var revisionValue: Long = 0L
+    /**
+     * 单调递增，首次加载完成与每次保存后 +1。ProviderFactory 的 memo key 带
+     * 的是 header 内容哈希，所以这里不需要它来失效缓存；[revisionFlow] 是给
+     * 需要“配置代”语义的观察者用的（加载完成前在 UI 侧拿到的是空 map）。
+     *
+     * [GH#221] `headersFor` 不再同步触发首次加载后，预热协程完成加载会 bump
+     * 一次，观察者据此刷新；未完成期间的读取是空 map（见 [headersFor]）。
+     */
+    private val _revision = MutableStateFlow(0L)
+    val revisionFlow: StateFlow<Long> = _revision.asStateFlow()
 
-    fun revision(): Long = revisionValue
+    fun revision(): Long = _revision.value
+
+    private fun bumpRevision() {
+        _revision.update { it + 1 }
+    }
 
     /**
      * 只捕获 context，不做 keystore IO —— MinisApp.onCreate 在主线程调用，
@@ -101,7 +117,40 @@ object ProviderHeaderStore {
         app = context.applicationContext
     }
 
-    /** 首次读写时加载；失败按空配置处理（不阻断请求）。 */
+    /**
+     * [GH#221] 预热：在 IO 协程里完成首次 Keystore 打开与 JSON 解码。
+     *
+     * `MinisApp.onCreate` 用 `appCoroutineScopes.io.launch { preload() }` 调用。
+     * 这样 `ProviderFactory.create()`（可能从 `viewModelScope` = Main 进入）
+     * 第一次读 [headersFor] 时不再同步打开 Keystore、不再阻塞主线程。
+     * 加载完成前读到的空 map 是可接受的：ProviderFactory 的 memo key 包含
+     * header 内容指纹，预热完成后下一次 create 会自然重建带头的 provider。
+     * [revisionFlow] 同时 +1，供需要响应式刷新的调用点观察。
+     */
+    fun preload() {
+        if (loaded) return
+        ensureLoaded()
+        if (loaded) bumpRevision()
+    }
+
+    /**
+     * 测试清理入口：把单例恢复到“未 prime / 未加载”的初始态，避免
+     * `headersFor` 的非阻塞契约被同进程内先跑过的测试掩盖。
+     */
+    internal fun resetForTest() {
+        synchronized(loadLock) {
+            app = null
+            cache = emptyMap()
+            openCodeSession = emptyMap()
+            loaded = false
+            _revision.value = 0L
+        }
+    }
+
+    /** 测试观察点：是否已完成首次加载（生产代码不调用）。 */
+    internal fun isLoadedForTest(): Boolean = loaded
+
+    /** 首次加载（IO 预热 [preload]，或保存/开关写入路径）；失败按空配置处理（不阻断请求）。 */
     private fun ensureLoaded() {
         if (loaded) return
         val ctx = app ?: return
@@ -119,16 +168,25 @@ object ProviderHeaderStore {
     private fun prefs(ctx: Context) =
         com.openminis.app.util.EncryptedPrefsFactory.safeCreate(ctx.applicationContext, PREFS)
 
-    /** 该实例当前生效的请求头；未配置返回空 map（调用点无需判空）。 */
+    /**
+     * 该实例当前生效的请求头；未配置返回空 map（调用点无需判空）。
+     *
+     * [GH#221] 未预热完成（[loaded] == false）时直接返回空 map，绝不在这里
+     * 触发首次同步加载：本方法被 [ProviderFactory.create] 从 Main 线程调用，
+     * 首次加载会打开 Keystore-backed EncryptedSharedPreferences。预热由
+     * `MinisApp.onCreate` 的 IO 协程负责（[preload]）；加载完成后 revision
+     * +1，下一次 create 的 memo key 变化并带上真实 header。
+     */
     fun headersFor(instanceId: String): Map<String, String> {
         if (instanceId.isBlank()) return emptyMap()
-        ensureLoaded()
+        if (!loaded) return emptyMap()
         return cache[instanceId].orEmpty()
     }
 
-    /** 已配置请求头的实例数（设置 UI 用来显示“已配置”）。 */
+    /** 已配置请求头的实例数（设置 UI 用来显示“已配置”）；预热完成前为空集。 */
     fun configuredInstanceIds(): Set<String> {
-        ensureLoaded()
+        // [GH#221] 与 headersFor 同策略：不触发 Keystore 首次同步加载。
+        if (!loaded) return emptySet()
         return cache.keys.toSet()
     }
 
@@ -154,7 +212,7 @@ object ProviderHeaderStore {
         }.getOrDefault(false)
         if (!ok) return@withContext "Failed to persist headers"
         cache = next
-        revisionValue++
+        bumpRevision()
         null
     }
 
@@ -166,9 +224,15 @@ object ProviderHeaderStore {
      * 把已保存的请求头还原成逐行文本，供设置 UI 编辑。保持插入顺序
      * （JSONObject 在 Android 上不保证顺序，但 map 的迭代顺序来自解析时的
      * LinkedHashMap，持久化往返后仍稳定到“按写入顺序”这一档就够用）。
+     *
+     * [GH#221] 必须只从 IO 调用：编辑框的初值不能依赖“预热已经完成”的时序，
+     * 否则空文本会让用户一保存就把已存 header 清掉，所以这里显式
+     * [ensureLoaded]（当前两个调用点都在 `withContext(Dispatchers.IO)` 内）。
      */
-    fun rawTextFor(instanceId: String): String =
-        headersFor(instanceId).entries.joinToString("\n") { "${it.key}: ${it.value}" }
+    fun rawTextFor(instanceId: String): String {
+        ensureLoaded()
+        return headersFor(instanceId).entries.joinToString("\n") { "${it.key}: ${it.value}" }
+    }
 
     /**
      * [GH#347] 是否允许向该实例的自定义端点发送 `x-opencode-session`。
@@ -181,7 +245,10 @@ object ProviderHeaderStore {
      */
     fun openCodeSessionEnabled(instanceId: String): Boolean {
         if (instanceId.isBlank()) return false
-        ensureLoaded()
+        // [GH#221] 与 headersFor 同策略：未预热完成时返回隐私默认值 false，
+        // 不在请求路径 / Main 上触发 Keystore 首次同步加载。真正打开时设置页
+        // 的 save/setOpenCodeSessionEnabled 已经在 IO 上 ensureLoaded。
+        if (!loaded) return false
         return openCodeSession[instanceId] == true
     }
 
@@ -206,7 +273,7 @@ object ProviderHeaderStore {
             }.getOrDefault(false)
             if (!ok) return@withContext false
             openCodeSession = next
-            revisionValue++
+            bumpRevision()
             true
         }
 

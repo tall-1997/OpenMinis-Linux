@@ -39,7 +39,8 @@ internal class ProviderBackupCoordinator(
         fun workingCopy(): ProviderConfig
         /** [Wave3-fix-1] False = config still unloaded on Main; caller must abort. */
         fun ensureConfigLoaded(): Boolean
-        fun addInstance(instance: ProviderInstance)
+        /** [OpenMinis#306] False = instance was not persisted (config unloaded); caller must abort. */
+        fun addInstance(instance: ProviderInstance): Boolean
         fun instance(id: String): ProviderInstance?
         fun visibleEntries(instanceId: String): List<ModelEntry>
         val configLock: Any
@@ -556,7 +557,11 @@ internal class ProviderBackupCoordinator(
             customUserAgent = customUserAgent,
             forceThinkingEnabled = forceThinkingEnabled,
         )
-        host.addInstance(instance)
+        // [OpenMinis#306] addInstance refuses while the config is unloaded
+        // (Main-thread cold-start window / unreadable store). Abort the whole
+        // import: saving the API key for a non-existent instance would leave a
+        // stray secret behind and report success for a provider that is absent.
+        if (!host.addInstance(instance)) return null
 
         // Decode API key (base64 or plain text)
         val keyValue = dict.optString("apiKey", "").ifEmpty { null }
