@@ -346,9 +346,20 @@ class ModelUseOffloadHandler(
                 Log.i(TAG, "[ModelUseRoute] CHAT-PASSTHROUGH extra_body keys=[${chatExtra.keys.sorted().joinToString(",")}]")
             }
             val chatHdrs = parseExtraHeaders(inputText, callWarnings)
-            if (chatHdrs.isNotEmpty()) {
-                openAI.chatExtraHeaders = chatHdrs
-                appliedExtras.put("extra_headers_keys", JSONArray(chatHdrs.keys.sorted()))
+            // [T-opencode-custom-endpoint-session GH#347] Custom OpenAI-compatible
+            // endpoints reached through model_use (title-gen, sub-agent lanes,
+            // passthrough callers) bypass ChatViewModel's agent loop, so the
+            // per-conversation `x-opencode-session` header has to be attached
+            // here too. Same stable id the chat path sends for this session, and
+            // both spellings ZenFreeLaneGate uses, so a relay keyed on either
+            // routes the request instead of answering 400. Official endpoints
+            // (no custom base URL) get an empty map and keep the old headers.
+            val sessionHdrs = com.openminis.app.provider.OpenCodeSessionHeader
+                .customEndpointHeadersFor(instance.effectiveBaseURL, request.sessionId)
+            val mergedHdrs = chatHdrs + sessionHdrs
+            if (mergedHdrs.isNotEmpty()) {
+                openAI.chatExtraHeaders = mergedHdrs
+                appliedExtras.put("extra_headers_keys", JSONArray(mergedHdrs.keys.sorted()))
             }
             parseCustomEndpointPath(inputText)?.let { customPath ->
                 openAI.absoluteEndpointOverride = customPath

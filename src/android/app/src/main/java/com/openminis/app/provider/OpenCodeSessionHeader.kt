@@ -100,6 +100,37 @@ object OpenCodeSessionHeader {
     }
 
     /**
+     * [T-opencode-custom-endpoint-session GH#347] Same per-conversation session
+     * header, but for a user-configured **custom OpenAI-compatible endpoint**
+     * rather than only the OpenCode Go host.
+     *
+     * The host gate in [headersFor] is a privacy control for *official*
+     * endpoints, where a custom host has not asked for the id. A custom base
+     * URL is categorically different: the user pointed the app at a specific
+     * gateway, and several OpenCode-compatible relays forward to a backend
+     * that enforces the same `400 missing x-opencode-session` routing rule the
+     * built-in Zen lane already satisfies ([ZenFreeLaneGate.headersFor] sends
+     * both spellings, so relays that key on either work). No custom base URL
+     * means the official endpoint — header omitted, exactly as before.
+     *
+     * Requirement (2) from the class contract still applies: [sessionId] must
+     * be the persisted conversation id so the id is stable across turns,
+     * retries and resumes. Draft (`__new__…`) ids are refused for the same
+     * reason [headersFor] refuses them.
+     */
+    fun customEndpointHeadersFor(baseUrl: String?, sessionId: String?): Map<String, String> {
+        val raw = baseUrl?.trim().orEmpty()
+        // Official endpoint (no custom base URL): nothing changes.
+        if (raw.isEmpty()) return emptyMap()
+        val id = sessionId?.trim().orEmpty()
+        if (!isPersistedSessionId(id)) return emptyMap()
+        return linkedMapOf(HEADER to id, HEADER_ID to id)
+    }
+
+    /** Parity with [ZenFreeLaneGate]'s second spelling; some relays read this one. */
+    private const val HEADER_ID = "x-opencode-session-id"
+
+    /**
      * Whether [sessionId] is a real, persisted conversation id rather than a
      * draft placeholder.
      *

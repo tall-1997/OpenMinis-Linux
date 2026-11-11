@@ -205,16 +205,43 @@ class MountedFoldersStore(private val context: Context) {
     }
 
     suspend fun setUserAllowWrite(id: String, allow: Boolean): Boolean = mutex.withLock {
-        var changed = false
-        _entries.value = _entries.value.map { e ->
-            if (e.id == id && e.userAllowWrite != allow) {
-                changed = true
-                e.copy(userAllowWrite = allow)
-            } else e
+        val current = _entries.value.firstOrNull { it.id == id } ?: return@withLock false
+        // [T-mount-ro-rw-consistency #14] `effectiveWritable` is
+        // `isWritable && userAllowWrite`, where `isWritable` is a filesystem
+        // probe cached at add()/refresh time. Enabling writes is the user
+        // asserting the folder is writable NOW (they just granted All Files
+        // Access, re-inserted the SD card, …) — but a stale false probe kept
+        // `effectiveWritable` false, so file_write/file_edit still refused the
+        // path and the toggle looked inert. Re-probe on the enable edge so the
+        // setting takes effect immediately; on the disable edge the cached
+        // probe is irrelevant (user intent alone locks it).
+        val probedWritable = if (allow) {
+            withContext(Dispatchers.IO) {
+                current.resolvedHostPath?.let { probeWritable(it) } ?: false
+            }
+        } else {
+            false
         }
+        // Adopt only a SUCCESSFUL probe here. A transient failure while the
+        // user is enabling writes (volume busy, provider still mounting) must
+        // not downgrade a mount that refreshWritability() can re-probe later;
+        // the enable edge is an upgrade opportunity, not a re-audit.
+        val nextWritable = if (allow) current.isWritable || probedWritable else current.isWritable
+        val changed = current.userAllowWrite != allow || current.isWritable != nextWritable
         if (changed) {
+            _entries.value = _entries.value.map { e ->
+                if (e.id == id) {
+                    e.copy(userAllowWrite = allow, isWritable = nextWritable)
+                } else {
+                    e
+                }
+            }
             saveToDisk(_entries.value)
             onChange?.invoke()
+            AppLogger.info(
+                TAG,
+                "setUserAllowWrite: name=${current.name} allow=$allow probedWritable=$probedWritable nextWritable=$nextWritable",
+            )
         }
         changed
     }

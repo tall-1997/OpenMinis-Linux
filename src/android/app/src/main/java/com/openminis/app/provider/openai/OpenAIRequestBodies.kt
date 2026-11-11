@@ -85,7 +85,16 @@ internal class OpenAIRequestBodies(
         val supportsImages = host.model.hasImageInput
         val body = JSONObject()
         body.put("model", host.model.id)
-        if (host.isOpenRouter) {
+        // [T-android-dashscope-max-tokens #35] Endpoint-level output-limit field
+        // name. OpenAI's newer Chat Completions wants `max_completion_tokens`,
+        // but several OpenAI-compatible vendors only accept the legacy
+        // `max_tokens` and 400 the whole request on the other name — most
+        // visibly Alibaba DashScope / Bailian ("百炼"), whose compatible-mode
+        // endpoint is reached through this same builder. The host flags are
+        // URL-matched (not capability guesses), so every other provider's body
+        // stays byte-for-byte unchanged. OpenRouter already had this shape for
+        // the same reason; DashScope joins it.
+        if (host.isOpenRouter || host.isDashScope) {
             body.put("max_tokens", maxTokens)
         } else {
             body.put("max_completion_tokens", maxTokens)

@@ -115,6 +115,15 @@ object SoulIcon {
     /** Decode a stored data URI. Returns null for an emoji value or garbage. */
     fun decode(value: String): Bitmap? {
         if (!isDataUri(value)) return null
+        // [T-soul-icon-decode-bound GH#299] A hand-edited / synced-in SOUL.md can
+        // carry an inline avatar far above what [encode] ever produces (the
+        // reported file had ~85 KB of base64). Decoding it would allocate an
+        // 85 KB string's bytes plus a bitmap on every chat-header composition for
+        // an image that renders at 18-44dp. The contract above already declares
+        // [MAX_DATA_URI_CHARS] the storage ceiling, so an over-cap value is not
+        // renderable state: treat it as "no image" (the default sparkle shows)
+        // instead of paying to decode it on the UI thread.
+        if (value.length > MAX_DATA_URI_CHARS) return null
         return runCatching {
             val bytes = Base64.decode(value.removePrefix(DATA_URI_PREFIX), Base64.DEFAULT)
             // Sampled: stored icons render at 96px, so a 512px ceiling is
