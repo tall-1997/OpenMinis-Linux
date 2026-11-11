@@ -334,6 +334,22 @@
     <string name="token_usage_cache_write">เขียนแคช</string>
     <string name="token_usage_section_agent_loop">ลูปของ Agent</string>
     <string name="token_usage_total_loops">จำนวนลูปทั้งหมด</string>
+    <!-- [#25] Context breakdown sheet -->
+    <string name="chat_menu_context_usage">รายละเอียดบริบท</string>
+    <string name="context_usage_sheet_title">รายละเอียดบริบท</string>
+    <string name="context_block_system">พรอมป์ระบบและเครื่องมือ</string>
+    <string name="context_block_skills_mcps">สกิลและ MCP</string>
+    <string name="context_block_memory">การฉีดความจำ</string>
+    <string name="context_block_runtime">การฉีดรายเทิร์น</string>
+    <string name="context_block_goal_plan">การฉีดเป้าหมายและแผน</string>
+    <string name="context_block_history">หน้าต่างประวัติ</string>
+    <string name="context_block_attachments">ไฟล์แนบและรูปภาพ</string>
+    <string name="context_usage_note_estimate">ค่าประมาณคร่าว ๆ (±10%); รีเฟรชเมื่อเปิดชีตนี้</string>
+    <!-- [#41] Gen UI card -->
+    <string name="gen_ui_card_label">Gen UI</string>
+    <string name="gen_ui_view_source">ดูซอร์ส</string>
+    <string name="gen_ui_view_render">แสดงผล</string>
+    <string name="gen_ui_view_fullscreen">เต็มหน้าจอ</string>
     <string name="common_on">เปิด</string>
     <string name="common_off">ปิด</string>
     <string name="common_yes">ใช่</string>
@@ -614,6 +630,14 @@
     <string name="env_var_privacy_header">ความเป็นส่วนตัว</string>
     <string name="env_var_privacy_toggle">โหมดความเป็นส่วนตัว</string>
     <string name="env_var_privacy_footer">เมื่อเปิดใช้ ค่าของตัวแปรสภาพแวดล้อมใดๆ ที่ปรากฏในผลลัพธ์ของ shell-execute จะถูกแทนที่ด้วยรูปแบบปกปิด (เช่น `sk-1********ajhks`) ก่อนส่งถึงโมเดล ค่าที่สั้นกว่า 8 อักขระจะกลายเป็น `*` ทั้งหมด ส่วนผลลัพธ์ที่ผู้ใช้เห็นในแชทจะไม่เปลี่ยนแปลง</string>
+    <string name="outbound_mask_toggle">การปกปิดความเป็นส่วนตัวขาออก</string>
+    <string name="outbound_mask_footer">เมื่อเปิดใช้ คีย์ API ที่อยู่อีเมล และหมายเลขโทรศัพท์จะถูกปกปิดในคำขอที่ส่งไปยังผู้ให้บริการโมเดล ประวัติแชทบนอุปกรณ์นี้ไม่เปลี่ยนแปลง ปิดอยู่ตามค่าเริ่มต้น</string>
+    <string name="chat_menu_perm_yoyo">YOLO · อัตโนมัติทั้งหมด</string>
+    <string name="chat_menu_perm_safe_auto">อัตโนมัติปลอดภัย · เครื่องมืออ่านอย่างเดียวทำงานอิสระ</string>
+    <string name="chat_menu_perm_ask">ถาม · ยืนยันทุกการเรียก</string>
+    <string name="chat_menu_perm_off">ปิด · ปฏิเสธเครื่องมือทั้งหมด</string>
+    <string name="gate_approval_allow_all">อนุญาตเสมอในเซสชันนี้</string>
+    <string name="approval_action_allow_all_session">อนุญาตเสมอในเซสชันนี้</string>
     <string name="env_var_section_header">ตัวแปร</string>
     <string name="env_var_section_footer">ตัวแปรสภาพแวดล้อมจะถูกใส่เข้าไปใน shell ของแซนด์บ็อกซ์เมื่อเริ่มเซสชัน ชื่อจะถูกแปลงเป็นตัวพิมพ์ใหญ่ และต้องเป็นไปตามกฎของตัวแปร shell แบบ POSIX</string>
     <string name="env_var_empty_title">ไม่มีตัวแปรสภาพแวดล้อม</string>
@@ -1832,6 +1856,7 @@
     <string name="usage_label_output_short">เอาต์พุต</string>
     <string name="plan_board_all_done">ทำทุกขั้นตอนเสร็จสมบูรณ์</string>
     <string name="cd_plan_board_toggle">ขยายหรือยุบกระดานแผน</string>
+    <string name="cd_plan_step_retry">ลองทำขั้นตอนที่ล้มเหลวนี้อีกครั้ง</string>
     <string name="cd_goal_header">เปิดรายละเอียดเป้าหมาย</string>
     <string name="cd_goal_status_active">เป้าหมายกำลังดำเนินการ</string>
     <string name="cd_goal_status_paused">เป้าหมายถูกพักไว้</string>
@@ -2107,4 +2132,58 @@
     <!-- Queued-message edit sheet + git diff truncation notice -->
     <string name="chat_queued_edit_title">แก้ไขข้อความที่อยู่ในคิว</string>
     <string name="git_panel_diff_truncated">Diff ถูกตัดที่ 200,000 อักขระ — ข้อความฉบับเต็มอยู่ในไฟล์ของรีโปซิทอรีนั้นเอง</string>
+    <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
+    <string name="provider_list_export_providers">ส่งออกผู้ให้บริการ</string>
+    <string name="provider_transfer_export_title">ส่งออกผู้ให้บริการ</string>
+    <string name="provider_transfer_export_body">จะส่งออกผู้ให้บริการ %1$d รายการไปยังไฟล์ JSON</string>
+    <string name="provider_transfer_include_keys">รวมคีย์ API</string>
+    <string name="provider_transfer_include_keys_risk">คีย์ API จะถูกเขียนลงไฟล์เป็นข้อความล้วน ผู้ที่ได้ไฟล์นี้สามารถใช้คีย์ของคุณได้ — โปรดเก็บไฟล์ให้ปลอดภัยและลบหลังนำเข้า</string>
+    <string name="provider_transfer_export">ส่งออก</string>
+    <string name="provider_transfer_export_success">ส่งออกผู้ให้บริการแล้ว %1$d รายการ</string>
+    <string name="provider_transfer_export_failed">ส่งออกล้มเหลว</string>
+    <string name="provider_transfer_import_ok">นำเข้าผู้ให้บริการแล้ว %1$d รายการ</string>
+    <string name="provider_transfer_import_partial">นำเข้าแล้ว %1$d รายการ ล้มเหลว %2$d รายการ</string>
+    <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
+    <string name="ssh_workspace_menu_title">พื้นที่ทำงาน SSH</string>
+    <string name="ssh_workspace_binding_title">พื้นที่ทำงาน SSH</string>
+    <string name="ssh_workspace_bound_to">เชื่อมกับ %1$s (%2$s)</string>
+    <string name="ssh_workspace_bound_local">ทำงานในแซนด์บ็อกซ์ภายในเครื่อง</string>
+    <string name="ssh_workspace_option_local">แซนด์บ็อกซ์ภายในเครื่อง</string>
+    <string name="ssh_workspace_option_local_subtitle">เชลล์ทำงานในแซนด์บ็อกซ์ Linux ของอุปกรณ์นี้</string>
+    <string name="ssh_workspace_no_hosts">ยังไม่มีโฮสต์ SSH — เพิ่มได้ที่ การตั้งค่า → พื้นที่ทำงาน SSH</string>
+    <string name="ssh_workspace_shell_only_note">พื้นที่ทำงาน SSH รองรับเฉพาะคำสั่งเชลล์ เครื่องมือไฟล์จะถูกปฏิเสธขณะผูกกับโฮสต์อยู่</string>
+    <string name="ssh_workspace_shell_only">พื้นที่ทำงาน SSH รองรับเฉพาะคำสั่งเชลล์ — ปฏิเสธ \'%1$s\' แล้ว</string>
+    <string name="ssh_workspace_shell_only_hint">รันคำสั่งระยะไกลด้วย shell_execute หรือยกเลิกการผูกเซสชันนี้ที่เมนูแชท → พื้นที่ทำงาน SSH เพื่อกลับไปใช้เครื่องมือไฟล์ภายในเครื่อง</string>
+    <string name="ssh_hosts_title">โฮสต์ SSH</string>
+    <string name="ssh_hosts_subtitle">โฮสต์ระยะไกลที่เอเจนต์เข้าถึงได้ผ่าน SSH ข้อมูลรับรองถูกเก็บแบบเข้ารหัสและไม่แสดงผล</string>
+    <string name="ssh_hosts_row_subtitle">เพิ่มโฮสต์ ทดสอบการเชื่อมต่อ จัดการคีย์โฮสต์</string>
+    <string name="ssh_hosts_empty">ยังไม่มีโฮสต์</string>
+    <string name="ssh_hosts_add">เพิ่มโฮสต์</string>
+    <string name="ssh_hosts_add_cancel">ยกเลิก</string>
+    <string name="ssh_hosts_test">ทดสอบการเชื่อมต่อ</string>
+    <string name="ssh_hosts_testing">กำลังทดสอบ…</string>
+    <string name="ssh_hosts_test_ok">เชื่อมต่อสำเร็จ</string>
+    <string name="ssh_hosts_test_failed">เชื่อมต่อไม่สำเร็จ</string>
+    <string name="ssh_hosts_forget_key">ลืมคีย์โฮสต์</string>
+    <string name="ssh_hosts_remove">ลบ</string>
+    <string name="ssh_hosts_pinned">ตรึงคีย์โฮสต์แล้ว: %1$s…</string>
+    <string name="ssh_field_name">ชื่อ (ตัวอักษร/ตัวเลข/._-)</string>
+    <string name="ssh_field_hostname">ชื่อโฮสต์หรือ IP</string>
+    <string name="ssh_field_port">พอร์ต</string>
+    <string name="ssh_field_username">ชื่อผู้ใช้</string>
+    <string name="ssh_auth_password">รหัสผ่าน</string>
+    <string name="ssh_auth_key">คีย์ส่วนตัว</string>
+    <string name="ssh_field_password">รหัสผ่าน</string>
+    <string name="ssh_field_private_key">คีย์ส่วนตัว PEM</string>
+    <string name="ssh_field_passphrase">วลีรหัสผ่านของคีย์ (ไม่บังคับ)</string>
+    <string name="ssh_save">บันทึก</string>
+
+    <!-- [T-handsfree-loop] (#40) Hands-free continuous voice conversation -->
+    <string name="handsfree_toggle">ปลอดมือ</string>
+    <string name="handsfree_state_starting">กำลังเริ่ม…</string>
+    <string name="handsfree_state_listening">กำลังฟัง…</string>
+    <string name="handsfree_state_thinking">กำลังคิด…</string>
+    <string name="handsfree_state_speaking">กำลังพูด…</string>
+    <string name="handsfree_exit_recognition">หยุดโหมดปลอดมือแล้ว: การจดจำเสียงพูดล้มเหลวซ้ำๆ แตะปลอดมือเพื่อลองอีกครั้ง</string>
+    <string name="handsfree_exit_tts">หยุดโหมดปลอดมือแล้ว: อ่านคำตอบออกเสียงไม่สำเร็จ แตะปลอดมือเพื่อลองอีกครั้ง</string>
 </resources>

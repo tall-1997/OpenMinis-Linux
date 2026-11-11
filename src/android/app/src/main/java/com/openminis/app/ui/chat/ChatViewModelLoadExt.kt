@@ -261,7 +261,9 @@ internal fun ChatViewModel.loadSession() {
         _sessionTitle.value = session.title ?: "New Chat"
         _sessionCategory.value = session.category
         _memoryEnabled.value = session.memoryEnabled != 0
-        _permissionMode.value = com.openminis.app.security.PermissionMode.sessionDefault(
+        // [#31] Four-tier compat read: "ASK"→ASK, "YOLO"/"YOYO"→YOLO,
+        // "SAFE_AUTO"/"OFF" literal, unknown → ASK (never widens the gate).
+        _permissionMode.value = com.openminis.app.security.SessionPermissionMode.fromStored(
             session.permissionMode,
         )
         applyGateMode(_permissionMode.value)
@@ -365,7 +367,7 @@ internal fun ChatViewModel.loadSession() {
                 "db.query.end",
                 "count=${rows.size} total=$totalMessages offset=$firstMessageOffset",
             )
-            val chatUi = rows.toChatMessages()
+            val chatUi = toChatMessages(rows)
             val tIoAfterTransform = System.currentTimeMillis()
             com.openminis.app.diagnostics.PerfLongCtx.step(
                 sessionId,
@@ -394,7 +396,7 @@ internal fun ChatViewModel.loadSession() {
             var totalPartsChars = 0L
             for (entity in windowRows) {
                 totalPartsChars += entity.partsJson.length
-                llm.add(entity.toLLMMessage())
+                llm.add(toLLMMessage(entity))
             }
             com.openminis.app.diagnostics.PerfLongCtx.step(
                 sessionId,

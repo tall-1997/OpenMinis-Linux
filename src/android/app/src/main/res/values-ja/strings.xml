@@ -334,6 +334,22 @@
     <string name="token_usage_cache_write">キャッシュ書き込み</string>
     <string name="token_usage_section_agent_loop">Agent ループ</string>
     <string name="token_usage_total_loops">合計ループ数</string>
+    <!-- [#25] Context breakdown sheet -->
+    <string name="chat_menu_context_usage">コンテキスト内訳</string>
+    <string name="context_usage_sheet_title">コンテキスト内訳</string>
+    <string name="context_block_system">システムプロンプトとツール</string>
+    <string name="context_block_skills_mcps">スキルとMCP</string>
+    <string name="context_block_memory">メモリ注入</string>
+    <string name="context_block_runtime">ターンごとの注入</string>
+    <string name="context_block_goal_plan">ゴールとプランの注入</string>
+    <string name="context_block_history">履歴ウィンドウ</string>
+    <string name="context_block_attachments">添付と画像</string>
+    <string name="context_usage_note_estimate">概算値（±10%）。シートを開いたときに更新されます</string>
+    <!-- [#41] Gen UI card -->
+    <string name="gen_ui_card_label">Gen UI</string>
+    <string name="gen_ui_view_source">ソースを表示</string>
+    <string name="gen_ui_view_render">レンダリングを表示</string>
+    <string name="gen_ui_view_fullscreen">フルスクリーン</string>
     <string name="common_on">オン</string>
     <string name="common_off">オフ</string>
     <string name="common_yes">はい</string>
@@ -614,6 +630,14 @@
     <string name="env_var_privacy_header">プライバシー</string>
     <string name="env_var_privacy_toggle">プライバシーモード</string>
     <string name="env_var_privacy_footer">有効にすると、shell-execute の出力に含まれる環境変数の値はモデルに渡される前にマスクされます（例: `sk-1********ajhks`）。8 文字未満の値はすべて `*` に置き換えられます。チャットに表示される出力は変更されません。</string>
+    <string name="outbound_mask_toggle">送信プライバシーマスキング</string>
+    <string name="outbound_mask_footer">有効にすると、モデルプロバイダーへ送信するリクエスト内の API キー・メールアドレス・電話番号をマスクします。この端末上のチャット履歴は変更されません。既定ではオフです。</string>
+    <string name="chat_menu_perm_yoyo">YOLO · 全自動</string>
+    <string name="chat_menu_perm_safe_auto">安全自動 · 読み取り系ツールは自動実行</string>
+    <string name="chat_menu_perm_ask">確認 · 毎回の呼び出しを確認</string>
+    <string name="chat_menu_perm_off">オフ · すべてのツールを拒否</string>
+    <string name="gate_approval_allow_all">このセッションでは常に許可</string>
+    <string name="approval_action_allow_all_session">このセッションでは常に許可</string>
     <string name="env_var_section_header">変数</string>
     <string name="env_var_section_footer">環境変数はセッション開始時にサンドボックスシェルに注入されます。名前は大文字に変換され、POSIX シェル変数のルールに従う必要があります。</string>
     <string name="env_var_empty_title">環境変数なし</string>
@@ -1829,6 +1853,7 @@
     <string name="usage_label_output_short">出力</string>
     <string name="plan_board_all_done">すべてのステップが完了しました</string>
     <string name="cd_plan_board_toggle">プランボードの展開／折りたたみ</string>
+    <string name="cd_plan_step_retry">失敗したこのステップを再試行</string>
     <string name="cd_goal_header">目標の詳細を開く</string>
     <string name="cd_goal_status_active">目標が進行中</string>
     <string name="cd_goal_status_paused">目標が一時停止中</string>
@@ -2104,4 +2129,58 @@
     <!-- Queued-message edit sheet + git diff truncation notice -->
     <string name="chat_queued_edit_title">キュー内のメッセージを編集</string>
     <string name="git_panel_diff_truncated">Diff は 200,000 文字で切り詰められました — 全文はリポジトリ内のファイル自体にあります。</string>
+    <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
+    <string name="provider_list_export_providers">プロバイダーをエクスポート</string>
+    <string name="provider_transfer_export_title">プロバイダーをエクスポート</string>
+    <string name="provider_transfer_export_body">%1$d 件のプロバイダーを JSON ファイルにエクスポートします。</string>
+    <string name="provider_transfer_include_keys">API キーを含める</string>
+    <string name="provider_transfer_include_keys_risk">API キーは平文でファイルに書き込まれます。このファイルを入手した誰もがキーを利用できます — 安全に保管し、インポート後は削除してください。</string>
+    <string name="provider_transfer_export">エクスポート</string>
+    <string name="provider_transfer_export_success">%1$d 件のプロバイダーをエクスポートしました</string>
+    <string name="provider_transfer_export_failed">エクスポートに失敗しました</string>
+    <string name="provider_transfer_import_ok">%1$d 件のプロバイダーをインポートしました</string>
+    <string name="provider_transfer_import_partial">%1$d 件をインポート、%2$d 件失敗</string>
+    <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
+    <string name="ssh_workspace_menu_title">SSHワークスペース</string>
+    <string name="ssh_workspace_binding_title">SSHワークスペース</string>
+    <string name="ssh_workspace_bound_to">%1$s（%2$s）に接続中</string>
+    <string name="ssh_workspace_bound_local">ローカルサンドボックスで動作中</string>
+    <string name="ssh_workspace_option_local">ローカルサンドボックス</string>
+    <string name="ssh_workspace_option_local_subtitle">この端末の Linux サンドボックスでシェルを実行します</string>
+    <string name="ssh_workspace_no_hosts">SSH ホストがまだありません。設定 → SSHワークスペースから追加してください。</string>
+    <string name="ssh_workspace_shell_only_note">SSHワークスペースはシェルコマンドのみをサポートします。ホスト接続中はファイルツールを利用できません。</string>
+    <string name="ssh_workspace_shell_only">SSHワークスペースはシェルコマンドのみ対応 — \'%1$s\' は拒否されました。</string>
+    <string name="ssh_workspace_shell_only_hint">リモートコマンドは shell_execute で実行するか、チャットメニュー → SSHワークスペースからこのセッションの接続を解除するとローカルのファイルツールが戻ります。</string>
+    <string name="ssh_hosts_title">SSH ホスト</string>
+    <string name="ssh_hosts_subtitle">エージェントが SSH で接続できるリモートホスト。認証情報は暗号化して保存され、表示されません。</string>
+    <string name="ssh_hosts_row_subtitle">ホストの追加・接続テスト・ホスト鍵の管理</string>
+    <string name="ssh_hosts_empty">ホストはまだありません。</string>
+    <string name="ssh_hosts_add">ホストを追加</string>
+    <string name="ssh_hosts_add_cancel">キャンセル</string>
+    <string name="ssh_hosts_test">接続テスト</string>
+    <string name="ssh_hosts_testing">テスト中…</string>
+    <string name="ssh_hosts_test_ok">接続OK</string>
+    <string name="ssh_hosts_test_failed">接続失敗</string>
+    <string name="ssh_hosts_forget_key">ホスト鍵を忘れる</string>
+    <string name="ssh_hosts_remove">削除</string>
+    <string name="ssh_hosts_pinned">ホスト鍵をピン留め済み: %1$s…</string>
+    <string name="ssh_field_name">名前（英数字/._-）</string>
+    <string name="ssh_field_hostname">ホスト名または IP</string>
+    <string name="ssh_field_port">ポート</string>
+    <string name="ssh_field_username">ユーザー名</string>
+    <string name="ssh_auth_password">パスワード</string>
+    <string name="ssh_auth_key">秘密鍵</string>
+    <string name="ssh_field_password">パスワード</string>
+    <string name="ssh_field_private_key">PEM 秘密鍵</string>
+    <string name="ssh_field_passphrase">鍵のパスフレーズ（任意）</string>
+    <string name="ssh_save">保存</string>
+
+    <!-- [T-handsfree-loop] (#40) Hands-free continuous voice conversation -->
+    <string name="handsfree_toggle">ハンズフリー</string>
+    <string name="handsfree_state_starting">開始中…</string>
+    <string name="handsfree_state_listening">聴取中…</string>
+    <string name="handsfree_state_thinking">考え中…</string>
+    <string name="handsfree_state_speaking">読み上げ中…</string>
+    <string name="handsfree_exit_recognition">ハンズフリーを停止しました：音声認識が繰り返し失敗しました。ハンズフリーをタップして再試行してください。</string>
+    <string name="handsfree_exit_tts">ハンズフリーを停止しました：返答を読み上げできませんでした。ハンズフリーをタップして再試行してください。</string>
 </resources>

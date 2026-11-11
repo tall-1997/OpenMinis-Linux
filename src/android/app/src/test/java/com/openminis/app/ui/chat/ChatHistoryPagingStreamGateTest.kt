@@ -56,8 +56,11 @@ class ChatHistoryPagingStreamGateTest {
 
     @Test
     fun `loadOlderMessages does not gate on streaming`() {
-        val source = ProductionSources.read("ui/chat/ChatViewModel.kt")
-        val body = functionBody(source, "fun loadOlderMessages()")
+        // [#42] The paging block was mechanically split into the Ext file;
+        // scan both so the contract follows the function wherever it lives.
+        val source = ProductionSources.read("ui/chat/ChatViewModel.kt") +
+            ProductionSources.read("ui/chat/ChatViewModelHistoryPageExt.kt")
+        val body = functionBody(source, "fun ChatViewModel.loadOlderMessages()")
 
         assertFalse(
             "loadOlderMessages must not refuse to run while a turn streams — " +
@@ -82,8 +85,9 @@ class ChatHistoryPagingStreamGateTest {
 
     @Test
     fun `loadOlderPage does not gate on streaming`() {
-        val source = ProductionSources.read("ui/chat/ChatViewModel.kt")
-        val body = functionBody(source, "fun loadOlderPage(): Boolean")
+        val source = ProductionSources.read("ui/chat/ChatViewModel.kt") +
+            ProductionSources.read("ui/chat/ChatViewModelHistoryPageExt.kt")
+        val body = functionBody(source, "fun ChatViewModel.loadOlderPage(): Boolean")
 
         assertFalse(
             "loadOlderPage must not return early while a turn streams — " +

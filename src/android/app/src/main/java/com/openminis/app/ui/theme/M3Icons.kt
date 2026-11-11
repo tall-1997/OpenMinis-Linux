@@ -55,6 +55,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.DataUsage
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Description
@@ -73,6 +74,7 @@ import androidx.compose.material.icons.filled.FactCheck
 import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.FolderOpen
@@ -125,6 +127,7 @@ import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material.icons.filled.RemoveRedEye
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Schedule
@@ -192,6 +195,7 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Dashboard
+import androidx.compose.material.icons.outlined.DataUsage
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Description
@@ -210,6 +214,7 @@ import androidx.compose.material.icons.outlined.FactCheck
 import androidx.compose.material.icons.outlined.Feedback
 import androidx.compose.material.icons.outlined.FiberManualRecord
 import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material.icons.outlined.FlashOn
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderOpen
@@ -262,6 +267,7 @@ import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Remove
+import androidx.compose.material.icons.outlined.RemoveRedEye
 import androidx.compose.material.icons.outlined.Replay
 import androidx.compose.material.icons.outlined.RestartAlt
 import androidx.compose.material.icons.outlined.Schedule
@@ -359,8 +365,10 @@ private val iconPairs: List<Pair<ImageVector, ImageVector>> = listOf(
     Icons.Filled.CreateNewFolder to Icons.Outlined.CreateNewFolder,
     Icons.Filled.DarkMode to Icons.Outlined.DarkMode,
     Icons.Filled.Dashboard to Icons.Outlined.Dashboard,
+    Icons.Filled.DataUsage to Icons.Outlined.DataUsage,
     Icons.Filled.Delete to Icons.Outlined.Delete,
     Icons.Filled.DeleteSweep to Icons.Outlined.DeleteSweep,
+    Icons.Filled.FileUpload to Icons.Outlined.FileUpload,
     Icons.Filled.Description to Icons.Outlined.Description,
     Icons.Filled.Diamond to Icons.Outlined.Diamond,
     Icons.Filled.Dns to Icons.Outlined.Dns,
@@ -429,6 +437,7 @@ private val iconPairs: List<Pair<ImageVector, ImageVector>> = listOf(
     Icons.Filled.RecordVoiceOver to Icons.Outlined.RecordVoiceOver,
     Icons.Filled.Refresh to Icons.Outlined.Refresh,
     Icons.Filled.Remove to Icons.Outlined.Remove,
+    Icons.Filled.RemoveRedEye to Icons.Outlined.RemoveRedEye,
     Icons.Filled.Replay to Icons.Outlined.Replay,
     Icons.Filled.RestartAlt to Icons.Outlined.RestartAlt,
     Icons.Filled.Schedule to Icons.Outlined.Schedule,

@@ -334,6 +334,22 @@
     <string name="token_usage_cache_write">Cache Write</string>
     <string name="token_usage_section_agent_loop">Agent Loop</string>
     <string name="token_usage_total_loops">Kabuuang Loop</string>
+    <!-- [#25] Context breakdown sheet -->
+    <string name="chat_menu_context_usage">Pagkakahati ng Konteksto</string>
+    <string name="context_usage_sheet_title">Pagkakahati ng Konteksto</string>
+    <string name="context_block_system">System prompt at mga tool</string>
+    <string name="context_block_skills_mcps">Mga skill at MCP</string>
+    <string name="context_block_memory">Iniksyon ng memorya</string>
+    <string name="context_block_runtime">Mga iniksyon kada turno</string>
+    <string name="context_block_goal_plan">Iniksyon ng layunin at plano</string>
+    <string name="context_block_history">Bintana ng kasaysayan</string>
+    <string name="context_block_attachments">Mga kalakip at larawan</string>
+    <string name="context_usage_note_estimate">Tinatayang mga bilang (±10%); sasariwa kapag binuksan ang sheet na ito</string>
+    <!-- [#41] Gen UI card -->
+    <string name="gen_ui_card_label">Gen UI</string>
+    <string name="gen_ui_view_source">Tingnan ang source</string>
+    <string name="gen_ui_view_render">Ipakita ang render</string>
+    <string name="gen_ui_view_fullscreen">Fullscreen</string>
     <string name="common_on">Naka-on</string>
     <string name="common_off">Naka-off</string>
     <string name="common_yes">Oo</string>
@@ -614,6 +630,14 @@
     <string name="env_var_privacy_header">Privacy</string>
     <string name="env_var_privacy_toggle">Privacy Mode</string>
     <string name="env_var_privacy_footer">Kapag naka-enable, pinapalitan ng nakatakip na anyo (hal. `sk-1********ajhks`) ang anumang halaga ng environment variable na lumalabas sa output ng shell-execute bago ito makarating sa model. Nagiging puro `*` ang mga halagang mas maikli sa 8 karakter. Hindi nagbabago ang output na nakikita ng user sa chat.</string>
+    <string name="outbound_mask_toggle">Mask ng privacy sa papalabas</string>
+    <string name="outbound_mask_footer">Kapag naka-on, ang mga API key, email address at numero ng telepono ay tinatakip sa mga kahilingan na ipinapadala sa model provider. Ang history ng chat sa device na ito ay hindi nagbabago. Nakasara bilang default.</string>
+    <string name="chat_menu_perm_yoyo">YOLO · buong awtomatiko</string>
+    <string name="chat_menu_perm_safe_auto">Ligtas na auto · ang read-only na tools ay papayagan</string>
+    <string name="chat_menu_perm_ask">Magtanong · kumpirmahin bawat tawag</string>
+    <string name="chat_menu_perm_off">Naka-off · tanggihan lahat ng tools</string>
+    <string name="gate_approval_allow_all">Palaging payagan sa session na ito</string>
+    <string name="approval_action_allow_all_session">Palaging payagan sa session na ito</string>
     <string name="env_var_section_header">Mga Variable</string>
     <string name="env_var_section_footer">Ipinapasok ang mga environment variable sa sandbox shell sa simula ng session. Ginagawang malalaking titik ang mga pangalan at dapat sumunod sa mga panuntunan ng POSIX shell variable.</string>
     <string name="env_var_empty_title">Walang Environment Variable</string>
@@ -1832,6 +1856,7 @@
     <string name="usage_label_output_short">Output</string>
     <string name="plan_board_all_done">Lahat ng hakbang ay nakumpleto</string>
     <string name="cd_plan_board_toggle">Palakihin o paliitin ang plan board</string>
+    <string name="cd_plan_step_retry">Subukang muli ang hakbang na nabigo</string>
     <string name="cd_goal_header">Buksan ang mga detalye ng layunin</string>
     <string name="cd_goal_status_active">Layunin sa proseso</string>
     <string name="cd_goal_status_paused">Naka-pause ang layunin</string>
@@ -2107,4 +2132,58 @@
     <!-- Queued-message edit sheet + git diff truncation notice -->
     <string name="chat_queued_edit_title">I-edit ang naka-queue na mensahe</string>
     <string name="git_panel_diff_truncated">Naputol ang diff sa 200,000 karakter — ang buong teksto ay nasa mismong file sa repo.</string>
+    <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
+    <string name="provider_list_export_providers">I-export ang mga provider</string>
+    <string name="provider_transfer_export_title">I-export ang mga provider</string>
+    <string name="provider_transfer_export_body">I-eexport ang %1$d provider sa isang JSON file.</string>
+    <string name="provider_transfer_include_keys">Isama ang mga API key</string>
+    <string name="provider_transfer_include_keys_risk">Ang mga API key ay isusulat sa file bilang plain text. Ang sinumang makakuha ng file na ito ay maaaring gamitin ang mga key mo — panatilihing ligtas ang file at burahin ito pagkatapos mag-import.</string>
+    <string name="provider_transfer_export">I-export</string>
+    <string name="provider_transfer_export_success">Nai-export ang %1$d provider</string>
+    <string name="provider_transfer_export_failed">Nabigo ang pag-export</string>
+    <string name="provider_transfer_import_ok">Nai-import ang %1$d provider</string>
+    <string name="provider_transfer_import_partial">Nai-import ang %1$d provider, %2$d ang nabigo</string>
+    <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
+    <string name="ssh_workspace_menu_title">SSH Workspace</string>
+    <string name="ssh_workspace_binding_title">SSH Workspace</string>
+    <string name="ssh_workspace_bound_to">Nakakonekta sa %1$s (%2$s)</string>
+    <string name="ssh_workspace_bound_local">Gumagana sa lokal na sandbox</string>
+    <string name="ssh_workspace_option_local">Lokal na sandbox</string>
+    <string name="ssh_workspace_option_local_subtitle">Tumatakbo ang shell sa Linux sandbox ng device na ito</string>
+    <string name="ssh_workspace_no_hosts">Wala pang SSH host — magdagdag sa Settings → SSH Workspace.</string>
+    <string name="ssh_workspace_shell_only_note">Ang mga SSH workspace ay sumusuporta lamang ng mga shell command; tinatanggihan ang mga file tool habang may nakabiling host.</string>
+    <string name="ssh_workspace_shell_only">Ang SSH workspace ay sumusuporta lamang ng mga shell command — tinanggihan ang \'%1$s\'.</string>
+    <string name="ssh_workspace_shell_only_hint">Patakbuhin ang mga remote command gamit ang shell_execute, o i-unbind ang session na ito sa chat menu → SSH Workspace para maibalik ang mga lokal na file tool.</string>
+    <string name="ssh_hosts_title">Mga SSH host</string>
+    <string name="ssh_hosts_subtitle">Mga remote host na maaabot ng agent sa pamamagitan ng SSH. Naka-encrypt ang mga credential at hindi kailanman ipinapakita.</string>
+    <string name="ssh_hosts_row_subtitle">Magdagdag ng host, subukan ang koneksyon, pamahalaan ang mga host key</string>
+    <string name="ssh_hosts_empty">Wala pang host.</string>
+    <string name="ssh_hosts_add">Magdagdag ng host</string>
+    <string name="ssh_hosts_add_cancel">Kanselahin</string>
+    <string name="ssh_hosts_test">Subukan ang koneksyon</string>
+    <string name="ssh_hosts_testing">Sinusuri…</string>
+    <string name="ssh_hosts_test_ok">Nakakonekta</string>
+    <string name="ssh_hosts_test_failed">Nabigo ang koneksyon</string>
+    <string name="ssh_hosts_forget_key">Kalimutan ang host key</string>
+    <string name="ssh_hosts_remove">Alisin</string>
+    <string name="ssh_hosts_pinned">Naka-pin ang host key: %1$s…</string>
+    <string name="ssh_field_name">Pangalan (mga titik/numero/._-)</string>
+    <string name="ssh_field_hostname">Hostname o IP</string>
+    <string name="ssh_field_port">Port</string>
+    <string name="ssh_field_username">Username</string>
+    <string name="ssh_auth_password">Password</string>
+    <string name="ssh_auth_key">Private key</string>
+    <string name="ssh_field_password">Password</string>
+    <string name="ssh_field_private_key">PEM private key</string>
+    <string name="ssh_field_passphrase">Passphrase ng key (opsyonal)</string>
+    <string name="ssh_save">I-save</string>
+
+    <!-- [T-handsfree-loop] (#40) Hands-free continuous voice conversation -->
+    <string name="handsfree_toggle">Hands-free</string>
+    <string name="handsfree_state_starting">Nagsisimula…</string>
+    <string name="handsfree_state_listening">Nakikinig…</string>
+    <string name="handsfree_state_thinking">Nag-iisip…</string>
+    <string name="handsfree_state_speaking">Nagsasalita…</string>
+    <string name="handsfree_exit_recognition">Huminto ang hands-free: paulit-ulit na nabigo ang speech recognition. I-tap ang Hands-free para subukan muli.</string>
+    <string name="handsfree_exit_tts">Huminto ang hands-free: hindi nabasa nang malakas ang mga sagot. I-tap ang Hands-free para subukan muli.</string>
 </resources>

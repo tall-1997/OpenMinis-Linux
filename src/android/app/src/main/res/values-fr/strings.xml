@@ -334,6 +334,22 @@
     <string name="token_usage_cache_write">Écriture du cache</string>
     <string name="token_usage_section_agent_loop">Boucle de Minis Ultra Agent</string>
     <string name="token_usage_total_loops">Boucles totales</string>
+    <!-- [#25] Context breakdown sheet -->
+    <string name="chat_menu_context_usage">Décomposition du contexte</string>
+    <string name="context_usage_sheet_title">Décomposition du contexte</string>
+    <string name="context_block_system">Prompt système et outils</string>
+    <string name="context_block_skills_mcps">Skills et MCPs</string>
+    <string name="context_block_memory">Injection de mémoire</string>
+    <string name="context_block_runtime">Injections par tour</string>
+    <string name="context_block_goal_plan">Injection d\'objectif et de plan</string>
+    <string name="context_block_history">Fenêtre d\'historique</string>
+    <string name="context_block_attachments">Pièces jointes et images</string>
+    <string name="context_usage_note_estimate">Estimations approximatives (±10 %) ; actualisées à l\'ouverture de cette feuille</string>
+    <!-- [#41] Gen UI card -->
+    <string name="gen_ui_card_label">Gen UI</string>
+    <string name="gen_ui_view_source">Voir la source</string>
+    <string name="gen_ui_view_render">Afficher le rendu</string>
+    <string name="gen_ui_view_fullscreen">Plein écran</string>
     <string name="common_on">Activé</string>
     <string name="common_off">Désactivé</string>
     <string name="common_yes">Oui</string>
@@ -614,6 +630,14 @@
     <string name="env_var_privacy_header">Confidentialité</string>
     <string name="env_var_privacy_toggle">Mode confidentiel</string>
     <string name="env_var_privacy_footer">Lorsque cette option est activée, toute valeur de variable d\'environnement détectée dans la sortie de shell-execute est masquée (p. ex. `sk-1********ajhks`) avant d\'être transmise au modèle. Les valeurs de moins de 8 caractères sont entièrement remplacées par des `*`. La sortie visible dans le chat reste inchangée.</string>
+    <string name="outbound_mask_toggle">Masquage de confidentialité sortant</string>
+    <string name="outbound_mask_footer">Une fois activé, les clés API, adresses e-mail et numéros de téléphone sont masqués dans les requêtes envoyées au fournisseur du modèle. L\'historique des discussions sur cet appareil reste inchangé. Désactivé par défaut.</string>
+    <string name="chat_menu_perm_yoyo">YOLO · tout automatique</string>
+    <string name="chat_menu_perm_safe_auto">Auto sûr · les outils de lecture passent librement</string>
+    <string name="chat_menu_perm_ask">Demander · confirmer chaque appel</string>
+    <string name="chat_menu_perm_off">Désactivé · refuser tous les outils</string>
+    <string name="gate_approval_allow_all">Toujours autoriser dans cette session</string>
+    <string name="approval_action_allow_all_session">Toujours autoriser dans cette session</string>
     <string name="env_var_section_header">Variables</string>
     <string name="env_var_section_footer">Les variables d\'environnement sont injectées dans le shell sandbox au démarrage de la session. Les noms sont en majuscules et doivent respecter les règles POSIX.</string>
     <string name="env_var_empty_title">Aucune variable d\'environnement</string>
@@ -1832,6 +1856,7 @@
     <string name="usage_label_output_short">Sortie</string>
     <string name="plan_board_all_done">Toutes les étapes sont terminées</string>
     <string name="cd_plan_board_toggle">Développer ou réduire le tableau du plan</string>
+    <string name="cd_plan_step_retry">Réessayer cette étape qui a échoué</string>
     <string name="cd_goal_header">Ouvrir les détails de l\'objectif</string>
     <string name="cd_goal_status_active">Objectif en cours</string>
     <string name="cd_goal_status_paused">Objectif en pause</string>
@@ -2107,4 +2132,58 @@
     <!-- Queued-message edit sheet + git diff truncation notice -->
     <string name="chat_queued_edit_title">Modifier le message en file d\'attente</string>
     <string name="git_panel_diff_truncated">Diff tronqué à 200 000 caractères — le texte complet se trouve dans le fichier du dépôt.</string>
+    <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
+    <string name="provider_list_export_providers">Exporter les fournisseurs</string>
+    <string name="provider_transfer_export_title">Exporter les fournisseurs</string>
+    <string name="provider_transfer_export_body">%1$d fournisseurs seront exportés vers un fichier JSON.</string>
+    <string name="provider_transfer_include_keys">Inclure les clés d\'API</string>
+    <string name="provider_transfer_include_keys_risk">Les clés d\'API sont écrites en clair dans le fichier. Quiconque obtient ce fichier peut utiliser vos clés — conservez-le en sécurité et supprimez-le après l\'importation.</string>
+    <string name="provider_transfer_export">Exporter</string>
+    <string name="provider_transfer_export_success">%1$d fournisseurs exportés</string>
+    <string name="provider_transfer_export_failed">Échec de l\'exportation</string>
+    <string name="provider_transfer_import_ok">%1$d fournisseurs importés</string>
+    <string name="provider_transfer_import_partial">%1$d fournisseurs importés, %2$d en échec</string>
+    <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
+    <string name="ssh_workspace_menu_title">Espace de travail SSH</string>
+    <string name="ssh_workspace_binding_title">Espace de travail SSH</string>
+    <string name="ssh_workspace_bound_to">Lié à %1$s (%2$s)</string>
+    <string name="ssh_workspace_bound_local">Travaille dans le bac à sable local</string>
+    <string name="ssh_workspace_option_local">Bac à sable local</string>
+    <string name="ssh_workspace_option_local_subtitle">Le shell s\'exécute dans le bac à sable Linux de cet appareil</string>
+    <string name="ssh_workspace_no_hosts">Aucun hôte SSH pour l\'instant — ajoutez-en un dans Réglages → Espace de travail SSH.</string>
+    <string name="ssh_workspace_shell_only_note">Les espaces de travail SSH ne prennent en charge que les commandes shell ; les outils de fichiers sont refusés tant qu\'un hôte est lié.</string>
+    <string name="ssh_workspace_shell_only">L\'espace de travail SSH ne prend en charge que les commandes shell — \'%1$s\' a été refusé.</string>
+    <string name="ssh_workspace_shell_only_hint">Exécutez les commandes distantes avec shell_execute, ou déliez cette session via le menu du chat → Espace de travail SSH pour restaurer les outils de fichiers locaux.</string>
+    <string name="ssh_hosts_title">Hôtes SSH</string>
+    <string name="ssh_hosts_subtitle">Hôtes distants accessibles par l\'agent via SSH. Les identifiants sont chiffrés et jamais affichés.</string>
+    <string name="ssh_hosts_row_subtitle">Ajouter des hôtes, tester les connexions, gérer les clés d\'hôte</string>
+    <string name="ssh_hosts_empty">Aucun hôte pour l\'instant.</string>
+    <string name="ssh_hosts_add">Ajouter un hôte</string>
+    <string name="ssh_hosts_add_cancel">Annuler</string>
+    <string name="ssh_hosts_test">Tester la connexion</string>
+    <string name="ssh_hosts_testing">Test…</string>
+    <string name="ssh_hosts_test_ok">Connexion réussie</string>
+    <string name="ssh_hosts_test_failed">Échec de la connexion</string>
+    <string name="ssh_hosts_forget_key">Oublier la clé d\'hôte</string>
+    <string name="ssh_hosts_remove">Supprimer</string>
+    <string name="ssh_hosts_pinned">Clé d\'hôte épinglée : %1$s…</string>
+    <string name="ssh_field_name">Nom (lettres/chiffres/._-)</string>
+    <string name="ssh_field_hostname">Hôte ou IP</string>
+    <string name="ssh_field_port">Port</string>
+    <string name="ssh_field_username">Nom d\'utilisateur</string>
+    <string name="ssh_auth_password">Mot de passe</string>
+    <string name="ssh_auth_key">Clé privée</string>
+    <string name="ssh_field_password">Mot de passe</string>
+    <string name="ssh_field_private_key">Clé privée PEM</string>
+    <string name="ssh_field_passphrase">Phrase secrète de la clé (facultatif)</string>
+    <string name="ssh_save">Enregistrer</string>
+
+    <!-- [T-handsfree-loop] (#40) Hands-free continuous voice conversation -->
+    <string name="handsfree_toggle">Mains libres</string>
+    <string name="handsfree_state_starting">Démarrage…</string>
+    <string name="handsfree_state_listening">Écoute…</string>
+    <string name="handsfree_state_thinking">Réflexion…</string>
+    <string name="handsfree_state_speaking">Lecture…</string>
+    <string name="handsfree_exit_recognition">Mains libres arrêté : la reconnaissance vocale a échoué à plusieurs reprises. Touchez Mains libres pour réessayer.</string>
+    <string name="handsfree_exit_tts">Mains libres arrêté : les réponses n\'ont pas pu être lues à voix haute. Touchez Mains libres pour réessayer.</string>
 </resources>

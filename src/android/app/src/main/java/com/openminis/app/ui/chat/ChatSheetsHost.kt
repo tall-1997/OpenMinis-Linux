@@ -1,6 +1,7 @@
 package com.openminis.app.ui.chat
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -134,10 +135,12 @@ internal fun ChatSheetsHost(
                     onConfirm = { viewModel.approvePendingTool(approval.id) },
                     dismissText = stringResource(R.string.approval_action_deny),
                     onDismiss = { viewModel.denyPendingTool(approval.id) },
-                    // [T-session-allow-all] Third action: approve this request
-                    // and auto-approve every remaining request this session.
+                    // [#36] Third action of the three-state approval: approve
+                    // this request AND allowlist its (tool, args-gist) key for
+                    // the rest of the session. Same-target re-calls skip the
+                    // dialog; different targets still ask.
                     neutralText = stringResource(R.string.approval_action_allow_all_session),
-                    onNeutral = { viewModel.approveAllForSession(approval.id) },
+                    onNeutral = { viewModel.approveToolAlwaysForSession(approval.id) },
                 )
             }
 
@@ -244,6 +247,38 @@ internal fun ChatSheetsHost(
         TokenUsageSheet(
             viewModel = viewModel,
             onDismiss = { showTokenUsageSheet.value = false },
+        )
+    }
+
+    // [#25] Context breakdown sheet — prompt composition + per-block token
+    // estimate. Visibility rides the process-level [ContextUsageSheetState]
+    // because ChatScreen.kt / ChatViewModel.kt are pinned at their
+    // architecture-policy ceilings (see the object's KDoc).
+    val showContextUsageSheet by ContextUsageSheetState.visible.collectAsStateWithLifecycle()
+    if (showContextUsageSheet) {
+        DisposableEffect(Unit) {
+            // Leaving the chat screen while the sheet is open must not
+            // resurrect it for the next session — reset the process-level
+            // flag when this host block leaves composition.
+            onDispose { ContextUsageSheetState.hide() }
+        }
+        ContextUsageSheet(
+            viewModel = viewModel,
+            onDismiss = { ContextUsageSheetState.hide() },
+        )
+    }
+
+    // [T-ssh-workspace] (#32) Session → SSH host binding sheet. Visibility
+    // rides the process-level SshWorkspaceSheetState (ceiling-pinned
+    // ChatScreen must not grow) — same pattern as ContextUsageSheetState.
+    val showSshWorkspaceSheet by SshWorkspaceSheetState.visible.collectAsStateWithLifecycle()
+    if (showSshWorkspaceSheet) {
+        DisposableEffect(Unit) {
+            onDispose { SshWorkspaceSheetState.hide() }
+        }
+        SshWorkspaceBindingSheet(
+            sessionId = sessionId,
+            onDismiss = { SshWorkspaceSheetState.hide() },
         )
     }
 

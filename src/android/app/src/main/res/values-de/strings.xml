@@ -334,6 +334,22 @@
     <string name="token_usage_cache_write">Cache-Schreiben</string>
     <string name="token_usage_section_agent_loop">Agent-Schleife</string>
     <string name="token_usage_total_loops">Schleifen gesamt</string>
+    <!-- [#25] Context breakdown sheet -->
+    <string name="chat_menu_context_usage">Kontext-Aufschlüsselung</string>
+    <string name="context_usage_sheet_title">Kontext-Aufschlüsselung</string>
+    <string name="context_block_system">Systemprompt &amp; Tools</string>
+    <string name="context_block_skills_mcps">Skills &amp; MCPs</string>
+    <string name="context_block_memory">Speicher-Injektion</string>
+    <string name="context_block_runtime">Turn-Injektionen</string>
+    <string name="context_block_goal_plan">Ziel- &amp; Plan-Injektion</string>
+    <string name="context_block_history">Verlaufs-Fenster</string>
+    <string name="context_block_attachments">Anhänge &amp; Bilder</string>
+    <string name="context_usage_note_estimate">Grobe Schätzungen (±10 %); beim Öffnen dieses Sheets aktualisiert</string>
+    <!-- [#41] Gen UI card -->
+    <string name="gen_ui_card_label">Gen UI</string>
+    <string name="gen_ui_view_source">Quelltext anzeigen</string>
+    <string name="gen_ui_view_render">Darstellung anzeigen</string>
+    <string name="gen_ui_view_fullscreen">Vollbild</string>
     <string name="common_on">An</string>
     <string name="common_off">Aus</string>
     <string name="common_yes">Ja</string>
@@ -614,6 +630,13 @@
     <string name="env_var_privacy_header">Datenschutz</string>
     <string name="env_var_privacy_toggle">Datenschutzmodus</string>
     <string name="env_var_privacy_footer">Wenn aktiviert, werden in der Ausgabe von shell-execute erkannte Werte von Umgebungsvariablen vor der Weitergabe an das Modell maskiert (z. B. `sk-1********ajhks`). Werte mit weniger als 8 Zeichen werden vollständig durch `*` ersetzt. Die für den Nutzer sichtbare Ausgabe im Chat bleibt unverändert.</string>
+    <string name="outbound_mask_toggle">Ausgehende Datenschutz-Maskierung</string>
+    <string name="outbound_mask_footer">Bei Aktivierung werden API-Schlüssel, E-Mail-Adressen und Telefonnummern in an den Modellanbieter gesendeten Anfragen maskiert. Der Chatverlauf auf diesem Gerät bleibt unverändert. Standardmäßig aus.</string>
+    <string name="chat_menu_perm_yoyo">YOLO · vollautomatisch</string>
+    <string name="chat_menu_perm_safe_auto">Sicher automatisch · Lese-Tools laufen frei</string>
+    <string name="chat_menu_perm_ask">Fragen · jeden Aufruf bestätigen</string>
+    <string name="chat_menu_perm_off">Aus · alle Tools verweigern</string>
+    <string name="gate_approval_allow_all">In dieser Sitzung immer erlauben</string>
     <string name="env_var_section_header">Variablen</string>
     <string name="env_var_section_footer">Umgebungsvariablen werden beim Sitzungsstart in die Sandbox-Shell eingespeist. Namen werden in Großbuchstaben umgewandelt und müssen den POSIX-Shell-Regeln entsprechen.</string>
     <string name="env_var_empty_title">Keine Umgebungsvariablen</string>
@@ -1832,6 +1855,7 @@
     <string name="usage_label_output_short">Ausgabe</string>
     <string name="plan_board_all_done">Alle Schritte abgeschlossen</string>
     <string name="cd_plan_board_toggle">Plantafel ein- oder ausklappen</string>
+    <string name="cd_plan_step_retry">Diesen fehlgeschlagenen Schritt wiederholen</string>
     <string name="cd_goal_header">Zieldetails öffnen</string>
     <string name="cd_goal_status_active">Ziel in Bearbeitung</string>
     <string name="cd_goal_status_paused">Ziel pausiert</string>
@@ -2097,4 +2121,58 @@
     <!-- Queued-message edit sheet + git diff truncation notice -->
     <string name="chat_queued_edit_title">Nachricht in der Warteschlange bearbeiten</string>
     <string name="git_panel_diff_truncated">Diff bei 200.000 Zeichen gekürzt — der vollständige Text steht in der Datei im Repository.</string>
+    <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
+    <string name="provider_list_export_providers">Anbieter exportieren</string>
+    <string name="provider_transfer_export_title">Anbieter exportieren</string>
+    <string name="provider_transfer_export_body">%1$d Anbieter werden als JSON-Datei exportiert.</string>
+    <string name="provider_transfer_include_keys">API-Schlüssel einschließen</string>
+    <string name="provider_transfer_include_keys_risk">API-Schlüssel werden im Klartext in die Datei geschrieben. Jeder, der diese Datei erhält, kann Ihre Schlüssel verwenden — bewahren Sie die Datei sicher auf und löschen Sie sie nach dem Import.</string>
+    <string name="provider_transfer_export">Exportieren</string>
+    <string name="provider_transfer_export_success">%1$d Anbieter exportiert</string>
+    <string name="provider_transfer_export_failed">Export fehlgeschlagen</string>
+    <string name="provider_transfer_import_ok">%1$d Anbieter importiert</string>
+    <string name="provider_transfer_import_partial">%1$d Anbieter importiert, %2$d fehlgeschlagen</string>
+    <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
+    <string name="ssh_workspace_menu_title">SSH-Arbeitsbereich</string>
+    <string name="ssh_workspace_binding_title">SSH-Arbeitsbereich</string>
+    <string name="ssh_workspace_bound_to">Verbunden mit %1$s (%2$s)</string>
+    <string name="ssh_workspace_bound_local">Arbeitet in der lokalen Sandbox</string>
+    <string name="ssh_workspace_option_local">Lokale Sandbox</string>
+    <string name="ssh_workspace_option_local_subtitle">Die Shell läuft in der Linux-Sandbox dieses Geräts</string>
+    <string name="ssh_workspace_no_hosts">Noch keine SSH-Hosts — füge einen unter Einstellungen → SSH-Arbeitsbereich hinzu.</string>
+    <string name="ssh_workspace_shell_only_note">SSH-Arbeitsbereiche unterstützen nur Shell-Befehle; Datei-Tools werden bei gebundenem Host abgelehnt.</string>
+    <string name="ssh_workspace_shell_only">SSH-Arbeitsbereich unterstützt nur Shell-Befehle — \'%1$s\' wurde abgelehnt.</string>
+    <string name="ssh_workspace_shell_only_hint">Führe entfernte Befehle mit shell_execute aus oder löse die Bindung dieser Sitzung über Chat-Menü → SSH-Arbeitsbereich, um lokale Datei-Tools wieder zu aktivieren.</string>
+    <string name="ssh_hosts_title">SSH-Hosts</string>
+    <string name="ssh_hosts_subtitle">Entfernte Hosts, die der Agent per SSH erreichen kann. Zugangsdaten werden verschlüsselt gespeichert und nie angezeigt.</string>
+    <string name="ssh_hosts_row_subtitle">Hosts hinzufügen, Verbindungen testen, Host-Keys verwalten</string>
+    <string name="ssh_hosts_empty">Noch keine Hosts.</string>
+    <string name="ssh_hosts_add">Host hinzufügen</string>
+    <string name="ssh_hosts_add_cancel">Abbrechen</string>
+    <string name="ssh_hosts_test">Verbindung testen</string>
+    <string name="ssh_hosts_testing">Teste…</string>
+    <string name="ssh_hosts_test_ok">Verbindung ok</string>
+    <string name="ssh_hosts_test_failed">Verbindung fehlgeschlagen</string>
+    <string name="ssh_hosts_forget_key">Host-Key vergessen</string>
+    <string name="ssh_hosts_remove">Entfernen</string>
+    <string name="ssh_hosts_pinned">Host-Key gepinnt: %1$s…</string>
+    <string name="ssh_field_name">Name (Buchstaben/Ziffern/._-)</string>
+    <string name="ssh_field_hostname">Hostname oder IP</string>
+    <string name="ssh_field_port">Port</string>
+    <string name="ssh_field_username">Benutzername</string>
+    <string name="ssh_auth_password">Passwort</string>
+    <string name="ssh_auth_key">Privater Schlüssel</string>
+    <string name="ssh_field_password">Passwort</string>
+    <string name="ssh_field_private_key">PEM-Privatschlüssel</string>
+    <string name="ssh_field_passphrase">Schlüssel-Passphrase (optional)</string>
+    <string name="ssh_save">Speichern</string>
+
+    <!-- [T-handsfree-loop] (#40) Hands-free continuous voice conversation -->
+    <string name="handsfree_toggle">Freisprechen</string>
+    <string name="handsfree_state_starting">Starte…</string>
+    <string name="handsfree_state_listening">Hört zu…</string>
+    <string name="handsfree_state_thinking">Denkt nach…</string>
+    <string name="handsfree_state_speaking">Spricht…</string>
+    <string name="handsfree_exit_recognition">Freisprechen beendet: Die Spracherkennung ist wiederholt fehlgeschlagen. Tippe auf Freisprechen, um es erneut zu versuchen.</string>
+    <string name="handsfree_exit_tts">Freisprechen beendet: Antworten konnten nicht vorgelesen werden. Tippe auf Freisprechen, um es erneut zu versuchen.</string>
 </resources>

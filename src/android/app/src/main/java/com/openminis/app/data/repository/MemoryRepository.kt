@@ -259,6 +259,7 @@ class MemoryRepository(private val memoryDir: File) {
             writeTextAtomic(file, newContent)
             val newRevision = Digest.sha256Hex(newContent).take(16)
             Log.i(TAG, "Memory written to $fileName (${content.length} chars, revision $newRevision)")
+            indexForEmbeddingsAsync(file)
             "Memory saved to $fileName (${content.length} chars, revision $newRevision)"
         } catch (e: Exception) {
             Log.e(TAG, "Failed to write memory", e)
@@ -517,7 +518,9 @@ class MemoryRepository(private val memoryDir: File) {
 
     fun saveFile(name: String, content: String) {
         if (name == LearnedPrefsStore.FILE_NAME) return
-        writeTextAtomic(File(memoryDir, name), content)
+        val file = File(memoryDir, name)
+        writeTextAtomic(file, content)
+        indexForEmbeddingsAsync(file)
     }
 
     fun deleteFile(name: String): Boolean {
@@ -581,6 +584,7 @@ class MemoryRepository(private val memoryDir: File) {
                 return try {
                     writeTextAtomic(file, newContent)
                     Log.i(TAG, "Revoked memory entry from $dateStr.md")
+                    indexForEmbeddingsAsync(file)
                     EntryMutationResult.Success(dateStr)
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to write $dateStr.md after revoke", e)
@@ -623,6 +627,7 @@ class MemoryRepository(private val memoryDir: File) {
                 return try {
                     writeTextAtomic(file, newFileContent)
                     Log.i(TAG, "Replaced memory entry body in $dateStr.md")
+                    indexForEmbeddingsAsync(file)
                     EntryMutationResult.Success(dateStr)
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to write $dateStr.md after edit", e)
@@ -639,6 +644,21 @@ class MemoryRepository(private val memoryDir: File) {
     }
 
     // -- Internal --
+
+    /**
+     * [T-memory-embedding-recall] Fire-and-forget (re)index of a memory file
+     * for semantic recall (#27). No-op unless the embedding runtime is
+     * attached (prefs default OFF — this hook costs one volatile read).
+     * Deliberately NOT called for GLOBAL.md: the recall engine excludes it as
+     * a candidate (its full text rides in the system prompt), so its vectors
+     * would never be read.
+     */
+    private fun indexForEmbeddingsAsync(file: File) {
+        if (file.name == GLOBAL_FILE) return
+        runCatching {
+            com.openminis.app.data.memory.MemoryEmbeddingRuntime.indexerOrNull()?.indexFileAsync(file)
+        }
+    }
 
     private fun formatFileSize(bytes: Long): String {
         if (bytes < 1024) return "$bytes B"

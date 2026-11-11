@@ -176,6 +176,38 @@ object AppGraph {
                 "minis-debug",
             ) { com.openminis.app.sandbox.offload.DebugOffloadHandler(app) }
         }
+
+        attachMemoryEmbeddings(app)
+    }
+
+    /**
+     * [T-memory-embedding-recall] Attach the #27 semantic-memory runtime when
+     * the prefs switch is on. Default is OFF — the prefs snapshot read returns
+     * null and this costs nothing: no provider object, no table query, recall
+     * stays keyword-only (the engine gets a null [com.openminis.app.data.
+     * memory.MemoryEmbeddingSupport]). A config change takes effect on the
+     * next process start, matching the attach-once contract of this wiring
+     * point.
+     */
+    private fun attachMemoryEmbeddings(app: Context) {
+        val minisApp = app as? com.openminis.app.MinisApp ?: return
+        val config = com.openminis.app.data.memory.EmbeddingPrefs.snapshot(app) ?: return
+        val indexer = runCatching {
+            val provider = com.openminis.app.data.memory.OpenAICompatibleEmbeddingProvider(
+                baseUrl = config.baseUrl,
+                apiKey = config.apiKey,
+                model = config.model,
+            )
+            val dao = minisApp.appContainer.database?.memoryEmbeddingDao()
+                ?: error("database not wired yet")
+            com.openminis.app.data.memory.MemoryEmbeddingIndexer(
+                provider = provider,
+                model = config.model,
+                dao = dao,
+                scope = minisApp.appCoroutineScopes.io,
+            )
+        }.getOrNull() ?: return
+        com.openminis.app.data.memory.MemoryEmbeddingRuntime.attach(indexer)
     }
 
     /**

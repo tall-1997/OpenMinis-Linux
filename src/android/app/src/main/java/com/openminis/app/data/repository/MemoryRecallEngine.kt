@@ -72,6 +72,17 @@ class MemoryRecallEngine(
      * what the existing tests and call sites expect.
      */
     private val sharedDirProvider: (() -> File?)? = null,
+    /**
+     * [T-memory-embedding-recall] Optional semantic-recall support (#27).
+     * Null (the default) keeps this engine keyword-FTS-only — the pre-#27
+     * code path byte-identical, which is why every existing test runs against
+     * engines built without this parameter. When present AND the provider
+     * serves the query, [recallForPromptHybrid] appends cosine top-K hits
+     * BELOW the keyword hits (same caps, same dedupe, same anti-nag
+     * bookkeeping); the plain [recall] / [recallForPrompt] functions never
+     * consult it, so a wired support cannot perturb the keyword path.
+     */
+    private val embeddingSupport: com.openminis.app.data.memory.MemoryEmbeddingSupport? = null,
 ) {
 
     companion object {
@@ -502,23 +513,33 @@ class MemoryRecallEngine(
      * The memo keys on the query string, but the prompt query folds in the
      * assistant tail, which changes every turn — so the same few memories
      * matched every turn and were re-announced every turn (the noise the
-     * live-recall block was drowning in). The dedupe here keys on the HIT
-     * instead: a memory injected [RECALL_REPEAT_CAP] consecutive turns stops
-     * being injected (the model has read it), while dropping out of the hit
-     * set — a task pivot — resets its counter, so it is announced once again
-     * when it becomes relevant anew.
+     * live-recall block was drowning in). The dedupe keys on the HIT
+     * instead — see [applyStreakFilter] for the exact semantics. The keyword
+     * path never consults the embedding support (#27); use
+     * [recallForPromptHybrid] for that.
+     */
+    fun recallForPrompt(query: String): List<RecallHit> = applyStreakFilter(recall(query))
+
+    /**
+     * [T-memory-recall-anti-nag] The hit-keyed cross-turn dedupe, extracted
+     * verbatim from the original `recallForPrompt` body so the hybrid path
+     * (#27) applies the SAME bookkeeping over the SAME key identity
+     * (`"$day:$trimmed line"`) — no second counter, no double counting.
+     *
+     * A memory injected [RECALL_REPEAT_CAP] consecutive turns stops being
+     * injected (the model has read it), while dropping out of the hit set —
+     * a task pivot — resets its counter, so it is announced once again when
+     * it becomes relevant anew.
      *
      * The streak update covers EVERY hit, including the ones filtered out:
      * a capped memory is still matching, and resetting its counter would
-     * re-inject it next turn, defeating the cap.
+     * re-inject it next turn, defeating the cap. The update also runs on
+     * EVERY outcome, including the empty one: an empty hit round IS the
+     * task-pivot signal, and returning early would keep the capped counters
+     * pinned — a memory that left the hits could then never re-arm
+     * (announced again), defeating the whole drop-out semantics.
      */
-    fun recallForPrompt(query: String): List<RecallHit> {
-        val hits = recall(query)
-        // The streak update runs on EVERY outcome, including the empty one:
-        // an empty hit round IS the task-pivot signal, and returning early
-        // would keep the capped counters pinned — a memory that left the hits
-        // could then never re-arm (announced again), defeating the whole
-        // drop-out semantics.
+    private fun applyStreakFilter(hits: List<RecallHit>): List<RecallHit> {
         val keyOf = { hit: RecallHit -> "${dayKeyOf(hit.source)}:${hit.line.trim()}" }
         val keys = hits.associate { it to keyOf(it) }
         val seenKeys = keys.values.toHashSet()
@@ -530,5 +551,113 @@ class MemoryRecallEngine(
         // a fresh signal (task pivot) and must be announced again.
         injectionStreaks.keys.retainAll(seenKeys)
         return fresh
+    }
+
+    /**
+     * [T-memory-embedding-recall] The #27 hybrid recall: keyword FTS first,
+     * then — ONLY when an embedding support is wired AND the provider serves
+     * the query — cosine top-K hits appended BELOW the keyword hits. Every
+     * keyword path stays byte-identical: [recall] and [recallForPrompt] never
+     * touch the support, and a null support (default) short-circuits to the
+     * plain keyword result.
+     *
+     * Weight rule: semantic hits fill only the slots the keyword path left
+     * free under [RECALL_LIMIT] and the per-file diversity cap, so they can
+     * never displace a keyword hit — "排序权重低于 FTS 命中". Dedupe runs on
+     * the same key identity the anti-nag uses (`day:trimmed line`) plus the
+     * pass-3 head-prefix guard, so a semantically-found line already surfaced
+     * by keywords is not double-injected.
+     *
+     * Backfill: every hybrid call opportunistically triggers a throttled,
+     * fire-and-forget re-index of this engine's memory scopes — a line whose
+     * vector write failed earlier is repaired on the next recall
+     * ("失败静默，下次检索触发补算").
+     */
+    suspend fun recallForPromptHybrid(query: String): List<RecallHit> {
+        val fts = recall(query)
+        val support = embeddingSupport ?: return applyStreakFilter(fts)
+        val semantic = runCatching { support.semanticHits(query, RECALL_LIMIT) }.getOrNull().orEmpty()
+        val scopes = buildList {
+            add(memoryDirProvider())
+            sharedDirProvider?.invoke()?.let { add(it) }
+        }
+        // Even with hits served, backfill catches up on lines whose embedding
+        // failed earlier; when the provider is down both calls no-op silently.
+        runCatching { support.backfillAsync(scopes) }
+        val merged = if (semantic.isEmpty()) {
+            fts
+        } else {
+            SemanticRecallFusion.merge(
+                fts = fts,
+                semantic = semantic,
+                limit = RECALL_LIMIT,
+                perFileCap = MAX_HITS_PER_FILE,
+                archiveCutoff = LocalDate.now().minusDays(ARCHIVE_AFTER_DAYS),
+                dayKeyOf = { dayKeyOf(it) },
+            )
+        }
+        return applyStreakFilter(merged)
+    }
+
+    /**
+     * [T-memory-embedding-recall] Pure keyword+semantic merge (#27): FTS hits
+     * keep their order and scores; semantic hits dedupe against them (exact
+     * recall key plus the pass-3 head-prefix guard) and fill only the slots
+     * left free under [limit] and [perFileCap]. Displayed semantic scores are
+     * clamped below half the weakest FTS score so the sort weight stays
+     * strictly below every keyword hit, exactly like the slot rule implies.
+     * Pure JVM — no Android, no Room — which is what makes the fusion
+     * unit-testable.
+     */
+    internal object SemanticRecallFusion {
+
+        fun merge(
+            fts: List<RecallHit>,
+            semantic: List<com.openminis.app.data.memory.MemoryEmbeddingSupport.SemanticHit>,
+            limit: Int,
+            perFileCap: Int,
+            archiveCutoff: LocalDate?,
+            dayKeyOf: (String) -> String,
+        ): List<RecallHit> {
+            if (semantic.isEmpty() || limit <= 0) return fts
+            // When keyword search found nothing, semantic hits are the only
+            // signal and keep their cosine score; otherwise every semantic
+            // score is clamped below half the weakest keyword score.
+            val scoreFloor = fts.minOfOrNull { it.score }?.let { it * 0.5 } ?: Double.MAX_VALUE
+            val perFile = HashMap<String, Int>()
+            val keys = HashSet<String>()
+            val heads = ArrayList<Pair<String, String>>() // (source, head) of accepted hits
+            for (hit in fts) {
+                keys.add("${dayKeyOf(hit.source)}:${hit.line.trim()}")
+                heads.add(hit.source to hit.line.take(30))
+                perFile.merge(hit.source, 1, Int::plus)
+            }
+            val out = ArrayList<RecallHit>(fts)
+            for (s in semantic) {
+                if (out.size >= limit) break
+                val key = "${dayKeyOf(s.source)}:${s.line.trim()}"
+                if (key in keys) continue
+                val head = s.line.take(30)
+                if (heads.any { (src, h) -> src == s.source && (h.startsWith(head) || head.startsWith(h)) }) continue
+                val used = perFile.merge(s.source, 1, Int::plus) ?: 1
+                if (used > perFileCap) continue
+                val entryDay = runCatching { LocalDate.parse(dayKeyOf(s.source), DateTimeFormatter.ISO_LOCAL_DATE) }.getOrNull()
+                out += RecallHit(
+                    source = s.source,
+                    line = s.line,
+                    day = dayKeyOf(s.source),
+                    score = minOf(s.score.toDouble(), scoreFloor),
+                    recallCount = 0,
+                    // Same aging flag as the keyword path: an old semantic hit
+                    // is surfaced faded, not hidden. Undated lines are never
+                    // archived.
+                    archived = entryDay != null && archiveCutoff != null && entryDay.isBefore(archiveCutoff),
+                    scoreDetail = "semantic=%.2f".format(s.score),
+                )
+                keys.add(key)
+                heads.add(s.source to head)
+            }
+            return out
+        }
     }
 }

@@ -379,6 +379,21 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
             "recall=perTurn",
     )
 
+    // [#25] Capture the assembled tail in a local so the context-usage
+    // breakdown can publish the exact string appended below (the call is
+    // pure, so hoisting it out of buildString changes nothing).
+    val dynamicTail = assembleDynamicTail(
+        worldBookFragment = worldBookFragment,
+        learnedPrefsFragment = learnedPrefsFragment,
+        recalledMemoryFragment = recalledMemoryFragment,
+        runtimeContext = renderRuntimeContext(dateStr, tzId, lang, modelUseCount),
+        personalityReminder = if (identitySection.contains("Personality (from")) {
+            PERSONALITY_REMINDER
+        } else {
+            null
+        },
+        taskAnchor = taskAnchorFragment(),
+    )
     var stablePrefixLen = -1
     val prompt = buildString {
         append(base)
@@ -396,22 +411,29 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         }
         // ---- stable / dynamic boundary: see the header comment ----
         stablePrefixLen = length
-        append(
-            assembleDynamicTail(
-                worldBookFragment = worldBookFragment,
-                learnedPrefsFragment = learnedPrefsFragment,
-                recalledMemoryFragment = recalledMemoryFragment,
-                runtimeContext = renderRuntimeContext(dateStr, tzId, lang, modelUseCount),
-                personalityReminder = if (identitySection.contains("Personality (from")) {
-                    PERSONALITY_REMINDER
-                } else {
-                    null
-                },
-                taskAnchor = taskAnchorFragment(),
-            ),
-        )
+        append(dynamicTail)
     }
     systemPromptStablePrefixLen = stablePrefixLen
+    // [#25] Publish the per-block sections of THIS build for the context
+    // breakdown sheet (ChatViewModelContextBreakdownExt.kt). Same strings,
+    // same order as the appends above — a size mirror the model never sees,
+    // swapped in as one list reference per request.
+    ContextBreakdownRegistry.publish(
+        listOfNotNull(
+            ContextBlockKey.SYSTEM_TOOLS to base,
+            listOfNotNull(skillFragment, mcpFragment)
+                .filter { it.isNotBlank() }
+                .takeIf { it.isNotEmpty() }
+                ?.joinToString("\n\n")
+                ?.let { ContextBlockKey.SKILLS_MCPS to it },
+            globalMemoryFragment
+                ?.takeIf { it.isNotBlank() }
+                ?.let { ContextBlockKey.MEMORY to it },
+            dynamicTail
+                .takeIf { it.isNotBlank() }
+                ?.let { ContextBlockKey.RUNTIME_TAIL to it },
+        ),
+    )
     // [T-context-assembly-preview] 每次组装落快照：构成明细+全文，
     // 调试"模型实际收到了什么"直接看 offloads/context-assembly/latest.md。
     com.openminis.app.agent.ContextAssemblySnapshot.capture(

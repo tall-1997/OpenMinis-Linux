@@ -29,7 +29,20 @@ internal fun ChatViewModel.planBoardPrompt(): String? = runCatching {
     // the on-demand full view behind op=list. list() throws on a corrupt
     // board (by design, so the tool surfaces it); the prompt path degrades
     // to no block instead of bricking the request.
-    AgentPlanStore.boardSnapshotPrompt(AgentPlanStore.list(activeSessionId, context))
+    val snapshot = AgentPlanStore.boardSnapshotPrompt(AgentPlanStore.list(activeSessionId, context))
+        ?: return@runCatching null
+    // [T-plan-step-retry] A user-requested step retry rides INSIDE the
+    // <plan_board> element, one-shot (consumed here). Inside the block — not
+    // as a standalone line — because withGoalContext strips the whole
+    // <plan_board> element before re-adding it each turn; a bare line would
+    // stack a copy on every request. A failed step always leaves open work,
+    // so the snapshot is non-null whenever a retry can be pending: when the
+    // board vanished (cleared concurrently) the request stays armed for the
+    // next board instead of being dropped.
+    consumePlanStepRetryPrompt()?.let { retryLine ->
+        return@runCatching snapshot.replace("</plan_board>", "$retryLine\n</plan_board>")
+    }
+    snapshot
 }.getOrNull()
 
 /**
