@@ -7,6 +7,9 @@ import android.content.Context
 import android.content.Intent
 import android.provider.Settings
 import android.widget.Toast
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BatteryAlert
 import androidx.compose.material.icons.outlined.Build
@@ -23,7 +26,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 import com.openminis.app.accessibility.AccessibilityRecoveryManager
 import com.openminis.app.accessibility.MinisAccessibilityService
@@ -138,6 +143,133 @@ fun SystemGrantSections(
                 showDivider = false,
             )
         }
+    }
+
+    // ─── [GH#114] Per-app accessibility allow / block list ───────────────
+    // 读屏/点击前的“权限门”配置。默认 OFF（升级用户行为不变）；开启后
+    // 未授权应用会在 ui_read / ui_action 派发前被拦截。
+    var policyMode by remember {
+        mutableStateOf(com.openminis.app.accessibility.A11yAppPolicy.mode())
+    }
+    var policyAppsText by remember {
+        mutableStateOf(com.openminis.app.accessibility.A11yAppPolicy.apps().joinToString("\n"))
+    }
+    var showPolicyAppsDialog by remember { mutableStateOf(false) }
+    var policyDraft by remember { mutableStateOf("") }
+    var policyError by remember { mutableStateOf<String?>(null) }
+
+    fun persistPolicy(mode: com.openminis.app.accessibility.A11yAppPolicy.Mode) {
+        val error = com.openminis.app.accessibility.A11yAppPolicy.save(context, mode, policyAppsText.lines())
+        policyError = error
+        if (error == null) policyMode = mode
+    }
+
+    SettingsSection(
+        header = stringResource(R.string.a11y_app_policy_section),
+        footer = stringResource(R.string.a11y_app_policy_footer),
+    ) {
+        SettingsSwitchRow(
+            icon = Icons.Outlined.RecordVoiceOver,
+            title = stringResource(R.string.a11y_app_policy_enabled),
+            subtitle = stringResource(R.string.a11y_app_policy_enabled_sub),
+            checked = policyMode != com.openminis.app.accessibility.A11yAppPolicy.Mode.OFF,
+            onCheckedChange = { on ->
+                persistPolicy(
+                    if (on) com.openminis.app.accessibility.A11yAppPolicy.Mode.ALLOWLIST
+                    else com.openminis.app.accessibility.A11yAppPolicy.Mode.OFF,
+                )
+            },
+            showDivider = true,
+        )
+        if (policyMode != com.openminis.app.accessibility.A11yAppPolicy.Mode.OFF) {
+            SettingsSwitchRow(
+                title = stringResource(R.string.a11y_app_policy_blocklist),
+                subtitle = stringResource(R.string.a11y_app_policy_blocklist_sub),
+                checked = policyMode == com.openminis.app.accessibility.A11yAppPolicy.Mode.BLOCKLIST,
+                onCheckedChange = { block ->
+                    persistPolicy(
+                        if (block) com.openminis.app.accessibility.A11yAppPolicy.Mode.BLOCKLIST
+                        else com.openminis.app.accessibility.A11yAppPolicy.Mode.ALLOWLIST,
+                    )
+                },
+                showDivider = true,
+            )
+            SettingsRow(
+                title = stringResource(R.string.a11y_app_policy_apps),
+                subtitle = stringResource(
+                    R.string.a11y_app_policy_apps_count,
+                    com.openminis.app.accessibility.A11yAppPolicy.apps().size,
+                ),
+                showDivider = false,
+                onClick = {
+                    policyDraft = com.openminis.app.accessibility.A11yAppPolicy.apps().joinToString("\n")
+                    policyError = null
+                    showPolicyAppsDialog = true
+                },
+            )
+        }
+        policyError?.let { error ->
+            Text(
+                error,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+        }
+    }
+
+    if (showPolicyAppsDialog) {
+        AlertDialog(
+            onDismissRequest = { showPolicyAppsDialog = false },
+            title = { Text(stringResource(R.string.a11y_app_policy_apps)) },
+            text = {
+                Column {
+                    Text(
+                        stringResource(R.string.a11y_app_policy_apps_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    com.openminis.app.ui.components.DialogTextField(
+                        value = policyDraft,
+                        onValueChange = {
+                            policyDraft = it
+                            policyError = null
+                        },
+                        singleLine = false,
+                        maxLines = 10,
+                        placeholder = "com.example.app",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp),
+                    )
+                    policyError?.let { error ->
+                        Text(
+                            error,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                MinisTextButton(onClick = {
+                    val error = com.openminis.app.accessibility.A11yAppPolicy
+                        .save(context, policyMode, policyDraft.lines())
+                    policyError = error
+                    if (error == null) {
+                        policyAppsText = policyDraft
+                        showPolicyAppsDialog = false
+                    }
+                }) {
+                    Text(stringResource(R.string.common_save))
+                }
+            },
+            dismissButton = {
+                MinisTextButton(onClick = { showPolicyAppsDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            },
+        )
     }
 
     // [T-android-voice-correction] Phase 4: opt-in consent for storing

@@ -200,6 +200,9 @@ internal class ModelCatalogCache(
 
         if (apiKey != null) {
             val baseURL = instance.effectiveBaseURL
+            // [GH#221] 用户自定义请求头；models 刷新与聊天请求走同一份 KV。
+            val userHeaders =
+                com.openminis.app.provider.ProviderHeaderStore.headersFor(instance.id)
             val models = try {
                 when (instance.providerType) {
                     ProviderType.anthropic -> AnthropicModelsApi.fetchModels(
@@ -210,6 +213,7 @@ internal class ModelCatalogCache(
                         // [T-provider-custom-user-agent] models-list UA override.
                         customUserAgent = instance.customUserAgent,
                         cacheScope = instance.id,
+                        extraHeaders = userHeaders,
                     )
                     ProviderType.gemini -> GeminiModelsApi.fetchModels(
                         apiKey,
@@ -218,13 +222,14 @@ internal class ModelCatalogCache(
                         forceRefresh = liveForce,
                         cacheScope = instance.id,
                         baseURL = instance.effectiveBaseURL,
+                        extraHeaders = userHeaders,
                     )
                     // [T-provider-custom-user-agent] models-list UA override.
                     // [T-android-provider-type-parity] openAIResponses lists
                     // models from the same /v1/models endpoint — only the
                     // completion endpoint differs.
                     ProviderType.openAI, ProviderType.openAIResponses ->
-                        OpenAIModelsApi.fetchModels(apiKey, baseURL, context = context, forceRefresh = liveForce, customUserAgent = instance.customUserAgent, cacheScope = instance.id)
+                        OpenAIModelsApi.fetchModels(apiKey, baseURL, context = context, forceRefresh = liveForce, customUserAgent = instance.customUserAgent, cacheScope = instance.id, extraHeaders = userHeaders)
                     ProviderType.openRouter -> OpenRouterModelsApi.fetchModels(apiKey, context = context, forceRefresh = liveForce, cacheScope = instance.id)
                     // [T-provider-dynamic-catalog-reconcile] xAI: fetch the live
                     // catalog, fall back to the built-in list.
@@ -265,6 +270,7 @@ internal class ModelCatalogCache(
                         forceRefresh = liveForce,
                         customUserAgent = instance.customUserAgent,
                         cacheScope = instance.id,
+                        extraHeaders = userHeaders,
                     ).ifEmpty { com.openminis.app.provider.xai.XAIModelsApi.fetchModelsOAuth() }
                     // [T-kimi-oauth] Kimi Code: unlike Codex OAuth, the Kimi
                     // OAuth token CAN call the models endpoint — real fetch
@@ -278,6 +284,7 @@ internal class ModelCatalogCache(
                         forceRefresh = liveForce,
                         customUserAgent = instance.customUserAgent,
                         cacheScope = instance.id,
+                        extraHeaders = userHeaders,
                     )
                     // [T-android-provider-type-parity] No models endpoint to
                     // query for a type this build cannot drive; the instance

@@ -477,6 +477,8 @@ fun AppNavigation(
                 onAppearanceClick = { navController.safeNavigate(Routes.APPEARANCE) },
                 onBackgroundClick = { navController.safeNavigate(Routes.BACKGROUND) },
                 onWebSearchClick = { navController.safeNavigate(Routes.WEB_SEARCH) },
+                // [GH#131] Lifecycle hooks settings.
+                onLifecycleHooksClick = { navController.safeNavigate(Routes.LIFECYCLE_HOOKS) },
                 onTranslateClick = { navController.safeNavigate(Routes.TRANSLATE) },
                 onOpenBrowser = { navController.safeNavigate(Routes.HOME_BROWSER) },
                 onBrowserSettings = { navController.safeNavigate(Routes.HOME_BROWSER_SETTINGS) },
@@ -863,6 +865,13 @@ fun AppNavigation(
 
         composable(Routes.WEB_SEARCH) {
             com.openminis.app.ui.settings.WebSearchSettingsScreen(
+                onBack = { navController.safePopBackStack() },
+            )
+        }
+
+        // [GH#131] Session lifecycle hooks (start / response / end → script).
+        composable(Routes.LIFECYCLE_HOOKS) {
+            com.openminis.app.ui.settings.LifecycleHooksScreen(
                 onBack = { navController.safePopBackStack() },
             )
         }

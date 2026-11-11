@@ -570,6 +570,13 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
         val skills = spawn.skills
         val requested = spawn.requestedModel
         val kind = spawn.kind
+        // [GH#530] Resolve the preset ONCE: its tool scope can downgrade a
+        // requested worker/general-purpose kind to a read-only kind, and the
+        // whitelist is enforced on the schema, at dispatch and at execute.
+        // Resolved before the write_paths check so a read-only preset is not
+        // rejected for "missing write paths" it will never need.
+        val agentType = com.openminis.app.tools.SubAgentTypeStore.find(context, role.orEmpty())
+        val effectiveKind = com.openminis.app.tools.DispatchAgentsTool.effectiveKind(agentType, kind)
         val writePaths = spawn.writePaths
         val maxTurns = spawn.maxTurns
         val title = spawn.title.ifBlank { context.getString(com.openminis.app.R.string.subagent_fallback_label) } // i/N lives in the chip badge, never here
@@ -578,7 +585,7 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
         // useless to the model, which would see a worker that cannot write
         // anything and no explanation. Treat it as "not supplied" so the
         // actionable error below fires instead of a silent denial at runtime.
-        if (SubAgentKind.requiresWritePaths(kind, parallelWriters) &&
+        if (SubAgentKind.requiresWritePaths(effectiveKind, parallelWriters) &&
             (writePaths.isEmpty() || com.openminis.app.tools.WritePathGuard.isPoisoned(writePaths))
         ) {
             val msg = "Error: parallel workers must set write_paths to non-overlapping directories, or write_paths=none if this task must not write."
@@ -812,6 +819,8 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
                     log = currentSubAgentLine(spawn, index, total, step),
                 )
             }
+            // [GH#530] agentType / effectiveKind were resolved at the top of this
+            // function (before the write_paths check); reuse them here.
             val result = com.openminis.app.tools.WritePathGuard.withPaths(writePaths) {
                 SubAgentRunner.run(
                     provider = provider,
@@ -822,9 +831,9 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
                     roleContext = context,
                     skillsHint = skills,
                     tools = com.openminis.app.tools.DispatchAgentsTool.filterToolsForType(
-                        com.openminis.app.tools.SubAgentTypeStore.find(context, role.orEmpty()),
+                        agentType,
                         SubAgentKind.filterTools(
-                            kind,
+                            effectiveKind,
                             AgentTools.makeAgentTools(
                                 supportsImageInput = entry.model.hasImageInput,
                                 visionGroupConfigured = com.openminis.app.tools.VisionGroupResolver.isConfigured(
@@ -833,6 +842,8 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
                                 memoryEnabled = false,
                                 subAgentEnabled = false,
                                 hasSpeechModel = providerRepository.resolveVoiceInputEntry() != null,
+                                // [GH#298] Same web_search master switch.
+                                webSearchEnabled = com.openminis.app.tools.WebSearchSettings.toolEnabled(context),
                             ) + AgentTools.makeSubAgentExtraTools(),
                             role,
                             context,
@@ -840,14 +851,17 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
                     ),
                     maxTokens = (entry.model.maxOutputTokens ?: 4096).coerceIn(256, 8192),
                     executeTool = { name, json ->
-                        if (SubAgentKind.blocks(kind, name)) {
-                            ToolExecutionResult("Error: $kind sub-agent cannot use $name.", false)
+                        if (SubAgentKind.blocks(effectiveKind, name)) {
+                            ToolExecutionResult("Error: $effectiveKind sub-agent cannot use $name.", false)
                         } else if (com.openminis.app.tools.CollabRoles.toolsFor(context, role)?.let { name !in it } == true) {
                             ToolExecutionResult("Error: role $role cannot use $name.", false)
-                        } else if (run {
-                            val type = com.openminis.app.tools.SubAgentTypeStore.find(context, role.orEmpty())
-                            type != null && type.toolNames.isNotEmpty() && name !in type.toolNames
-                        }) {
+                        } else if (agentType != null &&
+                            agentType.toolScope != com.openminis.app.tools.SCOPE_WRITE &&
+                            name in com.openminis.app.tools.DispatchAgentsTool.writeToolNames()
+                        ) {
+                            // [GH#530] Scope is a hard gate, not just a schema hint.
+                            ToolExecutionResult("Error: read-only preset ${agentType.name} cannot use $name.", false)
+                        } else if (agentType != null && agentType.toolNames.isNotEmpty() && name !in agentType.toolNames) {
                             ToolExecutionResult("Error: type $role cannot use $name.", false)
                         } else {
                             grepSourceToolResult(name, json)
@@ -859,12 +873,15 @@ private suspend fun ChatViewModel.runOneSubAgentInner(
                     },
                     onStep = { turn, toolName -> onStep(turn, toolName) },
                     onUi = { event -> publishSubAgentUi(trackerId, event) },
-                    kind = kind,
+                    kind = effectiveKind,
                     writePaths = writePaths,
                     maxTurns = maxTurns,
                     tokenBudget = tokenBudget,
                     thinkingLevel = requestedThinking,
                     steers = steerChannel,
+                    // [GH#221] 子代理 provider 来自 entry，不是当前主模型，因此
+                    // 按 entry 的实例解析 OpenCode 会话头 / 用户 KV。
+                    extraHeaders = providerExtraHeaders(entry.providerInstanceId),
                 )
             }
             com.openminis.app.service.SubAgentActivityTracker.appendLog(

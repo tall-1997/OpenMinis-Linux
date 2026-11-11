@@ -588,7 +588,8 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 // [T-stream-stall-watchdog] Phase 2: silence past twice the first-event
                 // budget means the stream stalled, not started slow.
                 val streamIdleTimeoutMs = firstEventTimeoutMs * 2
-                val opencodeHeaders = opencodeSessionHeaders()
+                // [GH#221] 用户自定义头 + OpenCode 会话头统一走同一通道。
+                val requestHeaders = requestExtraHeaders()
                 // [GH#563] Re-stamp the runtime-context date before every request
                 // of this run. A long agent loop (or a queued prompt drained
                 // hours later) otherwise kept the date of the turn that started
@@ -609,7 +610,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     tools = agentTools,
                     thinkingLevel = if (currentModelSupportsReasoning) _thinkingLevel.value else ThinkingLevel.OFF,
                     systemStablePrefixLen = systemPromptStablePrefixLen,
-                    extraHeaders = opencodeHeaders,
+                    extraHeaders = requestHeaders,
                 ).streamStallWatchdog(
                     firstTimeoutMs = firstEventTimeoutMs,
                     idleTimeoutMs = streamIdleTimeoutMs,
@@ -2079,6 +2080,17 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     }
     // [T-context-ring] Refresh the live token ring after the turn settles.
     refreshContextUsage()
+    // [GH#131] Lifecycle hook: one assistant response has settled. Detail is a
+    // bounded tail of the reply (hooks get MINIS_HOOK_DETAIL), not the whole
+    // transcript; fired after the UI/finalize work so a slow hook cannot delay
+    // what the user sees.
+    runCatching {
+        com.openminis.app.agent.lifecycle.LifecycleHooks.fire(
+            com.openminis.app.agent.lifecycle.LifecycleHooks.LifecycleEvent.RESPONSE,
+            realSessionId.ifEmpty { sessionId },
+            accumulatedText.takeLast(500),
+        )
+    }
     // [T-android-tts-scene-announcements] Loop converged — announce to the
     // user if they opted in (scene pref, default off). The sink is owned by
     // the UI layer; every failure mode (no engine bound, engine not yet

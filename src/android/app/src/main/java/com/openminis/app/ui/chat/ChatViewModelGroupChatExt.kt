@@ -275,6 +275,9 @@ private data class GroupMember(
     val maxTokens: Int,
     val temperature: Double?,
     val thinkingLevel: com.openminis.app.data.model.ThinkingLevel,
+    // [GH#221] Owning provider instance — resolves the per-instance user headers
+    // and the OpenCode conversation header for this speaker's requests.
+    val instanceId: String? = null,
 )
 
 private fun ChatViewModel.idleGroupProvider(): LLMProvider? {
@@ -306,6 +309,7 @@ private fun ChatViewModel.groupMembers(
             maxTokens = (entry.model.maxOutputTokens ?: 4096).coerceIn(1024, 16384),
             temperature = entry.overrides.temperature,
             thinkingLevel = entry.effectiveMaxThinkingLevel,
+            instanceId = entry.providerInstanceId,
         )
     }
 }
@@ -318,6 +322,8 @@ private fun ChatViewModel.groupTools(provider: LLMProvider) = AgentTools.makeAge
     memoryEnabled = false,
     subAgentEnabled = false,
     hasSpeechModel = providerRepository.resolveVoiceInputEntry() != null,
+    // [GH#298] Same web_search master switch.
+    webSearchEnabled = com.openminis.app.tools.WebSearchSettings.toolEnabled(context),
 ).filter { !SubAgentKind.blocks(SubAgentKind.PLAN, it.name) }
 
 private fun ChatViewModel.openingKey() = "opening:$groupChatPrefsId"
@@ -361,6 +367,8 @@ private suspend fun ChatViewModel.speakMembers(
                 deferBubble = deferBubble,
                 maxTokens = member.maxTokens,
                 bubbleId = bubbleIds?.get(member.name),
+                // [GH#221] Speaker-specific extra headers (user KV + OpenCode id).
+                extraHeaders = providerExtraHeaders(member.instanceId),
             )
         } catch (e: CancellationException) {
             throw e
@@ -399,6 +407,8 @@ private suspend fun ChatViewModel.speakVisible(
     deferBubble: Boolean = false,
     maxTokens: Int = 4096,
     bubbleId: String? = null,
+    // [GH#221] Per-instance user headers + OpenCode session header.
+    extraHeaders: Map<String, String> = emptyMap(),
 ): String {
     if (groupChatCloseRequested && allowPass) return ""
     // [T-routing-strategy-x] Group-level first-token budget, same resolver as the main agent loop.
@@ -413,6 +423,7 @@ private suspend fun ChatViewModel.speakVisible(
             provider, system, user, tools, toolGate, thinkingLevel,
             stopWhenClosing = allowPass, maxTokens = maxTokens,
             firstTokenTimeoutMs = groupFirstTokenMs,
+            extraHeaders = extraHeaders,
         ) { block ->
             showGroupStatus(id, speaker, vendor, block)
         }
@@ -427,6 +438,7 @@ private suspend fun ChatViewModel.speakVisible(
                 stopWhenClosing = false,
                 maxTokens = maxTokens,
                 firstTokenTimeoutMs = groupFirstTokenMs,
+                extraHeaders = extraHeaders,
             ) { block ->
                 showGroupStatus(id, speaker, vendor, block)
             }
@@ -485,6 +497,8 @@ internal suspend fun ChatViewModel.speakModel(
     stopWhenClosing: Boolean,
     maxTokens: Int = 4096,
     firstTokenTimeoutMs: Long? = null,
+    // [GH#221] Per-instance user headers + OpenCode session header.
+    extraHeaders: Map<String, String> = emptyMap(),
     onStatus: suspend (AssistantBlock) -> Unit,
 ): String {
     val history = mutableListOf(LLMMessage(role = LLMMessage.Role.USER, content = user))
@@ -513,6 +527,7 @@ internal suspend fun ChatViewModel.speakModel(
             temperature = null,
             tools = tools,
             thinkingLevel = thinkingLevel,
+            extraHeaders = extraHeaders,
         ).streamStallWatchdog(
             firstEventTimeoutMs,
             idleTimeoutMs = firstEventTimeoutMs * 2,

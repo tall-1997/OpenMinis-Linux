@@ -57,7 +57,7 @@ data class ContextPolicy(
          *     window, ahead of the offload line) so small-window models are not
          *     doomed to hit the ceiling; `[T-compact-small-window-auto]`.
          *   - `64K–128K` / `≥128K` → offload + compact at [compactPercent] of the window
-         *     (default 90).
+         *     (default 75 as of [GH#74]; previously 90 — see AutoCompactPrefs).
          *
          * [bufferTokens] is the explicit-headroom form of the same decision
          * (`[T-compact-buffer]`): the room to keep free below the model limit,

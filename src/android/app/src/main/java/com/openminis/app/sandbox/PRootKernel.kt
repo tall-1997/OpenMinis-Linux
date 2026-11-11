@@ -285,6 +285,11 @@ object PRootKernel {
 
         isBooted = true
         HostStatusPublisher.start(context, rootfsManager.rootfsDir)
+        // [GH#511] Rootfs is ready — fire the user boot hook asynchronously.
+        // Never await it here: a slow/hung script must not delay the first
+        // shell command or the app UI. See BootHook for the PRoot /proc and
+        // flock caveats that script authors need to know.
+        BootHook.launch(context, rootfsManager.rootfsDir)
         Log.i(TAG, "PRoot kernel booted " +
             "rootfs=${rootfsManager.rootfsDir.absolutePath} " +
             "nativeLibDir=$nativeLibDir " +

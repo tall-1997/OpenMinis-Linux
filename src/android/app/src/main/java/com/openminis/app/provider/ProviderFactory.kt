@@ -57,11 +57,16 @@ object ProviderFactory {
     internal const val CACHE_CAP = 64
 
     fun create(instance: ProviderInstance, apiKey: String, model: LLMModel, context: Context? = null): LLMProvider {
+        // [GH#221] 用户自定义请求头存在 ProviderHeaderStore（不改 Room schema）。
+        // memo key 带上 header 指纹：保存后内容一变就是新 key，下一次发送
+        // 重建 provider；内容相同的旧缓存继续复用。
+        val userHeaders = ProviderHeaderStore.headersFor(instance.id)
         val key = instance.id + "|" + model.hashCode() + "|" +
-            ProviderKeyGate.fingerprint(apiKey) + "|" + instance.hashCode()
+            ProviderKeyGate.fingerprint(apiKey) + "|" + instance.hashCode() +
+            "|h" + userHeaders.hashCode()
         cache[key]?.let { return it }
         val genAtEntry = generation.get()
-        val built = createUncached(instance, apiKey, model, context)
+        val built = createUncached(instance, apiKey, model, context, userHeaders)
         // Build runs OUTSIDE the lock (OkHttpClient construction is slow); the
         // generation re-check + cap + put run INSIDE it, and every invalidator
         // bumps the generation under the same lock. Without that, a check-then-put
@@ -123,7 +128,14 @@ object ProviderFactory {
      * Create a provider, optionally with OAuth support.
      * [context] is needed for OpenAI OAuth to access encrypted storage for token refresh.
      */
-    private fun createUncached(instance: ProviderInstance, apiKey: String, model: LLMModel, context: Context? = null): LLMProvider {
+    private fun createUncached(
+        instance: ProviderInstance,
+        apiKey: String,
+        model: LLMModel,
+        context: Context? = null,
+        // [GH#221] ProviderHeaderStore.headersFor(instance.id) 的快照。
+        userHeaders: Map<String, String> = emptyMap(),
+    ): LLMProvider {
         // T174: route through ProviderInstance.effectiveBaseURL instead of
         // re-implementing the trim-+-endsWith dance inline. The previous
         // version did `url.endsWith("/v1")` on the raw, untrimmed string,
@@ -147,8 +159,9 @@ object ProviderFactory {
                 // [OpenMinis#311] `forceThinkingEnabled` reaches the provider so
                 // an Anthropic-compatible relay can force extended thinking even
                 // when the catalog says the model is non-reasoning.
-                val anthropic = if (basePath != null) AnthropicProvider(apiKey, model, basePath, isOAuth = isOAuth, customUserAgent = instance.customUserAgent, forceThinkingEnabled = instance.forceThinkingEnabled)
-                else AnthropicProvider(apiKey, model, isOAuth = isOAuth, forceThinkingEnabled = instance.forceThinkingEnabled)
+                // [GH#221] `extraHeaders` carries user-configured provider headers.
+                val anthropic = if (basePath != null) AnthropicProvider(apiKey, model, basePath, isOAuth = isOAuth, customUserAgent = instance.customUserAgent, forceThinkingEnabled = instance.forceThinkingEnabled, extraHeaders = userHeaders)
+                else AnthropicProvider(apiKey, model, isOAuth = isOAuth, forceThinkingEnabled = instance.forceThinkingEnabled, extraHeaders = userHeaders)
                 // [port-upstream-1.16][T-quota-claude-subscription] Tag OAuth
                 // instances so their replies' usage headers reach the quota store.
                 if (isOAuth) anthropic.quotaInstanceId = instance.id
@@ -167,8 +180,8 @@ object ProviderFactory {
                 val tokenProvider: (suspend () -> String?)? = oauthProvider?.let { mgr ->
                     { mgr.validAccessToken() }
                 }
-                if (basePath != null) GeminiProvider(apiKey, model, basePath, tokenProvider)
-                else GeminiProvider(apiKey, model, oauthTokenProvider = tokenProvider)
+                if (basePath != null) GeminiProvider(apiKey, model, basePath, tokenProvider, extraHeaders = userHeaders)
+                else GeminiProvider(apiKey, model, oauthTokenProvider = tokenProvider, extraHeaders = userHeaders)
             }
             // [T-android-provider-type-parity] openAIResponses shares this
             // branch: on iOS it is "OpenAI with forceResponsesAPI = true", and
@@ -196,6 +209,7 @@ object ProviderFactory {
                         oauthTokenProvider = { oauthManager.validAccessToken() ?: throw com.openminis.app.data.model.LLMError.InvalidApiKey() },
                         model = model,
                         codexAccountId = oauthManager.accountId,
+                        extraHeaders = userHeaders,
                     ).also {
                         // [port-upstream-1.16][T-quota-codex-subscription] Replies'
                         // x-codex-* headers feed this instance's quota.
@@ -223,6 +237,8 @@ object ProviderFactory {
                         // /responses for custom-base OpenAI-compat relays; null
                         // on the official direct path.
                         customUserAgent = instance.customUserAgent,
+                        // [GH#221] 用户自定义请求头（同实例级别的 KV）。
+                        extraHeaders = userHeaders,
                         // [T-android-azure-openai] Azure auths with api-key +
                         // deployments-path URL. Pass the RAW customBaseURL (not
                         // the /v1-appended, query-stripped effectiveBaseURL) so
@@ -241,7 +257,7 @@ object ProviderFactory {
                     extraHeaders = mapOf(
                         "HTTP-Referer" to "https://github.com/OpenMinis/OpenMinis",
                         "X-Title" to "Minis App",
-                    ),
+                    ) + userHeaders,
                 )
             }
             ProviderType.xAI -> {
@@ -274,6 +290,7 @@ object ProviderFactory {
                         },
                         model = model,
                         basePath = base,
+                        extraHeaders = userHeaders,
                     ).also { it.supportsPriorityProcessing = true }
                 } else {
                     val effectiveKey = if (!manualBearer.isNullOrEmpty()) manualBearer else apiKey
@@ -281,6 +298,7 @@ object ProviderFactory {
                         apiKey = effectiveKey,
                         model = model,
                         basePath = base,
+                        extraHeaders = userHeaders,
                     ).also { it.supportsPriorityProcessing = true }
                 }
             }
@@ -308,6 +326,8 @@ object ProviderFactory {
                         },
                         model = model,
                         basePath = base,
+                        // [GH#221] 用户自定义请求头。
+                        extraHeaders = userHeaders,
                     )
                 } else {
                     // Manual Moonshot API key (or manual bearer) path.
@@ -316,6 +336,7 @@ object ProviderFactory {
                         apiKey = effectiveKey,
                         model = model,
                         basePath = base,
+                        extraHeaders = userHeaders,
                     )
                 }
             }

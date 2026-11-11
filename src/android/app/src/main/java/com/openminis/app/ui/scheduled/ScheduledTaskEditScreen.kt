@@ -603,6 +603,15 @@ private fun EditFormBody(
                 minLines = 4,
                 modifier = Modifier.fillMaxWidth(),
             )
+            // [GH#201] Template variables + the automatic date prefix. The
+            // prefix is prepended at FIRE time, so it always carries the real
+            // "today" rather than the day the task was authored.
+            Text(
+                stringResource(R.string.scheduled_task_prompt_template_hint),
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp, top = 4.dp),
+            )
         } else {
             Text(
                 stringResource(R.string.scheduled_task_rerun_note),

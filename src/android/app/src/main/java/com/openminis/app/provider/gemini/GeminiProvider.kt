@@ -55,6 +55,12 @@ class GeminiProvider(
      * param). Null = classic API-key mode, byte-identical requests.
      */
     private val oauthTokenProvider: (suspend () -> String?)? = null,
+    /**
+     * [GH#221] 用户为该 provider 实例配置的自定义请求头。在 [applyAuth] 里
+     * 最后应用（两条请求路径共用），因此同名头以用户配置为准；Host /
+     * Content-Length 等在存储层已被拒绝。空 map = 行为不变。
+     */
+    private val extraHeaders: Map<String, String> = emptyMap(),
 ) : LLMProvider {
     override val name = "Google"
 
@@ -65,6 +71,8 @@ class GeminiProvider(
     private suspend fun applyAuth(request: okhttp3.Request.Builder): okhttp3.Request {
         val token = oauthTokenProvider?.invoke()
         if (token != null) request.header("Authorization", "Bearer $token")
+        // [GH#221] 用户请求头最后应用；?key= 查询参数认证与 Bearer 均不受影响。
+        for ((key, value) in extraHeaders) request.header(key, value)
         return request.build()
     }
     override val callGateKey: String

@@ -1,38 +1,59 @@
 package com.openminis.app.ui.chat
 
 import com.openminis.app.provider.OpenCodeSessionHeader
+import com.openminis.app.provider.ProviderHeaderStore
 
 /**
  * [T-opencode-session-header] Chat-side wiring of the OpenCode Go header
  * (GH#327/#304). The provider instance is LRU-cached and shared across
  * conversations, so a per-conversation id cannot live in its constructor —
- * it rides per-call via [LLMProvider.streamMessage(extraHeaders=)].
+ * it rides per-call via `LLMProvider.streamMessage(extraHeaders=)`.
  *
  * [OpenCodeSessionHeader.headersFor] no-ops for every non-OpenCode base URL
  * and for draft placeholder ids (`__new__…`); the persisted id
  * ([ChatViewModel.realSessionId]) keeps cross-turn prompt-cache hits alive.
- * Extracted from the agent loop so the loop body stays under its ceiling.
  *
- * [GH#347] Custom OpenAI-compatible endpoints get the same session header via
- * [OpenCodeSessionHeader.customEndpointHeadersFor]. Users who point the app at
- * an OpenCode-compatible relay (or at a self-hosted gateway fronting OpenCode
- * Go) hit the same `400 missing x-opencode-session` routing rule the built-in
- * Zen lane already satisfies; host-gating the header to `opencode.ai` left
- * those endpoints unable to route a request at all. The custom-endpoint
- * branch only fires when the instance actually carries a custom base URL, so
- * official endpoints are untouched.
+ * [GH#221] 一次请求实际要带的额外请求头 = 用户为该实例配置的自定义头 +
+ * OpenCode 会话头。这个文件现在是"请求头"的唯一通道，主循环、群聊、supervisor、
+ * 子代理、压缩都走它，补上了旧版只有主循环携带会话头的接线缺口。
+ *
+ * 用户头在 ProviderFactory 构造 provider 时也会注入（覆盖聊天 + /models），
+ * 这里再合并一次是因为：
+ *  - OpenCode 的会话 id 是"每次对话"的数据，只有请求时才知道；
+ *  - 同一通道（per-call `extraHeaders`）便于其它调用点统一取头，不必各自
+ *    知道 store 的存在。
+ *
+ * [GH#347] 自定义 OpenAI 兼容端点也要拿到同一会话头：把 base URL 指向
+ * OpenCode 兼容中转（或自建网关）的用户会命中 `400 missing x-opencode-session`
+ * 路由规则，而只按 `opencode.ai` 主机门控会让这些端点永远发不出去。
+ * `customEndpointHeadersFor` 仅在实例确实带自定义 base URL 时生效，官方端点
+ * 不受影响。
+ *
+ * 合并顺序：用户头在前，OpenCode 头在后 —— `x-opencode-session` 是上游路由
+ * 的硬要求，用户即使配了同名头也不能把它顶掉。
  */
-internal fun ChatViewModel.opencodeSessionHeaders(): Map<String, String> {
+internal fun ChatViewModel.providerExtraHeaders(instanceId: String?): Map<String, String> {
+    val id = instanceId ?: return emptyMap()
+    val instance = providerRepository.instance(id) ?: return emptyMap()
+    val user = ProviderHeaderStore.headersFor(instance.id)
+    val persistedSessionId = realSessionId.ifEmpty { sessionId }
+    val opencode = OpenCodeSessionHeader
+        .customEndpointHeadersFor(instance.effectiveBaseURL, persistedSessionId)
+        .ifEmpty { OpenCodeSessionHeader.headersFor(instance.effectiveBaseURL, persistedSessionId) }
+    return if (user.isEmpty()) opencode else user + opencode
+}
+
+/** 当前会话主模型的额外请求头。 */
+internal fun ChatViewModel.requestExtraHeaders(): Map<String, String> {
     val entryId = _activeEntryId.value ?: return emptyMap()
     val entry = providerRepository.config.value.modelEntries
         .find { it.id == entryId } ?: return emptyMap()
-    val instance = providerRepository.instance(entry.providerInstanceId)
-        ?: return emptyMap()
-    val baseUrl = instance.effectiveBaseURL
-    val persistedSessionId = realSessionId.ifEmpty { sessionId }
-    val customEndpointHeaders =
-        OpenCodeSessionHeader.customEndpointHeadersFor(baseUrl, persistedSessionId)
-    return customEndpointHeaders.ifEmpty {
-        OpenCodeSessionHeader.headersFor(baseUrl, persistedSessionId)
-    }
+    return providerExtraHeaders(entry.providerInstanceId)
+}
+
+/** [GH#221] 当前主模型所属 provider 实例 id（压缩等旁路请求复用同一条通道）。 */
+internal fun ChatViewModel.currentProviderInstanceId(): String? {
+    val entryId = _activeEntryId.value ?: return null
+    return providerRepository.config.value.modelEntries
+        .find { it.id == entryId }?.providerInstanceId
 }

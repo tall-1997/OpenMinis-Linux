@@ -88,6 +88,10 @@ object SubAgentRunner {
         // boundary into a user-role message so the child reads it before its
         // next move. Null = no steering for this lane.
         steers: kotlinx.coroutines.channels.ReceiveChannel<String>? = null,
+        // [GH#221] Per-instance user headers + OpenCode session header. A lane
+        // pointed at OpenCode Go 400s on every request without the session
+        // header, so the parent's header channel must reach the child too.
+        extraHeaders: Map<String, String> = emptyMap(),
     ): ToolExecutionResult {
         val briefed = SubAgentBrief.wrap(userPrompt, kind = kind, role = role, writePaths = writePaths)
         // Defensive: duplicate tool names reach providers as duplicate schemas
@@ -159,6 +163,7 @@ object SubAgentRunner {
                     temperature = temperature,
                     tools = dedupedTools,
                     thinkingLevel = thinkingLevel,
+                    extraHeaders = extraHeaders,
                 ).collect { chunk ->
                     when (chunk) {
                         is LLMStreamChunk.Text -> {

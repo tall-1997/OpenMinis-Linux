@@ -58,6 +58,12 @@ class AnthropicProvider(
      * request. Only set for custom-base Anthropic-compat instances.
      */
     private val customUserAgent: String? = null,
+    /**
+     * [GH#221] 用户为该 provider 实例配置的自定义请求头（Settings → Provider →
+     * Custom request headers）。在 [buildRequest] 末尾应用，因此可以覆盖默认
+     * 头（Host/Content-Length 等在存储层已被拒绝）。空 map = 行为不变。
+     */
+    private val extraHeaders: Map<String, String> = emptyMap(),
     private val oauthIdentifierPromptProvider: () -> String = {
         com.openminis.app.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
     },
@@ -1176,6 +1182,11 @@ class AnthropicProvider(
             customUserAgent,
             defaultUserAgent = if (isOAuth) null else com.openminis.app.provider.MinisUserAgent.DEFAULT,
         )
+        // [GH#221] 用户请求头最后应用：与 OpenAIProvider 的 per-call
+        // extraHeaders 一致，同名 header 以用户配置为准。
+        for ((key, value) in extraHeaders) {
+            builder.header(key, value)
+        }
         return builder.build()
     }
 

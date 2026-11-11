@@ -50,6 +50,15 @@ class AccessibilityOffloadHandler(private val context: Context) : NativeOffloadH
         private const val TAG = "A11yOffload"
         private const val TOOL = "android-a11y-cli"
 
+        /**
+         * [GH#114] Subcommands that read the screen or inject input. These are
+         * checked against the per-app allow/block list; diagnostics (`service`,
+         * `--version`) and non-screen actions (`notify`, `wait`) are not.
+         */
+        private val POLICY_GATED_SUBS = setOf(
+            "ui", "tap", "input", "scroll", "gesture", "dialog", "extract", "event",
+        )
+
         private const val TOP_HELP = """android-a11y-cli — UI-layer automation via Android AccessibilityService.
 
 Usage:
@@ -146,6 +155,22 @@ First-run: enable "Minis Ultra" under Settings → Accessibility, then `service 
                         settingsPath = "Settings → Permissions → Integrations",
                     ),
                 )
+            }
+        }
+        // [GH#114] Per-app accessibility policy: this is the single point every
+        // real a11y operation passes through, so enforcing here also covers
+        // shell_execute's android-a11y-cli calls, not just the typed ui_* tools.
+        if (sub in POLICY_GATED_SUBS) {
+            when (val verdict = com.openminis.app.accessibility.A11yAppPolicy.verdictForForeground()) {
+                is com.openminis.app.accessibility.A11yAppPolicy.Verdict.Blocked ->
+                    return err(
+                        args,
+                        "PERMISSION_DENIED",
+                        com.openminis.app.accessibility.A11yAppPolicy
+                            .blockedMessage(verdict, "android-a11y-cli"),
+                        exit = 77,
+                    )
+                com.openminis.app.accessibility.A11yAppPolicy.Verdict.Allowed -> Unit
             }
         }
         // [T-android-a11y-force-stop-recovery] A force-stop (system Settings'

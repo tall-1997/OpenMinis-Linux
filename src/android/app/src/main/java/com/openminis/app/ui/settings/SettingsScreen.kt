@@ -24,6 +24,7 @@ import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.BatteryFull
 import androidx.compose.material.icons.outlined.BugReport
+import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Description
@@ -117,6 +118,8 @@ fun SettingsScreen(
     // don't need to be retrofitted.
     onBackgroundClick: () -> Unit = {},
     onWebSearchClick: () -> Unit = {},
+    // [GH#131] Lifecycle hooks (session start / response / end → sandbox script).
+    onLifecycleHooksClick: () -> Unit = {},
     // [T-dead-character-extras] onCharacterExtrasClick removed: no row invoked
     // it, so the CHARACTER_EXTRAS page was unreachable — deleted along with
     // its navigation destination.
@@ -203,6 +206,14 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_web_search),
                     subtitle = stringResource(R.string.settings_web_search_subtitle),
                     onClick = onWebSearchClick,
+                )
+                // [GH#131] Session lifecycle hooks (start / response / end).
+                SettingsRow(
+                    icon = Icons.Outlined.Build,
+                    iconColor = IosOrange,
+                    title = stringResource(R.string.settings_lifecycle_hooks),
+                    subtitle = stringResource(R.string.settings_lifecycle_hooks_subtitle),
+                    onClick = onLifecycleHooksClick,
                 )
                 SettingsRow(
                     icon = Icons.Outlined.Translate,

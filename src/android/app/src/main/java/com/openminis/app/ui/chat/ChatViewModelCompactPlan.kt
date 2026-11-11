@@ -29,6 +29,8 @@ internal fun ChatViewModel.compactStagePlan(): List<CompactAttempt> {
                 model = entry.model,
                 nextHint = "truncate",
                 temperature = entry.overrides.temperature,
+                // [GH#221] Per-instance headers for the summarisation request.
+                instanceId = instance.id,
             )
         }
     return wireCompactStages(
@@ -39,6 +41,9 @@ internal fun ChatViewModel.compactStagePlan(): List<CompactAttempt> {
             model = sessionModel,
             nextHint = "truncate",
             temperature = sessionTemperature,
+            // [GH#221] Same instance as the chat request (null when the entry
+            // vanished mid-run — providerExtraHeaders then returns empty).
+            instanceId = currentProviderInstanceId(),
         ),
         fallbacks = fallbacks,
     )

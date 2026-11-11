@@ -228,6 +228,9 @@ object DeepLinkHandler {
             "appearance" -> DeepLinkAction.OpenSettingsScreen(Routes.APPEARANCE)
             "background" -> DeepLinkAction.OpenSettingsScreen(Routes.BACKGROUND)
             "search", "web-search", "web_search" -> DeepLinkAction.OpenSettingsScreen(Routes.WEB_SEARCH)
+            // [GH#131] lifecycle hooks settings page.
+            "lifecycle-hooks", "lifecycle_hooks", "hooks" ->
+                DeepLinkAction.OpenSettingsScreen(Routes.LIFECYCLE_HOOKS)
             // Removed 人格扩展: old deep links land on Soul.
             "prompt-templates", "prompt_templates",
             "workspace-rules", "workspace_rules",

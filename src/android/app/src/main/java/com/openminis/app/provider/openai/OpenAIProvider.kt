@@ -171,7 +171,15 @@ class OpenAIProvider private constructor(
         oauthTokenProvider: suspend () -> String,
         model: LLMModel = LLMModel.codexMini,
         codexAccountId: String? = null,
-    ) : this(apiKey = null, oauthTokenProvider = oauthTokenProvider, model = model, codexAccountId = codexAccountId)
+        // [GH#221] 用户自定义请求头；OAuth 路径同样可注入（同名头以用户为准）。
+        extraHeaders: Map<String, String> = emptyMap(),
+    ) : this(
+        apiKey = null,
+        oauthTokenProvider = oauthTokenProvider,
+        model = model,
+        extraHeaders = extraHeaders,
+        codexAccountId = codexAccountId,
+    )
 
     companion object {
         /**
@@ -201,11 +209,14 @@ class OpenAIProvider private constructor(
             oauthTokenProvider: suspend () -> String,
             model: LLMModel,
             basePath: String,
+            // [GH#221] 自定义请求头，透传给主构造。
+            extraHeaders: Map<String, String> = emptyMap(),
         ): OpenAIProvider = OpenAIProvider(
             apiKey = null,
             oauthTokenProvider = oauthTokenProvider,
             model = model,
             basePath = basePath,
+            extraHeaders = extraHeaders,
             forceChatCompletions = true,
         )
     }

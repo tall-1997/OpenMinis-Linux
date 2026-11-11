@@ -414,7 +414,7 @@ data class ModelOverrides(
     val maxThinkingLevel: ThinkingLevel? = null,
     /** Per-model auto-compact; null inherits the app default (on). */
     val autoCompactEnabled: Boolean? = null,
-    /** Compact when context usage reaches this percent (50–95). null = app default 90. */
+    /** Compact when context usage reaches this percent (50–95). null = app default 75. */
     val compactThresholdPercent: Int? = null,
     /** Same-provider retries on 429 / 5xx / network. null = default 5. */
     val maxRetries: Int? = null,

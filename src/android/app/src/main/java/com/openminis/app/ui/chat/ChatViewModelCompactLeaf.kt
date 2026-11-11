@@ -48,6 +48,8 @@ internal suspend fun ChatViewModel.generateCompactSummary(conversationText: Stri
         // to the model's lowest LEGAL tier (minimal/low) and omits the field
         // when the model declares no such tier, so keep OFF here.
         thinkingLevel = ThinkingLevel.OFF,
+        // [GH#221] Summarisation uses the same per-instance headers as chat.
+        extraHeaders = providerExtraHeaders(attempt.instanceId),
     ).text
     if (text.isBlank()) throw IllegalStateException("empty compact summary from ${attempt.label}")
     return text

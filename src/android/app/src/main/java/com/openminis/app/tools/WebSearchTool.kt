@@ -80,6 +80,32 @@ object WebSearchTool {
             if (query.isEmpty()) {
                 return ToolExecutionResult("query is required", success = false, toolTitle = toolTitle)
             }
+            // [GH#298] 开关的运行时兜底：注册表已经不再暴露该工具，但历史会话
+            // 的 schema / 手动调用仍可能送到这里。关掉后直接拒绝，不给“关了还在
+            // 偷偷联网”留后门。
+            if (context != null && !WebSearchSettings.toolEnabled(context)) {
+                return ToolExecutionResult(
+                    "web_search is disabled in Settings → Web search. Enable it there, " +
+                        "or use browser_use for a known URL.",
+                    success = false,
+                    toolTitle = toolTitle,
+                )
+            }
+            // [GH#298] 插件式后端优先于内置引擎链；空结果/异常都静默落到链上。
+            for (backend in WebSearchBackendRegistry.backends()) {
+                val hits = try {
+                    backend.search(query, max, context)
+                } catch (_: Exception) {
+                    emptyList()
+                }
+                if (hits.isNotEmpty()) {
+                    return ToolExecutionResult(
+                        format(query, hits, backend.id),
+                        success = true,
+                        toolTitle = toolTitle,
+                    )
+                }
+            }
             val preferred = context?.let { WebSearchSettings.engine(it) } ?: WebSearchSettings.Engine.DDG
             val allowFallback = context?.let { WebSearchSettings.fallbackEnabled(it) } ?: true
             val engines = mutableListOf(preferred)
@@ -153,6 +179,13 @@ object WebSearchTool {
     }
 
     private data class Attempt(val results: List<Result>, val error: String?)
+
+    /**
+     * [GH#298] 供 [DuckDuckGoBackend] 复用的默认实现出口。保持 [Attempt]
+     * 私有，只把“结果列表”暴露给同模块的插件后端。
+     */
+    internal fun searchDuckDuckGoForBackend(query: String, max: Int, context: Context?): List<Result> =
+        searchDuckDuckGo(query, max, context).results
 
     private fun search(
         engine: WebSearchSettings.Engine,

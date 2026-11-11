@@ -32,7 +32,7 @@ import com.openminis.app.data.model.LLMMessage
  * tool outputs (offloaded to the session workspace, stub says the model can
  * `file_read` the full text back) → old consecutive tool iterations merged
  * into one index block each (upstream L4 "collapse to index"). The compact
- * threshold (ContextPolicy, default 90%) sits ABOVE the trim tiers, so
+ * threshold (ContextPolicy, default 75% as of [GH#74]) sits ABOVE the trim tiers, so
  * trimming gets a chance to pull the payload back under the compact line
  * first. Levels are computed from the UNTRIMMED estimate — monotone in
  * history growth — so the projection cannot oscillate between turns (a

@@ -96,6 +96,9 @@ object OpenAIModelsApi {
         // keeps the default UA. Threaded from ProviderRepository.refreshModels.
         customUserAgent: String? = null,
         cacheScope: String = "",
+        // [GH#221] 用户自定义请求头（同实例 KV）。有些 relay 把 /models 也挡在
+        // 自定义头后面，只注入聊天请求会让模型列表永远刷不出来。
+        extraHeaders: Map<String, String> = emptyMap(),
     ): List<LLMModel> = withContext(Dispatchers.IO) {
         val isCustomBase = baseURL != null && !isOfficialOpenAI(baseURL)
         // For third-party endpoints (vLLM, Ollama, etc.), return empty on failure
@@ -118,6 +121,8 @@ object OpenAIModelsApi {
             .apply { if (apiKey.isNotBlank()) header("Authorization", "Bearer $apiKey") }
             // [T-provider-custom-user-agent] models-list UA override.
             .applyUserAgentOverride(customUserAgent)
+            // [GH#221] 用户自定义请求头。
+            .apply { for ((k, v) in extraHeaders) header(k, v) }
             .let { ModelListFetchIsolation.run { it.noStoreIf(forceRefresh) } }
             .build()
 

@@ -44,6 +44,8 @@ fun WebSearchSettingsScreen(onBack: () -> Unit) {
     var customHeader by remember { mutableStateOf(WebSearchSettings.customKeyHeader(context)) }
     var fallback by remember { mutableStateOf(WebSearchSettings.fallbackEnabled(context)) }
     var keyless by remember { mutableStateOf(WebSearchSettings.keylessFallbackEnabled(context)) }
+    // [GH#298] Master tool switch — off removes web_search from the agent schema.
+    var toolEnabled by remember { mutableStateOf(WebSearchSettings.toolEnabled(context)) }
     var detail by remember { mutableStateOf<WebSearchSettings.Engine?>(null) }
     // [T-android-websearch-test-button] One-shot probe result for the engine
     // currently in detail view. Keyed by engine so switching detail pages
@@ -68,6 +70,24 @@ fun WebSearchSettingsScreen(onBack: () -> Unit) {
     ) {
         val current = detail
         if (current == null) {
+            // [GH#298] Master switch first: turning the tool off is the only
+            // control that changes what the MODEL can see, so it outranks the
+            // per-engine configuration below it.
+            SettingsSection(
+                header = stringResource(R.string.web_search_tool_section),
+                footer = stringResource(R.string.web_search_tool_section_footer),
+            ) {
+                SettingsSwitchRow(
+                    title = stringResource(R.string.web_search_tool_enabled),
+                    subtitle = stringResource(R.string.web_search_tool_enabled_sub),
+                    checked = toolEnabled,
+                    onCheckedChange = {
+                        toolEnabled = it
+                        WebSearchSettings.setToolEnabled(context, it)
+                    },
+                    showDivider = false,
+                )
+            }
             SettingsSection(
                 header = stringResource(R.string.web_search_engine_header),
                 footer = stringResource(R.string.web_search_engine_footer),
