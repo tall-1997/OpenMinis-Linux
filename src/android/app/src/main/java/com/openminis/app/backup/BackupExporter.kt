@@ -476,23 +476,20 @@ class BackupExporter(
         )
     }
 
-    /** `GLOBAL.md` / `SOUL.md` / daily notes, copied verbatim into `data/memory/`. */
-    private fun exportMemory(dataDir: File): BackupManifest.CategoryStat {
-        val source = File(context.filesDir, "minis-global/memory")
-        val dest = File(dataDir, "memory").apply { mkdirs() }
-        var entries = 0
-        var bytes = 0L
-        if (source.isDirectory) {
-            for (file in source.walkTopDown().filter { it.isFile }) {
-                val rel = file.relativeTo(source).path.replace(File.separatorChar, '/')
-                val out = File(dest, rel).apply { parentFile?.mkdirs() }
-                file.copyTo(out, overwrite = true)
-                entries += 1
-                bytes += file.length()
-            }
-        }
-        return BackupManifest.CategoryStat(entries, bytes, encrypted = false)
-    }
+    /**
+     * `GLOBAL.md` / `SOUL.md` / daily notes, copied verbatim into `data/memory/`.
+     *
+     * [GH#299] Delegates to [BackupMemoryTree] so the packaged tree is exactly
+     * `SoulStore.MEMORY_SUBDIR` recursively — including the migrated Soul
+     * icon at `soul-icons/soul.png`. The old inline loop here was the other half
+     * of the "avatar lost after restore" regression: it only knew the memory
+     * root, while the icon was written outside it.
+     */
+    private fun exportMemory(dataDir: File): BackupManifest.CategoryStat =
+        BackupMemoryTree.export(
+            BackupMemoryTree.deviceRoot(context.filesDir),
+            File(dataDir, "memory"),
+        )
 
     /**
      * `servers.json` verbatim. Returns null when there is nothing to write, so

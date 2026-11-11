@@ -59,11 +59,14 @@ data class SoulMetadata(
      * zero tokens; and SOUL.md is already synced as text and copied by the
      * memory backup, so a sibling PNG would silently not be backed up.
      *
-     * [GH#299] The inline form is now only a LEGACY input. On first read /
-     * save, [SoulIconMigration] rewrites it to a `file:soul-icons/soul.png`
-     * reference and moves the bytes into `filesDir`, so a hand-edited 85 KB
-     * data URI stops riding along in every SOUL.md read, sync and backup.
-     * `file:` values are accepted anywhere a data URI is.
+     * [GH#299] The inline form is now only a LEGACY input. [SoulStore.save]
+     * migrates it to `file:minis-global/memory/soul-icons/soul.png` and moves
+     * the bytes into the **memory backup root**, so a hand-edited 85 KB data
+     * URI stops riding along in every SOUL.md save and backup — and, unlike the
+     * second-round patch that wrote `filesDir/soul-icons/soul.png` outside every
+     * backup category, the migrated PNG is now packed/restored with SOUL.md.
+     * `file:` values are accepted anywhere a data URI is. Reads never migrate
+     * (see [SoulStore.load]): no read-side rewrite, no lost-update race.
      */
     val icon: String,
     val style: String,
@@ -209,7 +212,15 @@ object SoulStore {
 
     private const val TAG = "SoulStore"
     private const val FILE_NAME = "SOUL.md"
-    private const val MEMORY_SUBDIR = "minis-global/memory"
+
+    /**
+     * [GH#299] `filesDir`-relative memory root. `internal` because the backup
+     * layer (MEMORY category) must pack/restore exactly this tree: the migrated
+     * Soul icon lives in a subdirectory of it, and one shared definition is what
+     * keeps "SOUL.md is backed up" and "its avatar is backed up" from drifting
+     * apart again.
+     */
+    internal const val MEMORY_SUBDIR = "minis-global/memory"
     private const val PREFS_NAME = "soul_store"
     private const val FORCE_OVERWRITE_KEY = "force_overwrite_1_36_13"
 
@@ -476,31 +487,39 @@ lang: "auto"
      * missing or unreadable; an empty body parses to default-meta with
      * empty body and callers may treat that as "fall back to default".
      *
-     * [GH#299] A legacy inline image icon is migrated to a `file:` reference
-     * and SOUL.md is rewritten once, so every reader (prompt builder, Settings,
-     * minis-config, session memory) sees the small form from then on.
+     * [GH#299] **纯读：这里绝不写盘。** 第二轮补修在读路径把内联 icon 迁移后
+     * 整文件重写 SOUL.md，"先读后写"与并发 [save] 竞争时会用旧快照覆盖用户刚
+     * 保存的新内容（lost-update）。迁移现在只发生在 [save]（见
+     * [SoulIconMigration.prepareForSave]），读取保持零副作用，也不会为了迁移
+     * 而刷新 mtime / 让 prompt 缓存失效。
+     *
+     * 读用 [AtomicFileWrite.read]：与 [save] 的写共用同一把 per-path 锁，避免
+     * 读到一次写到一半的 SOUL.md。
      */
     fun load(context: Context): SoulFile? {
         val file = fileLocation(context)
         if (!file.exists()) return null
         return try {
-            val parsed = SoulMDParser.parse(file.readText())
-            SoulIconMigration.migrateOnRead(context, parsed)
+            val raw = AtomicFileWrite.read(file) ?: return null
+            SoulMDParser.parse(raw)
         } catch (t: Throwable) {
             AppLogger.warning(TAG, "SOUL.md load failed: ${t.message}")
             null
         }
     }
 
-    /** Atomic write through a `.tmp` sibling, then rename. */
+    /**
+     * Atomic write through a `.tmp` sibling, then rename.
+     *
+     * [GH#299] Save-side contract: **只迁移 frontmatter icon，body 原样落盘**。
+     * 磁盘上的 SOUL.md 必须保留用户原文（含 body 内 base64 图片）；token 清洗
+     * 只发生在 prompt 构建的内存副本上，由
+     * [SystemPromptBuilder.identitySection] 完成。这样保存不会无声改写用户内容，
+     * 也不需要"压缩 body"的产品决策。
+     */
     fun save(context: Context, file: SoulFile) {
         val target = fileLocation(context)
-        // [GH#299] Write-side interception: a personality body carrying an
-        // inline base64 image would otherwise be persisted and re-injected on
-        // every turn. Strip it here (all save callers — Settings, minis-config,
-        // persona library — go through this method) and migrate a legacy
-        // data-URI icon at the same time, so one file write settles both.
-        val prepared = SoulIconMigration.sanitizeForSave(context, file)
+        val prepared = SoulIconMigration.prepareForSave(context, file)
         val text = SoulMDParser.serialize(prepared)
         // Unified atomic write: AtomicFileWrite adds the per-path lock,
         // short-write detection and post-write verify on top of the same
@@ -707,9 +726,10 @@ object SystemPromptBuilder {
         //
         // [GH#299] …except inline image payloads: an 85 KB base64 screenshot
         // pasted into the personality body is injected into EVERY turn's system
-        // prompt. Replace it with a short placeholder before scrubbing; the
-        // write path applies the same rule, so this is also just defence in
-        // depth for files written by an older build.
+        // prompt. This is the ONLY place body scrubbing happens: `trimmed` /
+        // `resolved` are in-memory Strings, and the on-disk SOUL.md keeps the
+        // user's original bytes (save no longer rewrites the body). The style
+        // field above is scrubbed the same way, also on a copy.
         val personalityRaw = SoulIconMigration.stripInlineImageDataUris(trimmed)
 
         val personality = scrubInjections(personalityRaw)
