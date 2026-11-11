@@ -71,8 +71,24 @@ jobs:
 
       - name: Install build tools and Android NDK
         run: |
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y curl unzip make gawk sed file python3 cmake ninja-build g++ git
+          # [rolling-apk-resilience] Two consecutive main builds (43020473971's
+          # successor runs) died here on runner DNS — "Temporary failure
+          # resolving 'azure.archive.ubuntu.com'" while apt fetched ninja-build,
+          # on two different runners 20 minutes apart. Transient Azure mirror
+          # hiccups, not code. Retry the whole apt phase before failing the
+          # native-deps wheel; --fix-missing reuses the partial archives the
+          # failed attempt already downloaded.
+          apt_ok=0
+          for attempt in 1 2 3; do
+            if sudo apt-get update \
+              && sudo DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=5 install -y --fix-missing curl unzip make gawk sed file python3 cmake ninja-build g++ git; then
+              apt_ok=1
+              break
+            fi
+            echo "apt attempt $attempt failed (runner DNS/mirror hiccup) — retrying in 30s"
+            sleep 30
+          done
+          [ "$apt_ok" = 1 ] || { echo "apt still failing after 3 attempts"; exit 1; }
           mkdir -p /usr/local/lib/android/sdk/cmdline-tools
           if [ ! -x /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager ]; then
             curl -fsSL -o /tmp/cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-${{ env.ANDROID_CMDLINE_TOOLS }}_latest.zip
