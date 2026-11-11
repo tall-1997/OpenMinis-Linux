@@ -63,6 +63,11 @@ object ProviderFactory {
         // [GH#221] 用户自定义请求头存在 ProviderHeaderStore（不改 Room schema）。
         // memo key 带上 header 指纹：保存后内容一变就是新 key，下一次发送
         // 重建 provider；内容相同的旧缓存继续复用。
+        //
+        // [GH#221][OpenMinis#221] headersFor 不再在调用线程上做首次 Keystore
+        // 加载：冷启动时 MinisApp 的 IO 预热协程可能还没完成，这里会拿到空
+        // map —— 这是可接受的。预热完成后 header 指纹进入 memo key，下一次
+        // create 自然重建带用户头的 provider（首个请求可能不带，之后都带）。
         val userHeaders = ProviderHeaderStore.headersFor(instance.id)
         // [GH#258][GH#287] 用户 CA 的 generation 必须进 memo key：TLS socket
         // factory 在 provider 构造时就固化进 OkHttpClient（构造函数里 build），

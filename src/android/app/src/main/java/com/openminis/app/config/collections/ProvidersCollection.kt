@@ -142,7 +142,15 @@ class ProvidersCollection(
             azureMode = azureMode,
             forceThinkingEnabled = forceThinkingEnabled,
         )
-        repo.addInstance(instance)
+        // [OpenMinis#306] addInstance can refuse during the Main-thread
+        // cold-start window (config not loaded yet). Writing the key anyway
+        // would leave a stray secret for an instance that was never persisted,
+        // and returning its id would report a provider that does not exist.
+        if (!repo.addInstance(instance)) {
+            throw ConfigError.InvalidValue(
+                "Provider configuration is still loading — retry the add in a moment",
+            )
+        }
         if (apiKeyValue != null) repo.saveApiKey(instance.id, apiKeyValue)
         return instance.id
     }

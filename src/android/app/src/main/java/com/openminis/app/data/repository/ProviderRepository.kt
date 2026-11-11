@@ -256,8 +256,17 @@ class ProviderRepository(
         )
     }
 
-    fun addInstance(instance: ProviderInstance): Unit = synchronized(configLock) {
-        if (!ensureConfigLoaded()) return
+    /**
+     * [OpenMinis#306] Adds [instance] with its built-in/voice seeds.
+     *
+     * @return false when the config is still unloaded (Main-thread cold-start
+     *   window) or unreadable; nothing was persisted and the caller must not
+     *   treat the provider as created. Callers that save a credential next
+     *   (Settings add flow, config/debug import) MUST check this — otherwise
+     *   they write an API key for an instance that does not exist.
+     */
+    fun addInstance(instance: ProviderInstance): Boolean = synchronized(configLock) {
+        if (!ensureConfigLoaded()) return false
         val config = workingCopy()
         config.instances.add(instance)
         // Seed built-in model entries ONLY when the seed is appropriate for this
@@ -309,6 +318,7 @@ class ProviderRepository(
         saveConfig(config)
         // Stale from the start so the next sweep/SWR fetches it.
         invalidateModelCache(instance.id)
+        true
     }
     /** Voice-template seed reconciliation; implementation in [ProviderConfigStore]. */
     fun ensureVoiceTemplateModels() = configStore.ensureVoiceTemplateModels()

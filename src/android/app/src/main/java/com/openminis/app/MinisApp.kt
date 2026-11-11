@@ -192,6 +192,15 @@ class MinisApp : Application(), ImageLoaderFactory {
         // [GH#221] Per-provider custom request headers are read by
         // ProviderFactory.create() from call sites without a Context.
         com.openminis.app.provider.ProviderHeaderStore.prime(this)
+        // [GH#221] 预热必须在 IO：首次读取会打开 Keystore-backed
+        // EncryptedSharedPreferences，ProviderFactory.create() 可能从
+        // viewModelScope（Main）首次调用 headersFor。预热完成前 headersFor
+        // 返回空 map（不阻塞 Main），完成后 revision +1，下一次 create 用上
+        // 真实 header（memo key 含内容哈希，会自动重建 provider）。
+        appCoroutineScopes.io.launch {
+            runCatching { com.openminis.app.provider.ProviderHeaderStore.preload() }
+                .onFailure { Log.w("MinisApp", "ProviderHeaderStore preload failed: ${it.message}") }
+        }
         // [GH#114] Per-app accessibility allow/block list, read from the ui
         // tools which have no Activity context.
         com.openminis.app.accessibility.A11yAppPolicy.prime(this)

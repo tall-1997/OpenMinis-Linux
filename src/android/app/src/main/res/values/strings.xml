@@ -1798,7 +1798,7 @@
     <string name="backup_history_remove_title">Delete this backup record?</string>
     <string name="backup_history_remove_record_only">Delete Record Only</string>
     <string name="backup_history_remove_with_files">Delete Record and Files</string>
-    <string name="backup_history_remove_choice_note">“Delete Record Only” removes this entry and leaves the backup files on your destinations. “Delete Record and Files” also deletes the package from each destination — that cannot be undone.</string>
+    <string name="backup_history_remove_choice_note">“Delete Record Only” removes this entry and leaves the backup files where they are. “Delete Record and Files” also deletes the package from each destination and from this device — that cannot be undone.</string>
     <string name="backup_status_succeeded">Completed</string>
     <string name="backup_status_issues">Completed with issues</string>
     <string name="backup_status_failed">Failed</string>

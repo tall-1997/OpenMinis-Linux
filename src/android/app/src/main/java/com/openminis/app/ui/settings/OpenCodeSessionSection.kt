@@ -46,6 +46,10 @@ internal fun OpenCodeSessionSection(instanceId: String, customBaseURL: String?) 
 
     LaunchedEffect(instanceId) {
         enabled = withContext(Dispatchers.IO) {
+            // [OpenMinis#221] headersFor/openCodeSessionEnabled 未预热完成时返回
+            // 默认值而不触发 Keystore 首次同步加载；设置页需要真实状态，所以
+            // 在 IO 上显式预热一次，再读开关。
+            ProviderHeaderStore.preload()
             ProviderHeaderStore.openCodeSessionEnabled(instanceId)
         }
     }
