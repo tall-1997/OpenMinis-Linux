@@ -86,8 +86,10 @@ sealed class ToolCard {
     /**
      * State-change card: volume / brightness / DND / sound mode / toggles.
      * Undoable only when the result carried the fixed `was: <old>` line
-     * (F-batch convention in device/SystemTools.kt — TODO(G) align the
-     * exact wording once that batch lands) AND the old value could be
+     * (F-batch convention in device/SystemTools.kt — the 
+was: <old>
+     * suffix is now live there, wording verified identical) AND the old
+     * value could be
      * coerced back into the tool's own argument shape.
      */
     data class Change(

@@ -385,7 +385,9 @@ private fun FileItemRow(
     // [T-android-file-context-copy-abs-path] File context menu, anchored to
     // the row's bounding Box. Always offers "Copy Absolute Path"; the
     // HTML-only "Add to Home" item below stays gated behind the unvalidated
-    // WebApp entry point (TODO webapp-hidden).
+    // WebApp entry intentionally hidden: exposing a host-file browser as a
+    // WebApp needs a permission boundary review (sandbox-vs-host file
+    // scoping) — decided against for now, revisit if a use case lands.
     run {
         val context = LocalContext.current
         com.openminis.app.ui.components.MinisMenu(

@@ -70,6 +70,19 @@ internal fun DiffOverlay(diff: GitDiffView, onClose: () -> Unit) {
                         // recomposition of this panel (it took no remember at
                         // all), so an unrelated state change re-colored an
                         // arbitrarily large diff. Memoize per content.
+                        // [T-git-diff-truncation-hint] Both sources clip at
+                        // 200k chars (GitCli + GitHostRepo DIFF_MAX_CHARS);
+                        // a trailing ellipsis alone read as diff content.
+                        // The tail marker (a bare … line appended by
+                        // GitHostRepo) tells the user the view is partial.
+                        if (diff.content.trimEnd().endsWith("…")) {
+                            Text(
+                                stringResource(R.string.git_panel_diff_truncated),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(bottom = 4.dp),
+                            )
+                        }
                         val colored = remember(diff.content) { colorizeDiff(diff.content) }
                         Text(
                             colored,

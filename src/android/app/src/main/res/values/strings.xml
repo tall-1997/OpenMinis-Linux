@@ -2826,4 +2826,5 @@
     <string name="model_group_detail_quota_period_placeholder">Window length (hours)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Quota window reset — primary member serves again</string>
     <string name="model_group_detail_quota_window_remaining">Remaining this window: %1$d sends</string>
+    <string name="git_panel_diff_truncated">Diff truncated at 200,000 characters — the full text is in the repo file itself.</string>
 </resources>

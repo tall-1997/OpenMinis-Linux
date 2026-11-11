@@ -313,6 +313,7 @@ internal fun formatScheduleSummary(task: ScheduledTask): String {
             val days = task.customDays.sorted().joinToString(",") { dowShort(it) }
             if (days.isBlank()) "Custom" else days
         }
+        ScheduledRepeatMode.CRON -> task.cronSpec ?: "Cron"
         ScheduledRepeatMode.INTERVAL -> {
             val m = task.intervalMinutes
             when {

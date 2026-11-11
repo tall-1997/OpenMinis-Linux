@@ -16,8 +16,16 @@ import java.util.concurrent.TimeUnit
  */
 object PluginRegistry {
 
+    /**
+     * [T-plugin-registry-ownable] Fallback catalog source. The original
+     * XINCODE-Public URL stays as the built-in default, but users can point
+     * the catalog at their own registry via prefs
+     * (key [OVERRIDE_KEY], any https URL) — the app no longer hard-depends
+     * on an external project for its plugin market.
+     */
     const val REGISTRY_URL =
         "https://raw.githubusercontent.com/kusesad-1122/XINCODE-Public/main/docs/plugins/registry.json"
+    const val OVERRIDE_KEY = "registry_url_override"
     private const val PREFS = "plugin_registry"
     private const val CACHE_KEY = "plugin_registry_cache"
 
@@ -121,9 +129,12 @@ object PluginRegistry {
     fun fetch(context: Context): Pair<List<RemotePlugin>, Boolean> {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         try {
-            FetchUrlGuard.blockedReason(REGISTRY_URL)?.let { throw IllegalArgumentException(it) }
-            var currentUrl = REGISTRY_URL
-            val origin = URI(REGISTRY_URL)
+            // User override first; the built-in XINCODE default only serves
+            // when the override is unset or fails its own guard checks.
+            val effective = prefs.getString(OVERRIDE_KEY, null)?.trim()?.ifEmpty { null } ?: REGISTRY_URL
+            FetchUrlGuard.blockedReason(effective)?.let { throw IllegalArgumentException(it) }
+            var currentUrl = effective
+            val origin = URI(effective)
             var redirects = 0
             val client = OkHttpClient.Builder()
                 .dns(FetchUrlGuard.publicInternetDns())
