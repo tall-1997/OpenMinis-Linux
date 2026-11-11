@@ -708,6 +708,9 @@ internal object AppMigrations {
         }
     }
 
+    // MIGRATION_30_31 / 31_30 (audit_entries) live in AuditMigrations.kt —
+    // this file hit the 800-line policy cap.
+
     val MIGRATION_16_17 = object : Migration(16, 17) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.addColumnIfMissing("sessions", "permission_mode", "TEXT")
@@ -780,5 +783,8 @@ internal object AppMigrations {
     MIGRATION_29_30,
     MIGRATION_30_29,
     MIGRATION_29_28,
+    // [T-audit-room-persist] audit_entries chain — declared in AuditMigrations.kt.
+    AuditMigrations.MIGRATION_30_31,
+    AuditMigrations.MIGRATION_31_30,
     )
 }

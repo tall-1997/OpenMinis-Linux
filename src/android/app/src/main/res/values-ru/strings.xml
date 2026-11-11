@@ -2077,4 +2077,5 @@
     <string name="git_panel_no_branches">Нет веток</string>
     <string name="git_panel_no_stashes">Нет стэшей</string>
     <string name="git_panel_switch_branch">Переключить ветку</string>
+    <string name="sessionlist_export_markdown">Markdown</string>
 </resources>

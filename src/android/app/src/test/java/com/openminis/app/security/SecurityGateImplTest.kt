@@ -68,6 +68,38 @@ class SecurityGateImplTest {
         assertEquals(0, v.brokenAt)
     }
 
+    // ── [T-audit-room-persist] auditSink contract ───────────────────────────
+
+    @Test
+    fun auditSinkReceivesTheSameEntryTheTrailRecorded() {
+        val seen = mutableListOf<AuditEntry>()
+        gate.auditSink = { seen.add(it) }
+        val cmd = gate.classify("file_read", """{"path":"/tmp/a"}""")
+        gate.audit(cmd, Decision.Allow("ok"), "ok")
+        assertEquals(1, seen.size)
+        // Same hash ⇒ the persisted copy joins the same sha256 chain the
+        // in-memory trail verified, so Room stays a mirror, not a fork.
+        assertEquals(gate.getAuditTrail().single().hash, seen.single().hash)
+        assertEquals("Allow: ok", seen.single().decision)
+    }
+
+    @Test
+    fun auditSinkExceptionNeverBreaksAudit() {
+        gate.auditSink = { error("sink exploded") }
+        val cmd = gate.classify("file_read", """{"path":"/tmp/a"}""")
+        // Must not throw: persistence is fire-and-forget by contract.
+        gate.audit(cmd, Decision.Allow("ok"), "ok")
+        assertTrue(gate.verifyAuditChain().ok)
+    }
+
+    @Test
+    fun nullAuditSinkKeepsMemoryOnlyBehaviour() {
+        val cmd = gate.classify("file_read", """{"path":"/tmp/a"}""")
+        gate.audit(cmd, Decision.Allow("ok"), "ok")
+        assertEquals(1, gate.getAuditTrail().size)
+        assertTrue(gate.verifyAuditChain().ok)
+    }
+
     @Test
     fun authorityFenceDeniesOutsideWorkspace() {
         gate.setAuthorityProfile(PermissionProfile.workspace("/var/minis/workspace"))

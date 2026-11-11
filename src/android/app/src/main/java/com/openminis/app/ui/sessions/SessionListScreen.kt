@@ -1812,7 +1812,7 @@ private fun SessionItemContent(
                 },
             )
             RunNowMenuItem(session.id) { showContextMenu = false }
-            // Export submenu (JSON / Plain Text)
+            // Export submenu (JSON / Plain Text / Markdown).
             var showExportSub by remember { mutableStateOf(false) }
             DropdownMenuItem(
                 text = {
@@ -1827,20 +1827,20 @@ private fun SessionItemContent(
                 },
             )
             if (showExportSub) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.sessionlist_export_json), modifier = Modifier.padding(start = 24.dp)) },
-                    onClick = {
-                        showContextMenu = false
-                        onExportRequest(session, "json")
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.sessionlist_export_plain), modifier = Modifier.padding(start = 24.dp)) },
-                    onClick = {
-                        showContextMenu = false
-                        onExportRequest(session, "text")
-                    },
-                )
+                // [T-android-export-markdown] md joins the fmt passthrough trio.
+                listOf(
+                    R.string.sessionlist_export_json to "json",
+                    R.string.sessionlist_export_plain to "text",
+                    R.string.sessionlist_export_markdown to "markdown",
+                ).forEach { (label, fmt) ->
+                    DropdownMenuItem(
+                        text = { Text(stringResource(label), modifier = Modifier.padding(start = 24.dp)) },
+                        onClick = {
+                            showContextMenu = false
+                            onExportRequest(session, fmt)
+                        },
+                    )
+                }
             }
             // Edit Title & Category
             DropdownMenuItem(

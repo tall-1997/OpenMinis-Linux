@@ -77,3 +77,49 @@ internal fun providerIcon(type: ProviderType): Pair<ImageVector, Color> = when (
     ProviderType.antigravity,
     ProviderType.unsupported -> Icons.Default.Cloud to Color(0xFF9E9E9E)
 }
+
+/**
+ * Auto-increment [base] against already-used instance labels ("X", "X 2", …).
+ * Shared by the protocol-default label and the [T-android-vendor-presets]
+ * chip fill, so picking "DeepSeek" twice yields "DeepSeek", "DeepSeek 2"
+ * exactly like adding "OpenAI" twice does. Lives here rather than in
+ * AddProviderScreen because that file is pinned at its architecture ceiling.
+ */
+internal fun uniqueInstanceLabel(existing: Set<String>, base: String): String {
+    if (base !in existing) return base
+    var n = 2
+    while ("$base $n" in existing) n++
+    return "$base $n"
+}
+
+// [T-hardcoded-strings] These descriptions were English-only string
+// literals; now resolved through stringResource so they follow the device
+// locale. @Composable — the call sites already run inside composition.
+// Moved here from AddProviderScreen beside [providerDisplayOrder]: the same
+// per-protocol catalog shape, and AddProviderScreen is pinned at its
+// architecture ceiling.
+@Composable
+internal fun apiKeyDescription(type: ProviderType): String = when (type) {
+    ProviderType.openAI -> stringResource(R.string.add_provider_api_key_desc_openai)
+    ProviderType.anthropic -> stringResource(R.string.add_provider_api_key_desc_anthropic)
+    ProviderType.gemini -> stringResource(R.string.add_provider_api_key_desc_gemini)
+    ProviderType.openRouter -> stringResource(R.string.add_provider_api_key_desc_openrouter)
+    ProviderType.xAI -> stringResource(R.string.add_provider_api_key_desc_xai)
+    ProviderType.kimiCode -> stringResource(R.string.add_provider_api_key_desc_kimicode)
+    ProviderType.openAIResponses -> stringResource(R.string.add_provider_api_key_desc_openai_responses)
+    ProviderType.antigravity,
+    ProviderType.unsupported -> stringResource(R.string.add_provider_api_key_desc_unsupported)
+}
+
+@Composable
+internal fun oauthDescription(type: ProviderType): String = when (type) {
+    ProviderType.anthropic -> stringResource(R.string.add_provider_oauth_desc_anthropic)
+    ProviderType.gemini -> stringResource(R.string.add_provider_oauth_desc_gemini)
+    ProviderType.openAI -> stringResource(R.string.add_provider_oauth_desc_openai)
+    ProviderType.xAI -> stringResource(R.string.add_provider_oauth_desc_xai)
+    ProviderType.openRouter -> stringResource(R.string.add_provider_oauth_desc_openrouter)
+    ProviderType.kimiCode -> stringResource(R.string.add_provider_oauth_desc_kimicode)
+    ProviderType.openAIResponses -> stringResource(R.string.add_provider_oauth_desc_openai)
+    ProviderType.antigravity,
+    ProviderType.unsupported -> stringResource(R.string.add_provider_api_key_desc_unsupported)
+}

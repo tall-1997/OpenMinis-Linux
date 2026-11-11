@@ -2649,4 +2649,33 @@
     <string name="git_panel_no_stashes">没有暂存记录</string>
     <string name="git_panel_switch_branch">切换分支</string>
     <string name="git_panel_diff_truncated">Diff 已在 200,000 字符处截断——完整内容以仓库文件为准。</string>
+    <string name="sessionlist_export_markdown">Markdown</string>
+    <!-- 添加供应商页的厂商预设（[T-android-vendor-presets]）：一键预填主流厂商
+         公开文档的 OpenAI 兼容接入地址。 -->
+    <string name="add_provider_vendor_presets">厂商预设</string>
+    <string name="add_provider_vendor_presets_pick_hint">点按厂商可自动填入接口地址与名称。</string>
+    <string name="add_provider_vendor_preset_deepseek">DeepSeek</string>
+    <string name="add_provider_vendor_preset_zhipu">智谱 GLM</string>
+    <string name="add_provider_vendor_preset_kimi">Kimi（Moonshot）</string>
+    <string name="add_provider_vendor_preset_qwen">通义千问</string>
+    <string name="add_provider_vendor_preset_ark">火山方舟</string>
+    <string name="add_provider_vendor_preset_minimax">MiniMax</string>
+    <string name="add_provider_vendor_preset_siliconflow">硅基流动</string>
+    <string name="add_provider_vendor_preset_groq">Groq</string>
+    <string name="add_provider_vendor_preset_together">Together</string>
+    <string name="add_provider_vendor_preset_mistral">Mistral</string>
+    <string name="add_provider_vendor_preset_ollama">Ollama</string>
+    <string name="add_provider_vendor_preset_lmstudio">LM Studio</string>
+    <string name="add_provider_vendor_hint_deepseek">在 platform.deepseek.com 创建 API Key</string>
+    <string name="add_provider_vendor_hint_zhipu">在智谱开放平台 open.bigmodel.cn 控制台获取 API Key</string>
+    <string name="add_provider_vendor_hint_kimi">在 platform.moonshot.cn 创建 API Key</string>
+    <string name="add_provider_vendor_hint_qwen">在阿里云百炼控制台创建 API Key</string>
+    <string name="add_provider_vendor_hint_ark">在火山方舟控制台创建 API Key，模型名填接入点 ID 或模型 ID</string>
+    <string name="add_provider_vendor_hint_minimax">在 MiniMax 开放平台获取 API Key</string>
+    <string name="add_provider_vendor_hint_siliconflow">在 cloud.siliconflow.cn 创建 API Key</string>
+    <string name="add_provider_vendor_hint_groq">在 console.groq.com 创建 API Key</string>
+    <string name="add_provider_vendor_hint_together">在 Together 控制台 api.together.ai 获取 API Key</string>
+    <string name="add_provider_vendor_hint_mistral">在 console.mistral.ai 创建 API Key</string>
+    <string name="add_provider_vendor_hint_ollama">本地服务，无需 API Key</string>
+    <string name="add_provider_vendor_hint_lmstudio">本地服务，无需 API Key；请先在 LM Studio 启动 Developer 服务器</string>
 </resources>
