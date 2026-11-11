@@ -41,6 +41,8 @@ internal suspend fun ChatViewModel.generateCompactSummary(conversationText: Stri
         imageParts = emptyList(),
         tools = emptyList(),
         thinkingLevel = ThinkingLevel.OFF,
+        // [GH#221] Summarisation uses the same per-instance headers as chat.
+        extraHeaders = providerExtraHeaders(attempt.instanceId),
     ).text
     if (text.isBlank()) throw IllegalStateException("empty compact summary from ${attempt.label}")
     return text

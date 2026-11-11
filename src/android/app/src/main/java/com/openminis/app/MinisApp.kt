@@ -175,6 +175,15 @@ class MinisApp : Application(), ImageLoaderFactory {
 
         // The pre-send context check and the in-chat opt-in read this with no Activity context.
         com.openminis.app.data.AutoCompactPrefs.prime(this)
+        // [GH#221] Per-provider custom request headers are read by
+        // ProviderFactory.create() from call sites without a Context.
+        com.openminis.app.provider.ProviderHeaderStore.prime(this)
+        // [GH#114] Per-app accessibility allow/block list, read from the ui
+        // tools which have no Activity context.
+        com.openminis.app.accessibility.A11yAppPolicy.prime(this)
+        // [GH#131] Lifecycle hook config (event → sandbox script), read from
+        // ChatRepository without a Context.
+        com.openminis.app.agent.lifecycle.LifecycleHooks.prime(this)
         com.openminis.app.data.PlanDiscussionPrefs.prime(this)
         com.openminis.app.data.ToolLimitPrefs.prime(this)
         com.openminis.app.data.ContextSaverPrefs.prime(this) // [T-tool-result-aging] send path reads it per request

@@ -150,6 +150,16 @@ object ScheduledAgentRunner {
         sessionId: String,
     ): HeadlessChatRunner.PromptResult {
         val mode = task.targetMode
+        // [GH#201] Date / last-fire context + {{date}}-style template variables
+        // are resolved at FIRE time (not when the task was saved): a daily task
+        // saved weeks ago must see today's date, and {{last_fired}} must show
+        // the previous run. RerunMessage replays an existing user message, so
+        // there is no prompt to augment.
+        val renderedPrompt = ScheduledPromptTemplate.render(
+            prompt = task.prompt,
+            lastFiredAt = task.lastFiredAt,
+            taskLabel = task.label,
+        )
         return if (mode is ScheduledTargetMode.RerunMessage) {
             HeadlessChatRunner.retry(
                 context = app,
@@ -162,7 +172,7 @@ object ScheduledAgentRunner {
             HeadlessChatRunner.prompt(
                 context = app,
                 sessionId = sessionId,
-                text = task.prompt,
+                text = renderedPrompt,
                 attachments = emptyList(),
                 thinkingLevel = null,
                 wait = true,

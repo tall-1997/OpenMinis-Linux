@@ -134,6 +134,8 @@ private fun ChatViewModel.supervisorBaseTools(entry: ModelEntry): List<AgentTool
         memoryEnabled = false,
         subAgentEnabled = false,
         hasSpeechModel = providerRepository.resolveVoiceInputEntry() != null,
+        // [GH#298] Same web_search master switch.
+        webSearchEnabled = com.openminis.app.tools.WebSearchSettings.toolEnabled(context),
     )
 
 /** Supervisor seat: the session model, or null when it has no usable provider. */
@@ -369,6 +371,8 @@ private suspend fun ChatViewModel.runSupervisorSession(
                 toolGate = null,
                 thinkingLevel = supervisorEntry.effectiveMaxThinkingLevel,
                 stopWhenClosing = false,
+                // [GH#221] Same per-instance header channel as the main loop.
+                extraHeaders = providerExtraHeaders(supervisorEntry.providerInstanceId),
                 onStatus = {},
             )
         }
@@ -408,6 +412,8 @@ private suspend fun ChatViewModel.runSupervisorSession(
                 writePaths = writePaths,
                 maxTurns = multiAgentSettings.subagentMaxTurns.value,
                 thinkingLevel = workerEntry.effectiveMaxThinkingLevel,
+                // [GH#221] Worker seat speaks through its own provider instance.
+                extraHeaders = providerExtraHeaders(workerEntry.providerInstanceId),
             )
         }
         upsertGroupBubble(bubbleId, workerSpeaker, result.output, analyzing = false)

@@ -186,28 +186,63 @@ internal suspend fun ChatViewModel.executeTool(
         // [T-ui-read] GUI Agent 的眼睛：a11y 读屏快照，配合 shell_execute 里
         // 的 android-a11y-cli 点击/输入形成"看屏→决策→执行→再看"闭环。
         com.openminis.app.tools.UiReadTool.NAME -> {
-            // Session-scoped: ui_read also injects the first-entry app guide
-            // (per session, per pack) when the foreground app changed.
-            com.openminis.app.tools.UiReadTool.execute(argsJson, activeSessionId)
+            // [GH#114] Per-app allow/block list is checked BEFORE the screen is
+            // read. Checked here (dispatch layer) so every caller of the tool —
+            // not just one UI path — goes through the same gate.
+            when (val verdict = com.openminis.app.accessibility.A11yAppPolicy.verdictForForeground()) {
+                is com.openminis.app.accessibility.A11yAppPolicy.Verdict.Blocked ->
+                    com.openminis.app.tools.ToolExecutionResult(
+                        com.openminis.app.accessibility.A11yAppPolicy
+                            .blockedMessage(verdict, com.openminis.app.tools.UiReadTool.NAME),
+                        success = false,
+                        errorCode = com.openminis.app.tools.ToolErrorCode.PERMISSION_DENIED,
+                    )
+                com.openminis.app.accessibility.A11yAppPolicy.Verdict.Allowed ->
+                    // Session-scoped: ui_read also injects the first-entry app guide
+                    // (per session, per pack) when the foreground app changed.
+                    com.openminis.app.tools.UiReadTool.execute(argsJson, activeSessionId)
+            }
         }
         // [T-ui-action] GUI Agent 的手：tap/type/swipe/scroll/back/open_app/open_url。
         com.openminis.app.tools.UiActionTool.NAME -> {
-            val action = com.openminis.app.tools.UiActionTool.execute(argsJson)
-            // [T-android-app-knowledge] Feed the tap-route tracker: package from
-            // the accessibility foreground probe, target from the action text.
-            runCatching {
-                val pkg = com.openminis.app.accessibility.MinisAccessibilityService
-                    .getInstance()?.foregroundPackage()?.first
-                if (pkg != null) {
-                    val args = JSONObject(argsJson)
-                    val target = listOf("text", "selector", "package_name", "url")
-                        .firstNotNullOfOrNull { args.optString(it).takeIf { v -> v.isNotBlank() } }
-                        ?: args.optString("action")
-                    com.openminis.app.knowledge.RouteTrackers
-                        .global.record(activeSessionId ?: "", pkg, target)
+            // [GH#114] Same per-app gate as ui_read. `open_app` / `open_url`
+            // start a NEW app rather than acting on the current one, so they
+            // are exempt: blocking them on the CURRENT foreground app would
+            // make the allowlist a chicken-and-egg lock.
+            val verdict = com.openminis.app.accessibility.A11yAppPolicy.verdictForForeground()
+            val actionName = runCatching { JSONObject(argsJson).optString("action") }.getOrDefault("")
+            val action = if (actionName == "open_app" || actionName == "open_url") {
+                com.openminis.app.accessibility.A11yAppPolicy.Verdict.Allowed
+            } else {
+                verdict
+            }
+            when (action) {
+                is com.openminis.app.accessibility.A11yAppPolicy.Verdict.Blocked ->
+                    com.openminis.app.tools.ToolExecutionResult(
+                        com.openminis.app.accessibility.A11yAppPolicy
+                            .blockedMessage(action, com.openminis.app.tools.UiActionTool.NAME),
+                        success = false,
+                        errorCode = com.openminis.app.tools.ToolErrorCode.PERMISSION_DENIED,
+                    )
+                com.openminis.app.accessibility.A11yAppPolicy.Verdict.Allowed -> {
+                    val result = com.openminis.app.tools.UiActionTool.execute(argsJson)
+                    // [T-android-app-knowledge] Feed the tap-route tracker: package from
+                    // the accessibility foreground probe, target from the action text.
+                    runCatching {
+                        val pkg = com.openminis.app.accessibility.MinisAccessibilityService
+                            .getInstance()?.foregroundPackage()?.first
+                        if (pkg != null) {
+                            val args = JSONObject(argsJson)
+                            val target = listOf("text", "selector", "package_name", "url")
+                                .firstNotNullOfOrNull { args.optString(it).takeIf { v -> v.isNotBlank() } }
+                                ?: args.optString("action")
+                            com.openminis.app.knowledge.RouteTrackers
+                                .global.record(activeSessionId ?: "", pkg, target)
+                        }
+                    }
+                    result
                 }
             }
-            action
         }
         // [T-android-vscreen] Agent-owned virtual displays: the target app is
         // started on a VirtualDisplay so reads/taps/typing never steal the
@@ -223,11 +258,30 @@ internal suspend fun ChatViewModel.executeTool(
         // was dead code in production. forContext() is a process-wide
         // singleton (see A11ySkillStore), so concurrent ui_skill calls and
         // any future settings-page wiring share one lock-guarded instance.
-        com.openminis.app.tools.UiSkillTool.NAME ->
-            com.openminis.app.tools.UiSkillTool.execute(
-                argsJson,
-                com.openminis.app.accessibility.A11ySkillStore.forContext(context),
-            )
+        com.openminis.app.tools.UiSkillTool.NAME -> {
+            // [GH#114] `replay` drives real taps/typing, so it goes through the
+            // same per-app gate as ui_action; list/match/record only observe.
+            val skillAction = runCatching { JSONObject(argsJson).optString("action") }.getOrDefault("")
+            val skillVerdict = if (skillAction == "replay") {
+                com.openminis.app.accessibility.A11yAppPolicy.verdictForForeground()
+            } else {
+                com.openminis.app.accessibility.A11yAppPolicy.Verdict.Allowed
+            }
+            when (skillVerdict) {
+                is com.openminis.app.accessibility.A11yAppPolicy.Verdict.Blocked ->
+                    com.openminis.app.tools.ToolExecutionResult(
+                        com.openminis.app.accessibility.A11yAppPolicy
+                            .blockedMessage(skillVerdict, com.openminis.app.tools.UiSkillTool.NAME),
+                        success = false,
+                        errorCode = com.openminis.app.tools.ToolErrorCode.PERMISSION_DENIED,
+                    )
+                com.openminis.app.accessibility.A11yAppPolicy.Verdict.Allowed ->
+                    com.openminis.app.tools.UiSkillTool.execute(
+                        argsJson,
+                        com.openminis.app.accessibility.A11ySkillStore.forContext(context),
+                    )
+            }
+        }
         // T178: pass sessionId + context so read_image routes through
         // resolveSessionHostPath like file_read/write/edit do — without
         // these, the tool consults the global last-writer-wins

@@ -2043,6 +2043,8 @@ class ChatViewModel(
             mcpNativeEnabled = mcpRepository != null,
             includeLongTail = true,
             hasSpeechModel = providerRepository.resolveVoiceInputEntry() != null,
+            // [GH#298] Settings → Web search 总开关。
+            webSearchEnabled = com.openminis.app.tools.WebSearchSettings.toolEnabled(context),
         ) + com.openminis.app.plugins.OnlinePluginStore.toolDefinitions(context) +
             com.openminis.app.plugins.LocalToolPluginStore.agentToolDefinitions(context)
         val matches = com.openminis.app.tools.FindTools.search(query, all, limit)
@@ -2074,6 +2076,9 @@ class ChatViewModel(
                 (if (multiAgentSettings.enabled.value) 8L else 0L) or
                 (com.openminis.app.plugins.OnlinePluginStore.toolDefinitionsStamp(context) shl 4) xor
                 (com.openminis.app.plugins.LocalToolPluginStore.toolsStamp(context) shl 20) xor
+                // [GH#298] 关掉 web_search 必须让 memo 失效，否则切换开关后
+                // 本次进程内仍会继续下发旧 schema。
+                (if (com.openminis.app.tools.WebSearchSettings.toolEnabled(context)) 0L else 1L shl 40) xor
                 enabledStamp
             agentToolsMemo?.takeIf { agentToolsMemoStamp == stamp }?.let { return it }
             val built = AgentTools.makeAgentTools(
@@ -2096,6 +2101,8 @@ class ChatViewModel(
                 includeLongTail = false,
                 enabledToolNames = enabledLongTailTools,
                 hasSpeechModel = providerRepository.resolveVoiceInputEntry() != null,
+                // [GH#298] 与 findAndEnableTools 同一开关。
+                webSearchEnabled = com.openminis.app.tools.WebSearchSettings.toolEnabled(context),
             ) + com.openminis.app.plugins.OnlinePluginStore.toolDefinitions(context) +
                 com.openminis.app.plugins.LocalToolPluginStore.agentToolDefinitions(context)
             agentToolsMemo = built
@@ -3435,11 +3442,23 @@ class ChatViewModel(
         val model: LLMModel,
         val nextHint: String,
         val temperature: Double? = null,
+        /**
+         * [GH#221] Owning provider instance, so the compaction request can carry
+         * the same per-instance headers as the chat request (OpenCode Go's
+         * `x-opencode-session` rejects a summarisation call without it).
+         */
+        val instanceId: String? = null,
     ) {
         fun maxOutFor(userMessage: String): Int {
             val estimatedInput = userMessage.length / 4
             val window = model.contextWindow?.takeIf { it > 0 } ?: 128_000
-            return maxOf(1024, minOf(8192, window - estimatedInput))
+            // [GH#74] Budget against the model that will ACTUALLY serve this
+            // stage: its remaining headroom (window - input) AND its own output
+            // ceiling. The old formula ignored maxOutputTokens, so a stage whose
+            // declared ceiling was 4K asked for 8K and relied on the upstream to
+            // clamp or reject.
+            val declaredCeiling = model.maxOutputTokens?.takeIf { it > 0 }?.coerceAtMost(8192) ?: 8192
+            return maxOf(1024, minOf(declaredCeiling, window - estimatedInput))
         }
     }
 
@@ -5115,6 +5134,8 @@ class ChatViewModel(
             temperature = samplingTemperature(_activeEntryId.value),
             tools = emptyList(),
             thinkingLevel = ThinkingLevel.OFF,
+            // [GH#221] 一次性请求也带同一份额外头（OpenCode 会话头 + 用户 KV）。
+            extraHeaders = requestExtraHeaders(),
         ).collect { chunk ->
             if (chunk is LLMStreamChunk.Text) buf.append(chunk.text)
         }

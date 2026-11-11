@@ -1308,6 +1308,11 @@
     <string name="provider_detail_auto_append_v1">Auto-append /v1</string>
     <string name="provider_detail_custom_user_agent">Custom User-Agent</string>
     <string name="provider_detail_custom_user_agent_placeholder">Leave blank for default</string>
+    <!-- [GH#221] per-provider custom request headers (KV, one per line). -->
+    <string name="provider_detail_custom_headers">Custom request headers</string>
+    <string name="provider_detail_custom_headers_footer">One “Name: value” per line. Applied to chat, /models and Responses requests for this provider only. Host, Content-Length and Connection are managed by the HTTP client and cannot be overridden.</string>
+    <string name="provider_detail_custom_headers_placeholder">X-Custom-Header: value</string>
+    <string name="provider_detail_save_headers">Save Headers</string>
     <string name="provider_detail_save_url_settings">Save URL Settings</string>
     <string name="provider_detail_api_format">API Format</string>
     <string name="provider_detail_api_format_footer_chat">Standard /v1/chat/completions format. Compatible with most OpenAI-compatible services.</string>
@@ -2064,6 +2069,30 @@
 
     <!-- T323: System Permissions screen + AccessibilityService -->
     <string name="system_permissions_a11y_oem_header">Service keeps getting killed?</string>
+    <!-- [GH#114] per-app accessibility allow / block list. -->
+    <string name="a11y_app_policy_section">Accessibility app access</string>
+    <string name="a11y_app_policy_footer">When enabled, ui_read and ui_action are checked against the current foreground app before they run. Apps outside the list (allow mode) or inside it (block mode) are refused with a visible message. The Minis app itself is always allowed.</string>
+    <string name="a11y_app_policy_enabled">Restrict by app</string>
+    <string name="a11y_app_policy_enabled_sub">Check the foreground package before every screen read or tap</string>
+    <string name="a11y_app_policy_blocklist">List is a blocklist</string>
+    <string name="a11y_app_policy_blocklist_sub">Off = only listed apps are allowed. On = listed apps are blocked.</string>
+    <string name="a11y_app_policy_apps">Apps</string>
+    <string name="a11y_app_policy_apps_count">%1$d listed</string>
+    <string name="a11y_app_policy_apps_hint">One Android package name per line, e.g. com.tencent.mm</string>
+    <!-- [GH#131] lifecycle hooks (session events → sandbox scripts). -->
+    <string name="lifecycle_hooks_title">Lifecycle Hooks</string>
+    <string name="settings_lifecycle_hooks">Lifecycle Hooks</string>
+    <string name="settings_lifecycle_hooks_subtitle">Run sandbox scripts on session start / response / end</string>
+    <string name="lifecycle_hooks_section_master">Master switch</string>
+    <string name="lifecycle_hooks_master_footer">Off by default. While off, configured scripts are kept but never executed.</string>
+    <string name="lifecycle_hooks_enable">Enable lifecycle hooks</string>
+    <string name="lifecycle_hooks_enable_sub">Execute the scripts below on their events</string>
+    <string name="lifecycle_hooks_section_events">Events</string>
+    <string name="lifecycle_hooks_events_footer">Scripts run in the sandbox, serialized on their own lane, with a 20-second timeout. Failures are logged and never block the chat.</string>
+    <string name="lifecycle_hooks_not_set">Not set</string>
+    <string name="lifecycle_hooks_command_hint">One command line. A script path is usually best, e.g. bash /var/minis/hooks/on-response.sh. Leave empty to remove the hook.</string>
+    <string name="lifecycle_hooks_help_header">Environment &amp; caveats</string>
+    <string name="lifecycle_hooks_help_body">Each script receives MINIS_HOOK_EVENT, MINIS_HOOK_SESSION_ID and MINIS_HOOK_DETAIL. Scripts are one-shot PRoot processes: /proc of other commands is not visible across invocations and flock is unreliable, so use files for cross-run state. OnResponse fires once per completed agent reply; OnSessionEnd fires when the chat is deleted.</string>
     <string name="system_permissions_a11y_oem_footer">%1$s may show \"this service has failed\" and stop the accessibility service in the background. Whitelist autostart and remove the battery restriction so it stays connected.</string>
     <string name="system_permissions_a11y_oem_autostart">Add to autostart whitelist</string>
     <string name="system_permissions_a11y_oem_autostart_sub">Open the autostart manager and enable Minis Ultra</string>
@@ -2185,6 +2214,8 @@
     <string name="scheduled_task_field_repeat">Repeat</string>
     <string name="scheduled_task_field_prompt">Prompt</string>
     <string name="scheduled_task_field_prompt_hint">What should the assistant do when this fires?</string>
+    <!-- [GH#201] Template variables + automatic fire-time date prefix. -->
+    <string name="scheduled_task_prompt_template_hint">The current date/time and last run are added automatically. You can also use {{date}}, {{time}}, {{datetime}}, {{weekday}}, {{last_fired}}, {{last_fired_ago}} and {{task_label}}.</string>
     <string name="scheduled_task_repeat_once">Once</string>
     <string name="scheduled_task_repeat_daily">Daily</string>
     <string name="scheduled_task_repeat_weekdays">Weekdays</string>
@@ -2356,6 +2387,11 @@
     <string name="translate_no_model">No enabled model with an API key.</string>
     <string name="translate_empty">The model returned no text.</string>
     <string name="web_search_engine_header">Engine</string>
+    <!-- [GH#298] 工具总开关（settings UI + AgentTools 注册门控）。 -->
+    <string name="web_search_tool_section">Tool</string>
+    <string name="web_search_tool_enabled">Enable web_search</string>
+    <string name="web_search_tool_enabled_sub">Let the agent search the web from chat. Off → the tool is not offered at all.</string>
+    <string name="web_search_tool_section_footer">Turning the tool off does not delete the engine configuration below; re-enable it to restore the same behaviour.</string>
     <string name="web_search_engine_footer">Tap an engine to configure it. DuckDuckGo needs no key. SearXNG needs an instance URL. Bing needs an API key. Custom uses a URL template with {query}. Failed searches fall back to DuckDuckGo, then suggest browser_use.</string>
     <string name="web_search_engine_ddg">DuckDuckGo HTML</string>
     <string name="web_search_engine_searxng">SearXNG</string>

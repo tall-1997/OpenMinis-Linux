@@ -50,6 +50,8 @@ object AnthropicModelsApi {
         // keeps the default UA. Threaded from ProviderRepository.refreshModels.
         customUserAgent: String? = null,
         cacheScope: String = "",
+        // [GH#221] 用户自定义请求头（同实例 KV）。
+        extraHeaders: Map<String, String> = emptyMap(),
     ): List<LLMModel> = withContext(Dispatchers.IO) {
         // Cache key: base URL included so the same API key across proxies doesn't
         // share cached model lists (vLLM vs api.anthropic.com can differ).
@@ -93,6 +95,9 @@ object AnthropicModelsApi {
                 .header("anthropic-version", "2023-06-01")
                 // [T-provider-custom-user-agent] models-list UA override.
                 .applyUserAgentOverride(customUserAgent)
+                // [GH#221] 用户自定义请求头（在认证头之前应用，认证仍由下面对
+                // 空 base / OAuth 的判断决定；同名时后设置的认证头优先）。
+                .apply { for ((k, v) in extraHeaders) header(k, v) }
 
             if (isOAuth) {
                 // OAuth: Bearer token + required beta header (mirrors iOS fetchModels(oauthToken:))
