@@ -27,9 +27,12 @@ object BackupMerge {
         val instances = mutableListOf<ProviderInstance>()
         val placedInstances = mutableSetOf<String>()
         for (ri in remote.instances) {
+            // [GH#366] A package produced by an older/buggy merge (or hand-
+            // edited) can carry the same id twice; writing both duplicates the
+            // provider row and every model under it.
+            if (!placedInstances.add(ri.id)) continue
             val existing = local.instances.firstOrNull { it.id == ri.id }
             instances.add(ri)
-            placedInstances.add(ri.id)
             if (existing == null || !sameInstance(existing, ri)) changed++
         }
         local.instances.filter { it.id !in placedInstances }.forEach { instances.add(it) }
@@ -37,40 +40,66 @@ object BackupMerge {
         val entries = mutableListOf<ModelEntry>()
         val placedEntries = mutableSetOf<String>()
         for (re in remote.modelEntries) {
+            if (!placedEntries.add(re.id)) continue
             val existing = local.modelEntries.firstOrNull { it.id == re.id }
             entries.add(re)
-            placedEntries.add(re.id)
             if (existing == null || existing != re) changed++
         }
         local.modelEntries.filter { it.id !in placedEntries }.forEach { entries.add(it) }
 
         val groups = mutableListOf<ModelGroup>()
         val placedGroups = mutableSetOf<String>()
-        val consumedRemoteGroups = mutableSetOf<String>()
+
+        // [GH#366] Merge [incoming]'s members into the group already at
+        // [index] instead of appending a second copy. The by-name branch below
+        // can place a local group before a later remote group with the SAME id
+        // arrives; the old code then added that remote group unconditionally,
+        // so one restore produced two groups sharing an id / a name.
+        fun mergeMembersInto(index: Int, incoming: ModelGroup) {
+            val base = groups[index]
+            val union = (base.memberEntryIds + incoming.memberEntryIds).distinct()
+            // Same id = the backup's settings win (that is what restore means);
+            // only the member set is a union.
+            groups[index] = incoming.copy(memberEntryIds = union.toMutableList())
+            if (union != base.memberEntryIds) changed++
+        }
+
         for (rg in remote.modelGroups) {
-            val byId = local.modelGroups.firstOrNull { it.id == rg.id }
+            // 1) Same id: restore the backup's group content.
+            val byId = groups.firstOrNull { it.id == rg.id }
+                ?: local.modelGroups.firstOrNull { it.id == rg.id }
             if (byId != null) {
-                groups.add(rg)
-                placedGroups.add(rg.id)
-                consumedRemoteGroups.add(rg.id)
-                if (byId != rg) changed++
+                val idx = groups.indexOfFirst { it.id == byId.id }
+                if (idx >= 0) {
+                    mergeMembersInto(idx, rg)
+                } else {
+                    groups.add(rg)
+                    if (byId != rg) changed++
+                }
+                placedGroups.add(byId.id)
                 continue
             }
-            // 同名但不同 id：并入本机分组，不新建一个重复分组。
-            val byName = local.modelGroups.firstOrNull {
-                it.id !in placedGroups && it.name == rg.name
-            }
+            // 2) 同名但不同 id：并入已有分组（保留本机 id），不新建重复分组。
+            // 同时检查本轮已经放入的分组，避免远端两个同名分组各自新建一份。
+            val byName = groups.firstOrNull { it.name == rg.name }
+                ?: local.modelGroups.firstOrNull {
+                    it.id !in placedGroups && it.name == rg.name
+                }
             if (byName != null) {
-                val union = (byName.memberEntryIds + rg.memberEntryIds).distinct()
-                val merged = byName.copy(memberEntryIds = union.toMutableList())
-                groups.add(merged)
+                val idx = groups.indexOfFirst { it.id == byName.id }
+                if (idx >= 0) {
+                    val base = groups[idx]
+                    val union = (base.memberEntryIds + rg.memberEntryIds).distinct()
+                    groups[idx] = base.copy(memberEntryIds = union.toMutableList())
+                    if (union != base.memberEntryIds) changed++
+                } else {
+                    val union = (byName.memberEntryIds + rg.memberEntryIds).distinct()
+                    groups.add(byName.copy(memberEntryIds = union.toMutableList()))
+                    if (union != byName.memberEntryIds) changed++
+                }
                 placedGroups.add(byName.id)
-                consumedRemoteGroups.add(rg.id)
-                if (union != byName.memberEntryIds) changed++
+                continue
             }
-        }
-        for (rg in remote.modelGroups) {
-            if (rg.id in consumedRemoteGroups) continue
             groups.add(rg)
             changed++
         }

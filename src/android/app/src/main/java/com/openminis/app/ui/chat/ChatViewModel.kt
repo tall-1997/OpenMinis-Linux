@@ -2788,7 +2788,24 @@ class ChatViewModel(
     val mentionSelectedIndex: StateFlow<Int> = _mentionSelectedIndex.asStateFlow()
 
     val currentModelSupportsReasoning: Boolean
-        get() = currentModel?.supportsReasoning == true || activeInstanceForcesThinking()
+        get() {
+            // [GH#311] A provider-level force switch overrides capability detection.
+            if (activeInstanceForcesThinking()) return true
+            currentModel?.let { return it.supportsReasoning }
+            // [GH#180] The resolved `currentModel` is only populated once a
+            // model group (or a persisted session binding) has been resolved.
+            // A fresh chat with no default model group therefore reported
+            // "no reasoning" even when the session's own entry/model does
+            // support it, so the thinking-level entry (top-bar badge + the
+            // /thinking row) disappeared until the user picked a group. Ask
+            // the SESSION's bound entry directly — capability is a property
+            // of the model, never of the group.
+            val entry = _activeEntryId.value?.let { id ->
+                providerRepository.config.value.modelEntries.find { it.id == id }
+            }
+            if (entry != null) return entry.model.supportsReasoning != false
+            return false
+        }
 
     /**
      * [T-android-thinking-level-arch] The thinking ceiling the currently-bound

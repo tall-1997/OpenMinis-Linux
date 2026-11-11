@@ -253,6 +253,13 @@ object NativeOffloadServer {
         // app processes. See sweepStaleReplies for why this is safe here and
         // why the mechanism leaks in the first place.
         sweepStaleReplies(all = true)
+        // [GH#94] The reply files are only one of two leak classes. Everything
+        // else guest tooling leaves in the PERSISTENT /tmp and /var/tmp (apt /
+        // pip staging trees, partial downloads) also survived every restart and
+        // grew the rootfs without bound. Sweep those cold (>24 h) entries once
+        // per process, off the boot thread. See StaleTempSweeper for the
+        // /var/minis and symlink containment rules.
+        StaleTempSweeper.sweepAsyncOnce(rootfsDir)
     }
 
     /**

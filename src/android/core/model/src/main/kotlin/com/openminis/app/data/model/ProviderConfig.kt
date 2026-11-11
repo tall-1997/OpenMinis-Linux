@@ -326,14 +326,23 @@ data class ProviderInstance(
      * Deliberately NOT extended to official endpoints (no custom base URL —
      * an empty key against the official API is always a misconfiguration) or
      * OAuth instances (their credential is the token). Mirrors iOS
-     * `ProviderInstance.allowsEmptyAPIKey`; Android has no `openAIResponses`
-     * type — the `useResponsesAPI` flag rides on `.openAI`, so the type gate
-     * is just {openAI, anthropic}.
+     * `ProviderInstance.allowsEmptyAPIKey`.
+     *
+     * [GH#218] `openAIResponses` is a real type here (decode-only for the
+     * "add provider" screen, but fully usable once restored from an iOS
+     * package) and its third-party gateways are exactly the ones that often
+     * run without a key. Leaving it out made the client-side credential gate
+     * reject a Responses gateway whose key field is intentionally blank —
+     * the restored instance looked permanently unconfigured. The gate is a
+     * configuration-shape check, NOT a key-format check: never validate the
+     * key's prefix/length on the client; the server is the authority.
      */
     val allowsEmptyAPIKey: Boolean
         get() = credentialType == ProviderCredential.apiKey &&
             !customBaseURL.isNullOrBlank() &&
-            (providerType == ProviderType.openAI || providerType == ProviderType.anthropic)
+            (providerType == ProviderType.openAI ||
+                providerType == ProviderType.openAIResponses ||
+                providerType == ProviderType.anthropic)
 
     /**
      * [T-android-image-endpoint-mode] Whether the "Image Generation" endpoint

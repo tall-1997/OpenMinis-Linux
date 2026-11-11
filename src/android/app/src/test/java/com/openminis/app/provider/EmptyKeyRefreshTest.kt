@@ -60,6 +60,20 @@ class EmptyKeyRefreshTest {
         )
     }
 
+    // [GH#218] A restored iOS `openAIResponses` instance points at a
+    // /v1/responses gateway, and those gateways are frequently keyless. This
+    // type was omitted from the predicate even though it is fully driveable.
+    @Test
+    fun `self-hosted Responses-compatible endpoint may have an empty key`() {
+        assertTrue(
+            instance(ProviderType.openAIResponses, ProviderCredential.apiKey, "http://10.0.0.9:8080/v1")
+                .allowsEmptyAPIKey,
+        )
+        assertFalse(
+            instance(ProviderType.openAIResponses, ProviderCredential.apiKey, null).allowsEmptyAPIKey,
+        )
+    }
+
     // ── Cases that must KEEP requiring a key ──────────────────────────────
 
     @Test
@@ -94,7 +108,8 @@ class EmptyKeyRefreshTest {
     @Test
     fun `non OpenAI-compatible families are not covered`() {
         // Gemini and OpenRouter authenticate differently and have no
-        // keyless self-hosted story; the gate stays {openAI, anthropic}.
+        // keyless self-hosted story; the gate stays
+        // {openAI, openAIResponses, anthropic}.
         for (type in listOf(ProviderType.gemini, ProviderType.openRouter)) {
             assertFalse(
                 "expected $type to require a key",
