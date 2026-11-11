@@ -580,6 +580,17 @@ object MarkdownParser {
 
             // $ … $ — inline math (with currency-skip heuristic).
             if (chars[i] == '$' && i + 1 < n && chars[i + 1] != '$' && chars[i + 1] != ' ') {
+                // [GH#123] A `$` immediately followed by a digit is a currency
+                // marker ($5, $5.99, $1,000), not a math opener — unless it
+                // closes immediately ($5$). Without this, "cost $5 and $x+y$"
+                // paired the currency `$` with the formula's closing `$` and
+                // produced the latex "5 and $x+y" (the `$5` currency heuristic
+                // in looksLikeMath only ran AFTER a pair was found).
+                if (chars[i + 1].isDigit() &&
+                    (i + 2 >= n || (chars[i + 2] != '$' && chars[i + 2] != '\\'))
+                ) {
+                    out.append(chars[i]); i++; continue
+                }
                 val end = findSingleDollar(chars, i + 1, codeMask)
                 if (end != null) {
                     val latex = chars.substring(i + 1, end)

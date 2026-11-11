@@ -21,7 +21,13 @@ class MarkdownLinkResolverTest {
     @Test
     fun `relative links resolve against the file directory`() {
         val link = MarkdownLinkResolver.resolve("../README.md", "/var/minis/workspace/docs", root)
-        assertEquals(MarkdownLinkResolver.Target.File("/var/minis/workspace/README.md"), link)
+        // [跨平台] Windows 的 File.path 是反斜杠（且无盘符的 /var/... 会保留
+        // 词法形式），断言两边都归一化到 invariant 分隔符再比较。
+        val file = link as MarkdownLinkResolver.Target.File
+        assertEquals(
+            java.io.File("/var/minis/workspace/README.md").invariantSeparatorsPath,
+            java.io.File(file.absolutePath).invariantSeparatorsPath,
+        )
     }
 
     @Test

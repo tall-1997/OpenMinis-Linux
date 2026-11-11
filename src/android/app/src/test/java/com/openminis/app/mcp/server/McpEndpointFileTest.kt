@@ -38,7 +38,9 @@ class McpEndpointFileTest {
         assertTrue(target.isFile)
         assertEquals(
             "minis-global/shared/mcp/endpoint.json",
-            target.path.removePrefix(filesDir.path + "/"),
+            // [跨平台] invariantSeparatorsPath：Windows 的 File.path 用反斜杠，
+            // 直接按 "/" 做 removePrefix 会留下完整绝对路径。
+            target.relativeTo(filesDir).invariantSeparatorsPath,
         )
         val json = JSONObject(target.readText())
         assertEquals("http://127.0.0.1:8765/mcp", json.getString("url"))
