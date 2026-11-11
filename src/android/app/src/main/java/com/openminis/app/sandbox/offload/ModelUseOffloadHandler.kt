@@ -266,15 +266,19 @@ class ModelUseOffloadHandler(
 
         // Build provider + call — runBlocking is acceptable here: this handler
         // is invoked off the main thread by the offload server.
-        val apiKey = providerRepository.loadApiKey(entry.providerInstanceId)
+        // [GH#218] usableApiKey, NOT loadApiKey: a third-party OpenAI/Anthropic/
+        // Responses gateway configured with an empty key is a VALID setup
+        // (ProviderInstance.allowsEmptyAPIKey). Reading the raw store treated it
+        // as "missing_api_key" and blocked a working gateway.
+        val instance = providerRepository.instance(entry.providerInstanceId)
+            ?: return NativeOffloadResult(2, "minis-model-use run: provider instance not found\n")
+        val apiKey = providerRepository.usableApiKey(instance)
             ?: return NativeOffloadResult(
                 2,
                 JSONObject().put("error", "missing_api_key")
                     .put("message", "No API key configured for provider ${entry.model.provider}.")
                     .toString() + "\n",
             )
-        val instance = providerRepository.instance(entry.providerInstanceId)
-            ?: return NativeOffloadResult(2, "minis-model-use run: provider instance not found\n")
         val provider = ProviderFactory.create(instance, apiKey, entry.model, context)
 
         // [GH#67] input_audio serialization is implemented for the OpenAI

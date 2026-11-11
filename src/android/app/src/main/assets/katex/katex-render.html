@@ -26,6 +26,19 @@
     display: inline-block;
     padding: 2px 4px;
   }
+
+  /* [GH#189/#266] CJK text inside a formula. We synthesize `\text{…}` for CJK
+     runs (MathCjkLayout), but KaTeX_Main has no CJK glyphs, so without an
+     explicit fallback the WebView picks an arbitrary serif per glyph and the
+     bitmap's metrics drift ("downgraded" font + broken structure reported by
+     Chinese users). KaTeX_Main stays FIRST so Latin/digits keep KaTeX's exact
+     metrics; the browser falls back per glyph to the first CJK font present. */
+  #math .katex .text,
+  #math .katex .mord.text {
+    font-family: KaTeX_Main, "Noto Sans CJK SC", "Noto Sans SC",
+                 "Source Han Sans SC", "PingFang SC", "Microsoft YaHei",
+                 "WenQuanYi Micro Hei", sans-serif;
+  }
   body.dark #math { color: #fff; }
   body.light #math { color: #000; }
 

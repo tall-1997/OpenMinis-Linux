@@ -409,6 +409,34 @@ internal fun OpenAIProvider.rawStreamMessage(
         // allowlist; MiniMax M3 relied on the mid-stream contains fallback).
         val thinkParser = ThinkPrefixStreamParser()
 
+        // [GH#113] Some local / compatibility gateways stream a serialized tool
+        // call through `delta.content` instead of `delta.tool_calls`. The
+        // sniffer converts an envelope that names an ADVERTISED tool into a
+        // real tool call and lets every other `{…}` through untouched; see
+        // ContentToolCallSniffer for the false-positive guards.
+        val contentSniffer = ContentToolCallSniffer(tools.mapTo(HashSet()) { it.name })
+        var inlineToolCallSeq = 0
+        suspend fun emitSniffed(emissions: List<ContentToolCallSniffer.Emission>) {
+            for (em in emissions) {
+                when (em) {
+                    is ContentToolCallSniffer.Emission.Text ->
+                        if (em.text.isNotEmpty()) send(LLMStreamChunk.Text(em.text))
+                    is ContentToolCallSniffer.Emission.Call -> {
+                        val id = "inline-tool-${++inlineToolCallSeq}"
+                        if (android.util.Log.isLoggable("ToolChain[Provider]", android.util.Log.VERBOSE)) {
+                            android.util.Log.d(
+                                "ToolChain[Provider]",
+                                "→ content-embedded tool call recovered name=${em.name}",
+                            )
+                        }
+                        send(LLMStreamChunk.ToolUseStart(id, em.name))
+                        send(LLMStreamChunk.ToolInputDelta(id, em.args.toString()))
+                        send(LLMStreamChunk.ToolCallComplete(id, em.name, em.args))
+                    }
+                }
+            }
+        }
+
         // T321 counters + [T-android-stream-pace] first/last event clock —
         // streamMs in the tail tally separates a relay that buffered-then-burst
         // (long streamMs after the gateway finished) from client-side lag.
@@ -451,6 +479,9 @@ internal fun OpenAIProvider.rawStreamMessage(
                         }
                         if (fin.visible.isNotEmpty()) send(LLMStreamChunk.Text(fin.visible))
                     }
+                    // [GH#113] A sniffer buffer still open at [DONE] was not a
+                    // tool call after all — release it as text before finishing.
+                    emitSniffed(contentSniffer.finish())
                     // [T-android-think-prefix-stream] Persist reasoning captured
                     // EITHER from the `reasoning_content` field or from a
                     // `<think>` prefix. Gating solely on sawReasoningField would
@@ -824,7 +855,10 @@ internal fun OpenAIProvider.rawStreamMessage(
                                     reasoningAccum.append(out.thinking)
                                     send(LLMStreamChunk.ThinkingDelta(out.thinking))
                                 }
-                                if (out.visible.isNotEmpty()) send(LLMStreamChunk.Text(out.visible))
+                                // [GH#113] Route the visible text through the
+                                // sniffer: a call envelope goes to the tool lane,
+                                // ordinary prose streams exactly as before.
+                                if (out.visible.isNotEmpty()) emitSniffed(contentSniffer.feed(out.visible))
                             }
                         }
 
@@ -903,6 +937,9 @@ internal fun OpenAIProvider.rawStreamMessage(
                 }
                 if (fin.visible.isNotEmpty()) send(LLMStreamChunk.Text(fin.visible))
             }
+            // [GH#113] No `[DONE]` sentinel: release any half-received call
+            // envelope as text (idempotent after the [DONE] path).
+            emitSniffed(contentSniffer.finish())
 
             // Emit ToolCallComplete for all accumulated tool calls
             for ((_, acc) in toolCallAccumulators) {
