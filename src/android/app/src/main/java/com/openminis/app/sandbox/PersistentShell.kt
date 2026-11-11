@@ -682,7 +682,13 @@ class PersistentShell(
                 // one exits. Leaving it alive makes the timeout a no-op and lets
                 // the old marker/output land on the next command.
                 Log.w(TAG, "command timed out after ${armed / 1000}s; killing shell tree")
-                stop()
+                // [GH#358] Reset the channel, not just the process: the reader
+                // thread may still hold a pending callback, stdin may still be
+                // buffered, and a half-started replacement must not make
+                // ensureStarted() wait on a stale isStarting flag. Fields reset:
+                // pendingCallback / stdinWriter / process / isStarting /
+                // sourcedOffloadSignature / lastExitCode (logged in the method).
+                resetAfterTimeout()
                 Pair("[Command timed out after ${armed / 1000}s; guest process group killed]", 124)
             } else {
                 result
@@ -742,6 +748,51 @@ class PersistentShell(
                 }
             } catch (e: Exception) { Log.w(TAG, "PATH refresh failed: ${e.message}") }
         }
+    }
+
+    /**
+     * [GH#358] Reclaim the per-session shell channel after a command timeout.
+     *
+     * 中文：命令超时后显式重置挂起回调、stdin、进程、启动标志等状态，
+     * 让下一次 shell_execute 能重建并正常执行，而不是永久排队。
+     *
+     * The reported failure was that one timed-out command permanently wedged
+     * that session: all later `shell_execute` calls hung while a parallel
+     * session kept working. The per-session mutex is released by
+     * `ExecutionCoordinator` either way, so the stuck state has to be the
+     * shell object itself. This resets every field that can hold a stale
+     * command:
+     *
+     *  - [pendingCallback] — the reader/framer may not have observed the
+     *    cancellation yet; leaving it set makes the next command's output
+     *    match the old marker.
+     *  - [stdinWriter] — closed so a blocked `write()` in the timed-out caller
+     *    unwedges and a later command can never splice onto the dead pipe.
+     *  - [process] — killed and cleared so `isAlive` is false and
+     *    `ensureStarted()` must spawn a fresh shell.
+     *  - [isStarting] — a killed spawn must not leave waiters spinning in
+     *    `ensureStarted()`'s `while (isStarting && !isAlive)` loop.
+     *  - [sourcedOffloadSignature] — the replacement bash has none of the
+     *    offload wrapper functions; force the next command to re-source them.
+     *  - [lastExitCode] — recorded as 124 so a dead-channel report names the
+     *    timeout instead of an unrelated earlier exit.
+     *
+     * Idempotent and safe to call after [stop].
+     */
+    fun resetAfterTimeout() {
+        pendingCallback = null
+        runCatching { stdinWriter?.close() }
+        stdinWriter = null
+        runCatching { process?.destroyForcibly() }
+        process = null
+        isStarting.set(false)
+        sourcedOffloadSignature = null
+        lastExitCode = 124
+        com.openminis.app.logging.AppLogger.warning(
+            TAG,
+            "[GH#358] shell channel reset after timeout: pendingCallback=null " +
+                "stdinWriter=null process=null isStarting=false sourcedOffload=nil exit=124",
+        )
     }
 
     /**

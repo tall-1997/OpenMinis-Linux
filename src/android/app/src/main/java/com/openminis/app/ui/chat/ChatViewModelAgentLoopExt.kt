@@ -14,6 +14,7 @@ import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.data.model.ToolIdNormalization
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.LLMProvider
+import com.openminis.app.provider.countsAsFirstTokenProgress
 import com.openminis.app.provider.streamStallWatchdog
 import com.openminis.app.tools.SubAgentKind
 import com.openminis.app.tools.ToolExecutionResult
@@ -127,6 +128,10 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // can reconstruct how the model assembled (or failed to assemble) the
     // args.
     val toolInputChunkRings: MutableMap<String, MutableList<String>> = mutableMapOf()
+    // [GH#61/#83/#146] Provider-reported unparseable argument tails for this
+    // stream attempt, keyed by the same deduped id toolCalls uses. Run-scoped
+    // storage (so the bubble-swap helper can clear it), reset at every turn.
+    val toolCallRawArgs = mutableMapOf<String, String>()
     var accumulatedText = ""
     var lastContextTokens = 0  // updated each turn from API usage
     val activeRun = com.openminis.app.service.ActiveRunContext.current()
@@ -262,6 +267,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         allToolBlocks.clear()
         allToolInputs.clear()
         toolInputChunkRings.clear()
+        toolCallRawArgs.clear()
         _canResume.value = false
     }
     for (turn in 0 until maxTurns) {
@@ -349,6 +355,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 allToolBlocks.clear()
                 allToolInputs.clear()
                 toolInputChunkRings.clear()
+                toolCallRawArgs.clear()
                 AppLogger.info(
                     ChatViewModel.TAG,
                     "[Compact] in-loop: sealed $sealedId, continuing in $freshAssistantId below the divider",
@@ -466,6 +473,9 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         var turnRefusalExplanation: String? = null
         var lastUsage: LLMUsage? = null
         val maxTokens = dynamicMaxTokens(provider, lastContextTokens)
+        // [GH#61/#83/#146] New turn → previous turn's unparseable tails are
+        // stale; a provider id reused across turns must not inherit one.
+        toolCallRawArgs.clear()
         val toolCalls = mutableListOf<Triple<String, String, JSONObject>>() // id, name, args
         // [T-android-gemini3-thoughtsig / #179] toolCallId -> Gemini 3.x
         // thoughtSignature for this turn's calls (null for other providers).
@@ -513,6 +523,14 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 // A new model starts a new failure streak.
                 emptyStreakEntryIds.clear()
             }
+            // [GH#521] Per-attempt phase clocks: request → headers (`Started`)
+            // → first real token. The two numbers are logged separately so
+            // "slow upload", "slow gateway headers" and "headers then silent"
+            // stop hiding behind one mislabelled `ttfbMs`. Declared outside
+            // the try so the error path can report the phase it died in.
+            var attemptStartNanos = 0L
+            var headersAtNanos = 0L
+            var firstTokenAtNanos = 0L
             try {
                 // [T-android-enhanced-cache] Stamp the per-turn Enhanced
                 // Cache flag onto the active provider here — the single
@@ -571,15 +589,49 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 // budget means the stream stalled, not started slow.
                 val streamIdleTimeoutMs = firstEventTimeoutMs * 2
                 val opencodeHeaders = opencodeSessionHeaders()
+                // [GH#563] Re-stamp the runtime-context date before every request
+                // of this run. A long agent loop (or a queued prompt drained
+                // hours later) otherwise kept the date of the turn that started
+                // the loop, so "today/tomorrow" answers drifted. The date sits
+                // in the dynamic tail (after systemPromptStablePrefixLen), so
+                // this does not disturb the cached prefix.
+                val turnSystemPrompt = refreshRuntimeContextDate(
+                    systemPrompt,
+                    java.time.LocalDate.now().toString(),
+                )
+                attemptStartNanos = System.nanoTime()
+                headersAtNanos = 0L
+                firstTokenAtNanos = 0L
                 currentProvider.streamMessage(
                     applyRequestImageBudget(requestHistory),
-                    systemPrompt, dynamicMaxTokens(currentProvider, lastContextTokens),
+                    turnSystemPrompt, dynamicMaxTokens(currentProvider, lastContextTokens),
                     temperature = samplingTemperature(_activeEntryId.value),
                     tools = agentTools,
                     thinkingLevel = if (currentModelSupportsReasoning) _thinkingLevel.value else ThinkingLevel.OFF,
                     systemStablePrefixLen = systemPromptStablePrefixLen,
                     extraHeaders = opencodeHeaders,
-                ).streamStallWatchdog(firstEventTimeoutMs, streamIdleTimeoutMs).collect { chunk ->
+                ).streamStallWatchdog(
+                    firstTimeoutMs = firstEventTimeoutMs,
+                    idleTimeoutMs = streamIdleTimeoutMs,
+                    // [GH#521] Distinct headers→first-token phase. `Started`
+                    // satisfies the phase-1 budget (HTTP headers are in), so
+                    // without this the only bound after headers was the 2×
+                    // idle budget (90-180s) and a 15-28s silent gateway looked
+                    // healthy.
+                    // 中文：headers 到达后单独看首 token，超时走 transient 重试。
+                    firstContentTimeoutMs = firstEventTimeoutMs,
+                    firstContentReason = "connected (stream established) but no first token " +
+                        "within ${firstEventTimeoutMs / 1000}s — retrying",
+                ).collect { chunk ->
+            // [GH#521] Phase clocks. `Started` = headers; the first
+            // content-bearing chunk is the real first token (usage/finished
+            // markers do not count).
+            val chunkAt = System.nanoTime()
+            if (chunk is LLMStreamChunk.Started) {
+                if (headersAtNanos == 0L) headersAtNanos = chunkAt
+            } else if (firstTokenAtNanos == 0L && chunk.countsAsFirstTokenProgress()) {
+                firstTokenAtNanos = chunkAt
+            }
             // [T-stream-trace-live] 运行时轨迹录制（日志页开关控制，默认关）。
             com.openminis.app.provider.StreamTraceRecorder.record(chunk)
             when (chunk) {
@@ -881,6 +933,11 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     }
                     android.util.Log.d("ToolChain[VM]", "[turn=$turn] ToolCallComplete id=$toolCompleteId name=${chunk.name} args=${argsString.take(300)}")
                     toolCalls.add(Triple(toolCompleteId, chunk.name, chunk.args))
+                    // [GH#61/#83/#146] Keep the exact unparsed tail next to
+                    // the call. The parsed `args` above is `{}` in this case;
+                    // ToolJsonRepair/preflight must see the bytes that failed
+                    // instead of treating it as a genuine no-argument call.
+                    chunk.rawArgs?.let { toolCallRawArgs[toolCompleteId] = it }
                     // [T-android-gemini3-thoughtsig / #179] Stash the Gemini
                     // 3.x thought signature keyed by the (deduped) tool call id.
                     chunk.thoughtSignature?.let { toolCallSignatures[toolCompleteId] = it }
@@ -1014,6 +1071,30 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 lastFileToolInputMs = 0L
                 lastOtherToolInputMs = 0L
                 collectDone = true
+                // [GH#521] Separate the two numbers users and logs need:
+                // headersMs = request start → HTTP headers; firstTokenMs =
+                // request start → first content-bearing chunk. A null
+                // firstTokenMs with headersMs set is precisely the
+                // "200 OK, then silent" shape this issue reported.
+                if (headersAtNanos != 0L) {
+                    val headersMs = (headersAtNanos - attemptStartNanos) / 1_000_000L
+                    val firstTokenMs = if (firstTokenAtNanos != 0L) {
+                        (firstTokenAtNanos - attemptStartNanos) / 1_000_000L
+                    } else {
+                        -1L
+                    }
+                    val waitAfterHeaders = if (firstTokenAtNanos != 0L) {
+                        ((firstTokenAtNanos - headersAtNanos) / 1_000_000L).toString()
+                    } else {
+                        "none"
+                    }
+                    AppLogger.info(
+                        ChatViewModel.TAG_STREAM,
+                        "[T-first-token] turn=$turn sid=${activeSessionId.take(8)} " +
+                            "model=${currentProvider.model.id} headersMs=$headersMs " +
+                            "firstTokenMs=$firstTokenMs waitAfterHeadersMs=$waitAfterHeaders",
+                    )
+                }
                 com.openminis.app.agent.GenerationRunLifecycle.succeeded(context, generationRunId)
                 // [T-stall-resume] The stream attempt succeeded — no resume
                 // context should leak into a later turn.
@@ -1034,6 +1115,23 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             } catch (e: Exception) {
                 if (e is CancellationException && e.cause == null) { CancellationDiagnostic.log(provider.model.displayName, activeSessionId, e, _isStreaming.value); throw e }  // [T-cancel-diag] record timeline, real job cancellation
                 val actual = unwrapFlowException(e)
+                // [GH#521] Report the phase the attempt died in. headersMs=0
+                // means we never got past the request/upload+headers stage;
+                // headersMs>0 with firstTokenMs=0 is the post-headers stall.
+                if (headersAtNanos != 0L) {
+                    val firstTokenPhase = if (firstTokenAtNanos != 0L) {
+                        ((firstTokenAtNanos - attemptStartNanos) / 1_000_000L).toString()
+                    } else {
+                        "none"
+                    }
+                    AppLogger.warning(
+                        ChatViewModel.TAG_STREAM,
+                        "[T-first-token] attempt failed turn=$turn " +
+                            "headersMs=${(headersAtNanos - attemptStartNanos) / 1_000_000L} " +
+                            "firstTokenMs=$firstTokenPhase " +
+                            "error=${actual.javaClass.simpleName}: ${actual.message?.take(160)}",
+                    )
+                }
                 val isRateLimit = actual is com.openminis.app.data.model.LLMError.RateLimited
                 val is5xx = actual is com.openminis.app.data.model.LLMError.ProviderError &&
                     ChatViewModel.HTTP_5XX_STATUS_RE.containsMatchIn(actual.detail)
@@ -1124,6 +1222,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                         allToolBlocks.clear()
                         allToolInputs.clear()
                         toolInputChunkRings.clear()
+                        toolCallRawArgs.clear()
                         // Per-attempt state reset — same list as the
                         // transient-retry path above.
                         turnTextSb.setLength(0)
@@ -1851,6 +1950,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             replayRenamedIds = replayRenamedIds,
             allToolBlocks = allToolBlocks,
             toolInputChunkRings = toolInputChunkRings,
+            toolCallRawArgs = toolCallRawArgs,
         )
         val plan = preflightToolTurn(turnCtx, toolCalls)
         val execution = executePlannedToolTurn(turnCtx, plan)

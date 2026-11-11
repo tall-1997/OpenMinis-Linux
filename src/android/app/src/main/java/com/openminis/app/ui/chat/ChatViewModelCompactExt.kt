@@ -74,6 +74,10 @@ private inline fun ChatViewModel.compactAllImpl(
         appendSystemInfo(context.getString(R.string.vm_compact_empty_session), "compact")
         return
     }
+    // [GH#325] Compact is an explicit user action (or an in-loop recovery of
+    // a live session), not a delete: mark the session retained so the exit
+    // cleanup cannot remove its row + workspace if the tail becomes empty.
+    markSessionExplicitlyEmptied("compact")
     // ─── v2 unified anchor model ───────────────────────────────────
     //
     // anchor = last active agentHistory entry. The compacted range is

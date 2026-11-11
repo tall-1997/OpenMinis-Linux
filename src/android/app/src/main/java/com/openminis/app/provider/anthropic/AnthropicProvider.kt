@@ -103,6 +103,10 @@ class AnthropicProvider(
         // [T-android-stale-conn-retry-hang] Shared pool — see NetworkMonitor.
         // Network-transition eviction must reach provider connections.
         .connectionPool(com.openminis.app.network.NetworkMonitor.sharedLLMConnectionPool)
+        // [GH#188] Fill the per-call TtfbWatchState from requestBodyEnd /
+        // connectionAcquired so the watchdog can start its TTFB clock after
+        // the upload and evict THIS connection on timeout.
+        .eventListener(com.openminis.app.provider.UploadAwareTtfbListener())
         .build()
 
     override suspend fun sendMessageClamped(
@@ -165,13 +169,20 @@ class AnthropicProvider(
             headerMap[name] = request.headers[name] ?: ""
         }
 
-        val call = client.newCall(request)
+        val watch = com.openminis.app.provider.TtfbWatchState()
+        val call = client.newCall(
+            request.newBuilder()
+                .tag(com.openminis.app.provider.TtfbWatchState::class.java, watch)
+                .build(),
+        )
         // Install before execute: cancel must unblock the header wait too.
         val cancelOnExit = call.cancelOnCancellation(
             kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job],
         )
         try {
-        val response = com.openminis.app.provider.StreamTtfb.execute(call, "Anthropic")
+        val response = com.openminis.app.provider.StreamTtfb.execute(
+            call, "Anthropic", watch = watch,
+        )
         val durationMs = System.currentTimeMillis() - startTime
         // [T-quota-claude-subscription] Errors included: a 429 still reports usage.
         if (isOAuth) com.openminis.app.quota.QuotaObservationSink.recordAnthropicResponse(quotaInstanceId, response.headers)
@@ -296,9 +307,28 @@ class AnthropicProvider(
                     }
                     "content_block_stop" -> {
                         if (currentToolId != null && currentToolName != null) {
-                            val args = NonFiniteJson.parseOrNull(toolInputBuffer.toString()) ?: JSONObject()
+                            val rawArgs = toolInputBuffer.toString()
+                            val parsed = NonFiniteJson.parseOrNull(rawArgs)
+                            if (parsed == null && rawArgs.isNotBlank()) {
+                                // [GH#61/#83/#146] Never substitute a silent
+                                // `{}`. The final accumulated buffer may be
+                                // newer than the last ToolInputDelta (stride
+                                // gate); emit it so ToolJsonRepair sees the
+                                // exact truncation tail, and carry it on the
+                                // completion for preflight to report.
+                                send(LLMStreamChunk.ToolInputDelta(currentToolId!!, rawArgs))
+                                android.util.Log.w(
+                                    "ToolChain[Provider]",
+                                    "→ ToolCallComplete id=$currentToolId name=$currentToolName " +
+                                        "invalid argsLen=${rawArgs.length} rawTail=${rawArgs.take(200)}",
+                                )
+                            }
+                            val args = parsed ?: JSONObject()
                             android.util.Log.d("ToolChain[Provider]", "→ ToolCallComplete id=$currentToolId name=$currentToolName args=${args.toString().take(300)}")
-                            send(LLMStreamChunk.ToolCallComplete(currentToolId!!, currentToolName!!, args))
+                            send(LLMStreamChunk.ToolCallComplete(
+                                currentToolId!!, currentToolName!!, args,
+                                rawArgs = rawArgs.takeIf { parsed == null && it.isNotBlank() },
+                            ))
                             currentToolId = null
                             currentToolName = null
                             toolInputBuffer.clear()
@@ -326,8 +356,21 @@ class AnthropicProvider(
             // [T-anthropic-tool-drain] Relay drops mid-tool_use never send
             // content_block_stop — flush so the agent loop doesn't hang.
             if (currentToolId != null && currentToolName != null) {
-                val drainedArgs = NonFiniteJson.parseOrNull(toolInputBuffer.toString()) ?: JSONObject()
-                send(LLMStreamChunk.ToolCallComplete(currentToolId!!, currentToolName!!, drainedArgs))
+                val rawArgs = toolInputBuffer.toString()
+                val parsed = NonFiniteJson.parseOrNull(rawArgs)
+                if (parsed == null && rawArgs.isNotBlank()) {
+                    // [GH#61/#83/#146] Same contract as content_block_stop.
+                    send(LLMStreamChunk.ToolInputDelta(currentToolId!!, rawArgs))
+                    com.openminis.app.logging.AppLogger.warning(
+                        "AnthropicProvider",
+                        "tool drain id=$currentToolId name=$currentToolName carried invalid " +
+                            "argsLen=${rawArgs.length} — carrying raw tail for repair",
+                    )
+                }
+                send(LLMStreamChunk.ToolCallComplete(
+                    currentToolId!!, currentToolName!!, parsed ?: JSONObject(),
+                    rawArgs = rawArgs.takeIf { parsed == null && it.isNotBlank() },
+                ))
                 currentToolId = null
                 currentToolName = null
                 toolInputBuffer.clear()

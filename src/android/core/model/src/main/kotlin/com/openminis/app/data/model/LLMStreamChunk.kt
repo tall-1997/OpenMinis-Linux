@@ -36,6 +36,17 @@ sealed class LLMStreamChunk {
         // the historical functionCall or the next request 400s. Null for every
         // other provider (only Gemini populates it).
         val thoughtSignature: String? = null,
+        // [GH#61/#83/#146] Raw accumulated `arguments` text when the provider
+        // could not parse it into a JSON object. Before this field the
+        // providers silently substituted an empty `{}`, so the agent loop saw
+        // a syntactically valid no-argument call and (for tools without
+        // required fields) executed it; for tools WITH required fields the
+        // model only got a generic "empty arguments" error. Carrying the raw
+        // tail lets ToolJsonRepair use the exact bytes and, when even repair
+        // fails, lets preflight tell the model the parameter stream itself was
+        // incomplete. Null means "parsed successfully" (including a genuine
+        // empty `{}`).
+        val rawArgs: String? = null,
     ) : LLMStreamChunk()
 
     /**

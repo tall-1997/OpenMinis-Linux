@@ -61,23 +61,45 @@ class ToolResultImageSerializationTest {
             useResponsesAPI = useResponsesAPI,
         )
 
-    /** A history shaped like read_image's: assistant tool_use → tool result with pixels. */
-    private fun historyWithToolResultImage(mime: String = "image/jpeg") = listOf(
-        LLMMessage(LLMMessage.Role.USER, "look at the chart"),
-        LLMMessage(
-            role = LLMMessage.Role.USER,
-            content = "",
-            contentParts = listOf(
-                AgentContentPart.ToolResult(
-                    id = "call_abc123",
-                    name = "read_image",
-                    content = "[/var/minis/chart.png | 1635x1064 | 273116 bytes]",
-                    imageData = pngBytes,
-                    imageMimeType = mime,
+    /**
+     * A history shaped like read_image's: assistant tool_use → tool result
+     * with pixels. [includeToolCall] exists for the one test that deliberately
+     * exercises an ORPHAN output (Responses sanitizer); every other test must
+     * send a paired call, otherwise the Chat Completions pair sanitizer
+     * correctly drops the reply.
+     */
+    private fun historyWithToolResultImage(
+        mime: String = "image/jpeg",
+        includeToolCall: Boolean = true,
+    ) = buildList {
+        add(LLMMessage(LLMMessage.Role.USER, "look at the chart"))
+        if (includeToolCall) {
+            add(
+                LLMMessage(
+                    role = LLMMessage.Role.ASSISTANT,
+                    content = "",
+                    contentParts = listOf(
+                        AgentContentPart.ToolUse("call_abc123", "read_image", JSONObject()),
+                    ),
+                ),
+            )
+        }
+        add(
+            LLMMessage(
+                role = LLMMessage.Role.USER,
+                content = "",
+                contentParts = listOf(
+                    AgentContentPart.ToolResult(
+                        id = "call_abc123",
+                        name = "read_image",
+                        content = "[/var/minis/chart.png | 1635x1064 | 273116 bytes]",
+                        imageData = pngBytes,
+                        imageMimeType = mime,
+                    ),
                 ),
             ),
-        ),
-    )
+        )
+    }
 
     private fun bodyOf(p: OpenAIProvider, messages: List<LLMMessage>): JSONObject =
         p.buildRequestBody(
@@ -240,7 +262,7 @@ class ToolResultImageSerializationTest {
         // call_id ...". sanitize drops the orphan item; the pixels still ride
         // the following user turn so the vision model keeps its evidence.
         val body = provider(visionModel, useResponsesAPI = true).buildResponsesAPIBody(
-            messages = historyWithToolResultImage(),
+            messages = historyWithToolResultImage(includeToolCall = false),
             systemPrompt = null,
             maxTokens = 1024,
             stream = false,
