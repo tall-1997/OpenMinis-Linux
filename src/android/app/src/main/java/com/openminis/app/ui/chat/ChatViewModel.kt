@@ -2762,7 +2762,7 @@ class ChatViewModel(
     val mentionSelectedIndex: StateFlow<Int> = _mentionSelectedIndex.asStateFlow()
 
     val currentModelSupportsReasoning: Boolean
-        get() = currentModel?.supportsReasoning == true
+        get() = currentModel?.supportsReasoning == true || activeInstanceForcesThinking()
 
     /**
      * [T-android-thinking-level-arch] The thinking ceiling the currently-bound
@@ -2777,7 +2777,7 @@ class ChatViewModel(
                 providerRepository.config.value.modelEntries.find { it.id == id }
             }
             if (entry != null) {
-                return entry.effectiveMaxThinkingLevel
+                return forcedThinkingCeiling(entry) // [OpenMinis#311]
             }
             val model = currentModel ?: return ThinkingLevel.XHIGH
             return model.catalogMaxThinkingLevel

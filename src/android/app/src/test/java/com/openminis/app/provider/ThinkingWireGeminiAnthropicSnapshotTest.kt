@@ -5,6 +5,7 @@ import com.openminis.app.provider.thinking.ThinkingRuleResolver
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 /**
@@ -53,6 +54,12 @@ class ThinkingWireGeminiAnthropicSnapshotTest {
         // must fall back to "low". The golden previously had no 3.5/3.6/3.7 entry at
         // all, which is why the unusable-at-Off regression reached users.
         "gemini-3.6-flash", "gemini-3.7-flash",
+        // [OpenMinis#470] The 4.x generation keeps the 3.x `thinkingLevel` shape.
+        // `gemini-4-argon` used to fall through the `contains("gemini-3")` test
+        // into the unknown branch and was answered with a numeric thinkingBudget,
+        // which Gemini 4 rejects with a 400. Both a non-Flash and a Flash id are
+        // pinned so the version parser AND the OFF floor are covered.
+        "gemini-4-argon", "gemini-4-flash",
         "unknown-gemini-model",
     )
 
@@ -207,6 +214,20 @@ gemini/gemini-3.7-flash/HIGH -> {includeThoughts:true,thinkingLevel:"high"}
 gemini/gemini-3.7-flash/XHIGH -> {includeThoughts:true,thinkingLevel:"high"}
 gemini/gemini-3.7-flash/MAX -> {includeThoughts:true,thinkingLevel:"high"}
 gemini/gemini-3.7-flash/ULTRA -> {includeThoughts:true,thinkingLevel:"high"}
+gemini/gemini-4-argon/OFF -> {thinkingLevel:"low"}
+gemini/gemini-4-argon/LOW -> {includeThoughts:true,thinkingLevel:"low"}
+gemini/gemini-4-argon/MEDIUM -> {includeThoughts:true,thinkingLevel:"medium"}
+gemini/gemini-4-argon/HIGH -> {includeThoughts:true,thinkingLevel:"high"}
+gemini/gemini-4-argon/XHIGH -> {includeThoughts:true,thinkingLevel:"high"}
+gemini/gemini-4-argon/MAX -> {includeThoughts:true,thinkingLevel:"high"}
+gemini/gemini-4-argon/ULTRA -> {includeThoughts:true,thinkingLevel:"high"}
+gemini/gemini-4-flash/OFF -> {thinkingLevel:"low"}
+gemini/gemini-4-flash/LOW -> {includeThoughts:true,thinkingLevel:"low"}
+gemini/gemini-4-flash/MEDIUM -> {includeThoughts:true,thinkingLevel:"medium"}
+gemini/gemini-4-flash/HIGH -> {includeThoughts:true,thinkingLevel:"high"}
+gemini/gemini-4-flash/XHIGH -> {includeThoughts:true,thinkingLevel:"high"}
+gemini/gemini-4-flash/MAX -> {includeThoughts:true,thinkingLevel:"high"}
+gemini/gemini-4-flash/ULTRA -> {includeThoughts:true,thinkingLevel:"high"}
 gemini/unknown-gemini-model/OFF -> null
 gemini/unknown-gemini-model/LOW -> null
 gemini/unknown-gemini-model/MEDIUM -> null
@@ -343,5 +364,28 @@ anthropic/not-a-claude/ULTRA/mt65536 -> {budget_tokens=61440}
                 }
             }
         }
+    }
+
+    /**
+     * [OpenMinis#226] Gemini TTS rejects the thinking config with a 400, and
+     * the id-suffix check alone is not the whole story: an AUDIO-OUTPUT model
+     * whose id does not end in "-tts" was still answered by the family branch.
+     * The modality flag is checked before every family rule.
+     */
+    @Test
+    fun geminiAudioOutputModalitySkipsThinkingConfig() {
+        assertNull(
+            ThinkingRuleResolver.geminiThinkingConfig(
+                "gemini-3-flash-preview", // would normally get a thinkingLevel
+                ThinkingLevel.HIGH,
+                hasAudioOutput = true,
+            ),
+        )
+        assertNull(
+            ThinkingRuleResolver.geminiThinkingConfig(
+                "gemini-2.5-flash-preview-tts",
+                ThinkingLevel.LOW,
+            ),
+        )
     }
 }

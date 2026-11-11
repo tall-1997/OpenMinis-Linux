@@ -5028,9 +5028,9 @@ fun ChatScreen(
                                 voiceUsedSinceClear = true
                                 com.openminis.app.ui.chat.voice.VoiceModePrefs.enteredFromText = true
                                 com.openminis.app.ui.chat.voice.VoiceModePrefs.isVoiceActive = true
+                                seedReadRepliesOnVoiceEntry(context) // [OpenMinis#267]
                             }
                         }
-
                         // App-icon quick action: when the user launched via
                         // `minis://action/voice_chat`, auto-fire the mic on
                         // first compose. Consumed exactly once so re-entering

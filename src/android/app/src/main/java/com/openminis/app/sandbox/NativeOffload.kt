@@ -140,6 +140,19 @@ object NativeOffloadServer {
     private var acceptThread: Thread? = null
 
     /**
+     * [OpenMinis#439 / #440] Non-null when the offload server could not bind and
+     * this process is running WITHOUT native offload. Visible to diagnostics
+     * (`HostStatusPublisher` / `minis-config`) instead of being an uncaught
+     * exception or a silent no-op.
+     */
+    @Volatile
+    var degradedReason: String? = null
+        private set
+
+    /** True once the server is listening; false in the degraded (no-bind) state. */
+    val isListening: Boolean get() = serverSocket != null
+
+    /**
      * Fixed pools (created in start, shut down in stop) replace the old
      * thread-per-request spawns, which leaked an unbounded pair of threads
      * under a chatty guest.
@@ -201,12 +214,33 @@ object NativeOffloadServer {
         // re-spawn …). Retry up to ~2s with exponential backoff; in the
         // overwhelming majority of cases the socket frees within the first
         // 100-300ms window.
+        //
+        // [OpenMinis#439 / #440] On some ROMs the retry window is not enough:
+        // an app CLONE / a second user profile keeps a DIFFERENT process alive
+        // against the SAME abstract-socket namespace, so the name is held
+        // indefinitely (MIUI 分身, multi-user instance 2). The old code turned
+        // that into `throw IOException`, which aborted MinisApp.onCreate and
+        // PRootKernel.boot: the second instance could not start AT ALL — no
+        // shell, no sandbox, no chat — for a feature (native offload) whose
+        // absence only disables tool acceleration. Degrade instead: log loudly,
+        // record the visible reason and return; every other subsystem boots,
+        // and guest calls simply do not find an offload server (the proot
+        // extension falls back to the real binary / reports "no handler").
         val s = bindWithRetry()
-            ?: throw java.io.IOException(
-                "failed to bind abstract socket '$SOCKET_NAME' after retries — " +
-                "previous process holding the namespace?",
-            )
+        if (s == null) {
+            degradedReason = "abstract socket '$SOCKET_NAME' is held by another process " +
+                "(app clone / second user?); native offload disabled, the rest of the app runs normally"
+            Log.e(TAG, "[OpenMinis#439/#440] $degradedReason")
+            rootfsTmpDir?.let {
+                // Nothing to serve, but a previous process may still have left
+                // reply files behind; sweep them so this degraded instance does
+                // not inherit garbage it can never read.
+                runCatching { sweepStaleReplies(all = true) }
+            }
+            return
+        }
         serverSocket = s
+        degradedReason = null
         workerPool = newPool("native-offload-worker", WORKER_POOL_SIZE)
         handlerPool = newPool("native-offload-handler", HANDLER_POOL_SIZE)
         acceptThread = thread(name = "native-offload-accept", isDaemon = true) {

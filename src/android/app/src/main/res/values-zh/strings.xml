@@ -325,6 +325,13 @@
     <string name="voice_service_text_to_speech">文字转语音</string>
     <string name="voice_service_show_in_voice_services">在语音服务中显示</string>
     <string name="voice_service_shared_credential_note">该语音服务与其提供商共用 API 密钥和端点。要修改，请编辑对应的提供商。</string>
+    <string name="voice_service_no_audio_models">该提供商没有列出任何音频模型。百炼、硅基流动等提供商的模型列表不声明音频能力——请把 ASR/TTS 模型添加为带音频模态的自定义模型，或换一个语音服务。</string>
+    <string name="voice_error_network">语音识别失败：网络错误。请检查网络，或切换到设备端引擎 / 其他服务商。</string>
+    <string name="voice_error_transcription">语音识别没有返回文字。请重新说话，或检查转写服务商的模型与 API 密钥。</string>
+    <string name="voice_error_busy">语音识别器正忙，请稍后再试。</string>
+    <string name="voice_error_audio">录音失败。请检查麦克风权限，并确认没有其他应用占用麦克风。</string>
+    <string name="voice_error_language">当前引擎不支持所选语言，请更换语言。</string>
+    <string name="voice_error_unknown">语音识别失败：%1$s</string>
     <string name="voice_service_hidden_badge">已隐藏</string>
     <string name="add_provider_voice_chat_providers">语音对话提供商</string>
     <string name="zen_restore_section">恢复</string>
@@ -747,6 +754,7 @@
     <string name="common_edit">编辑</string>
     <string name="thinking_rules_section">思考规则</string>
     <string name="thinking_rules_footer">规则自上而下依次匹配，第一条匹配当前模型的规则决定发送哪些思考参数。默认规则为内置规则，不可删除——在其上方添加一条规则即可覆盖。</string>
+    <string name="thinking_rules_cache_not_ready">自定义规则尚未生效（%1$s）。当前请求使用内置默认规则；缓存加载完成后的下一条消息才会应用你的规则。</string>
     <string name="thinking_rules_official_protocol_notice">该服务商使用官方协议，其思考参数由 Minis Ultra 内置维护。自定义规则仅适用于走 Chat Completions API 的 OpenAI 兼容服务商。</string>
     <string name="thinking_rules_default_rules_count">默认规则（%1$d）</string>
     <string name="thinking_rules_add_rule">添加规则</string>
@@ -1024,6 +1032,8 @@
     <string name="skill_title">技能</string>
     <string name="skill_add">添加 Skill</string>
     <string name="skill_section_installed">已安装</string>
+    <string name="skill_display_name_skill_creator">技能创建器</string>
+    <string name="skill_display_name_android_sdk_mirrors">Android SDK 镜像</string>
     <string name="skill_section_footer">Skill 通过专门的指令和工作流扩展 Minis Ultra Agent。启用后会被载入 system prompt。</string>
     <string name="skill_empty_title">未安装 Skill</string>
     <string name="skill_empty_action">点击 + 导入 SKILL.md 或浏览 Minis Ultra Skills。</string>
@@ -1212,6 +1222,8 @@
     <string name="provider_detail_responses_api">Responses API</string>
     <string name="provider_detail_azure_openai">Azure OpenAI</string>
     <string name="provider_detail_azure_openai_footer">使用 Azure OpenAI 认证（api-key 请求头）。将完整的 Azure 端点（含 ?api-version=… 查询参数）粘贴到上面的自定义 API Base。两种 API 格式均可用。</string>
+    <string name="provider_detail_force_thinking">强制开启思考</string>
+    <string name="provider_detail_force_thinking_footer">仅用于 Anthropic 兼容服务商。即使模型目录标注该模型不支持思考，也发送 thinking:{type:"enabled",budget_tokens:N}。当模型实际支持思考但目录条目缺失或错误时使用。</string>
     <string name="provider_detail_status">状态</string>
     <string name="provider_detail_enabled">已启用</string>
     <string name="provider_detail_refresh_models">刷新模型</string>

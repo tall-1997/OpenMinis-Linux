@@ -2104,4 +2104,16 @@
     <!-- Queued-message edit sheet + git diff truncation notice -->
     <string name="chat_queued_edit_title">대기열 메시지 편집</string>
     <string name="git_panel_diff_truncated">Diff가 200,000자에서 잘렸습니다 — 전체 내용은 저장소의 파일 자체에 있습니다.</string>
+    <string name="voice_service_no_audio_models">No audio models are listed for this provider. Model lists from some providers (Bailian, SiliconFlow) do not declare audio support — add the ASR/TTS model as a custom model with the audio modality, or choose another voice service.</string>
+    <string name="voice_error_network">Voice recognition failed: network error. Check your connection, or switch to the on-device engine or another provider.</string>
+    <string name="voice_error_transcription">Voice recognition returned no text. Speak again, or check the transcription provider\'s model and API key.</string>
+    <string name="voice_error_busy">The speech recognizer is busy. Wait a moment and try again.</string>
+    <string name="voice_error_audio">Audio capture failed. Check the microphone permission and make sure no other app is using the mic.</string>
+    <string name="voice_error_language">The selected language is not supported by this engine. Pick another language.</string>
+    <string name="voice_error_unknown">Voice recognition failed: %1$s</string>
+    <string name="thinking_rules_cache_not_ready">Custom rules are not active yet (%1$s). Requests currently use the built-in defaults; the next message after the cache loads will apply your rules.</string>
+    <string name="skill_display_name_skill_creator">Skill Creator</string>
+    <string name="skill_display_name_android_sdk_mirrors">Android SDK Mirrors</string>
+    <string name="provider_detail_force_thinking">Force extended thinking</string>
+    <string name="provider_detail_force_thinking_footer">For Anthropic-compatible relays only. Sends thinking:{type:"enabled",budget_tokens:N} even when the model catalog says the model cannot reason. Use when the model supports thinking but the catalog entry is missing or wrong.</string>
 </resources>

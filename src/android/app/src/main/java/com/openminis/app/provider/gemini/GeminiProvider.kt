@@ -451,6 +451,11 @@ class GeminiProvider(
             model.id,
             level,
             budgetTokensMax = model.budgetTokensMax,
+            // [OpenMinis#226] Audio-output (TTS) models reject thinkingConfig
+            // with a 400 regardless of how their id is spelled. The modality is
+            // the property actually responsible, so pass it instead of relying
+            // on the "-tts" suffix heuristic alone.
+            hasAudioOutput = "audio" in model.outputModalities.orEmpty(),
             // [T-gemini-budget-min-dead] budgetTokensMin intentionally NOT
             // passed: the Gemini wire API has no minimum-thinking field
             // (thinkingBudget is a single value, 3.x uses thinkingLevel), so

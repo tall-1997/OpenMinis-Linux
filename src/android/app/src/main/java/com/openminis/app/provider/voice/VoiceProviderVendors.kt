@@ -897,11 +897,11 @@ class OpenRouterVoiceProvider(providerId: String, baseURL: String, apiKey: Strin
     override suspend fun synthesize(request: VoiceOutputRequest): ByteArray {
         val modelId = request.model ?: defaultVoiceOutputModel()
         if (!usesChatAudioOutput(modelId)) {
-            // Not a known chat-audio model — behave exactly as before rather
-            // than guessing. (This path still 400s on OpenRouter, but that is
-            // the pre-existing state for those ids, not a regression, and it
-            // keeps a working relay-hosted TTS model working if one exists.)
-            return super.synthesize(request)
+            // [OpenMinis#280] OpenRouter has no /audio/speech; non-chat-audio ids fail there.
+            // Fail with the classification error instead of that misleading 400.
+            throw VoiceProviderException.Unsupported(
+                "OpenRouter has no /audio/speech endpoint; '$modelId' is not a chat-audio model (use openai/gpt-audio).",
+            )
         }
 
         val url = composedUrlString("/v1/chat/completions")

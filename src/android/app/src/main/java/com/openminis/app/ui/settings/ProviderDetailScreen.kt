@@ -412,8 +412,8 @@ fun ProviderDetailScreen(
                 )
             }
         }
-
-        // ─── Image Generation Endpoint ──────────────────────────────
+        // [OpenMinis#311] Force extended thinking for Anthropic-compatible relays.
+        if (instance.providerType == ProviderType.anthropic) ForceThinkingSection(instance, providerRepository)
         // [T-android-image-endpoint-mode] OpenAI-compatible providers only.
         // Picks how minis-model-use routes image-output models:
         // auto-probe / forced Images API / forced Chat Completions. Mirrors

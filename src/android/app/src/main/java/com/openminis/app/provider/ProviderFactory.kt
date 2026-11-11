@@ -144,8 +144,11 @@ object ProviderFactory {
                 val isOAuth = instance.credentialType == ProviderCredential.oauth
                 // [T-provider-custom-user-agent] Only meaningful for custom-base
                 // (relay) instances; on the official direct path it's null.
-                val anthropic = if (basePath != null) AnthropicProvider(apiKey, model, basePath, isOAuth = isOAuth, customUserAgent = instance.customUserAgent)
-                else AnthropicProvider(apiKey, model, isOAuth = isOAuth)
+                // [OpenMinis#311] `forceThinkingEnabled` reaches the provider so
+                // an Anthropic-compatible relay can force extended thinking even
+                // when the catalog says the model is non-reasoning.
+                val anthropic = if (basePath != null) AnthropicProvider(apiKey, model, basePath, isOAuth = isOAuth, customUserAgent = instance.customUserAgent, forceThinkingEnabled = instance.forceThinkingEnabled)
+                else AnthropicProvider(apiKey, model, isOAuth = isOAuth, forceThinkingEnabled = instance.forceThinkingEnabled)
                 // [port-upstream-1.16][T-quota-claude-subscription] Tag OAuth
                 // instances so their replies' usage headers reach the quota store.
                 if (isOAuth) anthropic.quotaInstanceId = instance.id

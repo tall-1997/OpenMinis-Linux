@@ -95,6 +95,10 @@ object TailscaleNode {
         if (!dir.isDirectory && !dir.mkdirs()) throw NodeException("cannot create the Tailscale state directory")
         nodeTouched = true
         TailscalePathMonitor.start(context)
+        // [OpenMinis#546] Snapshot the policy-routing state BEFORE the node
+        // starts so stop() can remove exactly the entries this run added —
+        // never a route table that belonged to the user's other VPN/tailscaled.
+        TailscaleRouteCleanup.captureBaseline()
         AppLogger.info(TAG, "[Net][TS] start hostname=$hostname authKey=${if (authKey.isNullOrEmpty()) "none" else "provided"} dir=noBackupFiles/tailscale")
         val t0 = System.nanoTime()
         try {
@@ -102,6 +106,10 @@ object TailscaleNode {
             AppLogger.info(TAG, "[Net][TS] start ok in ${"%.2f".format((System.nanoTime() - t0) / 1e9)}s")
         } catch (e: NodeException) {
             AppLogger.error(TAG, "[Net][TS] start FAILED: ${redact(e.message.orEmpty())}")
+            // [OpenMinis#546] A failed start may still have installed routes
+            // before reporting the error; run the same diff cleanup instead of
+            // leaving residue behind for the next attempt.
+            TailscaleRouteCleanup.cleanupAfterStop("start failed")
             throw e
         }
     }
@@ -119,7 +127,22 @@ object TailscaleNode {
     }
 
     fun stop() {
-        call(GomobileNet.tsStop())
+        var stopError: Throwable? = null
+        try {
+            call(GomobileNet.tsStop())
+        } catch (e: Throwable) {
+            // [OpenMinis#546] Cleanup must run even when the Go stop reports an
+            // error: that is exactly the state most likely to leave routes
+            // behind. Re-throw after cleanup so the caller still sees the
+            // original failure.
+            stopError = e
+        } finally {
+            // [OpenMinis#546] Remove only the policy rules / tun routes that
+            // appeared during this run (see TailscaleRouteCleanup). The result
+            // is surfaced by NetworkHub in the visible network error row.
+            TailscaleRouteCleanup.cleanupAfterStop("node stop")
+        }
+        stopError?.let { throw it }
         AppLogger.info(TAG, "[Net][TS] stopped")
     }
 

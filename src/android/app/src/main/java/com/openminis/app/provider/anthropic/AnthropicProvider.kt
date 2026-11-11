@@ -59,8 +59,10 @@ class AnthropicProvider(
     private val oauthIdentifierPromptProvider: () -> String = {
         com.openminis.app.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
     },
+    private val forceThinkingEnabled: Boolean = false, // [OpenMinis#311] force thinking
 ) : LLMProvider {
     override val name = "Anthropic"
+    override val forcesThinkingWhenEnabled: Boolean get() = forceThinkingEnabled
     override val callGateKey: String
         get() = ProviderKeyGate.key(basePath, apiKey, model.id)
     override val defaultMaxOutputTokens: Int get() = 64_000
@@ -416,16 +418,14 @@ class AnthropicProvider(
             SamplingIdentity.of(this), model.id, temperature, thinkingLevel.isEnabled,
         )?.let { body.put("temperature", it) }
 
-        // Thinking / extended thinking. Two shapes: Claude 4.6+ adaptive
-        // (thinking.type="adaptive" + output_config.effort; the legacy form is
-        // silently ignored — the "thinking on but no thoughts" symptom) and
-        // <=4.5 legacy (budget_tokens + temperature=1; 4.6+ rejects temperature,
-        // guarded above). [T-thinking-rules-phase2] WHICH shape is
-        // ThinkingRuleResolver.anthropicThinkingShape's call; emission stays here
-        // for the companions the abstract shape does not model. Pinned by
-        // ThinkingWireGeminiAnthropicSnapshotTest.
+        // Thinking shape selection lives in ThinkingRuleResolver.anthropicThinkingShape;
+        // emission stays here for the companions it does not model (pinned by
+        // ThinkingWireGeminiAnthropicSnapshotTest).
         val thinkShape = ThinkingRuleResolver.anthropicThinkingShape(
-            model.id, model.supportsReasoning, thinkingLevel, maxTokens,
+            model.id,
+            if (forceThinkingEnabled) true else model.supportsReasoning, // [OpenMinis#311]
+            thinkingLevel,
+            maxTokens,
         )
         com.openminis.app.logging.AppLogger.info(
             "Thinking",

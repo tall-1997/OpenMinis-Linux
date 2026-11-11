@@ -218,7 +218,15 @@ object NetworkHub {
         var nodeUp = false
         if (s.nodeWanted) {
             try {
-                if (restartNode || authKey != null) runCatching { TailscaleNode.stop() }
+                if (restartNode || authKey != null) {
+                    runCatching { TailscaleNode.stop() }
+                    // [OpenMinis#546] A failed stop-time route cleanup is a
+                    // visible network error, never a silent one: stale policy
+                    // rules keep steering traffic into a dead tun interface.
+                    TailscaleRouteCleanup.visibleError()?.let {
+                        failure = listOfNotNull(failure, it).joinToString("; ")
+                    }
+                }
                 TailscaleNode.start(appContext, authKey, hostname(s))
                 // Subnet routes must be off (the default) before the entry
                 // starts sending tailnet traffic through the node.
@@ -232,6 +240,11 @@ object NetworkHub {
             }
         } else if (nodeTouched) {
             runCatching { TailscaleNode.stop() }
+            // [OpenMinis#546] Surface cleanup failures on the settings status
+            // row (joined with any other apply error) instead of logging-only.
+            TailscaleRouteCleanup.visibleError()?.let {
+                failure = listOfNotNull(failure, it).joinToString("; ")
+            }
         }
 
         var port: Int? = null

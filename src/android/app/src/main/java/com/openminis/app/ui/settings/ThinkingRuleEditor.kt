@@ -289,13 +289,12 @@ private fun formatPath(fmt: ThinkingWireFormat?): String? = when (fmt) {
 private fun previewJson(rule: ThinkingRule): String {
     return try {
         val body = JSONObject()
-        // Isolate: inject just this one rule as the sole custom rule under a throwaway id.
-        val previewInstance = "__preview__"
-        ThinkingRuleResolver.setCustomRules(previewInstance, listOf(rule))
         val ctx = ThinkingResolveContext(
             modelId = (rule.scope as? ThinkingRule.Scope.ModelPattern)?.pattern?.replace("*", "x") ?: "sample-model",
-            instanceId = previewInstance,
+            instanceId = null,
             supportsReasoning = true,
+            // No declared tier set: the preview shows the SHAPE the rule emits
+            // at HIGH, not a catalog-specific clamp.
             declaredEffortValues = null,
             level = ThinkingLevel.HIGH,
             maxTokens = 4096,
@@ -305,11 +304,17 @@ private fun previewJson(rule: ThinkingRule): String {
             isDashScope = false,
             offEffort = null,
         )
-        ThinkingRuleResolver.apply(body, ctx)
-        ThinkingRuleResolver.setCustomRules(previewInstance, emptyList())
+        // [OpenMinis#306] Pass the hypothetical rule explicitly instead of
+        // seeding/clearing the process-wide custom-rule cache. The old code
+        // mutated global state from a Composable preview: a concurrent request
+        // builder could observe the throwaway "__preview__" entry, and any
+        // exception between set and reset leaked it for the rest of the process.
+        ThinkingRuleResolver.apply(body, ctx, customRulesOverride = listOf(rule))
         if (body.length() == 0) "{ }  (no thinking key sent)" else body.toString(2)
     } catch (e: Exception) {
-        "(preview unavailable)"
+        // Never a blank box: name the failure so the user can tell a bad rule
+        // from a broken preview.
+        "(preview unavailable: ${e.message ?: e.javaClass.simpleName})"
     }
 }
 

@@ -330,7 +330,7 @@ fun InlineVoiceInputPanel(
                     com.openminis.app.speech.RecognitionError.NO_MATCH -> {}
                     com.openminis.app.speech.RecognitionError.PERMISSION_DENIED ->
                         permissionDenied = true
-                    else -> transcribeError = message ?: error.name
+                    else -> transcribeError = voiceFailureText(panelContext, error, message) // [OpenMinis#267]
                 }
             },
         )

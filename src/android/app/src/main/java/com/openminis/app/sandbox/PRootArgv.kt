@@ -76,7 +76,14 @@ internal fun commonArgv(
 
         // Native offload: route registered handler names to the host-side
         // NativeOffloadServer over the abstract unix socket.
-        if (includeNativeOffload) {
+        //
+        // [OpenMinis#439 / #440] Only when the server actually bound. In the
+        // degraded state (app clone / second user holds the abstract socket)
+        // passing the option would make every offloaded execve attempt a
+        // connection that cannot succeed; without it the command is executed
+        // normally (and unknown handler names surface as "command not found"
+        // instead of an intercept that can never answer).
+        if (includeNativeOffload && NativeOffloadServer.isListening) {
             val handlers = NativeOffloadServer.registeredHandlers
             if (handlers.isNotEmpty()) {
                 cmd.add("--native-offload=${NativeOffloadServer.socketName}:${handlers.joinToString(",")}")

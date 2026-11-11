@@ -40,6 +40,12 @@ object VoiceModality {
     private val asrInferencePatterns = listOf(
         "-asr", "asr-", "_asr", "asr_", "whisper", "transcrib", "speech-to-text",
         "speech2text", "stt-", "-stt", "_stt", "stt_", "voice-input", "voice_input",
+        // [OpenMinis#305] Alibaba Bailian / SiliconFlow dedicated ASR families.
+        // Their `/v1/models` rows carry the vendor name but no audio modality
+        // bit, so the lists were empty ("ASR 模型列表空"). SenseVoice is
+        // SiliconFlow's `FunAudioLLM/SenseVoiceSmall`; Paraformer / FunASR are
+        // Bailian's DashScope ASR ids. Matched by family token, not one id.
+        "sensevoice", "paraformer", "funasr",
     )
 
     /** Substrings marking a DEDICATED text-to-speech (TTS) model. Mirrors iOS
@@ -47,6 +53,9 @@ object VoiceModality {
     private val ttsInferencePatterns = listOf(
         "tts", "-tts", "_tts", "text-to-speech", "text2speech", "audio-gen",
         "audio-generation", "seed-tts", "voice-output", "voice_output",
+        // [OpenMinis#305] SiliconFlow `FunAudioLLM/CosyVoice2-0.5B` and
+        // Bailian's CosyVoice / Sambert TTS families.
+        "cosyvoice", "sambert",
     )
 
     /**
@@ -111,12 +120,26 @@ val LLMModel.isVoiceTemplateSeedShape: Boolean
 
 /**
  * Apply dedicated-voice modality inference when the model has no explicit
- * modality info. Mirrors the dedicated-voice step of iOS
+ * audio modality. Mirrors the dedicated-voice step of iOS
  * LLMModel.withInferredModality (models.dev enrichment stays where it is —
  * this only fills the exact ASR/TTS shape from id/name patterns).
+ *
+ * [OpenMinis#305] The gate used to be "both modality lists are null", which
+ * missed exactly the Bailian / SiliconFlow rows that DO publish modalities —
+ * as plain text/text. A dedicated ASR/TTS id that an API describes as
+ * text-only was therefore never classified and the Voice Services lists came
+ * up empty. Text-only metadata may now be REPLACED by the inferred voice
+ * shape; anything richer (image/video/audio already present) is left alone so
+ * a genuinely multimodal model is never relabelled.
  */
 fun LLMModel.withInferredVoiceModality(): LLMModel {
-    if (inputModalities != null || outputModalities != null) return this
-    val (ins, outs) = VoiceModality.inferDedicatedVoiceModality(id, displayName) ?: return this
-    return copy(inputModalities = ins, outputModalities = outs)
+    val ins = inputModalities.normalizeModalities()
+    val outs = outputModalities.normalizeModalities()
+    if (ins?.contains("audio") == true || outs?.contains("audio") == true) return this
+    val richerThanText = (ins != null && ins.any { it != "text" }) ||
+        (outs != null && outs.any { it != "text" })
+    if (richerThanText) return this
+    val (inferredIn, inferredOut) =
+        VoiceModality.inferDedicatedVoiceModality(id, displayName) ?: return this
+    return copy(inputModalities = inferredIn, outputModalities = inferredOut)
 }

@@ -362,6 +362,13 @@
     <string name="voice_service_text_to_speech">Text to Speech</string>
     <string name="voice_service_show_in_voice_services">Show in Voice Services</string>
     <string name="voice_service_shared_credential_note">This voice service shares the API key and endpoint of its provider. To change them, edit that provider.</string>
+    <string name="voice_service_no_audio_models">No audio models are listed for this provider. Model lists from some providers (Bailian, SiliconFlow) do not declare audio support — add the ASR/TTS model as a custom model with the audio modality, or choose another voice service.</string>
+    <string name="voice_error_network">Voice recognition failed: network error. Check your connection, or switch to the on-device engine or another provider.</string>
+    <string name="voice_error_transcription">Voice recognition returned no text. Speak again, or check the transcription provider\'s model and API key.</string>
+    <string name="voice_error_busy">The speech recognizer is busy. Wait a moment and try again.</string>
+    <string name="voice_error_audio">Audio capture failed. Check the microphone permission and make sure no other app is using the mic.</string>
+    <string name="voice_error_language">The selected language is not supported by this engine. Pick another language.</string>
+    <string name="voice_error_unknown">Voice recognition failed: %1$s</string>
     <string name="voice_service_hidden_badge">Hidden</string>
     <string name="add_provider_voice_chat_providers">Voice Chat Providers</string>
     <string name="zen_restore_section">Recovery</string>
@@ -825,6 +832,7 @@
     <!-- [T-android-thinking-rules-phase2] Provider-detail Thinking Rules section -->
     <string name="thinking_rules_section">Thinking Rules</string>
     <string name="thinking_rules_footer">Rules are evaluated top to bottom. The first rule matching the model decides which thinking parameters are sent. Default rules are built in and cannot be deleted — add a rule above them to override one.</string>
+    <string name="thinking_rules_cache_not_ready">Custom rules are not active yet (%1$s). Requests currently use the built-in defaults; the next message after the cache loads will apply your rules.</string>
     <string name="thinking_rules_official_protocol_notice">This provider uses an official protocol, so its thinking parameters are maintained by Minis Ultra. Custom rules apply to OpenAI-compatible providers on the Chat Completions API.</string>
     <string name="thinking_rules_default_rules_count">Default rules (%1$d)</string>
     <string name="thinking_rules_add_rule">Add Rule</string>
@@ -1122,6 +1130,8 @@
     <string name="skill_title">Skills</string>
     <string name="skill_add">Add Skill</string>
     <string name="skill_section_installed">Installed</string>
+    <string name="skill_display_name_skill_creator">Skill Creator</string>
+    <string name="skill_display_name_android_sdk_mirrors">Android SDK Mirrors</string>
     <string name="skill_section_footer">Skills extend the Minis Ultra Agent with specialized instructions and workflows. They are loaded into the system prompt when enabled.</string>
     <string name="skill_empty_title">No Skills Installed</string>
     <string name="skill_empty_action">Tap + to import a SKILL.md, .zip, or .skill file, or browse Minis Ultra Skills.</string>
@@ -1316,6 +1326,8 @@
     <string name="provider_detail_responses_api">Responses API</string>
     <string name="provider_detail_azure_openai">Azure OpenAI</string>
     <string name="provider_detail_azure_openai_footer">Use Azure OpenAI authentication (api-key header). Paste your full Azure endpoint into Custom API Base above, including the ?api-version=… query. Works with both API formats.</string>
+    <string name="provider_detail_force_thinking">Force extended thinking</string>
+    <string name="provider_detail_force_thinking_footer">For Anthropic-compatible relays only. Sends thinking:{type:"enabled",budget_tokens:N} even when the model catalog says the model cannot reason. Use when the model supports thinking but the catalog entry is missing or wrong.</string>
     <string name="provider_detail_status">Status</string>
     <string name="provider_detail_enabled">Enabled</string>
     <string name="provider_detail_refresh_models">Refresh Models</string>

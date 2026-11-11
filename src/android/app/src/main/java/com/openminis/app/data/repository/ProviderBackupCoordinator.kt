@@ -210,6 +210,10 @@ internal class ProviderBackupCoordinator(
             instance.customBaseURL?.let { put("customBaseURL", it) }
             if (!instance.appendV1Suffix) put("appendV1Suffix", false)
             if (instance.useResponsesAPI) put("useResponsesAPI", true)
+            // [OpenMinis#311] Optional provider-level force-thinking switch.
+            // Only written when on, so old exports stay byte-identical and an
+            // importer that does not know the key keeps the safe default.
+            if (instance.forceThinkingEnabled) put("forceThinkingEnabled", true)
             // [T-provider-custom-user-agent] Additive, optional. Only written
             // when set; old/new readers without the key decode to null →
             // default UA. Field name matches iOS for cross-platform interop.
@@ -535,6 +539,8 @@ internal class ProviderBackupCoordinator(
         }
         val appendV1 = dict.optBoolean("appendV1Suffix", true)
         val useResponsesAPI = dict.optBoolean("useResponsesAPI", false)
+        // [OpenMinis#311] Missing in old exports → false (capability decides).
+        val forceThinkingEnabled = dict.optBoolean("forceThinkingEnabled", false)
         // [T-provider-custom-user-agent] Additive: old exports lack the key →
         // empty → null → default UA. Field name matches iOS.
         val customUserAgent = dict.optString("customUserAgent", "").ifEmpty { null }
@@ -548,6 +554,7 @@ internal class ProviderBackupCoordinator(
             appendV1Suffix = appendV1,
             useResponsesAPI = useResponsesAPI,
             customUserAgent = customUserAgent,
+            forceThinkingEnabled = forceThinkingEnabled,
         )
         host.addInstance(instance)
 

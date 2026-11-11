@@ -710,4 +710,85 @@ class ThinkingRulesRegressionTest {
                 .catalogMaxThinkingLevel,
         )
     }
+
+    /**
+     * [OpenMinis#356] `deepseek-flash` is a live alias for the V4 flash model,
+     * so it must travel on the V4 wire shape (root `thinking` switch + root
+     * `reasoning_effort` sibling) instead of the generic reasoning_effort
+     * fallback. The alias row in the catalog predates V4 and carries no effort
+     * tiers, so the request must be clamped against V4's legal set — an xhigh
+     * request may never reach an endpoint that only knows low|medium|high|max.
+     */
+    @Test
+    fun `deepseek flash alias uses the v4 sibling shape and clamps effort`() {
+        val body = capture(
+            model = model("deepseek-flash", reasoningEffortValues = null),
+            level = ThinkingLevel.XHIGH,
+        )
+        val thinking = body.optJSONObject("thinking")
+        assertTrue("`thinking` switch must be present for the alias: $body", thinking != null)
+        assertEquals("thinking.type must be 'enabled': $body", "enabled", thinking?.optString("type"))
+        assertEquals(
+            "xhigh must be clamped to V4's legal set: $body",
+            "high",
+            body.optString("reasoning_effort", null),
+        )
+    }
+
+    /**
+     * [OpenMinis#377] The compaction / title / sub-agent lanes pin thinking OFF;
+     * on official OpenAI that used to emit the allowlist value "none"
+     * unconditionally. gpt-5 and o-series do not accept it (400), so the OFF
+     * tier must be clamped onto the lowest DECLARED tier. Asserted at the
+     * resolver (not through MockWebServer: the allowlist keys on the real
+     * api.openai.com base URL, which a local server cannot impersonate).
+     */
+    @Test
+    fun `openai off tier is clamped to the lowest declared tier`() {
+        val body = JSONObject()
+        val ctx = com.openminis.app.provider.thinking.ThinkingResolveContext(
+            modelId = "gpt-5.3",
+            instanceId = null,
+            supportsReasoning = true,
+            declaredEffortValues = listOf("minimal", "low", "medium", "high"),
+            level = ThinkingLevel.OFF,
+            maxTokens = 4096,
+            isOpenRouter = false,
+            usesUnifiedReasoningEffort = false,
+            isMistral = false,
+            isDashScope = false,
+            offEffort = "none",
+        )
+        com.openminis.app.provider.thinking.ThinkingRuleResolver.apply(body, ctx)
+        assertEquals(
+            "OFF must send a legal floor, never the undeclared 'none': $body",
+            "minimal",
+            body.optString("reasoning_effort", null),
+        )
+    }
+
+    /**
+     * [OpenMinis#377] A model that only declares high/max has no legal off tier
+     * below "low": the field must be OMITTED rather than forcing a strong tier
+     * on a request the caller explicitly wanted cheap.
+     */
+    @Test
+    fun `off tier is omitted when the model declares only high tiers`() {
+        val body = JSONObject()
+        val ctx = com.openminis.app.provider.thinking.ThinkingResolveContext(
+            modelId = "glm-5.2",
+            instanceId = null,
+            supportsReasoning = true,
+            declaredEffortValues = listOf("high", "max"),
+            level = ThinkingLevel.OFF,
+            maxTokens = 4096,
+            isOpenRouter = false,
+            usesUnifiedReasoningEffort = false,
+            isMistral = false,
+            isDashScope = false,
+            offEffort = "none",
+        )
+        com.openminis.app.provider.thinking.ThinkingRuleResolver.apply(body, ctx)
+        assertFalse("no legal off tier exists; the field must be omitted: $body", body.has("reasoning_effort"))
+    }
 }

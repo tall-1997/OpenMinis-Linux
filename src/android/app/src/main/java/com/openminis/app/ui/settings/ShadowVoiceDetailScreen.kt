@@ -85,6 +85,18 @@ fun ShadowVoiceDetailScreen(
                 outputModels.forEach { VoiceModelRow(it, isInput = false, onClick = { quickTestEntry = it }) }
             }
         }
+        // [OpenMinis#305] An empty Voice Services list used to be a blank
+        // screen with no explanation. Say WHY nothing is listed and what to do:
+        // add a custom model with the audio modality (the provider's /v1/models
+        // may not publish one), or pick another provider.
+        if (inputModels.isEmpty() && outputModels.isEmpty()) {
+            Text(
+                text = stringResource(R.string.voice_service_no_audio_models),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 30.dp, vertical = 10.dp),
+            )
+        }
 
         SettingsSection(header = null) {
             Row(
