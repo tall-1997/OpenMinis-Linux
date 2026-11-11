@@ -82,31 +82,34 @@ class ScheduledNewSessionPersistenceTest {
     }
 
     @Test
-    fun yoyoTaskWritesYoyoOntoSessionRow() = runBlocking {
+    fun yoyoTaskWritesYoloOntoSessionRow() = runBlocking {
         val session = ScheduledAgentRunner.persistNewSessionRow(
             repo, context, task(permission = "YOYO"), seedModelId = "m1", bindingToWrite = null,
         )
-        assertEquals("YOYO", session.permissionMode)
+        // The historical "YOYO" spelling normalizes to the canonical token.
+        assertEquals("YOLO", session.permissionMode)
         val reloaded = repo.getSession(session.id)!!
-        assertEquals("YOYO", reloaded.permissionMode)
+        assertEquals("YOLO", reloaded.permissionMode)
         assertNull(reloaded.folderId)
         assertEquals("scheduled", reloaded.source)
     }
 
     @Test
-    fun defaultTaskWritesAskOntoSessionRow() = runBlocking {
+    fun defaultTaskWritesSafeAutoOntoSessionRow() = runBlocking {
         val session = ScheduledAgentRunner.persistNewSessionRow(
             repo, context, task(permission = null), seedModelId = "m1", bindingToWrite = null,
         )
-        assertEquals("ASK", session.permissionMode)
+        // Headless default: SAFE_AUTO (the old "ASK" gate behaviour) so a
+        // scheduled run never stalls on prompts.
+        assertEquals("SAFE_AUTO", session.permissionMode)
     }
 
     @Test
-    fun askTaskWritesAskOntoSessionRow() = runBlocking {
+    fun askTaskWritesSafeAutoOntoSessionRow() = runBlocking {
         val session = ScheduledAgentRunner.persistNewSessionRow(
             repo, context, task(permission = "ASK"), seedModelId = "m1", bindingToWrite = null,
         )
-        assertEquals("ASK", session.permissionMode)
+        assertEquals("SAFE_AUTO", session.permissionMode)
     }
 
     @Test
@@ -151,7 +154,7 @@ class ScheduledNewSessionPersistenceTest {
             seedModelId = "m1", bindingToWrite = null,
         )
         val reloaded: ChatSessionEntity = repo.getSession(session.id)!!
-        assertEquals("YOYO", reloaded.permissionMode)
+        assertEquals("YOLO", reloaded.permissionMode)
         assertEquals("ws-2", reloaded.folderId)
     }
 }

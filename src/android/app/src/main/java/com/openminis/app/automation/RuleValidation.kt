@@ -141,8 +141,18 @@ object RuleValidation {
             .filter { it in knownTools }
             .distinct()
 
+        // [#31] Normalize to the four-tier session tokens. Explicit tokens
+        // pass through their tier verbatim (ASK means the strict
+        // ask-everything tier now); unknown/garbage values degrade to
+        // SAFE_AUTO — the gate behaviour the old "ASK" token produced — so a
+        // hallucinated value can never widen (or stall) an unattended run.
         val permissionMode = spec.permissionMode?.trim()?.takeIf { it.isNotEmpty() }?.let { raw ->
-            if (raw.equals("YOYO", ignoreCase = true)) "YOYO" else "ASK"
+            val known = setOf("ASK", "YOLO", "YOYO", "SAFE_AUTO", "OFF", "DENY_ALL")
+            if (raw.uppercase().trim() in known) {
+                com.openminis.app.security.SessionPermissionMode.fromStored(raw).toStoredToken()
+            } else {
+                com.openminis.app.security.SessionPermissionMode.SAFE_AUTO.toStoredToken()
+            }
         }
 
         if (p.isNotEmpty()) return Result(null, p)

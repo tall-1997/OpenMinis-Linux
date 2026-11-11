@@ -125,10 +125,13 @@ class SessionForkManager(
         source.thinkingOverride?.let { override ->
             chatRepository.dao.updateThinkingOverride(new.id, override)
         }
-        val forkedMode = com.openminis.app.security.PermissionMode.sessionDefault(source.permissionMode)
+        // [#31] Four-tier faithful fork: the source token re-reads through
+        // SessionPermissionMode (compat: "YOLO"/"YOYO"→YOLO, unknown→ASK) and
+        // the fork stores the canonical tier token verbatim.
+        val forkedMode = com.openminis.app.security.SessionPermissionMode.fromStored(source.permissionMode)
         chatRepository.dao.updatePermissionMode(
             new.id,
-            if (forkedMode.isYoyo()) "YOYO" else "ASK",
+            forkedMode.toStoredToken(),
         )
         // [T-session-duplicate-compact-marker-android] Track old→new message id
         // and old→new sort_order so copied compact markers (which reference DB

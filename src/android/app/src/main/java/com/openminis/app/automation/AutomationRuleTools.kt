@@ -113,8 +113,10 @@ object AutomationRuleTools {
                 ),
                 "permission_mode" to AgentToolParam(
                     "string",
-                    "Optional tool-gate for the created session: ASK (default) or YOYO (allow all tools).",
-                    enumValues = listOf("ASK", "YOYO"),
+                    // [#31] Four-tier tool gate. SAFE_AUTO is the default.
+                    "Optional tool-gate for the created session: SAFE_AUTO (default; read-only tools run, the rest ask), " +
+                        "YOLO (allow all tools), ASK (confirm every call) or OFF (deny all tools).",
+                    enumValues = listOf("SAFE_AUTO", "YOLO", "ASK", "OFF"),
                 ),
             ),
             required = listOf("tool_title", "name", "trigger", "action"),
@@ -151,7 +153,7 @@ object AutomationRuleTools {
                 "conditions" to AgentToolParam("array", "Replacement conditions array."),
                 "action" to AgentToolParam("object", "Replacement action ($ACTION_DOC)."),
                 "allowed_tools" to AgentToolParam("array", "Replacement tool whitelist."),
-                "permission_mode" to AgentToolParam("string", "ASK or YOYO."),
+                "permission_mode" to AgentToolParam("string", "SAFE_AUTO (default), YOLO, ASK or OFF."),
             ),
             required = listOf("tool_title", "id"),
             propertyOrdering = listOf(

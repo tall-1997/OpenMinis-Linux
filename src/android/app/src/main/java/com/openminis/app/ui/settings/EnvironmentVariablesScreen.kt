@@ -90,6 +90,8 @@ fun EnvironmentVariablesScreen(
     }
 
     val privacyEnabled by com.openminis.app.data.EnvVarPrivacyStore.enabled.collectAsStateWithLifecycle()
+    // [#28] Outbound masking switch state (default OFF).
+    val outboundMaskEnabled by com.openminis.app.data.OutboundMaskPrefs.enabled.collectAsStateWithLifecycle()
 
     val fallbackSkills = remember { MutableStateFlow(emptyList<SkillRepository.Skill>()) }
     val allSkills by (skillRepository?.skills ?: fallbackSkills).collectAsStateWithLifecycle()
@@ -153,6 +155,14 @@ fun EnvironmentVariablesScreen(
                 title = stringResource(R.string.env_var_privacy_toggle),
                 checked = privacyEnabled,
                 onCheckedChange = { com.openminis.app.data.EnvVarPrivacyStore.setEnabled(it) },
+                showDivider = true,
+            )
+            // [#28] Outbound privacy masking. Default OFF (opt-in): masking is
+            // pattern-based and can rewrite payloads a task needs verbatim.
+            SettingsSwitchRow(
+                title = stringResource(R.string.outbound_mask_toggle),
+                checked = outboundMaskEnabled,
+                onCheckedChange = { com.openminis.app.data.OutboundMaskPrefs.setEnabled(it) },
                 showDivider = false,
             )
         }
