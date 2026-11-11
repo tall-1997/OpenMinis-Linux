@@ -42,10 +42,9 @@ class SessionListViewModel(
         private const val TAG = "SessionListVM"
 
         /**
-         * [GH#210] The placeholder ChatViewModel writes for a session whose
-         * title has not been generated yet. The fallback path keys off this
-         * exact string (plus null/blank), which is what keeps a user-typed
-         * title from ever being overwritten.
+         * [GH#210] Placeholder title ChatViewModel writes before title-gen runs.
+         * The fallback path keys off this exact string (plus null/blank), which
+         * is what keeps a user-typed title from ever being overwritten.
          */
         private const val NEW_CHAT_TITLE = "New Chat"
 
@@ -99,14 +98,9 @@ class SessionListViewModel(
         }
 
         /**
-         * Factory for use with `androidx.lifecycle.viewmodel.compose.viewModel`.
-         * Hosting the VM on the NavBackStackEntry's ViewModelStore (instead of
-         * `remember {}` inside the composable) is what lets [searchQuery] and
-         * [isSearchActive] survive navigation push/pop — the user can tap a
-         * session in the search results, view it, and pop back to find the
-         * filter still applied. Mirrors iOS where ContentView's `@State
-         * searchText` survives because the parent view does not unmount during
-         * a NavigationLink push.
+         * Factory for `androidx.lifecycle.viewmodel.compose.viewModel`. The VM
+         * is hosted on the NavBackStackEntry's ViewModelStore (not `remember
+         * {}`) so [searchQuery] / [isSearchActive] survive navigation push/pop.
          */
         fun factory(
             chatRepository: ChatRepository,
@@ -151,11 +145,9 @@ class SessionListViewModel(
     val searchResults = MutableStateFlow<List<ChatSessionEntity>>(emptyList())
 
     /**
-     * True while the user has typed something but the debounced search query
-     * has not yet finalised + run. Drives the trailing CircularProgressIndicator
-     * in the search field so a slow query (or fast typing) shows visible
-     * progress instead of a stale-results-then-snap transition. Cleared the
-     * moment a query resolves to results (or to empty when query is blank).
+     * True while a typed query is still in flight (pre-debounce until resolve).
+     * Drives the search field's trailing spinner; cleared the moment a query
+     * resolves to results (or empty on blank).
      */
     val isSearching = MutableStateFlow(false)
 
@@ -184,11 +176,19 @@ class SessionListViewModel(
     val displayedSessions: StateFlow<List<ChatSessionEntity>> = combine(
         _allSessions, searchResults, searchQuery, isSearchActive, com.openminis.app.tools.AgentReportStore.attentionSessions
     ) { all, results, q, active, attention ->
-        if (active && q.isNotBlank()) results else SessionOrdering.sorted(all, { SessionOrdering.Key(it.id, it.updatedAt, it.pinnedAt) }, attention)
+        // [#35] Archived rows never render in the main list (or search results) — they surface in [archivedSessions] only.
+        if (active && q.isNotBlank()) results.filter { it.archivedAt == null } else SessionOrdering.sorted(all.filter { it.archivedAt == null }, { SessionOrdering.Key(it.id, it.updatedAt, it.pinnedAt) }, attention)
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    // ─── Session groups ("folders") ────────────────────────────────────────
-    // [T-android-session-grouping]
+    /** [#35] Archived (archivedAt != null), newest stamp first — the collapsed footer section; search narrows the pool like [displayedSessions]. */
+    val archivedSessions: StateFlow<List<ChatSessionEntity>> = combine(
+        _allSessions, searchResults, searchQuery, isSearchActive,
+    ) { all, results, q, active ->
+        (if (active && q.isNotBlank()) results else all)
+            .filter { it.archivedAt != null }.sortedByDescending { it.archivedAt }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    // ─── Session groups ("folders") ─ [T-android-session-grouping] ──────────
 
     /**
      * Groups, ordered `updated_at DESC`.
@@ -204,22 +204,15 @@ class SessionListViewModel(
      * Which groups are collapsed. Never persisted to the DB, but mirrored to
      * SharedPreferences like iOS mirrors it to UserDefaults — without this the
      * accordion's "only one group open" state resets to ALL-EXPANDED on every
-     * cold start, which is exactly the wall of open groups the accordion
-     * exists to prevent. (getStringSet's return value must be copied, never
-     * mutated in place.)
-     */
-    /**
-     * [T-android-sessionlist-prefs-io] Lazy + first access on [Dispatchers.IO]:
-     * the FIRST SharedPreferences read loads the XML synchronously on the
-     * calling thread, and this VM is constructed on the main thread inside a
-     * Compose frame (viewModel(factory=…)). On a device whose storage layer
-     * stalls (crash-loop signature, restartCount in the dozens) that load can
-     * hang the frame for minutes — measured in the field as a 119s main-thread
-     * stall inside ViewModelProvider.create before observeSessions ever ran,
-     * which left isInitialLoadComplete false forever and the list pane black.
-     * `lazy` keeps construction off the disk entirely; [loadCollapsedFolderIds]
-     * performs the first touch on IO, after which every main-thread access
-     * returns the cached instance.
+     * cold start. (getStringSet's return value must be copied, never mutated.)
+     *
+     * [T-android-sessionlist-prefs-io] `lazy` + first touch on IO: the FIRST
+     * SharedPreferences read loads the XML synchronously on the calling thread,
+     * and this VM is constructed on the main thread inside a Compose frame —
+     * on a device with a stalling storage layer that load hung the frame for
+     * minutes (measured 119s), leaving the list pane black.
+     * [loadCollapsedFolderIds] performs the first read on IO; after that every
+     * main-thread access returns the cached instance.
      */
     internal val uiPrefs by lazy { context.getSharedPreferences("session_list_ui", Context.MODE_PRIVATE) }
     val collapsedFolderIds = MutableStateFlow<Set<String>>(emptySet())
@@ -757,10 +750,10 @@ class SessionListViewModel(
         }
     }
 
-    /** Member count per group, for the picker subtitles and group cards. */
+    /** Member count per group, for the picker subtitles and group cards. Archived members don't count — they render in the footer section, not the group. */
     val folderMemberCounts: StateFlow<Map<String, Int>> =
         combine(_allSessions, folders) { sessions, _ ->
-            sessions.mapNotNull { it.folderId }.groupingBy { it }.eachCount()
+            sessions.filter { it.archivedAt == null }.mapNotNull { it.folderId }.groupingBy { it }.eachCount()
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
     fun togglePin(id: String) {
@@ -768,6 +761,13 @@ class SessionListViewModel(
             val session = chatRepository.getSession(id) ?: return@launch
             val newPinnedAt = if (session.pinnedAt != null) null else System.currentTimeMillis()
             chatRepository.dao.updatePinnedAt(id, newPinnedAt)
+        }
+    }
+
+    /** [#35] Stamp/clear archived_at. Metadata-only — no updated_at bump (see ChatDao.updateArchivedAt). */
+    fun archiveSession(id: String, archived: Boolean) {
+        viewModelScope.launch {
+            chatRepository.dao.updateArchivedAt(id, if (archived) System.currentTimeMillis() else null)
         }
     }
 
@@ -1189,7 +1189,7 @@ class SessionListViewModel(
         val q = query.lowercase()
         val needingSnippet = pruneSessionsNeedingSnippet(sessions.map { SessionSearchRow(it.id, it.title) }, q)
         if (needingSnippet.isEmpty()) return ContentHits(emptyMap(), emptyMap())
-        val rows = chatRepository.searchDao().firstSnippetPerSession(
+        val rows = chatRepository.firstSnippetPerSessionWordAware(
             sessionIds = needingSnippet.map { it.id },
             query = query,
             radius = 50,

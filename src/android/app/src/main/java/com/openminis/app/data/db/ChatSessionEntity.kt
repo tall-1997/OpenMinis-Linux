@@ -74,4 +74,11 @@ data class ChatSessionEntity(
     @ColumnInfo(name = "branch_of") val branchOf: String? = null,
     /** Message id of the fork point in the SOURCE session (last kept message). */
     @ColumnInfo(name = "branch_point") val branchPoint: String? = null,
+    /**
+     * [#35] Session archive stamp (ms), null = not archived. Pure list
+     * metadata: the session-list filters on it and the footer section reads
+     * it — chat open/re-send paths never branch on it. Participates in
+     * equality like folderId (archiving changes nothing else).
+     */
+    @ColumnInfo(name = "archived_at") val archivedAt: Long? = null,
 )

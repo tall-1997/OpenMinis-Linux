@@ -542,6 +542,12 @@ interface ChatDao : MessageHeadDao, ChatTruncationDao, SessionBindingDao, UsageS
     @Query("UPDATE sessions SET pinned_at = :pinnedAt, updated_at = :updatedAt WHERE id = :id")
     suspend fun updatePinnedAt(id: String, pinnedAt: Long?, updatedAt: Long = System.currentTimeMillis())
 
+    // Session: archived_at ([#35] session archive). Metadata-only on purpose —
+    // NO updated_at bump, so archiving cannot reorder the live list and
+    // unarchiving returns the row to its old slot.
+    @Query("UPDATE sessions SET archived_at = :archivedAt WHERE id = :id")
+    suspend fun updateArchivedAt(id: String, archivedAt: Long?)
+
     // Session: source
     @Query("UPDATE sessions SET source = :source WHERE id = :id")
     suspend fun updateSource(id: String, source: String?)

@@ -11,7 +11,10 @@ import java.util.concurrent.CopyOnWriteArrayList
  * Adapted from XINCODE-Public SecurityGateImpl (GPL-3.0-or-later)
  * https://github.com/kusesad-1122/XINCODE-Public
  *
- * Audit is an in-memory sha256 hash chain (no Room). Tests can tamper entries.
+ * Audit is an in-memory sha256 hash chain (no Room dependency — the gate stays
+ * a pure JVM class). Persistence is opt-in via [auditSink]: the app installs a
+ * sink at startup that mirrors each entry into the `audit_entries` Room table.
+ * Tests can tamper entries.
  */
 class SecurityGateImpl : SecurityGate {
 
@@ -47,6 +50,21 @@ class SecurityGateImpl : SecurityGate {
      */
     @Volatile
     var sdcardMounted: (() -> Boolean)? = null
+
+    /**
+     * [T-audit-room-persist] App-installed persistence hook for the audit
+     * chain, fired once per [audit] call AFTER the in-memory record has landed.
+     *
+     * The gate itself must stay Room-free (pure JVM, heavily unit-tested), so
+     * persistence is inverted: the app wires a sink that mirrors the entry into
+     * `audit_entries`. The call is fire-and-forget by contract — [audit]
+     * wraps it in `runCatching`, so a throwing or slow sink can never break
+     * (or even delay the verdict of) a tool decision, and a null sink leaves
+     * the historical memory-only behaviour byte-for-byte intact. Long-running
+     * work belongs in the sink's own coroutine, not in this call.
+     */
+    @Volatile
+    var auditSink: ((AuditEntry) -> Unit)? = null
 
     /** Run [block] with [sessionId] visible to the path policies inside it. */
     fun <T> withCallerSession(sessionId: String?, block: () -> T): T {
@@ -468,26 +486,31 @@ class SecurityGateImpl : SecurityGate {
             is Decision.NeedConfirm -> "NeedConfirm: ${decision.reason}"
             is Decision.Denied -> "Denied: ${decision.reason}"
         }
-        synchronized(auditTrail) {
+        val entry: AuditEntry = synchronized(auditTrail) {
             // [T-audit-trail-bounded] rationale lives on AUDIT_TRAIL_MAX.
             val prev = auditTrail.lastOrNull()?.hash ?: ""
             val ts = System.currentTimeMillis()
             val hash = computeAuditHash(prev, ts, cmd.toolName, cmd.toolArgs, ds, result)
-            auditTrail.add(
-                AuditEntry(
-                    timestamp = ts,
-                    toolName = cmd.toolName,
-                    toolArgs = cmd.toolArgs,
-                    capability = cmd.capability,
-                    reversibility = cmd.reversibility,
-                    decision = ds,
-                    result = result,
-                    prevHash = prev,
-                    hash = hash,
-                ),
+            val e = AuditEntry(
+                timestamp = ts,
+                toolName = cmd.toolName,
+                toolArgs = cmd.toolArgs,
+                capability = cmd.capability,
+                reversibility = cmd.reversibility,
+                decision = ds,
+                result = result,
+                prevHash = prev,
+                hash = hash,
             )
+            auditTrail.add(e)
             while (auditTrail.size > AUDIT_TRAIL_MAX) auditTrail.removeAt(0)
+            e
         }
+        // [T-audit-room-persist] Fire-and-forget persistence hook. Outside the
+        // lock so an unknown sink can never stall concurrent classify/decide
+        // traffic; runCatching so a broken sink cannot reach the caller — the
+        // in-memory record has already landed and is the source of truth here.
+        auditSink?.let { sink -> runCatching { sink(entry) } }
     }
 
     override fun getAuditTrail(): List<AuditEntry> = synchronized(auditTrail) { auditTrail.toList() }

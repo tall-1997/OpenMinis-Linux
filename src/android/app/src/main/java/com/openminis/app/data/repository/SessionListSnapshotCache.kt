@@ -54,6 +54,7 @@ data class SessionSnapshotRow(
     val thinkingOverride: String? = null,
     val folderId: String? = null,
     val permissionMode: String? = "ASK",
+    val archivedAt: Long? = null,
 )
 
 @Serializable
@@ -104,6 +105,7 @@ internal fun ChatSessionEntity.toSnapshotRow() = SessionSnapshotRow(
     thinkingOverride = thinkingOverride,
     folderId = folderId,
     permissionMode = permissionMode,
+    archivedAt = archivedAt,
 )
 
 internal fun SessionSnapshotRow.toEntity() = ChatSessionEntity(
@@ -122,6 +124,7 @@ internal fun SessionSnapshotRow.toEntity() = ChatSessionEntity(
     thinkingOverride = thinkingOverride,
     folderId = folderId,
     permissionMode = permissionMode,
+    archivedAt = archivedAt,
 )
 
 internal fun FolderEntity.toSnapshotRow() = FolderSnapshotRow(

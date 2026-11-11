@@ -47,8 +47,25 @@ class GeminiProvider(
     private val apiKey: String,
     override var model: LLMModel = LLMModel.gemini25Flash,
     private val basePath: String = "https://generativelanguage.googleapis.com/v1beta",
+    /**
+     * [T-android-gemini-oauth] Non-null switches auth from the `?key=`
+     * query parameter to an `Authorization: Bearer <token>` header fetched
+     * per call (Google Code Assist / OAuth subscriptions reject the key
+     * param). Null = classic API-key mode, byte-identical requests.
+     */
+    private val oauthTokenProvider: (suspend () -> String?)? = null,
 ) : LLMProvider {
     override val name = "Google"
+
+    /** `?key=` in API-key mode; bare URL in OAuth mode (token goes in the header). */
+    private fun authUrl(path: String): String =
+        if (oauthTokenProvider == null) "$path?key=$apiKey" else path
+
+    private suspend fun applyAuth(request: okhttp3.Request.Builder): okhttp3.Request {
+        val token = oauthTokenProvider?.invoke()
+        if (token != null) request.header("Authorization", "Bearer $token")
+        return request.build()
+    }
     override val callGateKey: String
         get() = ProviderKeyGate.key(basePath, apiKey, model.id)
 
@@ -71,7 +88,7 @@ class GeminiProvider(
         extraHeaders: Map<String, String>,
     ): LLMResponse = withContext(Dispatchers.IO) {
         val body = buildRequestBody(messages, systemPrompt, maxTokens, temperature, imageParts, tools, thinkingLevel)
-        val url = "$basePath/models/${model.id}:generateContent?key=$apiKey"
+        val url = authUrl("$basePath/models/${model.id}:generateContent")
         val request = Request.Builder()
             .url(url)
             .post(body.toString().toRequestBody("application/json".toMediaType()))
@@ -79,10 +96,10 @@ class GeminiProvider(
             // can trace the request back to the Minis build. Gemini has no
             // SDK-specific UA requirement, so the helper's default kicks in.
             .applyUserAgentOverride(null)
-            .build()
+        val authedRequest = applyAuth(request)
 
         // [T-android-stop-cancels-socket] Non-stream execute is blocking IO.
-        val response = client.newCall(request).executeCancellable()
+        val response = client.newCall(authedRequest).executeCancellable()
         val responseBody = response.body?.string() ?: ""
 
         if (!response.isSuccessful) {
@@ -121,16 +138,16 @@ class GeminiProvider(
         thinkingLevel: ThinkingLevel,
     ): Flow<LLMStreamChunk> = callbackFlow {
         val body = buildRequestBody(messages, systemPrompt, maxTokens, temperature, imageParts, tools, thinkingLevel)
-        val url = "$basePath/models/${model.id}:streamGenerateContent?alt=sse&key=$apiKey"
+        val url = authUrl("$basePath/models/${model.id}:streamGenerateContent?alt=sse")
         val request = Request.Builder()
             .url(url)
             .post(body.toString().toRequestBody("application/json".toMediaType()))
             // [T-android-default-ua] same intent as the non-streaming
             // branch above — brand outbound requests with Minis/<version>.
             .applyUserAgentOverride(null)
-            .build()
+        val authedRequest = applyAuth(request)
 
-        val call = client.newCall(request)
+        val call = client.newCall(authedRequest)
         val cancelOnExit = call.cancelOnCancellation(
             kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job],
         )

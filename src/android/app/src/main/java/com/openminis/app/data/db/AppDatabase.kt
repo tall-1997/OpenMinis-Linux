@@ -23,8 +23,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ProjectExperienceEntity::class,
         com.openminis.app.data.instruction.InstructionStateEntity::class,
         com.openminis.app.data.instruction.InstructionUpdateEntity::class,
+        AuditEntryEntity::class,
     ],
-    version = 30, // keep DatabaseVersionGuard.CODE_DB_VERSION in lockstep
+    version = 32, // keep DatabaseVersionGuard.CODE_DB_VERSION in lockstep
     // [T-android-downgrade-compat] Kept ON so MigrationTestHelper and CI can
     // validate migrations against the committed schema json. The chain now
     // runs 12-29 complete. 13.json and 17.json were never exported by a
@@ -50,6 +51,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun projectExperienceDao(): ProjectExperienceDao
     abstract fun instructionStateDao(): com.openminis.app.data.instruction.InstructionStateDao
     abstract fun automationRuleDao(): com.openminis.app.automation.AutomationRuleDao
+    abstract fun auditEntryDao(): AuditEntryDao
 
     companion object {
         @Volatile
@@ -279,6 +281,22 @@ abstract class AppDatabase : RoomDatabase() {
 
         /**
          * Downgrade 17 → 16. No-op (keep the permission_mode column).
+         * Downgrade backstop note: also covers the secondary `AppDatabase.getInstance` call sites that open Room without the [DatabaseVersionGuard] pre-check.
+         */
+
+        /**
+         * [T-audit-room-persist] 29 → 31: audit_entries — the durable mirror of
+         * SecurityGateImpl's in-memory audit hash chain (written via the app-side
+         * auditSink hook). Pure additive: a new table plus two plain indices, no
+         * existing entity touched, no data rewritten. 29 → 30 is a bridge no-op:
+         * schema v30 never shipped, it only completes the migration graph so
+         * every on-disk v29 database has a path to v31.
+         */
+
+        /**
+         * Downgrade 31 → 30 and 30 → 29. No-op (keep audit_entries): the older
+         * builds never knew the table and simply ignore it, and a version
+         * round-trip must not lose the audit trail.
          * Downgrade backstop note: also covers the secondary `AppDatabase.getInstance` call sites that open Room without the [DatabaseVersionGuard] pre-check.
          */
 

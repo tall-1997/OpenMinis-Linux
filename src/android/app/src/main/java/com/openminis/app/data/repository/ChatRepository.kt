@@ -469,7 +469,7 @@ class ChatRepository(
 
 
     suspend fun searchSessions(query: String): List<ChatSessionEntity> =
-        searchDao().searchSessions("%$query%")
+        searchSessionsWordAware(query)
 
     // [Wave3-fix-5] `observeMessages(sessionId)` was deleted: a dead Flow with
     // zero collectors in the whole repository, wrapping a query silently

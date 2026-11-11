@@ -2069,4 +2069,42 @@
     <string name="git_panel_no_branches">ไม่มีบรานช์</string>
     <string name="git_panel_no_stashes">ไม่มีสแตช</string>
     <string name="git_panel_switch_branch">สลับบรานช์</string>
+    <string name="sessionlist_export_markdown">Markdown</string>
+    <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
+    <string name="check_update_notes_expand">แสดงทั้งหมด</string>
+    <string name="check_update_notes_collapse">ย่อ</string>
+    <!-- [#35] Session archive: row menu + collapsed footer section -->
+    <string name="sessionlist_archive">เก็บถาวร</string>
+    <string name="sessionlist_unarchive">เลิกเก็บถาวร</string>
+    <string name="sessionlist_section_archived">เก็บถาวรแล้ว (%1$d)</string>
+    <!-- Add-provider vendor presets ([T-android-vendor-presets]) -->
+    <string name="add_provider_vendor_presets">พรีเซ็ตผู้ให้บริการ</string>
+    <string name="add_provider_vendor_presets_pick_hint">แตะผู้ให้บริการเพื่อกรอก endpoint และชื่อให้อัตโนมัติ</string>
+    <string name="add_provider_vendor_preset_deepseek">DeepSeek</string>
+    <string name="add_provider_vendor_preset_zhipu">Zhipu GLM</string>
+    <string name="add_provider_vendor_preset_kimi">Kimi (Moonshot)</string>
+    <string name="add_provider_vendor_preset_qwen">Qwen (DashScope)</string>
+    <string name="add_provider_vendor_preset_ark">Volcano Ark</string>
+    <string name="add_provider_vendor_preset_minimax">MiniMax</string>
+    <string name="add_provider_vendor_preset_siliconflow">SiliconFlow</string>
+    <string name="add_provider_vendor_preset_groq">Groq</string>
+    <string name="add_provider_vendor_preset_together">Together</string>
+    <string name="add_provider_vendor_preset_mistral">Mistral</string>
+    <string name="add_provider_vendor_preset_ollama">Ollama</string>
+    <string name="add_provider_vendor_preset_lmstudio">LM Studio</string>
+    <string name="add_provider_vendor_hint_deepseek">สร้าง API key ได้ที่ platform.deepseek.com</string>
+    <string name="add_provider_vendor_hint_zhipu">รับ API key จากคอนโซลของ Zhipu open platform ที่ open.bigmodel.cn</string>
+    <string name="add_provider_vendor_hint_kimi">สร้าง API key ได้ที่ platform.moonshot.cn</string>
+    <string name="add_provider_vendor_hint_qwen">สร้าง API key ในคอนโซล Alibaba Cloud Model Studio (Bailian)</string>
+    <string name="add_provider_vendor_hint_ark">สร้าง API key ในคอนโซล Volcano Ark ชื่อโมเดลคือ endpoint ID หรือ model ID</string>
+    <string name="add_provider_vendor_hint_minimax">รับ API key จากแพลตฟอร์มเปิดของ MiniMax</string>
+    <string name="add_provider_vendor_hint_siliconflow">สร้าง API key ได้ที่ cloud.siliconflow.cn</string>
+    <string name="add_provider_vendor_hint_groq">สร้าง API key ได้ที่ console.groq.com</string>
+    <string name="add_provider_vendor_hint_together">รับ API key จากคอนโซล Together ที่ api.together.ai</string>
+    <string name="add_provider_vendor_hint_mistral">สร้าง API key ได้ที่ console.mistral.ai</string>
+    <string name="add_provider_vendor_hint_ollama">เซิร์ฟเวอร์ภายในเครื่อง — ไม่ต้องใช้ API key</string>
+    <string name="add_provider_vendor_hint_lmstudio">เซิร์ฟเวอร์ภายในเครื่อง — ไม่ต้องใช้ API key เริ่ม Developer server ใน LM Studio ก่อน</string>
+    <!-- Queued-message edit sheet + git diff truncation notice -->
+    <string name="chat_queued_edit_title">แก้ไขข้อความที่อยู่ในคิว</string>
+    <string name="git_panel_diff_truncated">Diff ถูกตัดที่ 200,000 อักขระ — ข้อความฉบับเต็มอยู่ในไฟล์ของรีโปซิทอรีนั้นเอง</string>
 </resources>

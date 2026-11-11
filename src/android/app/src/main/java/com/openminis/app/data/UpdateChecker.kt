@@ -58,6 +58,18 @@ object UpdateChecker {
             val tagName: String,
             val versionName: String,
             val releaseName: String,
+            /**
+             * Release notes ("更新说明"), taken verbatim from the GitHub release
+             * `body` field — markdown (including `#` headings) is preserved.
+             * CI metadata lines (`versionCode:`/`versionName:`/`applicationId:`)
+             * are stripped and rolling bodies are resolved to the matching
+             * tagged release's notes by [UpdateVersionLogic.resolveChangelog].
+             * Blank when the release published no notes; the update dialog
+             * hides the notes section entirely in that case. This field IS the
+             * notes source — no separate raw-body copy is kept, and the local
+             * release-notes directory snapshots are NOT consulted (they
+             * duplicate what the live API already returns and would drift).
+             */
             val changelog: String,
             val apkUrl: String,
             val apkSizeBytes: Long,

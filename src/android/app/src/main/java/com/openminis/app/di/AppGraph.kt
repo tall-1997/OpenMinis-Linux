@@ -35,6 +35,7 @@ import com.openminis.app.sandbox.offload.SuOffloadHandler
 import com.openminis.app.sandbox.offload.ToastOffloadHandler
 import com.openminis.app.sandbox.offload.WeatherOffloadHandler
 import com.openminis.app.session.ChatSessionBinder
+import kotlinx.coroutines.launch
 
 /** Startup wiring boundary between Application and containerized repositories. */
 object AppGraph {
@@ -110,6 +111,39 @@ object AppGraph {
             com.openminis.app.sandbox.PRootKernel
                 .shellSharedStorageBinds(app, publish = false)
                 .containsKey(com.openminis.app.sandbox.SharedStorageBindPlan.SDCARD)
+        }
+        // [T-audit-room-persist] Mirror the gate's audit chain into Room
+        // (audit_entries). The gate must stay a pure JVM class — no Room, no
+        // Context — so persistence is inverted: the app installs this sink at
+        // the same place it wires the gate's other app-provided hooks above.
+        // Fire-and-forget by contract: the gate already runCatching-wraps the
+        // call, and here every failure is swallowed again so audit persistence
+        // can never influence a tool decision; the gate's in-memory trail
+        // remains the review surface when a write fails. Session attribution
+        // is best-effort — the foreground chat id at call time (the decision
+        // path carries no caller identity through the sink signature);
+        // "" means "no visible session". The database handle is resolved per
+        // call so a backup-restore swap (closeForRestore) is picked up
+        // automatically instead of writing into a closed instance.
+        com.openminis.app.security.SecurityGateHolder.gate.auditSink = { entry ->
+            minisApp.appContainer.database?.let { db ->
+                minisApp.appCoroutineScopes.io.launch {
+                    runCatching {
+                        db.auditEntryDao().insert(
+                            com.openminis.app.data.db.AuditEntryEntity(
+                                sessionId = chatBinderOrNull()?.activeSessionId.orEmpty(),
+                                tool = entry.toolName,
+                                decision = entry.decision,
+                                // Room TEXT has no length; the 400-char cap is
+                                // the writer's contract (see AuditEntryEntity).
+                                resultPreview = entry.result?.take(400),
+                                hash = entry.hash,
+                                createdAt = entry.timestamp,
+                            ),
+                        )
+                    }
+                }
+            }
         }
         // [T-android-scheduled-tasks-full] minis-scheduled — create/list/run
         // timed AI tasks (new chat / follow-up / re-run), mirroring the in-app

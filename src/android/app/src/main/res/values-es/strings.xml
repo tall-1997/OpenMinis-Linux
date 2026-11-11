@@ -2059,4 +2059,42 @@
     <string name="git_panel_no_branches">Sin ramas</string>
     <string name="git_panel_no_stashes">Sin stashes</string>
     <string name="git_panel_switch_branch">Cambiar rama</string>
+    <string name="sessionlist_export_markdown">Markdown</string>
+    <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
+    <string name="check_update_notes_expand">Mostrar todo</string>
+    <string name="check_update_notes_collapse">Mostrar menos</string>
+    <!-- [#35] Session archive: row menu + collapsed footer section -->
+    <string name="sessionlist_archive">Archivar</string>
+    <string name="sessionlist_unarchive">Desarchivar</string>
+    <string name="sessionlist_section_archived">Archivadas (%1$d)</string>
+    <!-- Add-provider vendor presets ([T-android-vendor-presets]) -->
+    <string name="add_provider_vendor_presets">Preajustes de proveedor</string>
+    <string name="add_provider_vendor_presets_pick_hint">Toca un proveedor para rellenar automáticamente su endpoint y su nombre.</string>
+    <string name="add_provider_vendor_preset_deepseek">DeepSeek</string>
+    <string name="add_provider_vendor_preset_zhipu">Zhipu GLM</string>
+    <string name="add_provider_vendor_preset_kimi">Kimi (Moonshot)</string>
+    <string name="add_provider_vendor_preset_qwen">Qwen (DashScope)</string>
+    <string name="add_provider_vendor_preset_ark">Volcano Ark</string>
+    <string name="add_provider_vendor_preset_minimax">MiniMax</string>
+    <string name="add_provider_vendor_preset_siliconflow">SiliconFlow</string>
+    <string name="add_provider_vendor_preset_groq">Groq</string>
+    <string name="add_provider_vendor_preset_together">Together</string>
+    <string name="add_provider_vendor_preset_mistral">Mistral</string>
+    <string name="add_provider_vendor_preset_ollama">Ollama</string>
+    <string name="add_provider_vendor_preset_lmstudio">LM Studio</string>
+    <string name="add_provider_vendor_hint_deepseek">Crea una clave de API en platform.deepseek.com</string>
+    <string name="add_provider_vendor_hint_zhipu">Obtén una clave de API en la consola de la plataforma abierta de Zhipu, open.bigmodel.cn</string>
+    <string name="add_provider_vendor_hint_kimi">Crea una clave de API en platform.moonshot.cn</string>
+    <string name="add_provider_vendor_hint_qwen">Crea una clave de API en la consola de Alibaba Cloud Model Studio (Bailian)</string>
+    <string name="add_provider_vendor_hint_ark">Crea una clave de API en la consola de Volcano Ark; el nombre del modelo es un ID de endpoint o de modelo</string>
+    <string name="add_provider_vendor_hint_minimax">Obtén una clave de API en la plataforma abierta de MiniMax</string>
+    <string name="add_provider_vendor_hint_siliconflow">Crea una clave de API en cloud.siliconflow.cn</string>
+    <string name="add_provider_vendor_hint_groq">Crea una clave de API en console.groq.com</string>
+    <string name="add_provider_vendor_hint_together">Obtén una clave de API en la consola de Together, api.together.ai</string>
+    <string name="add_provider_vendor_hint_mistral">Crea una clave de API en console.mistral.ai</string>
+    <string name="add_provider_vendor_hint_ollama">Servidor local — no se necesita clave de API</string>
+    <string name="add_provider_vendor_hint_lmstudio">Servidor local — no se necesita clave de API. Inicia primero el servidor de desarrollador en LM Studio</string>
+    <!-- Queued-message edit sheet + git diff truncation notice -->
+    <string name="chat_queued_edit_title">Editar mensaje en cola</string>
+    <string name="git_panel_diff_truncated">Diff truncado en 200 000 caracteres; el texto completo está en el propio archivo del repositorio.</string>
 </resources>

@@ -35,6 +35,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -334,35 +336,10 @@ private fun ChooseCredentialScreen(
     }
 }
 
-// [T-hardcoded-strings] These descriptions were English-only string
-// literals; now resolved through stringResource so they follow the device
-// locale. @Composable — the call sites already run inside composition.
-@Composable
-private fun apiKeyDescription(type: ProviderType): String = when (type) {
-    ProviderType.openAI -> stringResource(R.string.add_provider_api_key_desc_openai)
-    ProviderType.anthropic -> stringResource(R.string.add_provider_api_key_desc_anthropic)
-    ProviderType.gemini -> stringResource(R.string.add_provider_api_key_desc_gemini)
-    ProviderType.openRouter -> stringResource(R.string.add_provider_api_key_desc_openrouter)
-    ProviderType.xAI -> stringResource(R.string.add_provider_api_key_desc_xai)
-    ProviderType.kimiCode -> stringResource(R.string.add_provider_api_key_desc_kimicode)
-    ProviderType.openAIResponses -> stringResource(R.string.add_provider_api_key_desc_openai_responses)
-    ProviderType.antigravity,
-    ProviderType.unsupported -> stringResource(R.string.add_provider_api_key_desc_unsupported)
-}
-
-@Composable
-private fun oauthDescription(type: ProviderType): String = when (type) {
-    ProviderType.anthropic -> stringResource(R.string.add_provider_oauth_desc_anthropic)
-    ProviderType.gemini -> stringResource(R.string.add_provider_oauth_desc_gemini)
-    ProviderType.openAI -> stringResource(R.string.add_provider_oauth_desc_openai)
-    ProviderType.xAI -> stringResource(R.string.add_provider_oauth_desc_xai)
-    ProviderType.openRouter -> stringResource(R.string.add_provider_oauth_desc_openrouter)
-    ProviderType.kimiCode -> stringResource(R.string.add_provider_oauth_desc_kimicode)
-    ProviderType.openAIResponses -> stringResource(R.string.add_provider_oauth_desc_openai)
-    ProviderType.antigravity,
-    ProviderType.unsupported -> stringResource(R.string.add_provider_api_key_desc_unsupported)
-}
-
+// [T-hardcoded-strings] These descriptions resolve through stringResource so
+// they follow the device locale; the per-type copy tables live in
+// AddProviderPresets.kt beside providerDisplayOrder because this file is
+// pinned at its architecture ceiling.
 // -- Step 3: Configure & Save --
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -379,14 +356,7 @@ private fun ConfigureProviderScreen(
     // A voice template preseeds its vendor name instead of the protocol name.
     val config by providerRepository.config.collectAsStateWithLifecycle()
     val defaultLabel = remember(config) {
-        val baseName = voiceTemplate?.name ?: providerType.displayName
-        val existingLabels = config.instances.map { it.label }.toSet()
-        if (baseName !in existingLabels) baseName
-        else {
-            var n = 2
-            while ("$baseName $n" in existingLabels) n++
-            "$baseName $n"
-        }
+        uniqueInstanceLabel(config.instances.map { it.label }.toSet(), voiceTemplate?.name ?: providerType.displayName)
     }
 
     var label by remember { mutableStateOf(defaultLabel) }
@@ -394,6 +364,11 @@ private fun ConfigureProviderScreen(
     var labelEdited by remember { mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(defaultLabel, labelEdited) {
         if (!labelEdited) label = defaultLabel
+    }
+    // [T-android-vendor-presets] Chip pick = deliberate vendor-name label edit (auto-incremented like the default).
+    val onVendorLabelPicked: (String) -> Unit = { vendorName ->
+        label = uniqueInstanceLabel(config.instances.map { it.label }.toSet(), vendorName)
+        labelEdited = true
     }
     var apiKey by remember { mutableStateOf("") }
     var customBaseURL by remember { mutableStateOf(voiceTemplate?.baseURL ?: "") }
@@ -432,6 +407,7 @@ private fun ConfigureProviderScreen(
                 onCustomBaseURLChange = { customBaseURL = it },
                 providerRepository = providerRepository,
                 initialAppendV1 = voiceTemplate?.appendV1,
+                onVendorLabelPicked = onVendorLabelPicked,
                 onSaved = onSaved,
             )
             ProviderCredential.oauth -> OAuthConfigSection(
@@ -458,6 +434,7 @@ private fun ColumnScope.ApiKeyConfigSection(
     // [T-android-provider-voice] Voice templates carry their own v1-suffix
     // policy (e.g. MiMo appends /v1, ElevenLabs must not). null = type default.
     initialAppendV1: Boolean? = null,
+    onVendorLabelPicked: (String) -> Unit = {},
     onSaved: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
@@ -467,6 +444,7 @@ private fun ColumnScope.ApiKeyConfigSection(
     }
     // OpenAI API Format: false = Chat Completions, true = Responses API
     var useResponsesAPI by remember { mutableStateOf(false) }
+    val keyFocusRequester = remember { FocusRequester() }  // [T-android-vendor-presets] vendor-chip focus target
 
     // ── Credential ──────────────────────────────────────────────────────
     val keyPlaceholder = when (providerType) {
@@ -491,6 +469,7 @@ private fun ColumnScope.ApiKeyConfigSection(
                 onValueChange = onApiKeyChange,
                 placeholder = keyPlaceholder,
                 singleLine = true,
+                fieldModifier = Modifier.focusRequester(keyFocusRequester),  // [T-android-vendor-presets] vendor-chip focus target
                 visualTransformation = if (showApiKeyPlaintext) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
                     IconButton(onClick = { showApiKeyPlaintext = !showApiKeyPlaintext }) {
@@ -535,6 +514,17 @@ private fun ColumnScope.ApiKeyConfigSection(
             footer = baseUrlFooter,
         ) {
             SettingsCardBlock {
+                // [T-android-vendor-presets] Vendor chips: pick one to prefill endpoint + /v1 policy + name, then focus the key.
+                VendorPresetChipSection(
+                    providerType = providerType,
+                    currentBaseUrl = customBaseURL,
+                    onPick = { preset, presetLabel ->
+                        onCustomBaseURLChange(preset.baseUrl ?: "")
+                        appendV1Suffix = preset.appendV1
+                        onVendorLabelPicked(presetLabel)
+                        keyFocusRequester.requestFocus()
+                    },
+                )
                 RowLabel(text = stringResource(R.string.add_provider_custom_api_base_optional))
                 SectionTextField(
                     value = customBaseURL,

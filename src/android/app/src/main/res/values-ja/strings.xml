@@ -2066,4 +2066,42 @@
     <string name="git_panel_no_branches">ブランチなし</string>
     <string name="git_panel_no_stashes">スタッシュなし</string>
     <string name="git_panel_switch_branch">ブランチを切り替え</string>
+    <string name="sessionlist_export_markdown">Markdown</string>
+    <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
+    <string name="check_update_notes_expand">すべて表示</string>
+    <string name="check_update_notes_collapse">折りたたむ</string>
+    <!-- [#35] Session archive: row menu + collapsed footer section -->
+    <string name="sessionlist_archive">アーカイブ</string>
+    <string name="sessionlist_unarchive">アーカイブ解除</string>
+    <string name="sessionlist_section_archived">アーカイブ済み (%1$d)</string>
+    <!-- Add-provider vendor presets ([T-android-vendor-presets]) -->
+    <string name="add_provider_vendor_presets">ベンダープリセット</string>
+    <string name="add_provider_vendor_presets_pick_hint">ベンダーをタップするとエンドポイントと名前が自動入力されます。</string>
+    <string name="add_provider_vendor_preset_deepseek">DeepSeek</string>
+    <string name="add_provider_vendor_preset_zhipu">Zhipu GLM</string>
+    <string name="add_provider_vendor_preset_kimi">Kimi (Moonshot)</string>
+    <string name="add_provider_vendor_preset_qwen">Qwen (DashScope)</string>
+    <string name="add_provider_vendor_preset_ark">Volcano Ark</string>
+    <string name="add_provider_vendor_preset_minimax">MiniMax</string>
+    <string name="add_provider_vendor_preset_siliconflow">SiliconFlow</string>
+    <string name="add_provider_vendor_preset_groq">Groq</string>
+    <string name="add_provider_vendor_preset_together">Together</string>
+    <string name="add_provider_vendor_preset_mistral">Mistral</string>
+    <string name="add_provider_vendor_preset_ollama">Ollama</string>
+    <string name="add_provider_vendor_preset_lmstudio">LM Studio</string>
+    <string name="add_provider_vendor_hint_deepseek">platform.deepseek.com で API キーを作成</string>
+    <string name="add_provider_vendor_hint_zhipu">Zhipu オープンプラットフォーム open.bigmodel.cn のコンソールで API キーを取得</string>
+    <string name="add_provider_vendor_hint_kimi">platform.moonshot.cn で API キーを作成</string>
+    <string name="add_provider_vendor_hint_qwen">Alibaba Cloud Model Studio（百炼）コンソールで API キーを作成</string>
+    <string name="add_provider_vendor_hint_ark">Volcano Ark コンソールで API キーを作成。モデル名にはエンドポイント ID またはモデル ID を指定します</string>
+    <string name="add_provider_vendor_hint_minimax">MiniMax オープンプラットフォームで API キーを取得</string>
+    <string name="add_provider_vendor_hint_siliconflow">cloud.siliconflow.cn で API キーを作成</string>
+    <string name="add_provider_vendor_hint_groq">console.groq.com で API キーを作成</string>
+    <string name="add_provider_vendor_hint_together">Together コンソール api.together.ai で API キーを取得</string>
+    <string name="add_provider_vendor_hint_mistral">console.mistral.ai で API キーを作成</string>
+    <string name="add_provider_vendor_hint_ollama">ローカルサーバー — API キー不要</string>
+    <string name="add_provider_vendor_hint_lmstudio">ローカルサーバー — API キー不要。先に LM Studio の Developer サーバーを起動してください</string>
+    <!-- Queued-message edit sheet + git diff truncation notice -->
+    <string name="chat_queued_edit_title">キュー内のメッセージを編集</string>
+    <string name="git_panel_diff_truncated">Diff は 200,000 文字で切り詰められました — 全文はリポジトリ内のファイル自体にあります。</string>
 </resources>

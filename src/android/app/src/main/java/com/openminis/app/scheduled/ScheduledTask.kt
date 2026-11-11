@@ -51,7 +51,7 @@ data class ScheduledRun(
  * [ScheduledTaskStore] (SharedPreferences). Schema lives here so the store
  * stays a thin layer over the JSON array.
  */
-enum class ScheduledRepeatMode { ONCE, DAILY, WEEKDAYS, CUSTOM, INTERVAL }
+enum class ScheduledRepeatMode { ONCE, DAILY, WEEKDAYS, CUSTOM, INTERVAL, CRON }
 
 /**
  * What the task does when it fires. Mirrors the iOS App Intent set.
@@ -134,6 +134,12 @@ data class ScheduledTask(
     // MAX_RUN_HISTORY by the manager when appending.
     val runHistory: List<ScheduledRun> = emptyList(),
     val intervalMinutes: Long = 0,
+    /**
+     * [T-android-cron-5-field] Raw 5-field cron expression when
+     * repeatMode=CRON; nextTriggerMs derives fires from it via
+     * CronScheduler.nextCronFire. Null on interval/calendar tasks.
+     */
+    val cronSpec: String? = null,
     val fireAtMs: Long? = null,
     // [T-sched-run-now, port upstream 1.16] The calendar slot "Run now" already
     // fired early, so the alarm delivered for that slot (and the in-app timer
@@ -193,6 +199,10 @@ data class ScheduledTask(
      */
     fun nextTriggerMs(now: Long = System.currentTimeMillis()): Long? {
         if (!enabled) return null
+        if (repeatMode == ScheduledRepeatMode.CRON) {
+            val spec = cronSpec ?: return null
+            return CronScheduler.nextCronFire(spec, now)
+        }
         if (repeatMode == ScheduledRepeatMode.INTERVAL) {
             val intervalMs = intervalMinutes * 60_000L
             if (intervalMs <= 0L) return null
@@ -219,7 +229,7 @@ data class ScheduledTask(
         }
 
         val candidate: Long = when (repeatMode) {
-            ScheduledRepeatMode.INTERVAL -> return null
+            ScheduledRepeatMode.INTERVAL, ScheduledRepeatMode.CRON -> return null
             ScheduledRepeatMode.ONCE, ScheduledRepeatMode.DAILY -> {
                 if (cal.timeInMillis < floor) cal.add(Calendar.DAY_OF_YEAR, 1)
                 cal.timeInMillis
@@ -284,6 +294,7 @@ data class ScheduledTask(
             put("runHistory", JSONArray().apply { runHistory.forEach { put(it.toJson()) } })
         }
         if (intervalMinutes > 0L) put("intervalMinutes", intervalMinutes)
+        if (cronSpec != null) put("cronSpec", cronSpec)
         if (fireAtMs != null) put("fireAtMs", fireAtMs)
         if (runNowSlotMs != null) put("runNowSlotMs", runNowSlotMs)
         if (newSessionPermissionMode != null) put("newSessionPermissionMode", newSessionPermissionMode)
@@ -325,6 +336,7 @@ data class ScheduledTask(
                 }
             } ?: emptyList(),
             intervalMinutes = o.optLong("intervalMinutes", 0L),
+            cronSpec = if (o.has("cronSpec")) o.optString("cronSpec", null) else null,
             fireAtMs = if (o.has("fireAtMs")) o.optLong("fireAtMs") else null,
             runNowSlotMs = if (o.has("runNowSlotMs")) o.optLong("runNowSlotMs") else null,
             newSessionPermissionMode =

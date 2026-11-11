@@ -32,6 +32,27 @@ object ScheduledTaskCodec {
         id: String = UUID.randomUUID().toString(),
         now: Long = System.currentTimeMillis(),
     ): ScheduledTask? {
+        // [T-android-cron-5-field] 5-field cron wins over interval parsing:
+        // "0 9 * * 1-5" is unambiguous, while interval parsing only accepts
+        // duration chunks and rejects the same token count anyway.
+        val cronFields = CronScheduler.parseCronExpression(schedule)
+        if (cronFields != null) {
+            val fireAt = CronScheduler.nextCronFire(schedule, now) ?: return null
+            val cal = Calendar.getInstance().apply { timeInMillis = fireAt }
+            val t = ScheduledTask(
+                id = id,
+                label = name.ifBlank { prompt.take(32) },
+                timeOfDayHour = cal.get(Calendar.HOUR_OF_DAY),
+                timeOfDayMinute = cal.get(Calendar.MINUTE),
+                repeatMode = ScheduledRepeatMode.CRON,
+                cronSpec = schedule,
+                prompt = prompt,
+                targetMode = targetMode,
+                fireAtMs = fireAt,
+                createdAt = now,
+            )
+            return t
+        }
         val parsed = CronScheduler.parseSchedule(schedule) ?: return null
         val fireAt = now + parsed.firstDelayMs
         val cal = Calendar.getInstance().apply { timeInMillis = fireAt }

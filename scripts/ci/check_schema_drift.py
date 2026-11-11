@@ -48,7 +48,9 @@ DB_DIR = os.path.join(
 # compact_markers). Blanket-scanning the directory therefore lets one database
 # overwrite the other's replay. Name AppDatabase's migration sources explicitly;
 # a missing entry fails loudly instead of silently replaying the wrong schema.
-APP_DB_SOURCES = ("AppDatabase.kt", "AppMigrations.kt")
+# AuditMigrations.kt joined the split when AppMigrations.kt hit the 800-line
+# policy cap (mirrors appDbSources in SchemaMigrationDriftTest.kt).
+APP_DB_SOURCES = ("AppDatabase.kt", "AppMigrations.kt", "AuditMigrations.kt")
 
 
 def load_migration_sources():

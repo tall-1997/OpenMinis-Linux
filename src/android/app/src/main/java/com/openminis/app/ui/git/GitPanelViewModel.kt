@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.git.GitCli
 import com.openminis.app.git.GitCli.CommitOutcome
+import com.openminis.app.git.GitHostRepoTransfer
 import com.openminis.app.git.GitCli.GitCommit
 import com.openminis.app.git.GitCli.GitFileEntry
 import com.openminis.app.git.GitCommitMessageGenerator
@@ -269,14 +270,36 @@ class GitPanelViewModel(
         }
     }
 
-    /** Push to upstream; on success the reload clears the ahead count. */
+    /**
+     * Push to upstream; on success the reload clears the ahead count.
+     * [#33] Native JGit first (host path, no PRoot round-trip) whenever the
+     * remote's credentials are visible to the host — embedded in the URL or
+     * not needed at all; otherwise falls back to the sandbox shell, which
+     * owns the credential store.
+     */
     fun push() {
-        mutate { GitCli.push(sessionId, guestRoot) ?: "pushed" }
+        mutate {
+            when (val r = hostDir?.let { GitHostRepoTransfer.push(it) }) {
+                null, GitHostRepoTransfer.Result.Fallback -> GitCli.push(sessionId, guestRoot) ?: "pushed"
+                is GitHostRepoTransfer.Result.Done -> r.message ?: "pushed"
+                is GitHostRepoTransfer.Result.Error -> r.message
+            }
+        }
     }
 
-    /** Pull (ff-only) — a diverged upstream reports git's refusal verbatim. */
+    /**
+     * Pull (ff-only) — a diverged upstream reports the refusal verbatim.
+     * [#33] Native-first, same split as [push]: JGit fetch + explicit
+     * fast-forward on the host path, `GitCli.pull --ff-only` as fallback.
+     */
     fun pull() {
-        mutate { GitCli.pull(sessionId, guestRoot) ?: "pulled" }
+        mutate {
+            when (val r = hostDir?.let { GitHostRepoTransfer.pull(it) }) {
+                null, GitHostRepoTransfer.Result.Fallback -> GitCli.pull(sessionId, guestRoot) ?: "pulled"
+                is GitHostRepoTransfer.Result.Done -> r.message ?: "pulled"
+                is GitHostRepoTransfer.Result.Error -> r.message
+            }
+        }
     }
 
     /**

@@ -208,6 +208,22 @@ internal fun ChatFlatItemRow(
                                 onWithdraw = if (item.message.isQueued) {
                                     { safeMutate { viewModel.withdrawQueuedMessage(item.message.id) } }
                                 } else null,
+                                // [T-android-queued-message-edit #37] Long-
+                                // press → Edit (or the pencil beside withdraw)
+                                // on a queued bubble opens the single-field
+                                // dialog; confirm rewrites the queued prompt
+                                // text in place — queue position and
+                                // attachments preserved, memory-only (the
+                                // queue never touches the DB until drain).
+                                onEditQueued = if (item.message.isQueued) {
+                                    { newText ->
+                                        safeMutate {
+                                            item.message.queuedPromptId?.let { pid ->
+                                                viewModel.editQueued(pid, newText)
+                                            }
+                                        }
+                                    }
+                                } else null,
                                 onPreviewFile = { uri, name ->
                                     // T150: turn the persisted file:// URI back
                                     // into a FileItem and hand off to the host

@@ -23,8 +23,8 @@ import org.json.JSONObject
  *    the safety net by construction, not something to handle per tool.
  *  - `was:` line: the F batch appends a fixed `\nwas: <old>` line to the
  *    write-class device tool results (device/SystemTools.kt). The parsers
- *    below follow that convention; TODO(G) re-verify exact wording when
- *    the F batch lands.
+ *    below follow that convention; wording verified against the live
+ *    F-batch implementation (SystemTools.withWasLine).
  */
 object CardDeriver {
 
@@ -325,7 +325,7 @@ object CardDeriver {
     /**
      * The fixed F-batch undo line: the LAST line of the result that starts
      * with exactly `was: `. Everything after the marker is the old value.
-     * TODO(G): align word-for-word with the F batch in device/SystemTools.kt.
+     * Matches SystemTools.withWasLine word-for-word (was: <old>).
      */
     internal fun parseWasLine(resultText: String): String? =
         resultText.lineSequence()

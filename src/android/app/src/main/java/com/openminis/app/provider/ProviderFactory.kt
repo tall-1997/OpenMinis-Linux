@@ -152,8 +152,20 @@ object ProviderFactory {
                 anthropic
             }
             ProviderType.gemini -> {
-                if (basePath != null) GeminiProvider(apiKey, model, basePath)
-                else GeminiProvider(apiKey, model)
+                // [T-android-gemini-oauth] OAuth instances drive the provider
+                // with a per-call Bearer token (Code Assist subscriptions
+                // reject ?key=); API-key instances keep the classic query
+                // parameter byte-for-byte.
+                val oauthProvider = if (context != null &&
+                    instance.credentialType == ProviderCredential.oauth
+                ) {
+                    com.openminis.app.auth.GeminiOAuthManager(context, instance.id)
+                } else null
+                val tokenProvider: (suspend () -> String?)? = oauthProvider?.let { mgr ->
+                    { mgr.validAccessToken() }
+                }
+                if (basePath != null) GeminiProvider(apiKey, model, basePath, tokenProvider)
+                else GeminiProvider(apiKey, model, oauthTokenProvider = tokenProvider)
             }
             // [T-android-provider-type-parity] openAIResponses shares this
             // branch: on iOS it is "OpenAI with forceResponsesAPI = true", and
@@ -311,7 +323,15 @@ object ProviderFactory {
             // credential error rather than constructing a provider that would
             // emit malformed requests. iOS throws FactoryError here likewise.
             ProviderType.antigravity, ProviderType.unsupported -> {
-                throw com.openminis.app.data.model.LLMError.InvalidApiKey()
+                // [T-antigravity-honest-error] Antigravity has no mobile path
+                // today: magpie's desktop integration proxies the local CLI
+                // sign-in files, which do not exist on Android, and the
+                // service API is not public. Fail with an actionable message
+                // instead of a bare InvalidApiKey that reads as a bad key.
+                throw com.openminis.app.data.model.LLMError.ProviderError(
+                    "Antigravity is not supported on Android yet (no mobile sign-in path). " +
+                        "Pick a different provider for this session.",
+                )
             }
         }
         // [T-android-thinking-rules-phase2] Tag OpenAI-family providers with their

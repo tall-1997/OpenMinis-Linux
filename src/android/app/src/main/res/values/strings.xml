@@ -2826,4 +2826,52 @@
     <string name="model_group_detail_quota_period_placeholder">Window length (hours)</string>
     <string name="model_group_detail_quota_window_reset_snackbar">Quota window reset — primary member serves again</string>
     <string name="model_group_detail_quota_window_remaining">Remaining this window: %1$d sends</string>
+    <string name="git_panel_diff_truncated">Diff truncated at 200,000 characters — the full text is in the repo file itself.</string>
+
+    <!-- [T-android-export-markdown] Session export formats. The Markdown document
+         labels below mark roles / metadata inside the exported file — document
+         content shared OUT of the app, not UI — hence translatable=false: the
+         L10n gate does not require locale copies for them. -->
+    <string name="sessionlist_export_markdown">Markdown</string>
+    <string name="export_role_user" translatable="false">👤 用户</string>
+    <string name="export_role_assistant" translatable="false">🤖 助手</string>
+    <string name="export_md_tool" translatable="false">工具</string>
+    <string name="export_md_model" translatable="false">模型</string>
+    <string name="export_md_exported_at" translatable="false">导出时间</string>
+    <!-- Add-provider vendor presets ([T-android-vendor-presets]): one-tap
+         prefill of mainstream vendors' documented OpenAI-compatible endpoints. -->
+    <string name="add_provider_vendor_presets">Vendor presets</string>
+    <string name="add_provider_vendor_presets_pick_hint">Tap a vendor to prefill its endpoint and name.</string>
+    <string name="add_provider_vendor_preset_deepseek">DeepSeek</string>
+    <string name="add_provider_vendor_preset_zhipu">Zhipu GLM</string>
+    <string name="add_provider_vendor_preset_kimi">Kimi (Moonshot)</string>
+    <string name="add_provider_vendor_preset_qwen">Qwen (DashScope)</string>
+    <string name="add_provider_vendor_preset_ark">Volcano Ark</string>
+    <string name="add_provider_vendor_preset_minimax">MiniMax</string>
+    <string name="add_provider_vendor_preset_siliconflow">SiliconFlow</string>
+    <string name="add_provider_vendor_preset_groq">Groq</string>
+    <string name="add_provider_vendor_preset_together">Together</string>
+    <string name="add_provider_vendor_preset_mistral">Mistral</string>
+    <string name="add_provider_vendor_preset_ollama">Ollama</string>
+    <string name="add_provider_vendor_preset_lmstudio">LM Studio</string>
+    <string name="add_provider_vendor_hint_deepseek">Create an API key at platform.deepseek.com</string>
+    <string name="add_provider_vendor_hint_zhipu">Get an API key from the Zhipu open platform console at open.bigmodel.cn</string>
+    <string name="add_provider_vendor_hint_kimi">Create an API key at platform.moonshot.cn</string>
+    <string name="add_provider_vendor_hint_qwen">Create an API key in the Alibaba Cloud Model Studio (Bailian) console</string>
+    <string name="add_provider_vendor_hint_ark">Create an API key in the Volcano Ark console; the model name is an endpoint ID or model ID</string>
+    <string name="add_provider_vendor_hint_minimax">Get an API key from the MiniMax open platform</string>
+    <string name="add_provider_vendor_hint_siliconflow">Create an API key at cloud.siliconflow.cn</string>
+    <string name="add_provider_vendor_hint_groq">Create an API key at console.groq.com</string>
+    <string name="add_provider_vendor_hint_together">Get an API key from the Together console at api.together.ai</string>
+    <string name="add_provider_vendor_hint_mistral">Create an API key at console.mistral.ai</string>
+    <string name="add_provider_vendor_hint_ollama">Local server — no API key needed</string>
+    <string name="add_provider_vendor_hint_lmstudio">Local server — no API key needed. Start the Developer server in LM Studio first</string>
+    <string name="chat_queued_edit_title">Edit queued message</string>
+    <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
+    <string name="check_update_notes_expand">Show all</string>
+    <string name="check_update_notes_collapse">Show less</string>
+    <!-- [#35] Session archive: row menu + collapsed footer section -->
+    <string name="sessionlist_archive">Archive</string>
+    <string name="sessionlist_unarchive">Unarchive</string>
+    <string name="sessionlist_section_archived">Archived (%1$d)</string>
 </resources>
