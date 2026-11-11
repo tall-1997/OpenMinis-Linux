@@ -52,7 +52,7 @@ class AlibabaVoiceProvider(providerId: String, baseURL: String, apiKey: String?)
      * default, paraformer-realtime-v2, is WebSocket-only.
      *
      * [GH#520] This is also the wiring for qwen omni models on a
-     * dashscope/*.maas.aliyuncs.com instance: routing them here (instead of
+     * dashscope or &lt;workspace&gt;.maas.aliyuncs.com instance: routing them here (instead of
      * the base class's generic chat-ASR path) is what puts the clip in the
      * Data-URI `input_audio` part bailianBody() builds. The model id is still
      * normalized by bailianModel() to the compatible-mode ASR model, so the

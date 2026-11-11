@@ -2816,7 +2816,8 @@ class ChatViewModel(
         get() {
             // [GH#311] A provider-level force switch overrides capability detection.
             if (activeInstanceForcesThinking()) return true
-            currentModel?.let { return it.supportsReasoning }
+            val modelReasoning = currentModel?.supportsReasoning
+            if (modelReasoning != null) return modelReasoning
             // [GH#180] The resolved `currentModel` is only populated once a
             // model group (or a persisted session binding) has been resolved.
             // A fresh chat with no default model group therefore reported

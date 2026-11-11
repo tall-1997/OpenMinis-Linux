@@ -33,7 +33,7 @@ import java.io.File
  *
  * ## 为什么脚本里不要用 flock / 不要依赖 /proc（重要）
  *
- * 1. **/proc 跨会话不可见**：每次 `shell_execute` 都是一次新的 proot 进程，
+ * 1. **`/proc` 跨会话不可见**：每次 `shell_execute` 都是一次新的 proot 进程，
  *    看到的是宿主内核的 /proc，而不是“上一次命令”的 /proc。脚本里
  *    `pgrep` / `ls /proc/<pid>` 找不到另一条命令启动的进程，也无法通过
  *    /proc/<pid>/fd 与别的会话共享状态。需要跨调用协调时，用文件锁之外的
@@ -44,7 +44,7 @@ import java.io.File
  *    [AtomicBoolean] / 单协程），脚本内部不要依赖 flock 做关键区。
  *
  * 扩展点：需要多个 hook 时，在这里按行读取一个清单文件（例如
- * `/var/minis/boot.d/*.sh` 排序执行），执行器与日志契约保持不变。
+ * `/var/minis/boot.d/<name>.sh` 排序执行），执行器与日志契约保持不变。
  */
 object BootHook {
 
