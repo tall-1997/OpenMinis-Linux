@@ -69,13 +69,14 @@ jobs:
             android-sdk-${{ runner.os }}-ndk-${{ env.ANDROID_NDK }}-cmake-${{ env.ANDROID_CMAKE }}-
             android-sdk-${{ runner.os }}-ndk-${{ env.ANDROID_NDK }}-
 
+      # [T-rolling-apk-blocked] apt 镜像 DNS 故障曾把 #861 挡死在这步：
+      # 预装检测优先（零 apt 依赖），真缺才走带重试的 apt 兜底。
       - name: Install build tools and Android NDK
         run: |
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y curl unzip make gawk sed file python3 cmake ninja-build g++ git
+          bash scripts/ci/ensure-build-tools.sh curl unzip make gawk sed file python3 cmake ninja-build g++ git
           mkdir -p /usr/local/lib/android/sdk/cmdline-tools
           if [ ! -x /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager ]; then
-            curl -fsSL -o /tmp/cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-${{ env.ANDROID_CMDLINE_TOOLS }}_latest.zip
+            curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o /tmp/cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-${{ env.ANDROID_CMDLINE_TOOLS }}_latest.zip
             unzip -q /tmp/cmdline-tools.zip -d /tmp/sdk
             mv /tmp/sdk/cmdline-tools /usr/local/lib/android/sdk/cmdline-tools/latest
           fi
