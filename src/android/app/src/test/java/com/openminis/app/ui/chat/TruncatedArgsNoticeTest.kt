@@ -12,6 +12,10 @@ class TruncatedArgsNoticeTest {
         assertEquals(1234, TruncatedArgsNotice.writtenBytes("Wrote to /a.txt (1234 bytes)"))
         assertEquals(12, TruncatedArgsNotice.writtenBytes("Edited /a (1 replacement(s), 12 bytes)"))
         assertEquals(null, TruncatedArgsNotice.writtenBytes("(no output)"))
+        // [GH#119] 负例：正文里的 "N bytes" 没有右括号，不能被当成写入字节数；
+        // 路径里带 "100 bytes" 时仍应取真正的 (12 bytes)。
+        assertEquals(null, TruncatedArgsNotice.writtenBytes("The file has 100 bytes"))
+        assertEquals(12, TruncatedArgsNotice.writtenBytes("Wrote to /tmp/100 bytes.txt (12 bytes)"))
     }
 
     @Test

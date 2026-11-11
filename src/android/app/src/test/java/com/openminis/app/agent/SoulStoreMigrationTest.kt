@@ -121,6 +121,29 @@ class SoulStoreMigrationTest {
         assertNotNull(SoulIcon.decode(loaded.metadata.icon, context))
     }
 
+    @Test
+    fun `startup migration moves a legacy reference without any further save`() {
+        // [GH#299] interim 构建升级后用户可能再也不保存 SOUL.md；启动迁移必须
+        // 自己把旧引用搬进备份根，否则备份/恢复仍丢头像。
+        val legacyDir = File(context.filesDir, "soul-icons").apply { mkdirs() }
+        val legacyFile = File(legacyDir, "soul.png")
+        legacyFile.writeBytes(Base64.decode(onePixelPng, Base64.DEFAULT))
+        val legacyRef = SoulIcon.fileRefFor(SoulIconMigration.LEGACY_ICON_RELATIVE_PATH)
+        writeRawSoul(legacyRef, "body")
+
+        SoulIconMigration.migrateLegacyRefOnStartup(context)
+
+        val loaded = SoulStore.load(context)!!
+        assertEquals(migratedRef(), loaded.metadata.icon)
+        assertTrue(iconFile().isFile)
+        assertFalse("old out-of-backup copy must be gone", legacyFile.exists())
+        assertNotNull(SoulIcon.decode(loaded.metadata.icon, context))
+
+        // 幂等：第二次启动迁移不改变任何内容。
+        SoulIconMigration.migrateLegacyRefOnStartup(context)
+        assertEquals(loaded, SoulStore.load(context))
+    }
+
     // ── 2. body 保真（E2）──────────────────────────────────────────────
 
     @Test

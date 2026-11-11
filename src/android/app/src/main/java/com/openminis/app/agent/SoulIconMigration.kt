@@ -139,6 +139,25 @@ internal object SoulIconMigration {
     }
 
     /**
+     * [GH#299] 启动时一次性迁移 interim 构建留下的旧引用。
+     *
+     * 只在用户之后恰好保存 SOUL.md 时才迁移是不够的：从 interim 构建升级、
+     * 之后不再保存 SOUL.md 的用户，旧 `file:soul-icons/soul.png` 永远进不了
+     * 备份根，备份/恢复仍会丢头像。幂等：无变化直接返回；迁移失败保留旧
+     * 引用，下次启动再试（不阻塞启动，调用点已在 IO 协程）。
+     */
+    fun migrateLegacyRefOnStartup(context: Context) {
+        val current = SoulStore.load(context) ?: return
+        val prepared = prepareForSave(context, current)
+        if (prepared == current) return
+        SoulStore.save(context, prepared)
+        AppLogger.info(
+            TAG,
+            "[GH#299] startup migration moved the SOUL icon into the memory backup root",
+        )
+    }
+
+    /**
      * Decode → downscale to [SoulIcon.STORED_PIXELS] → PNG →
      * `filesDir/minis-global/memory/soul-icons/soul.png`, returning the
      * frontmatter reference. Every failure is logged and returns null so the

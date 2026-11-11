@@ -385,6 +385,9 @@ class MinisApp : Application(), ImageLoaderFactory {
                 com.openminis.app.agent.SoulStore.ensureExists(this@MinisApp)
                 com.openminis.app.agent.SoulStore.upgradeStaleDefault(this@MinisApp)
                 com.openminis.app.agent.SoulStore.renameStockProduct(this@MinisApp)
+                // [GH#299] 升级用户可能带着 interim 构建的旧 icon 引用；启动时迁移
+                // 一次，避免"不再保存 SOUL.md 就永远进不了备份根"（幂等）。
+                com.openminis.app.agent.SoulIconMigration.migrateLegacyRefOnStartup(this@MinisApp)
                 com.openminis.app.agent.SoulStore.refreshCache(this@MinisApp)
 
                 // [T-global-md-seed + T-default-assets] Seed GLOBAL.md starter template on first launch (create-only).
