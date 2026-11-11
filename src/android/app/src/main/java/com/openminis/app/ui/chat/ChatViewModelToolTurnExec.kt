@@ -72,6 +72,12 @@ internal class ToolTurnContext(
     val replayRenamedIds: Set<String>,
     val allToolBlocks: MutableList<AssistantBlock>,
     val toolInputChunkRings: MutableMap<String, MutableList<String>>,
+    /**
+     * [GH#61/#83/#146] Per-call raw `arguments` tail the provider could not
+     * parse. Consulted by preflight AFTER the ToolInputDelta ring, so the
+     * exact final payload wins over a stale stride-gated delta.
+     */
+    val toolCallRawArgs: MutableMap<String, String>,
 )
 
 /**
@@ -127,16 +133,66 @@ internal suspend fun ChatViewModel.preflightToolTurn(
         // Mutates `args` in place; downstream argsStr and preflight see
         // the repaired payload. Mirrors iOS repairToolArgs in
         // AIChatViewModel.swift.
+        // [GH#61/#83/#146] Prefer the provider's exact unparsed tail over the
+        // ring's last stride-gated delta: a final fragment may never have been
+        // emitted as ToolInputDelta, and repairing a stale prefix can produce
+        // a syntactically valid but semantically older argument set.
+        val rawArgumentTail = ctx.toolCallRawArgs[id]?.takeIf { it.isNotBlank() }
+            ?: ctx.toolInputChunkRings[id]?.lastOrNull()
         val repairs = ToolJsonRepair.repair(
-            name, args, ctx.toolInputChunkRings[id]?.lastOrNull(), ctx.agentTools,
+            name, args, rawArgumentTail, ctx.agentTools,
         )
         if (repairs.isNotEmpty()) {
             AppLogger.warning(
                 "ToolPreflight",
                 "[ToolRepair] REPAIRED tool=$name id=$id strategies=[${repairs.joinToString(", ")}] " +
                     "argsKeys=[${args.keys().asSequence().toList().sorted().joinToString(",")}] " +
-                    "rawTail=<<<${ctx.toolInputChunkRings[id]?.lastOrNull()?.take(500) ?: ""}>>>"
+                    "rawTail=<<<${rawArgumentTail?.take(500) ?: ""}>>>"
             )
+        }
+        // [GH#61/#83/#146] The provider sent a non-blank argument tail that is
+        // not JSON and no closure suffix fixed it. Executing `{}` would be the
+        // silent corruption #61 reported (all tools "empty arguments") and,
+        // for tools with no required fields, an invisible no-op call. Refuse
+        // with the fact the model needs: the PARAMETER STREAM was incomplete.
+        // 中文：参数流非法/不完整时拒绝执行，并把“参数流未完整”的事实回写
+        // 给模型（而不是静默下发空对象）。
+        if (repairs.any { it == ToolJsonRepair.INVALID_JSON_MARKER }) {
+            val rawBytes = (rawArgumentTail ?: "").toByteArray(Charsets.UTF_8).size
+            val tailPreview = (rawArgumentTail ?: "").take(200).replace("\n", "\\n")
+            val modelMessage = "Error: The argument stream for this tool call did not arrive " +
+                "as valid JSON ($rawBytes bytes received, tail=<<<$tailPreview>>>). The call " +
+                "was NOT executed — no tool ran and nothing was written. This usually means " +
+                "the model response was cut off mid-arguments or the gateway corrupted the " +
+                "parameter stream. Re-issue the call with complete arguments; do not retry " +
+                "with an empty or partial payload."
+            AppLogger.warning(
+                "ToolPreflight",
+                "BLOCKED incomplete argument stream tool=$name id=$id bytes=$rawBytes " +
+                    "tail=<<<$tailPreview>>>"
+            )
+            val invalidIdx = ctx.allToolBlocks.indexOfFirst { it.id == id }
+            if (invalidIdx >= 0) {
+                val elapsed = System.currentTimeMillis() - ctx.allToolBlocks[invalidIdx].startTimeMs
+                ctx.allToolBlocks[invalidIdx] = ctx.allToolBlocks[invalidIdx].copy(
+                    toolStatus = ToolBlockStatus.FAILED,
+                    content = "Blocked: arguments stream was incomplete or invalid",
+                    durationMs = elapsed,
+                )
+            }
+            toolLoopDetector.record(name, parseToolParams(args.toString()),
+                result = null, errorMessage = modelMessage, toolCallId = id)
+            refusedParts[id] = AgentContentPart.ToolResult(
+                id = id, name = name,
+                content = modelMessage,
+                isError = true,
+            )
+            ctx.toolInputChunkRings.remove(id)
+            ctx.toolCallRawArgs.remove(id)
+            withContext(Dispatchers.Main) {
+                updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, ctx.allToolBlocks)
+            }
+            continue
         }
         // [T-truncated-args-visibility #119] Non-null when THIS call's
         // arguments arrived truncated and were auto-closed. Only the
@@ -431,6 +487,23 @@ internal suspend fun ChatViewModel.finalizePlannedCall(
                 result.timedOut -> ToolBlockStatus.TIMEOUT
                 else -> ToolBlockStatus.FAILED
             }
+            // [GH#119] Name the truncation and the bytes the tool reported;
+            // "success" with no marker is exactly what let a half-written
+            // file become the basis for the next steps.
+            val truncatedWrittenBytes = if (truncationRepairTag != null) {
+                TruncatedArgsNotice.writtenBytes(result.output)
+            } else {
+                null
+            }
+            val finalContentWithNotice = if (truncationRepairTag != null) {
+                TruncatedArgsNotice.uiLine(
+                    truncationRepairTag,
+                    truncatedWrittenBytes,
+                    TruncatedArgsNotice.argumentBytes(call.argsStr),
+                ) + "\n\n" + finalContent
+            } else {
+                finalContent
+            }
             // T-bg-overlay phase 1: tool finished — drop the
             // notification's indeterminate progress bar so the
             // user can tell streaming has paused (LLM step) vs
@@ -446,10 +519,10 @@ internal suspend fun ChatViewModel.finalizePlannedCall(
                 else -> ToolOutcome.Unknown
             }
             SessionActivityTracker.clearToolRunning(toolOutcome)
-            Log.d("ToolChain[VM]", "[turn=${ctx.turn}] block[$blockIdx] status→$finalStatus title=${result.toolTitle} contentLen=${finalContent.length}")
+            Log.d("ToolChain[VM]", "[turn=${ctx.turn}] block[$blockIdx] status→$finalStatus title=${result.toolTitle} contentLen=${finalContentWithNotice.length}")
             ctx.allToolBlocks[blockIdx] = ctx.allToolBlocks[blockIdx].copy(
                 toolStatus = finalStatus,
-                content = finalContent,
+                content = finalContentWithNotice,
                 toolTitle = result.toolTitle.ifEmpty { ctx.allToolBlocks[blockIdx].toolTitle },
                 durationMs = elapsed,
                 browserURL = result.pageURL ?: ctx.allToolBlocks[blockIdx].browserURL,
@@ -468,11 +541,11 @@ internal suspend fun ChatViewModel.finalizePlannedCall(
     // that ran. Mirrors iOS ConcurrentTools.
     currentCoroutineContext().ensureActive()
     val outputForLLMWithNote = if (truncationRepairTag != null) {
-        outputForLLM + "\n\n<system-reminder>The argument stream for this call was " +
-            "truncated in transit and auto-closed by the client (repair strategy: " +
-            "$truncationRepairTag) before execution. The arguments actually used may be " +
-            "incomplete — verify the result and re-issue the call with complete " +
-            "arguments if anything is missing.</system-reminder>"
+        outputForLLM + "\n\n" + TruncatedArgsNotice.modelNote(
+            truncationRepairTag,
+            TruncatedArgsNotice.writtenBytes(result.output),
+            TruncatedArgsNotice.argumentBytes(call.argsStr),
+        )
     } else {
         outputForLLM
     }

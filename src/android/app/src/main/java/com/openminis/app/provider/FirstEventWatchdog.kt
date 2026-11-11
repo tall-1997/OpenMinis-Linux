@@ -11,6 +11,20 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 /**
+ * [GH#521] True for chunks that represent actual model progress (text,
+ * thinking, a tool call forming) and false for lifecycle/accounting markers.
+ * The first-token phase must not be satisfied by `Started` (headers) or by an
+ * early `Usage` block — those are exactly the "headers arrived, no token yet"
+ * state the watchdog exists to bound.
+ */
+internal fun LLMStreamChunk.countsAsFirstTokenProgress(): Boolean = when (this) {
+    is LLMStreamChunk.Started,
+    is LLMStreamChunk.Usage,
+    is LLMStreamChunk.Finished -> false
+    else -> true
+}
+
+/**
  * [T-stream-stall-watchdog] Bound how long a model stream may go silent.
  *
  * ## The gap this closes
@@ -39,6 +53,10 @@ import java.util.concurrent.atomic.AtomicLong
  *   between chunks. The connection already proved itself, so a long gap now
  *   means progress stopped, not that it is slow to start.
  *
+ * [GH#521] An optional third window, [firstContentTimeoutMs], sits between
+ * them: it starts when headers (`Started`) land and expires if no real token
+ * follows. It is off by default so the historical contract is unchanged.
+ *
  * Phase 2 is deliberately **opt-in**: [idleTimeoutMs] of 0 disables it, which
  * is what [firstEventWatchdog] passes so its documented contract (and its
  * regression test `retires after the first chunk, a late stop is not killed`)
@@ -63,17 +81,45 @@ fun Flow<LLMStreamChunk>.streamStallWatchdog(
     idleTimeoutMs: Long = 0L,
     reason: String = "no first chunk within ${firstTimeoutMs / 1000}s",
     idleReason: String = "stream stalled — no chunk for ${idleTimeoutMs / 1000}s",
+    /**
+     * [GH#521] 200 headers 之后、首个 token 之前的独立看门狗预算。
+     *
+     * [GH#521] Once response HEADERS arrive (`Started`), the phase-1 budget is
+     * satisfied and previously nothing watched the gap before the first
+     * TOKEN: an OpenAI-compatible gateway can return 200 + headers and then
+     * sit silent for 15-30s (measured), which looked like a healthy stream.
+     * With this > 0 the operator adds a distinct "headers → first content"
+     * phase. `Started` does NOT count as content; text/thinking/tool chunks do.
+     *
+     * 0 keeps the historical two-phase contract (used by
+     * [firstEventWatchdog]) so its regression tests stay valid.
+     */
+    firstContentTimeoutMs: Long = 0L,
+    firstContentReason: String = "connected, but no first token within ${firstContentTimeoutMs / 1000}s",
 ): Flow<LLMStreamChunk> = channelFlow {
     val seen = AtomicBoolean(false)
+    // [GH#521] Separate the "headers arrived" marker from "a token arrived".
+    val contentSeen = AtomicBoolean(false)
+    val headersAtNanos = AtomicLong(0L)
     val startNanos = System.nanoTime()
     val lastEventNanos = AtomicLong(startNanos)
-    val stalledAfterFirstEvent = AtomicBoolean(false)
+    // FIRST_EVENT / FIRST_CONTENT / IDLE — which phase tripped, if any.
+    val timedOutPhase = java.util.concurrent.atomic.AtomicReference<String?>(null)
 
     val upstream = launch {
         try {
             collect { chunk ->
+                val now = System.nanoTime()
                 seen.set(true)
-                lastEventNanos.set(System.nanoTime())
+                lastEventNanos.set(now)
+                if (chunk is LLMStreamChunk.Started) {
+                    headersAtNanos.compareAndSet(0L, now)
+                } else if (chunk.countsAsFirstTokenProgress()) {
+                    // Any real progress chunk (text, thinking, a tool call
+                    // being formed) satisfies the first-token phase. Usage /
+                    // Finished markers do not.
+                    contentSeen.set(true)
+                }
                 send(chunk)
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -85,23 +131,43 @@ fun Flow<LLMStreamChunk>.streamStallWatchdog(
 
     val watchdog = launch {
         while (isActive) {
-            // Retire before computing any deadline: with phase 2 disabled the
-            // phase-1 deadline stays in the past forever, and checking it first
-            // would kill a stream that is merely slow *after* its first chunk —
-            // exactly the contract `firstEventWatchdog` promises (and that
-            // `retires after the first chunk, a late stop is not killed` pins).
-            if (seen.get() && idleTimeoutMs <= 0L) return@launch
+            val hasAny = seen.get()
+            val hasContent = contentSeen.get()
+            // Retire before computing any deadline: with phase 2 disabled and
+            // no first-content phase the deadline would stay in the past
+            // forever, and checking it first would kill a stream that is
+            // merely slow *after* its first chunk — exactly the contract
+            // `firstEventWatchdog` promises (and that `retires after the first
+            // chunk, a late stop is not killed` pins).
+            if (hasAny && hasContent && idleTimeoutMs <= 0L) return@launch
+            if (hasAny && !hasContent && idleTimeoutMs <= 0L && firstContentTimeoutMs <= 0L) return@launch
+
             val now = System.nanoTime()
-            val deadlineNanos = if (!seen.get() || idleTimeoutMs <= 0L) {
-                startNanos + firstTimeoutMs * NANOS_PER_MILLI
-            } else {
-                lastEventNanos.get() + idleTimeoutMs * NANOS_PER_MILLI
+            val deadlineNanos: Long
+            val phase: String
+            when {
+                !hasAny -> {
+                    phase = "first-event"
+                    deadlineNanos = startNanos + firstTimeoutMs * NANOS_PER_MILLI
+                }
+                !hasContent && firstContentTimeoutMs > 0L -> {
+                    // [GH#521] Measured from headers, not from stream start:
+                    // the upload/first-header wait already has its own bound
+                    // at the transport layer, and counting it here would
+                    // double-charge a slow upload.
+                    phase = "first-content"
+                    val base = headersAtNanos.get().takeIf { it > 0L } ?: startNanos
+                    deadlineNanos = base + firstContentTimeoutMs * NANOS_PER_MILLI
+                }
+                idleTimeoutMs > 0L -> {
+                    phase = "idle"
+                    deadlineNanos = lastEventNanos.get() + idleTimeoutMs * NANOS_PER_MILLI
+                }
+                else -> return@launch
             }
             val remainingMs = (deadlineNanos - now) / NANOS_PER_MILLI
             if (remainingMs <= 0L) {
-                // Only phase 2 counts as a stall; phase 1 keeps the historical
-                // "never produced anything" wording.
-                stalledAfterFirstEvent.set(seen.get())
+                timedOutPhase.set(phase)
                 upstream.cancel()
                 return@launch
             }
@@ -111,14 +177,18 @@ fun Flow<LLMStreamChunk>.streamStallWatchdog(
 
     upstream.join()
     watchdog.cancel()
-    if (!seen.get()) {
-        throw LLMError.TransientError(reason)
-    }
-    if (stalledAfterFirstEvent.get()) {
+    when (timedOutPhase.get()) {
+        // [GH#521] Headers landed but no token did: retry as transient. Do
+        // NOT set stalledAfterFirstEvent — nothing visible was emitted, so
+        // there is no partial text to resume from.
+        "first-content" -> throw LLMError.TransientError(firstContentReason)
         // [T-stall-resume] Mark mid-stream stalls explicitly so the retry
         // layer can resume from the partial text instead of regenerating
         // from scratch (the stream WAS alive when it died).
-        throw LLMError.TransientError(idleReason, stalledAfterFirstEvent = true)
+        "idle" -> throw LLMError.TransientError(idleReason, stalledAfterFirstEvent = true)
+    }
+    if (!seen.get()) {
+        throw LLMError.TransientError(reason)
     }
 }
 

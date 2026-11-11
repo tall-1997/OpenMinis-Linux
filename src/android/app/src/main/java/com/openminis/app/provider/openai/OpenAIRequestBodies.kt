@@ -246,6 +246,15 @@ internal class OpenAIRequestBodies(
                         val textParts = msg.contentParts.filterIsInstance<AgentContentPart.Text>()
                         val imageParts = msg.contentParts.filterIsInstance<AgentContentPart.ImageData>()
 
+                        // [GH#293/#352] Tool results MUST be contiguous after
+                        // the assistant tool_calls message. The image-carrier
+                        // user messages used to be emitted INSIDE this loop,
+                        // so with two image-bearing results the wire read
+                        // tool,tool,user,tool — strict gateways answered
+                        // "Messages with role 'tool' must be a response to a
+                        // preceding message with 'tool_calls'". Collect them
+                        // and append after every tool reply instead.
+                        val toolResultImageMessages = mutableListOf<JSONObject>()
                         for (tr in toolResults) {
                             messagesArray.put(JSONObject().apply {
                                 put("role", "tool")
@@ -274,7 +283,7 @@ internal class OpenAIRequestBodies(
                                     tr.imageMimeType ?: "image/jpeg"
                                 } else "image/jpeg"
                                 val b64 = Base64.encodeToString(safeBytes, Base64.NO_WRAP)
-                                messagesArray.put(JSONObject().apply {
+                                toolResultImageMessages += JSONObject().apply {
                                     put("role", "user")
                                     put("content", JSONArray().apply {
                                         put(JSONObject().apply {
@@ -291,9 +300,12 @@ internal class OpenAIRequestBodies(
                                             })
                                         })
                                     })
-                                })
+                                }
                             }
                         }
+                        // [GH#293/#352] All tool replies first, then the
+                        // image carriers — never interleaved.
+                        toolResultImageMessages.forEach { messagesArray.put(it) }
                         // T132: emit text + image_url parts as a structured user
                         // message. The previous structured-contentParts branch
                         // dropped AgentContentPart.ImageData entirely — only the
@@ -453,7 +465,23 @@ internal class OpenAIRequestBodies(
         // "Duplicate value for tool_call_id ... in message[N]" whenever
         // any id repeats across the full messages array.
         globallyDedupeToolCallIds(messagesArray)
-        body.put("messages", messagesArray)
+        // [GH#222/#293/#352/#382] Last gate before the provider validates:
+        // drop orphan/duplicate `role:"tool"` replies, close any assistant
+        // `tool_calls` block that lost its replies, and refuse malformed
+        // calls. Logged because a silent repair here used to leave no trace
+        // of why a session had started "working again".
+        val pairing = ChatToolPairSanitizer.sanitize(messagesArray)
+        if (pairing.changed) {
+            android.util.Log.w(
+                "OpenAIProvider",
+                "[sanitize-chat-tool-pairing] droppedOrphanResults=" +
+                    "${pairing.droppedOrphanResults} droppedDuplicateResults=" +
+                    "${pairing.droppedDuplicateResults} insertedMissingResults=" +
+                    "${pairing.insertedMissingResults} droppedMalformedCalls=" +
+                    "${pairing.droppedMalformedCalls}",
+            )
+        }
+        body.put("messages", pairing.messages)
 
         // [T-android-model-use-passthrough-mode GH#72] Merge user-supplied extra
         // body fields verbatim (no OpenAI→native conversion — callers own the

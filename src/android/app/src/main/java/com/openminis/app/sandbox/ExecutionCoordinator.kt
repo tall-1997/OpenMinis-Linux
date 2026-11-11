@@ -262,6 +262,15 @@ object ExecutionCoordinator {
                 // text alone silently dropped `resourceClass`.
                 callerBudget = budget,
             )
+            // [GH#358] A timed-out command leaves the shell object in a state
+            // a later command must never reuse (cancelled pending callback,
+            // possibly blocked stdin writer). Drop THIS instance from the
+            // per-session registry so getOrCreateShell() builds a fresh one
+            // on the next call; the per-session mutex itself stays (queued
+            // callers already reference it and withLock releases it normally).
+            if (ShellChannelRecovery.shouldDiscardChannel(exitCode, rawOutput)) {
+                discardTimedOutChannel(sessionId, shell)
+            }
 
             val durationMs = System.currentTimeMillis() - startTime
             val sanitized = TerminalSanitizer.sanitize(rawOutput)
@@ -362,6 +371,25 @@ object ExecutionCoordinator {
     }
 
     fun sessionBindMounts(sessionId: String): Map<String, String> = buildSessionBindMounts(sessionId)
+
+    /**
+     * [GH#358] Explicit channel teardown after a timeout: reset the shell
+     * object and unregister only THIS instance (`remove(key, value)`), so a
+     * concurrently rebuilt shell is never thrown away. The session mutex is
+     * deliberately kept — waiters are already parked on it and `withLock`
+     * releases it when this command returns.
+     */
+    private fun discardTimedOutChannel(sessionId: String, shell: PersistentShell) {
+        shell.resetAfterTimeout()
+        val removed = shells.remove(sessionId, shell)
+        lastInjectedKeys.remove(sessionId)
+        lastIdle.remove(sessionId)
+        Log.w(
+            TAG,
+            "[GH#358] discarded timed-out shell for session=$sessionId removed=$removed " +
+                "reset=[${ShellChannelRecovery.RESET_FIELDS}] — next command builds a fresh channel",
+        )
+    }
 
     internal fun hasLiveShell(sessionId: String): Boolean = shells[sessionId]?.isAlive == true
 

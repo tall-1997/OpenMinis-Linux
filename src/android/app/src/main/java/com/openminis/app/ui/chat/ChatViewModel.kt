@@ -2160,6 +2160,32 @@ class ChatViewModel(
         _clearChatConfirmRequested.value = false
     }
 
+    /**
+     * [GH#325] Set by an explicit `/clear` or `/compact` in THIS process.
+     * Checked synchronously by [cleanupIfEmptyOnExit] so the race between the
+     * user leaving the screen and the durable marker write cannot delete a
+     * deliberately emptied session. The on-disk marker in [ChatSessionRetention]
+     * carries the same fact across restarts.
+     */
+    @Volatile
+    private var sessionExplicitlyEmptied = false
+
+    /**
+     * [GH#325] Mark the session as deliberately emptied (clear/compact) and
+     * persist the marker off the main thread. Idempotent; called from both
+     * entry points.
+     */
+    internal fun markSessionExplicitlyEmptied(reason: String) {
+        val sid = realSessionId.ifEmpty { sessionId }
+        if (sid.isEmpty()) return
+        sessionExplicitlyEmptied = true
+        val scope = (context.applicationContext as? com.openminis.app.MinisApp)
+            ?.appCoroutineScopes?.io ?: viewModelScope
+        scope.launch {
+            ChatSessionRetention.markExplicitlyEmptied(context.filesDir, sid, reason)
+        }
+    }
+
     internal val _memoryToolRecords = MutableStateFlow<List<MemoryToolRecord>>(emptyList())
     val memoryToolRecords: StateFlow<List<MemoryToolRecord>> = _memoryToolRecords.asStateFlow()
 
@@ -3356,7 +3382,19 @@ class ChatViewModel(
      */
     internal fun effectiveAgentHistory(): List<LLMMessage> {
         val repaired = dropOrphanedToolParts(effectiveAgentHistoryUncounted())
-        val steered = if (personaHistorySteering) com.openminis.app.agent.PersonaPromptLogic.applyHistorySteering(repaired) else repaired
+        // [GH#352] A base64 image that entered history as TEXT (instead of an
+        // image content block) blows the model's context window on EVERY
+        // request and bricks the session. Scrub it from the outgoing copy only;
+        // the persisted rows are untouched.
+        val scrubbed = TextifiedImageGuard.scrub(repaired)
+        if (scrubbed.scrubbedParts > 0) {
+            com.openminis.app.logging.AppLogger.warning(
+                TAG,
+                "[GH#352] scrubbed ${scrubbed.scrubbedParts} textified image part(s) " +
+                    "from outbound history (${scrubbed.savedChars} chars saved)",
+            )
+        }
+        val steered = if (personaHistorySteering) com.openminis.app.agent.PersonaPromptLogic.applyHistorySteering(scrubbed.history) else scrubbed.history
         // Rows trimmed out of the window stay as a clipped excerpt; the digest covers what this process dropped.
         // [T-message-transformers] 发送前清洗 assistant 文本里的思考残留。
         val cleaned = HistoryDigest.inject(
@@ -4167,6 +4205,14 @@ class ChatViewModel(
     fun clearChat() {
         if (_isStreaming.value) cancelStream()
         val sid = activeSessionId
+        // [GH#325] /clear is an explicit, user-confirmed action. Record the
+        // retention marker BEFORE the wipe so the exit cleanup
+        // (cleanupIfEmptyOnExit) can never mistake "explicitly cleared" for
+        // "materialised but never used" and delete the session row + workspace
+        // on the way out. The in-memory flag covers the same-process race; the
+        // on-disk marker survives a process restart; an explicit session
+        // delete removes the whole directory with it.
+        markSessionExplicitlyEmptied("clear")
         // T-streaming-side-channel: ensure no stale stream delta survives a
         // session wipe; the messages list is about to be cleared, so any
         // pending key would be orphaned.
@@ -4220,10 +4266,28 @@ class ChatViewModel(
         }
         // Persist: drop messages + compact markers. Files (workspace,
         // attachments, offloads) intentionally retained.
-        viewModelScope.launch {
-            chatRepository.dao.deleteMessages(sid)
-            chatRepository.dao.deleteCompactMarkers(sid)
-            Log.i(TAG, "clearChat: session=$sid wiped (files preserved)")
+        //
+        // [GH#325] Run on the application scope, not viewModelScope: the user
+        // can clear and immediately leave the screen (which clears the VM) or
+        // the process can be reclaimed; a viewModelScope launch is cancelled
+        // at that point and the old rows come back on the next launch. Also
+        // blank the session-list preview in the same pass so a restart cannot
+        // show the pre-clear last message on a now-empty chat.
+        val appScope = (context.applicationContext as? com.openminis.app.MinisApp)
+            ?.appCoroutineScopes?.io
+        (appScope ?: viewModelScope).launch {
+            try {
+                // [GH#325] Marker FIRST, in the same coroutine as the wipe:
+                // a process death between the two must never leave a cleared
+                // session that looks "never used" on the next launch.
+                ChatSessionRetention.markExplicitlyEmptied(context.filesDir, sid, "clear")
+                chatRepository.dao.deleteMessages(sid)
+                chatRepository.dao.deleteCompactMarkers(sid)
+                chatRepository.dao.clearLastMessagePreview(sid)
+                Log.i(TAG, "clearChat: session=$sid wiped (files preserved)")
+            } catch (t: Throwable) {
+                Log.e(TAG, "clearChat: wipe failed for session=$sid", t)
+            }
         }
     }
 
@@ -5583,6 +5647,10 @@ class ChatViewModel(
      * Safe to call multiple times; the row-existence + count gates make it
      * idempotent. After deletion we release the cached VM so a stale entry
      * doesn't linger in `ChatViewModelStore`.
+     *
+     * [GH#325] Sessions explicitly emptied by `/clear` or `/compact` are
+     * excluded (in-memory flag + on-disk marker): auto-deleting those removed
+     * the session row and its workspace after a restart.
      */
     fun cleanupIfEmptyOnExit() {
         val sid = realSessionId
@@ -5593,6 +5661,17 @@ class ChatViewModel(
             try {
                 val count = chatRepository.messageCount(sid)
                 if (count > 0) return@launch
+                // [GH#325] NEVER auto-delete a session the user explicitly
+                // emptied (/clear, /compact). That action is deliberate and
+                // must persist across restart; only sessions materialised
+                // without ever being used are residue. See ChatSessionRetention.
+                if (sessionExplicitlyEmptied || ChatSessionRetention.isRetained(context.filesDir, sid)) {
+                    AppLogger.info(
+                        TAG,
+                        "cleanupIfEmptyOnExit: keeping explicitly-emptied session $sid (GH#325)",
+                    )
+                    return@launch
+                }
                 AppLogger.info(
                     TAG,
                     "cleanupIfEmptyOnExit: deleting empty session $sid (no persisted messages)",

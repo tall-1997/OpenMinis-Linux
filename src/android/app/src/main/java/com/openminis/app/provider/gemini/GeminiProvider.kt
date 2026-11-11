@@ -82,6 +82,9 @@ class GeminiProvider(
         .connectionPool(com.openminis.app.network.NetworkMonitor.sharedLLMConnectionPool)
         // [GH#258][GH#287] Custom-base endpoints may present a private CA.
         .applyAppTrustStore()
+        // [GH#188] See AnthropicProvider: upload-aware TTFB clock + targeted
+        // connection eviction on timeout.
+        .eventListener(com.openminis.app.provider.UploadAwareTtfbListener())
         .build()
 
     override suspend fun sendMessageClamped(
@@ -150,12 +153,19 @@ class GeminiProvider(
             .applyUserAgentOverride(null)
         val authedRequest = applyAuth(request)
 
-        val call = client.newCall(authedRequest)
+        val watch = com.openminis.app.provider.TtfbWatchState()
+        val call = client.newCall(
+            authedRequest.newBuilder()
+                .tag(com.openminis.app.provider.TtfbWatchState::class.java, watch)
+                .build(),
+        )
         val cancelOnExit = call.cancelOnCancellation(
             kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job],
         )
         try {
-        val response = com.openminis.app.provider.StreamTtfb.execute(call, "Gemini")
+        val response = com.openminis.app.provider.StreamTtfb.execute(
+            call, "Gemini", watch = watch,
+        )
         if (!response.isSuccessful) {
             val errorBody = response.body?.string() ?: ""
             response.close()

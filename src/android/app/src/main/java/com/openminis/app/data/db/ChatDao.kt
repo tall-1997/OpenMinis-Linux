@@ -185,6 +185,15 @@ interface ChatDao : MessageHeadDao, ChatTruncationDao, SessionBindingDao, UsageS
     @Query("UPDATE sessions SET last_message = :preview, updated_at = :updatedAt WHERE id = :id")
     suspend fun updateLastMessage(id: String, preview: String?, updatedAt: Long)
 
+    /**
+     * [GH#325] Drop only the list preview after /clear. Deliberately does NOT
+     * bump `updated_at`: clearing a chat must not reorder the session list,
+     * and the row itself must survive so a restart cannot resurrect the old
+     * preview or make the session look deleted.
+     */
+    @Query("UPDATE sessions SET last_message = NULL WHERE id = :id")
+    suspend fun clearLastMessagePreview(id: String)
+
     @Query("UPDATE sessions SET model_id = :modelId, updated_at = :updatedAt WHERE id = :id")
     suspend fun updateSessionModel(id: String, modelId: String, updatedAt: Long = System.currentTimeMillis())
 
