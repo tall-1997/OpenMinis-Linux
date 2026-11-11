@@ -14,7 +14,19 @@
 # 某个工具时才落进 apt 兜底，兜底自带 update 重试 + Acquire::Retries。
 #
 # 用法：bash scripts/ci/ensure-build-tools.sh curl unzip make ...
+#
+# 注意：参数是「命令名」不是包名。ninja-build 是 apt 包名，其命令叫 ninja
+# ——run #862 的初版脚本误用 ninja-build 当命令名，预装命中失败落进 apt
+# 兜底，正撞上 runner DNS 故障窗口，exit 100。pkg_for_cmd 只在兜底安装时
+# 把命令名映射回包名。
 set -euo pipefail
+
+pkg_for_cmd() {
+  case "$1" in
+    ninja) echo ninja-build ;;
+    *) echo "$1" ;;
+  esac
+}
 
 if [ "$#" -eq 0 ]; then
   echo "usage: $0 <command> [<command> ...]" >&2
@@ -49,4 +61,5 @@ if [ "$update_ok" != 1 ]; then
   echo "::error::apt-get update failed 3 times (runner apt mirror outage?); cannot install: ${missing[*]}"
   exit 1
 fi
-sudo DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=8 install -y "${missing[@]}"
+sudo DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=8 install -y \
+  $(for c in "${missing[@]}"; do pkg_for_cmd "$c"; done)

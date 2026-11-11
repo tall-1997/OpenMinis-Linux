@@ -171,7 +171,7 @@ jobs:
       # 同款步骤：预装检测优先（零 apt 依赖），真缺才走带重试的 apt 兜底。
       - name: Install native build dependencies
         run: |
-          bash scripts/ci/ensure-build-tools.sh curl tar unzip make gawk sed file python3 cmake ninja-build g++ git
+          bash scripts/ci/ensure-build-tools.sh curl tar unzip make gawk sed file python3 cmake ninja g++ git
 
       # Every run used to re-download the platform, build-tools, CMake and the
       # whole NDK (~2.5 GB) even though only the Gradle home was cached. The key
