@@ -33,6 +33,10 @@ object StreamTrace {
         is LLMStreamChunk.ToolCallComplete -> JSONObject().put("kind", "tool_call_complete")
             .put("id", chunk.id).put("name", chunk.name).put("args", chunk.args.toString())
             .put("thoughtSignature", chunk.thoughtSignature ?: "")
+            // [GH#61/#83/#146] Preserve the unparseable tail so a replayed
+            // trace exercises the same ToolJsonRepair / preflight path the
+            // live stream did.
+            .put("rawArgs", chunk.rawArgs ?: "")
         is LLMStreamChunk.Finished -> JSONObject().put("kind", "finished").put("stopReason", chunk.stopReason ?: "")
         else -> JSONObject().put("kind", "unknown").put("class", chunk.javaClass.simpleName)
     }
@@ -53,6 +57,7 @@ object StreamTrace {
                     obj.getString("id"), obj.getString("name"),
                     NonFiniteJson.parse(obj.optString("args", "{}")),
                     obj.optString("thoughtSignature").takeIf { it.isNotBlank() },
+                    obj.optString("rawArgs").takeIf { it.isNotBlank() },
                 )
                 "finished" -> LLMStreamChunk.Finished(obj.optString("stopReason").takeIf { it.isNotBlank() })
                 else -> LLMStreamChunk.Finished(null)

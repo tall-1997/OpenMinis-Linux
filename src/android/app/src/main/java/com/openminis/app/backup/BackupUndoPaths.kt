@@ -1,5 +1,7 @@
 package com.openminis.app.backup
 
+import com.openminis.app.agent.SoulStore
+
 /**
  * [T-backup-undo-paths] Which on-disk roots a restore of each [BackupCategory]
  * can overwrite.
@@ -36,7 +38,9 @@ internal object BackupUndoPaths {
         // importSharedFiles / importSkills / importMemory / importMcpServers.
         BackupCategory.SHARED_FILES -> listOf("$GLOBAL_DIR/shared")
         BackupCategory.SKILLS -> listOf("$GLOBAL_DIR/skills")
-        BackupCategory.MEMORY -> listOf("$GLOBAL_DIR/memory")
+        // [GH#299] Same definition the MEMORY exporter/importer use: the
+        // migrated Soul icon lives in this tree, so undo must snapshot it too.
+        BackupCategory.MEMORY -> listOf(SoulStore.MEMORY_SUBDIR)
         BackupCategory.MCP_SERVERS -> listOf("$GLOBAL_DIR/mcp-servers")
         // importProviders / importEnvironmentVariables both land in prefs.
         BackupCategory.PROVIDERS -> listOf(PREFS_DIR)

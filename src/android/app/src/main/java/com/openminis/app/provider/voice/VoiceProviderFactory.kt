@@ -1,6 +1,7 @@
 package com.openminis.app.provider.voice
 
 import android.util.Log
+import com.openminis.app.data.model.BailianEndpoint
 import com.openminis.app.data.model.ProviderInstance
 import com.openminis.app.data.model.ProviderType
 
@@ -47,7 +48,14 @@ object VoiceProviderFactory {
                 when {
                     normalizedBase.contains("groq.com") ->
                         GroqVoiceProvider(instance.id, custom ?: "https://api.groq.com/openai", apiKey)
-                    normalizedBase.contains("dashscope") ->
+                    // [GH#520] Bailian now has two host families: the classic
+                    // dashscope host and the per-workspace *.maas.aliyuncs.com
+                    // host. Both serve voice only through the compatible-mode
+                    // chat path, so both must map to AlibabaVoiceProvider —
+                    // otherwise the generic provider sends ASR to
+                    // /v1/audio/transcriptions (404) and the omni model's
+                    // Data-URI body never runs.
+                    BailianEndpoint.matches(custom) ->
                         AlibabaVoiceProvider(instance.id, custom ?: "https://dashscope.aliyuncs.com/compatible-mode", apiKey)
                     normalizedBase.contains("minimax") ->
                         MiniMaxVoiceProvider(instance.id, custom ?: "https://api.minimax.io", apiKey)

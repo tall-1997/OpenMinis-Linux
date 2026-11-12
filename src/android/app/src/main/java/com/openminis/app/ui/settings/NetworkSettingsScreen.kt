@@ -359,6 +359,9 @@ fun NetworkSettingsScreen(
             )
         }
 
+        // [GH#258][GH#287] User-imported CAs for private provider endpoints.
+        if (page == NetworkPage.PROXIES) TrustedCaSection()
+
         // Used By
         if (page == NetworkPage.ROUTING) SettingsSection(
             header = stringResource(R.string.network_used_by),

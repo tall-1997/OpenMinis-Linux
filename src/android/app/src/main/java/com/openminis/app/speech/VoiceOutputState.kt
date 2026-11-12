@@ -158,6 +158,15 @@ object VoiceOutputState {
     val canPlay: Boolean get() = _isEnabled.value && !_isMuted.value
 
     /**
+     * [OpenMinis#267] Whether the user has ever touched the "Read replies"
+     * switch. Used to seed a sensible default the first time someone enters
+     * voice mode: a voice-first session that stays silent was the reported
+     * "不自动朗读". Once the user flips the switch either way, their choice is
+     * persisted and never overridden again.
+     */
+    val wasEverConfigured: Boolean get() = prefs?.contains(KEY_ENABLED) == true
+
+    /**
      * [T-android-tts-stop-on-capture] Silence EVERY live player because the mic
      * is about to open, holding unspoken text for [resumeAllAfterCapture].
      *

@@ -151,7 +151,7 @@ object ToolOutputPolicy {
      * can put the full text somewhere the model can page through. This form has
      * no session, so an oversized result is capped WITHOUT a spill file — capped
      * is still the contract (the old code returned the full body here).
-     * Callers that hold a session (ui/chat/ChatViewModelExecuteToolExt.kt:263)
+     * Callers that hold a session (ui/chat/ChatViewModelExecuteToolExt.kt)
      * should pass `context` + `sessionId`.
      */
     fun apply(output: String, toolId: String): String =
@@ -161,6 +161,12 @@ object ToolOutputPolicy {
      * Session-aware form: redact, then hand the oversized body to
      * [ToolOutputSpill] so it lands in THIS session's workspace and the model
      * gets a guest path it can actually `file_read`.
+     *
+     * [T-tool-output-offload-loop GH#343] [sourcePath] names an existing spill
+     * file this call is READING BACK (`file_read`, shell `cat … tool-spill/…`).
+     * Passed through so the read-back is answered from that file instead of
+     * being spilled again. The decision runs on the ORIGINAL [output] (only
+     * redaction happens first), not on a pre-capped preview.
      */
     fun apply(
         output: String,
@@ -168,12 +174,13 @@ object ToolOutputPolicy {
         context: android.content.Context?,
         sessionId: String?,
         toolName: String = "",
+        sourcePath: String? = null,
     ): String {
         val text = redactEnvVars(output)
         if (text.length <= ToolOutputSpill.LIMIT) return text
         val name = toolName.ifBlank { toolId.ifBlank { "tool" } }
         return if (context != null && !sessionId.isNullOrBlank()) {
-            ToolOutputSpill.maybeSpill(context, sessionId, name, toolId, text)
+            ToolOutputSpill.maybeSpill(context, sessionId, name, toolId, text, sourcePath)
         } else {
             ToolOutputSpill.cappedPreview(name, text)
         }

@@ -1,6 +1,7 @@
 package com.openminis.app.provider.thinking
 
 import com.openminis.app.data.model.ThinkingLevel
+import com.openminis.app.logging.AppLogger
 import org.json.JSONObject
 
 /**
@@ -138,6 +139,67 @@ object ThinkingRuleResolver {
         instanceId?.let { customRulesCache[it] } ?: emptyList()
 
     /**
+     * [OpenMinis#306] Cold-start state of the user-authored rule cache.
+     *
+     * The cache is filled asynchronously from Room by
+     * `ProviderRepository.loadAllThinkingRulesIntoCache()`; a request built
+     * before that first fill used to resolve with built-ins only, silently
+     * ignoring every custom rule — the "my rule does nothing" report. The
+     * request path cannot suspend to wait for Room, so it keeps falling back to
+     * the built-in defaults, but the fallback is now VISIBLE: a warning is
+     * logged once per state change and the provider-detail screen renders a
+     * banner while the cache is not loaded.
+     */
+    enum class CustomRuleCacheState {
+        /** No fill has happened yet in this process (cold start). */
+        NOT_LOADED,
+
+        /** The last fill succeeded; [customRulesFor] is authoritative. */
+        LOADED,
+
+        /** The last fill threw; custom rules fall back to built-ins. */
+        FAILED,
+    }
+
+    @Volatile
+    var customRulesState: CustomRuleCacheState = CustomRuleCacheState.NOT_LOADED
+        private set
+
+    /** Human-readable reason for [CustomRuleCacheState.FAILED], else null. */
+    @Volatile
+    var customRulesLoadError: String? = null
+        private set
+
+    /** One-shot cold-start warning latch (see [apply]). */
+    @Volatile
+    private var coldStartWarned = false
+
+    @Synchronized
+    fun markCustomRulesLoaded() {
+        customRulesState = CustomRuleCacheState.LOADED
+        customRulesLoadError = null
+    }
+
+    /** [OpenMinis#306] Record a failed fill so the UI can show it instead of silently using defaults. */
+    @Synchronized
+    fun markCustomRulesLoadFailed(message: String) {
+        customRulesState = CustomRuleCacheState.FAILED
+        customRulesLoadError = message.take(300)
+        AppLogger.warning(
+            "Thinking",
+            "[rules] custom-rule cache load FAILED, falling back to built-in defaults: ${customRulesLoadError}",
+        )
+    }
+
+    /** Reset for tests / a fresh profile. */
+    @Synchronized
+    fun resetCustomRulesForTest() {
+        customRulesCache = emptyMap()
+        customRulesState = CustomRuleCacheState.NOT_LOADED
+        customRulesLoadError = null
+    }
+
+    /**
      * The vendor rules, in priority order — deliberately not alphabetical. The most
      * specific predicate must be consulted first, and Mistral leads because its rule is a
      * total prohibition that outranks every shape below it.
@@ -265,6 +327,25 @@ object ThinkingRuleResolver {
             ),
         )
 
+        // [OpenMinis#356] `deepseek-flash` is a live ALIAS for the V4 flash
+        // model (the catalog row, when there is one, is the older chat entry).
+        // Without this rule the alias fell through to the generic
+        // reasoning_effort fallback: the wrong wire shape (no root
+        // `thinking:{type:…}` switch, which V4 requires) and an unclamped
+        // effort (xhigh/max leaking into an endpoint whose legal set is
+        // low|medium|high|max). The scope also covers a future `deepseek-flash-*`
+        // spelling; `*deepseek-v4*` above stays first so the canonical ids are
+        // unaffected.
+        add(
+            ThinkingRule(
+                kind = ThinkingRule.Kind.OFFICIAL_VENDOR,
+                scope = ThinkingRule.Scope.ModelPattern("*deepseek-flash*"),
+                wireFormat = ThinkingWireFormat.DeepSeekSibling,
+                reasoningEcho = ReasoningEchoPolicy("reasoning_content", ReasoningEchoPolicy.Timing.AFTER_TOOL_USE_ONLY),
+                label = "deepseek-flash-alias",
+            ),
+        )
+
         // Fallback for the providerType: generic root reasoning_effort, subject to the
         // self-reasoning skip in stage B. AllModels guarantees stage A always matches.
         add(
@@ -281,8 +362,18 @@ object ThinkingRuleResolver {
      * Resolve and apply the thinking parameters for one request. The body is mutated in
      * place so the call site stays identical to the function this replaced; the trace is
      * returned for logging.
+     *
+     * [customRulesOverride] exists for the rule EDITOR's live preview: it lets the preview
+     * resolve a hypothetical rule without seeding/clearing the process-wide cache (the old
+     * code did exactly that, so a preview running while a chat request was being built
+     * could race the real cache — and an exception mid-preview left the throwaway entry
+     * behind). Production callers pass nothing and keep reading the cache.
      */
-    fun apply(body: JSONObject, ctx: ThinkingResolveContext): ThinkingResolveTrace {
+    fun apply(
+        body: JSONObject,
+        ctx: ThinkingResolveContext,
+        customRulesOverride: List<ThinkingRule>? = null,
+    ): ThinkingResolveTrace {
         val before = body.keys().asSequence().toSet()
 
         // ---- Stage A: first-match-wins ----
@@ -290,7 +381,39 @@ object ThinkingRuleResolver {
         // are prepended above the built-ins, so a custom rule can override a vendor
         // default by matching first — but never remove a built-in. An empty custom
         // list makes `rules` == `builtInRules(ctx)`, byte-identical to Phase 1.
+        //
+        // [OpenMinis#306] A cache that has not been filled yet (cold start, or a failed
+        // Room read) yields an empty list here — the built-in defaults are the fallback.
+        // That fallback is logged once per state change instead of being silent.
+        customRulesOverride?.let { override ->
+            val rules = override + builtInRules(ctx)
+            return resolveWith(rules, body, ctx, before)
+        }
+        // [OpenMinis#306] Make the silent cold-start fallback observable. The
+        // provider-detail screen renders the FAILED reason from
+        // [customRulesLoadError]; the log covers the "first message landed
+        // before Room filled the cache" window, once per process, so a chatty
+        // agent loop cannot flood the log.
+        if (ctx.instanceId != null && customRulesState != CustomRuleCacheState.LOADED && !coldStartWarned) {
+            coldStartWarned = true
+            AppLogger.warning(
+                "Thinking",
+                "[rules] custom rules not loaded yet (state=$customRulesState); " +
+                    "resolving instance=${ctx.instanceId} with built-in defaults — " +
+                    "a just-created custom rule may not apply until the next request",
+            )
+        }
         val rules = customRulesFor(ctx.instanceId) + builtInRules(ctx)
+        return resolveWith(rules, body, ctx, before)
+    }
+
+    /** The Stage A/B body of [apply]; extracted so the preview override shares it. */
+    private fun resolveWith(
+        rules: List<ThinkingRule>,
+        body: JSONObject,
+        ctx: ThinkingResolveContext,
+        before: Set<String>,
+    ): ThinkingResolveTrace {
         val winner = rules.firstOrNull { it.scope.matches(ctx.modelId) }
             ?: return ThinkingResolveTrace(
                 matchedRuleLabel = "none",
@@ -334,14 +457,26 @@ object ThinkingRuleResolver {
         // [T-thinking-off-explicit] Strict-enum families never receive an off tier:
         // sending "minimal" to MiMo/Agnes killed the whole request (iOS c5efeb1e).
         val strictEffortEnum = lid.contains("mimo") || lid.contains("agnes")
-        val offEffort = if (strictEffortEnum) null else ctx.offEffort
+        // [OpenMinis#377] Every OFF tier goes through the declared-set clamp. The
+        // allowlist value ("none" on official OpenAI, "minimal" on Ark) is only
+        // correct for the models whose protocol documents it: a compaction /
+        // title / sub-agent request pinned to OFF used to send `reasoning_effort
+        // = "none"` to gpt-5 / o-series, which reject it (400) because their
+        // legal sets stop at low/minimal. The clamp snaps the value DOWN onto the
+        // lowest declared tier and omits the field entirely when the model only
+        // declares high/max (forcing "high" would invert the user's OFF intent).
+        val offEffort = if (strictEffortEnum) {
+            null
+        } else {
+            ThinkingEffort.clampOffEffort(ctx.offEffort, ctx.declaredEffortValues)
+        }
 
         return when (format) {
             is ThinkingWireFormat.OmitEverything -> null to null
 
             is ThinkingWireFormat.ReasoningEffortNested -> {
                 if (!ctx.level.isEnabled) return null to null
-                val effort = wireEffort(ctx.level)
+                val effort = ThinkingEffort.wireEffort(ctx.level)
                 body.put("reasoning", JSONObject().put("effort", effort))
                 effort to effort
             }
@@ -354,9 +489,13 @@ object ThinkingRuleResolver {
                     // unconditionally; the self-reasoning families only do so when the
                     // endpoint is a unified gateway OR the model declares that tier; and
                     // everything else sends it unless the model declares a set without it.
-                    // Deliberately NOT clamped — clampEffort walks UP when nothing at or
-                    // below is declared, so a ["high","max"] model would turn an OFF
-                    // request into "high", inverting the user's intent.
+                    // [OpenMinis#377] `offEffort` has already been snapped onto the
+                    // model's declared set by clampOffEffort (and is null when no
+                    // legal off tier exists). It is NOT further clamped through
+                    // clampEffort: that walks UP when nothing at or below is
+                    // declared, so a ["high","max"] model would turn an OFF
+                    // request into "high", inverting the user's intent — which is
+                    // why clampOffEffort returns null instead.
                     if (offEffort == null) return null to null
                     val isSelfReasoningFamily = listOf("deepseek", "glm", "kimi", "minimax")
                         .any { lid.contains(it) }
@@ -385,7 +524,7 @@ object ThinkingRuleResolver {
                     }
                 }
                 if (isOpenAINative) {
-                    val effort = clampEffortForModel(wireEffort(ctx.level), lid)
+                    val effort = ThinkingEffort.clampEffortForModel(ThinkingEffort.wireEffort(ctx.level), lid)
                     body.put("reasoning_effort", effort)
                     return effort to effort
                 }
@@ -427,21 +566,82 @@ object ThinkingRuleResolver {
                     return null to null
                 }
                 if (ctx.supportsReasoning == false) return null to null
-                val requested = clampEffortForModel(wireEffort(ctx.level), lid)
-                val clamped = clampEffort(requested, ctx.declaredEffortValues)
+                val requested = ThinkingEffort.clampEffortForModel(ThinkingEffort.wireEffort(ctx.level), lid)
+                val clamped = ThinkingEffort.clampEffort(requested, ctx.declaredEffortValues)
                 body.put("reasoning_effort", clamped)
                 requested to clamped
             }
 
             is ThinkingWireFormat.DeepSeekSibling -> {
+                // [OpenMinis#356] The alias `deepseek-flash` has no modern
+                // catalog row (the catalog describes the old chat model), so
+                // `declaredEffortValues` is either null or a pre-V4 set. Because
+                // the alias is served by V4, clamp against V4's legal set so an
+                // xhigh/undeclared tier cannot reach the endpoint. The canonical
+                // `deepseek-v4*` ids keep their catalog-driven clamp untouched.
+                val validEfforts = if (lid.contains("deepseek-v4")) {
+                    ctx.declaredEffortValues
+                } else {
+                    ThinkingEffort.DEEPSEEK_V4_EFFORT_VALUES
+                }
                 if (ctx.level.isEnabled) {
-                    val requested = wireEffort(ctx.level)
-                    val clamped = clampEffort(requested, ctx.declaredEffortValues)
+                    val requested = ThinkingEffort.wireEffort(ctx.level)
+                    val clamped = ThinkingEffort.clampEffort(requested, validEfforts)
                     body.put("thinking", JSONObject().put("type", "enabled"))
                     body.put("reasoning_effort", clamped)
                     requested to clamped
                 } else {
                     body.put("thinking", JSONObject().put("type", "disabled"))
+                    null to null
+                }
+            }
+
+            is ThinkingWireFormat.BooleanToggle -> {
+                // [OpenMinis#306] The editor offers this format, but the emitter
+                // used to fall into the "programmer error" `else` branch and
+                // threw at REQUEST TIME — a custom rule the user could create but
+                // never use. A plain switch is on/off; there is no tier.
+                ThinkingEffort.putDotted(body, format.path, ctx.level.isEnabled)
+                null to null
+            }
+
+            is ThinkingWireFormat.ExtraBodyToggle -> {
+                // [OpenMinis#306] Nested switch under `extra_body` (DeepSeek's
+                // documented native shape). The path may or may not carry the
+                // `extra_body.` prefix; both spellings must work because the
+                // editor defaults to the prefixed one.
+                val path = format.path.removePrefix("extra_body.").ifEmpty { format.path }
+                val extra = body.optJSONObject("extra_body") ?: JSONObject().also {
+                    body.put("extra_body", it)
+                }
+                ThinkingEffort.putDotted(extra, path, ctx.level.isEnabled)
+                null to null
+            }
+
+            is ThinkingWireFormat.CustomPath -> {
+                // [OpenMinis#306] Escape hatch: a dotted path plus a per-tier
+                // value map. The old `else -> error(...)` made EVERY custom rule
+                // using this format crash the request builder (and made the
+                // editor preview print "(preview unavailable)"). Unknown tiers
+                // fall back to the wire effort string; OFF uses offValue when the
+                // user supplied one, else omits.
+                if (ctx.level.isEnabled) {
+                    // Prefer the exact tier; otherwise the nearest lower tier the
+                    // user DID provide, then the lowest provided one. Only when
+                    // the map is empty do we fall back to the standard wire
+                    // effort — a custom rule's own vocabulary is authoritative,
+                    // so we never invent a tier it did not author.
+                    val value = format.values[ctx.level]
+                        ?: format.values.entries
+                            .filter { it.key.rank <= ctx.level.rank }
+                            .maxByOrNull { it.key.rank }?.value
+                        ?: format.values.entries.minByOrNull { it.key.rank }?.value
+                        ?: ThinkingEffort.wireEffort(ctx.level)
+                    ThinkingEffort.putDotted(body, format.path, value)
+                    null to null
+                } else {
+                    val off = format.offValue ?: return null to null
+                    ThinkingEffort.putDotted(body, format.path, off)
                     null to null
                 }
             }
@@ -581,207 +781,19 @@ object ThinkingRuleResolver {
         }
     }
 
-    // ---- Gemini / Anthropic (Phase 2 §1) ----
-    //
-    // These two providers do NOT share the OpenAI body shape — Gemini writes into
-    // `generationConfig.thinkingConfig` and Anthropic builds its own `thinking` object —
-    // so rather than routing them through [apply], the resolver owns their SHAPE
-    // decisions as pure functions and each provider asks for the shape it needs.
-    //
-    // That still achieves the Phase 2 goal (one place owns every vendor's thinking
-    // contract) without pretending three body formats are one. Both functions were lifted
-    // verbatim from the provider-local implementations they replace and are pinned
-    // byte-for-byte by ThinkingWireGeminiAnthropicSnapshotTest.
-    //
-    // ⚠️ These intentionally differ from the iOS versions in two places, because the
-    // Android originals did: 3.x at MAX/ULTRA falls through to "low" here (iOS: "high"),
-    // and unknown/latest ids return null here (iOS: a 128-floor fallback table). Phase 2
-    // §1 is a pure refactor — do not "align" them without a deliberate decision.
-
-    /**
-     * The `generationConfig.thinkingConfig` object for a Gemini request, or null when the
-     * model takes no thinking config at all (specialized -tts/-image/-embedding/-vision
-     * modalities, 2.5 Flash Lite, and any id matching none of the families).
-     */
-    /**
-     * [T-gemini37-minimal-400] Gemini 3.x Flash models that reject
-     * `thinkingLevel: "minimal"` with a 400 and must use "low" as their OFF floor.
-     *
-     * Matched by minor version rather than an exact-id list: 3.7 is where Google
-     * dropped the level, so anything from 3.7 up is assumed to have dropped it
-     * too. Guessing "low" for a model that would have accepted "minimal" costs a
-     * slightly higher thinking floor; guessing "minimal" for one that rejects it
-     * makes the model unusable outright. The asymmetry decides the default.
-     */
-    private fun rejectsMinimalLevel(lowerId: String): Boolean {
-        val m = Regex("""gemini-3\.(\d+)""").find(lowerId) ?: return false
-        val minor = m.groupValues[1].toIntOrNull() ?: return false
-        return minor >= 7
-    }
-
+    /** [OpenMinis#470] Gemini thinking config; impl in ThinkingShapes.kt. */
     fun geminiThinkingConfig(
         modelId: String,
         level: ThinkingLevel,
         budgetTokensMax: Int? = null,
-        // [T-gemini-budget-min-dead] No budgetTokensMin here: the Gemini wire
-        // API has no minimum-thinking field (2.5 sends a single thinkingBudget,
-        // 3.x sends thinkingLevel). The parameter used to exist and was never
-        // consumed — models.dev's declared min is a catalog bound, not wire.
-    ): JSONObject? {
-        // [T-gemini-tts-thinking-400 / OpenMinis#226] Specialized modalities take
-        // precedence over EVERY family rule and over the requested level: these models
-        // reject the thinking parameter outright, so sending one is a hard 400
-        // ("Thinking level is not supported for this model.").
-        //
-        // Checked FIRST because these ids also match a family pattern —
-        // `gemini-3.1-flash-tts-preview` contains "gemini-3", so any later placement is
-        // shadowed. Android previously had no such test at all, so all three Gemini TTS
-        // models were unusable; iOS had one but below the family branches, equally dead.
-        //
-        // Lowercased for the same reason iOS lowercases the whole id: catalog and live
-        // API spellings differ in case. The family checks above deliberately keep their
-        // original raw-`modelId` form (Phase 2 §1 is a pure refactor).
-        val lowerId = modelId.lowercase()
-        val noThinkingSuffixes = listOf("-tts", "-image", "-embedding", "-vision")
-        if (noThinkingSuffixes.any { lowerId.endsWith(it) || lowerId.contains("$it-") }) {
-            return null
-        }
+        hasAudioOutput: Boolean = false,
+    ): JSONObject? = ThinkingShapes.geminiThinkingConfig(modelId, level, budgetTokensMax, hasAudioOutput)
 
-        val isGemini3 = modelId.contains("gemini-3")
-        val is25Pro = modelId.contains("gemini-2.5-pro")
-        val is25Flash = modelId.contains("gemini-2.5-flash") && !modelId.contains("lite")
-        val is25FlashLite = modelId.contains("gemini-2.5-flash-lite")
-
-        if (is25FlashLite) return null
-
-        return when {
-            isGemini3 -> JSONObject().apply {
-                if (level == ThinkingLevel.OFF) {
-                    // 3.x cannot fully disable thinking; the floor is the weakest
-                    // level the model will accept.
-                    //
-                    // [T-gemini37-minimal-400] "minimal" is NOT universal across the
-                    // 3.x Flash family. Verified on-device (Pixel 4a, Gemini API):
-                    // gemini-3-flash-preview / 3.5-flash / 3.6-flash accept it, but
-                    // gemini-3.7-flash returns a hard
-                    //   400 "Thinking level MINIMAL is not supported for this model."
-                    // on EVERY request — 5/5 consecutive, "all fallbacks exhausted".
-                    // So with 思考 set to Off, 3.7 Flash was completely unusable, not
-                    // merely un-thinking. "low" is accepted by the whole family and is
-                    // the same floor 3.x Pro already used, so fall back to it for the
-                    // models that reject minimal rather than probing at runtime.
-                    val acceptsMinimal = modelId.contains("flash") && !rejectsMinimalLevel(lowerId)
-                    put("thinkingLevel", if (acceptsMinimal) "minimal" else "low")
-                } else {
-                    put(
-                        "thinkingLevel",
-                        when (level) {
-                            ThinkingLevel.LOW -> "low"
-                            ThinkingLevel.MEDIUM -> "medium"
-                            // MAX/ULTRA were appended to ThinkingLevel after this
-                            // branch was written (for GPT-5.6) and fell through the
-                            // old `else -> "low"`, silently sending the WEAKEST level
-                            // when the user asked for the strongest. Gemini's ladder
-                            // tops out at "high", so every tier at or above HIGH maps
-                            // there. Latent today — no catalog rule lifts a Gemini
-                            // ceiling above XHIGH, so the picker doesn't offer
-                            // MAX/ULTRA — but a per-entry maxThinkingLevel override
-                            // reaches it, and a future catalog rule would too.
-                            ThinkingLevel.HIGH, ThinkingLevel.XHIGH,
-                            ThinkingLevel.MAX, ThinkingLevel.ULTRA,
-                            -> "high"
-                            ThinkingLevel.OFF -> "low" // unreachable; OFF handled above
-                        },
-                    )
-                    put("includeThoughts", true)
-                }
-            }
-            is25Pro -> JSONObject().apply {
-                    val cap = budgetTokensMax?.takeIf { it > ThinkingLadder.FLOOR }
-                        ?: ThinkingLadder.DEFAULT_CAPACITY
-                    put(
-                        "thinkingBudget",
-                        if (level == ThinkingLevel.OFF) 128 // minimum; 0 is rejected (df8a823d)
-                        else ThinkingLadder.budgetFor(level, cap),
-                    )
-                    if (level.isEnabled) put("includeThoughts", true)
-                }
-                is25Flash -> JSONObject().apply {
-                    val cap = budgetTokensMax?.takeIf { it > ThinkingLadder.FLOOR }
-                        ?: ThinkingLadder.DEFAULT_CAPACITY
-                    put(
-                        "thinkingBudget",
-                        if (level == ThinkingLevel.OFF) 0
-                        else ThinkingLadder.budgetFor(level, cap),
-                    )
-                    if (level.isEnabled) put("includeThoughts", true)
-                }
-            else -> null
-        }
-    }
-
-    /**
-     * The abstract Anthropic thinking shape, as a small map the caller turns into its
-     * `thinking` object:
-     *   `{effort:"<tier>"}`   → adaptive thinking (Claude 4.6+)
-     *   `{budget_tokens:N}`   → legacy budget thinking (≤4.5)
-     *   `{disabled:true}`     → adaptive model at OFF; must be explicit because those
-     *                           models think by DEFAULT when no thinking field is sent
-     *   `{}`                  → send nothing
-     */
+    /** Anthropic thinking shape; impl in ThinkingShapes.kt. */
     fun anthropicThinkingShape(
         modelId: String,
         supportsReasoning: Boolean?,
         level: ThinkingLevel,
         maxTokens: Int,
-    ): Map<String, Any> {
-        val adaptive = com.openminis.app.provider.anthropic.AnthropicProvider
-            .modelUsesAdaptiveThinking(modelId)
-        if (level.isEnabled && supportsReasoning != false) {
-            if (adaptive) {
-                return mapOf(
-                    "effort" to com.openminis.app.provider.anthropic.AnthropicProvider
-                        .thinkingEffort(level),
-                )
-            }
-            val budget = com.openminis.app.provider.anthropic.AnthropicProvider
-                .thinkingBudget(maxTokens, level)
-            return if (budget > 0) mapOf("budget_tokens" to budget) else emptyMap()
-        }
-        return if (adaptive) mapOf("disabled" to true) else emptyMap()
-    }
-
-    /** UI level → wire tier, before any per-model clamp. */
-    fun wireEffort(level: ThinkingLevel): String = when (level) {
-        ThinkingLevel.OFF, ThinkingLevel.LOW -> "low"
-        ThinkingLevel.MEDIUM -> "medium"
-        ThinkingLevel.HIGH -> "high"
-        ThinkingLevel.XHIGH -> "xhigh"
-        // ULTRA is a client-side "Max + orchestration" concept and is NEVER a valid
-        // server effort string (iOS b38bf3d5).
-        ThinkingLevel.MAX, ThinkingLevel.ULTRA -> "max"
-    }
-
-    /**
-     * [T-android-xhigh-effort-clamp] MiMo/Agnes reject xhigh (400/422); their ladder tops
-     * out at high. Matches the FAMILY substring, not one spelling — the live API serves
-     * `mimo-v2.5` while docs say `mimo-2.5` (iOS 72968c4f).
-     */
-    fun clampEffortForModel(effort: String, lid: String): String =
-        if (effort == "xhigh" && (lid.contains("mimo") || lid.contains("agnes"))) "high" else effort
-
-    /** Snap a requested tier onto the model's declared set, walking DOWN then up. */
-    fun clampEffort(effort: String, values: List<String>?): String {
-        if (values.isNullOrEmpty()) return effort
-        if (values.contains(effort)) return effort
-        val ladder = listOf("none", "minimal", "low", "medium", "high", "xhigh", "max")
-        val want = ladder.indexOf(effort)
-        if (want < 0) return effort
-        val declared = values.mapNotNull { v ->
-            val i = ladder.indexOf(v)
-            if (i >= 0) i to v else null
-        }.sortedBy { it.first }
-        if (declared.isEmpty()) return effort
-        return declared.lastOrNull { it.first <= want }?.second ?: declared.first().second
-    }
+    ): Map<String, Any> = ThinkingShapes.anthropicThinkingShape(modelId, supportsReasoning, level, maxTokens)
 }

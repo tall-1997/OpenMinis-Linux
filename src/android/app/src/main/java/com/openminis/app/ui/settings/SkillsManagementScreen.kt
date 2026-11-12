@@ -279,7 +279,7 @@ fun SkillsManagementScreen(
                 filteredSkills.forEachIndexed { index, skill ->
                     val (badgeIcon, badgeColor) = sourceIconAndColor(skill.importSource)
                     SettingsRow(
-                        title = skill.name,
+                        title = localizedSkillName(skill),
                         subtitle = skill.description.takeIf { it.isNotEmpty() }?.let { stripMarkdown(it) },
                         showChevron = true,
                         showDivider = index < filteredSkills.size - 1,
@@ -667,7 +667,7 @@ fun SkillDetailScreen(
     Scaffold(
         topBar = {
             MinisCenterTopBar(
-                title = { Text(skill.name) },
+                title = { Text(localizedSkillName(skill)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(m3Icon(Icons.AutoMirrored.Filled.ArrowBack), contentDescription = stringResource(R.string.common_back))

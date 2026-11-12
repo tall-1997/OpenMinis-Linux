@@ -1,5 +1,6 @@
 package com.openminis.app.agent
 
+import android.content.Context
 import android.graphics.Bitmap
 import android.util.Base64
 import com.openminis.app.provider.SampledDecode
@@ -43,7 +44,68 @@ object SoulIcon {
      */
     const val MAX_DATA_URI_CHARS = 64 * 1024
 
+    /**
+     * [GH#299] File-backed icon reference, relative to `filesDir`.
+     *
+     * The migrated icon lives at
+     * `file:minis-global/memory/soul-icons/soul.png` — deliberately INSIDE the
+     * memory backup root, so a backup/restore round trip carries the avatar
+     * together with SOUL.md (see [SoulIconMigration.ICON_RELATIVE_PATH]).
+     */
+    const val FILE_REF_PREFIX = "file:"
+
+    /** [GH#299] Hard cap on a file-backed icon; a 96px PNG is only a few KB. */
+    const val MAX_ICON_FILE_BYTES = 512 * 1024
+
     fun isDataUri(value: String): Boolean = value.startsWith(DATA_URI_PREFIX)
+
+    /**
+     * [GH#299] Any inline `data:image/...;base64,...` value, not just the PNG
+     * prefix this app writes. Used by the migration and by the renderer so a
+     * hand-edited JPEG data URI is treated as an image (and, if over the cap,
+     * falls back to the sparkle) instead of being printed as literal text.
+     */
+    fun isInlineImageDataUri(value: String): Boolean =
+        value.startsWith("data:image/", ignoreCase = true) &&
+            value.substringBefore(',').contains(";base64", ignoreCase = true)
+
+    /** [GH#299] True for the `file:<path-relative-to-filesDir>` frontmatter form. */
+    fun isFileRef(value: String): Boolean =
+        value.startsWith(FILE_REF_PREFIX) && value.length > FILE_REF_PREFIX.length
+
+    /** [GH#299] Build the frontmatter value for a `filesDir`-relative path. */
+    fun fileRefFor(relativePath: String): String =
+        FILE_REF_PREFIX + relativePath.trimStart('/', '\\')
+
+    /**
+     * [GH#299] Resolve a `file:` reference to a File under `filesDir`.
+     *
+     * Containment is checked on canonical paths (same helper the icon import
+     * uses), so a hand-edited `file:../databases/x` cannot read outside the
+     * app files tree. Returns null for a non-file value or an escaping path.
+     *
+     * The migrated value is the nested
+     * `file:minis-global/memory/soul-icons/soul.png`; nesting does not change
+     * the rule — it is still resolved under `filesDir` and bounded there.
+     */
+    fun fileFor(context: Context, value: String): java.io.File? {
+        if (!isFileRef(value)) return null
+        val relative = value.removePrefix(FILE_REF_PREFIX).trim()
+        if (relative.isEmpty() || relative.contains('\u0000')) return null
+        val root = context.applicationContext.filesDir
+        val candidate = java.io.File(root, relative)
+        return if (isContained(candidate, root)) candidate else null
+    }
+
+    /** [GH#299] Decode the base64 payload of any inline image data URI. */
+    fun decodeInlineBytes(value: String): ByteArray? {
+        if (!isInlineImageDataUri(value)) return null
+        val comma = value.indexOf(',')
+        if (comma <= 0) return null
+        return runCatching { Base64.decode(value.substring(comma + 1), Base64.DEFAULT) }
+            .getOrNull()
+            ?.takeIf { it.isNotEmpty() }
+    }
 
     /**
      * Corner radius as a fraction of the icon's edge, matching iOS.
@@ -79,9 +141,24 @@ object SoulIcon {
      * longer required.
      */
     fun encode(source: Bitmap): EncodeResult {
-        if (source.width <= 0 || source.height <= 0) {
-            return EncodeResult.Failure(Rejection.UNREADABLE)
+        val png = encodePng(source) ?: return EncodeResult.Failure(Rejection.UNREADABLE)
+        // NO_WRAP is mandatory: the default inserts newlines, and the
+        // frontmatter parser is strictly line-oriented — a wrapped payload
+        // would be truncated at the first break.
+        val encoded = DATA_URI_PREFIX + Base64.encodeToString(png, Base64.NO_WRAP)
+        if (encoded.length > MAX_DATA_URI_CHARS) {
+            return EncodeResult.Failure(Rejection.TOO_LARGE)
         }
+        return EncodeResult.Success(encoded)
+    }
+
+    /**
+     * [GH#299] Same normalisation as [encode] but returns the PNG bytes
+     * directly — the migration path writes them to `filesDir` instead of
+     * building an inline data URI only to decode it again.
+     */
+    fun encodePng(source: Bitmap): ByteArray? {
+        if (source.width <= 0 || source.height <= 0) return null
 
         val square = squareCropped(source)
         // Never upscale: a 48px source stays 48px rather than being blown up
@@ -93,35 +170,47 @@ object SoulIcon {
             Bitmap.createScaledBitmap(square, side, side, true)
         }
 
-        val png = ByteArrayOutputStream().use { out ->
+        return ByteArrayOutputStream().use { out ->
             // PNG is lossless and ignores the quality argument, so alpha and
             // exact pixels survive the round trip.
-            if (!scaled.compress(Bitmap.CompressFormat.PNG, 100, out)) {
-                return EncodeResult.Failure(Rejection.UNREADABLE)
-            }
-            out.toByteArray()
+            if (!scaled.compress(Bitmap.CompressFormat.PNG, 100, out)) null else out.toByteArray()
         }
-
-        // NO_WRAP is mandatory: the default inserts newlines, and the
-        // frontmatter parser is strictly line-oriented — a wrapped payload
-        // would be truncated at the first break.
-        val encoded = DATA_URI_PREFIX + Base64.encodeToString(png, Base64.NO_WRAP)
-        if (encoded.length > MAX_DATA_URI_CHARS) {
-            return EncodeResult.Failure(Rejection.TOO_LARGE)
-        }
-        return EncodeResult.Success(encoded)
     }
 
-    /** Decode a stored data URI. Returns null for an emoji value or garbage. */
-    fun decode(value: String): Bitmap? {
-        if (!isDataUri(value)) return null
-        return runCatching {
-            val bytes = Base64.decode(value.removePrefix(DATA_URI_PREFIX), Base64.DEFAULT)
+    /**
+     * Decode a stored icon: an inline data URI, or a `file:`-backed reference.
+     * Returns null for an emoji value, garbage, or a file that is missing /
+     * outside the app files tree.
+     *
+     * [GH#299] The file form is what the SOUL.md migration writes, so this is
+     * the render-side half of the token fix: the 85 KB base64 line is gone from
+     * the document and the bitmap comes from a small on-disk PNG.
+     *
+     * A missing / unreadable file returns null — the caller falls back to the
+     * default sparkle. That fallback is exactly why the migrated PNG must live
+     * inside the memory backup root: if a backup/restore loses the file, every
+     * restored profile silently shows the sparkle instead of the user's avatar.
+     */
+    fun decode(value: String, context: Context? = null): Bitmap? {
+        if (isInlineImageDataUri(value)) {
+            // [T-soul-icon-decode-bound GH#299] A hand-edited / synced-in SOUL.md can
+            // carry an inline avatar far above what [encode] ever produces (the
+            // reported file had ~85 KB of base64). Decoding it would allocate an
+            // 85 KB string's bytes plus a bitmap on every chat-header composition for
+            // an image that renders at 18-44dp. The contract above already declares
+            // [MAX_DATA_URI_CHARS] the storage ceiling, so an over-cap value is not
+            // renderable state: treat it as "no image" (the default sparkle shows)
+            // instead of paying to decode it on the UI thread.
+            if (value.length > MAX_DATA_URI_CHARS) return null
+            val bytes = decodeInlineBytes(value) ?: return null
             // Sampled: stored icons render at 96px, so a 512px ceiling is
             // generous headroom — a pathological huge payload never
             // allocates a full-resolution bitmap here.
-            SampledDecode.decodeBytes(bytes, 512)
-        }.getOrNull()
+            return runCatching { SampledDecode.decodeBytes(bytes, 512) }.getOrNull()
+        }
+        val file = context?.let { fileFor(it, value) } ?: return null
+        if (!file.isFile || file.length() > MAX_ICON_FILE_BYTES) return null
+        return runCatching { SampledDecode.decodeFile(file.absolutePath, 512) }.getOrNull()
     }
 
     /**

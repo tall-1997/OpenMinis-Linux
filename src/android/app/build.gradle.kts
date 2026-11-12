@@ -106,6 +106,22 @@ val minisVersionName: String = System.getenv("MINIS_VERSION_SUFFIX")
     ?.let { "$minisBaseVersionName.$it" }
     ?: minisBaseVersionName
 
+/**
+ * [GH#423][GH#301] Optional build-time pin for the Claude CLI fingerprint
+ * version (the `claude-cli/<version>` User-Agent the Anthropic backend gates
+ * new models on). Empty means "use the runtime resolver" — the npm dist-tag
+ * cache or [com.openminis.app.auth.ClaudeCliVersion.FALLBACK]. Pin it with
+ * `./gradlew -Pminis.claudeCliVersion=2.1.280 …` or the
+ * `MINIS_CLAUDE_CLI_VERSION` environment variable.
+ */
+val claudeCliVersionOverride: String =
+    (providers.gradleProperty("minis.claudeCliVersion").orNull
+        ?: System.getenv("MINIS_CLAUDE_CLI_VERSION"))
+        .orEmpty()
+        .trim()
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+
 android {
     namespace = "com.openminis.app"
     // [T-android-dynamic-island] Bumped 35→36 so the Android 16 (Baklava)
@@ -141,6 +157,8 @@ android {
         // runtime verification ambiguous).
         buildConfigField("String", "GIT_SHA", "\"$gitSha\"")
         buildConfigField("boolean", "GIT_DIRTY", "$gitDirty")
+        // [GH#423][GH#301] Empty → runtime resolver; non-empty → pinned.
+        buildConfigField("String", "CLAUDE_CLI_VERSION", "\"$claudeCliVersionOverride\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

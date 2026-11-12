@@ -120,13 +120,13 @@
     <string name="settings_mcp">Integracje MCP</string>
     <string name="settings_mcp_subtitle">Podłącz serwery Model Context Protocol</string>
     <!-- Dev Suite bundle names/summaries -->
-    <string name="dev_suite_android_name">Android &amp; Mobile Full Stack</string>
+    <string name="dev_suite_android_name">Pełny stack Android i mobilny</string>
     <string name="dev_suite_android_summary">JDK17 · Łańcuch narzędzi aarch64 SDK · NDK r29 · Opcjonalny Flutter/RE/Rust</string>
     <string name="dev_suite_code_search_name">Wyszukiwanie kodu i wydajność terminala</string>
     <string name="dev_suite_code_search_summary">kwartet rg / fd / fzf / bat</string>
     <string name="dev_suite_python_name">Pakiet programistyczny Python &amp; AI</string>
     <string name="dev_suite_python_summary">Środowisko uruchomieniowe Python 3 · pip/venv · Zależności kompilacji obliczeń naukowych AI</string>
-    <string name="dev_suite_nodejs_name">Node.js &amp; Web Full Stack</string>
+    <string name="dev_suite_nodejs_name">Pełny stack Node.js i web</string>
     <string name="dev_suite_nodejs_summary">Środowisko uruchomieniowe Node.js · npm · pnpm/yarn</string>
     <string name="dev_suite_go_name">Pakiet programistyczny Go</string>
     <string name="dev_suite_go_summary">Łańcuch narzędzi golang-go (pakiet wyłączny OpenMinis)</string>
@@ -183,8 +183,8 @@
     <string name="zen_deleted_models_title">Przywróć usunięte darmowe modele (%1$d)</string>
     <string name="zen_deleted_models_subtitle">Cofnij usunięcia zapisane dla tego dostawcy</string>
     <string name="provider_sync_mark_not_found">404 not found</string>
-    <string name="provider_sync_mark_connection">Connection failed</string>
-    <string name="provider_sync_mark_invalid">Invalid response</string>
+    <string name="provider_sync_mark_connection">Połączenie nieudane</string>
+    <string name="provider_sync_mark_invalid">Nieprawidłowa odpowiedź</string>
     <string name="add_provider_voice_templates_footer">Dostawcy zamiany mowy na tekst i tekstu na mowę. Typ dostawcy i bazowy adres URL są już uzupełnione — wystarczy dodać klucz API.</string>
     <string name="add_provider_voice_capability_tts">Synteza mowy (TTS)</string>
     <string name="add_provider_voice_capability_asr">Rozpoznawanie mowy (ASR)</string>
@@ -259,8 +259,8 @@
     <string name="soul_icon_choose_image">Wybierz obraz</string>
     <string name="soul_icon_image_hint">Przycinane do kwadratu i zaokrąglane</string>
     <string name="soul_icon_use_default">Użyj domyślnej</string>
-    <string name="soul_icon_use_model">Use Model Icon</string>
-    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
+    <string name="soul_icon_use_model">Użyj ikony modelu</string>
+    <string name="soul_icon_use_model_hint">Podąża za ikoną dostawcy aktywnego modelu</string>
     <string name="soul_icon_emoji_title">Ikona tożsamości</string>
     <string name="soul_icon_emoji_field">Lub wpisz emoji</string>
     <string name="soul_icon_set">Ustaw</string>
@@ -1144,7 +1144,7 @@
     <string name="settings_bg_overlay">Nakładka zadania w tle</string>
     <string name="settings_bg_overlay_footer">Pokazuje małą pływającą kapsułę z bieżącym narzędziem, gdy Minis Ultra działa w tle. Wymaga uprawnienia do wyświetlania nad innymi aplikacjami. Dotknij kapsuły, aby przywrócić Minis Ultra na pierwszy plan; przeciągnij, aby ją przesunąć.</string>
     <string name="settings_bg_overlay_permission_needed">Aby włączyć, zezwól na wyświetlanie nad innymi aplikacjami</string>
-    <string name="settings_dynamic_island">Dynamic Island (Live Updates)</string>
+    <string name="settings_dynamic_island">Dynamic Island (aktualizacje na żywo)</string>
     <string name="settings_dynamic_island_footer">Pokazuje stan Agenta na żywo na pasku stanu Androida 16. Gdy włączone, zastępuje pływającą nakładkę, więc nie zobaczysz dwóch wskaźników naraz.</string>
     <string name="settings_dynamic_island_unsupported">Twoja wersja systemu nie obsługuje jeszcze Live Updates (wymagany Android 16+ z włączoną funkcją).</string>
     <string name="agent_loop_section_title">Modele, które Minis Ultra może wywołać w trakcie pracy</string>
@@ -1769,7 +1769,7 @@
     <string name="dev_suite_installing">Instalowanie…</string>
     <string name="dev_suite_failed">niepowodzenie</string>
     <string name="dev_suite_view_details">Details</string>
-    <string name="dev_suite_failure_details">Installation failure details</string>
+    <string name="dev_suite_failure_details">Szczegóły błędu instalacji</string>
     <string name="dev_suite_ready">Gotowe</string>
     <string name="dev_suite_not_installed">Nie zainstalowano</string>
     <string name="dev_suite_required">wymagane</string>
@@ -2145,6 +2145,18 @@
     <!-- Queued-message edit sheet + git diff truncation notice -->
     <string name="chat_queued_edit_title">Edytuj wiadomość w kolejce</string>
     <string name="git_panel_diff_truncated">Diff przycięty do 200 000 znaków — pełny tekst znajduje się w samym pliku repozytorium.</string>
+    <string name="voice_service_no_audio_models">U tego dostawcy nie ma wypisanych modeli audio. Listy modeli niektórych dostawców (Bailian, SiliconFlow) nie deklarują obsługi audio — dodaj model ASR/TTS jako własny model z modalnością audio albo wybierz inną usługę głosową.</string>
+    <string name="voice_error_network">Błąd rozpoznawania mowy: błąd sieci. Sprawdź połączenie albo przełącz na silnik lokalny lub innego dostawcę.</string>
+    <string name="voice_error_transcription">Rozpoznawanie mowy nie zwróciło tekstu. Powtórz wypowiedź albo sprawdź model i klucz API dostawcy transkrypcji.</string>
+    <string name="voice_error_busy">Rozpoznawanie mowy jest zajęte. Chwilę odczekaj i spróbuj ponownie.</string>
+    <string name="voice_error_audio">Nie udało się nagrać dźwięku. Sprawdź uprawnienie mikrofonu i czy inna aplikacja go nie zajmuje.</string>
+    <string name="voice_error_language">Wybrany język nie jest wspierany przez ten silnik. Wybierz inny język.</string>
+    <string name="voice_error_unknown">Błąd rozpoznawania mowy: %1$s</string>
+    <string name="thinking_rules_cache_not_ready">Własne reguły nie są jeszcze aktywne (%1$s). Żądania używają teraz wbudowanych domyślnych; Twoje reguły zadziałają od pierwszej wiadomości po załadowaniu cache.</string>
+    <string name="skill_display_name_skill_creator">Skill Creator</string>
+    <string name="skill_display_name_android_sdk_mirrors">Android SDK Mirrors</string>
+    <string name="provider_detail_force_thinking">Wymuś rozszerzone myślenie</string>
+    <string name="provider_detail_force_thinking_footer">Tylko dla relayów zgodnych z Anthropic. Wysyła thinking:{type:"enabled",budget_tokens:N} nawet gdy katalog modeli mówi, że model nie potrafi rozumować. Użyj, gdy model wspiera myślenie, ale wpis w katalogu brakuje lub jest błędny.</string>
     <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
     <string name="provider_list_export_providers">Eksportuj dostawców</string>
     <string name="provider_transfer_export_title">Eksportuj dostawców</string>
@@ -2200,4 +2212,58 @@
     <string name="handsfree_state_speaking">Mówię…</string>
     <string name="handsfree_exit_recognition">Hands-free zatrzymane: rozpoznawanie mowy wielokrotnie zawiodło. Dotknij Hands-free, aby spróbować ponownie.</string>
     <string name="handsfree_exit_tts">Hands-free zatrzymane: nie udało się odczytać odpowiedzi na głos. Dotknij Hands-free, aby spróbować ponownie.</string>
+
+    <!-- [T-untranslated] English fallback for keys added by PR #325; pending translation -->
+    <string name="a11y_app_policy_apps">Apps</string>
+    <string name="a11y_app_policy_apps_count">%1$d listed</string>
+    <string name="a11y_app_policy_apps_hint">Jedna nazwa pakietu Androida na linię, np. com.tencent.mm</string>
+    <string name="a11y_app_policy_blocklist">Użyj listy jako listy blokad</string>
+    <string name="a11y_app_policy_blocklist_sub">Wył. = dozwolone tylko wymienione aplikacje. Wł. = wymienione aplikacje zablokowane.</string>
+    <string name="a11y_app_policy_enabled">Ograniczaj per aplikacja</string>
+    <string name="a11y_app_policy_enabled_sub">Sprawdza pakiet aplikacji na pierwszym planie przed każdym odczytem ekranu lub dotknięciem</string>
+    <string name="a11y_app_policy_footer">Gdy włączone, ui_read i ui_action są sprawdzane względem aktualnej aplikacji na pierwszym planie przed wykonaniem. Aplikacje spoza listy (tryb allow) lub na liście (tryb blokady) są odrzucane z widocznym komunikatem. Sama aplikacja Minis jest zawsze dozwolona.</string>
+    <string name="a11y_app_policy_section">Zakres aplikacji ułatwień dostępu</string>
+    <string name="boot_hook_enable">Uruchamiaj /var/minis/boot.sh przy starcie</string>
+    <string name="boot_hook_enable_sub">Wykonuje się w piaskownicy po starcie Linux rootfs</string>
+    <string name="boot_hook_footer">Domyślnie wyłączone. Ta ścieżka leży w zapisywalnej piaskownicy, więc każdy agent z dostępem do shella może podmienić skrypt — po włączeniu taki plik wykonuje się po cichu przy każdym uruchomieniu. Przełącznik jest sprawdzany ponownie tuż przed wykonaniem, a czas pierwszego wykrycia skryptu i zmiany rozmiaru/mtime trafiają do logu aplikacji. Działa od następnego startu.</string>
+    <string name="boot_hook_last_status">Ostatnie uruchomienie</string>
+    <string name="boot_hook_section">Hak startowy</string>
+    <string name="lifecycle_hooks_command_hint">Jedna linia polecenia. Zwykle najlepiej ścieżka skryptu, np. bash /var/minis/hooks/on-response.sh. Zostaw puste, aby usunąć hak.</string>
+    <string name="lifecycle_hooks_enable">Włącz haki cyklu życia</string>
+    <string name="lifecycle_hooks_enable_sub">Wykonuje poniższe skrypty przy ich zdarzeniach</string>
+    <string name="lifecycle_hooks_events_footer">Skrypty działają w piaskownicy, szeregowo na własnym torze, z limitem 20 sekund. Błędy są tylko logowane i nigdy nie blokują czatu.</string>
+    <string name="lifecycle_hooks_help_body">Każdy skrypt otrzymuje MINIS_HOOK_EVENT, MINIS_HOOK_SESSION_ID i MINIS_HOOK_DETAIL. Skrypty to jednorazowe procesy PRoot: /proc innych poleceń nie jest widoczny między wywołaniami, a flock jest zawodny — stan między uruchomieniami trzymaj w plikach. OnResponse odpala się raz po każdej zakończonej odpowiedzi agenta; OnSessionEnd — przy usunięciu czatu.</string>
+    <string name="lifecycle_hooks_help_header">Środowisko i zastrzeżenia</string>
+    <string name="lifecycle_hooks_master_footer">Domyślnie wyłączone. Dopóki wyłączone, skonfigurowane skrypty są zachowywane, ale nigdy się nie wykonują.</string>
+    <string name="lifecycle_hooks_not_set">Nie ustawiono</string>
+    <string name="lifecycle_hooks_section_events">Zdarzenia</string>
+    <string name="lifecycle_hooks_section_master">Główny przełącznik</string>
+    <string name="lifecycle_hooks_title">Haki cyklu życia</string>
+    <string name="network_trusted_ca_count">Zaimportowano certyfikatów: %1$d</string>
+    <string name="network_trusted_ca_duplicate">Ten certyfikat jest już zaimportowany.</string>
+    <string name="network_trusted_ca_failed">Nie udało się odczytać pliku jako certyfikatu PEM/X.509.</string>
+    <string name="network_trusted_ca_footer">Dla dostawcy, którego endpoint HTTPS używa certyfikatu z podpisem własnym lub prywatnego CA. Certyfikat jest przechowywany tylko wewnątrz Minis i dodawany do kotwic zaufania Androida dla tej aplikacji; zwykłe sprawdzanie certyfikatu i nazwy hosta pozostaje włączone. Działa od następnego żądania do dostawcy — bez ponownego uruchamiania.</string>
+    <string name="network_trusted_ca_import">Importuj certyfikat PEM</string>
+    <string name="network_trusted_ca_imported">Zaimportowano certyfikatów: %1$d. Ponów żądanie.</string>
+    <string name="network_trusted_ca_none">Brak zaimportowanych certyfikatów</string>
+    <string name="network_trusted_ca_remove_all">Usuń wszystkie</string>
+    <string name="network_trusted_ca_removed">Zaimportowane certyfikaty usunięte.</string>
+    <string name="network_trusted_ca_title">Zaufane certyfikaty</string>
+    <string name="provider_detail_custom_headers">Własne nagłówki żądań</string>
+    <string name="provider_detail_custom_headers_footer">Jedna linia na wpis „Nazwa: wartość”. Stosowane tylko do żądań chat, /models i Responses tego dostawcy. Host, Content-Length i Connection zarządza klient HTTP — nie da się ich nadpisać.</string>
+    <string name="provider_detail_custom_headers_placeholder">X-Custom-Header: value</string>
+    <string name="provider_detail_opencode_session_footer">Domyślnie wyłączone. Po włączeniu każde żądanie czatu do tego własnego endpointu niesie stabilny identyfikator rozmowy (x-opencode-session), aby relaye zgodne z OpenCode mogły go trasować i cache\'ować. Włączaj tylko dla zaufanej bramy: ten identyfikator rozpoznaje rozmowę między turami.</string>
+    <string name="provider_detail_opencode_session_header">Nagłówek sesji OpenCode</string>
+    <string name="provider_detail_opencode_session_toggle">Wysyłaj x-opencode-session</string>
+    <string name="provider_detail_save_headers">Zapisz nagłówki</string>
+    <string name="scheduled_task_prompt_template_hint">Aktualna data/godzina i ostatnie uruchomienie są dodawane automatycznie. Możesz też użyć {{date}}, {{time}}, {{datetime}}, {{weekday}}, {{last_fired}}, {{last_fired_ago}} i {{task_label}}.</string>
+    <string name="settings_lifecycle_hooks">Haki cyklu życia</string>
+    <string name="settings_lifecycle_hooks_subtitle">Uruchamia skrypty piaskownicy przy starcie sesji / po odpowiedzi / na końcu sesji</string>
+    <string name="web_search_tool_enabled">Włącz web_search</string>
+    <string name="web_search_tool_enabled_sub">Pozwala agentowi przeszukiwać sieć z czatu. Wył. → narzędzie w ogóle nie jest oferowane.</string>
+    <string name="web_search_tool_section">Tool</string>
+    <string name="web_search_tool_section_footer">Wyłączenie narzędzia nie usuwa konfiguracji silnika poniżej; włącz ponownie, by przywrócić to samo zachowanie.</string>
+    <string name="tool_label_short_app_name">Minis Ultra</string>
+    <string name="attachment_no_app_toast">Brak aplikacji do otwarcia tego załącznika.</string>
+    <string name="chat_move_to_capsule">Przenieś do…</string>
 </resources>

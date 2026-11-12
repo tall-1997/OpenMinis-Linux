@@ -42,6 +42,17 @@
     <string name="network_proxies">Proxies</string>
     <string name="network_proxies_footer">HTTP, HTTPS or SOCKS5 proxies. Passwords are encrypted with the Android Keystore.</string>
     <string name="network_add_proxy">Add Proxy</string>
+    <!-- [GH#258][GH#287] App-level trust store for private provider CAs -->
+    <string name="network_trusted_ca_title">Trusted Certificates</string>
+    <string name="network_trusted_ca_import">Import PEM Certificate</string>
+    <string name="network_trusted_ca_none">No certificates imported</string>
+    <string name="network_trusted_ca_count">%1$d certificate(s) imported</string>
+    <string name="network_trusted_ca_imported">Imported %1$d certificate(s). Retry the request.</string>
+    <string name="network_trusted_ca_duplicate">That certificate is already imported.</string>
+    <string name="network_trusted_ca_removed">Imported certificates removed.</string>
+    <string name="network_trusted_ca_remove_all">Remove All</string>
+    <string name="network_trusted_ca_failed">Could not read that file as a PEM/X.509 certificate.</string>
+    <string name="network_trusted_ca_footer">For a provider whose HTTPS endpoint uses a self-signed or private CA. The certificate is stored only inside Minis and is added to Android\'s trust anchors for this app; normal certificate and hostname checks stay on. It takes effect on the next provider request — no restart is needed.</string>
     <string name="network_edit_proxy">Edit Proxy</string>
     <string name="network_used_by">Used By</string>
     <string name="network_scope_shell">Shell</string>

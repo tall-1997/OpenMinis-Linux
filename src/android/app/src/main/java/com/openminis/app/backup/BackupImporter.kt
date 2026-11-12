@@ -621,30 +621,19 @@ class BackupImporter(
         return report
     }
 
-    private fun importMemory(root: File): CategoryReport {
-        val report = CategoryReport(BackupCategory.MEMORY.key)
-        val src = File(root, "data/memory")
-        if (!src.isDirectory) return report
-        val dest = File(context.filesDir, "minis-global/memory").apply { mkdirs() }
-        val destRoot = dest.canonicalFile
-        for (file in src.walkTopDown().filter { it.isFile }) {
-            val rel = file.relativeTo(src).path.replace(File.separatorChar, '/')
-            val out = File(dest, rel)
-            // Same containment rule as the blob path: `data/memory` names come
-            // from inside the package too.
-            val parent = out.parentFile?.let { it.mkdirs(); it.canonicalFile }
-            if (parent == null || !(parent.path == destRoot.path ||
-                    parent.path.startsWith(destRoot.path + File.separator))
-            ) {
-                report.rejectedPaths += 1
-                continue
-            }
-            file.copyTo(out, overwrite = true)
-            report.filesWritten += 1
-            report.bytesWritten += file.length()
-        }
-        return report
-    }
+    /**
+     * [GH#299] Restore the whole `data/memory` tree through [BackupMemoryTree], the same
+     * implementation the exporter uses. Recursive on purpose: the migrated Soul
+     * icon lives at `minis-global/memory/soul-icons/soul.png`, and a restore
+     * that skipped subdirectories would bring SOUL.md back with its `file:`
+     * reference intact while the PNG stayed missing — `SoulIcon.decode` then
+     * returns null and the avatar silently falls back to the sparkle.
+     */
+    private fun importMemory(root: File): CategoryReport =
+        BackupMemoryTree.restore(
+            File(root, "data/memory"),
+            BackupMemoryTree.deviceRoot(context.filesDir),
+        )
 
     private fun importMcpServers(root: File): CategoryReport {
         val report = CategoryReport(BackupCategory.MCP_SERVERS.key)

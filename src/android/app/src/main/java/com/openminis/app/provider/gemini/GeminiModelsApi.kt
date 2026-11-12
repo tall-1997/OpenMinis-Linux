@@ -15,7 +15,10 @@ import okhttp3.Request
 import org.json.JSONObject
 
 object GeminiModelsApi {
-    private val client = SharedHttpClients.default
+    // [GH#258][GH#287] getter, not a captured val: the shared client is now
+    // generation-keyed, so a CA imported after this object initialised must be
+    // picked up on the next fetch.
+    private val client get() = SharedHttpClients.default
     private val cache = ProviderModelsCache("gemini")
 
     /**
@@ -46,6 +49,8 @@ object GeminiModelsApi {
         // from the official one — the cache key must carry the connection,
         // not only the credential (matches OpenAI/Anthropic keying).
         baseURL: String? = null,
+        // [GH#221] 用户自定义请求头（同实例 KV）。
+        extraHeaders: Map<String, String> = emptyMap(),
     ): List<LLMModel> = withContext(Dispatchers.IO) {
         if (cloudCodeFallback) return@withContext LLMModel.allGemini
 
@@ -69,6 +74,8 @@ object GeminiModelsApi {
 
         // [T-android-default-ua] brand outbound /v1beta/models request.
         builder.applyUserAgentOverride(null)
+        // [GH#221] 用户自定义请求头。
+        for ((k, v) in extraHeaders) builder.header(k, v)
         val geminiRequest = ModelListFetchIsolation.run { builder.noStoreIf(forceRefresh) }.build()
         // [T-models-fetch-transient-auth] Bounded retry; see ModelListFetchRetry.
         val response = ModelListFetchRetry.execute(

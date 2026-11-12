@@ -1042,9 +1042,13 @@ internal object ConfigBuiltins {
         // Accepts an emoji OR an image, matching iOS `fe2f3ae8b`. An address
         // (minis:// or a /var/minis path) is only an import source: it is
         // resolved, re-encoded through the SAME SoulIcon.encode the Settings
-        // picker uses, and only the RESULT is stored inline — so the source
-        // file can be deleted afterwards and the icon survives attachment
-        // cleanup and syncing to another device.
+        // picker uses, and only the RESULT is stored — so the source file can
+        // be deleted afterwards and the icon survives attachment cleanup.
+        //
+        // [GH#299] The stored result is a `file:` reference into the memory
+        // backup root: the next SoulStore.save() migrates the inline value to
+        // `filesDir/minis-global/memory/soul-icons/soul.png`, so backup/restore
+        // carries the avatar with SOUL.md instead of falling back to sparkle.
         //
         // Reading is summarized, never dumped: a stored image reports as
         // "<image>" so `minis-config get` cannot flood the context with
@@ -1083,7 +1087,9 @@ internal object ConfigBuiltins {
                     "\n" +
                     "PROCESSING — identical to picking an image in Settings → Soul: centre-cropped to a " +
                     "square, downscaled to ${com.openminis.app.agent.SoulIcon.STORED_PIXELS}×" +
-                    "${com.openminis.app.agent.SoulIcon.STORED_PIXELS}, re-encoded as PNG and stored inline.\n" +
+                    "${com.openminis.app.agent.SoulIcon.STORED_PIXELS}, re-encoded as PNG and stored as " +
+                    "filesDir/minis-global/memory/soul-icons/soul.png (inside the memory backup category, " +
+                    "so a backup/restore keeps it); SOUL.md keeps a `file:` reference. [GH#299]\n" +
                     "\n" +
                     "READING — `get soul.icon` returns \"<image>\" for an image, never the base64.\n" +
                     "\n" +
@@ -1098,9 +1104,9 @@ internal object ConfigBuiltins {
                 risk = ConfigRisk.SENSITIVE,
                 revertable = false,
                 reader = {
-                    val raw = loadCurrent().metadata.icon
+                    val raw = loadCurrent().metadata.icon // [GH#299] data URI and file: both read as "<image>"
                     ConfigValue.Str(
-                        if (com.openminis.app.agent.SoulIcon.isDataUri(raw)) "<image>" else raw,
+                        if (com.openminis.app.agent.SoulIcon.isInlineImageDataUri(raw) || com.openminis.app.agent.SoulIcon.isFileRef(raw)) "<image>" else raw,
                     )
                 },
                 writer = { v ->

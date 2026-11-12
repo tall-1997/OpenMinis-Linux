@@ -118,13 +118,13 @@
     <string name="settings_mcp">Integraciones MCP</string>
     <string name="settings_mcp_subtitle">Conecta servidores Model Context Protocol</string>
     <!-- Dev Suite bundle names/summaries -->
-    <string name="dev_suite_android_name">Android &amp; Mobile Full Stack</string>
+    <string name="dev_suite_android_name">Stack completo de Android y móvil</string>
     <string name="dev_suite_android_summary">JDK17 · Cadena de herramientas aarch64 SDK · NDK r29 · Flutter/RE/Rust opcional</string>
     <string name="dev_suite_code_search_name">Búsqueda de código y eficiencia del terminal</string>
     <string name="dev_suite_code_search_summary">cuarteto rg / fd / fzf / bat</string>
     <string name="dev_suite_python_name">Suite de desarrolladores de Python &amp; AI</string>
     <string name="dev_suite_python_summary">Tiempo de ejecución de Python 3 · pip/venv · Dependencias de compilación de computación científica de IA</string>
-    <string name="dev_suite_nodejs_name">Node.js &amp; Web Full Stack</string>
+    <string name="dev_suite_nodejs_name">Stack completo de Node.js y web</string>
     <string name="dev_suite_nodejs_summary">Tiempo de ejecución de Node.js · npm · pnpm/yarn</string>
     <string name="dev_suite_go_name">Suite de desarrollo Go</string>
     <string name="dev_suite_go_summary">Cadena de herramientas golang-go (suite exclusiva de OpenMinis)</string>
@@ -181,8 +181,8 @@
     <string name="zen_deleted_models_title">Restaurar modelos gratuitos eliminados (%1$d)</string>
     <string name="zen_deleted_models_subtitle">Deshace las eliminaciones registradas en este proveedor</string>
     <string name="provider_sync_mark_not_found">404 not found</string>
-    <string name="provider_sync_mark_connection">Connection failed</string>
-    <string name="provider_sync_mark_invalid">Invalid response</string>
+    <string name="provider_sync_mark_connection">Conexión fallida</string>
+    <string name="provider_sync_mark_invalid">Respuesta no válida</string>
     <string name="add_provider_voice_templates_footer">Proveedores de voz a texto y texto a voz. El tipo de proveedor y la URL base ya están rellenados: solo agrega tu API key.</string>
     <string name="add_provider_voice_capability_tts">Síntesis de voz (TTS)</string>
     <string name="add_provider_voice_capability_asr">Reconocimiento de voz (ASR)</string>
@@ -257,8 +257,8 @@
     <string name="soul_icon_choose_image">Elegir imagen</string>
     <string name="soul_icon_image_hint">Se recorta en cuadrado y se redondea</string>
     <string name="soul_icon_use_default">Usar el predeterminado</string>
-    <string name="soul_icon_use_model">Use Model Icon</string>
-    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
+    <string name="soul_icon_use_model">Usar icono del modelo</string>
+    <string name="soul_icon_use_model_hint">Sigue el icono del proveedor del modelo en ejecución</string>
     <string name="soul_icon_emoji_title">Icono de identidad</string>
     <string name="soul_icon_emoji_field">O escribe un emoji</string>
     <string name="soul_icon_set">Establecer</string>
@@ -499,7 +499,7 @@
     <string name="browser_engine_stale">El núcleo WebView Chrome/%1$s va %2$d versiones por detrás. Actualízalo para las últimas funciones web.</string>
     <string name="browser_engine_stale_action">Actualizar núcleo</string>
     <string name="browser_settings_engine_shared">browser_use y el navegador integrado comparten este núcleo.</string>
-    <string name="browser_settings_user_agent">User Agent</string>
+    <string name="browser_settings_user_agent">Agente de usuario</string>
     <string name="browser_settings_ua_mobile_chrome">Chrome móvil (Android)</string>
     <string name="browser_settings_ua_desktop_chrome">Chrome de escritorio (Linux)</string>
     <string name="browser_settings_ua_custom">Personalizado</string>
@@ -751,8 +751,8 @@
     <string name="shizuku_state_need_permission">Se requiere autorización</string>
     <string name="shizuku_state_need_permission_subtitle">El servicio está en ejecución, pero Minis Ultra no está autorizado.</string>
     <string name="shizuku_state_ready">Listo</string>
-    <string name="shizuku_ready_subtitle">version=%1$d, uid=%2$d</string>
-    <string name="shizuku_ready_subtitle_sui">Sui (root) · version=%1$d, uid=%2$d</string>
+    <string name="shizuku_ready_subtitle">versión=%1$d, uid=%2$d</string>
+    <string name="shizuku_ready_subtitle_sui">Sui (root) · versión=%1$d, uid=%2$d</string>
     <string name="shizuku_badge_not_installed">No instalado</string>
     <string name="shizuku_badge_not_running">Detenido</string>
     <string name="shizuku_badge_need_permission">Permiso</string>
@@ -1761,7 +1761,7 @@
     <string name="dev_suite_installing">Instalando…</string>
     <string name="dev_suite_failed">fallido</string>
     <string name="dev_suite_view_details">Details</string>
-    <string name="dev_suite_failure_details">Installation failure details</string>
+    <string name="dev_suite_failure_details">Detalles del fallo de instalación</string>
     <string name="dev_suite_ready">Listo</string>
     <string name="dev_suite_not_installed">No instalado</string>
     <string name="dev_suite_required">obligatorio</string>
@@ -2127,6 +2127,18 @@
     <!-- Queued-message edit sheet + git diff truncation notice -->
     <string name="chat_queued_edit_title">Editar mensaje en cola</string>
     <string name="git_panel_diff_truncated">Diff truncado en 200 000 caracteres; el texto completo está en el propio archivo del repositorio.</string>
+    <string name="voice_service_no_audio_models">No hay modelos de audio listados para este proveedor. Las listas de modelos de algunos proveedores (Bailian, SiliconFlow) no declaran soporte de audio — añade el modelo ASR/TTS como modelo personalizado con la modalidad de audio, o elige otro servicio de voz.</string>
+    <string name="voice_error_network">Reconocimiento de voz fallido: error de red. Comprueba tu conexión o cambia al motor local u otro proveedor.</string>
+    <string name="voice_error_transcription">El reconocimiento de voz no devolvió texto. Habla de nuevo o comprueba el modelo y la clave API del proveedor de transcripción.</string>
+    <string name="voice_error_busy">El reconocedor de voz está ocupado. Espera un momento e inténtalo de nuevo.</string>
+    <string name="voice_error_audio">Fallo al capturar audio. Comprueba el permiso de micrófono y que ninguna otra app lo esté usando.</string>
+    <string name="voice_error_language">El idioma seleccionado no lo admite este motor. Elige otro idioma.</string>
+    <string name="voice_error_unknown">Reconocimiento de voz fallido: %1$s</string>
+    <string name="thinking_rules_cache_not_ready">Las reglas personalizadas aún no están activas (%1$s). Las peticiones usan ahora los valores integrados; el mensaje siguiente a la carga de la caché aplicará tus reglas.</string>
+    <string name="skill_display_name_skill_creator">Skill Creator</string>
+    <string name="skill_display_name_android_sdk_mirrors">Android SDK Mirrors</string>
+    <string name="provider_detail_force_thinking">Forzar pensamiento extendido</string>
+    <string name="provider_detail_force_thinking_footer">Solo para relés compatibles con Anthropic. Envía thinking:{type:"enabled",budget_tokens:N} aunque el catálogo diga que el modelo no puede razonar. Úsalo cuando el modelo admite pensamiento pero la entrada del catálogo falta o es incorrecta.</string>
     <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
     <string name="provider_list_export_providers">Exportar proveedores</string>
     <string name="provider_transfer_export_title">Exportar proveedores</string>
@@ -2182,4 +2194,55 @@
     <string name="handsfree_state_speaking">Hablando…</string>
     <string name="handsfree_exit_recognition">Manos libres detenido: el reconocimiento de voz falló repetidamente. Toca Manos libres para reintentar.</string>
     <string name="handsfree_exit_tts">Manos libres detenido: no se pudieron leer las respuestas en voz alta. Toca Manos libres para reintentar.</string>
+
+    <!-- [T-untranslated] English fallback for keys added by PR #325; pending translation -->
+    <string name="a11y_app_policy_apps">Apps</string>
+    <string name="a11y_app_policy_apps_count">%1$d listed</string>
+    <string name="a11y_app_policy_apps_hint">Un nombre de paquete Android por línea, p. ej. com.tencent.mm</string>
+    <string name="a11y_app_policy_blocklist">Usar la lista como lista de bloqueo</string>
+    <string name="a11y_app_policy_blocklist_sub">Off = solo las apps de la lista se permiten. On = las apps de la lista se bloquean.</string>
+    <string name="a11y_app_policy_enabled">Restringir por app</string>
+    <string name="a11y_app_policy_enabled_sub">Comprueba el paquete de la app en primer plano antes de cada lectura de pantalla o toque</string>
+    <string name="a11y_app_policy_footer">Al activarlo, ui_read y ui_action se comprueban contra la app en primer plano antes de ejecutarse. Las apps fuera de la lista (modo permitir) o dentro de la lista (modo bloquear) se rechazan con un mensaje visible. La propia app de Minis siempre está permitida.</string>
+    <string name="a11y_app_policy_section">Alcance de apps de accesibilidad</string>
+    <string name="boot_hook_enable">Ejecutar /var/minis/boot.sh al iniciar</string>
+    <string name="boot_hook_enable_sub">Se ejecuta en el sandbox después de que arranque el rootfs de Linux</string>
+    <string name="boot_hook_footer">Desactivado por defecto. Esta ruta está dentro del sandbox modificable, así que cualquier agente con capacidad de shell puede reemplazar el script — al activarlo, ese archivo se ejecuta silenciosamente en cada arranque. El interruptor se vuelve a comprobar justo antes de la ejecución, y la hora de primera detección del script más los cambios de tamaño/mtime se escriben en el registro de la app. Surte efecto en el próximo arranque.</string>
+    <string name="boot_hook_last_status">Última ejecución</string>
+    <string name="boot_hook_section">Hook de arranque</string>
+    <string name="lifecycle_hooks_command_hint">Una línea de comando. Normalmente lo mejor es una ruta de script, p. ej. bash /var/minis/hooks/on-response.sh. Déjalo vacío para eliminar el hook.</string>
+    <string name="lifecycle_hooks_enable">Activar hooks de ciclo de vida</string>
+    <string name="lifecycle_hooks_enable_sub">Ejecuta los scripts de abajo en sus eventos</string>
+    <string name="lifecycle_hooks_events_footer">Los scripts se ejecutan en el sandbox, en serie y en su propio carril, con un tiempo límite de 20 segundos. Los fallos se registran y nunca bloquean el chat.</string>
+    <string name="lifecycle_hooks_help_body">Cada script recibe MINIS_HOOK_EVENT, MINIS_HOOK_SESSION_ID y MINIS_HOOK_DETAIL. Los scripts son procesos PRoot de un solo uso: el /proc de otros comandos no es visible entre invocaciones y flock no es fiable, así que usa archivos para el estado entre ejecuciones. OnResponse se dispara una vez por cada respuesta completada del agente; OnSessionEnd se dispara al eliminar el chat.</string>
+    <string name="lifecycle_hooks_help_header">Entorno y advertencias</string>
+    <string name="lifecycle_hooks_master_footer">Desactivado por defecto. Mientras esté apagado, los scripts configurados se conservan pero nunca se ejecutan.</string>
+    <string name="lifecycle_hooks_not_set">Sin configurar</string>
+    <string name="lifecycle_hooks_section_events">Eventos</string>
+    <string name="lifecycle_hooks_section_master">Interruptor maestro</string>
+    <string name="lifecycle_hooks_title">Hooks de ciclo de vida</string>
+    <string name="network_trusted_ca_count">%1$d certificado(s) importado(s)</string>
+    <string name="network_trusted_ca_duplicate">Ese certificado ya está importado.</string>
+    <string name="network_trusted_ca_failed">No se pudo leer ese archivo como certificado PEM/X.509.</string>
+    <string name="network_trusted_ca_footer">Para un proveedor cuyo endpoint HTTPS usa una CA autofirmada o privada. El certificado se guarda solo dentro de Minis y se añade a los anclajes de confianza de Android para esta app; las comprobaciones normales de certificado y hostname siguen activas. Surte efecto en la siguiente petición al proveedor — sin reiniciar.</string>
+    <string name="network_trusted_ca_import">Importar certificado PEM</string>
+    <string name="network_trusted_ca_imported">%1$d certificado(s) importado(s). Reintenta la petición.</string>
+    <string name="network_trusted_ca_none">Sin certificados importados</string>
+    <string name="network_trusted_ca_remove_all">Quitar todos</string>
+    <string name="network_trusted_ca_removed">Certificados importados eliminados.</string>
+    <string name="network_trusted_ca_title">Certificados de confianza</string>
+    <string name="provider_detail_custom_headers">Cabeceras de petición personalizadas</string>
+    <string name="provider_detail_custom_headers_footer">Una línea por «Nombre: valor». Se aplica solo a las peticiones de chat, /models y Responses de este proveedor. Host, Content-Length y Connection los gestiona el cliente HTTP y no se pueden sobrescribir.</string>
+    <string name="provider_detail_custom_headers_placeholder">X-Custom-Header: value</string>
+    <string name="provider_detail_opencode_session_footer">Desactivado por defecto. Al activarlo, cada petición de chat a este endpoint personalizado lleva un ID estable por conversación (x-opencode-session) para que los relés compatibles con OpenCode puedan enrutarla y cachearla. Actívalo solo en una pasarela de confianza: el ID identifica la conversación entre turnos.</string>
+    <string name="provider_detail_opencode_session_header">Cabecera de sesión OpenCode</string>
+    <string name="provider_detail_opencode_session_toggle">Enviar x-opencode-session</string>
+    <string name="provider_detail_save_headers">Guardar cabeceras</string>
+    <string name="scheduled_task_prompt_template_hint">La fecha/hora actual y la última ejecución se añaden automáticamente. También puedes usar {{date}}, {{time}}, {{datetime}}, {{weekday}}, {{last_fired}}, {{last_fired_ago}} y {{task_label}}.</string>
+    <string name="settings_lifecycle_hooks">Hooks de ciclo de vida</string>
+    <string name="settings_lifecycle_hooks_subtitle">Ejecuta scripts del sandbox al iniciar sesión / al terminar respuestas / al cerrar sesión</string>
+    <string name="web_search_tool_enabled">Activar web_search</string>
+    <string name="web_search_tool_enabled_sub">Permite al agente buscar en la web desde el chat. Off → la herramienta no se ofrece en absoluto.</string>
+    <string name="web_search_tool_section">Tool</string>
+    <string name="web_search_tool_section_footer">Apagar la herramienta no borra la configuración del motor de abajo; vuelve a activarla para recuperar el mismo comportamiento.</string>
 </resources>

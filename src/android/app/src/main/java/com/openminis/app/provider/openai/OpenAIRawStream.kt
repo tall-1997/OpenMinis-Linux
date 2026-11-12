@@ -409,6 +409,34 @@ internal fun OpenAIProvider.rawStreamMessage(
         // allowlist; MiniMax M3 relied on the mid-stream contains fallback).
         val thinkParser = ThinkPrefixStreamParser()
 
+        // [GH#113] Some local / compatibility gateways stream a serialized tool
+        // call through `delta.content` instead of `delta.tool_calls`. The
+        // sniffer converts an envelope that names an ADVERTISED tool into a
+        // real tool call and lets every other `{…}` through untouched; see
+        // ContentToolCallSniffer for the false-positive guards.
+        val contentSniffer = ContentToolCallSniffer(tools.mapTo(HashSet()) { it.name })
+        var inlineToolCallSeq = 0
+        suspend fun emitSniffed(emissions: List<ContentToolCallSniffer.Emission>) {
+            for (em in emissions) {
+                when (em) {
+                    is ContentToolCallSniffer.Emission.Text ->
+                        if (em.text.isNotEmpty()) send(LLMStreamChunk.Text(em.text))
+                    is ContentToolCallSniffer.Emission.Call -> {
+                        val id = "inline-tool-${++inlineToolCallSeq}"
+                        if (android.util.Log.isLoggable("ToolChain[Provider]", android.util.Log.VERBOSE)) {
+                            android.util.Log.d(
+                                "ToolChain[Provider]",
+                                "→ content-embedded tool call recovered name=${em.name}",
+                            )
+                        }
+                        send(LLMStreamChunk.ToolUseStart(id, em.name))
+                        send(LLMStreamChunk.ToolInputDelta(id, em.args.toString()))
+                        send(LLMStreamChunk.ToolCallComplete(id, em.name, em.args))
+                    }
+                }
+            }
+        }
+
         // T321 counters + [T-android-stream-pace] first/last event clock —
         // streamMs in the tail tally separates a relay that buffered-then-burst
         // (long streamMs after the gateway finished) from client-side lag.
@@ -451,6 +479,9 @@ internal fun OpenAIProvider.rawStreamMessage(
                         }
                         if (fin.visible.isNotEmpty()) send(LLMStreamChunk.Text(fin.visible))
                     }
+                    // [GH#113] A sniffer buffer still open at [DONE] was not a
+                    // tool call after all — release it as text before finishing.
+                    emitSniffed(contentSniffer.finish())
                     // [T-android-think-prefix-stream] Persist reasoning captured
                     // EITHER from the `reasoning_content` field or from a
                     // `<think>` prefix. Gating solely on sawReasoningField would
@@ -608,12 +639,61 @@ internal fun OpenAIProvider.rawStreamMessage(
                             val itemType = item.optString("type", "")
                             if (itemType == "function_call") {
                                 val itemId = item.optString("id", "")
-                                val acc = responsesToolCalls.remove(itemId) ?: continue
-                                val argsStr = item.optString("arguments", acc.args.toString())
-                                val args = NonFiniteJson.parseOrNull(argsStr) ?: JSONObject()
+                                // [GH#83/#146] Some relays start at
+                                // output_item.done (the added event never
+                                // arrived). Dropping the call here left the
+                                // model with no tool channel. Reconstruct the
+                                // accumulator from the completed item.
+                                val acc = responsesToolCalls.remove(itemId)
+                                    ?: ResponsesToolCallAccumulator(
+                                        callId = item.optString("call_id", "").ifBlank { itemId },
+                                        name = item.optString("name", ""),
+                                    )
+                                if (acc.name.isBlank()) {
+                                    com.openminis.app.logging.AppLogger.warning(
+                                        "OpenAIProvider",
+                                        "Responses output_item.done function_call without a name " +
+                                            "id=$itemId — dropping",
+                                    )
+                                    continue
+                                }
+                                // [GH#83] `arguments` is present but EMPTY on
+                                // some Codex/Responses relays even though the
+                                // deltas carried the real payload; taking the
+                                // empty authoritative value produced the
+                                // "all tool calls are {}" report. Prefer the
+                                // authoritative value only when non-blank.
+                                val authoritativeArgs = item.optString("arguments", "")
+                                val argsStr = authoritativeArgs.ifBlank { acc.args.toString() }
+                                val parsed = NonFiniteJson.parseOrNull(argsStr)
                                 val combined = combineResponsesAPIIds(acc.callId, itemId)
+                                // [GH#83/#146] A reconstructed accumulator has
+                                // no ToolUseStart yet; emit one so the agent
+                                // loop creates the UI tool block it later
+                                // finalizes (otherwise the tool runs with no
+                                // card and the user sees a silent turn).
+                                if (!acc.started) {
+                                    acc.started = true
+                                    send(LLMStreamChunk.ToolUseStart(combined, acc.name))
+                                }
+                                if (parsed == null && argsStr.isNotBlank()) {
+                                    // [GH#61/#83/#146] The authoritative
+                                    // `arguments` string did not parse. Keep
+                                    // the bytes for ToolJsonRepair and flag
+                                    // the completion instead of sending `{}`.
+                                    send(LLMStreamChunk.ToolInputDelta(combined, argsStr))
+                                    com.openminis.app.logging.AppLogger.warning(
+                                        "OpenAIProvider",
+                                        "Responses output_item.done carried invalid tool args id=$combined " +
+                                            "name=${acc.name} (${argsStr.length} chars) — carrying raw tail for repair",
+                                    )
+                                }
+                                val args = parsed ?: JSONObject()
                                 if (android.util.Log.isLoggable("ToolChain[Provider]", android.util.Log.VERBOSE)) android.util.Log.d("ToolChain[Provider]", "→ ToolCallComplete (Responses) id=$combined name=${acc.name} args=${args.toString().take(300)}")
-                                send(LLMStreamChunk.ToolCallComplete(combined, acc.name, args))
+                                send(LLMStreamChunk.ToolCallComplete(
+                                    combined, acc.name, args,
+                                    rawArgs = argsStr.takeIf { parsed == null && it.isNotBlank() },
+                                ))
                             } else if (android.util.Log.isLoggable("ToolChain[Provider]", android.util.Log.VERBOSE)) android.util.Log.d("ToolChain[Provider]", "output_item.done type=$itemType id=${item.optString("id", "")} — acknowledged") // [T-responses-unknown-item] Acknowledge only, NEVER re-send item.content: for message/reasoning items `content` is a JSON ARRAY, so optString would dump raw JSON into the visible stream, and the text already streamed via response.output_text.delta.
                         }
                         type == "response.failed" -> {
@@ -824,7 +904,10 @@ internal fun OpenAIProvider.rawStreamMessage(
                                     reasoningAccum.append(out.thinking)
                                     send(LLMStreamChunk.ThinkingDelta(out.thinking))
                                 }
-                                if (out.visible.isNotEmpty()) send(LLMStreamChunk.Text(out.visible))
+                                // [GH#113] Route the visible text through the
+                                // sniffer: a call envelope goes to the tool lane,
+                                // ordinary prose streams exactly as before.
+                                if (out.visible.isNotEmpty()) emitSniffed(contentSniffer.feed(out.visible))
                             }
                         }
 
@@ -903,13 +986,36 @@ internal fun OpenAIProvider.rawStreamMessage(
                 }
                 if (fin.visible.isNotEmpty()) send(LLMStreamChunk.Text(fin.visible))
             }
+            // [GH#113] No `[DONE]` sentinel: release any half-received call
+            // envelope as text (idempotent after the [DONE] path).
+            emitSniffed(contentSniffer.finish())
 
             // Emit ToolCallComplete for all accumulated tool calls
             for ((_, acc) in toolCallAccumulators) {
                 if (acc.id.isNotEmpty() && acc.name.isNotEmpty()) {
-                    val args = NonFiniteJson.parseOrNull(acc.args.toString()) ?: JSONObject()
+                    val rawArgs = acc.args.toString()
+                    val parsed = NonFiniteJson.parseOrNull(rawArgs)
+                    if (parsed == null && rawArgs.isNotBlank()) {
+                        // [GH#61/#83/#146] Do not silently substitute `{}`.
+                        // Park the exact tail in the agent loop's ring (a
+                        // ToolInputDelta the stride gate may have skipped
+                        // would be stale) and carry it on the chunk so
+                        // ToolJsonRepair can try to close a truncated JSON,
+                        // and preflight can report "parameter stream
+                        // incomplete" when repair cannot.
+                        send(LLMStreamChunk.ToolInputDelta(acc.id, rawArgs))
+                        com.openminis.app.logging.AppLogger.warning(
+                            "OpenAIProvider",
+                            "tool args for id=${acc.id} name=${acc.name} are not valid JSON " +
+                                "(${rawArgs.length} chars) — carrying raw tail for repair",
+                        )
+                    }
+                    val args = parsed ?: JSONObject()
                     if (android.util.Log.isLoggable("ToolChain[Provider]", android.util.Log.VERBOSE)) android.util.Log.d("ToolChain[Provider]", "→ ToolCallComplete id=${acc.id} name=${acc.name} args=${args.toString().take(300)}")
-                    send(LLMStreamChunk.ToolCallComplete(acc.id, acc.name, args))
+                    send(LLMStreamChunk.ToolCallComplete(
+                        acc.id, acc.name, args,
+                        rawArgs = rawArgs.takeIf { parsed == null && it.isNotBlank() },
+                    ))
                 }
             }
             // Drain Responses-API tool accumulators that didn't get an output_item.done
@@ -920,13 +1026,28 @@ internal fun OpenAIProvider.rawStreamMessage(
             // disappears (T247 root cause; same path hit by T237 DeepSeek truncation).
             for ((itemId, acc) in responsesToolCalls) {
                 if (acc.callId.isNotEmpty() && acc.name.isNotEmpty()) {
-                    val args = NonFiniteJson.parseOrNull(acc.args.toString()) ?: JSONObject()
+                    val rawArgs = acc.args.toString()
+                    val parsed = NonFiniteJson.parseOrNull(rawArgs)
                     val combined = combineResponsesAPIIds(acc.callId, itemId)
+                    if (parsed == null && rawArgs.isNotBlank()) {
+                        // [GH#61/#83/#146] Same contract as the Chat
+                        // Completions tail: park the exact tail and carry it,
+                        // never hand the executor a silent `{}`.
+                        send(LLMStreamChunk.ToolInputDelta(combined, rawArgs))
+                        com.openminis.app.logging.AppLogger.warning(
+                            "OpenAIProvider",
+                            "Responses stream ended with invalid tool args id=$combined " +
+                                "name=${acc.name} (${rawArgs.length} chars) — carrying raw tail for repair",
+                        )
+                    }
                     com.openminis.app.logging.AppLogger.warning(
                         "OpenAIProvider",
                         "Stream ended mid-tool-call id=$combined name=${acc.name} argsLen=${acc.args.length} — flushing as ToolCallComplete (T248)",
                     )
-                    send(LLMStreamChunk.ToolCallComplete(combined, acc.name, args))
+                    send(LLMStreamChunk.ToolCallComplete(
+                        combined, acc.name, parsed ?: JSONObject(),
+                        rawArgs = rawArgs.takeIf { parsed == null && it.isNotBlank() },
+                    ))
                 }
             }
             responsesToolCalls.clear()

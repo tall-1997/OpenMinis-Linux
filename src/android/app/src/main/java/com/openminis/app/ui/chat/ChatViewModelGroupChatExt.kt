@@ -16,11 +16,14 @@ import com.openminis.app.tools.AgentTools
 import com.openminis.app.tools.DiscussionGraph
 import com.openminis.app.tools.GroupChat
 import com.openminis.app.tools.SubAgentKind
+import com.openminis.app.tools.ToolCallPreflight
 import com.openminis.app.tools.ToolExecutionResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -231,6 +234,24 @@ internal suspend fun ChatViewModel.runGroupChat(provider: LLMProvider, closing: 
             setGroupChatEnabled(false)
         }
     }
+    // [GH#131] Lifecycle hook: one user-visible group-chat round = one
+    // OnResponse (see LifecycleHooks KDoc — a per-speaker event would run the
+    // user's script N times for one prompt and could not tell a member turn from
+    // a finished round). Fired once per invocation, after the closing summary
+    // when there is one; a cancelled (Stop) round never reaches this point, and
+    // the isActive check makes that contract explicit for the race where the
+    // cancellation lands between the last suspension and here.
+    if (currentCoroutineContext().isActive) {
+        val lastAssistant = _messages.value.lastOrNull { it.role == "assistant" }
+        val detail = if (lastAssistant != null) lastAssistant.content.takeLast(500) else ""
+        runCatching {
+            com.openminis.app.agent.lifecycle.LifecycleHooks.fire(
+                com.openminis.app.agent.lifecycle.LifecycleHooks.LifecycleEvent.RESPONSE,
+                realSessionId.ifEmpty { sessionId },
+                detail,
+            )
+        }
+    }
     groupChatCloseRequested = false
 }
 
@@ -275,6 +296,9 @@ private data class GroupMember(
     val maxTokens: Int,
     val temperature: Double?,
     val thinkingLevel: com.openminis.app.data.model.ThinkingLevel,
+    // [GH#221] Owning provider instance — resolves the per-instance user headers
+    // and the OpenCode conversation header for this speaker's requests.
+    val instanceId: String? = null,
 )
 
 private fun ChatViewModel.idleGroupProvider(): LLMProvider? {
@@ -306,6 +330,7 @@ private fun ChatViewModel.groupMembers(
             maxTokens = (entry.model.maxOutputTokens ?: 4096).coerceIn(1024, 16384),
             temperature = entry.overrides.temperature,
             thinkingLevel = entry.effectiveMaxThinkingLevel,
+            instanceId = entry.providerInstanceId,
         )
     }
 }
@@ -318,6 +343,8 @@ private fun ChatViewModel.groupTools(provider: LLMProvider) = AgentTools.makeAge
     memoryEnabled = false,
     subAgentEnabled = false,
     hasSpeechModel = providerRepository.resolveVoiceInputEntry() != null,
+    // [GH#298] Same web_search master switch.
+    webSearchEnabled = com.openminis.app.tools.WebSearchSettings.toolEnabled(context),
 ).filter { !SubAgentKind.blocks(SubAgentKind.PLAN, it.name) }
 
 private fun ChatViewModel.openingKey() = "opening:$groupChatPrefsId"
@@ -361,6 +388,8 @@ private suspend fun ChatViewModel.speakMembers(
                 deferBubble = deferBubble,
                 maxTokens = member.maxTokens,
                 bubbleId = bubbleIds?.get(member.name),
+                // [GH#221] Speaker-specific extra headers (user KV + OpenCode id).
+                extraHeaders = providerExtraHeaders(member.instanceId),
             )
         } catch (e: CancellationException) {
             throw e
@@ -399,11 +428,15 @@ private suspend fun ChatViewModel.speakVisible(
     deferBubble: Boolean = false,
     maxTokens: Int = 4096,
     bubbleId: String? = null,
+    // [GH#221] Per-instance user headers + OpenCode session header.
+    extraHeaders: Map<String, String> = emptyMap(),
 ): String {
     if (groupChatCloseRequested && allowPass) return ""
     // [T-routing-strategy-x] Group-level first-token budget, same resolver as the main agent loop.
-    val groupFirstTokenMs = GroupRoutingState.firstTokenOverrideMs(
-        providerRepository, _selectedGroupId.value,
+    // [GH#521] resolve (not the bare override) so the thinking-model default is
+    // shared with the main loop instead of being re-derived here.
+    val groupFirstTokenMs = GroupRoutingState.resolveFirstEventTimeoutMs(
+        providerRepository, _selectedGroupId.value, thinkingLevel.isEnabled,
     )
     // [group-chat-debate] 排队可视化：外部预建的“排队中”气泡可传入复用，轮到该成员时同一气泡平滑切换到思考态。
     val id = bubbleId ?: UUID.randomUUID().toString()
@@ -413,6 +446,7 @@ private suspend fun ChatViewModel.speakVisible(
             provider, system, user, tools, toolGate, thinkingLevel,
             stopWhenClosing = allowPass, maxTokens = maxTokens,
             firstTokenTimeoutMs = groupFirstTokenMs,
+            extraHeaders = extraHeaders,
         ) { block ->
             showGroupStatus(id, speaker, vendor, block)
         }
@@ -427,6 +461,7 @@ private suspend fun ChatViewModel.speakVisible(
                 stopWhenClosing = false,
                 maxTokens = maxTokens,
                 firstTokenTimeoutMs = groupFirstTokenMs,
+                extraHeaders = extraHeaders,
             ) { block ->
                 showGroupStatus(id, speaker, vendor, block)
             }
@@ -475,109 +510,6 @@ private suspend fun ChatViewModel.speakVisible(
     return text
 }
 
-internal suspend fun ChatViewModel.speakModel(
-    provider: LLMProvider,
-    system: String,
-    user: String,
-    tools: List<com.openminis.app.data.model.AgentToolDefinition>,
-    toolGate: Mutex?,
-    thinkingLevel: com.openminis.app.data.model.ThinkingLevel,
-    stopWhenClosing: Boolean,
-    maxTokens: Int = 4096,
-    firstTokenTimeoutMs: Long? = null,
-    onStatus: suspend (AssistantBlock) -> Unit,
-): String {
-    val history = mutableListOf(LLMMessage(role = LLMMessage.Role.USER, content = user))
-    val report = StringBuilder()
-    var lastThinking = ""
-    // [group-chat-empty-fix] 轮次上限 3→6，另加 3 分钟总时长兜底：以前工具密集的发言跑满 3 轮只剩思考兑底；思考档不降级，靠预算记账给正文留位置。
-    val deadline = android.os.SystemClock.elapsedRealtime() + 180_000L
-    var round = 0
-    while (round < 6 && android.os.SystemClock.elapsedRealtime() < deadline) {
-        round++
-        if (stopWhenClosing && groupChatCloseRequested) {
-            return GroupChat.recoverUtterance(report.toString(), lastThinking)
-        }
-        val textSb = StringBuilder()
-        val thinking = StringBuilder()
-        val calls = mutableListOf<Triple<String, String, JSONObject>>()
-        var lastStatusAt = 0L
-        // [T-stream-stall-watchdog] Same two-phase bound as the main agent loop: a speaker
-        // whose stream goes quiet mid-sentence must not wedge the round for a read timeout.
-        // [T-routing-strategy-x] Group-level firstTokenTimeoutMs override, resolved once in speakVisible and passed down.
-        val firstEventTimeoutMs = firstTokenTimeoutMs ?: if (thinkingLevel.isEnabled) 90_000L else 45_000L
-        provider.streamMessage(
-            messages = history,
-            systemPrompt = system,
-            maxTokens = maxTokens,
-            temperature = null,
-            tools = tools,
-            thinkingLevel = thinkingLevel,
-        ).streamStallWatchdog(
-            firstEventTimeoutMs,
-            idleTimeoutMs = firstEventTimeoutMs * 2,
-        ).collect { chunk ->
-            when (chunk) {
-                is LLMStreamChunk.Started -> onStatus(
-                    AssistantBlock(
-                        id = "group-status",
-                        kind = "info",
-                        content = context.getString(com.openminis.app.R.string.group_chat_thinking),
-                    ),
-                )
-                is LLMStreamChunk.ThinkingDelta -> {
-                    thinking.append(chunk.text)
-                    val now = android.os.SystemClock.elapsedRealtime()
-                    if (now - lastStatusAt >= 120L) {
-                        lastStatusAt = now
-                        onStatus(thinkingStatus(thinking))
-                    }
-                }
-                is LLMStreamChunk.Text -> textSb.append(chunk.text)
-                is LLMStreamChunk.ToolUseStart -> onStatus(toolStatus(chunk.id, chunk.name, ToolBlockStatus.RUNNING, ""))
-                is LLMStreamChunk.ToolCallComplete -> {
-                    calls += Triple(chunk.id, chunk.name, chunk.args)
-                    onStatus(toolStatus(chunk.id, chunk.name, ToolBlockStatus.RUNNING, chunk.args.toString()))
-                }
-                else -> Unit
-            }
-        }
-        if (thinking.isNotEmpty()) onStatus(thinkingStatus(thinking))
-        lastThinking = thinking.toString()
-        val text = textSb.toString().trim()
-        // [group-chat-empty-fix] 每轮正文都记账：带工具调用的轮次同样有话要说，
-        // 以前只收“干净轮”的正文，工具密集的发言整段丢失。
-        if (text.isNotEmpty()) {
-            if (report.isNotEmpty()) report.append("\n\n")
-            report.append(text)
-        }
-        if (calls.isEmpty() || tools.isEmpty()) {
-            return GroupChat.recoverUtterance(report.toString(), lastThinking)
-        }
-        val assistantParts = mutableListOf<AgentContentPart>()
-        if (text.isNotEmpty()) assistantParts += AgentContentPart.Text(text)
-        calls.forEach { (callId, name, args) ->
-            assistantParts += AgentContentPart.ToolUse(callId, name, input = args)
-        }
-        history += LLMMessage(role = LLMMessage.Role.ASSISTANT, content = text, contentParts = assistantParts)
-        val results = mutableListOf<AgentContentPart>()
-        for ((callId, name, args) in calls) {
-            onStatus(toolStatus(callId, name, ToolBlockStatus.RUNNING, args.toString()))
-            val denied = DiscussionGraph.denyExecution(name, args.toString())
-            val result = if (denied != null) {
-                ToolExecutionResult(denied, false)
-            } else if (toolGate != null) {
-                toolGate.withLock { executeTool(name, args.toString(), "") }
-            } else {
-                executeTool(name, args.toString(), "")
-            }
-            results += AgentContentPart.ToolResult(callId, name, result.output, isError = !result.success)
-        }
-        history += LLMMessage(role = LLMMessage.Role.USER, content = "", contentParts = results)
-    }
-    return GroupChat.recoverUtterance(report.toString(), lastThinking)
-}
-
 /**
  * [group-chat-debate] 清掉仍是排队/思考态的占位气泡（被关门截断、没轮到发言的成员）；已定型的不受影响。
  */
@@ -593,26 +525,11 @@ private suspend fun ChatViewModel.clearGroupQueue(ids: Map<String, String>) {
     }
 }
 
-private fun thinkingStatus(thinking: StringBuilder) = AssistantBlock(
+internal fun thinkingStatus(thinking: StringBuilder) = AssistantBlock(
     id = "group-thinking",
     kind = "thinking",
     content = thinking.toString().takeLast(600),
     toolTitle = "Thinking",
-)
-
-private fun toolStatus(
-    id: String,
-    name: String,
-    status: ToolBlockStatus,
-    args: String,
-) = AssistantBlock(
-    id = id.ifBlank { "group-tool" },
-    kind = "tool_use",
-    toolName = name,
-    toolTitle = name,
-    toolArgs = args.take(240),
-    toolStatus = status,
-    content = name,
 )
 
 private suspend fun ChatViewModel.showGroupStatus(

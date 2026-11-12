@@ -367,6 +367,12 @@ internal fun ToolDetailSheet(
                     // ── Shell: black rounded terminal card (mirrors iOS ToolLiveSheet) ──
                     "shell_execute" -> {
                         val command = extractShellCommand(toolArgsObj, block)
+                        // [T-shell-detail-dedupe GH#339] The card prints `$ command`
+                        // itself; a persisted block whose content still starts with
+                        // that same echoed line would show the command twice.
+                        val outputText = remember(block.content, command) {
+                            stripShellCommandEcho(block.content, command)
+                        }
                         // T141: monitor active only while the tool is still running;
                         // sheet may stay open after the run completes (user reading
                         // output), and we don't want a stuck HUD there.
@@ -426,19 +432,19 @@ internal fun ToolDetailSheet(
                                         color = Color.White,
                                         lineHeight = 18.sp,
                                     )
-                                    if (block.content.isNotEmpty()) {
+                                    if (outputText.isNotEmpty()) {
                                         // T38: linkify http/https URLs in shell output so the user can
                                         // tap them to open the in-app web preview (matches iOS
                                         // TerminalCanvasView.addURLLinks → MinisOpenURLBroker).
                                         val urlClick = LocalMarkdownUrlClickHandler.current
-                                        val linkified = remember(block.content, urlClick) {
+                                        val linkified = remember(outputText, urlClick) {
                                             if (urlClick != null) {
                                                 com.openminis.app.ui.util.linkifyUrls(
-                                                    text = block.content,
+                                                    text = outputText,
                                                     onClick = urlClick,
                                                     linkColor = Color(0xFF7CC4FF), // light blue on dark terminal bg
                                                 )
-                                            } else androidx.compose.ui.text.AnnotatedString(block.content)
+                                            } else androidx.compose.ui.text.AnnotatedString(outputText)
                                         }
                                         Text(
                                             text = linkified,

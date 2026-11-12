@@ -27,6 +27,19 @@ import org.json.JSONObject
 object ToolJsonRepair {
 
     /**
+     * [GH#61/#83/#146] 参数流非法且无法补齐时的标记。
+     *
+     * Returned when the provider handed us a non-blank raw
+     * argument tail and none of the closure suffixes made it parse. The call
+     * is NOT safe to execute as an empty object: the parameter stream itself
+     * was incomplete/corrupt, not a legitimate no-argument call. Preflight
+     * maps this marker to a model-visible "parameter stream incomplete"
+     * tool_result so the model re-issues the call instead of silently
+     * running `{}`.
+     */
+    const val INVALID_JSON_MARKER = "invalid-json-unrepaired"
+
+    /**
      * Mutates [args] in-place and returns the list of repair strategy tags
      * that fired (empty when nothing changed). Caller is responsible for
      * logging the tags at WARNING level when non-empty.
@@ -49,14 +62,21 @@ object ToolJsonRepair {
         if (args.length() == 0 && !rawTail.isNullOrBlank()) {
             val tail = rawTail.trim()
             val suffixes = listOf("", "\"", "\"}", "\"]}", "}", "}}", "]}", "]}}", "]", "]]")
+            var repaired = false
             for (suffix in suffixes) {
                 val candidate = tail + suffix
                 val parsed = tryParseObject(candidate) ?: continue
                 val keys = parsed.keys().asSequence().toList()
                 for (k in keys) args.put(k, parsed.opt(k))
                 repairs.add("truncation+" + if (suffix.isEmpty()) "noop" else suffix)
+                repaired = true
                 break
             }
+            // [GH#61/#83/#146] A non-blank tail that cannot be closed means the
+            // stream was corrupt, not merely cut. Mark it so preflight refuses
+            // the call even for tools with no required fields (which would
+            // otherwise happily run with `{}`).
+            if (!repaired) repairs.add(INVALID_JSON_MARKER)
         }
 
         // Strategy 2: type coercion on required fields.

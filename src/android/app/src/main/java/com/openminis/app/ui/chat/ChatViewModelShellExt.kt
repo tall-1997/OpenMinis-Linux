@@ -237,10 +237,11 @@ internal suspend fun ChatViewModel.executeShellCommand(
         for (raw in oneShotUrls) MinisOpenUrlBroker.offer(raw)
         val output = if (cleanedOutput.isBlank()) "(no output)" else cleanedOutput
         val exitInfo = if (result.exitCode != 0) " (exit code ${result.exitCode})" else ""
-        // Exit code 124 is the BusyBox/GNU timeout-utility convention for
-        // a command that exceeded its budget. PersistentShell returns this
-        // when its `withTimeoutOrNull(timeout)` wrapper fires.
-        val timedOut = result.exitCode == 124
+        // [GH#358] 工具超时只认 PersistentShell 的内部看门狗标志（以及 ExecutionCoordinator
+        // 识别的 native offload handler_timeout），不裸判 exit code。124 是 timeout
+        // 工具的通用退出码，用户自己执行 `timeout 5 sleep 10` 同样返回 124 ——
+        // 裸判会把正常结果错标成 TIMEOUT。
+        val timedOut = result.timedOut
 
         // Redact env-var values that leaked into the captured output
         // before the model sees them. No-op when Privacy Mode is OFF.

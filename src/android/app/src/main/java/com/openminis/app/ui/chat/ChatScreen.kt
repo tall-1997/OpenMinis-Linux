@@ -4715,7 +4715,16 @@ fun ChatScreen(
                                 },
                             textStyle = mergedTextStyle,
                             cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
-                            maxLines = 6,
+                            // [T-android-composer-expand GH#193] Grow with the
+                            // content instead of stopping at a fixed line count.
+                            // The visual ceiling is the `.heightIn(max = …)` right
+                            // above (120dp with the IME up, 220dp when it is down),
+                            // so a taller window/long paste uses the space that
+                            // exists instead of clipping a hardcoded 6 lines.
+                            // maxLines = Int.MAX_VALUE is the documented way to
+                            // ask BasicTextField for "unbounded, height decides";
+                            // past the max height the field scrolls internally.
+                            maxLines = Int.MAX_VALUE,
                             // [T-android-enter-to-send-broken] When the
                             // user has Return-Key=Send turned on, ask the
                             // IME for the Send action so it (a) shows the
@@ -5028,9 +5037,9 @@ fun ChatScreen(
                                 voiceUsedSinceClear = true
                                 com.openminis.app.ui.chat.voice.VoiceModePrefs.enteredFromText = true
                                 com.openminis.app.ui.chat.voice.VoiceModePrefs.isVoiceActive = true
+                                seedReadRepliesOnVoiceEntry(context) // [OpenMinis#267]
                             }
                         }
-
                         // App-icon quick action: when the user launched via
                         // `minis://action/voice_chat`, auto-fire the mic on
                         // first compose. Consumed exactly once so re-entering

@@ -80,18 +80,62 @@ object WebSearchTool {
             if (query.isEmpty()) {
                 return ToolExecutionResult("query is required", success = false, toolTitle = toolTitle)
             }
-            val preferred = context?.let { WebSearchSettings.engine(it) } ?: WebSearchSettings.Engine.DDG
-            val allowFallback = context?.let { WebSearchSettings.fallbackEnabled(it) } ?: true
-            val engines = mutableListOf(preferred)
-            // A user who picked DuckDuckGo must not silently spend keyed quotas
-            // when it returns nothing. Keyed fallback only runs after a keyed
-            // engine was the one they asked for.
-            if (allowFallback && context != null && preferred != WebSearchSettings.Engine.DDG) {
-                for (keyed in WebSearchSettings.configuredKeyed(context)) {
-                    if (keyed != preferred) engines += keyed
-                }
-                if (WebSearchSettings.Engine.DDG !in engines) engines += WebSearchSettings.Engine.DDG
+            // [GH#298] 开关的运行时兜底：注册表已经不再暴露该工具，但历史会话
+            // 的 schema / 手动调用仍可能送到这里。关掉后直接拒绝，不给“关了还在
+            // 偷偷联网”留后门。
+            if (context != null && !WebSearchSettings.toolEnabled(context)) {
+                return ToolExecutionResult(
+                    "web_search is disabled in Settings → Web search. Enable it there, " +
+                        "or use browser_use for a known URL.",
+                    success = false,
+                    toolTitle = toolTitle,
+                )
             }
+            // [GH#298] 插件式后端优先于内置引擎链；空结果/异常都静默落到链上。
+            val preferred = context?.let { WebSearchSettings.engine(it) } ?: WebSearchSettings.Engine.DDG
+            val backends = WebSearchBackendRegistry.backends()
+            // [GH#298] 默认 DDG 后端现在会在启动时注册，而 DDG 同时是内置链的
+            // 兜底引擎。当用户就选了 DDG 时：默认后端负责唯一一次 DDG 请求，
+            // 内置链必须跳过 DDG —— 否则后端空结果 / 反爬拦截后，同一个 DDG
+            // 会被再请求一次（#298 的重复请求）。其它引擎仍然先跳过默认后端，
+            // 让用户配置的 keyed 引擎先跑。
+            val defaultBackendHandledDdg = preferred == WebSearchSettings.Engine.DDG &&
+                backends.any { it === WebSearchBackendRegistry.DEFAULT }
+            for (backend in backends) {
+                // [GH#298] 默认 DDG 后端现在会在启动时注册，但 DDG 同时是
+                // 内置链的兜底引擎。用户明确选了 Tavily/SearXNG 等其它引擎时
+                // 跳过它，否则 DDG 通常先成功，用户的引擎配置永远轮不到。
+                // 第三方注册的后端不受影响，仍然是先注册先试。
+                if (backend === WebSearchBackendRegistry.DEFAULT &&
+                    preferred != WebSearchSettings.Engine.DDG
+                ) {
+                    continue
+                }
+                val hits = try {
+                    backend.search(query, max, context)
+                } catch (_: Exception) {
+                    emptyList()
+                }
+                if (hits.isNotEmpty()) {
+                    return ToolExecutionResult(
+                        format(query, hits, backend.id),
+                        success = true,
+                        toolTitle = toolTitle,
+                    )
+                }
+            }
+            val allowFallback = context?.let { WebSearchSettings.fallbackEnabled(it) } ?: true
+            val engines = buildEngineChain(
+                preferred = preferred,
+                allowFallback = allowFallback,
+                hasContext = context != null,
+                configuredKeyed = if (allowFallback && context != null) {
+                    WebSearchSettings.configuredKeyed(context)
+                } else {
+                    emptyList()
+                },
+                defaultBackendHandledPreferred = defaultBackendHandledDdg,
+            )
             // [T-android-websearch-error-aggregation] Every engine's failure
             // is kept, not just the last. When the chain runs Tavily → Bocha
             // → Brave and each dies differently (401 / timeout / quota), the
@@ -99,6 +143,13 @@ object WebSearchTool {
             // exhausted" reads as if THAT is the only thing wrong, hiding
             // the expired Tavily key they actually need to rotate.
             val failures = mutableListOf<Pair<WebSearchSettings.Engine, String>>()
+            // The default backend already tried DDG for this call. Record its
+            // outcome so a fully failed run still names DDG instead of printing
+            // an empty "Engines tried:" list.
+            if (defaultBackendHandledDdg) {
+                failures += WebSearchSettings.Engine.DDG to
+                    "DuckDuckGo backend returned no results"
+            }
             var used = preferred
             var results: List<Result> = emptyList()
             for (engine in engines) {
@@ -153,6 +204,46 @@ object WebSearchTool {
     }
 
     private data class Attempt(val results: List<Result>, val error: String?)
+
+    /**
+     * [GH#298] 内置引擎链的构造，抽成纯函数以便单测“preferred == DDG 时
+     * 只走默认后端、不再重复请求 DDG”。
+     *
+     * [defaultBackendHandledPreferred] 由调用方在“默认 DDG 后端确实已注册且
+     * preferred 就是 DDG”时置 true：此时后端的 DDG 请求已经发生过，链里必须
+     * 跳过 DDG（否则空结果/反爬会再打一次同一端点）。默认后端没注册时保留
+     * 内置 DDG，离线/测试环境仍有兜底。
+     *
+     * 用户明确选 DDG 时同样不追加 keyed 引擎：不能让一次 DDG 空结果偷偷花掉
+     * 用户配置的付费额度；keyless 中文链与 Wikipedia 兜底在 execute() 里另行
+     * 执行，与这里无关。
+     */
+    internal fun buildEngineChain(
+        preferred: WebSearchSettings.Engine,
+        allowFallback: Boolean,
+        hasContext: Boolean,
+        configuredKeyed: List<WebSearchSettings.Engine>,
+        defaultBackendHandledPreferred: Boolean,
+    ): List<WebSearchSettings.Engine> {
+        val engines = mutableListOf<WebSearchSettings.Engine>()
+        if (!(preferred == WebSearchSettings.Engine.DDG && defaultBackendHandledPreferred)) {
+            engines += preferred
+        }
+        if (allowFallback && hasContext && preferred != WebSearchSettings.Engine.DDG) {
+            for (keyed in configuredKeyed) {
+                if (keyed != preferred && keyed !in engines) engines += keyed
+            }
+            if (WebSearchSettings.Engine.DDG !in engines) engines += WebSearchSettings.Engine.DDG
+        }
+        return engines
+    }
+
+    /**
+     * [GH#298] 供 [DuckDuckGoBackend] 复用的默认实现出口。保持 [Attempt]
+     * 私有，只把“结果列表”暴露给同模块的插件后端。
+     */
+    internal fun searchDuckDuckGoForBackend(query: String, max: Int, context: Context?): List<Result> =
+        searchDuckDuckGo(query, max, context).results
 
     private fun search(
         engine: WebSearchSettings.Engine,

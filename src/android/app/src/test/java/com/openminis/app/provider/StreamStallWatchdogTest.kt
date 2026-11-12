@@ -116,4 +116,91 @@ class StreamStallWatchdogTest {
         val out = withTimeout(5_000) { src.firstEventWatchdog(150).toList() }
         assertEquals(2, out.size)
     }
+
+    // ── [GH#521] headers → first-token phase ──────────────────────────────
+
+    @Test
+    fun `headers followed by silence trips the first-token phase`() = runBlocking {
+        // `Started` is the 200-headers marker, NOT a token: before GH#521 it
+        // retired the watchdog and the stream could then sit silent for the
+        // transport timeout.
+        val src = flow {
+            emit(LLMStreamChunk.Started)
+            delay(30_000)
+        }
+        val e = assertThrows(LLMError::class.java) {
+            runBlocking {
+                withTimeout(5_000) {
+                    src.streamStallWatchdog(
+                        firstTimeoutMs = 5_000,
+                        idleTimeoutMs = 10_000,
+                        firstContentTimeoutMs = 200,
+                        firstContentReason = "connected, but no first token",
+                    ).toList()
+                }
+            }
+        }
+        assertTrue("expected TransientError, got $e", e is LLMError.TransientError)
+        assertTrue(
+            "expected the first-token detail, got: ${(e as LLMError.TransientError).detail}",
+            e.detail.contains("no first token"),
+        )
+        assertTrue(
+            "no visible output means no partial-text resume",
+            !(e as LLMError.TransientError).stalledAfterFirstEvent,
+        )
+    }
+
+    @Test
+    fun `headers then a token within the budget passes`() = runBlocking {
+        val src = flow {
+            emit(LLMStreamChunk.Started)
+            delay(60)
+            emit(LLMStreamChunk.Text("hello"))
+        }
+        val out = withTimeout(5_000) {
+            src.streamStallWatchdog(
+                firstTimeoutMs = 5_000,
+                idleTimeoutMs = 5_000,
+                firstContentTimeoutMs = 500,
+            ).toList()
+        }
+        assertEquals(2, out.size)
+    }
+
+    @Test
+    fun `usage after headers does not satisfy the first-token phase`() = runBlocking {
+        val src = flow {
+            emit(LLMStreamChunk.Started)
+            emit(LLMStreamChunk.Usage(com.openminis.app.data.model.LLMUsage(inputTokens = 0, outputTokens = 0)))
+            delay(30_000)
+        }
+        val e = assertThrows(LLMError::class.java) {
+            runBlocking {
+                withTimeout(5_000) {
+                    src.streamStallWatchdog(
+                        firstTimeoutMs = 5_000,
+                        idleTimeoutMs = 10_000,
+                        firstContentTimeoutMs = 200,
+                    ).toList()
+                }
+            }
+        }
+        assertTrue(e is LLMError.TransientError)
+    }
+
+    @Test
+    fun `firstContentTimeout zero preserves the old idle-only behaviour`() = runBlocking {
+        // Backwards compatibility for every existing caller that does not opt
+        // into the GH#521 phase: Started then a late token is not killed.
+        val src = flow {
+            emit(LLMStreamChunk.Started)
+            delay(400)
+            emit(LLMStreamChunk.Text("late"))
+        }
+        val out = withTimeout(5_000) {
+            src.streamStallWatchdog(firstTimeoutMs = 150, idleTimeoutMs = 5_000).toList()
+        }
+        assertEquals(2, out.size)
+    }
 }

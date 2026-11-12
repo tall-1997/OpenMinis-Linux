@@ -150,6 +150,20 @@ class MinisApp : Application(), ImageLoaderFactory {
 
         // Application subclasses run in EVERY process: sub-processes get minimal boot (rest is main-only).
         if (ProcessChecks.shouldSkipMainInit(this)) return
+
+        // [GH#258][GH#287] App-level trust store for user-imported CAs. Init
+        // only creates the directory; the provider clients pick the material
+        // up when they are built (Settings → Network → Proxies can import one).
+        com.openminis.app.network.AppTrustStore.init(this)
+
+        // [GH#423][GH#301] Claude CLI fingerprint version: load the cached npm
+        // dist-tag now, refresh it in the background at most once per 24h. A
+        // network failure leaves the pinned fallback in place.
+        com.openminis.app.auth.ClaudeCliVersion.init(this)
+        appCoroutineScopes.io.launch {
+            com.openminis.app.auth.ClaudeCliVersion.refreshIfStale(this@MinisApp)
+        }
+
         com.openminis.app.crash.LaunchPhaseProbes.startLaunchScan(this, appCoroutineScopes.io)
         com.openminis.app.crash.LaunchPhaseProbes.startDbVersionProbe(this, appCoroutineScopes.io)
 
@@ -176,6 +190,28 @@ class MinisApp : Application(), ImageLoaderFactory {
 
         // The pre-send context check and the in-chat opt-in read this with no Activity context.
         com.openminis.app.data.AutoCompactPrefs.prime(this)
+        // [GH#221] Per-provider custom request headers are read by
+        // ProviderFactory.create() from call sites without a Context.
+        com.openminis.app.provider.ProviderHeaderStore.prime(this)
+        // [GH#221] 预热必须在 IO：首次读取会打开 Keystore-backed
+        // EncryptedSharedPreferences，ProviderFactory.create() 可能从
+        // viewModelScope（Main）首次调用 headersFor。预热完成前 headersFor
+        // 返回空 map（不阻塞 Main），完成后 revision +1，下一次 create 用上
+        // 真实 header（memo key 含内容哈希，会自动重建 provider）。
+        appCoroutineScopes.io.launch {
+            runCatching { com.openminis.app.provider.ProviderHeaderStore.preload() }
+                .onFailure { Log.w("MinisApp", "ProviderHeaderStore preload failed: ${it.message}") }
+        }
+        // [GH#114] Per-app accessibility allow/block list, read from the ui
+        // tools which have no Activity context.
+        com.openminis.app.accessibility.A11yAppPolicy.prime(this)
+        // [GH#298] Register the shipped DuckDuckGo backend once so the
+        // pluggable-backend extension point has a production registrant; the
+        // tool still prefers a user-selected keyed engine over this default.
+        com.openminis.app.tools.WebSearchBackendRegistry.ensureDefaultRegistered()
+        // [GH#131] Lifecycle hook config (event → sandbox script), read from
+        // ChatRepository without a Context.
+        com.openminis.app.agent.lifecycle.LifecycleHooks.prime(this)
         com.openminis.app.data.PlanDiscussionPrefs.prime(this)
         com.openminis.app.data.ToolLimitPrefs.prime(this)
         com.openminis.app.data.ContextSaverPrefs.prime(this) // [T-tool-result-aging] send path reads it per request
@@ -350,6 +386,9 @@ class MinisApp : Application(), ImageLoaderFactory {
                 com.openminis.app.agent.SoulStore.ensureExists(this@MinisApp)
                 com.openminis.app.agent.SoulStore.upgradeStaleDefault(this@MinisApp)
                 com.openminis.app.agent.SoulStore.renameStockProduct(this@MinisApp)
+                // [GH#299] 升级用户可能带着 interim 构建的旧 icon 引用；启动时迁移
+                // 一次，避免"不再保存 SOUL.md 就永远进不了备份根"（幂等）。
+                com.openminis.app.agent.SoulIconMigration.migrateLegacyRefOnStartup(this@MinisApp)
                 com.openminis.app.agent.SoulStore.refreshCache(this@MinisApp)
 
                 // [T-global-md-seed + T-default-assets] Seed GLOBAL.md starter template on first launch (create-only).
@@ -379,7 +418,7 @@ class MinisApp : Application(), ImageLoaderFactory {
                 android.util.Log.e("MinisApp", "legacy workspace migrate failed", it)
             }
             // [T268] One-shot migration of pre-T266 ghost alarms into the system Clock app, off the critical path.
-            runCatching { migrateGhostAlarms() }
+            runCatching { migrateGhostAlarmsLegacy() }
                 .onFailure { Log.w("MinisApp", "ghost alarm migration failed: ${it.message}") }
         }
 
@@ -633,62 +672,6 @@ class MinisApp : Application(), ImageLoaderFactory {
         }.onFailure { Log.w("MinisApp", "MCP server init failed: ${it.message}") }
 
         // [T268] Ghost-alarm migration call moved into the startup IO block above.
-    }
-
-    // T268: replay pre-T266 alarms/timers from prefs through SET_ALARM/SET_TIMER, then clear the blob (idempotent, past-dated dropped).
-    private fun migrateGhostAlarms() {
-        val prefs = getSharedPreferences("minis_alarms_prefs", Context.MODE_PRIVATE)
-        val raw = prefs.getString("alarms_json", null) ?: return
-        if (raw.isBlank() || raw == "[]") return
-        val arr = org.json.JSONArray(raw)
-        if (arr.length() == 0) {
-            prefs.edit().remove("alarms_json").apply()
-            return
-        }
-        val now = System.currentTimeMillis()
-        var migrated = 0
-        var skipped = 0
-        for (i in 0 until arr.length()) {
-            val entry = arr.optJSONObject(i) ?: continue
-            val triggerAt = entry.optLong("triggerAtMs", 0L)
-            if (triggerAt in 1L..now && entry.optString("type") == "timer") {
-                skipped++; continue  // Past timer — nothing to recover.
-            }
-            if (triggerAt in 1L..now && entry.optString("repeatMode", "ONCE") == "ONCE") {
-                skipped++; continue  // Past one-shot alarm.
-            }
-            val migrationOk = runCatching {
-                if (entry.optString("type") == "timer") {
-                    val secs = entry.optInt("durationSec", -1)
-                    val remaining = ((triggerAt - now) / 1000L).toInt()
-                    if (remaining <= 0 && secs <= 0) return@runCatching false
-                    val intent = android.content.Intent(android.provider.AlarmClock.ACTION_SET_TIMER).apply {
-                        putExtra(android.provider.AlarmClock.EXTRA_LENGTH, if (remaining > 0) remaining else secs)
-                        putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, entry.optString("label", "Timer"))
-                        putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI, true)
-                        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    startActivity(intent)
-                    true
-                } else {
-                    val intent = android.content.Intent(android.provider.AlarmClock.ACTION_SET_ALARM).apply {
-                        putExtra(android.provider.AlarmClock.EXTRA_HOUR, entry.optInt("hour", 0))
-                        putExtra(android.provider.AlarmClock.EXTRA_MINUTES, entry.optInt("minute", 0))
-                        putExtra(android.provider.AlarmClock.EXTRA_MESSAGE, entry.optString("label", "Alarm"))
-                        putExtra(android.provider.AlarmClock.EXTRA_SKIP_UI, true)
-                        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    startActivity(intent)
-                    true
-                }
-            }.getOrDefault(false)
-            if (migrationOk) migrated++ else skipped++
-        }
-        // Clear the blob unconditionally — entries we couldn't replay are
-        // still useless ghosts, and leaving the blob would re-trigger
-        // migration on every launch.
-        prefs.edit().remove("alarms_json").apply()
-        Log.i("MinisApp", "T268 ghost alarm migration: migrated=$migrated skipped=$skipped (prefs cleared)")
     }
 
     /** Coil ImageLoader: MinisImageFetcher resolves `minis://`; SvgDecoder is required for res/raw vendor logos. */

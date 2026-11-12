@@ -467,8 +467,7 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun removeHistoryRecordWithFiles(id: String) {
         val record = history.records().firstOrNull { it.id == id }
-        val name = record?.packageName
-        if (record == null || name.isNullOrEmpty()) {
+        if (record == null || record.packageName.isNullOrEmpty()) {
             removeHistoryRecord(id)
             return
         }
@@ -484,25 +483,10 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
         // the meantime. Falls back to viewModelScope when the Application is not
         // the real MinisApp (unit tests), so behaviour there is unchanged.
         deletionScope().launch {
-            withContext(Dispatchers.IO) {
-                runCatching {
-                    val store = com.openminis.app.backup.remote.RcloneRemoteStore(getApplication())
-                    store.syncToRclone()
-                    val uploader =
-                        com.openminis.app.backup.remote.RcloneChunkedUpload(getApplication())
-                    for (outcome in record.destinations.filter { it.succeeded }) {
-                        val remote = store.remotes.firstOrNull { it.name == outcome.name }
-                            ?: continue
-                        runCatching { uploader.deletePackage(remote, name) }
-                            .onFailure {
-                                AppLogger.error(
-                                    TAG,
-                                    "[Backup] deleting '$name' from '${outcome.name}' failed: ${it.message}",
-                                )
-                            }
-                    }
-                }
-            }
+            // [GH#367] Delete from rclone AND phone SAF destinations, then the
+            // local fallback; record goes regardless (provider ctor may throw).
+            runCatching { deleteBackupPackageFiles(getApplication(), record) }
+                .onFailure { AppLogger.error(TAG, "[Backup] deleting files for '$id' failed: ${it.message}") }
             removeHistoryRecord(id)
         }
     }

@@ -119,13 +119,13 @@
     <string name="settings_mcp">Integrări MCP</string>
     <string name="settings_mcp_subtitle">Conectează servere Model Context Protocol</string>
     <!-- Dev Suite bundle names/summaries -->
-    <string name="dev_suite_android_name">Android &amp; Mobile Full Stack</string>
+    <string name="dev_suite_android_name">Stack complet Android și mobil</string>
     <string name="dev_suite_android_summary">JDK17 · Lanț de instrumente aarch64 SDK · NDK r29 · Flutter/RE/Rust opțional</string>
     <string name="dev_suite_code_search_name">Căutare cod și eficiență terminal</string>
     <string name="dev_suite_code_search_summary">cvartet rg / fd / fzf / bat</string>
     <string name="dev_suite_python_name">Suită dezvoltatori Python &amp; AI</string>
     <string name="dev_suite_python_summary">Runtime Python 3 · pip/venv · Dependențe de compilare calcul științific AI</string>
-    <string name="dev_suite_nodejs_name">Node.js &amp; Web Full Stack</string>
+    <string name="dev_suite_nodejs_name">Stack complet Node.js și web</string>
     <string name="dev_suite_nodejs_summary">Runtime Node.js · npm · pnpm/yarn</string>
     <string name="dev_suite_go_name">Suită de dezvoltare Go</string>
     <string name="dev_suite_go_summary">Lanț de instrumente golang-go (suită exclusivă OpenMinis)</string>
@@ -182,8 +182,8 @@
     <string name="zen_deleted_models_title">Restaurează modelele gratuite șterse (%1$d)</string>
     <string name="zen_deleted_models_subtitle">Anulează ștergerile înregistrate pentru acest furnizor</string>
     <string name="provider_sync_mark_not_found">404 not found</string>
-    <string name="provider_sync_mark_connection">Connection failed</string>
-    <string name="provider_sync_mark_invalid">Invalid response</string>
+    <string name="provider_sync_mark_connection">Conexiune eșuată</string>
+    <string name="provider_sync_mark_invalid">Răspuns invalid</string>
     <string name="add_provider_voice_templates_footer">Furnizori de transcriere și de sinteză vocală. Tipul furnizorului și adresa de bază sunt deja completate — mai trebuie doar cheia ta API.</string>
     <string name="add_provider_voice_capability_tts">Sinteză vocală (TTS)</string>
     <string name="add_provider_voice_capability_asr">Recunoaștere vocală (ASR)</string>
@@ -258,8 +258,8 @@
     <string name="soul_icon_choose_image">Alege o imagine</string>
     <string name="soul_icon_image_hint">Decupată pătrat și cu colțuri rotunjite</string>
     <string name="soul_icon_use_default">Folosește imaginea implicită</string>
-    <string name="soul_icon_use_model">Use Model Icon</string>
-    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
+    <string name="soul_icon_use_model">Folosește iconița modelului</string>
+    <string name="soul_icon_use_model_hint">Urmează iconița furnizorului modelului activ</string>
     <string name="soul_icon_emoji_title">Pictograma identității</string>
     <string name="soul_icon_emoji_field">Sau scrie un emoji</string>
     <string name="soul_icon_set">Setează</string>
@@ -1144,7 +1144,7 @@
     <string name="settings_bg_overlay">Suprapunere pentru sarcina din fundal</string>
     <string name="settings_bg_overlay_footer">Afișează o mică pastilă plutitoare cu instrumentul curent cât timp Minis Ultra este în fundal. Necesită permisiunea de afișare peste alte aplicații. Atinge pastila pentru a aduce Minis Ultra în prim-plan; trage de ea pentru a o muta.</string>
     <string name="settings_bg_overlay_permission_needed">Pentru activare, permite afișarea peste alte aplicații</string>
-    <string name="settings_dynamic_island">Dynamic Island (Live Updates)</string>
+    <string name="settings_dynamic_island">Dynamic Island (actualizări live)</string>
     <string name="settings_dynamic_island_footer">Afișează starea Agentului în timp real pe indicatorul de stare din Android 16. Când este activată, înlocuiește suprapunerea plutitoare, ca să nu vezi doi indicatori deodată.</string>
     <string name="settings_dynamic_island_unsupported">Versiunea actuală a sistemului tău nu acceptă încă Live Updates (necesită Android 16+ cu funcția activată).</string>
     <string name="agent_loop_section_title">Modelele pe care Minis Ultra le poate apela în timpul execuției</string>
@@ -1766,7 +1766,7 @@
     <string name="dev_suite_installing">Se instalează…</string>
     <string name="dev_suite_failed">eșec</string>
     <string name="dev_suite_view_details">Details</string>
-    <string name="dev_suite_failure_details">Installation failure details</string>
+    <string name="dev_suite_failure_details">Detalii despre eșecul instalării</string>
     <string name="dev_suite_ready">Gata</string>
     <string name="dev_suite_not_installed">Neinstalat</string>
     <string name="dev_suite_required">obligatoriu</string>
@@ -2142,6 +2142,18 @@
     <!-- Queued-message edit sheet + git diff truncation notice -->
     <string name="chat_queued_edit_title">Editează mesajul din coadă</string>
     <string name="git_panel_diff_truncated">Diff trunchiat la 200.000 de caractere — textul complet se află în fișierul din depozit.</string>
+    <string name="voice_service_no_audio_models">Niciun model audio listat pentru acest furnizor. Listele de modele ale unor furnizori (Bailian, SiliconFlow) nu declară suport audio — adaugă modelul ASR/TTS ca model personalizat cu modalitatea audio sau alege alt serviciu vocal.</string>
+    <string name="voice_error_network">Recunoașterea vocală a eșuat: eroare de rețea. Verifică conexiunea sau treci pe motorul de pe dispozitiv ori la alt furnizor.</string>
+    <string name="voice_error_transcription">Recunoașterea vocală nu a returnat text. Vorbește din nou sau verifică modelul și cheia API a furnizorului de transcriere.</string>
+    <string name="voice_error_busy">Motorul de recunoaștere vocală e ocupat. Așteaptă puțin și încearcă din nou.</string>
+    <string name="voice_error_audio">Captura audio a eșuat. Verifică permisiunea microfonului și că nicio altă aplicație nu folosește microfonul.</string>
+    <string name="voice_error_language">Limba selectată nu e suportată de acest motor. Alege altă limbă.</string>
+    <string name="voice_error_unknown">Recunoașterea vocală a eșuat: %1$s</string>
+    <string name="thinking_rules_cache_not_ready">Regulile personalizate nu sunt încă active (%1$s). Cererile folosesc acum valorile implicite integrate; următorul mesaj după încărcarea cache-ului va aplica regulile tale.</string>
+    <string name="skill_display_name_skill_creator">Skill Creator</string>
+    <string name="skill_display_name_android_sdk_mirrors">Android SDK Mirrors</string>
+    <string name="provider_detail_force_thinking">Forțează raționamentul extins</string>
+    <string name="provider_detail_force_thinking_footer">Doar pentru relee compatibile Anthropic. Trimite thinking:{type:"enabled",budget_tokens:N} chiar și când catalogul spune că modelul nu poate raționa. Folosește-l când modelul suportă raționament, dar intrarea din catalog lipsește sau e greșită.</string>
     <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
     <string name="provider_list_export_providers">Exportare furnizori</string>
     <string name="provider_transfer_export_title">Exportare furnizori</string>
@@ -2197,4 +2209,58 @@
     <string name="handsfree_state_speaking">Vorbește…</string>
     <string name="handsfree_exit_recognition">Mâini libere oprit: recunoașterea vocală a eșuat repetat. Atinge Mâini libere pentru a reîncerca.</string>
     <string name="handsfree_exit_tts">Mâini libere oprit: răspunsurile nu au putut fi citite cu voce tare. Atinge Mâini libere pentru a reîncerca.</string>
+
+    <!-- [T-untranslated] English fallback for keys added by PR #325; pending translation -->
+    <string name="a11y_app_policy_apps">Apps</string>
+    <string name="a11y_app_policy_apps_count">%1$d listed</string>
+    <string name="a11y_app_policy_apps_hint">Un nume de pachet Android pe linie, ex. com.tencent.mm</string>
+    <string name="a11y_app_policy_blocklist">Folosește lista ca listă de blocare</string>
+    <string name="a11y_app_policy_blocklist_sub">Off = doar aplicațiile listate sunt permise. On = aplicațiile listate sunt blocate.</string>
+    <string name="a11y_app_policy_enabled">Restricționează per aplicație</string>
+    <string name="a11y_app_policy_enabled_sub">Verifică pachetul aplicației din prim-plan înainte de fiecare citire de ecran sau atingere</string>
+    <string name="a11y_app_policy_footer">Când e activat, ui_read și ui_action sunt verificate împotriva aplicației curente din prim-plan înainte de rulare. Aplicațiile în afara listei (mod allow) sau din listă (mod blocare) sunt refuzate cu un mesaj vizibil. Aplicația Minis în sine e mereu permisă.</string>
+    <string name="a11y_app_policy_section">Domeniul aplicațiilor de accesibilitate</string>
+    <string name="boot_hook_enable">Rulează /var/minis/boot.sh la pornire</string>
+    <string name="boot_hook_enable_sub">Se execută în sandbox după boot-ul rootfs-ului Linux</string>
+    <string name="boot_hook_footer">Implicit oprit. Această cale e în interiorul sandbox-ului inscriptibil, deci orice agent capabil de shell poate înlocui scriptul — activat, un astfel de fișier rulează silențios la fiecare lansare. Întrerupătorul e verificat din nou chiar înainte de execuție, iar prima detecție a scriptului plus schimbările de dimensiune/mtime sunt scrise în jurnalul aplicației. Intră în vigoare la următoarea lansare.</string>
+    <string name="boot_hook_last_status">Ultima rulare</string>
+    <string name="boot_hook_section">Cârlig de boot</string>
+    <string name="lifecycle_hooks_command_hint">O singură linie de comandă. De obicei cea mai bună e calea unui script, ex. bash /var/minis/hooks/on-response.sh. Lasă gol pentru a elimina cârligul.</string>
+    <string name="lifecycle_hooks_enable">Activează cârligele de ciclu de viață</string>
+    <string name="lifecycle_hooks_enable_sub">Execută scripturile de mai jos la evenimentele lor</string>
+    <string name="lifecycle_hooks_events_footer">Scripturile rulează în sandbox, serializate pe propriul fir, cu timeout de 20 de secunde. Eșecurile sunt doar logate și nu blochează niciodată chat-ul.</string>
+    <string name="lifecycle_hooks_help_body">Fiecare script primește MINIS_HOOK_EVENT, MINIS_HOOK_SESSION_ID și MINIS_HOOK_DETAIL. Scripturile sunt procese PRoot de unică folosință: /proc al altor comenzi nu e vizibil între invocări și flock nu e fiabil — folosește fișiere pentru starea între rulări. OnResponse se declanșează o dată per răspuns finalizat al agentului; OnSessionEnd la ștergerea chat-ului.</string>
+    <string name="lifecycle_hooks_help_header">Mediu și avertismente</string>
+    <string name="lifecycle_hooks_master_footer">Implicit oprit. Cât timp e oprit, scripturile configurate sunt păstrate, dar nu se execută niciodată.</string>
+    <string name="lifecycle_hooks_not_set">Nesetat</string>
+    <string name="lifecycle_hooks_section_events">Evenimente</string>
+    <string name="lifecycle_hooks_section_master">Întrerupător principal</string>
+    <string name="lifecycle_hooks_title">Cârlige de ciclu de viață</string>
+    <string name="network_trusted_ca_count">%1$d certificat(e) importat(e)</string>
+    <string name="network_trusted_ca_duplicate">Acel certificat este deja importat.</string>
+    <string name="network_trusted_ca_failed">Nu s-a putut citi fișierul ca certificat PEM/X.509.</string>
+    <string name="network_trusted_ca_footer">Pentru un furnizor al cărui endpoint HTTPS folosește o CA auto-semnată sau privată. Certificatul este stocat doar în interiorul Minis și adăugat la ancorele de încredere Android pentru această aplicație; verificările normale de certificat și hostname rămân active. Intră în vigoare la următoarea cerere către furnizor — fără repornire.</string>
+    <string name="network_trusted_ca_import">Importă certificat PEM</string>
+    <string name="network_trusted_ca_imported">S-au importat %1$d certificat(e). Reîncearcă cererea.</string>
+    <string name="network_trusted_ca_none">Niciun certificat importat</string>
+    <string name="network_trusted_ca_remove_all">Elimină toate</string>
+    <string name="network_trusted_ca_removed">Certificatetele importate au fost eliminate.</string>
+    <string name="network_trusted_ca_title">Certificate de încredere</string>
+    <string name="provider_detail_custom_headers">Antete de cerere personalizate</string>
+    <string name="provider_detail_custom_headers_footer">Un „Nume: valoare” pe linie. Se aplică doar cererilor de chat, /models și Responses ale acestui furnizor. Host, Content-Length și Connection sunt gestionate de clientul HTTP și nu pot fi suprascrise.</string>
+    <string name="provider_detail_custom_headers_placeholder">X-Custom-Header: value</string>
+    <string name="provider_detail_opencode_session_footer">Implicit oprit. Când e pornit, fiecare cerere de chat către acest endpoint personalizat poartă un ID stabil per conversație (x-opencode-session), ca releele compatibile OpenCode să-l poată ruta și cache-ui. Activează-l doar pentru un gateway de încredere: ID-ul identifică conversația între ture.</string>
+    <string name="provider_detail_opencode_session_header">Antet de sesiune OpenCode</string>
+    <string name="provider_detail_opencode_session_toggle">Trimite x-opencode-session</string>
+    <string name="provider_detail_save_headers">Salvează antetele</string>
+    <string name="scheduled_task_prompt_template_hint">Data/ora curentă și ultima rulare se adaugă automat. Poți folosi și {{date}}, {{time}}, {{datetime}}, {{weekday}}, {{last_fired}}, {{last_fired_ago}} și {{task_label}}.</string>
+    <string name="settings_lifecycle_hooks">Cârlige de ciclu de viață</string>
+    <string name="settings_lifecycle_hooks_subtitle">Rulează scripturi sandbox la începutul sesiunii / după răspunsuri / la finalul sesiunii</string>
+    <string name="web_search_tool_enabled">Activează web_search</string>
+    <string name="web_search_tool_enabled_sub">Permite agentului să caute pe web din chat. Off → instrumentul nu mai e oferit deloc.</string>
+    <string name="web_search_tool_section">Tool</string>
+    <string name="web_search_tool_section_footer">Oprirea instrumentului nu șterge configurația motorului de mai jos; reactiveaz-o pentru a restaura același comportament.</string>
+    <string name="tool_label_short_app_name">Minis Ultra</string>
+    <string name="attachment_no_app_toast">Nicio aplicație disponibilă pentru a deschide acest atașament.</string>
+    <string name="chat_move_to_capsule">Mută în…</string>
 </resources>

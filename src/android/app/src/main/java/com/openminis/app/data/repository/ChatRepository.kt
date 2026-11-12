@@ -63,6 +63,14 @@ class ChatRepository(
             permissionMode = permissionMode,
         )
         dao.insertSession(session)
+        // [GH#131] Lifecycle hook: a session row now exists. Fired for every
+        // creation path (user draft promotion, scheduled task, automation) so
+        // consumers see one event per real conversation. Non-blocking.
+        com.openminis.app.agent.lifecycle.LifecycleHooks.fire(
+            com.openminis.app.agent.lifecycle.LifecycleHooks.LifecycleEvent.SESSION_START,
+            session.id,
+            title.orEmpty(),
+        )
         return session
     }
 
@@ -462,6 +470,13 @@ class ChatRepository(
             runCatching { ExecutionCoordinator.sessionDidTerminate(id) }
             SessionWorkspace.deleteEntire(dir, id)
         }
+        // [GH#131] Lifecycle hook: the conversation is gone. Fired after the DB
+        // commit + file cleanup so a hook can rely on neither existing.
+        com.openminis.app.agent.lifecycle.LifecycleHooks.fire(
+            com.openminis.app.agent.lifecycle.LifecycleHooks.LifecycleEvent.SESSION_END,
+            id,
+            "deleted",
+        )
     }
 
     // Session groups ("folders") live in ChatRepositoryFolders.kt as

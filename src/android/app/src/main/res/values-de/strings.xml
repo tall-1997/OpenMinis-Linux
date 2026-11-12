@@ -118,13 +118,13 @@
     <string name="settings_mcp">MCP-Integrationen</string>
     <string name="settings_mcp_subtitle">Model-Context-Protocol-Server verbinden</string>
     <!-- Dev Suite bundle names/summaries -->
-    <string name="dev_suite_android_name">Android &amp; Mobile Full Stack</string>
+    <string name="dev_suite_android_name">Android- &amp; Mobile-Full-Stack</string>
     <string name="dev_suite_android_summary">JDK17 · aarch64 SDK-Toolchain · NDK r29 · Optional Flutter/RE/Rust</string>
     <string name="dev_suite_code_search_name">Code-Suche &amp; Terminal-Effizienz</string>
     <string name="dev_suite_code_search_summary">rg / fd / fzf / bat Quartett</string>
     <string name="dev_suite_python_name">Python &amp; AI-Entwickler-Suite</string>
     <string name="dev_suite_python_summary">Python 3-Laufzeit · pip/venv · AI wissenschaftliche Berechnungs-Build-Abhängigkeiten</string>
-    <string name="dev_suite_nodejs_name">Node.js &amp; Web Full Stack</string>
+    <string name="dev_suite_nodejs_name">Node.js- &amp; Web-Full-Stack</string>
     <string name="dev_suite_nodejs_summary">Node.js-Laufzeit · npm · pnpm/yarn</string>
     <string name="dev_suite_go_name">Go-Entwicklungssuite</string>
     <string name="dev_suite_go_summary">golang-go Toolchain (exklusiv für OpenMinis)</string>
@@ -181,8 +181,8 @@
     <string name="zen_deleted_models_title">Gelöschte Gratismodelle wiederherstellen (%1$d)</string>
     <string name="zen_deleted_models_subtitle">Löschungen für diesen Anbieter rückgängig machen</string>
     <string name="provider_sync_mark_not_found">404 not found</string>
-    <string name="provider_sync_mark_connection">Connection failed</string>
-    <string name="provider_sync_mark_invalid">Invalid response</string>
+    <string name="provider_sync_mark_connection">Verbindung fehlgeschlagen</string>
+    <string name="provider_sync_mark_invalid">Ungültige Antwort</string>
     <string name="add_provider_voice_templates_footer">Anbieter für Sprache-zu-Text und Text-zu-Sprache. Anbietertyp und Basis-URL sind bereits ausgefüllt — ergänzen Sie nur Ihren API Key.</string>
     <string name="add_provider_voice_capability_tts">Sprachsynthese (TTS)</string>
     <string name="add_provider_voice_capability_asr">Spracherkennung (ASR)</string>
@@ -257,8 +257,8 @@
     <string name="soul_icon_choose_image">Bild wählen</string>
     <string name="soul_icon_image_hint">Wird quadratisch zugeschnitten und abgerundet</string>
     <string name="soul_icon_use_default">Standard verwenden</string>
-    <string name="soul_icon_use_model">Use Model Icon</string>
-    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
+    <string name="soul_icon_use_model">Modell-Icon verwenden</string>
+    <string name="soul_icon_use_model_hint">Folgt dem Anbieter-Icon des laufenden Modells</string>
     <string name="soul_icon_emoji_title">Identitätssymbol</string>
     <string name="soul_icon_emoji_field">Oder ein Emoji eingeben</string>
     <string name="soul_icon_set">Festlegen</string>
@@ -500,8 +500,8 @@
     <string name="browser_engine_stale_action">Kernel aktualisieren</string>
     <string name="browser_settings_engine_shared">browser_use und der In-App-Browser teilen sich diesen Kernel.</string>
     <string name="browser_settings_user_agent">User Agent</string>
-    <string name="browser_settings_ua_mobile_chrome">Mobile Chrome (Android)</string>
-    <string name="browser_settings_ua_desktop_chrome">Desktop Chrome (Linux)</string>
+    <string name="browser_settings_ua_mobile_chrome">Mobiles Chrome (Android)</string>
+    <string name="browser_settings_ua_desktop_chrome">Desktop-Chrome (Linux)</string>
     <string name="browser_settings_ua_custom">Benutzerdefiniert</string>
     <string name="browser_settings_custom_ua_label">Benutzerdefinierte User-Agent-Zeichenfolge</string>
     <string name="browser_settings_apply">Anwenden</string>
@@ -908,7 +908,7 @@
     <string name="provider_list_add_provider">KI-Anbieter hinzufügen</string>
     <string name="provider_list_no_providers_configured">Keine KI-Anbieter konfiguriert</string>
     <string name="provider_list_add_a_provider_to_get_started">Fügen Sie einen KI-Anbieter hinzu, um zu beginnen.</string>
-    <string name="provider_list_import_provider">Import Provider</string>
+    <string name="provider_list_import_provider">Anbieter importieren</string>
     <string name="share_provider_json_title">Provider-Konfiguration erkannt</string>
     <string name="share_expired_toast">Geteilter Inhalt ist abgelaufen. Bitte erneut teilen.</string>
     <string name="share_provider_json_message">Diese JSON-Datei sieht wie ein exportierter Provider aus. Was möchtest du tun?</string>
@@ -949,7 +949,7 @@
     <string name="provider_detail_refresh_models">Modelle aktualisieren</string>
     <string name="provider_detail_add_custom_model">Benutzerdefiniertes Modell hinzufügen</string>
     <string name="provider_detail_delete_provider">KI-Anbieter löschen</string>
-    <string name="provider_detail_delete_model">Delete Model</string>
+    <string name="provider_detail_delete_model">Modell löschen</string>
     <string name="provider_detail_hide_model">Modell ausblenden</string>
     <string name="provider_detail_show_model">Modell anzeigen</string>
     <string name="provider_detail_sign_out">Abmelden</string>
@@ -983,7 +983,7 @@
     <string name="add_provider_signing_in">Anmeldung läuft…</string>
     <string name="add_provider_oauth_network_unreachable">Der Anmeldeserver war nicht erreichbar. Prüfen Sie Ihre Netzwerk- oder Proxy-Einstellungen und versuchen Sie es erneut.</string>
     <string name="add_provider_or_configure_manually">Oder manuell konfigurieren</string>
-    <string name="add_provider_for_third_party_coding_plans_e_g_minimax">For third-party Coding Plans (e.g. MiniMax, Kimi) or compatible proxy endpoints, enter the API base URL and bearer token manually.</string>
+    <string name="add_provider_for_third_party_coding_plans_e_g_minimax">Für Coding Plans von Drittanbietern (z. B. MiniMax, Kimi) oder kompatible Proxy-Endpunkte trage API-Basis-URL und Bearer-Token manuell ein.</string>
     <string name="add_provider_bearer_token">Bearer Token</string>
     <string name="add_custom_model_model_id">Modell-ID</string>
     <string name="add_custom_model_display_name_optional">Anzeigename (optional)</string>
@@ -1761,7 +1761,7 @@
     <string name="dev_suite_installing">Installation…</string>
     <string name="dev_suite_failed">fehlgeschlagen</string>
     <string name="dev_suite_view_details">Details</string>
-    <string name="dev_suite_failure_details">Installation failure details</string>
+    <string name="dev_suite_failure_details">Details zum Installationsfehler</string>
     <string name="dev_suite_ready">Bereit</string>
     <string name="dev_suite_not_installed">Nicht installiert</string>
     <string name="dev_suite_required">erforderlich</string>
@@ -2127,6 +2127,18 @@
     <!-- Queued-message edit sheet + git diff truncation notice -->
     <string name="chat_queued_edit_title">Nachricht in der Warteschlange bearbeiten</string>
     <string name="git_panel_diff_truncated">Diff bei 200.000 Zeichen gekürzt — der vollständige Text steht in der Datei im Repository.</string>
+    <string name="voice_service_no_audio_models">Für diesen Anbieter sind keine Audio-Modelle gelistet. Modelllisten mancher Anbieter (Bailian, SiliconFlow) deklarieren keine Audio-Unterstützung — füge das ASR/TTS-Modell als benutzerdefiniertes Modell mit Audio-Modalität hinzu oder wähle einen anderen Sprachdienst.</string>
+    <string name="voice_error_network">Spracherkennung fehlgeschlagen: Netzwerkfehler. Verbindung prüfen oder auf die On-Device-Engine bzw. einen anderen Anbieter wechseln.</string>
+    <string name="voice_error_transcription">Die Spracherkennung hat keinen Text geliefert. Erneut sprechen oder Modell und API-Schlüssel des Transkriptions-Anbieters prüfen.</string>
+    <string name="voice_error_busy">Die Spracherkennung ist beschäftigt. Kurz warten und erneut versuchen.</string>
+    <string name="voice_error_audio">Audioaufnahme fehlgeschlagen. Mikrofon-Berechtigung prüfen und sicherstellen, dass kein anderes App das Mikrofon belegt.</string>
+    <string name="voice_error_language">Die gewählte Sprache wird von dieser Engine nicht unterstützt. Andere Sprache wählen.</string>
+    <string name="voice_error_unknown">Spracherkennung fehlgeschlagen: %1$s</string>
+    <string name="thinking_rules_cache_not_ready">Eigene Regeln sind noch nicht aktiv (%1$s). Anfragen nutzen derzeit die eingebauten Standards; nach dem Laden des Caches gilt ab der nächsten Nachricht deine Regel.</string>
+    <string name="skill_display_name_skill_creator">Skill Creator</string>
+    <string name="skill_display_name_android_sdk_mirrors">Android SDK Mirrors</string>
+    <string name="provider_detail_force_thinking">Erweitertes Denken erzwingen</string>
+    <string name="provider_detail_force_thinking_footer">Nur für Anthropic-kompatible Relays. Sendet thinking:{type:"enabled",budget_tokens:N} selbst wenn der Modellkatalog sagt, dass das Modell nicht denken kann. Verwende dies, wenn das Modell Denken unterstützt, der Katalogeintrag aber fehlt oder falsch ist.</string>
     <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
     <string name="provider_list_export_providers">Anbieter exportieren</string>
     <string name="provider_transfer_export_title">Anbieter exportieren</string>
@@ -2182,4 +2194,55 @@
     <string name="handsfree_state_speaking">Spricht…</string>
     <string name="handsfree_exit_recognition">Freisprechen beendet: Die Spracherkennung ist wiederholt fehlgeschlagen. Tippe auf Freisprechen, um es erneut zu versuchen.</string>
     <string name="handsfree_exit_tts">Freisprechen beendet: Antworten konnten nicht vorgelesen werden. Tippe auf Freisprechen, um es erneut zu versuchen.</string>
+
+    <!-- [T-untranslated] English fallback for keys added by PR #325; pending translation -->
+    <string name="a11y_app_policy_apps">Apps</string>
+    <string name="a11y_app_policy_apps_count">%1$d listed</string>
+    <string name="a11y_app_policy_apps_hint">Ein Android-Paketname pro Zeile, z. B. com.tencent.mm</string>
+    <string name="a11y_app_policy_blocklist">Liste als Sperrliste verwenden</string>
+    <string name="a11y_app_policy_blocklist_sub">Aus = nur gelistete Apps erlaubt. Ein = gelistete Apps blockiert.</string>
+    <string name="a11y_app_policy_enabled">Pro App einschränken</string>
+    <string name="a11y_app_policy_enabled_sub">Prüft vor jedem Bildschirm-Auslesen oder Tippen das Paket der Vordergrund-App</string>
+    <string name="a11y_app_policy_footer">Wenn aktiviert, werden ui_read und ui_action vor der Ausführung gegen die aktuelle Vordergrund-App geprüft. Apps außerhalb der Liste (Allow-Modus) oder in der Liste (Block-Modus) werden mit sichtbarer Meldung abgelehnt. Die Minis-App selbst ist immer erlaubt.</string>
+    <string name="a11y_app_policy_section">App-Zugriff der Bedienungshilfen</string>
+    <string name="boot_hook_enable">/var/minis/boot.sh beim Start ausführen</string>
+    <string name="boot_hook_enable_sub">Wird in der Sandbox ausgeführt, nachdem das Linux-Rootfs gebootet hat</string>
+    <string name="boot_hook_footer">Standardmäßig aus. Dieser Pfad liegt innerhalb der beschreibbaren Sandbox, daher kann jedes Shell-fähige Agent das Skript ersetzen — aktiviert läuft eine solche Datei bei jedem Start stillschweigend aus. Der Schalter wird unmittelbar vor der Ausführung erneut geprüft, und Erstfund-Zeitpunkt sowie Größe-/mtime-Änderungen des Skripts werden ins App-Log geschrieben. Wirkt beim nächsten Start.</string>
+    <string name="boot_hook_last_status">Letzte Ausführung</string>
+    <string name="boot_hook_section">Boot-Hook</string>
+    <string name="lifecycle_hooks_command_hint">Eine Befehlszeile. Meist ist ein Skriptpfad am besten, z. B. bash /var/minis/hooks/on-response.sh. Leer lassen, um den Hook zu entfernen.</string>
+    <string name="lifecycle_hooks_enable">Lifecycle-Hooks aktivieren</string>
+    <string name="lifecycle_hooks_enable_sub">Führt die unten stehenden Skripte bei ihren Ereignissen aus</string>
+    <string name="lifecycle_hooks_events_footer">Skripte laufen in der Sandbox, serialisiert auf einer eigenen Lane, mit 20 Sekunden Timeout. Fehler werden protokolliert und blockieren nie den Chat.</string>
+    <string name="lifecycle_hooks_help_body">Jedes Skript erhält MINIS_HOOK_EVENT, MINIS_HOOK_SESSION_ID und MINIS_HOOK_DETAIL. Skripte sind einmalige PRoot-Prozesse: /proc anderer Befehle ist über Aufrufe hinweg nicht sichtbar und flock ist unzuverlässig — verwende Dateien für Zustand über mehrere Läufe. OnResponse feuert einmal pro abgeschlossener Agent-Antwort; OnSessionEnd beim Löschen des Chats.</string>
+    <string name="lifecycle_hooks_help_header">Umgebung &amp; Einschränkungen</string>
+    <string name="lifecycle_hooks_master_footer">Standardmäßig aus. Solange aus, bleiben konfigurierte Skripte erhalten, werden aber nie ausgeführt.</string>
+    <string name="lifecycle_hooks_not_set">Nicht gesetzt</string>
+    <string name="lifecycle_hooks_section_events">Ereignisse</string>
+    <string name="lifecycle_hooks_section_master">Hauptschalter</string>
+    <string name="lifecycle_hooks_title">Lifecycle-Hooks</string>
+    <string name="network_trusted_ca_count">%1$d Zertifikat(e) importiert</string>
+    <string name="network_trusted_ca_duplicate">Dieses Zertifikat ist bereits importiert.</string>
+    <string name="network_trusted_ca_failed">Die Datei konnte nicht als PEM/X.509-Zertifikat gelesen werden.</string>
+    <string name="network_trusted_ca_footer">Für Anbieter, deren HTTPS-Endpunkt eine selbstsignierte oder private CA verwendet. Das Zertifikat wird nur innerhalb von Minis gespeichert und für diese App zu den Trust-Ankern von Android hinzugefügt; normale Zertifikats- und Hostname-Prüfungen bleiben aktiv. Es wirkt ab der nächsten Anbieter-Anfrage — kein Neustart nötig.</string>
+    <string name="network_trusted_ca_import">PEM-Zertifikat importieren</string>
+    <string name="network_trusted_ca_imported">%1$d Zertifikat(e) importiert. Anfrage erneut versuchen.</string>
+    <string name="network_trusted_ca_none">Keine Zertifikate importiert</string>
+    <string name="network_trusted_ca_remove_all">Alle entfernen</string>
+    <string name="network_trusted_ca_removed">Importierte Zertifikate entfernt.</string>
+    <string name="network_trusted_ca_title">Vertraute Zertifikate</string>
+    <string name="provider_detail_custom_headers">Eigene Anfrage-Header</string>
+    <string name="provider_detail_custom_headers_footer">Ein „Name: Wert“ pro Zeile. Gilt nur für Chat-, /models- und Responses-Anfragen dieses Anbieters. Host, Content-Length und Connection verwaltet der HTTP-Client, sie lassen sich nicht überschreiben.</string>
+    <string name="provider_detail_custom_headers_placeholder">X-Custom-Header: value</string>
+    <string name="provider_detail_opencode_session_footer">Standardmäßig aus. Wenn an, trägt jede Chat-Anfrage an diesen benutzerdefinierten Endpunkt eine stabile konversationsbezogene ID (x-opencode-session), damit OpenCode-kompatible Relays sie routen und cachen können. Nur für Gateways aktivieren, denen du vertraust: Die ID identifiziert die Konversation über mehrere Runden hinweg.</string>
+    <string name="provider_detail_opencode_session_header">OpenCode-Sitzungs-Header</string>
+    <string name="provider_detail_opencode_session_toggle">x-opencode-session senden</string>
+    <string name="provider_detail_save_headers">Header speichern</string>
+    <string name="scheduled_task_prompt_template_hint">Aktuelles Datum/Uhrzeit und der letzte Lauf werden automatisch angehängt. Du kannst auch {{date}}, {{time}}, {{datetime}}, {{weekday}}, {{last_fired}}, {{last_fired_ago}} und {{task_label}} verwenden.</string>
+    <string name="settings_lifecycle_hooks">Lifecycle-Hooks</string>
+    <string name="settings_lifecycle_hooks_subtitle">Führt beim Sitzungsstart / nach Antworten / beim Sitzungsende Sandbox-Skripte aus</string>
+    <string name="web_search_tool_enabled">web_search aktivieren</string>
+    <string name="web_search_tool_enabled_sub">Erlaubt dem Agent, im Chat im Web zu suchen. Aus → das Tool wird gar nicht angeboten.</string>
+    <string name="web_search_tool_section">Tool</string>
+    <string name="web_search_tool_section_footer">Das Ausschalten des Tools löscht nicht die Engine-Konfiguration unten; wieder einschalten, um dasselbe Verhalten wiederherzustellen.</string>
 </resources>

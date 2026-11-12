@@ -61,7 +61,19 @@ internal object McpEndpointFile {
             val tmp = File(dir, "$NAME.tmp")
             tmp.writeText(body)
             restrictToOwner(tmp)
-            if (!tmp.renameTo(target)) {
+            // [跨平台] File.renameTo 在 Windows 上不能覆盖已存在的目标（Linux/Android
+            // 可以）——重写已有 endpoint.json 时会静默失败。renameTo 作为快路径，失败
+            // 时回退到 Files.move(REPLACE_EXISTING)。目标目录占位时必须失败（不是覆盖），
+            // 否则 REPLACE_EXISTING 会把空目录换成文件，破坏"目录占位报告失败"契约。
+            val renamed = tmp.renameTo(target) || runCatching {
+                if (target.isDirectory) throw java.io.IOException("target is a directory: $target")
+                java.nio.file.Files.move(
+                    tmp.toPath(),
+                    target.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                )
+            }.isSuccess
+            if (!renamed) {
                 tmp.delete()
                 return false
             }

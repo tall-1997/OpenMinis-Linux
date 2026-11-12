@@ -100,4 +100,36 @@ class SystemPromptDynamicTailTest {
             tail,
         )
     }
+
+    /**
+     * [GH#357] The daily-memory window must live in this dynamic tail, after
+     * recall and before the task anchor. It used to be concatenated into the
+     * byte-stable head, so every `memory_write` (which touches today's daily
+     * log) invalidated the whole cached prompt prefix.
+     */
+    @Test
+    fun dailyMemoryWindowSitsInTheDynamicTailAfterRecall() {
+        val tail =
+            assembleDynamicTail(
+                worldBookFragment = "",
+                learnedPrefsFragment = "LEARNED",
+                recalledMemoryFragment = "RECALL",
+                dailyMemoryFragment = "DAILY-WINDOW",
+                runtimeContext = renderRuntimeContext("d", "t", "l", 1),
+                personalityReminder = null,
+                taskAnchor = "ANCHOR",
+            )
+        val learned = tail.indexOf("LEARNED")
+        val recall = tail.indexOf("RECALL")
+        val daily = tail.indexOf("DAILY-WINDOW")
+        val anchor = tail.indexOf("ANCHOR")
+        assertTrue("daily window present", daily >= 0)
+        assertTrue("learned < recall", learned < recall)
+        assertTrue("recall < daily", recall < daily)
+        assertTrue("daily < anchor", daily < anchor)
+        // No daily content → no stray separator (older callers unchanged).
+        val withoutDaily =
+            assembleDynamicTail("", "LEARNED", "RECALL", renderRuntimeContext("d", "t", "l", 1), null)
+        assertFalse(withoutDaily.contains("\n\n\n"))
+    }
 }

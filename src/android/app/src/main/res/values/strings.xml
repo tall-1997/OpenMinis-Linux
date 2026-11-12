@@ -362,6 +362,13 @@
     <string name="voice_service_text_to_speech">Text to Speech</string>
     <string name="voice_service_show_in_voice_services">Show in Voice Services</string>
     <string name="voice_service_shared_credential_note">This voice service shares the API key and endpoint of its provider. To change them, edit that provider.</string>
+    <string name="voice_service_no_audio_models">No audio models are listed for this provider. Model lists from some providers (Bailian, SiliconFlow) do not declare audio support — add the ASR/TTS model as a custom model with the audio modality, or choose another voice service.</string>
+    <string name="voice_error_network">Voice recognition failed: network error. Check your connection, or switch to the on-device engine or another provider.</string>
+    <string name="voice_error_transcription">Voice recognition returned no text. Speak again, or check the transcription provider\'s model and API key.</string>
+    <string name="voice_error_busy">The speech recognizer is busy. Wait a moment and try again.</string>
+    <string name="voice_error_audio">Audio capture failed. Check the microphone permission and make sure no other app is using the mic.</string>
+    <string name="voice_error_language">The selected language is not supported by this engine. Pick another language.</string>
+    <string name="voice_error_unknown">Voice recognition failed: %1$s</string>
     <string name="voice_service_hidden_badge">Hidden</string>
     <string name="add_provider_voice_chat_providers">Voice Chat Providers</string>
     <string name="zen_restore_section">Recovery</string>
@@ -846,6 +853,7 @@
     <!-- [T-android-thinking-rules-phase2] Provider-detail Thinking Rules section -->
     <string name="thinking_rules_section">Thinking Rules</string>
     <string name="thinking_rules_footer">Rules are evaluated top to bottom. The first rule matching the model decides which thinking parameters are sent. Default rules are built in and cannot be deleted — add a rule above them to override one.</string>
+    <string name="thinking_rules_cache_not_ready">Custom rules are not active yet (%1$s). Requests currently use the built-in defaults; the next message after the cache loads will apply your rules.</string>
     <string name="thinking_rules_official_protocol_notice">This provider uses an official protocol, so its thinking parameters are maintained by Minis Ultra. Custom rules apply to OpenAI-compatible providers on the Chat Completions API.</string>
     <string name="thinking_rules_default_rules_count">Default rules (%1$d)</string>
     <string name="thinking_rules_add_rule">Add Rule</string>
@@ -1146,6 +1154,8 @@
     <string name="skill_title">Skills</string>
     <string name="skill_add">Add Skill</string>
     <string name="skill_section_installed">Installed</string>
+    <string name="skill_display_name_skill_creator">Skill Creator</string>
+    <string name="skill_display_name_android_sdk_mirrors">Android SDK Mirrors</string>
     <string name="skill_section_footer">Skills extend the Minis Ultra Agent with specialized instructions and workflows. They are loaded into the system prompt when enabled.</string>
     <string name="skill_empty_title">No Skills Installed</string>
     <string name="skill_empty_action">Tap + to import a SKILL.md, .zip, or .skill file, or browse Minis Ultra Skills.</string>
@@ -1332,6 +1342,14 @@
     <string name="provider_detail_auto_append_v1">Auto-append /v1</string>
     <string name="provider_detail_custom_user_agent">Custom User-Agent</string>
     <string name="provider_detail_custom_user_agent_placeholder">Leave blank for default</string>
+    <!-- [GH#221] per-provider custom request headers (KV, one per line). -->
+    <string name="provider_detail_custom_headers">Custom request headers</string>
+    <string name="provider_detail_custom_headers_footer">One “Name: value” per line. Applied to chat, /models and Responses requests for this provider only. Host, Content-Length and Connection are managed by the HTTP client and cannot be overridden.</string>
+    <string name="provider_detail_custom_headers_placeholder">X-Custom-Header: value</string>
+    <string name="provider_detail_save_headers">Save Headers</string>
+    <string name="provider_detail_opencode_session_header">OpenCode session header</string>
+    <string name="provider_detail_opencode_session_toggle">Send x-opencode-session</string>
+    <string name="provider_detail_opencode_session_footer">Off by default. When on, every chat request to this custom endpoint carries a stable per-conversation ID (x-opencode-session) so OpenCode-compatible relays can route and cache it. Only enable it for a gateway you trust: the ID identifies the conversation across turns.</string>
     <string name="provider_detail_save_url_settings">Save URL Settings</string>
     <string name="provider_detail_api_format">API Format</string>
     <string name="provider_detail_api_format_footer_chat">Standard /v1/chat/completions format. Compatible with most OpenAI-compatible services.</string>
@@ -1340,6 +1358,8 @@
     <string name="provider_detail_responses_api">Responses API</string>
     <string name="provider_detail_azure_openai">Azure OpenAI</string>
     <string name="provider_detail_azure_openai_footer">Use Azure OpenAI authentication (api-key header). Paste your full Azure endpoint into Custom API Base above, including the ?api-version=… query. Works with both API formats.</string>
+    <string name="provider_detail_force_thinking">Force extended thinking</string>
+    <string name="provider_detail_force_thinking_footer">For Anthropic-compatible relays only. Sends thinking:{type:"enabled",budget_tokens:N} even when the model catalog says the model cannot reason. Use when the model supports thinking but the catalog entry is missing or wrong.</string>
     <string name="provider_detail_status">Status</string>
     <string name="provider_detail_enabled">Enabled</string>
     <string name="provider_detail_refresh_models">Refresh Models</string>
@@ -1802,7 +1822,7 @@
     <string name="backup_history_remove_title">Delete this backup record?</string>
     <string name="backup_history_remove_record_only">Delete Record Only</string>
     <string name="backup_history_remove_with_files">Delete Record and Files</string>
-    <string name="backup_history_remove_choice_note">“Delete Record Only” removes this entry and leaves the backup files on your destinations. “Delete Record and Files” also deletes the package from each destination — that cannot be undone.</string>
+    <string name="backup_history_remove_choice_note">“Delete Record Only” removes this entry and leaves the backup files where they are. “Delete Record and Files” also deletes the package from each destination and from this device — that cannot be undone.</string>
     <string name="backup_status_succeeded">Completed</string>
     <string name="backup_status_issues">Completed with issues</string>
     <string name="backup_status_failed">Failed</string>
@@ -2088,6 +2108,36 @@
 
     <!-- T323: System Permissions screen + AccessibilityService -->
     <string name="system_permissions_a11y_oem_header">Service keeps getting killed?</string>
+    <!-- [GH#114] per-app accessibility allow / block list. -->
+    <string name="a11y_app_policy_section">Accessibility app access</string>
+    <string name="a11y_app_policy_footer">When enabled, ui_read and ui_action are checked against the current foreground app before they run. Apps outside the list (allow mode) or inside it (block mode) are refused with a visible message. The Minis app itself is always allowed.</string>
+    <string name="a11y_app_policy_enabled">Restrict by app</string>
+    <string name="a11y_app_policy_enabled_sub">Check the foreground package before every screen read or tap</string>
+    <string name="a11y_app_policy_blocklist">List is a blocklist</string>
+    <string name="a11y_app_policy_blocklist_sub">Off = only listed apps are allowed. On = listed apps are blocked.</string>
+    <string name="a11y_app_policy_apps">Apps</string>
+    <string name="a11y_app_policy_apps_count">%1$d listed</string>
+    <string name="a11y_app_policy_apps_hint">One Android package name per line, e.g. com.tencent.mm</string>
+    <!-- [GH#131] lifecycle hooks (session events → sandbox scripts). -->
+    <string name="lifecycle_hooks_title">Lifecycle Hooks</string>
+    <string name="settings_lifecycle_hooks">Lifecycle Hooks</string>
+    <string name="settings_lifecycle_hooks_subtitle">Run sandbox scripts on session start / response / end</string>
+    <string name="lifecycle_hooks_section_master">Master switch</string>
+    <string name="lifecycle_hooks_master_footer">Off by default. While off, configured scripts are kept but never executed.</string>
+    <string name="lifecycle_hooks_enable">Enable lifecycle hooks</string>
+    <string name="lifecycle_hooks_enable_sub">Execute the scripts below on their events</string>
+    <string name="lifecycle_hooks_section_events">Events</string>
+    <string name="lifecycle_hooks_events_footer">Scripts run in the sandbox, serialized on their own lane, with a 20-second timeout. Failures are logged and never block the chat.</string>
+    <string name="lifecycle_hooks_not_set">Not set</string>
+    <string name="lifecycle_hooks_command_hint">One command line. A script path is usually best, e.g. bash /var/minis/hooks/on-response.sh. Leave empty to remove the hook.</string>
+    <string name="lifecycle_hooks_help_header">Environment &amp; caveats</string>
+    <string name="lifecycle_hooks_help_body">Each script receives MINIS_HOOK_EVENT, MINIS_HOOK_SESSION_ID and MINIS_HOOK_DETAIL. Scripts are one-shot PRoot processes: /proc of other commands is not visible across invocations and flock is unreliable, so use files for cross-run state. OnResponse fires once per completed agent reply; OnSessionEnd fires when the chat is deleted.</string>
+    <!-- [GH#511] sandbox boot hook master switch (agent-writable /var/minis/boot.sh). -->
+    <string name="boot_hook_section">Boot hook</string>
+    <string name="boot_hook_enable">Run /var/minis/boot.sh at startup</string>
+    <string name="boot_hook_enable_sub">Executes in the sandbox after the Linux rootfs boots</string>
+    <string name="boot_hook_footer">Off by default. This path is inside the writable sandbox, so any shell-capable agent can replace the script — enabling this lets such a file run silently on every launch. The switch is checked again immediately before execution, and the script\'s first-seen time plus size/mtime changes are written to the app log. Takes effect at the next launch.</string>
+    <string name="boot_hook_last_status">Last run</string>
     <string name="system_permissions_a11y_oem_footer">%1$s may show \"this service has failed\" and stop the accessibility service in the background. Whitelist autostart and remove the battery restriction so it stays connected.</string>
     <string name="system_permissions_a11y_oem_autostart">Add to autostart whitelist</string>
     <string name="system_permissions_a11y_oem_autostart_sub">Open the autostart manager and enable Minis Ultra</string>
@@ -2209,6 +2259,8 @@
     <string name="scheduled_task_field_repeat">Repeat</string>
     <string name="scheduled_task_field_prompt">Prompt</string>
     <string name="scheduled_task_field_prompt_hint">What should the assistant do when this fires?</string>
+    <!-- [GH#201] Template variables + automatic fire-time date prefix. -->
+    <string name="scheduled_task_prompt_template_hint">The current date/time and last run are added automatically. You can also use {{date}}, {{time}}, {{datetime}}, {{weekday}}, {{last_fired}}, {{last_fired_ago}} and {{task_label}}.</string>
     <string name="scheduled_task_repeat_once">Once</string>
     <string name="scheduled_task_repeat_daily">Daily</string>
     <string name="scheduled_task_repeat_weekdays">Weekdays</string>
@@ -2380,6 +2432,11 @@
     <string name="translate_no_model">No enabled model with an API key.</string>
     <string name="translate_empty">The model returned no text.</string>
     <string name="web_search_engine_header">Engine</string>
+    <!-- [GH#298] 工具总开关（settings UI + AgentTools 注册门控）。 -->
+    <string name="web_search_tool_section">Tool</string>
+    <string name="web_search_tool_enabled">Enable web_search</string>
+    <string name="web_search_tool_enabled_sub">Let the agent search the web from chat. Off → the tool is not offered at all.</string>
+    <string name="web_search_tool_section_footer">Turning the tool off does not delete the engine configuration below; re-enable it to restore the same behaviour.</string>
     <string name="web_search_engine_footer">Tap an engine to configure it. DuckDuckGo needs no key. SearXNG needs an instance URL. Bing needs an API key. Custom uses a URL template with {query}. Failed searches fall back to DuckDuckGo, then suggest browser_use.</string>
     <string name="web_search_engine_ddg">DuckDuckGo HTML</string>
     <string name="web_search_engine_searxng">SearXNG</string>

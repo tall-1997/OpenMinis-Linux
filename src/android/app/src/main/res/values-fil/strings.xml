@@ -110,7 +110,7 @@
     <string name="settings_token_usage_subtitle">Subaybayan ang paggamit ng API sa lahat ng provider</string>
     <string name="settings_section_appearance">Hitsura</string>
     <string name="settings_appearance_subtitle">Tema, laki ng font, at display</string>
-    <string name="settings_section_agent_runtime">Agent Runtime</string>
+    <string name="settings_section_agent_runtime">Runtime ng agent</string>
     <string name="settings_skills">Mga Skill</string>
     <string name="settings_skills_subtitle">Pamahalaan ang mga skill at tagubilin ng Minis Ultra Agent</string>
     <string name="settings_memory">Memory</string>
@@ -118,15 +118,15 @@
     <string name="settings_mcp">Mga MCP Integration</string>
     <string name="settings_mcp_subtitle">Ikonekta ang mga Model Context Protocol server</string>
     <!-- Dev Suite bundle names/summaries -->
-    <string name="dev_suite_android_name">Android &amp; Mobile Full Stack</string>
+    <string name="dev_suite_android_name">Buong stack ng Android at Mobile</string>
     <string name="dev_suite_android_summary">JDK17 · aarch64 SDK toolchain · NDK r29 · Opsyonal na Flutter/RE/Rust</string>
     <string name="dev_suite_code_search_name">Paghahanap ng code at kahusayan ng terminal</string>
-    <string name="dev_suite_code_search_summary">rg / fd / fzf / bat quartet</string>
-    <string name="dev_suite_python_name">Python &amp; AI Developer Suite</string>
-    <string name="dev_suite_python_summary">Python 3 runtime · pip/venv · AI scientific computing build deps</string>
-    <string name="dev_suite_nodejs_name">Node.js &amp; Web Full Stack</string>
-    <string name="dev_suite_nodejs_summary">Node.js runtime · npm · pnpm/yarn</string>
-    <string name="dev_suite_go_name">Go Development Suite</string>
+    <string name="dev_suite_code_search_summary">Apat na tool: rg / fd / fzf / bat</string>
+    <string name="dev_suite_python_name">Suite ng Python at AI Developer</string>
+    <string name="dev_suite_python_summary">Runtime ng Python 3 · pip/venv · mga build dependency para sa AI scientific computing</string>
+    <string name="dev_suite_nodejs_name">Buong stack ng Node.js at Web</string>
+    <string name="dev_suite_nodejs_summary">Runtime ng Node.js · npm · pnpm/yarn</string>
+    <string name="dev_suite_go_name">Suite ng pag-develop sa Go</string>
     <string name="dev_suite_go_summary">golang-go toolchain (eksklusibong suite ng OpenMinis)</string>
 
     <string name="mcp_status_running">Tumatakbo (port %1$d), %2$d na kahilingan ang naproseso</string>
@@ -168,8 +168,8 @@
     <string name="voice_service_source">Pinagmulan</string>
     <string name="voice_service_credential_from">Credential mula sa</string>
     <string name="voice_service_endpoint">Endpoint</string>
-    <string name="voice_service_speech_to_text">Speech to Text</string>
-    <string name="voice_service_text_to_speech">Text to Speech</string>
+    <string name="voice_service_speech_to_text">Pagsasalita sa teksto</string>
+    <string name="voice_service_text_to_speech">Teksto sa pagsasalita</string>
     <string name="voice_service_show_in_voice_services">Ipakita sa Mga Voice Service</string>
     <string name="voice_service_shared_credential_note">Ginagamit ng voice service na ito ang API key at endpoint ng provider nito. Para baguhin ang mga ito, i-edit ang provider na iyon.</string>
     <string name="voice_service_hidden_badge">Nakatago</string>
@@ -181,11 +181,11 @@
     <string name="zen_deleted_models_title">Ibalik ang mga tinanggal na libreng modelo (%1$d)</string>
     <string name="zen_deleted_models_subtitle">I-undo ang mga pagtatanggal na naitala sa provider na ito</string>
     <string name="provider_sync_mark_not_found">404 not found</string>
-    <string name="provider_sync_mark_connection">Connection failed</string>
-    <string name="provider_sync_mark_invalid">Invalid response</string>
+    <string name="provider_sync_mark_connection">Nabigo ang koneksyon</string>
+    <string name="provider_sync_mark_invalid">Di-wastong tugon</string>
     <string name="add_provider_voice_templates_footer">Mga vendor ng speech-to-text at text-to-speech. Nakalagay na ang uri ng provider at ang base URL — kailangan mo na lang idagdag ang API key mo.</string>
-    <string name="add_provider_voice_capability_tts">Speech synthesis (TTS)</string>
-    <string name="add_provider_voice_capability_asr">Speech recognition (ASR)</string>
+    <string name="add_provider_voice_capability_tts">Pagbuo ng pananalita (TTS)</string>
+    <string name="add_provider_voice_capability_asr">Pagkilala sa pananalita (ASR)</string>
     <string name="add_provider_voice_capability_both">Recognition at synthesis</string>
     <string name="quicktest_no_audio">Walang naibalik na audio.</string>
     <string name="quicktest_voice_unsupported">Hindi kayang tugunan ng provider ng model na ito ang direksyong iyon ng boses.</string>
@@ -193,9 +193,9 @@
     <string name="quicktest_audio_replay">I-replay</string>
     <string name="quicktest_transcript_result">Sinabi: \"%1$s\"\nNarinig: \"%2$s\"</string>
     <string name="quicktest_clip_failed">Nabigong gawin ang lokal na test clip.</string>
-    <string name="model_groups_voice_input">Voice Input</string>
-    <string name="model_groups_voice_output">Voice Output</string>
-    <string name="model_groups_vision">Vision Input</string>
+    <string name="model_groups_voice_input">Input ng boses</string>
+    <string name="model_groups_voice_output">Output ng boses</string>
+    <string name="model_groups_vision">Input ng vision</string>
     <string name="mcp_form_env_insert_app_var">Maglagay ng app variable</string>
     <string name="mcp_form_env_clear">I-clear</string>
     <string name="mcp_form_env_clear_confirm_title">I-clear ang mga environment variable?</string>
@@ -209,9 +209,9 @@
     <string name="mcp_form_oauth_client_id_placeholder">OAuth client ID</string>
     <string name="mcp_form_oauth_client_secret">Client Secret</string>
     <string name="mcp_form_oauth_client_secret_placeholder">Opsyonal; naka-encrypt kapag naka-imbak</string>
-    <string name="mcp_form_oauth_auth_endpoint">Authorization Endpoint</string>
+    <string name="mcp_form_oauth_auth_endpoint">Endpoint ng Authorization</string>
     <string name="mcp_form_oauth_auth_endpoint_placeholder">https://…/authorize</string>
-    <string name="mcp_form_oauth_token_endpoint">Token Endpoint</string>
+    <string name="mcp_form_oauth_token_endpoint">Endpoint ng Token</string>
     <string name="mcp_form_oauth_token_endpoint_placeholder">https://…/token</string>
     <string name="mcp_form_oauth_scopes">Mga Scope</string>
     <string name="mcp_form_oauth_scopes_placeholder">Pinaghihiwalay ng espasyo, hal. openid email</string>
@@ -236,7 +236,7 @@
     <string name="soul_settings_title">Soul</string>
     <string name="soul_section_preview">Preview</string>
     <string name="soul_section_identity">Pagkakakilanlan</string>
-    <string name="soul_section_personality">Personality Prompt</string>
+    <string name="soul_section_personality">Prompt ng personalidad</string>
     <string name="soul_personality_footer">Ine-edit bilang Markdown body ng SOUL.md. Nakabatay sa wika ang limitasyon sa haba: Chinese ≤ 1600 na karakter O English ≤ 1000 salita (pinipili ang panuntunan ayon sa nangingibabaw na wika). Tinatanggihan sa pag-save ang lumalampas sa limitasyon at hindi ito isinasama kapag binubuo ang prompt.</string>
     <string name="soul_field_name">Pangalan</string>
     <string name="soul_field_style">Estilo</string>
@@ -257,8 +257,8 @@
     <string name="soul_icon_choose_image">Pumili ng Larawan</string>
     <string name="soul_icon_image_hint">Ginagawang parisukat at binibilugan ang gilid</string>
     <string name="soul_icon_use_default">Gamitin ang Default</string>
-    <string name="soul_icon_use_model">Use Model Icon</string>
-    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
+    <string name="soul_icon_use_model">Gamitin ang icon ng model</string>
+    <string name="soul_icon_use_model_hint">Sinusunod ang vendor icon ng tumatakbong model</string>
     <string name="soul_icon_emoji_title">Icon ng pagkakakilanlan</string>
     <string name="soul_icon_emoji_field">O mag-type ng emoji</string>
     <string name="soul_icon_set">Itakda</string>
@@ -279,12 +279,12 @@
     <string name="settings_privacy_policy">Patakaran sa Privacy</string>
     <string name="settings_feedback">Feedback</string>
     <string name="settings_submit_github_issues">Magsumite ng GitHub Issue</string>
-    <string name="settings_feedback_telegram">Feedback (Telegram)</string>
-    <string name="settings_feedback_email">Feedback (Email)</string>
+    <string name="settings_feedback_telegram">Puna (Telegram)</string>
+    <string name="settings_feedback_email">Puna (Email)</string>
     <string name="about_title">Tungkol Dito</string>
     <string name="about_minis_tagline">Ang Minis Ultra ay Agent sa iyong device na ganap na lokal at ganap na pribado.</string>
     <string name="about_links">Mga Link</string>
-    <string name="about_github_repository">GitHub Repository</string>
+    <string name="about_github_repository">Repository sa GitHub</string>
     <string name="about_version_format">Bersyon %1$s (%2$s)</string>
     <string name="move_to_sheet_title">Ilipat sa…</string>
     <string name="move_to_sheet_empty">Walang ibang available na session.</string>
@@ -320,7 +320,7 @@
     <string name="token_usage_sheet_title">Paggamit ng Token sa Session</string>
     <string name="token_usage_section_context">Konteksto</string>
     <string name="token_usage_context_used">Nagamit na Konteksto</string>
-    <string name="token_usage_context_window">Context Window</string>
+    <string name="token_usage_context_window">Bintana ng context</string>
     <string name="token_usage_max_output">Max na Output</string>
     <string name="token_usage_section_thinking">Pag-iisip</string>
     <string name="token_usage_thinking_label">Pag-iisip</string>
@@ -330,9 +330,9 @@
     <string name="token_usage_input_with_cache">Input (kasama ang cache)</string>
     <string name="token_usage_output">Output</string>
     <string name="token_usage_section_cache">Cache (Kabuuan ng Session)</string>
-    <string name="token_usage_cache_read">Cache Read</string>
-    <string name="token_usage_cache_write">Cache Write</string>
-    <string name="token_usage_section_agent_loop">Agent Loop</string>
+    <string name="token_usage_cache_read">Pagbasa sa cache</string>
+    <string name="token_usage_cache_write">Pagsulat sa cache</string>
+    <string name="token_usage_section_agent_loop">Loop ng agent</string>
     <string name="token_usage_total_loops">Kabuuang Loop</string>
     <!-- [#25] Context breakdown sheet -->
     <string name="chat_menu_context_usage">Pagkakahati ng Konteksto</string>
@@ -346,7 +346,7 @@
     <string name="context_block_attachments">Mga kalakip at larawan</string>
     <string name="context_usage_note_estimate">Tinatayang mga bilang (±10%); sasariwa kapag binuksan ang sheet na ito</string>
     <!-- [#41] Gen UI card -->
-    <string name="gen_ui_card_label">Interactive card</string>
+    <string name="gen_ui_card_label">Interaktibong card</string>
     <string name="gen_ui_view_source">Tingnan ang source</string>
     <string name="gen_ui_view_render">Ipakita ang render</string>
     <string name="gen_ui_view_fullscreen">Fullscreen</string>
@@ -367,8 +367,8 @@
     <string name="webpreview_open_external">Buksan sa ibang browser</string>
     <string name="webpreview_open_fullscreen">Buksan nang fullscreen</string>
     <string name="webpreview_more">Higit pa</string>
-    <string name="webpreview_desktop_site">Desktop site</string>
-    <string name="webpreview_mobile_site">Mobile site</string>
+    <string name="webpreview_desktop_site">Site para sa desktop</string>
+    <string name="webpreview_mobile_site">Site para sa mobile</string>
     <string name="webpreview_pin_to_home">Idagdag sa Home screen</string>
     <string name="webpreview_pin_to_home_requested">Hiniling ang shortcut — kumpirmahin sa iyong launcher</string>
     <string name="webpreview_pin_to_home_unsupported">Hindi sinusuportahan ng launcher mo ang mga naka-pin na shortcut</string>
@@ -444,14 +444,14 @@
     <string name="group_collapse">I-collapse ang group</string>
     <string name="group_expand">I-expand ang group</string>
     <string name="sessionlist_settings">Mga Setting</string>
-    <string name="sessionlist_shell_terminal">Shell Terminal</string>
+    <string name="sessionlist_shell_terminal">Terminal ng shell</string>
     <string name="sessionlist_open_browser">Buksan ang Browser</string>
     <string name="sessionlist_browser_settings">Mga Setting ng Browser</string>
     <string name="sessionlist_pin">I-pin</string>
     <string name="sessionlist_unpin">I-unpin</string>
     <string name="sessionlist_export">I-export</string>
     <string name="sessionlist_export_json">JSON</string>
-    <string name="sessionlist_export_plain">Plain Text</string>
+    <string name="sessionlist_export_plain">Plain na teksto</string>
     <string name="export_progress_failed">Nabigo ang pag-export</string>
     <string name="sessionlist_edit_title_category">I-edit ang Pamagat at Kategorya</string>
     <string name="sessionlist_regenerate_title">Gumawa Muli ng Pamagat</string>
@@ -489,7 +489,7 @@
     <string name="chat_input_placeholder_hint_4">Pindutin nang matagal para kopyahin lahat</string>
     <string name="browser_takeover">Kunin ang Kontrol</string>
     <string name="browser_settings_done">Tapos</string>
-    <string name="browser_settings_engine_title">WebView kernel</string>
+    <string name="browser_settings_engine_title">Kernel ng WebView</string>
     <string name="browser_settings_engine_version">%1$s (target na Chrome/%2$s)</string>
     <string name="browser_settings_engine_below">Mas luma sa %1$s — compatible pa rin. I-update ang System WebView para sa Blink %1$s+.</string>
     <string name="browser_settings_engine_at">Gumagamit ng target na Chrome/%1$s.</string>
@@ -500,8 +500,8 @@
     <string name="browser_engine_stale_action">I-update ang kernel</string>
     <string name="browser_settings_engine_shared">Magkapareho ang kernel na ginagamit ng browser_use at ng in-app browser.</string>
     <string name="browser_settings_user_agent">User Agent</string>
-    <string name="browser_settings_ua_mobile_chrome">Mobile Chrome (Android)</string>
-    <string name="browser_settings_ua_desktop_chrome">Desktop Chrome (Linux)</string>
+    <string name="browser_settings_ua_mobile_chrome">Chrome sa mobile (Android)</string>
+    <string name="browser_settings_ua_desktop_chrome">Chrome sa desktop (Linux)</string>
     <string name="browser_settings_ua_custom">Custom</string>
     <string name="browser_settings_custom_ua_label">Custom na User-Agent string</string>
     <string name="browser_settings_apply">Ilapat</string>
@@ -550,7 +550,7 @@
     <string name="thinking_rules_send_off_value">Magpadala ng halaga kapag naka-off ang pag-iisip</string>
     <string name="thinking_rules_off_value">Halaga kapag naka-off (hal. none, minimal)</string>
     <string name="thinking_rules_field_path">Path ng field</string>
-    <string name="thinking_rules_dotted_path">Dotted path</string>
+    <string name="thinking_rules_dotted_path">Path na may tuldok</string>
     <string name="thinking_rules_value_at_high">Halaga sa High</string>
     <string name="thinking_rules_request_preview">Preview ng request</string>
     <string name="thinking_fmt_omit_title">Walang ipapadala</string>
@@ -583,7 +583,7 @@
     <string name="appearance_launch_last">Huling Session</string>
     <string name="appearance_launch_new">Bagong Chat</string>
     <string name="appearance_launch_home">Home</string>
-    <string name="appearance_section_return_key">Return Key</string>
+    <string name="appearance_section_return_key">Return key</string>
     <string name="appearance_return_key_footer">Piliin kung ang Return key sa chat input ay maglalagay ng bagong linya o magpapadala ng mensahe. Palaging naglalagay ng bagong linya ang Shift+Return sa pisikal na keyboard.</string>
     <string name="appearance_return_key_newline">Bagong linya</string>
     <string name="appearance_return_key_send">Ipadala</string>
@@ -614,7 +614,7 @@
     <string name="appearance_font_size_footer">Ayusin ang laki ng font para sa chat input, nilalaman ng mensahe, at pangkalahatang teksto ng app. Agad na nalalapat ang mga pagbabago.</string>
     <string name="appearance_font_scale_title">Scale ng Font</string>
     <string name="appearance_font_scale_subtitle">Ayusin ang mga laki sa ibaba</string>
-    <string name="appearance_font_chat_input">Chat Input</string>
+    <string name="appearance_font_chat_input">Input ng chat</string>
     <string name="appearance_font_message">Teksto ng Mensahe</string>
     <string name="appearance_font_app_base">Batayan ng App</string>
     <string name="appearance_font_reset">Ibalik sa Mga Default</string>
@@ -628,7 +628,7 @@
     <string name="env_var_title">Mga Environment Variable</string>
     <string name="env_var_add">Magdagdag</string>
     <string name="env_var_privacy_header">Privacy</string>
-    <string name="env_var_privacy_toggle">Privacy Mode</string>
+    <string name="env_var_privacy_toggle">Mode ng privacy</string>
     <string name="env_var_privacy_footer">Kapag naka-enable, pinapalitan ng nakatakip na anyo (hal. `sk-1********ajhks`) ang anumang halaga ng environment variable na lumalabas sa output ng shell-execute bago ito makarating sa model. Nagiging puro `*` ang mga halagang mas maikli sa 8 karakter. Hindi nagbabago ang output na nakikita ng user sa chat.</string>
     <string name="outbound_mask_toggle">Mask ng privacy sa papalabas</string>
     <string name="outbound_mask_footer">Opt-in shape masking: key-shaped strings (kasama ang code), emails, at phone-like numbers nagiging placeholder. Ang embedding API key sa ibaba ay plain text sa app-private prefs. Hindi nagbabago ang device history.</string>
@@ -701,7 +701,7 @@
     <string name="perm_level_bypass">Laktawan</string>
     <string name="perm_level_ask_once">Isang beses bawat pagbukas</string>
     <string name="perm_level_not_allowed">Hindi Pinapayagan</string>
-    <string name="perm_section_config_tool">Configuration Tool</string>
+    <string name="perm_section_config_tool">Tool sa configuration</string>
     <string name="perm_tool_a11y_cli">android-a11y-cli</string>
     <string name="perm_tool_shizuku_cli">android-shizuku-cli</string>
     <string name="perm_section_a11y">Accessibility</string>
@@ -829,7 +829,7 @@
     <string name="skills_browser_error_format">Hindi wasto ang nilalaman ng SKILL.md</string>
     <string name="storage_title">Storage</string>
     <string name="storage_section_overview">Pangkalahatang Tanaw</string>
-    <string name="storage_overview_shell">Shell Container</string>
+    <string name="storage_overview_shell">Container ng shell</string>
     <string name="storage_overview_database">Database ng Chat</string>
     <string name="storage_overview_sessions">Mga File ng Session</string>
     <string name="storage_section_sessions">Mga Session</string>
@@ -854,9 +854,9 @@
     <string name="usage_chart_no_data">Walang paggamit sa panahong ito</string>
     <string name="usage_label_total_input">Kabuuang Input (kasama ang Cache)</string>
     <string name="usage_label_output">Mga Output Token</string>
-    <string name="usage_label_cache_read">Cache Read</string>
+    <string name="usage_label_cache_read">Pagbasa sa cache</string>
     <string name="usage_label_cache_creation">Paggawa ng Cache</string>
-    <string name="usage_label_cache_hit_rate">Cache Hit Rate</string>
+    <string name="usage_label_cache_hit_rate">Rate ng cache hit</string>
     <string name="usage_detail_input">Input</string>
     <string name="newer_db_title">Galing sa mas bagong bersyon ang data mo</string>
     <string name="newer_db_body">Mas luma ang kopyang ito ng Minis Ultra kaysa sa bersyong gumawa ng data mo, kaya hindi ito ligtas na mabubuksan.\n\nWalang nabura — buo pa rin ang mga usapan mo sa device na ito. I-install muli ang mas bagong bersyon ng Minis Ultra at babalik ang lahat.</string>
@@ -1000,7 +1000,7 @@
     <string name="modeldetail_identity_footer_custom">Custom na model ito. Puwedeng baguhin ang ID ng Model.</string>
     <string name="modeldetail_identity_footer_builtin">Model na kasama sa app. Pinapalitan ng Pangalang Ipapakita ang default ng provider.</string>
     <string name="modeldetail_section_capabilities">Mga Kakayahan</string>
-    <string name="modeldetail_context_window">Context Window</string>
+    <string name="modeldetail_context_window">Bintana ng context</string>
     <string name="modeldetail_thinking">Pag-iisip</string>
     <string name="modeldetail_capabilities_footer">Context window at max na output token (sa token). Iwanang blangko para gamitin ang mga default ng provider. I-enable ang Pag-iisip para sa mga model na sumusuporta sa malalim na pangangatwiran.</string>
     <string name="modeldetail_provider_default">Default ng provider</string>
@@ -1044,8 +1044,8 @@
     <string name="model_group_detail_routing_least_used_footer">Palaging ipinapadala sa miyembrong pinakamadalang gamitin ng session na ito.</string>
     <string name="model_group_detail_fallback">Fallback</string>
     <string name="model_group_detail_least_used">Pinakamadalang Gamitin</string>
-    <string name="model_group_detail_load_balance">Load Balance</string>
-    <string name="model_group_detail_quota_window">Quota Window</string>
+    <string name="model_group_detail_load_balance">Pagbabalanse ng load</string>
+    <string name="model_group_detail_quota_window">Bintana ng quota</string>
     <string name="model_group_detail_round_robin">Round Robin</string>
     <string name="model_group_detail_smart">Smart</string>
     <string name="model_group_detail_weighted">May Timbang</string>
@@ -1143,7 +1143,7 @@
     <string name="settings_bg_overlay">Overlay ng Gawain sa Background</string>
     <string name="settings_bg_overlay_footer">Magpakita ng maliit na lumulutang na kapsula na may kasalukuyang tool habang nasa background ang Minis Ultra. Kailangan ng pahintulot na ipakita sa ibabaw ng ibang app. I-tap ang kapsula para ilabas ang Minis Ultra; i-drag para ilipat ito.</string>
     <string name="settings_bg_overlay_permission_needed">Payagan ang pagpapakita sa ibabaw ng ibang app para ma-enable</string>
-    <string name="settings_dynamic_island">Dynamic Island (Live Updates)</string>
+    <string name="settings_dynamic_island">Dynamic Island (mga live update)</string>
     <string name="settings_dynamic_island_footer">Ipakita ang live na status ng Agent sa status chip ng Android 16. Kapag naka-on, pinapalitan nito ang lumulutang na overlay para hindi ka makakita ng dalawang indicator nang sabay.</string>
     <string name="settings_dynamic_island_unsupported">Hindi pa sinusuportahan ng kasalukuyang bersyon ng system mo ang Live Updates (kailangan ang Android 16+ na may naka-enable na feature).</string>
     <string name="agent_loop_section_title">Mga Model na Matatawag ng Minis Ultra Habang Tumatakbo</string>
@@ -1501,11 +1501,11 @@
     <string name="tts_capsule_picker_title">Model ng Voice Output</string>
     <string name="tts_capsule_system_engine">System TTS</string>
     <string name="voice_system_tts_subtitle">Text-to-speech na kasama sa Android</string>
-    <string name="voice_system_recognition_online">System Recognition (Online)</string>
-    <string name="voice_system_recognition_offline">System Recognition (Offline)</string>
+    <string name="voice_system_recognition_online">Pagkilala ng system (online)</string>
+    <string name="voice_system_recognition_offline">Pagkilala ng system (offline)</string>
     <string name="voice_system_online_subtitle">Kasama sa Android, kailangan ng network</string>
     <string name="voice_system_offline_subtitle">Kasama sa Android, gumagana nang walang network</string>
-    <string name="voice_input_picker_title">Voice Input</string>
+    <string name="voice_input_picker_title">Pag-input ng boses</string>
     <string name="voice_input_picker_system">System</string>
     <string name="voice_input_picker_group_models">%1$d model</string>
     <string name="voice_input_picker_group_footer">Pumili ng group na ang mga model na may kakayahan sa audio ang bahala sa direksyong ito.</string>
@@ -1762,7 +1762,7 @@
     <string name="dev_suite_installing">Nag-i-install…</string>
     <string name="dev_suite_failed">nabigo</string>
     <string name="dev_suite_view_details">Details</string>
-    <string name="dev_suite_failure_details">Installation failure details</string>
+    <string name="dev_suite_failure_details">Mga detalye ng pagkabigo ng pag-install</string>
     <string name="dev_suite_ready">Handa na</string>
     <string name="dev_suite_not_installed">Hindi naka-install</string>
     <string name="dev_suite_required">kinakailangan</string>
@@ -1816,7 +1816,7 @@
     <string name="mcp_builtin_enable">I-enable ang built-in na MCP server</string>
     <string name="mcp_builtin_port">Port</string>
     <string name="mcp_builtin_port_sub">Kasalukuyang port: %1$d (1024–65535)</string>
-    <string name="mcp_builtin_token">Access token (Bearer)</string>
+    <string name="mcp_builtin_token">Token ng access (Bearer)</string>
     <string name="mcp_builtin_token_configured">Nakatakdang · %1$s</string>
     <string name="mcp_builtin_token_missing">Hindi pa nagagawa (hindi makaka-authenticate ang mga kliyente; inirerekomendang gumawa)</string>
     <string name="mcp_builtin_shell_policy">Patakaran sa shell</string>
@@ -1826,7 +1826,7 @@
     <string name="mcp_builtin_pc_connect_sub">I-run ang adb reverse tcp:%1$d tcp:%1$d, pagkatapos ay idagdag ang http://127.0.0.1:%1$d/mcp (Streamable HTTP, kailangan ng Bearer token) sa iyong MCP client</string>
     <string name="mcp_builtin_port_edit">Baguhin ang port</string>
     <string name="mcp_builtin_port_edit_sub">1024–65535. I-restart ang server para magkabisa ang pagbabago.</string>
-    <string name="mcp_builtin_token_dialog_title">Access token</string>
+    <string name="mcp_builtin_token_dialog_title">Token ng access</string>
     <string name="mcp_builtin_token_not_generated">(hindi pa nagagawa)</string>
     <string name="mcp_builtin_token_dialog_body">Ipinapakita lamang isang beses ang buong token — kopyahin at iimbak ito. Dapat magpadala ang mga kliyente ng Authorization: Bearer &lt;token&gt;.</string>
     <string name="mcp_builtin_token_regenerated_toast">Muling nagawa at nakopya</string>
@@ -2040,7 +2040,7 @@
     <string name="memory_embedding_toggle">Semantic memory recall gamit ang embedding</string>
     <string name="memory_embedding_base_url">Base URL ng embeddings</string>
     <string name="memory_embedding_api_key">API key ng embeddings</string>
-    <string name="memory_embedding_model">Embedding model</string>
+    <string name="memory_embedding_model">Modelo ng embedding</string>
     <string name="memory_embedding_footer">Nakasara bilang default. Kapag naka-on, magdaragdag ang memory recall ng vector-similarity search sa pamamagitan ng OpenAI-compatible na embeddings endpoint, bukod sa keyword search. Nagkakabisa ang mga pagbabago lamang pagkatapos i-restart ang app process.</string>
     <string name="memory_center_stat_memory">Mga file ng memorya</string>
     <string name="memory_center_stat_recalls">Mga naalala na entry</string>
@@ -2138,6 +2138,18 @@
     <!-- Queued-message edit sheet + git diff truncation notice -->
     <string name="chat_queued_edit_title">I-edit ang naka-queue na mensahe</string>
     <string name="git_panel_diff_truncated">Naputol ang diff sa 200,000 karakter — ang buong teksto ay nasa mismong file sa repo.</string>
+    <string name="voice_service_no_audio_models">Walang naka-listang audio model para sa provider na ito. Hindi nagdedeklara ng audio support ang model list ng ilang provider (Bailian, SiliconFlow) — idagdag ang ASR/TTS model bilang custom model na may audio modality, o pumili ng ibang voice service.</string>
+    <string name="voice_error_network">Nabigo ang voice recognition: error sa network. Suriin ang koneksyon, o lumipat sa on-device na engine o ibang provider.</string>
+    <string name="voice_error_transcription">Walang naibalik na text ang voice recognition. Magsalita muli, o suriin ang model at API key ng transcription provider.</string>
+    <string name="voice_error_busy">Abala ang speech recognizer. Maghintay ng sandali at subukan muli.</string>
+    <string name="voice_error_audio">Nabigo ang pagkuha ng audio. Suriin ang pahintulot sa mikropono at tiyaking walang ibang app na gumagamit ng mic.</string>
+    <string name="voice_error_language">Hindi sinusuportahan ng engine na ito ang piniling wika. Pumili ng ibang wika.</string>
+    <string name="voice_error_unknown">Nabigo ang voice recognition: %1$s</string>
+    <string name="thinking_rules_cache_not_ready">Hindi pa aktibo ang mga custom na panuntunan (%1$s). Gumagamit muna ang mga request ng built-in na defaults; ilalapat ng susunod na mensahe pagkatapos ma-load ang cache ang mga panuntunan mo.</string>
+    <string name="skill_display_name_skill_creator">Skill Creator</string>
+    <string name="skill_display_name_android_sdk_mirrors">Android SDK Mirrors</string>
+    <string name="provider_detail_force_thinking">I-pwersa ang extended thinking</string>
+    <string name="provider_detail_force_thinking_footer">Para lang sa mga Anthropic-compatible na relay. Nagpapadala ng thinking:{type:"enabled",budget_tokens:N} kahit sabi ng model catalog na hindi makapag-reason ang model. Gamitin kapag sinusuportahan ng model ang thinking pero kulang o mali ang entry sa catalog.</string>
     <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
     <string name="provider_list_export_providers">I-export ang mga provider</string>
     <string name="provider_transfer_export_title">I-export ang mga provider</string>
@@ -2179,9 +2191,9 @@
     <string name="ssh_field_port">Port</string>
     <string name="ssh_field_username">Username</string>
     <string name="ssh_auth_password">Password</string>
-    <string name="ssh_auth_key">Private key</string>
+    <string name="ssh_auth_key">Pribadong susi</string>
     <string name="ssh_field_password">Password</string>
-    <string name="ssh_field_private_key">PEM private key</string>
+    <string name="ssh_field_private_key">Pribadong PEM key</string>
     <string name="ssh_field_passphrase">Passphrase ng key (opsyonal)</string>
     <string name="ssh_save">I-save</string>
 
@@ -2193,4 +2205,58 @@
     <string name="handsfree_state_speaking">Nagsasalita…</string>
     <string name="handsfree_exit_recognition">Huminto ang hands-free: paulit-ulit na nabigo ang speech recognition. I-tap ang Hands-free para subukan muli.</string>
     <string name="handsfree_exit_tts">Huminto ang hands-free: hindi nabasa nang malakas ang mga sagot. I-tap ang Hands-free para subukan muli.</string>
+
+    <!-- [T-untranslated] English fallback for keys added by PR #325; pending translation -->
+    <string name="a11y_app_policy_apps">Apps</string>
+    <string name="a11y_app_policy_apps_count">%1$d listed</string>
+    <string name="a11y_app_policy_apps_hint">Isang Android package name kada linya, hal. com.tencent.mm</string>
+    <string name="a11y_app_policy_blocklist">Gamitin ang listahan bilang blocklist</string>
+    <string name="a11y_app_policy_blocklist_sub">Off = pinapayagan lang ang mga naka-listang app. On = hinarang ang mga naka-listang app.</string>
+    <string name="a11y_app_policy_enabled">I-limit kada app</string>
+    <string name="a11y_app_policy_enabled_sub">Sinusuri ang package ng app sa harap bago ang bawat pagbasa ng screen o pag-tap</string>
+    <string name="a11y_app_policy_footer">Kapag naka-enable, sinusuri ang ui_read at ui_action laban sa kasalukuyang app sa harap bago tumakbo. Ang mga app sa labas ng listahan (allow mode) o sa loob ng listahan (block mode) ay tinatanggihan na may nakikitang mensahe. Ang mismong Minis app ay laging pinapayagan.</string>
+    <string name="a11y_app_policy_section">Saklaw ng mga app para sa accessibility</string>
+    <string name="boot_hook_enable">Patakbuhin ang /var/minis/boot.sh sa pagsisimula</string>
+    <string name="boot_hook_enable_sub">Tumatakbo sa sandbox pagkatapos mag-boot ang Linux rootfs</string>
+    <string name="boot_hook_footer">Naka-off bilang default. Nasa loob ng masusulatang sandbox ang path na ito, kaya kahit anong shell-capable na agent ay makapapalit sa script — kapag naka-enable, tumatakbo nang tahimik ang ganitong file sa bawat paglunsad. Sinusuri muli ang switch bago pa man tumakbo, at ang unang oras ng pagkakita sa script kasama ang mga pagbabago sa size/mtime ay isinusulat sa log ng app. Magkakabisa sa susunod na paglunsad.</string>
+    <string name="boot_hook_last_status">Huling takbo</string>
+    <string name="boot_hook_section">Hook sa pag-boot</string>
+    <string name="lifecycle_hooks_command_hint">Isang linya ng utos. Karaniwang pinakamabuti ang path ng script, hal. bash /var/minis/hooks/on-response.sh. Iwanang blangko para tanggalin ang hook.</string>
+    <string name="lifecycle_hooks_enable">I-enable ang mga lifecycle hook</string>
+    <string name="lifecycle_hooks_enable_sub">Pinapatakbo ang mga script sa ibaba sa kani-kanilang mga kaganapan</string>
+    <string name="lifecycle_hooks_events_footer">Tumatakbo ang mga script sa sandbox, serialized sa sarili nilang lane, na may 20-segundong timeout. Ang mga pagkakamali ay naka-log lamang at hindi kailanman humaharang sa chat.</string>
+    <string name="lifecycle_hooks_help_body">Tumatanggap ang bawat script ng MINIS_HOOK_EVENT, MINIS_HOOK_SESSION_ID at MINIS_HOOK_DETAIL. Mga one-shot na PRoot process ang mga script: hindi nakikita ang /proc ng ibang utos sa pagitan ng mga invocation at hindi maaasahan ang flock — gumamit ng mga file para sa estado sa pagitan ng mga takbo. Natutulog ang OnResponse nang isang beses kada natapos na sagot ng agent; ang OnSessionEnd kapag binura ang chat.</string>
+    <string name="lifecycle_hooks_help_header">Kapaligiran at mga paalala</string>
+    <string name="lifecycle_hooks_master_footer">Naka-off bilang default. Habang naka-off, napanatili ang mga nakatakdang script pero hindi kailanman pinapatakbo.</string>
+    <string name="lifecycle_hooks_not_set">Hindi nakatakdá</string>
+    <string name="lifecycle_hooks_section_events">Mga kaganapan</string>
+    <string name="lifecycle_hooks_section_master">Pangunahing switch</string>
+    <string name="lifecycle_hooks_title">Mga hook ng lifecycle</string>
+    <string name="network_trusted_ca_count">%1$d certificate ang na-import</string>
+    <string name="network_trusted_ca_duplicate">Na-import na ang certificate na iyan.</string>
+    <string name="network_trusted_ca_failed">Hindi mabasa ang file na iyan bilang PEM/X.509 certificate.</string>
+    <string name="network_trusted_ca_footer">Para sa provider na ang HTTPS endpoint ay gumagamit ng self-signed o pribadong CA. Ang certificate ay nakaimbak lamang sa loob ng Minis at idinaragdag sa mga trust anchor ng Android para sa app na ito; nananatiling nakabukas ang mga normal na pagsusuri ng certificate at hostname. Magkakabisa sa susunod na request sa provider — hindi na kailangang i-restart.</string>
+    <string name="network_trusted_ca_import">I-import ang PEM Certificate</string>
+    <string name="network_trusted_ca_imported">Na-import ang %1$d certificate. Subukan muli ang request.</string>
+    <string name="network_trusted_ca_none">Walang na-import na certificate</string>
+    <string name="network_trusted_ca_remove_all">Alisin Lahat</string>
+    <string name="network_trusted_ca_removed">Natanggal ang mga na-import na certificate.</string>
+    <string name="network_trusted_ca_title">Mga Pinagkakatiwalaang Certificate</string>
+    <string name="provider_detail_custom_headers">Mga custom na request header</string>
+    <string name="provider_detail_custom_headers_footer">Isang «Pangalan: halaga» kada linya. Inilalapat lang sa mga chat, /models at Responses request ng provider na ito. Pinamamahalaan ng HTTP client ang Host, Content-Length at Connection at hindi maa-overridden.</string>
+    <string name="provider_detail_custom_headers_placeholder">X-Custom-Header: value</string>
+    <string name="provider_detail_opencode_session_footer">Naka-off bilang default. Kapag naka-on, dala ng bawat chat request sa custom na endpoint na ito ang isang matatag na ID kada usapan (x-opencode-session) para makapag-route at makapag-cache ang mga OpenCode-compatible na relay. I-enable lang para sa gateway na pinagkakatiwalaan mo: kinikilala ng ID ang usapan sa mga turn.</string>
+    <string name="provider_detail_opencode_session_header">Session header ng OpenCode</string>
+    <string name="provider_detail_opencode_session_toggle">Ipadala ang x-opencode-session</string>
+    <string name="provider_detail_save_headers">I-save ang mga header</string>
+    <string name="scheduled_task_prompt_template_hint">Ang kasalukuyang petsa/oras at huling takbo ay idinaragdag nang awtomatiko. Maaari mo ring gamitin ang {{date}}, {{time}}, {{datetime}}, {{weekday}}, {{last_fired}}, {{last_fired_ago}} at {{task_label}}.</string>
+    <string name="settings_lifecycle_hooks">Mga hook ng lifecycle</string>
+    <string name="settings_lifecycle_hooks_subtitle">Pumapatakbo ng mga sandbox script sa pagsisimula ng sesyon / pagkatapos ng sagot / sa pagtatapos ng sesyon</string>
+    <string name="web_search_tool_enabled">I-enable ang web_search</string>
+    <string name="web_search_tool_enabled_sub">Pinapayagan ang agent na maghanap sa web mula sa chat. Off → hindi na inaalok ang tool.</string>
+    <string name="web_search_tool_section">Tool</string>
+    <string name="web_search_tool_section_footer">Ang pag-off ng tool ay hindi nabubura ang configuration ng engine sa ibaba; i-enable muli para ibalik ang parehong pag-uugali.</string>
+    <string name="tool_label_short_app_name">Minis Ultra</string>
+    <string name="attachment_no_app_toast">Walang app na makakabukas ng attachment na ito.</string>
+    <string name="chat_move_to_capsule">Ilipat sa…</string>
 </resources>

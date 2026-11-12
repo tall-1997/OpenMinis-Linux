@@ -61,6 +61,7 @@ import com.openminis.app.ui.components.RowLabel
 import com.openminis.app.ui.components.SectionTextField
 import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.theme.IosGreen
+
 private enum class AddProviderStep {
     CHOOSE_TYPE,
     CHOOSE_CREDENTIAL,
@@ -439,6 +440,9 @@ private fun ColumnScope.ApiKeyConfigSection(
 ) {
     val scope = rememberCoroutineScope()
     var showApiKeyPlaintext by remember { mutableStateOf(false) }
+    // [OpenMinis#306] Non-null when addInstance refused (config not loaded);
+    // surfaced instead of silently navigating away.
+    var saveError by remember { mutableStateOf<String?>(null) }
     var appendV1Suffix by remember {
         mutableStateOf(initialAppendV1 ?: (providerType != ProviderType.gemini))
     }
@@ -587,15 +591,11 @@ private fun ColumnScope.ApiKeyConfigSection(
                 // Only OpenAI-family providers expose the Responses API toggle.
                 useResponsesAPI = providerType == ProviderType.openAI && useResponsesAPI,
             )
-            providerRepository.addInstance(instance)
-            // [T-empty-key-compat-endpoints] Never persist an empty string as
-            // the key — usableApiKey() treats absent as the keyless-valid case.
-            if (apiKey.isNotBlank()) {
-                providerRepository.saveApiKey(instance.id, apiKey.trim())
-            }
-            // Auto-refresh models in background (fetches from API or falls back to models.dev)
-            scope.launch { providerRepository.refreshModels(instance) }
-            onSaved()
+            // [OpenMinis#306] False = cold-start placeholder; key/refresh/nav must not run.
+            // The helper saves the key only on success and refreshes on IO.
+            saveError = providerRepository.addInstanceFromUi(
+                instance, { if (apiKey.isNotBlank()) providerRepository.saveApiKey(instance.id, apiKey.trim()) }, scope, onSaved,
+            )
         },
         modifier = Modifier
             .fillMaxWidth()
@@ -612,6 +612,7 @@ private fun ColumnScope.ApiKeyConfigSection(
     ) {
         Text(stringResource(R.string.provider_list_add_provider))
     }
+    SaveFailureMessage(saveError)
 }
 
 @Composable
@@ -626,6 +627,8 @@ private fun ColumnScope.OAuthConfigSection(
     val pendingInstanceId = remember { UUID.randomUUID().toString() }
     var isAuthenticating by remember { mutableStateOf(false) }
     var isAuthenticated by remember { mutableStateOf(false) }
+    // [OpenMinis#306] addInstance refusal surface for both save buttons here.
+    var saveError by remember { mutableStateOf<String?>(null) }
     var maskedToken by remember { mutableStateOf<String?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
@@ -702,10 +705,9 @@ private fun ColumnScope.OAuthConfigSection(
                     providerType = providerType,
                     credentialType = ProviderCredential.oauth,
                 )
-                providerRepository.addInstance(instance)
-                // Auto-refresh models (fetches from API or falls back to models.dev)
-                scope.launch { providerRepository.refreshModels(instance) }
-                onSaved()
+                // [OpenMinis#306] Token already stored; only add/refresh when loaded.
+                // A refusal renders below the button instead of navigating away.
+                saveError = providerRepository.addInstanceFromUi(instance, {}, scope, onSaved)
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -713,6 +715,7 @@ private fun ColumnScope.OAuthConfigSection(
         ) {
             Text(stringResource(R.string.add_provider_save_provider))
         }
+        SaveFailureMessage(saveError)
     } else {
         // ── Sign In ────────────────────────────────────────────────────
         SettingsSection(
@@ -867,11 +870,13 @@ private fun ColumnScope.OAuthConfigSection(
                     customBaseURL = trimmedBase.ifEmpty { null },
                     appendV1Suffix = appendV1Suffix,
                 )
-                providerRepository.addInstance(instance)
-                // Store the manual token as API key — ProviderFactory uses loadApiKey() for all credential types
-                providerRepository.saveApiKey(instance.id, manualToken.trim())
-                scope.launch { providerRepository.refreshModels(instance) }
-                onSaved()
+                // [OpenMinis#306] Never write bearer/refresh on a refused add.
+                saveError = providerRepository.addInstanceFromUi(
+                    instance = instance,
+                    credential = { providerRepository.saveApiKey(instance.id, manualToken.trim()) },
+                    scope = scope,
+                    onAdded = onSaved,
+                )
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -880,11 +885,6 @@ private fun ColumnScope.OAuthConfigSection(
         ) {
             Text(stringResource(R.string.provider_list_add_provider))
         }
+        SaveFailureMessage(saveError)
     }
-}
-
-private fun maskOAuthToken(token: String): String {
-    if (token.length <= 4) return "*".repeat(token.length)
-    val edge = minOf(10, token.length / 3)
-    return token.take(edge) + "*".repeat(10) + token.takeLast(edge)
 }

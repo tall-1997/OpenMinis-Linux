@@ -12,6 +12,7 @@ import com.openminis.app.data.model.ProviderInstance
 import com.openminis.app.data.model.ProviderType
 import com.openminis.app.data.model.RoutingStrategy
 import com.openminis.app.data.model.ThinkingLevel
+import com.openminis.app.data.model.withInferredVoiceModality
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
@@ -101,6 +102,9 @@ fun ProviderConfig.toSnapshot(
             appendV1Suffix = if (inst.appendV1Suffix) 1 else 0,
             useResponsesAPI = if (inst.useResponsesAPI) 1 else 0,
             azureMode = if (inst.azureMode) 1 else 0,
+            // [OpenMinis#311] Provider-level force-thinking switch round-trips
+            // through Room, not just the JSON mirror.
+            forceThinking = if (inst.forceThinkingEnabled) 1 else 0,
             // [GH#68] Persist the picker choice + probe cache; auto is stored
             // explicitly (not null) so a legit "auto" survives round-trips too.
             imageEndpointMode = inst.imageEndpointMode.name,
@@ -249,6 +253,7 @@ fun ProviderConfigSnapshot.toProviderConfig(jsonForBlobs: Json): ProviderConfig 
             customUserAgent = row.customUserAgent,
             useResponsesAPI = row.useResponsesAPI != 0,
             azureMode = row.azureMode != 0,
+            forceThinkingEnabled = row.forceThinking != 0,
             // [GH#68] Safe parse: null (pre-migration rows) or an unknown
             // name from a future build falls back to auto / no cache rather
             // than throwing and wiping the whole provider load.
@@ -262,7 +267,14 @@ fun ProviderConfigSnapshot.toProviderConfig(jsonForBlobs: Json): ProviderConfig 
     }.toMutableList()
 
     val entries = this.entries.map { row ->
-        val baseModel = jsonForBlobs.decodeFromString(LLMModel.serializer(), row.baseModelJson)
+        val decoded = jsonForBlobs.decodeFromString(LLMModel.serializer(), row.baseModelJson)
+        // [OpenMinis#305] Heal API-fetched entries persisted before the
+        // Bailian/SiliconFlow ASR/TTS naming rules existed: they carry a
+        // text-only modality and were never classified as voice, so the Voice
+        // Services lists stayed empty until the next model refresh. Inference
+        // is read-time here and is persisted on the next save. CUSTOM entries
+        // are left untouched — their modality is user-authored.
+        val baseModel = if (row.isCustom != 0) decoded else decoded.withInferredVoiceModality()
         val overrides = row.overridesJson?.let {
             jsonForBlobs.decodeFromString(ModelOverrides.serializer(), it)
         } ?: ModelOverrides()

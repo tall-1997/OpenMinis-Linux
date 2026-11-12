@@ -153,11 +153,15 @@ internal object KatexWebViewPool {
         isDark: Boolean,
         fontSizePx: Int = DEFAULT_FONT_SIZE_PX,
     ): KatexRenderResult? {
-        val key = cacheKey(latex, displayMode, isDark, fontSizePx)
+        // [GH#189/#266/#276] Wrap CJK runs in `\text{}` before KaTeX sees them;
+        // see MathCjkLayout. Cache key + JS both use the normalized form so one
+        // formula has exactly one bitmap regardless of which path rendered it.
+        val renderLatex = com.openminis.app.ui.markdown.MathCjkLayout.normalize(latex)
+        val key = cacheKey(renderLatex, displayMode, isDark, fontSizePx)
         cache.get(key)?.let { return it }
         return mutex.withLock {
             cache.get(key)?.let { return@withLock it }
-            val result = renderInternal(context.applicationContext, latex, displayMode, isDark, fontSizePx)
+            val result = renderInternal(context.applicationContext, renderLatex, displayMode, isDark, fontSizePx)
             if (result != null) cache.put(key, result)
             result
         }

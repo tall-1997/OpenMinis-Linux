@@ -123,13 +123,13 @@
     <string name="settings_mcp">Integrasi MCP</string>
     <string name="settings_mcp_subtitle">Hubungkan server Model Context Protocol</string>
     <!-- Dev Suite bundle names/summaries -->
-    <string name="dev_suite_android_name">Android &amp; Mobile Full Stack</string>
+    <string name="dev_suite_android_name">Stack penuh Android &amp; mobile</string>
     <string name="dev_suite_android_summary">JDK17 · Toolchain aarch64 SDK · NDK r29 · Flutter/RE/Rust opsional</string>
     <string name="dev_suite_code_search_name">Pencarian kode dan efisiensi terminal</string>
     <string name="dev_suite_code_search_summary">kuartet rg / fd / fzf / bat</string>
     <string name="dev_suite_python_name">Suite pengembang Python &amp; AI</string>
     <string name="dev_suite_python_summary">Runtime Python 3 · pip/venv · Dependensi build komputasi ilmiah AI</string>
-    <string name="dev_suite_nodejs_name">Node.js &amp; Web Full Stack</string>
+    <string name="dev_suite_nodejs_name">Stack penuh Node.js &amp; web</string>
     <string name="dev_suite_nodejs_summary">Runtime Node.js · npm · pnpm/yarn</string>
     <string name="dev_suite_go_name">Suite Pengembangan Go</string>
     <string name="dev_suite_go_summary">Toolchain golang-go (suite eksklusif OpenMinis)</string>
@@ -186,8 +186,8 @@
     <string name="zen_deleted_models_title">Pulihkan model gratis yang dihapus (%1$d)</string>
     <string name="zen_deleted_models_subtitle">Batalkan penghapusan yang tercatat pada penyedia ini</string>
     <string name="provider_sync_mark_not_found">404 not found</string>
-    <string name="provider_sync_mark_connection">Connection failed</string>
-    <string name="provider_sync_mark_invalid">Invalid response</string>
+    <string name="provider_sync_mark_connection">Koneksi gagal</string>
+    <string name="provider_sync_mark_invalid">Respons tidak valid</string>
     <string name="add_provider_voice_templates_footer">Vendor ucapan ke teks dan teks ke ucapan. Jenis penyedia dan URL dasar sudah terisi — Anda tinggal menambahkan kunci API.</string>
     <string name="add_provider_voice_capability_tts">Sintesis suara (TTS)</string>
     <string name="add_provider_voice_capability_asr">Pengenalan suara (ASR)</string>
@@ -262,8 +262,8 @@
     <string name="soul_icon_choose_image">Pilih Gambar</string>
     <string name="soul_icon_image_hint">Dipotong menjadi persegi dan dibulatkan</string>
     <string name="soul_icon_use_default">Gunakan Bawaan</string>
-    <string name="soul_icon_use_model">Use Model Icon</string>
-    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
+    <string name="soul_icon_use_model">Pakai ikon model</string>
+    <string name="soul_icon_use_model_hint">Mengikuti ikon vendor dari model yang berjalan</string>
     <string name="soul_icon_emoji_title">Ikon identitas</string>
     <string name="soul_icon_emoji_field">Atau ketik emoji</string>
     <string name="soul_icon_set">Terapkan</string>
@@ -855,7 +855,7 @@
     <string name="usage_range_30d">30 hari terakhir</string>
     <string name="usage_range_all">Semua</string>
     <string name="usage_chart_title">Penggunaan Harian</string>
-    <string name="usage_row_io_format">Input: %1$s | Output: %2$s</string>
+    <string name="usage_row_io_format">Masukan: %1$s | Keluaran: %2$s</string>
     <string name="usage_chart_no_data">Tidak ada penggunaan dalam periode ini</string>
     <string name="usage_label_total_input">Total Input (termasuk Cache)</string>
     <string name="usage_label_output">Token Output</string>
@@ -1148,7 +1148,7 @@
     <string name="settings_bg_overlay">Overlay Tugas Latar Belakang</string>
     <string name="settings_bg_overlay_footer">Tampilkan kapsul mengambang kecil berisi alat yang sedang berjalan saat Minis Ultra berada di latar belakang. Memerlukan izin untuk tampil di atas aplikasi lain. Ketuk kapsul untuk membawa Minis Ultra ke depan; seret untuk memindahkannya.</string>
     <string name="settings_bg_overlay_permission_needed">Izinkan tampil di atas aplikasi lain untuk mengaktifkan</string>
-    <string name="settings_dynamic_island">Dynamic Island (Live Updates)</string>
+    <string name="settings_dynamic_island">Dynamic Island (pembaruan langsung)</string>
     <string name="settings_dynamic_island_footer">Tampilkan status Agen secara langsung pada chip status Android 16. Jika aktif, ini menggantikan overlay mengambang sehingga Anda tidak melihat dua indikator status sekaligus.</string>
     <string name="settings_dynamic_island_unsupported">Versi sistem Anda saat ini belum mendukung Live Updates (memerlukan Android 16+ dengan fitur tersebut diaktifkan).</string>
     <string name="agent_loop_section_title">Model yang Dapat Dipanggil Minis Ultra Saat Berjalan</string>
@@ -1767,7 +1767,7 @@
     <string name="dev_suite_installing">Memasang…</string>
     <string name="dev_suite_failed">gagal</string>
     <string name="dev_suite_view_details">Details</string>
-    <string name="dev_suite_failure_details">Installation failure details</string>
+    <string name="dev_suite_failure_details">Rincian kegagalan instalasi</string>
     <string name="dev_suite_ready">Siap</string>
     <string name="dev_suite_not_installed">Belum terpasang</string>
     <string name="dev_suite_required">wajib</string>
@@ -2143,6 +2143,18 @@
     <!-- Queued-message edit sheet + git diff truncation notice -->
     <string name="chat_queued_edit_title">Edit pesan dalam antrean</string>
     <string name="git_panel_diff_truncated">Diff dipotong pada 200.000 karakter — teks lengkap ada di file repo itu sendiri.</string>
+    <string name="voice_service_no_audio_models">Tidak ada model audio yang terdaftar untuk penyedia ini. Daftar model dari sebagian penyedia (Bailian, SiliconFlow) tidak menyatakan dukungan audio — tambahkan model ASR/TTS sebagai model kustom dengan modalitas audio, atau pilih layanan suara lain.</string>
+    <string name="voice_error_network">Pengenalan suara gagal: kesalahan jaringan. Periksa koneksi, atau beralih ke mesin on-device atau penyedia lain.</string>
+    <string name="voice_error_transcription">Pengenalan suara tidak mengembalikan teks. Bicara lagi, atau periksa model dan kunci API penyedia transkripsi.</string>
+    <string name="voice_error_busy">Pengenal suara sedang sibuk. Tunggu sebentar lalu coba lagi.</string>
+    <string name="voice_error_audio">Pengambilan audio gagal. Periksa izin mikrofon dan pastikan tidak ada aplikasi lain yang memakai mic.</string>
+    <string name="voice_error_language">Bahasa yang dipilih tidak didukung mesin ini. Pilih bahasa lain.</string>
+    <string name="voice_error_unknown">Pengenalan suara gagal: %1$s</string>
+    <string name="thinking_rules_cache_not_ready">Aturan kustom belum aktif (%1$s). Permintaan saat ini memakai bawaan bawaan; pesan berikutnya setelah cache dimuat akan menerapkan aturanmu.</string>
+    <string name="skill_display_name_skill_creator">Skill Creator</string>
+    <string name="skill_display_name_android_sdk_mirrors">Android SDK Mirrors</string>
+    <string name="provider_detail_force_thinking">Paksa extended thinking</string>
+    <string name="provider_detail_force_thinking_footer">Hanya untuk relay yang kompatibel dengan Anthropic. Mengirim thinking:{type:"enabled",budget_tokens:N} bahkan saat katalog model mengatakan model tidak bisa menalar. Gunakan saat model mendukung thinking tetapi entri katalog hilang atau salah.</string>
     <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
     <string name="provider_list_export_providers">Ekspor penyedia</string>
     <string name="provider_transfer_export_title">Ekspor penyedia</string>
@@ -2198,4 +2210,58 @@
     <string name="handsfree_state_speaking">Berbicara…</string>
     <string name="handsfree_exit_recognition">Bebas tangan berhenti: pengenalan suara berulang kali gagal. Ketuk Bebas tangan untuk mencoba lagi.</string>
     <string name="handsfree_exit_tts">Bebas tangan berhenti: balasan tidak dapat dibacakan. Ketuk Bebas tangan untuk mencoba lagi.</string>
+
+    <!-- [T-untranslated] English fallback for keys added by PR #325; pending translation -->
+    <string name="a11y_app_policy_apps">Apps</string>
+    <string name="a11y_app_policy_apps_count">%1$d listed</string>
+    <string name="a11y_app_policy_apps_hint">Satu nama paket Android per baris, mis. com.tencent.mm</string>
+    <string name="a11y_app_policy_blocklist">Gunakan daftar sebagai blocklist</string>
+    <string name="a11y_app_policy_blocklist_sub">Mati = hanya aplikasi terdaftar diizinkan. Nyala = aplikasi terdaftar diblokir.</string>
+    <string name="a11y_app_policy_enabled">Batasi per aplikasi</string>
+    <string name="a11y_app_policy_enabled_sub">Memeriksa paket aplikasi latar depan sebelum setiap pembacaan layar atau ketukan</string>
+    <string name="a11y_app_policy_footer">Saat aktif, ui_read dan ui_action diperiksa terhadap aplikasi latar depan saat ini sebelum dijalankan. Aplikasi di luar daftar (mode izin) atau di dalam daftar (mode blokir) ditolak dengan pesan yang terlihat. Aplikasi Minis sendiri selalu diizinkan.</string>
+    <string name="a11y_app_policy_section">Cakupan aplikasi aksesibilitas</string>
+    <string name="boot_hook_enable">Jalankan /var/minis/boot.sh saat startup</string>
+    <string name="boot_hook_enable_sub">Dieksekusi di sandbox setelah rootfs Linux boot</string>
+    <string name="boot_hook_footer">Nonaktif secara bawaan. Path ini berada di dalam sandbox yang dapat ditulis, sehingga agen apa pun yang mampu menjalankan shell bisa mengganti skripnya — saat aktif, file seperti itu berjalan diam-diam pada setiap peluncuran. Saklar diperiksa ulang tepat sebelum eksekusi, dan waktu pertama kali skrip terdeteksi beserta perubahan ukuran/mtime ditulis ke log aplikasi. Berlaku pada peluncuran berikutnya.</string>
+    <string name="boot_hook_last_status">Eksekusi terakhir</string>
+    <string name="boot_hook_section">Hook boot</string>
+    <string name="lifecycle_hooks_command_hint">Satu baris perintah. Biasanya path skrip paling tepat, mis. bash /var/minis/hooks/on-response.sh. Kosongkan untuk menghapus hook.</string>
+    <string name="lifecycle_hooks_enable">Aktifkan hook siklus hidup</string>
+    <string name="lifecycle_hooks_enable_sub">Menjalankan skrip di bawah pada peristiwanya</string>
+    <string name="lifecycle_hooks_events_footer">Skrip berjalan di sandbox, diserialisasi di jalurnya sendiri, dengan batas waktu 20 detik. Kegagalan hanya dicatat di log dan tidak pernah memblokir obrolan.</string>
+    <string name="lifecycle_hooks_help_body">Setiap skrip menerima MINIS_HOOK_EVENT, MINIS_HOOK_SESSION_ID, dan MINIS_HOOK_DETAIL. Skrip adalah proses PRoot sekali pakai: /proc dari perintah lain tidak terlihat antar-invokasi dan flock tidak andal — gunakan file untuk status antar-eksekusi. OnResponse terpicu sekali per jawaban agen yang selesai; OnSessionEnd terpicu saat obrolan dihapus.</string>
+    <string name="lifecycle_hooks_help_header">Lingkungan &amp; catatan</string>
+    <string name="lifecycle_hooks_master_footer">Nonaktif secara bawaan. Selama nonaktif, skrip yang dikonfigurasi tetap disimpan tetapi tidak pernah dijalankan.</string>
+    <string name="lifecycle_hooks_not_set">Belum diatur</string>
+    <string name="lifecycle_hooks_section_events">Peristiwa</string>
+    <string name="lifecycle_hooks_section_master">Saklar utama</string>
+    <string name="lifecycle_hooks_title">Hook siklus hidup</string>
+    <string name="network_trusted_ca_count">%1$d sertifikat diimpor</string>
+    <string name="network_trusted_ca_duplicate">Sertifikat itu sudah diimpor.</string>
+    <string name="network_trusted_ca_failed">File tersebut tidak bisa dibaca sebagai sertifikat PEM/X.509.</string>
+    <string name="network_trusted_ca_footer">Untuk penyedia yang endpoint HTTPS-nya memakai CA self-signed atau privat. Sertifikat hanya disimpan di dalam Minis dan ditambahkan ke trust anchor Android untuk aplikasi ini; pemeriksaan sertifikat dan hostname yang normal tetap aktif. Berlaku pada permintaan berikutnya ke penyedia — tanpa perlu restart.</string>
+    <string name="network_trusted_ca_import">Impor Sertifikat PEM</string>
+    <string name="network_trusted_ca_imported">%1$d sertifikat diimpor. Coba ulangi permintaan.</string>
+    <string name="network_trusted_ca_none">Belum ada sertifikat yang diimpor</string>
+    <string name="network_trusted_ca_remove_all">Hapus Semua</string>
+    <string name="network_trusted_ca_removed">Sertifikat yang diimpor telah dihapus.</string>
+    <string name="network_trusted_ca_title">Sertifikat Tepercaya</string>
+    <string name="provider_detail_custom_headers">Header permintaan kustom</string>
+    <string name="provider_detail_custom_headers_footer">Satu «Nama: nilai» per baris. Hanya diterapkan pada permintaan chat, /models, dan Responses untuk penyedia ini. Host, Content-Length, dan Connection dikelola klien HTTP dan tidak dapat ditimpa.</string>
+    <string name="provider_detail_custom_headers_placeholder">X-Custom-Header: value</string>
+    <string name="provider_detail_opencode_session_footer">Nonaktif secara bawaan. Saat aktif, setiap permintaan obrolan ke endpoint kustom ini membawa ID stabil per percakapan (x-opencode-session) agar relay kompatibel OpenCode dapat merutekan dan men-cache-nya. Aktifkan hanya untuk gateway yang kamu percaya: ID ini mengidentifikasi percakapan lintas giliran.</string>
+    <string name="provider_detail_opencode_session_header">Header sesi OpenCode</string>
+    <string name="provider_detail_opencode_session_toggle">Kirim x-opencode-session</string>
+    <string name="provider_detail_save_headers">Simpan header</string>
+    <string name="scheduled_task_prompt_template_hint">Tanggal/waktu saat ini dan eksekusi terakhir ditambahkan otomatis. Kamu juga bisa memakai {{date}}, {{time}}, {{datetime}}, {{weekday}}, {{last_fired}}, {{last_fired_ago}}, dan {{task_label}}.</string>
+    <string name="settings_lifecycle_hooks">Hook siklus hidup</string>
+    <string name="settings_lifecycle_hooks_subtitle">Menjalankan skrip sandbox saat sesi mulai / jawaban selesai / sesi berakhir</string>
+    <string name="web_search_tool_enabled">Aktifkan web_search</string>
+    <string name="web_search_tool_enabled_sub">Mengizinkan agen mencari web dari obrolan. Mati → alat ini tidak ditawarkan sama sekali.</string>
+    <string name="web_search_tool_section">Tool</string>
+    <string name="web_search_tool_section_footer">Mematikan alat ini tidak menghapus konfigurasi mesin di bawah; aktifkan kembali untuk memulihkan perilaku yang sama.</string>
+    <string name="tool_label_short_app_name">Minis Ultra</string>
+    <string name="attachment_no_app_toast">Tidak ada aplikasi untuk membuka lampiran ini.</string>
+    <string name="chat_move_to_capsule">Pindahkan ke…</string>
 </resources>

@@ -5,6 +5,7 @@ import android.util.Base64
 import android.util.Log
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.ModelEntry
+import com.openminis.app.data.model.ProviderInstance
 import com.openminis.app.data.model.ProviderType
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.provider.ProviderFactory
@@ -266,15 +267,19 @@ class ModelUseOffloadHandler(
 
         // Build provider + call — runBlocking is acceptable here: this handler
         // is invoked off the main thread by the offload server.
-        val apiKey = providerRepository.loadApiKey(entry.providerInstanceId)
+        // [GH#218] usableApiKey, NOT loadApiKey: a third-party OpenAI/Anthropic/
+        // Responses gateway configured with an empty key is a VALID setup
+        // (ProviderInstance.allowsEmptyAPIKey). Reading the raw store treated it
+        // as "missing_api_key" and blocked a working gateway.
+        val instance = providerRepository.instance(entry.providerInstanceId)
+            ?: return NativeOffloadResult(2, "minis-model-use run: provider instance not found\n")
+        val apiKey = providerRepository.usableApiKey(instance)
             ?: return NativeOffloadResult(
                 2,
                 JSONObject().put("error", "missing_api_key")
                     .put("message", "No API key configured for provider ${entry.model.provider}.")
                     .toString() + "\n",
             )
-        val instance = providerRepository.instance(entry.providerInstanceId)
-            ?: return NativeOffloadResult(2, "minis-model-use run: provider instance not found\n")
         val provider = ProviderFactory.create(instance, apiKey, entry.model, context)
 
         // [GH#67] input_audio serialization is implemented for the OpenAI
@@ -346,9 +351,29 @@ class ModelUseOffloadHandler(
                 Log.i(TAG, "[ModelUseRoute] CHAT-PASSTHROUGH extra_body keys=[${chatExtra.keys.sorted().joinToString(",")}]")
             }
             val chatHdrs = parseExtraHeaders(inputText, callWarnings)
-            if (chatHdrs.isNotEmpty()) {
-                openAI.chatExtraHeaders = chatHdrs
-                appliedExtras.put("extra_headers_keys", JSONArray(chatHdrs.keys.sorted()))
+            // [T-opencode-custom-endpoint-session GH#347] Custom OpenAI-compatible
+            // endpoints reached through model_use (title-gen, sub-agent lanes,
+            // passthrough callers) bypass ChatViewModel's agent loop, so the
+            // per-conversation `x-opencode-session` header has to be attached
+            // here too — but ONLY when the user opted this instance in
+            // (Provider detail → OpenCode session header). The old unconditional
+            // path leaked a stable conversation id to every third-party relay.
+            // [F2 GH#347] Shares `sessionHeaders` with the chat path (through
+            // [modelUseSessionHeaders]): the official `*.opencode.ai` lane now
+            // gets the same automatic fallback here that the chat path always
+            // had. Before this, a real key against opencode.ai went through
+            // model_use WITHOUT the required header and reproduced the service's
+            // 400 ("missing x-opencode-session").
+            val sessionHdrs = modelUseSessionHeaders(
+                instance,
+                request.sessionId,
+                com.openminis.app.provider.ProviderHeaderStore
+                    .openCodeSessionEnabled(instance.id),
+            )
+            val mergedHdrs = chatHdrs + sessionHdrs
+            if (mergedHdrs.isNotEmpty()) {
+                openAI.chatExtraHeaders = mergedHdrs
+                appliedExtras.put("extra_headers_keys", JSONArray(mergedHdrs.keys.sorted()))
             }
             parseCustomEndpointPath(inputText)?.let { customPath ->
                 openAI.absoluteEndpointOverride = customPath
@@ -2189,3 +2214,27 @@ Examples:
 """
     }
 }
+
+/**
+ * [F2 GH#347] model_use 会话头解析的唯一入口。
+ *
+ * 中文：以前这里只调 `customEndpointHeadersFor`，官方 `*.opencode.ai` 实例
+ * （base URL 指向官方 host）在开关关闭时拿不到 `x-opencode-session`，真实 key
+ * 经 model_use 必然 400。现在与聊天主循环共用
+ * [com.openminis.app.provider.OpenCodeSessionHeader.sessionHeaders]，官方 host
+ * 的兜底不会再缺。抽成函数是为了让组合回归（官方 key + model_use 带会话头 /
+ * 自定义端点 + 开关关闭不带）能在 JVM 测试里直接钉住。
+ *
+ * @param enabled 用户在 Provider detail 打开的 per-instance opt-in；必传，
+ *   防止调用点漏传后被默认值静默关闭。
+ */
+internal fun modelUseSessionHeaders(
+    instance: ProviderInstance,
+    sessionId: String?,
+    enabled: Boolean,
+): Map<String, String> =
+    com.openminis.app.provider.OpenCodeSessionHeader.sessionHeaders(
+        instance.effectiveBaseURL,
+        sessionId,
+        enabled,
+    )

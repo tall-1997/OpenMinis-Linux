@@ -50,6 +50,11 @@ class AccessibilityOffloadHandler(private val context: Context) : NativeOffloadH
         private const val TAG = "A11yOffload"
         private const val TOOL = "android-a11y-cli"
 
+        // [GH#114] The gated subcommand set now lives on A11yAppPolicy so the
+        // policy's own tests can assert it (wait/notify included). Diagnostics
+        // (`service`, `--version`) and non-screen actions stay out.
+        private val POLICY_GATED_SUBS = com.openminis.app.accessibility.A11yAppPolicy.POLICY_GATED_SUBS
+
         private const val TOP_HELP = """android-a11y-cli — UI-layer automation via Android AccessibilityService.
 
 Usage:
@@ -117,12 +122,51 @@ First-run: enable "Minis Ultra" under Settings → Accessibility, then `service 
         // a curious developer) can still verify the service runs even when
         // the agent surface is blocked.
         if (sub != "service" && sub != "--version") {
-            if (!OffloadGate.allow("a11y_cli", "android-a11y-cli", request)) {
+            // [GH#539] Fail closed when this CLI is missing from the permission
+            // registry: checkPermission() treats unknown tools as BYPASS, which
+            // would silently allow a gated automation surface. Registration is
+            // also one of the three refusal states OffloadDenial reports.
+            val registered = com.openminis.app.offload.OffloadPermissionManager.isRegistered("a11y_cli")
+            if (!registered || !OffloadGate.allow("a11y_cli", "android-a11y-cli", request)) {
+                val restricted = RestrictedSettingsManager.isRestricted(context)
                 return err(
                     args,
                     "PERMISSION_DENIED",
-                    "Agent is not allowed to use android-a11y-cli. Open Settings → Permissions → Integrations to change.",
+                    OffloadDenial.permissionDenied(
+                        toolName = "a11y_cli",
+                        displayName = "android-a11y-cli",
+                        systemName = "The Android accessibility service",
+                        systemState = if (MinisAccessibilityService.getInstance() != null) {
+                            OffloadDenial.SystemLayer.RUNNING
+                        } else {
+                            OffloadDenial.SystemLayer.NOT_RUNNING
+                        },
+                        systemFix = if (restricted) {
+                            "Android is blocking the Accessibility toggle for this install " +
+                                "(\"Restricted setting\"): allow it via App info → ⋮ → Allow " +
+                                "restricted settings, then enable Minis under Settings → Accessibility."
+                        } else {
+                            "Enable Minis under Settings → Accessibility."
+                        },
+                        settingsPath = "Settings → Permissions → Integrations",
+                    ),
                 )
+            }
+        }
+        // [GH#114] Per-app accessibility policy: this is the single point every
+        // real a11y operation passes through, so enforcing here also covers
+        // shell_execute's android-a11y-cli calls, not just the typed ui_* tools.
+        if (sub in POLICY_GATED_SUBS) {
+            when (val verdict = com.openminis.app.accessibility.A11yAppPolicy.verdictForForeground()) {
+                is com.openminis.app.accessibility.A11yAppPolicy.Verdict.Blocked ->
+                    return err(
+                        args,
+                        "PERMISSION_DENIED",
+                        com.openminis.app.accessibility.A11yAppPolicy
+                            .blockedMessage(verdict, "android-a11y-cli"),
+                        exit = 77,
+                    )
+                com.openminis.app.accessibility.A11yAppPolicy.Verdict.Allowed -> Unit
             }
         }
         // [T-android-a11y-force-stop-recovery] A force-stop (system Settings'

@@ -45,7 +45,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         ProviderConfigMetaEntity::class,
         ProviderThinkingRuleEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class ProviderDatabase : RoomDatabase() {
@@ -139,6 +139,19 @@ abstract class ProviderDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * [OpenMinis#311] Force extended thinking for Anthropic-compatible
+         * relays whose catalog entry says `supportsReasoning = false`. Pure
+         * additive ALTER with NOT NULL DEFAULT 0: existing rows keep the old
+         * "capability decides" behaviour, no data rewrite, no provider drop.
+         * The exported schema (7.json) lands with the next Gradle build.
+         */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.addColumnIfMissing("provider_instances", "force_thinking", "INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun getInstance(context: Context): ProviderDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -146,7 +159,7 @@ abstract class ProviderDatabase : RoomDatabase() {
                     ProviderDatabase::class.java,
                     "provider.db",
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
                     .build()
                     .also { INSTANCE = it }
             }

@@ -7,7 +7,6 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import android.net.Uri
 import android.widget.Toast
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,9 +29,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
@@ -52,18 +49,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
@@ -673,60 +661,12 @@ fun SoulSettingsScreen(
 
     if (showEmojiSheet) {
         SoulEmojiPickerSheet(
-            current = if (SoulIcon.isDataUri(icon) || SoulIcon.isModelIcon(icon)) "" else icon,
+            current = if (
+                SoulIcon.isDataUri(icon) || SoulIcon.isFileRef(icon) || SoulIcon.isModelIcon(icon)
+            ) "" else icon,
             onDismiss = { showEmojiSheet = false },
             onPick = { chosen -> icon = chosen; showEmojiSheet = false },
         )
-    }
-}
-
-/**
- * [T-android-soul-custom-icon] The icon itself, rendered the same way
- * everywhere it appears: a decoded bitmap, an emoji, or the default sparkle.
- *
- * The bitmap decode is `remember`ed on the icon string. Without that, the
- * chat header would re-decode base64 on every recomposition — and headers
- * recompose on every streaming tick.
- */
-@Composable
-internal fun SoulIconGlyph(
-    icon: String,
-    sizeDp: Dp,
-    emojiSp: TextUnit,
-    sparkleTint: Brush? = null,
-) {
-    val bitmap = remember(icon) { SoulIcon.decode(icon) }
-    when {
-        // Rounded rectangle, NOT a circle: at 18dp in the chat header a circle
-        // eats the corners of a small avatar. Clipping here is also what makes
-        // an opaque image acceptable at all — the refusal that used to guard
-        // against "opaque rectangle reads as a broken tile" was a presentation
-        // concern, and this is the presentation fix.
-        bitmap != null -> Image(
-            bitmap = bitmap.asImageBitmap(),
-            contentDescription = null,
-            modifier = Modifier
-                .size(sizeDp)
-                .clip(RoundedCornerShape(sizeDp * SoulIcon.CORNER_RADIUS_FRACTION)),
-        )
-        // [T-soul-avatar-model-icon] 哨兵判断必须在 isNotEmpty() 之前，否则被当文字渲染。
-        SoulIcon.isModelIcon(icon) -> SoulModelIconAvatar(sizeDp = sizeDp, emojiSp = emojiSp)
-        icon.isNotEmpty() -> Text(text = icon, fontSize = emojiSp)
-        // Unset: byte-for-byte the previous sparkle, so a user who never
-        // touches this sees no visual change at all.
-        sparkleTint != null -> Icon(
-            imageVector = m3Icon(Icons.Filled.AutoAwesome),
-            contentDescription = null,
-            tint = Color.White,
-            modifier = Modifier
-                .size(sizeDp)
-                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                .drawWithContent {
-                    drawContent()
-                    drawRect(brush = sparkleTint, blendMode = BlendMode.SrcIn)
-                },
-        )
-        else -> Text(text = SoulMetadata.DISPLAY_EMOJI, fontSize = emojiSp)
     }
 }
 
