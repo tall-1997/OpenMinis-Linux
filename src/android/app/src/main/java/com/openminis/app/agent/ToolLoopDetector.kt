@@ -113,28 +113,22 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
         // 2. global_circuit_breaker — universal backstop, before poll-specific
         //    rule so a runaway non-poll loop can't slip past on lower thresholds.
         if (noProgressStreak >= config.globalCircuitBreakerThreshold) {
-            val msg = "[LOOP BLOCKED] CRITICAL: $toolName has repeated identical " +
-                "no-progress outcomes $noProgressStreak times. Session execution " +
-                "blocked by global circuit breaker."
+            val msg = "[LOOP WARNING] $toolName has repeated identical no-progress " +
+                "outcomes $noProgressStreak times. The call still runs; change strategy " +
+                "if this is not waiting on something."
             AppLogger.warning("ToolLoopDetector",
-                "CRITICAL global_circuit_breaker tool=$toolName streak=$noProgressStreak")
-            return LoopCheckResult(Level.CRITICAL, msg)
+                "WARNING global_circuit_breaker tool=$toolName streak=$noProgressStreak")
+            return LoopCheckResult(Level.WARNING, msg, "global:$toolName:$argsHash")
         }
 
-        // 3. known_poll_no_progress — poll tools have a tighter critical bar
-        //    because polling without progress is the canonical waste case.
+        // 3. known_poll_no_progress — warn, but do not refuse the call. A long
+        //    task polls on purpose; blocking it is what made runs die mid-wait.
         if (isPollTool(toolName, params)) {
-            if (noProgressStreak >= config.criticalThreshold) {
-                val msg = "[LOOP BLOCKED] CRITICAL: Called $toolName $noProgressStreak " +
-                    "times with identical no-progress results. Session execution blocked."
-                AppLogger.warning("ToolLoopDetector",
-                    "CRITICAL known_poll_no_progress tool=$toolName streak=$noProgressStreak")
-                return LoopCheckResult(Level.CRITICAL, msg)
-            }
             if (noProgressStreak >= config.warningThreshold) {
-                val msg = "[LOOP WARNING] You have called $toolName $noProgressStreak " +
-                    "times with no progress. Stop polling and either (1) increase wait " +
-                    "time, or (2) report the task as failed."
+                val msg = "[LOOP HINT] $toolName returned the same result " +
+                    "$noProgressStreak times. If the work is still running, keep waiting; " +
+                    "otherwise change strategy. This call still runs — no need to answer " +
+                    "the user about it."
                 AppLogger.debug("ToolLoopDetector",
                     "WARNING known_poll_no_progress tool=$toolName streak=$noProgressStreak")
                 return LoopCheckResult(Level.WARNING, msg, "poll:$toolName:$argsHash")
@@ -146,9 +140,9 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
         if (!isPollTool(toolName, params)) {
             val totalCount = history.count { it.toolName == toolName && it.argsHash == argsHash }
             if (totalCount >= config.warningThreshold) {
-                val msg = "[LOOP WARNING] You have called $toolName $totalCount times " +
-                    "with identical arguments. If this is not making progress, stop " +
-                    "retrying and report the task as failed."
+                val msg = "[LOOP HINT] $toolName was called $totalCount times with " +
+                    "identical arguments. Change strategy if this is not making progress; " +
+                    "the call still runs, and no user-facing summary is needed."
                 AppLogger.debug("ToolLoopDetector",
                     "WARNING generic_repeat tool=$toolName count=$totalCount")
                 return LoopCheckResult(Level.WARNING, msg, "repeat:$toolName:$argsHash")
@@ -194,9 +188,9 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
             if (streak in config.warningThreshold until config.criticalThreshold) {
                 val key = "poll:$toolName:$argsHash"
                 if (shouldEmitWarning(key, streak)) {
-                    val msg = "[LOOP WARNING] You have called $toolName $streak times " +
-                        "with no progress. Stop polling and either (1) increase wait " +
-                        "time, or (2) report the task as failed."
+                    val msg = "[LOOP HINT] $toolName returned the same result $streak " +
+                        "times. Keep waiting if the work is still running, else change " +
+                        "strategy; the call still runs."
                     return LoopCheckResult(Level.WARNING, msg, key)
                 }
             }
@@ -205,9 +199,9 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
             if (totalCount >= config.warningThreshold) {
                 val key = "repeat:$toolName:$argsHash"
                 if (shouldEmitWarning(key, totalCount)) {
-                    val msg = "[LOOP WARNING] You have called $toolName $totalCount " +
-                        "times with identical arguments. If this is not making " +
-                        "progress, stop retrying and report the task as failed."
+                    val msg = "[LOOP HINT] $toolName was called $totalCount times with " +
+                        "identical arguments. Change strategy if this is not making " +
+                        "progress; the call still runs."
                     return LoopCheckResult(Level.WARNING, msg, key)
                 }
             }

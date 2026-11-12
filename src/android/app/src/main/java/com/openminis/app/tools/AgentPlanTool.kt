@@ -405,36 +405,6 @@ object AgentPlanStore {
             }
         }
     }
-
-    /**
-     * Live board snapshot for the system prompt so the model sees the current
-     * progress every request without a tool round-trip. Empty board renders
-     * nothing (no section at all) to keep the prompt lean. Moved here from
-     * the deleted PlanModeStore: it renders the board, not any mode.
-     */
-    fun boardSnapshotPrompt(plans: List<Plan>): String? {
-        if (plans.isEmpty()) return null
-        // A finished board has nothing to advance: announcing it would tell the
-        // model to keep pushing items that already landed, and the card is on
-        // its way out. The empty-board "create one" contract lives in the
-        // agent_plan tool description, which is in the schema every turn.
-        if (plans.all { it.status == "done" }) return null
-        return buildString {
-            append("<plan_board>\n")
-            append("Current plan board. Advance it with agent_plan — target an item by its number (update id=\"2\", status=\"done\"), by its title, or rebuild the whole board with op=replace; the user sees it live:\n")
-            plans.forEachIndexed { i, p ->
-                append("${i + 1}. [${p.status}] ${p.title}")
-                // [T-plan-snapshot-diet] A landed item's description is
-                // history, not working state: this snapshot rides every
-                // turn, so done rows carry their title only. Open rows keep
-                // the description — it is the spec the model works from next.
-                if (p.description.isNotBlank() && p.status != "done") append(" — ${p.description}")
-                append("\n")
-            }
-            append("</plan_board>")
-        }
-    }
-
     private val DONE_ALIASES = setOf("done", "completed", "complete", "finished")
     private val ACTIVE_ALIASES = setOf("active", "in_progress", "inprogress", "in-progress", "doing")
     private val FAILED_ALIASES = setOf("failed", "error", "cancelled", "canceled", "blocked")
@@ -465,7 +435,7 @@ object AgentPlanTool {
                 "flip the item you are on to active, and to done the moment it lands - in the turn the work happens. " +
                 "When the ACTIVE item flips to done the next pending item is activated automatically — " +
                 "just mark done/failed as work settles; activating the next one yourself is harmless but not needed. " +
-            "update/remove need no ids either: target an item by its 1-based number from the snapshot, its exact " +
+            "update/remove need no ids either: target an item by its 1-based number (op=list shows the board), its exact " +
             "title, or a unique title prefix. Skip the board for single-shot answers and one-command lookups.",
         parameters = mapOf(
             "tool_title" to AgentToolParam("string", "A concise 5-10 word summary shown to the user."),
@@ -514,6 +484,25 @@ object AgentPlanTool {
         return "(${done}/${plans.size} done)"
     }
 
+    /**
+     * [T-board-in-receipt] The board no longer rides every request, so the
+     * receipt (the model's only durable view of the plan) carries the list:
+     * position, status and title, no ids, no descriptions. ZCode's TodoWrite
+     * returns the full list on every write for the same reason.
+     */
+    private fun boardLines(sessionId: String, context: Context?): String {
+        val plans = AgentPlanStore.list(sessionId, context)
+        if (plans.isEmpty()) return ""
+        val done = plans.count { it.status == "done" }
+        return buildString {
+            appendLine()
+            appendLine("Plan (${done}/${plans.size} done):")
+            plans.forEachIndexed { index, plan ->
+                appendLine("${index + 1}. [${plan.status}] ${plan.title}")
+            }
+        }.trimEnd()
+    }
+
     fun execute(argsJson: String, sessionId: String = "__default__", context: Context? = null): ToolExecutionResult {
         val toolTitle = runCatching { JSONObject(argsJson).optString("tool_title", NAME) }.getOrDefault(NAME)
         return try {
@@ -522,7 +511,7 @@ object AgentPlanTool {
             when (op) {
                 "add" -> {
                     val p = AgentPlanStore.add(sessionId, context, args.optString("title"), args.optString("description"), args.optString("status", "pending"), args.optString("id").takeIf { it.isNotBlank() })
-                    ToolExecutionResult("Added {${p.id}}: ${p.title} ${progressLine(sessionId, context)}", true, toolTitle = toolTitle)
+                    ToolExecutionResult("Added {${p.id}}: ${p.title} ${progressLine(sessionId, context)}${boardLines(sessionId, context)}", true, toolTitle = toolTitle)
                 }
                 "update" -> {
                     val ref = args.optString("id")
@@ -535,11 +524,11 @@ object AgentPlanTool {
                     val advanceNote = promoted?.let {
                         "\nAuto-activated next step {${it.id}}: ${it.title} — continue with it."
                     } ?: ""
-                    ToolExecutionResult("Updated {${p.id}}: ${p.title} [${p.status}] ${progressLine(sessionId, context)}$advanceNote", true, toolTitle = toolTitle)
+                    ToolExecutionResult("Updated {${p.id}}: ${p.title} [${p.status}] ${progressLine(sessionId, context)}$advanceNote${boardLines(sessionId, context)}", true, toolTitle = toolTitle)
                 }
                 "remove" -> {
                     val ref = args.optString("id")
-                    if (AgentPlanStore.remove(sessionId, context, ref)) ToolExecutionResult("Removed: ${ref} ${progressLine(sessionId, context)}", true, toolTitle = toolTitle)
+                    if (AgentPlanStore.remove(sessionId, context, ref)) ToolExecutionResult("Removed: ${ref} ${progressLine(sessionId, context)}${boardLines(sessionId, context)}", true, toolTitle = toolTitle)
                     else ToolExecutionResult("Error: plan item not found for \"$ref\". Current board: ${AgentPlanStore.render(sessionId, context)}", false, toolTitle = toolTitle)
                 }
                 "clear" -> { AgentPlanStore.clear(sessionId, context); ToolExecutionResult("(plan list cleared)", true, toolTitle = toolTitle) }
@@ -553,7 +542,7 @@ object AgentPlanTool {
                     }
                     AgentPlanStore.replace(sessionId, context, items)
                     val titles = items.take(10).joinToString(", ") { it.title } + if (items.size > 10) " +${items.size - 10} more" else ""
-                    ToolExecutionResult("Replaced plans: ${items.size} items — $titles ${progressLine(sessionId, context)}", true, toolTitle = toolTitle)
+                    ToolExecutionResult("Replaced plans: ${items.size} items — $titles ${progressLine(sessionId, context)}${boardLines(sessionId, context)}", true, toolTitle = toolTitle)
                 }
                 else -> ToolExecutionResult(AgentPlanStore.render(sessionId, context), true, toolTitle = toolTitle)
             }

@@ -146,6 +146,7 @@ internal suspend fun ChatViewModel.applyCompactMarkerGraying(
         // calling us, so overwrite with the healed one now.
         _cachedLatestMarker = healedMarker
         _compactSummary.value = healedMarker.summary
+        stateHydrationPending = true  // [T-state-hydration]
     }
 
     // ─── Apply graying ────────────────────────────────────────────

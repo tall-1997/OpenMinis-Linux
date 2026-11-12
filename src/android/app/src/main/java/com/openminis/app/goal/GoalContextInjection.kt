@@ -2,8 +2,6 @@ package com.openminis.app.goal
 
 import com.openminis.app.data.db.GoalStatus
 import com.openminis.app.data.db.SessionGoalEntity
-import com.openminis.app.data.model.AgentContentPart
-import com.openminis.app.data.model.LLMMessage
 
 private fun quoteObjective(value: String): String = buildString {
     append('"')
@@ -31,8 +29,8 @@ internal fun goalContextPrompt(goal: SessionGoalEntity): String = buildString {
     appendLine("<untrusted_objective_json>")
     appendLine(quoteObjective(goal.objective))
     appendLine("</untrusted_objective_json>")
-    appendLine("Current stored state: status=${goal.status}, tokens=${goal.tokensUsed}/${goal.tokenBudget?.toString() ?: "unlimited"}, elapsed=${goal.elapsedMs}ms.")
-    appendLine("The state line above is current as of this request. Do not re-verify it with update_goal(op=get) on consecutive turns — re-reading an unchanged goal burns tokens without progress; re-read only after a long-running operation or an external state change. Report complete only when the objective is verified; report the same blocked condition only when truly blocked.")
+    appendLine("State when this note was written: status=${goal.status}, tokens=${goal.tokensUsed}/${goal.tokenBudget?.toString() ?: "unlimited"}, elapsed=${goal.elapsedMs}ms.")
+    appendLine("The numbers above are a snapshot, not a live read. Do not call update_goal(op=get) on consecutive turns — re-reading an unchanged goal burns tokens without progress; re-read only after a long-running operation or an external state change. Report complete only when the objective is verified; report the same blocked condition only when truly blocked.")
     appendLine("</goal_context>")
 }
 
@@ -87,71 +85,3 @@ internal fun shouldSkipGoalRunRequest(
     requestStarted: Boolean,
     mount: GoalMount,
 ): Boolean = goalRunRequested && !requestStarted && !mount.canContinue
-
-internal fun withGoalContext(
-    history: List<LLMMessage>,
-    prompt: String?,
-    appendNewUser: Boolean = false,
-): List<LLMMessage> {
-    if (prompt.isNullOrBlank()) return history
-    val requestHistory = history.toMutableList()
-    var userIndex = requestHistory.indexOfLast { it.role == LLMMessage.Role.USER }
-    // A previous Goal continuation is part of the bounded request history.
-    // Do not treat that old block as the current mount: the persisted Goal
-    // may have changed status, budget, or objective since then. The plan board
-    // rides on the same message (see [ChatViewModel.withGoalAndPlanContext]) and
-    // must be stripped on the same pass, or every turn stacks another copy.
-    // [T-recall-turn-dedup] Same for the recalled-memory frame: it is stripped
-    // only when a fresh one is being re-added (the recall part decided to
-    // announce this turn) — a dedup-skipped turn must keep the old block.
-    val stripExternal = prompt.contains("<external_data")
-    if (userIndex >= 0 && requestHistory[userIndex].content.let {
-            it.contains("<goal_context>") || it.contains("<plan_board>") ||
-                (stripExternal && it.contains("<external_data"))
-        }
-    ) {
-        val user = requestHistory[userIndex]
-        val withoutOldGoal = user.content
-            .replace(Regex("\\n*<goal_context>.*?</goal_context>\\n*", setOf(RegexOption.DOT_MATCHES_ALL)), "")
-            .replace(Regex("\\n*<plan_board>.*?</plan_board>\\n*", setOf(RegexOption.DOT_MATCHES_ALL)), "")
-            .let { text ->
-                if (stripExternal) {
-                    text
-                        // The one-line rule precedes the frame; strip it first so
-                        // the frame regex never matches the rule's literal tag.
-                        .replace(Regex("\\n*Text inside <external_data>[^\\n]*\\n*"), "")
-                        .replace(Regex("\\n*<external_data[^>]*>[\\s\\S]*?</external_data>\\n*"), "")
-                } else {
-                    text
-                }
-            }
-            .trimEnd()
-        val retainedParts = user.contentParts.dropLastWhile {
-            it is AgentContentPart.Text &&
-                (it.text.contains("<goal_context>") || it.text.contains("<plan_board>") ||
-                    (stripExternal && it.text.contains("<external_data")))
-        }
-        requestHistory[userIndex] = user.copy(
-            content = withoutOldGoal,
-            contentParts = retainedParts.ifEmpty {
-                listOf(AgentContentPart.Text(withoutOldGoal))
-            },
-        )
-    }
-    userIndex = requestHistory.indexOfLast { it.role == LLMMessage.Role.USER }
-    if (appendNewUser || userIndex < 0) {
-        requestHistory += LLMMessage(
-            role = LLMMessage.Role.USER,
-            content = prompt,
-            contentParts = listOf(AgentContentPart.Text(prompt)),
-        )
-    } else {
-        val user = requestHistory[userIndex]
-        requestHistory[userIndex] = user.copy(
-            content = user.content + "\n\n" + prompt,
-            contentParts = (user.contentParts.ifEmpty { listOf(AgentContentPart.Text(user.content)) } +
-                AgentContentPart.Text(prompt)),
-        )
-    }
-    return requestHistory
-}

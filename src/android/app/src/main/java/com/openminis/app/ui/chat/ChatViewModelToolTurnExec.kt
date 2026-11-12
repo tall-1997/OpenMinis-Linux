@@ -77,6 +77,8 @@ internal class ToolTurnContext(
      * exact final payload wins over a stale stride-gated delta.
      */
     val toolCallRawArgs: MutableMap<String, String>,
+    /** [T-tool-execution-ledger] Run-scoped: a replayed call reuses its result. */
+    val ledger: ToolExecutionLedger,
 )
 
 /**
@@ -473,6 +475,18 @@ private suspend fun ChatViewModel.runPlannedCall(
     withContext(Dispatchers.Main) {
         updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, ctx.allToolBlocks.toList())
     }
+    // [T-tool-execution-ledger] A replay of an already-completed call reuses
+    // its recorded result instead of running side effects twice. The key
+    // includes name+args: a provider may reuse a numbered id for a new call.
+    val ledgerArgsSha = com.openminis.app.util.Digest.sha256Hex(call.argsStr)
+    ctx.ledger.reuse(call.id, call.name, ledgerArgsSha)?.let { prior ->
+        AppLogger.warning(
+            ChatViewModel.TAG_STREAM,
+            "[ToolLedger] reused recorded result for replayed call id=${call.id} name=${call.name}",
+        )
+        executedParts[call.id] = prior
+        return
+    }
     Log.d("ToolChain[VM]", "[turn=${ctx.turn}] executeTool START name=${call.name} args=${call.argsStr.take(200)}")
     val result = executeTool(call.name, call.argsStr, call.id, ctx.allToolBlocks, ctx.assistantId, ctx.accumulatedText)
     // [T-known-failure] Feed the outcome back into the failure ledger the dispatch
@@ -483,7 +497,9 @@ private suspend fun ChatViewModel.runPlannedCall(
     )
     currentCoroutineContext().ensureActive()
     Log.d("ToolChain[VM]", "[turn=${ctx.turn}] executeTool END name=${call.name} success=${result.success} title=${result.toolTitle} outputLen=${result.output.length} output=${result.output.take(200)}")
-    executedParts[call.id] = finalizePlannedCall(ctx, call, result)
+    val part = finalizePlannedCall(ctx, call, result)
+    ctx.ledger.record(call.id, call.name, ledgerArgsSha, part)
+    executedParts[call.id] = part
 }
 
 /**
@@ -526,8 +542,16 @@ private suspend fun ChatViewModel.fanOutSpawnCalls(
         }.awaitAll()
     }
     for (peer in peers) {
+        val peerArgsSha = com.openminis.app.util.Digest.sha256Hex(peer.argsStr)
+        val prior = ctx.ledger.reuse(peer.id, peer.name, peerArgsSha)
+        if (prior != null) {
+            execution.executedParts[peer.id] = prior
+            continue
+        }
         val peerResult = execution.parallelSubResults[peer.id] ?: continue
-        execution.executedParts[peer.id] = finalizePlannedCall(ctx, peer, peerResult)
+        val part = finalizePlannedCall(ctx, peer, peerResult)
+        ctx.ledger.record(peer.id, peer.name, peerArgsSha, part)
+        execution.executedParts[peer.id] = part
     }
 }
 

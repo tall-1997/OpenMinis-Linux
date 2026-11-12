@@ -140,10 +140,7 @@ internal object ContextBreakdownMath {
  *     ([T-context-breakdown-race]; the old global lastSystemSections
  *     registry let a concurrent session's build bleed into this session's
  *     numbers, and served stale sections after a failed build);
- *   - goal/plan = the PromptParts registry render (work report, lanes,
- *     jobs, plan board, recall) + the active goal's <goal_context> prompt —
- *     exactly what withGoalAndPlanContext appends to the last user message,
- *     so HISTORY (measured without the injection) + GOAL_PLAN don't overlap;
+ *   - goal/plan: nothing is appended per request; those notices live in HISTORY;
  *   - history reuses estimateAgentHistoryTokens (effective/compacted window);
  *   - pending attachments count images at the same flat 1,500 the history
  *     estimator uses. Document attachments are NOT byte-read here — that is
@@ -155,26 +152,17 @@ internal suspend fun ChatViewModel.buildContextBreakdown(): ContextBreakdown = w
     // no shared registry between build and read.
     val systemSections = buildSystemPromptWithSections().second
 
-    val goalPrompt = runCatching {
-        val manager = com.openminis.app.goal.GoalManager(chatRepository)
-        val state = manager.get(activeSessionId)
-        state
-            ?.takeIf { com.openminis.app.goal.GoalStateMachine.canContinue(it, usefulActivity = true) }
-            ?.let { com.openminis.app.goal.goalContextPrompt(it) }
-    }.getOrNull()
-
-    val goalPlanText = buildList {
-        addAll(PromptParts.render(PromptParts.validate(PromptParts.of(this@buildContextBreakdown))))
-        if (!goalPrompt.isNullOrBlank()) add(goalPrompt)
-    }.joinToString("\n\n")
+    // [T-no-repeated-injection] Nothing is appended per request any more:
+    // goal/recall/plan notices are committed once into HISTORY, and the plan
+    // report/lanes/jobs live in tool results. Counting them here again would
+    // report tokens the request does not carry (and double-count the history).
 
     val maxOutput = currentProvider?.let { dynamicMaxTokens(it, _lastTurnContextTokens.value) }
         ?: currentModelMaxOutputTokens
         ?: 0
 
     ContextBreakdownMath.build(
-        sections = systemSections +
-            listOf(ContextBlockKey.GOAL_PLAN to goalPlanText),
+        sections = systemSections,
         historyTokens = estimateAgentHistoryTokens(),
         pendingAttachmentTokens = pendingAttachmentTokens(),
         usedTokens = contextTokensForPolicy(),

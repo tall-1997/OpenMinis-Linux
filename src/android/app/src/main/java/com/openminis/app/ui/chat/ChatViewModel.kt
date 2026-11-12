@@ -371,19 +371,7 @@ class ChatViewModel(
             return (COMPACT_TIMEOUT_BASE_MS + growth).coerceAtMost(COMPACT_TIMEOUT_MAX_MS)
         }
 
-        /**
-         * Should a failed summary attempt be retried by splitting the input in
-         * half? Pure predicate, in the companion so it is testable without an
-         * Android-bound ViewModel; [isSegmentRetryableError] delegates here.
-         *
-         * Splitting only helps when the failure was caused by the SIZE of the
-         * request. Unclassified errors still split — an over-length refusal
-         * arrives as an untyped ProviderError on most providers, and a summary
-         * built from halves beats no summary — but the classes known to be
-         * size-independent are excluded, because for those a split turns one
-         * failure into up to 15 sequential slow calls. That amplification is
-         * what produced the 15-20 minute apparent hang.
-         */
+        /** Split-retry predicate for summary failures; size-classified errors are excluded. */
         internal fun shouldSplitOnError(error: Throwable): Boolean {
             if (error is CancellationException) return false
             if (error is LLMError) {
@@ -1316,24 +1304,11 @@ class ChatViewModel(
     internal val _promptQueue = MutableStateFlow<List<QueuedPrompt>>(emptyList())
     val promptQueue: StateFlow<List<QueuedPrompt>> = _promptQueue.asStateFlow()
 
-    /**
-     * [T-plan-step-retry] One-shot plan-step retry request, shared with
-     * ChatViewModelPlanStepExt.kt (extensions cannot add fields, so the state
-     * lives here and the behavior lives in the ext). Set by
-     * [ChatViewModel.retryPlanStep] when the user retries a failed board step;
-     * consumed by `planBoardPrompt` at the NEXT request assembly, where it
-     * rides inside the `<plan_board>` block as one-shot steering. Null when
-     * nothing is pending.
-     */
+    /** [T-plan-step-retry] One-shot retry steering, consumed by [commitSessionNoticesOnce]. */
     internal val _planStepRetry = MutableStateFlow<PlanStepRetryRequest?>(null)
     val planStepRetry: StateFlow<PlanStepRetryRequest?> = _planStepRetry.asStateFlow()
 
-    /**
-     * Input-token count reported by the most recent API call, used by
-     * [ContextPolicy] as the "estimated tokens" gate before sending. Zero
-     * means either we've never called the model or the provider didn't return
-     * a usage payload — in which case we treat the turn as low-pressure.
-     */
+    /** Input tokens from the last API call; 0 = unknown (treated as low pressure). */
     internal val _lastTurnContextTokens = MutableStateFlow(0)
     val lastTurnContextTokens: StateFlow<Int> = _lastTurnContextTokens.asStateFlow()
 
@@ -1341,61 +1316,37 @@ class ChatViewModel(
     internal val _lastCacheHitRate = MutableStateFlow(0.0)
     val lastCacheHitRate: StateFlow<Double> = _lastCacheHitRate.asStateFlow()
 
-    // [T-android-split-chat-tokenext] estimateAgentHistoryTokens /
-    // estimateMessagesTokens / estimateMixedTokens / contextTokensForPolicy /
-    // refreshContextUsage / thinkingInfo / loadSessionTokenStats /
-    // dynamicMaxTokens / estimateContextTokens / countPartTokens moved
-    // verbatim to ChatViewModelTokenExt.kt.
+    // [T-android-split-chat-tokenext] Token helpers live in ChatViewModelTokenExt.kt.
 
-    /**
-     * Latest compact summary for the current session, loaded from the DB on
-     * [loadSession] and re-populated after [compactAll] finishes. When non-null,
-     * [effectiveAgentHistory] prepends it as a `<context-summary>` user message
-     * so the model sees a condensed recap of the turns we folded away while
-     * keeping the full [agentHistory] on disk as an audit trail. Mirrors iOS
-     * Phase-B compact semantics (summary synthesized at inference time, never
-     * baked back into agentHistory).
-     */
+    /** Compact summary prepended as `<context-summary>`; never written back to agentHistory. */
     internal val _compactSummary = MutableStateFlow<String?>(null)
     override val compactSummary: StateFlow<String?> = _compactSummary.asStateFlow()
 
-    /**
-     * Set each [buildSystemPrompt] from whether a personality body was
-     * injected. [effectiveAgentHistory] then prefixes the latest user-text
-     * turn so existing sessions don't keep the previous generic voice.
-     */
-    @Volatile
-    internal var personaHistorySteering = false
-
-    /**
-     * Byte offset at which the last [buildSystemPrompt] result switches from
-     * byte-stable (base, skills, MCP, global + daily memory) to per-turn
-     * dynamic (WorldBook hits, learned prefs, recall, runtime context).
-     * AnthropicProvider places its system cache_control breakpoint exactly here
-     * so the stable head is a cross-turn cache hit; -1 means "unknown, cache
-     * the whole system prompt as before".
-     */
+    /** Byte offset of the stable system-prompt prefix; -1 caches the whole prompt. */
     @Volatile internal var systemPromptStablePrefixLen: Int = -1
 
-    // [T-recall-turn-dedup] Cross-turn dedup state for live recall: the turn
-    // identity (last non-queued user message id) and the recalled line keys
-    // announced for it. Compaction resets both so memories can return.
-    @Volatile internal var lastRecallTurnKey: String? = null
-    @Volatile internal var lastRecallTurnKeys: Set<String>? = null
+    /** Daily files already pasted verbatim into the system prompt. Recall must not repeat them. */
+    @Volatile internal var residentDailyFiles: Set<String> = emptySet()
 
-    /** [T-process-tail-content-dedupe] Last process tail (identical bytes reuse the instance). */
-    @Volatile internal var processTailCache: String? = null
+    /** [T-recall-once] Memory lines already delivered this session. */
+    internal val announcedRecallKeys: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+    /** [T-goal-once] Objective sha already delivered. */
+    @Volatile internal var goalAnnouncedSha: String? = null
 
-    /**
-     * [T-recall-carrier-replay-once] Whether the last announcement was the
-     * "carrier evicted" replay. After compaction evicts the message that
-     * carried the recall block, the memories are absent from context and must
-     * be re-surfaced — but only ONCE: without this flag the carrier-alive
-     * condition stays false for every following turn of a compacted session,
-     * and the same memories are re-announced on every request (context bloat
-     * plus the model reading the same "past task" notes over and over).
-     */
-    @Volatile internal var lastRecallCarrierReplayed: Boolean = false
+    /** [T-recall-once] Committed recall note; re-announced only after eviction. */
+    @Volatile internal var announcedRecallCarrier: String? = null
+
+    /** [T-goal-once] Marker of the committed objective note. */
+    @Volatile internal var goalAnnouncedCarrier: String? = null
+
+    /** [T-state-hydration] Set when history lost the live state (compact/trim/load). */
+    @Volatile internal var stateHydrationPending: Boolean = false
+
+    /** [T-state-hydration] Sha of the last restored snapshot (dedupe). */
+    @Volatile internal var stateSnapshotSha: String? = null
+
+    /** [T-recall-once] Session the notice bookkeeping belongs to. */
+    @Volatile internal var noticesSessionId: String? = null
 
     /** True when a compact-summary LLM call is in flight (UI disables further sends). */
     internal val _isCompacting = MutableStateFlow(false)
@@ -2911,7 +2862,7 @@ class ChatViewModel(
                     "from outbound history (${scrubbed.savedChars} chars saved)",
             )
         }
-        val steered = if (personaHistorySteering) com.openminis.app.agent.PersonaPromptLogic.applyHistorySteering(scrubbed.history) else scrubbed.history
+        val steered = scrubbed.history
         // Rows trimmed out of the window stay as a clipped excerpt; the digest covers what this process dropped.
         // [T-message-transformers] 发送前清洗 assistant 文本里的思考残留。
         val cleaned = HistoryDigest.inject(

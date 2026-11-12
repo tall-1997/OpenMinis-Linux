@@ -538,6 +538,7 @@ internal fun ChatViewModel.loadSession() {
         // keeps the write order below identical to the serial version.
         val marker = markerDeferred.await()
         _compactSummary.value = marker?.summary
+        if (marker != null) stateHydrationPending = true  // [T-state-hydration] compacted history
         _cachedLatestMarker = marker
         if (marker == null) {
             val oldest = loaded.llmOldestSortOrder

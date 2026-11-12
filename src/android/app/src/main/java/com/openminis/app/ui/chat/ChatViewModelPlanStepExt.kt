@@ -17,16 +17,12 @@ import kotlinx.coroutines.flow.StateFlow
  * the failed step to active and arms a one-shot steering request. Whether the
  * model actually sees it depends on the run state:
  *
- * - **Streaming** — the next in-run request picks the steering up at the
- *   request-assembly boundary ([consumePlanStepRetryPrompt] is called from
- *   `planBoardPrompt`, which the agent loop re-renders every round).
+ * - **Streaming** — the next in-run request commits the steering ONCE via
+ *   [consumePlanStepRetryPrompt] (see [commitSessionNoticesOnce]); it is
+ *   never rebuilt into later requests.
  * - **Idle** — the loop is kicked with the same internal-run send the Goal
  *   sheet uses (`sendMessage("", skipContextCheck = true, internalGoalRun =
- *   true)`): no user bubble, the plan-board block IS the instruction.
- *
- * The steering rides INSIDE the `<plan_board>` element, so the per-turn strip
- * in withGoalContext (which removes the whole block) also removes the steering
- * — a standalone line would stack copies turn after turn.
+ *   true)`): no user bubble, the one-shot note IS the instruction.
  */
 
 /** One user-requested retry of one failed board step; consumed once. */

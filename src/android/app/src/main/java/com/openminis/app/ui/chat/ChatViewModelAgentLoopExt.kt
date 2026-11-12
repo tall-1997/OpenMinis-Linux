@@ -74,14 +74,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     val generationRunId = com.openminis.app.agent.GenerationRunLifecycle.start(
         context, activeSessionId, provider.model.displayName, runAnchor,
     )
-    // [T-android-mem-probe-trust] Send-path context shape. The existing
-    // `messages-shape` probe only runs on session LOAD, so the 2026-08-15
-    // log described the session as it was opened, never as it was sent —
-    // and the send is where the memory goes. `historySize` alone says
-    // nothing about payload: 17 messages carrying a 100 KB tool_result each
-    // is a very different request from 1500 short ones. Logged once per
-    // agent loop (not per turn) to stay cheap; the walk is O(parts) over
-    // already-resident strings.
+    // [T-android-mem-probe-trust] Log the send-path context shape once per run.
     runCatching {
         var chars = 0L
         var maxOne = 0
@@ -150,17 +143,8 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // other tools get 5Hz so command/url previews stay legible.
     var lastFileToolInputMs = 0L
     var lastOtherToolInputMs = 0L
-    // [T-android-throttle-ladder-converge] Ladder body moved to
-    // [StreamingThrottle.ladderFor]. This surface deliberately keeps its
-    // FASTER 150ms first tier (vs the flush/parse surfaces' 200ms) — the
-    // delta gate only applies to short inputs, where the pill's command/url
-    // preview benefits from the lower latency; the rest of the ladder is
-    // shared.
-    // Fallback state — mirrors iOS streamWithGroupFallback.
-    // [T-android-model-switch-midrun-adopt] Both are reassigned at the top of
-    // every request when the user picked a different model since the previous
-    // one started: the run keeps going, and the next request uses the new
-    // model with the fallback chain rebuilt for it.
+    // [T-android-throttle-ladder-converge] 150ms first tier for this surface.
+    // [T-android-model-switch-midrun-adopt] Fallback state is re-read per request.
     var currentProvider = provider
     var remainingFallbacks = fallbackProviders.toMutableList()
     val fallbackReasons = mutableListOf<String>()
@@ -254,11 +238,8 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // that emits text across several turns doesn't re-fire it and cut off
     // its own speech mid-sentence.
     var didStopStaleReadAloud = false
-    // [T-android-loop-stall-guard] Per-run stall accounting (fresh instance
-    // per runAgentLoop = the run-start clear); rule 1/3 nudges ride the next
-    // request assembly (see applyStallNudge); rule 2 breaks with a report.
-    val stallGuard = ChatViewModelStallGuard()
-    var stallGuardNudge: String? = null
+    val toolExecutionLedger = ToolExecutionLedger()  // [T-tool-execution-ledger] one per run
+    val repeatTracker = ToolRepeatTracker()  // [T-frozen-repeat-hint] hint-only
     // [T-main-session-turn-cap] The runaway guard is user-tunable
     // (Settings → Tool Limits); 200 is only the shipped default. Read once
     // per run so a mid-run settings change can't shift the range end under
@@ -280,9 +261,6 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         currentCoroutineContext().ensureActive()
         // Sanitize history before each API call (mirrors iOS pre-API validation)
         sanitizeAgentHistory()
-        // [T-work-report-staleness] Per-turn count (retries re-collect the same request
-        // and must not count): STALE_REQUEST_LIMIT unrefreshed rounds degrades the snapshot.
-        com.openminis.app.tools.AgentReportStore.noteRequestServed(activeSessionId)
 
         // Context window management: offload large tool outputs in older
         // messages to disk when this model's window threshold is crossed;
@@ -542,36 +520,31 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     loopExitedNormally = true
                     break@agentTurns
                 }
+                // [T-once-notices] Recall, plan retry and the goal are committed
+                // into the transcript once — never rebuilt per request.
+                commitSessionNoticesOnce(
+                    goalObjective = requestGoalState?.objective.orEmpty(),
+                    goalPrompt = goalMount.prompt,
+                    goalCanContinue = goalMount.canContinue,
+                )
                 val requestHistory = ToolIdNormalization.normalizeMessages(
-                    // [T-process-tail-injection] Process blocks + goal ride the
-                    // system prompt tail; the history stays byte-clean (no grafting
-                    // onto the tool_result carrier).
                     effectiveAgentHistory().let { history ->
-                        // [T-stall-resume] A previous attempt stalled mid-stream:
-                        // [T-stall-resume][T-android-loop-stall-guard] One-shot
-                        // USER-note lane (never persisted; cleared on first use).
-                        val withResume = applyStallNudge(history, stallResumeContext)
-                        val guardNudge = stallGuardNudge
-                        stallGuardNudge = null
-                        applyStallNudge(withResume, guardNudge)
+                        // [T-stall-resume] One-shot continuation note only.
+                        applyStallNudge(history, stallResumeContext)
                     }
                 )
-                // [T-first-event-watchdog] A hung relay never throws — this stream
-                // cancels itself and surfaces a TransientError for the retry chain.
-                // [T-routing-strategy-x] First-token budget via GroupRoutingState so the main loop and the group-chat lane agree.
+                // [T-first-event-watchdog][T-routing-strategy-x] First-token budget.
                 val firstEventTimeoutMs = GroupRoutingState.resolveFirstEventTimeoutMs(providerRepository,
                     _selectedGroupId.value,
                     (if (currentModelSupportsReasoning) _thinkingLevel.value else ThinkingLevel.OFF).isEnabled)
-                // [T-stream-stall-watchdog] Phase 2: silence past twice the first-event
-                // budget means the stream stalled, not started slow.
+                // [T-stream-stall-watchdog] 2x first-event budget = stalled, not slow.
                 val streamIdleTimeoutMs = firstEventTimeoutMs * 2
                 // [GH#221] 用户头 + OpenCode 会话头走同一通道。
                 val requestHeaders = requestExtraHeaders()
-                // [GH#563] refresh the date per request; process blocks + goal ride the tail.
-                // goal 每轮都在 tail，历史不追加（见上方复审注释），避免同一请求两份。
-                val turnSystemPrompt = processInjectedSystemPrompt(
-                    refreshRuntimeContextDate(systemPrompt, java.time.LocalDate.now().toString()),
-                    goalMount.prompt,
+                // [GH#563][T-no-repeated-injection] Date only; state lives in history.
+                val turnSystemPrompt = refreshRuntimeContextDate(
+                    systemPrompt,
+                    java.time.LocalDate.now().toString(),
                 )
                 streamPhase.startAttempt()
                 currentProvider.streamMessage(
@@ -1810,6 +1783,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
 
         // [T-truncated-tool-call-reject] finish_reason=length/max_tokens 由 ToolCallPreflight 统一拒绝。
         val turnCtx = ToolTurnContext(
+            ledger = toolExecutionLedger,
             activeSessionId = activeSessionId,
             assistantId = assistantId,
             accumulatedText = accumulatedText,
@@ -1845,6 +1819,9 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 }
             }
         }
+
+        // [T-frozen-repeat-hint] One hint inside the tool result; never a USER turn.
+        ToolRepeatTracker.applyHint(repeatTracker, toolCalls, resultParts)
 
         currentCoroutineContext().ensureActive()
         if (activeRun?.isStopped == true) { loopExitedNormally = true; break }
@@ -1900,25 +1877,10 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             break
         }
 
-        // [T-android-loop-stall-guard] Record this dispatched turn after the
-        // results are in history and the goal ledger settled, then act on the
-        // outcome (see enforceStallGuard): rule 1/3 arms a one-shot nudge for
-        // the next request assembly; rule 2 breaks the run with a final
-        // report. The break's UI teardown stays loop-local — it is bound to
-        // assistantId/accumulatedText/allToolBlocks.
-        when (val outcome = enforceStallGuard(stallGuard, turn, toolCalls, turnText, resultParts)) {
-            is StallLoopOutcome.Nudge -> stallGuardNudge = outcome.message
-            is StallLoopOutcome.BreakWithReport -> {
-                accumulatedText = accumulatedText + "\n\n" + outcome.report
-                withContext(Dispatchers.Main) {
-                    drainLiveAssistantUi(assistantId, accumulatedText, allToolBlocks)
-                }
-                markLiveInterruptionAndArmResume(loopResumeEpoch)
-                loopExitedNormally = true
-                break
-            }
-            StallLoopOutcome.Continue -> Unit
-        }
+        // [T-no-mid-task-speech] No stall nudge rides the loop: a synthetic
+        // USER turn makes the model stop and answer in prose, which is exactly
+        // what ZCode/DeepSeek-Harness avoid. Repeated calls still get a hint
+        // appended INSIDE the tool result (ToolLoopDetector), never as a turn.
 
         if (turn == 0) generateSessionTitleIfNeeded()  // auto-title after first exchange
 

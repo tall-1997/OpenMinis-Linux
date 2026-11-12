@@ -34,6 +34,7 @@ internal suspend fun ChatViewModel.reconcileCompactMarkersAfterTruncation(sessio
     val latest = runCatching { chatRepository.dao.latestCompactMarker(sessionId) }.getOrNull()
     _cachedLatestMarker = latest
     _compactSummary.value = latest?.summary
+    if (latest != null) stateHydrationPending = true  // [T-state-hydration]
     _compactMarkerDetached = false
     if (removed > 0) {
         AppLogger.info(

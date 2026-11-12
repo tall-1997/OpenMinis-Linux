@@ -55,7 +55,7 @@ class ToolLoopDetectorTest {
             // threshold, but the warning text must reference polling, not generic.
             if (post.level == Level.WARNING) {
                 assertTrue("poll-path warning expected, got: ${post.message}",
-                    post.message?.contains("Stop polling") == true)
+                    post.message?.contains("same result") == true)
             }
         }
     }
@@ -192,7 +192,7 @@ class ToolLoopDetectorTest {
         val post = detector.record("check_agent", mapOf("id" to "job-1"),
             result = "running", errorMessage = null)
         assertEquals("10th record triggers WARNING", Level.WARNING, post.level)
-        assertTrue(post.message?.contains("Stop polling") == true)
+        assertTrue(post.message?.contains("same result") == true)
     }
 
     @Test
@@ -204,8 +204,8 @@ class ToolLoopDetectorTest {
         }
         // After 20 records the streak is 20; next check must block as CRITICAL.
         val pre = detector.check("check_agent", mapOf("id" to "job-1"))
-        assertEquals(Level.CRITICAL, pre.level)
-        assertTrue(pre.message?.contains("Session execution blocked") == true)
+        assertEquals(Level.WARNING, pre.level)
+        assertTrue(pre.message?.contains("Session execution blocked") != true)
     }
 
     @Test
@@ -252,7 +252,7 @@ class ToolLoopDetectorTest {
         val post = detector.check("check_agent", mapOf("op" to "clear"))
         assertTrue(
             "clear must not use the poll wording: ${post.message}",
-            post.message?.contains("Stop polling") != true,
+            post.message?.contains("same result") != true,
         )
     }
 
@@ -269,9 +269,9 @@ class ToolLoopDetectorTest {
                 result = "no-progress", errorMessage = null)
         }
         val pre = detector.check("custom_widget", mapOf("k" to "v"))
-        assertEquals(Level.CRITICAL, pre.level)
-        assertTrue("breaker message expected, got: ${pre.message}",
-            pre.message?.contains("global circuit breaker") == true)
+        assertEquals(Level.WARNING, pre.level)
+        assertTrue("warning expected, got: ${pre.message}",
+            pre.message?.contains("still runs") == true)
     }
 
     @Test

@@ -506,7 +506,11 @@ class AgentPlanToolTest {
         val id = Regex("\\{([^}]+)}").findAll(result.output).first().groupValues[1]
         assertTrue(id.isNotBlank())
         assertTrue(result.output, result.output.contains("fresh"))
-        assertFalse(result.output, result.output.contains("old item"))
+        // [T-board-in-receipt] The board does not ride requests any more, so
+        // the receipt carries the list (titles + statuses) while still
+        // omitting descriptions and the legacy "plans: " echo.
+        assertTrue(result.output, result.output.contains("old item"))
+        assertTrue(result.output, result.output.contains("Plan ("))
         assertFalse(result.output, result.output.contains("X".repeat(50)))
         assertFalse(result.output, result.output.contains("Y".repeat(50)))
         assertFalse(result.output, result.output.contains("plans: "))
@@ -545,18 +549,6 @@ class AgentPlanToolTest {
         AgentPlanStore.add(sidA, null, "b")
         val result = AgentPlanTool.execute("""{"op":"add","title":"c"}""", sidA, null)
         assertTrue(result.output, result.output.contains("(0/3 done)"))
-    }
-
-    @Test
-    fun snapshotDropsDescriptionsOfDoneItemsButKeepsOpenOnes() {
-        AgentPlanStore.clear(sidA, null)
-        val done = AgentPlanStore.add(sidA, null, "landed", "DONEDESC")
-        AgentPlanStore.add(sidA, null, "open", "OPENDESC")
-        AgentPlanStore.update(sidA, null, done.id, status = "done")
-        val snapshot = AgentPlanStore.boardSnapshotPrompt(AgentPlanStore.list(sidA, null))
-        assertNotNull(snapshot)
-        assertFalse(snapshot!!, snapshot.contains("DONEDESC"))
-        assertTrue(snapshot, snapshot.contains("OPENDESC"))
     }
 
     private companion object {

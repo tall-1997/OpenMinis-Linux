@@ -60,49 +60,51 @@ internal fun dropOrphanedToolParts(history: List<LLMMessage>): List<LLMMessage> 
     // An assistant tail may legitimately be awaiting execution. Only those
     // exact final-message occurrences are exempt.
     //
-    // [T-orphan-use-removal] A mid-history use with NO result is not a failed
-    // tool call: it is the surviving half of a pair that history trimming cut
-    // apart. The old repair fabricated an "interrupted by an unexpected error"
-    // result for it, so the model read a failed call and re-issued the SAME
-    // call on the next turn — every request rebuilt the same slice, the same
-    // fabrication reappeared, and the run looped forever (the reported
-    // "repeats itself and does no work"). Remove the orphaned use instead:
-    // the provider sees a clean, fully paired transcript, and the model has no
-    // failed call to retry.
+    // [T-orphan-use-pairing] ZCode's contract: every visible tool call owns
+    // exactly one result. A mid-history use whose result is gone (history
+    // trimmed, stream aborted) is paired with a NEUTRAL interrupted result —
+    // not deleted, and not an error: deleting it hid the call from the
+    // transcript, and an error told the model the call failed so it re-issued
+    // the same call every turn.
     val tailUses = if (history.lastOrNull()?.role == LLMMessage.Role.ASSISTANT) {
         history.last().contentParts.mapIndexedNotNull { partIndex, part ->
             (part as? AgentContentPart.ToolUse)?.let { it.id to it.name to partIndex }
         }.toSet()
     } else emptySet()
-    val removableUses = unmatchedUses.filterNot { use ->
+    val repairedUses = unmatchedUses.filterNot { use ->
         use.messageIndex == history.lastIndex &&
             (use.id to use.name to use.partIndex) in tailUses
     }
-    if (droppedResults.isEmpty() && removableUses.isEmpty()) return history
+    if (droppedResults.isEmpty() && repairedUses.isEmpty()) return history
 
     AppLogger.warning(
         ChatViewModel.TAG,
         "[CompactDiag] ordered tool pairing repair: droppedResults=${droppedResults.size} " +
-            "removedOrphanUses=${removableUses.size} historyCount=${history.size}",
+            "interruptedUses=${repairedUses.size} historyCount=${history.size}",
     )
-    val removedByMessage = removableUses.groupBy { it.messageIndex }
-    val cleaned = ArrayList<LLMMessage>(history.size)
+    val repairedByMessage = repairedUses.groupBy { it.messageIndex }
+    val cleaned = ArrayList<LLMMessage>(history.size + repairedUses.size)
     history.forEachIndexed { index, message ->
-        val removedHere = removedByMessage[index].orEmpty()
         val kept = message.contentParts.mapIndexedNotNull { partIndex, part ->
-            when {
-                part is AgentContentPart.ToolResult && (index to partIndex) in droppedResults -> null
-                // Pairing-key comparison, same rule the matcher above uses: a
-                // Responses-style "<call_id>|<fc_id>" use must be removed by
-                // the same key its result was matched on.
-                part is AgentContentPart.ToolUse && removedHere.any {
-                    ToolPairing.key(it.id) == ToolPairing.key(part.id) && it.name == part.name
-                } -> null
-                else -> part
-            }
+            if (part is AgentContentPart.ToolResult && (index to partIndex) in droppedResults) null else part
         }
         if (kept.isNotEmpty() || message.contentParts.isEmpty()) {
             cleaned += if (kept.size == message.contentParts.size) message else message.copy(contentParts = kept)
+        }
+        val repairs = repairedByMessage[index].orEmpty()
+        if (repairs.isNotEmpty()) {
+            cleaned += LLMMessage(
+                role = LLMMessage.Role.USER,
+                content = "",
+                contentParts = repairs.map {
+                    AgentContentPart.ToolResult(
+                        id = it.id,
+                        name = it.name,
+                        content = "[Tool execution was interrupted before resume]",
+                        isError = false,
+                    )
+                },
+            )
         }
     }
     return cleaned

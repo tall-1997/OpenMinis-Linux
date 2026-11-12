@@ -6,68 +6,52 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * [T-process-tail-injection] Architecture guard: process blocks must ride the
- * SYSTEM PROMPT's dynamic tail, never the conversation history.
+ * [T-no-repeated-injection] Architecture guard: per-turn state is never rebuilt
+ * into every request.
  *
- * Regression this pins (the reported "non-stop repeated injection"): the agent
- * loop used to call `withGoalAndPlanContext(...)` on every turn, which grafted
- * stage/lanes/jobs/plan-board/recall onto the LAST user message — inside the
- * loop that is the tool_result carrier, so the model read process narration as
- * tool output and every request re-injected the same blocks. Source-grep guards
- * follow the repo's existing drift-test style (see ProductionSources).
+ * Regression this pins (the reported "keeps circling"): the agent loop used to
+ * re-inject stage/lanes/jobs/plan-board/recall/goal into a fresh request every
+ * turn. ZCode's shape is the opposite — a notice is written into the
+ * transcript once, and current state lives in tool-result history.
  */
 class ProcessInjectionArchitectureTest {
 
     @Test
-    fun `the agent loop no longer grafts process blocks onto history`() {
+    fun `the agent loop injects notices once into history`() {
         val loop = ProductionSources.read("ui/chat/ChatViewModelAgentLoopExt.kt")
         assertFalse(
             "process blocks must not be grafted onto the tool_result carrier",
             loop.contains("withGoalAndPlanContext("),
         )
         assertFalse(
-            "goal context must ride the prompt tail only — a first-mount history row " +
-                "would duplicate the objective (history row + tail) after turn 0",
-            loop.contains("withGoalFirstMount("),
-        )
-        assertTrue(
-            "the loop must build the request history from the history itself",
-            loop.contains("effectiveAgentHistory().let { history ->"),
-        )
-        assertTrue(
-            "the process tail must be injected through the system prompt",
+            "per-request process tail was the repeated-injection bug",
             loop.contains("processInjectedSystemPrompt("),
         )
+        assertTrue("notices are committed once", loop.contains("commitSessionNoticesOnce("))
         assertTrue(
-            "goal context must be passed to the tail on every turn",
-            loop.contains("goalMount.prompt,"),
+            "the request prompt is only date-refreshed",
+            loop.contains("refreshRuntimeContextDate("),
         )
+        val notes = ProductionSources.read("ui/chat/ChatViewModelHiddenNote.kt")
+        assertTrue("goal is announced once", notes.contains("goalAnnouncedSha"))
+        assertTrue("recall is committed once", notes.contains("newRecallReminder()"))
+        assertTrue("recall re-surfaces only after eviction", notes.contains("announcedRecallCarrier"))
+        assertTrue("plan retry is not dropped", notes.contains("consumePlanStepRetryPrompt()"))
     }
 
     @Test
-    fun `the tail path carries the cache contract`() {
+    fun `recall never re-selects a delivered line`() {
         val ext = ProductionSources.read("ui/chat/ChatViewModelPlanContextExt.kt")
-        assertTrue("processInjectionTail must exist", ext.contains("internal fun ChatViewModel.processInjectionTail("))
-        assertTrue(
-            "the tail must be deduped content-wise",
-            ext.contains("processTailCache"),
-        )
-        assertTrue(
-            "the injected prompt must keep the stable-prefix contract documented",
-            ext.contains("systemPromptStablePrefixLen"),
-        )
+        assertTrue("fresh-hit filter must exist", ext.contains("internal fun <T> recallFreshHits("))
+        assertTrue("delivered lines are remembered", ext.contains("announcedRecallKeys"))
+        assertFalse("the per-turn recall part is gone", ext.contains("internal fun ChatViewModel.liveRecallPrompt("))
     }
 
     @Test
-    fun `goal context has a single injection path, not a history row plus a tail copy`() {
-        val goal = ProductionSources.read("goal/GoalContextInjection.kt")
-        assertFalse(
-            "the removed first-mount helper must not come back",
-            goal.contains("internal fun withGoalFirstMount("),
-        )
-        assertTrue(
-            "the legacy history graft must be marked LEGACY",
-            ProductionSources.read("ui/chat/ChatViewModelPlanContextExt.kt").contains("LEGACY"),
-        )
+    fun `the hidden-note helper persists once`() {
+        val note = ProductionSources.read("ui/chat/ChatViewModelHiddenNote.kt")
+        assertTrue(note.contains("internal suspend fun ChatViewModel.commitHiddenUserNote("))
+        assertTrue("persisted so a reload does not re-inject", note.contains("chatRepository.appendMessage"))
+        assertTrue("never rendered as a user bubble", note.contains("notePersistedUiRow(null"))
     }
 }

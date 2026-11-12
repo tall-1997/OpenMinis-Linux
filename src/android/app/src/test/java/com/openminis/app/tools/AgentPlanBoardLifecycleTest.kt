@@ -3,7 +3,6 @@ package com.openminis.app.tools
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -109,22 +108,6 @@ class AgentPlanBoardLifecycleTest {
     // ── the prompt always says something true ──
 
     @Test
-    fun thePromptNeverAnnouncesAFinishedOrEmptyBoard() {
-        // Empty: no snapshot fragment. The board's absence is still covered —
-        // the agent_plan tool description carries the "create it when the work
-        // spans 3+ steps" contract and ships in the schema every turn, so the
-        // announcement channel moved from a prompt fragment into the schema
-        // where it can no longer vanish exactly when the board is missing.
-        assertNull(AgentPlanStore.boardSnapshotPrompt(AgentPlanStore.list(sid, null)))
-        val p = AgentPlanStore.add(sid, null, "one")
-        assertNotNull(AgentPlanStore.boardSnapshotPrompt(AgentPlanStore.list(sid, null)))
-        AgentPlanStore.update(sid, null, p.id, status = "done")
-        // Finished: the snapshot would announce work that already landed,
-        // while the card is still holding its green state.
-        assertNull(AgentPlanStore.boardSnapshotPrompt(AgentPlanStore.list(sid, null)))
-    }
-
-    @Test
     fun theToolDescriptionCarriesTheWhenToCreateContract() {
         val description = AgentPlanTool.definition().description
         assertTrue(description, description.contains("agent_plan") || description.contains("plan"))
@@ -144,16 +127,6 @@ class AgentPlanBoardLifecycleTest {
     fun theEmptyRenderNamesTheGapInsteadOfReadingAsFine() {
         val text = AgentPlanStore.render(sid, null)
         assertTrue(text, text.contains("no board yet"))
-    }
-
-    @Test
-    fun theSnapshotTeachesNumberTargeting() {
-        AgentPlanStore.add(sid, null, "one")
-        AgentPlanStore.add(sid, null, "two")
-        val snapshot = AgentPlanStore.boardSnapshotPrompt(AgentPlanStore.list(sid, null))
-        assertNotNull(snapshot)
-        assertTrue(snapshot!!, snapshot.contains("update id=\"2\""))
-        assertTrue(snapshot, snapshot.contains("op=replace"))
     }
 
     private companion object {

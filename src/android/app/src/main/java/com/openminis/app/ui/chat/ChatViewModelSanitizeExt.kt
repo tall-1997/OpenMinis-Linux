@@ -43,27 +43,33 @@ internal fun ChatViewModel.sanitizeAgentHistory() {
         val missingIds = toolUseIds - resultIdsAhead
         if (missingIds.isEmpty()) { i++; continue }
 
-        // A tool_use with no result this late is a history casualty (trim,
-        // abort, crash), not a tool failure: normal execution appends the
-        // result before the next request. The old repair fabricated an
-        // "interrupted by an unexpected error" result — the model read its call
-        // as FAILED and re-issued it on the next turn (the reported "repeats
-        // itself and does no work"), which is also why dropOrphanedToolParts
-        // stopped synthesising that placeholder. Remove the orphaned use
-        // instead: the assistant row keeps its text, and the provider still
-        // receives a fully paired transcript.
-        val keptParts = msg.contentParts.filterNot {
-            it is AgentContentPart.ToolUse && it.id in missingIds
+        // ZCode session-persistence: a visible call that produced no result
+        // gets a NEUTRAL interrupted result, never deletion and never a
+        // failure. Every emitted call owns exactly one result, and the model
+        // must not re-issue it as if it had failed.
+        val interrupted = toolUses.filter { it.id in missingIds }.map { use ->
+            AgentContentPart.ToolResult(
+                id = use.id, name = use.name,
+                content = "[Tool execution was interrupted before resume]",
+                isError = false,
+            )
         }
         Log.w(
             ChatViewModel.TAG,
-            "sanitize: removing ${msg.contentParts.size - keptParts.size} orphaned tool_use(s) from history[$i]",
+            "sanitize: pairing ${interrupted.size} interrupted tool_result(s) after history[$i]",
         )
-        if (keptParts.isEmpty() && msg.content.isBlank()) {
-            agentHistory.removeAt(i)
-            continue // the next message shifted into this index; do not advance
+        val next = agentHistory.getOrNull(i + 1)
+        if (next != null && next.role == LLMMessage.Role.USER &&
+            next.contentParts.any { it is AgentContentPart.ToolResult }
+        ) {
+            agentHistory[i + 1] = next.copy(contentParts = next.contentParts + interrupted)
+        } else {
+            agentHistory.add(i + 1, LLMMessage(
+                role = LLMMessage.Role.USER, content = "",
+                contentParts = interrupted,
+            ))
+            trimAgentHistory()
         }
-        agentHistory[i] = msg.copy(contentParts = keptParts)
         i++
     }
 

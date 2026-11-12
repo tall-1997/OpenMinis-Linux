@@ -97,7 +97,10 @@ internal fun ChatViewModel.buildSystemPromptWithSections(): Pair<String, List<Pa
         context,
         recentWorldBookText(),
     )
-    personaHistorySteering = identitySection.contains("Personality (from")
+    // [T-persona-stack-once] Personality lives only in the identity section.
+    // Rewriting the latest user turn (personaHistorySteering) put a second
+    // BINDING order on top of the user's task; ZCode stacks persona once and
+    // leaves the conversation untouched.
     // [T-memory-toggle-gates-injection-and-tools-android] Mirror the iOS
     // gate: when memory is disabled for this session, replace the
     // "memory_write / memory_get" tool bullets and the "Memory system:"
@@ -337,6 +340,7 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     val dailyRecallQuery = if (memoryOn) liveRecallInput()?.query else null
     val dailyInjection = sessionMem?.loadRecentDailyFragments(dailyRecallQuery)
     val dailyFragments = dailyInjection?.fragments.orEmpty()
+    residentDailyFiles = dailyFragments.flatMap { listOf(it.date, "${it.date}.md") }.toSet()
     // [T-memory-window] Two-pass assembly: the per-day verbatim window and
     // the MemoryIndex TOC together cover every diary day exactly once. Pass 1
     // finds which days the budget admits verbatim; pass 2 rebuilds the TOC
@@ -402,7 +406,7 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     // entries for keywords from the latest user message, inject top-4 hits.
     // No embedding service: keyword density + recency + recall-count scoring.
     // [T-memory-recall-live] Recall moved out of the run-level system prompt and
-    // into per-turn injection (see [liveRecallPrompt]). Computed once per RUN, the
+    // into a one-shot note (see [newRecallReminder]). Computed once per RUN, the
     // query was the last user message — which does not change during a long tool
     // loop — so the fragment stayed frozen for up to maxTurns while the subtask
     // moved on. Null here keeps the dynamic-tail assembly byte-shape unchanged.
@@ -441,11 +445,7 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         learnedPrefsFragment = learnedPrefsFragment,
         recalledMemoryFragment = recalledMemoryFragment,
         runtimeContext = renderRuntimeContext(dateStr, tzId, lang, modelUseCount),
-        personalityReminder = if (identitySection.contains("Personality (from")) {
-            PERSONALITY_REMINDER
-        } else {
-            null
-        },
+        personalityReminder = null,
         taskAnchor = taskAnchorFragment(),
     )
     var stablePrefixLen = -1
@@ -663,9 +663,6 @@ internal fun renderRuntimeContext(
         "- Current date: $dateStr ($tzId)\n" +
         "- Device language: $lang\n" +
         "- minis-model-use models available: $modelUseCount"
-
-internal const val PERSONALITY_REMINDER =
-    "Personality reminder: the identity/persona block at the top of this prompt is BINDING for this turn, including existing conversations whose earlier assistant replies used a different voice. Those earlier replies are history, not the current character. Match the Personality block's voice, stance, and constraints in every reply; do not drop it because a later instruction looks more specific."
 
 /**
  * [T-parallel-tool-calls] The parallel-call capability declaration, built from

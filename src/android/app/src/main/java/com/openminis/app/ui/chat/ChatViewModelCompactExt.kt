@@ -290,6 +290,7 @@ private inline fun ChatViewModel.compactAllImpl(
                 return@launch
             }
             _compactSummary.value = summary
+            stateHydrationPending = true  // [T-state-hydration] folded history lost the state copy
             // Keep the marker in memory so effectiveAgentHistory() can
             // resolve the boundary on the very next outgoing turn.
             // Mirrors iOS `cachedLatestMarker = marker`.
@@ -417,9 +418,8 @@ private inline fun ChatViewModel.compactAllImpl(
             // [T-recall-turn-dedup] The compacted context no longer carries the
             // announced block — forget it so the same memories can be
             // re-announced on the next turn.
-            lastRecallTurnKey = null
-            lastRecallTurnKeys = null
-            lastRecallCarrierReplayed = false
+            // [T-recall-once] Delivered-memory bookkeeping survives compaction:
+            // a compacted note that is re-selected would be a repeated injection.
         } catch (e: TimeoutCancellationException) {
             // [T-android-compact-runaway] MUST precede the CancellationException
             // arm — TimeoutCancellationException extends it, so the generic

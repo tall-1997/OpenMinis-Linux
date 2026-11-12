@@ -429,7 +429,7 @@ internal fun ChatViewModel.sendMessage(
         // [P0-5] Prompt assembly reloads skills/MCP repos from disk and reads
         // memory fragments — move it off the main dispatcher. All inputs are
         // StateFlow reads / pure helpers; the fields it writes
-        // (personaHistorySteering, systemPromptStablePrefixLen) are @Volatile.
+        // systemPromptStablePrefixLen is @Volatile.
         val baseSystemPrompt = withContext(Dispatchers.Default) { buildSystemPrompt() }
         val systemPrompt = if ((provider as? com.openminis.app.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
             val prefix = com.openminis.app.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
