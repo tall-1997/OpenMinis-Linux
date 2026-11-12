@@ -58,6 +58,13 @@ import java.util.zip.ZipOutputStream
 object ChatExporter {
 
     private const val BATCH_SIZE = 50
+
+/**
+ * [T-export-quiet-transcript] Cap for a body resolved from the offload store.
+ * Long sessions keep 50 KB+ bodies verbatim on disk; embedding all of them
+ * would produce a multi-MB export. The full text stays in the session.
+ */
+private const val MAX_EXPORT_BODY_CHARS = 2000
     private const val LOG_CATEGORY = "ChatExporter"
 
     sealed interface Progress {
@@ -317,16 +324,74 @@ object ChatExporter {
                 writer.write(": ")
                 writer.write(SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date()))
                 writer.write("\n\n")
+                // [T-export-quiet-transcript] Progress-first transcript, the
+                // quiet-transcript shape mature agents ship (codex
+                // final-answer-only mode, opencode click-to-expand):
+                //  - consecutive tool-ONLY assistant turns merge into ONE
+                //    `> **tool** name ×N` line instead of one section each
+                //    (a 1200-step session exported 1200 blockquotes);
+                //  - pure tool_result carriers (no text, no media) are skipped
+                //    instead of writing an empty `## user` section
+                //    (1023 empty sections in the reported session);
+                //  - a body resolved from the offload store is capped, so
+                //    fixing the placeholder leak cannot explode the file.
+                var toolRunNames = mutableListOf<String>()
+                val flushToolRun: () -> Unit = {
+                    if (toolRunNames.isNotEmpty()) {
+                        val counts = toolRunNames.groupingBy { it }.eachCount()
+                        writer.write("## ")
+                        writer.write(roleAssistant)
+                        writer.write("\n\n> **")
+                        writer.write(toolLabel)
+                        writer.write("** ")
+                        writer.write(
+                            counts.entries.joinToString(" · ") { (name, n) ->
+                                if (n > 1) "$name ×$n" else name
+                            },
+                        )
+                        writer.write("\n\n")
+                        bytes += toolRunNames.size * 8L
+                        toolRunNames = mutableListOf()
+                    }
+                }
                 forEachBatch(repository, session.id, total) { batch ->
                     for (msg in batch) {
-                        val role = if (msg.role == "user") roleUser else roleAssistant
+                        val toolOnly = if (msg.role == "assistant") toolOnlyNames(msg.partsJson) else null
+                        if (toolOnly != null) {
+                            toolRunNames += toolOnly
+                            if (first == null) first = msg.createdAt
+                            last = msg.createdAt
+                            done += 1
+                            continue
+                        }
                         val body = extractMarkdownBody(msg.partsJson, toolLabel)
+                        if (!hasReadableContent(msg.partsJson, body)) {
+                            // Pure tool_result carrier (or an empty row): nothing
+                            // a reader can use. Skip it WITHOUT flushing the tool
+                            // run — this carrier row sits between the tool call
+                            // and its result, so flushing here would break every
+                            // merge and export one blockquote per step.
+                            if (first == null) first = msg.createdAt
+                            last = msg.createdAt
+                            done += 1
+                            continue
+                        }
+                        flushToolRun()
+                        val exportedBody = if (msg.bodyRef.isNullOrBlank()) {
+                            body
+                        } else if (body.length > MAX_EXPORT_BODY_CHARS) {
+                            body.take(MAX_EXPORT_BODY_CHARS) +
+                                "\n\n…（正文过长，已截断；完整内容保留在设备上的会话里）"
+                        } else {
+                            body
+                        }
+                        val role = if (msg.role == "user") roleUser else roleAssistant
                         writer.write("## ")
                         writer.write(role)
                         writer.write("\n\n")
-                        writer.write(body)
+                        writer.write(exportedBody)
                         writer.write("\n\n")
-                        bytes += body.length.toLong() + role.length + 8
+                        bytes += exportedBody.length.toLong() + role.length + 8
                         if (first == null) first = msg.createdAt
                         last = msg.createdAt
                         val (img, vid) = countAttachments(msg.partsJson)
@@ -339,6 +404,7 @@ object ChatExporter {
                         _progress.value = Progress.Running(done, total)
                     }
                 }
+                flushToolRun()
             } else {
                 writer.write(session.title ?: "Conversation")
                 writer.write("\n\n")
@@ -525,6 +591,53 @@ object ChatExporter {
         sb.toString()
     } catch (_: Throwable) {
         partsJson
+    }
+
+    /**
+     * [T-export-quiet-transcript] Tool names of a tool-ONLY assistant turn, or
+     * null when the turn carries anything a reader would want (text, media,
+     * tool results). Only those turns merge into the `> **tool** name ×N` run.
+     */
+    private fun toolOnlyNames(partsJson: String): List<String>? {
+        val arr = try {
+            JSONArray(partsJson)
+        } catch (_: Throwable) {
+            return null
+        }
+        if (arr.length() == 0) return null
+        val names = mutableListOf<String>()
+        for (i in 0 until arr.length()) {
+            val obj = arr.optJSONObject(i) ?: return null
+            when (obj.optString("type")) {
+                "text" -> if (stripAttachedFilesInventory(obj.optString("value")).isNotBlank()) return null
+                "toolUse" -> names += obj.optJSONObject("value")
+                    ?.optString("name")
+                    ?.takeIf { it.isNotBlank() } ?: "tool"
+                else -> return null
+            }
+        }
+        return names.takeIf { it.isNotEmpty() }
+    }
+
+    /**
+     * [T-export-quiet-transcript] Whether a row carries anything readable: an
+     * extracted body, or media the plain-text branch also counts. A pure
+     * tool_result carrier has neither and must not become an empty section.
+     */
+    private fun hasReadableContent(partsJson: String, body: String): Boolean {
+        if (body.isNotBlank()) return true
+        val arr = try {
+            JSONArray(partsJson)
+        } catch (_: Throwable) {
+            return false
+        }
+        for (i in 0 until arr.length()) {
+            val obj = arr.optJSONObject(i) ?: continue
+            when (obj.optString("type")) {
+                "image", "imageData", "video", "videoData", "file", "attachment" -> return true
+            }
+        }
+        return false
     }
 
     /**
