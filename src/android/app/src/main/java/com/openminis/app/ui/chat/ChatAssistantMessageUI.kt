@@ -487,7 +487,7 @@ internal fun ToolCallPill(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = block.toolTitle.ifEmpty { block.toolName },
+                    text = displayToolTitle(block.toolName, block.toolArgs, block.toolTitle),
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     // [P-process-card] A failed call tints its OWN row's title

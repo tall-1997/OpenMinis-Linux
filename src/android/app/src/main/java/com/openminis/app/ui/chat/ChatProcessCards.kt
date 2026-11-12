@@ -248,7 +248,7 @@ private fun ProcessStepRow(step: ProcessStepRef, onOpen: () -> Unit) {
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = if (isThinking) stringResource(R.string.chat_thinking_header)
-                    else block.toolTitle.ifEmpty { block.toolName },
+                    else displayToolTitle(block.toolName, block.toolArgs, block.toolTitle),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
                 color = if (isFailed) ToolErrorColor else MaterialTheme.colorScheme.onSurface,

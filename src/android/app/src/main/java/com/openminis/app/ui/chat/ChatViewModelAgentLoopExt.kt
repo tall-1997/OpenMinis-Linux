@@ -775,7 +775,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                             kind = "tool_use",
                             toolName = chunk.name,
                             toolStatus = ToolBlockStatus.STREAMING,
-                            toolTitle = friendlyToolTitle(chunk.name),
+                            toolTitle = resolveToolTitle(chunk.name, ""),
                             startTimeMs = System.currentTimeMillis(),
                         ))
                         uiBatcher.enqueue(assistantId, messageTextSnapshot(), true, allToolBlocks.toList())
@@ -804,16 +804,13 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     val idx = allToolBlocks.indexOfFirst { it.id == toolInputId }
                     if (idx >= 0) {
                         val prev = allToolBlocks[idx]
-                        // Stream-parse partial JSON (mirrors iOS extractPartialStringValue):
-                        //   - pull "tool_title" out early so the pill header updates live
-                        val liveTitle = extractToolTitle(
-                            chunk.accumulated,
-                            fallback = if (prev.toolTitle.isNotEmpty() && prev.toolTitle != prev.toolName) {
-                                prev.toolTitle
-                            } else {
-                                friendlyToolTitle(prev.toolName)
-                            },
-                        ) ?: friendlyToolTitle(prev.toolName)
+                        // [T-tool-title-single-source GH#344] ONE resolver for
+                        // the whole lifecycle: model title → prior specific
+                        // title → args summary ("Reading /path") → friendly
+                        // label. Never a bare snake_case name, even mid-stream.
+                        val liveTitle = resolveToolTitle(
+                            prev.toolName, chunk.accumulated, prev.toolTitle,
+                        )
                         allToolBlocks[idx] = prev.copy(
                             toolArgs = chunk.accumulated,
                             toolTitle = liveTitle,
@@ -872,8 +869,9 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     chunk.thoughtSignature?.let { toolCallSignatures[toolCompleteId] = it }
                     val idx = allToolBlocks.indexOfFirst { it.id == toolCompleteId }
                     if (idx >= 0) {
-                        val providedTitle = chunk.args.optString("tool_title", "").takeIf { it.isNotEmpty() }
-                        val title = providedTitle ?: friendlyToolTitle(chunk.name)
+                        val title = resolveToolTitle(
+                            chunk.name, chunk.args.toString(), allToolBlocks[idx].toolTitle,
+                        )
                         // PENDING — JSON params fully received, waiting for execution
                         // dispatcher to invoke the tool. executeTool() flips to RUNNING.
                         allToolBlocks[idx] = allToolBlocks[idx].copy(

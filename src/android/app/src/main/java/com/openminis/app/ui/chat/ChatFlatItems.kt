@@ -597,7 +597,7 @@ private fun splitRounds(
                     // Latest running step wins: the header reports what is
                     // happening NOW, not what happened first.
                     segActivity = if (block.kind == "thinking") "thinking" else "tool"
-                    segActivityTitle = if (block.kind == "thinking") "" else block.toolTitle.ifEmpty { block.toolName }
+                    segActivityTitle = if (block.kind == "thinking") "" else displayToolTitle(block.toolName, block.toolArgs, block.toolTitle)
                 }
                 when (block.kind) {
                     "thinking" -> {
@@ -618,7 +618,7 @@ private fun splitRounds(
                 segSteps += ProcessStepRef(
                     id = block.id,
                     kind = block.kind,
-                    title = if (block.kind == "thinking") "" else block.toolTitle.ifEmpty { block.toolName }.ifEmpty { "tool" },
+                    title = if (block.kind == "thinking") "" else displayToolTitle(block.toolName, block.toolArgs, block.toolTitle).ifEmpty { "tool" },
                     status = block.toolStatus,
                     durationMs = block.durationMs,
                     running = stepRunning,

@@ -1064,7 +1064,7 @@ internal fun ToolDetailSheet(
                             overflow = TextOverflow.Ellipsis,
                         )
                         Text(
-                            text = block.toolTitle.ifEmpty { block.toolName },
+                            text = displayToolTitle(block.toolName, block.toolArgs, block.toolTitle),
                             fontSize = 12.sp,
                             lineHeight = 14.sp,
                             color = ChatColors.secondaryText,

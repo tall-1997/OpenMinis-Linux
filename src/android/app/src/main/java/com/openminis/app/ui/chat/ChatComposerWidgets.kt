@@ -336,7 +336,7 @@ internal fun ToolActivityPill(
         }
         Spacer(modifier = Modifier.width(6.dp))
         Text(
-            text = block.toolTitle.ifEmpty { block.toolName },
+            text = displayToolTitle(block.toolName, block.toolArgs, block.toolTitle),
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
             color = ChatColors.primaryText,

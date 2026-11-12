@@ -154,6 +154,13 @@ jobs:
       - name: Tool single-execution contract (both lanes)
         run: python3 scripts/ci/check_tool_execution_contract.py
 
+      # [T-preanchor-dynamic-budget / T-tool-title-single-source GH#344]
+      # Structural ratchet: the corridor stays in one pure function (40k
+      # ceiling, 20% window, 8k floor) and every tool-card title flows
+      # through resolveToolTitle / displayToolTitle.
+      - name: preAnchor budget + tool title contract
+        run: python3 scripts/ci/check_tool_title_and_budget_contract.py
+
       # [T-announced-tools-core] The plan board fragment told the model to
       # "advance items with agent_plan" while agent_plan was long-tail, so the
       # board the user watched could never move (and could never be created:
