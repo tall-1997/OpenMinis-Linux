@@ -30,6 +30,7 @@ internal suspend fun ChatViewModel.ensureSessionScopedNotices() {
     announcedRecallKeys.clear()
     announcedRecallKeys.addAll(saved.recallKeys)
     goalAnnouncedSha = saved.goalSha
+    stateSnapshotSha = saved.stateSha
     announcedRecallCarrier = RECALL_NOTE_MARKER.takeIf { marker ->
         agentHistory.any { it.content.contains(marker) }
     }
@@ -64,6 +65,29 @@ internal suspend fun ChatViewModel.commitSessionNoticesOnce(
         announcedRecallCarrier = null
         ledgerDirty = true
     }
+    // [T-state-hydration] The host restores the live task state itself after a
+    // compaction/trim/load dropped it. No model tool call and no prompt rule:
+    // the snapshot is written into the transcript once and deduped by sha.
+    if (stateHydrationPending) {
+        stateHydrationPending = false
+        val snapshot = SessionStateSnapshot.build(activeSessionId, context)
+        if (!snapshot.isNullOrBlank()) {
+            val sha = com.openminis.app.util.Digest.sha256Hex(snapshot)
+            if (sha != stateSnapshotSha) {
+                stateSnapshotSha = sha
+                commitHiddenUserNote("${SessionStateSnapshot.MARKER}\n\n$snapshot")
+                ledgerDirty = true
+            }
+        }
+    }
+    // After a hydration, the state note is the carrier; drop it if it is gone.
+    if (stateSnapshotSha != null &&
+        agentHistory.none { it.content.contains(SessionStateSnapshot.MARKER) }
+    ) {
+        stateSnapshotSha = null
+        stateHydrationPending = true
+        ledgerDirty = true
+    }
     consumePlanStepRetryPrompt()?.let { commitHiddenUserNote(it) }
     newRecallReminder()?.let { note ->
         commitHiddenUserNote(note)
@@ -88,7 +112,11 @@ internal suspend fun ChatViewModel.commitSessionNoticesOnce(
         // session's delivery record under the next one.
         val sid = noticesSessionId ?: activeSessionId
         val filesDir = context.filesDir
-        val state = NoticeLedgerStore.State(announcedRecallKeys.toSet(), goalAnnouncedSha)
+        val state = NoticeLedgerStore.State(
+            announcedRecallKeys.toSet(),
+            goalAnnouncedSha,
+            stateSnapshotSha,
+        )
         withContext(Dispatchers.IO) { NoticeLedgerStore.save(filesDir, sid, state) }
     }
 }

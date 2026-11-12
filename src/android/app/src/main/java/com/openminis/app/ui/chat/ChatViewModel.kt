@@ -371,19 +371,7 @@ class ChatViewModel(
             return (COMPACT_TIMEOUT_BASE_MS + growth).coerceAtMost(COMPACT_TIMEOUT_MAX_MS)
         }
 
-        /**
-         * Should a failed summary attempt be retried by splitting the input in
-         * half? Pure predicate, in the companion so it is testable without an
-         * Android-bound ViewModel; [isSegmentRetryableError] delegates here.
-         *
-         * Splitting only helps when the failure was caused by the SIZE of the
-         * request. Unclassified errors still split — an over-length refusal
-         * arrives as an untyped ProviderError on most providers, and a summary
-         * built from halves beats no summary — but the classes known to be
-         * size-independent are excluded, because for those a split turns one
-         * failure into up to 15 sequential slow calls. That amplification is
-         * what produced the 15-20 minute apparent hang.
-         */
+        /** Split-retry predicate for summary failures; size-classified errors are excluded. */
         internal fun shouldSplitOnError(error: Throwable): Boolean {
             if (error is CancellationException) return false
             if (error is LLMError) {
@@ -1350,6 +1338,12 @@ class ChatViewModel(
 
     /** [T-goal-once] Marker of the committed objective note. */
     @Volatile internal var goalAnnouncedCarrier: String? = null
+
+    /** [T-state-hydration] Set when history lost the live state (compact/trim/load). */
+    @Volatile internal var stateHydrationPending: Boolean = false
+
+    /** [T-state-hydration] Sha of the last restored snapshot (dedupe). */
+    @Volatile internal var stateSnapshotSha: String? = null
 
     /** [T-recall-once] Session the notice bookkeeping belongs to. */
     @Volatile internal var noticesSessionId: String? = null

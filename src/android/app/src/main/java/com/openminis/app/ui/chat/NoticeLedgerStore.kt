@@ -17,6 +17,8 @@ internal object NoticeLedgerStore {
     data class State(
         val recallKeys: Set<String> = emptySet(),
         val goalSha: String? = null,
+        /** [T-state-hydration] Sha of the last restored task-state snapshot. */
+        val stateSha: String? = null,
     )
 
     private fun dir(filesDir: File): File = File(filesDir, "notices")
@@ -33,7 +35,11 @@ internal object NoticeLedgerStore {
             val set = buildSet {
                 for (i in 0 until keys.length()) keys.optString(i).takeIf { it.isNotBlank() }?.let(::add)
             }
-            State(set, json.optString("goalSha").takeIf { it.isNotBlank() })
+            State(
+                set,
+                json.optString("goalSha").takeIf { it.isNotBlank() },
+                json.optString("stateSha").takeIf { it.isNotBlank() },
+            )
         }.getOrDefault(State())
     }
 
@@ -43,6 +49,7 @@ internal object NoticeLedgerStore {
             val json = JSONObject().apply {
                 put("recallKeys", JSONArray(state.recallKeys.toList()))
                 put("goalSha", state.goalSha ?: "")
+                put("stateSha", state.stateSha ?: "")
             }
             file(filesDir, sessionId).writeText(json.toString())
         }

@@ -101,6 +101,7 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
             // tail instead. Logged once per detection, not per call.
             if (!_compactMarkerDetached) {
                 _compactMarkerDetached = true
+                stateHydrationPending = true  // [T-state-hydration]
                 AppLogger.warning(
                     ChatViewModel.TAG,
                     "[Compact] marker ${marker.id.take(8)} anchor ${anchorId?.take(8) ?: "nil"} " +
@@ -347,6 +348,9 @@ internal fun ChatViewModel.progressivelyTrimmed(list: List<LLMMessage>): List<LL
     }
     val trimmed = ProgressiveTrim.trim(list, level, offloader)
     if (trimmed !== list) {
+        // [T-state-hydration] Reclaimed content may include the only copy of
+        // the plan/report/lane state; the host restores it before the next request.
+        stateHydrationPending = true
         AppLogger.info(
             ChatViewModel.TAG,
             "[ProgressiveTrim] level=$level window=$window untrimmedEst=$untrimmed " +

@@ -262,6 +262,13 @@ object AgentReportStore {
                     append(" The turn can end here; new input will resume it.")
                 Stage.IDLE, Stage.WORKING -> Unit
             }
+            // [T-report-recovery] The receipt carries the content, so the last
+            // report stays readable from history instead of requiring op=get.
+            append("\nstatus: ${report.status}")
+            append("\nsummary: ${report.summary}")
+            if (report.blocker.isNotBlank()) append("\nblocker: ${report.blocker}")
+            if (report.question.isNotBlank()) append("\nquestion: ${report.question}")
+            if (report.evidence.isNotBlank()) append("\nevidence: ${report.evidence}")
         }
     }
 }

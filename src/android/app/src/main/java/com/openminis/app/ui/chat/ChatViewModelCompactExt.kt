@@ -290,6 +290,7 @@ private inline fun ChatViewModel.compactAllImpl(
                 return@launch
             }
             _compactSummary.value = summary
+            stateHydrationPending = true  // [T-state-hydration] folded history lost the state copy
             // Keep the marker in memory so effectiveAgentHistory() can
             // resolve the boundary on the very next outgoing turn.
             // Mirrors iOS `cachedLatestMarker = marker`.
