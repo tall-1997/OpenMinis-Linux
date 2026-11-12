@@ -258,6 +258,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // per runAgentLoop = the run-start clear); rule 1/3 nudges ride the next
     // request assembly (see applyStallNudge); rule 2 breaks with a report.
     val stallGuard = ChatViewModelStallGuard()
+    val toolExecutionLedger = ToolExecutionLedger()  // [T-tool-execution-ledger] one per run
     var stallGuardNudge: String? = null
     // [T-main-session-turn-cap] The runaway guard is user-tunable
     // (Settings → Tool Limits); 200 is only the shipped default. Read once
@@ -1810,6 +1811,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
 
         // [T-truncated-tool-call-reject] finish_reason=length/max_tokens 由 ToolCallPreflight 统一拒绝。
         val turnCtx = ToolTurnContext(
+            ledger = toolExecutionLedger,
             activeSessionId = activeSessionId,
             assistantId = assistantId,
             accumulatedText = accumulatedText,
@@ -1900,12 +1902,8 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             break
         }
 
-        // [T-android-loop-stall-guard] Record this dispatched turn after the
-        // results are in history and the goal ledger settled, then act on the
-        // outcome (see enforceStallGuard): rule 1/3 arms a one-shot nudge for
-        // the next request assembly; rule 2 breaks the run with a final
-        // report. The break's UI teardown stays loop-local — it is bound to
-        // assistantId/accumulatedText/allToolBlocks.
+        // [T-android-loop-stall-guard] Record the dispatched turn; nudges are
+        // one-shot and never end the run (see enforceStallGuard).
         when (val outcome = enforceStallGuard(stallGuard, turn, toolCalls, turnText, resultParts)) {
             is StallLoopOutcome.Nudge -> stallGuardNudge = outcome.message
             is StallLoopOutcome.BreakWithReport -> {
