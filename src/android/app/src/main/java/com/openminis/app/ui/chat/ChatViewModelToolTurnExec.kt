@@ -104,10 +104,9 @@ internal class ToolTurnPlan(
     val refusedParts: Map<String, AgentContentPart.ToolResult>,
 )
 
-/** Phase-2 output: per-id executed parts plus the spawn fan-out results. */
+/** Phase-2 output: per-id executed parts, keyed by call id for phase-3 assembly. */
 internal class ToolTurnExecution(
     val executedParts: ConcurrentHashMap<String, AgentContentPart.ToolResult>,
-    val parallelSubResults: MutableMap<String, ToolExecutionResult>,
 )
 
 /**
@@ -446,59 +445,108 @@ internal suspend fun ChatViewModel.finalizePlannedCall(
     )
 }
 
-/** Execute one planned call on its lane coroutine. */
+/**
+ * [T-tool-execution-ledger] Terminal status for a call whose result came from
+ * the ledger instead of a fresh execution. Kept as a pure, testable mapping so
+ * the serial lane and spawn fan-out settle replayed cards identically.
+ */
+internal fun settledReplayStatus(part: AgentContentPart.ToolResult): ToolBlockStatus =
+    if (part.isError) ToolBlockStatus.FAILED else ToolBlockStatus.SUCCESS
+
+/**
+ * [T-tool-execution-ledger] Settle a replayed call's UI card.
+ *
+ * Phase 1 creates every tool_use block as PENDING. The owner path flips it
+ * RUNNING then SUCCESS/FAILED in [finalizePlannedCall], but a replay NEVER
+ * enters the producer: the old code left the card spinning on RUNNING, and
+ * skipping the producer would leave it PENDING forever. Both lanes call this
+ * from their onReuse callback so a replay shows the recorded result in a
+ * terminal state — user experience, and a card the model's transcript agrees
+ * with.
+ */
+private suspend fun ChatViewModel.settleReplayedCall(
+    ctx: ToolTurnContext,
+    callId: String,
+    part: AgentContentPart.ToolResult,
+) {
+    synchronized(ctx.allToolBlocks) {
+        val idx = ctx.allToolBlocks.indexOfFirst { it.id == callId }
+        if (idx >= 0) {
+            ctx.allToolBlocks[idx] = ctx.allToolBlocks[idx].copy(
+                toolStatus = settledReplayStatus(part),
+                content = part.content,
+            )
+        }
+    }
+    withContext(Dispatchers.Main) {
+        updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, ctx.allToolBlocks.toList())
+    }
+}
+
+/**
+ * Execute one planned call on its lane coroutine.
+ *
+ * [T-tool-execution-ledger] The ledger's [ToolExecutionLedger.executeOnce] is
+ * the single execution boundary: it claims (id, name, args) BEFORE any side
+ * effect. A replay (or a concurrent duplicate) returns the recorded result and
+ * skips the whole producer — tool dispatch, UI status flip, failure-memory
+ * write and finalization all live INSIDE the producer so none of them can run
+ * twice. This is the same contract the spawn fan-out uses; the two lanes must
+ * never diverge on when the ledger is consulted.
+ */
 private suspend fun ChatViewModel.runPlannedCall(
     ctx: ToolTurnContext,
     call: PlannedToolCall,
     executedParts: ConcurrentHashMap<String, AgentContentPart.ToolResult>,
 ) {
     currentCoroutineContext().ensureActive()
-    // [T-android-overlay-tool-title] Pull tool_title uniformly from
-    // args for ALL tools, at the moment execution actually starts.
-    // [P1-17] Routed through the shared extractToolTitle (complete-JSON path
-    // first, streaming partial fallback); blank/absent → null, as before.
-    val dispatchToolTitle = extractToolTitle(call.argsStr, fallback = null)
-    SessionActivityTracker.updateToolStatus(
-        status = "Running: ${call.name}",
-        toolName = call.name,
-        isRunning = true,
-        toolTitle = dispatchToolTitle,
-    )
-    // Flip PENDING → RUNNING right before the execute dispatch so the UI
-    // (tool pill spinner) shows the exact moment execution begins.
-    synchronized(ctx.allToolBlocks) {
-        val preIdx = ctx.allToolBlocks.indexOfFirst { it.id == call.id }
-        if (preIdx >= 0 && ctx.allToolBlocks[preIdx].toolStatus == ToolBlockStatus.PENDING) {
-            ctx.allToolBlocks[preIdx] = ctx.allToolBlocks[preIdx].copy(toolStatus = ToolBlockStatus.RUNNING)
-        }
-    }
-    withContext(Dispatchers.Main) {
-        updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, ctx.allToolBlocks.toList())
-    }
-    // [T-tool-execution-ledger] A replay of an already-completed call reuses
-    // its recorded result instead of running side effects twice. The key
-    // includes name+args: a provider may reuse a numbered id for a new call.
     val ledgerArgsSha = com.openminis.app.util.Digest.sha256Hex(call.argsStr)
-    ctx.ledger.reuse(call.id, call.name, ledgerArgsSha)?.let { prior ->
-        AppLogger.warning(
-            ChatViewModel.TAG_STREAM,
-            "[ToolLedger] reused recorded result for replayed call id=${call.id} name=${call.name}",
+    val part = ctx.ledger.executeOnce(
+        call.id, call.name, ledgerArgsSha,
+        onReuse = { prior ->
+            AppLogger.warning(
+                ChatViewModel.TAG_STREAM,
+                "[ToolLedger] reused recorded result for replayed call id=${call.id} name=${call.name}",
+            )
+            settleReplayedCall(ctx, call.id, prior)
+        },
+    ) {
+        // Owner-only: everything below has a side effect and must run once.
+        // [T-android-overlay-tool-title] Pull tool_title uniformly from
+        // args for ALL tools, at the moment execution actually starts.
+        // [P1-17] Routed through the shared extractToolTitle (complete-JSON
+        // path first, streaming partial fallback); blank/absent → null.
+        val dispatchToolTitle = extractToolTitle(call.argsStr, fallback = null)
+        SessionActivityTracker.updateToolStatus(
+            status = "Running: ${call.name}",
+            toolName = call.name,
+            isRunning = true,
+            toolTitle = dispatchToolTitle,
         )
-        executedParts[call.id] = prior
-        return
+        // Flip PENDING → RUNNING right before the execute dispatch so the UI
+        // (tool pill spinner) shows the exact moment execution begins.
+        synchronized(ctx.allToolBlocks) {
+            val preIdx = ctx.allToolBlocks.indexOfFirst { it.id == call.id }
+            if (preIdx >= 0 && ctx.allToolBlocks[preIdx].toolStatus == ToolBlockStatus.PENDING) {
+                ctx.allToolBlocks[preIdx] = ctx.allToolBlocks[preIdx].copy(toolStatus = ToolBlockStatus.RUNNING)
+            }
+        }
+        withContext(Dispatchers.Main) {
+            updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, ctx.allToolBlocks.toList())
+        }
+        Log.d("ToolChain[VM]", "[turn=${ctx.turn}] executeTool START name=${call.name} args=${call.argsStr.take(200)}")
+        val result = executeTool(call.name, call.argsStr, call.id, ctx.allToolBlocks, ctx.assistantId, ctx.accumulatedText)
+        // [T-known-failure] Feed the outcome back into the failure ledger the
+        // dispatch gate reads: a success clears the record, a failure arms it
+        // for the next identical call. Fire-and-forget; never affects the
+        // result the model sees.
+        com.openminis.app.tools.ToolFailureMemory.recordOutcome(
+            context, activeSessionId, call.name, call.argsStr, result.success, result.output,
+        )
+        currentCoroutineContext().ensureActive()
+        Log.d("ToolChain[VM]", "[turn=${ctx.turn}] executeTool END name=${call.name} success=${result.success} title=${result.toolTitle} outputLen=${result.output.length} output=${result.output.take(200)}")
+        finalizePlannedCall(ctx, call, result)
     }
-    Log.d("ToolChain[VM]", "[turn=${ctx.turn}] executeTool START name=${call.name} args=${call.argsStr.take(200)}")
-    val result = executeTool(call.name, call.argsStr, call.id, ctx.allToolBlocks, ctx.assistantId, ctx.accumulatedText)
-    // [T-known-failure] Feed the outcome back into the failure ledger the dispatch
-    // gate reads: a success clears the record, a failure arms it for the next
-    // identical call. Fire-and-forget; never affects the result the model sees.
-    com.openminis.app.tools.ToolFailureMemory.recordOutcome(
-        context, activeSessionId, call.name, call.argsStr, result.success, result.output,
-    )
-    currentCoroutineContext().ensureActive()
-    Log.d("ToolChain[VM]", "[turn=${ctx.turn}] executeTool END name=${call.name} success=${result.success} title=${result.toolTitle} outputLen=${result.output.length} output=${result.output.take(200)}")
-    val part = finalizePlannedCall(ctx, call, result)
-    ctx.ledger.record(call.id, call.name, ledgerArgsSha, part)
     executedParts[call.id] = part
 }
 
@@ -508,6 +556,19 @@ private suspend fun ChatViewModel.runPlannedCall(
  * multi-agent semaphore, the barrier awaits them all), then each peer's
  * result goes through the shared finalize path so spawn cards are
  * indistinguishable from serial ones.
+ *
+ * [T-tool-execution-ledger] Root-cause fix for the single-execution contract
+ * violation: the ledger is consulted INSIDE each peer's async, BEFORE
+ * [executeRunSubAgent] is dispatched. The old code ran every peer first
+ * (awaitAll of executeRunSubAgent) and only then called ledger.reuse() — by
+ * which point a replayed spawn had already launched a SECOND wave of
+ * sub-agents; reuse only swapped which result was shown, it could not undo
+ * the side effect. Routing the whole execute + finalize through
+ * [ToolExecutionLedger.executeOnce] makes replay/in-flight duplicates skip
+ * dispatch entirely and gives spawn the identical contract as the serial
+ * lane. The barrier still awaits all peers; finalization is concurrency-safe
+ * (loop detector and tool blocks are synchronized, UI pushes use snapshots),
+ * exactly as it is for concurrent serial reads.
  */
 private suspend fun ChatViewModel.fanOutSpawnCalls(
     ctx: ToolTurnContext,
@@ -524,34 +585,35 @@ private suspend fun ChatViewModel.fanOutSpawnCalls(
     coroutineScope {
         peers.mapIndexed { peerIdx, peer ->
             async {
-                val peerResult = executeRunSubAgent(
-                    peer.argsStr,
-                    peer.id,
-                    ctx.allToolBlocks,
-                    ctx.assistantId,
-                    ctx.accumulatedText,
-                    limiter = sem,
-                    parallelWriters = writerCount,
-                    waveIndex = peerIdx,
-                    waveSize = peers.size,
-                )
-                synchronized(execution.parallelSubResults) {
-                    execution.parallelSubResults[peer.id] = peerResult
+                val peerArgsSha = com.openminis.app.util.Digest.sha256Hex(peer.argsStr)
+                val part = ctx.ledger.executeOnce(
+                    peer.id, peer.name, peerArgsSha,
+                    onReuse = { prior ->
+                        AppLogger.warning(
+                            ChatViewModel.TAG_STREAM,
+                            "[ToolLedger] reused recorded result for replayed spawn id=${peer.id} name=${peer.name}",
+                        )
+                        settleReplayedCall(ctx, peer.id, prior)
+                    },
+                ) {
+                    // Owner-only: dispatching a sub-agent wave is the side
+                    // effect. A replay must never reach this line.
+                    val peerResult = executeRunSubAgent(
+                        peer.argsStr,
+                        peer.id,
+                        ctx.allToolBlocks,
+                        ctx.assistantId,
+                        ctx.accumulatedText,
+                        limiter = sem,
+                        parallelWriters = writerCount,
+                        waveIndex = peerIdx,
+                        waveSize = peers.size,
+                    )
+                    finalizePlannedCall(ctx, peer, peerResult)
                 }
+                execution.executedParts[peer.id] = part
             }
         }.awaitAll()
-    }
-    for (peer in peers) {
-        val peerArgsSha = com.openminis.app.util.Digest.sha256Hex(peer.argsStr)
-        val prior = ctx.ledger.reuse(peer.id, peer.name, peerArgsSha)
-        if (prior != null) {
-            execution.executedParts[peer.id] = prior
-            continue
-        }
-        val peerResult = execution.parallelSubResults[peer.id] ?: continue
-        val part = finalizePlannedCall(ctx, peer, peerResult)
-        ctx.ledger.record(peer.id, peer.name, peerArgsSha, part)
-        execution.executedParts[peer.id] = part
     }
 }
 
@@ -565,7 +627,6 @@ internal suspend fun ChatViewModel.executePlannedToolTurn(
 ): ToolTurnExecution {
     val execution = ToolTurnExecution(
         executedParts = ConcurrentHashMap(),
-        parallelSubResults = mutableMapOf(),
     )
     if (plan.plannedCalls.isEmpty()) return execution
     val laneSemaphore = Semaphore(ToolLimitPrefs.toolCallConcurrency())
