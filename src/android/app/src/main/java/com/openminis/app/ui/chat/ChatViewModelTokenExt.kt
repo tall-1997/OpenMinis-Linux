@@ -61,9 +61,27 @@ internal fun ChatViewModel.estimateMessagesTokens(messages: List<LLMMessage>): I
 
 private fun estimateMixedTokens(text: String): Long = TokenScanMemo.mixedTokens(text)
 
-/** max(real usage, estimate) so a stale-but-real reading always wins. */
+/**
+ * max(real usage, effective estimate, untrimmed-effective estimate) so a
+ * stale-but-real reading always wins.
+ *
+ * [T-android-inloop-compact-truthful-gate] The third term is the compact
+ * gate's floor: the effective slice WITHOUT ProgressiveTrim. ProgressiveTrim
+ * strips thinking and stubs old tool outputs but never drops messages, so a
+ * 992-entry pile-up weighed ~270k tokens in memory while this function read
+ * the trimmed ~41k — the 80% compact threshold never fired and the loop kept
+ * re-assembling 900 stale tool rounds every turn. The floor uses the
+ * UNTRIMMED effective slice (not raw `agentHistory`) on purpose: compaction
+ * moves the marker forward, which shrinks exactly that slice, so the
+ * post-compact check passes and the gate cannot thrash against a raw list
+ * that stays over-threshold until ResidentWindow evicts it.
+ */
 internal fun ChatViewModel.contextTokensForPolicy(): Int =
-    maxOf(_lastTurnContextTokens.value, estimateAgentHistoryTokens())
+    maxOf(
+        _lastTurnContextTokens.value,
+        estimateAgentHistoryTokens(),
+        estimateMessagesTokens(effectiveAgentHistoryUncounted(applyProgressiveTrim = false)),
+    )
 
 /**
  * Recompute contextUsage for the session-menu ring.

@@ -326,7 +326,15 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     val sessionGlobal = if ("session-global" in keptInstructionKeys) {
         sessionMem?.loadGlobalMemoryFragment(sessionScoped = true)
     } else null
-    val dailyFragments = sessionMem?.loadRecentDailyFragments().orEmpty()
+    // [T-daily-recall-gate] Resident daily injection is today's log + the
+    // MemoryIndex TOC; older days return only on relevance. The gate query is
+    // the same live-recall fold the per-turn block uses (latest user text +
+    // assistant tail) — a pure state read, zero network, zero engine calls.
+    // A fold too short to query (liveRecallInput null) falls back to the
+    // DIAG_TASK_KEYWORDS vocabulary inside the gate.
+    val dailyRecallQuery = if (memoryOn) liveRecallInput()?.query else null
+    val dailyInjection = sessionMem?.loadRecentDailyFragments(dailyRecallQuery)
+    val dailyFragments = dailyInjection?.fragments.orEmpty()
     // [T-memory-window] Two-pass assembly: the per-day verbatim window and
     // the MemoryIndex TOC together cover every diary day exactly once. Pass 1
     // finds which days the budget admits verbatim; pass 2 rebuilds the TOC
@@ -361,12 +369,20 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
             daily = dailyFragments,
             header = com.openminis.app.data.repository.MemoryAssembly.DAILY_BLOCK_HEADER,
         ) { excludeDates ->
-            com.openminis.app.data.repository.MemoryIndex.fragment(
+            val toc = com.openminis.app.data.repository.MemoryIndex.fragment(
                 sessionDir = com.openminis.app.sandbox.SessionWorkspace
                     .memoryDir(context.filesDir, memorySessionId),
                 sharedDir = com.openminis.app.data.repository.MemoryIndex.sharedDir(context.filesDir),
                 excludeDates = excludeDates,
             )
+            // [T-daily-recall-gate] The budget note rides AFTER the index rows
+            // (same block, next line) so the model sees why older notes are
+            // missing and how to fetch them. Non-null only when the hard
+            // budget actually dropped days; those days are also TOC rows, so
+            // nothing becomes invisible.
+            listOfNotNull(toc, dailyInjection?.budgetNote)
+                .joinToString("\n")
+                .takeIf { it.isNotBlank() }
         }
     } else null
     // [T-memory-prompt-budget] One budget for the whole memory block, admitted
@@ -401,6 +417,10 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
             "worldBookChars=${worldBookFragment.length} " +
             "projectRulesChars=${projectRulesFragment?.length ?: 0} " +
             "memoryBudget=${memoryAllocation?.describe() ?: "off"} " +
+            // [T-daily-recall-gate] D2 honesty: how many older daily files the
+            // gate/budget kept out of this build, and their full-text chars —
+            // the kept= list above lists only what was truly injected.
+            "dailyOmitted=${dailyInjection?.omittedCount ?: 0}(${dailyInjection?.omittedChars ?: 0}c) " +
             "globalChars=${globalMemoryFragment?.length ?: 0} " +
             "recall=perTurn",
     )

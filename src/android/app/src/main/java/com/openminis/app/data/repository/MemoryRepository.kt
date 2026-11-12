@@ -450,8 +450,14 @@ class MemoryRepository(private val memoryDir: File) {
     fun loadLearnedPrefsFragment(scene: SceneTag = SceneTag.GENERAL): String? =
         fragments.loadLearnedPrefsFragment(scene)
 
-    internal fun loadRecentDailyFragments(): List<MemoryAssembly.DailyFragment> =
-        fragments.loadRecentDailyFragments()
+    /**
+     * [T-daily-recall-gate] The budgeted, relevance-gated daily window. See
+     * [MemoryFragmentBuilder.loadRecentDailyFragments] — [recallQuery] is the
+     * caller's live-recall fold (null falls back to the DIAG_TASK_KEYWORDS
+     * vocabulary inside the gate).
+     */
+    internal fun loadRecentDailyFragments(recallQuery: String? = null): MemoryFragmentBuilder.DailyInjection =
+        fragments.loadRecentDailyFragments(recallQuery)
 
     // -- File Management (for Settings UI) --
 
