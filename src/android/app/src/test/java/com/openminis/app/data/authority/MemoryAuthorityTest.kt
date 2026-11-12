@@ -53,7 +53,7 @@ class MemoryAuthorityTest {
     @Test
     fun recalledMemoryIsAutomaticRecallReference() {
         val wrapped = MemoryAuthority.withEnvelope(
-            "## Recalled relevant memories (keyword FTS, no embeddings)\n- **2026-11-04.md**: foo\n",
+            "## Recalled relevant memories\n- **2026-11-04.md**: foo\n",
             MemoryTrust.UNVERIFIED_CANDIDATE,
             MemoryOrigin.AUTOMATIC_RECALL,
         )

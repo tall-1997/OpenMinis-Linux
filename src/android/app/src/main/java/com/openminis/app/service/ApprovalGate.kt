@@ -26,6 +26,18 @@ object ApprovalGate {
         val preview: String,
         val timestamp: Long = System.currentTimeMillis(),
         val sessionId: String? = null,
+        /**
+         * [#36] Identifying argument of the call (command / path / target),
+         * from [com.openminis.app.security.ToolApprovalKey.gist]. Drives the
+         * "always allow this session" allowlist key; blank = tool-level key.
+         */
+        val argsGist: String = "",
+        /**
+         * [#36] Fatal confirmation (mustPrompt): the allowlist can never
+         * skip this class of call, so an "always allow" button here would
+         * store a key that never matches — the UI hides it when set.
+         */
+        val fatalConfirm: Boolean = false,
     )
 
     private fun legacySession(): String? = legacyBoundSessionId
@@ -37,9 +49,18 @@ object ApprovalGate {
     }
 
     fun allowToolForSession(toolName: String) { allowToolForSession(toolName, legacySession()) }
-    fun allowToolForSession(toolName: String, sessionId: String?) {
+    fun allowToolForSession(toolName: String, sessionId: String?) =
+        allowToolForSession(toolName, sessionId, argsGist = "")
+
+    /**
+     * [#36] Allowlist a tool for the session. Blank [argsGist] stores the
+     * tool-level key (every call of [toolName] auto-approves); a non-blank
+     * gist stores the `tool|gist` key (only calls on that exact target).
+     */
+    fun allowToolForSession(toolName: String, sessionId: String?, argsGist: String) {
         val sid = sessionId ?: return
-        sessionAllowedTools.computeIfAbsent(sid) { ConcurrentHashMap.newKeySet() }.add(toolName)
+        sessionAllowedTools.computeIfAbsent(sid) { ConcurrentHashMap.newKeySet() }
+            .add(com.openminis.app.security.ToolApprovalKey.key(toolName, argsGist))
     }
 
     fun isSessionAllowAll(): Boolean = isSessionAllowAll(legacySession())
@@ -47,9 +68,20 @@ object ApprovalGate {
 
     fun isToolAllowedForSession(toolName: String): Boolean =
         isToolAllowedForSession(toolName, legacySession())
-    fun isToolAllowedForSession(toolName: String, sessionId: String?): Boolean {
+    fun isToolAllowedForSession(toolName: String, sessionId: String?): Boolean =
+        isToolAllowedForSession(toolName, sessionId, argsGist = "")
+
+    /**
+     * [#36] Allowlist membership. A session grant matches when the stored key
+     * is the tool-level key OR the exact `tool|gist` key. Session allow-all
+     * always matches.
+     */
+    fun isToolAllowedForSession(toolName: String, sessionId: String?, argsGist: String): Boolean {
         val sid = sessionId ?: return false
-        return sessionAllowAll.contains(sid) || sessionAllowedTools[sid]?.contains(toolName) == true
+        if (sessionAllowAll.contains(sid)) return true
+        val keys = sessionAllowedTools[sid] ?: return false
+        return keys.contains(com.openminis.app.security.ToolApprovalKey.key(toolName, argsGist)) ||
+            keys.contains(com.openminis.app.security.ToolApprovalKey.key(toolName, ""))
     }
 
     fun resetSessionAllowAll() { resetSessionAllowAll(legacySession()) }
@@ -88,13 +120,27 @@ object ApprovalGate {
     fun requestApproval(toolName: String, preview: String, mustPrompt: Boolean = false): String =
         requestApproval(legacySession(), toolName, preview, mustPrompt)
 
-    fun requestApproval(sessionId: String?, toolName: String, preview: String, mustPrompt: Boolean = false): String {
+    fun requestApproval(
+        sessionId: String?,
+        toolName: String,
+        preview: String,
+        mustPrompt: Boolean = false,
+        argsGist: String = "",
+    ): String {
         val sid = sessionId
-        if (!mustPrompt && isToolAllowedForSession(toolName, sid)) return ""
+        // [#36] The session allowlist is checked HERE, before a request is
+        // filed — a gist (or tool-level) hit returns "" and the caller treats
+        // that as auto-approved. mustPrompt (fatal confirms) never skips.
+        if (!mustPrompt && isToolAllowedForSession(toolName, sid, argsGist)) return ""
         if (sessionAllowAllSkipsPrompt(isSessionAllowAll(sid), mustPrompt)) return ""
         val id = UUID.randomUUID().toString()
+        approvalDetails[id] = ApprovalRequest(
+            id, toolName, preview,
+            sessionId = sid,
+            argsGist = argsGist,
+            fatalConfirm = mustPrompt,
+        )
         pending[id] = MutableStateFlow(null)
-        approvalDetails[id] = ApprovalRequest(id, toolName, preview, sessionId = sid)
         refreshPendingBroadcast()
         return id
     }

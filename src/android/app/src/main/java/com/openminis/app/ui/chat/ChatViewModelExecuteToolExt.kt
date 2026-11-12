@@ -158,7 +158,13 @@ internal suspend fun ChatViewModel.executeTool(
         return findAndEnableTools(query, limit)
     }
 
-    var result = capabilityResult ?: when (canonical) {
+    // [T-ssh-workspace] (#32) Sessions bound to an SSH workspace resolve
+    // here first: shell-class tools are executed on the remote host via
+    // SshBackend, file-surface tools get the honest "shell only" refusal,
+    // and every other tool (or an unbound session) proceeds unchanged.
+    var result = com.openminis.app.ssh.SshWorkspaceOps.intercept(
+        canonical, argsJson, activeSessionId, context,
+    ) ?: capabilityResult ?: when (canonical) {
         FileReadTool.NAME -> {
             val result = FileReadTool.execute(argsJson, activeSessionId, context)
             // Record skill usage when SKILL.md under /var/minis/skills/<id>/ is read.

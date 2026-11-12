@@ -686,7 +686,9 @@ class ChatViewModel(
          * The banner only appears once this budget is exhausted.
          */
         internal const val MAX_STREAM_DROP_CONTINUATIONS = 3
-        private const val MIN_MAX_TOKENS = 1024
+        // [T-android-split-chat-tokenext] internal (was private): consumed by
+        // dynamicMaxTokens, which moved to ChatViewModelTokenExt.kt.
+        internal const val MIN_MAX_TOKENS = 1024
         /**
          * Hard ceiling on max_tokens we ever send to a provider, regardless
          * of what the model itself claims. Some models advertise 128K+
@@ -701,7 +703,9 @@ class ChatViewModel(
          * the value is still clamped by the model's own maxOutputTokens and
          * the remaining context window in dynamicMaxTokens().
          */
-        private const val GLOBAL_MAX_TOKENS_CEILING = 128_000
+        // [T-android-split-chat-tokenext] internal (was private): consumed by
+        // dynamicMaxTokens, which moved to ChatViewModelTokenExt.kt.
+        internal const val GLOBAL_MAX_TOKENS_CEILING = 128_000
         /**
          * Sentinel prefix on synthetic tool_result output marking
          * user-cancelled calls. Aligned with iOS
@@ -712,14 +716,8 @@ class ChatViewModel(
          */
         const val CANCELLED_MARKER =
             "<system-reminder>The user cancelled this operation. The returned result may be incomplete.</system-reminder>"
-
-        /**
-         * Pre-T13 cancelled marker. Kept only so [toLLMMessage]'s
-         * tool-block restore can still recognise rows persisted by
-         * earlier app versions and surface them as CANCELLED instead
-         * of FAILED. Never emitted by this version.
-         */
-        private const val LEGACY_CANCELLED_MARKER = "[cancelled by user]"
+        // [T-android-split-chat-mapping] LEGACY_CANCELLED_MARKER moved verbatim
+        // to ChatViewModelChatMappingExt.kt with its only consumer (toChatMessages).
         /**
          * Number of recent user-text turns kept verbatim as inference anchors when
          * compactAll runs. The summary stands in for everything older; the LLM
@@ -823,8 +821,11 @@ class ChatViewModel(
     // Tail-attach scheduling flags. Serialization itself is the ledger's
     // mutationMutex — these only decide whether a drain is already running
     // and whether one more pass is owed after it.
-    private var tailAttachJob: kotlinx.coroutines.Job? = null
-    private var tailAttachQueued = false
+    // [T-android-split-chat-historypage] internal (was private): the tail-attach
+    // job state is driven by ensureSessionTailLoaded, which moved to
+    // ChatViewModelHistoryPageExt.kt.
+    internal var tailAttachJob: kotlinx.coroutines.Job? = null
+    internal var tailAttachQueued = false
     internal val llmDigestLines = ArrayDeque<HistoryDigest.Line>()
     internal var llmDigestOmitted = 0
 
@@ -862,9 +863,13 @@ class ChatViewModel(
      */
     private val _hasOlderMessages = MutableStateFlow(false)
     val hasOlderMessages: StateFlow<Boolean> = _hasOlderMessages.asStateFlow()
-    private val _hasNewerMessages = MutableStateFlow(false)
+    // [T-android-split-chat-historypage] internal (was private): read/written by
+    // the tail-attach driver in ChatViewModelHistoryPageExt.kt.
+    internal val _hasNewerMessages = MutableStateFlow(false)
     val hasNewerMessages: StateFlow<Boolean> = _hasNewerMessages.asStateFlow()
-    private val _sessionTailReady = MutableStateFlow(false)
+    // [T-android-split-chat-historypage] internal (was private): written by
+    // ensureSessionTailLoaded in ChatViewModelHistoryPageExt.kt.
+    internal val _sessionTailReady = MutableStateFlow(false)
     val sessionTailReady: StateFlow<Boolean> = _sessionTailReady.asStateFlow()
     // [T-task-anchor] Session-scoped copy of the first user message. Loaded
     // once per session (DB read, immune to the UI window), consumed by the
@@ -943,291 +948,9 @@ class ChatViewModel(
         }
     }
 
-    /**
-     * Prepend one turn-aligned page in the background (pill / sentinel entry
-     * point). See [loadOlderPage] for the single-page contract.
-     */
-    fun loadOlderMessages() {
-        if (loadingOlderFlag.get()) return
-        viewModelScope.launch { loadOlderPage() }
-    }
-
-    /**
-     * Prepend one turn-aligned page. The newer side stays on screen — a live
-     * turn sits on THAT edge and never touches the old edge this page
-     * prepends to, so paging stays available mid-stream. Returns true when
-     * rows were added to the painted window.
-     *
-     * [T-android-timeline-ledger] The whole fetch+splice holds the ledger's
-     * mutation mutex so a concurrent tail-attach drain cannot interleave its
-     * own splice into the same `_messages` publish. Single-flight: a call
-     * while a page is already loading is a no-op (the caller re-resolves on
-     * its next tap). Stream-side publishes take no mutex but run on the main
-     * dispatcher; this splice re-reads `_messages` only after its last
-     * suspension with no suspension before the publish — main-thread
-     * serialization closes the lost-update window.
-     *
-     * [T-android-upbtn-no-scan] The up-button awaits this when its walk
-     * reaches the window's oldest edge with history still above — one page
-     * per tap keeps each click bounded.
-     */
-    internal suspend fun loadOlderPage(): Boolean {
-        if (!claimOlderLoad()) return false
-        _isLoadingHistory.value = true
-        try {
-            var added = false
-            timeline.mutationMutex.withLock {
-                val before = timeline.oldestSortOrder
-                if (before == null) return@withLock
-                val hardPageLimit = ChatHistoryWindow.PAGE_ROW_LIMIT
-                val oldestAnchor = withContext(Dispatchers.IO) {
-                    chatRepository.dao.loadOlderSortAnchors(sessionId, before, hardPageLimit)
-                        .lastOrNull()?.sortOrder
-                }
-                val start = withContext(Dispatchers.IO) {
-                    olderTurnStart(before, ChatHistoryWindow.TURN_PAGE_SIZE)
-                }
-                // [T-load-older-fallback] Turn-aligned paging targets whole
-                // user turns. When the remaining history before the window has
-                // fewer than TURN_PAGE_SIZE user turns (or none at all),
-                // olderTurnStart returns null even though countMessagesBeforeSort
-                // still reports rows — mostly assistant-only trailing messages.
-                // Without a fallback, the pill stays lit but every click just
-                // calls refreshHistoryEdges and returns: visible button, zero
-                // effect. Fall back to a non-turn-aligned load of all remaining
-                // rows instead of freezing at the boundary.
-                val boundedStart = ChatHistoryWindow.boundedOlderStart(start, oldestAnchor, before)
-                val loadStart = if (boundedStart != null) {
-                    boundedStart
-                } else {
-                    // Turn alignment failed. Do NOT walk all the way to the
-                    // session start: that is how one tap re-materialised the
-                    // whole transcript the 500-row cold-open cap exists to
-                    // keep out of the render window. Take one capped page;
-                    // another tap continues from its new edge.
-                    val remaining = withContext(Dispatchers.IO) {
-                        chatRepository.dao.countMessagesBeforeSort(sessionId, before)
-                    }
-                    if (remaining <= 0) {
-                        refreshHistoryEdges(scheduleTail = false)
-                        return@withLock
-                    }
-                    // One probe of the cold-open cap, newest first. The oldest
-                    // anchor in it is the page start; rows before it stay
-                    // behind the pill.
-                    val anchors = withContext(Dispatchers.IO) {
-                        chatRepository.dao.loadOlderSortAnchors(
-                            sessionId,
-                            before,
-                            hardPageLimit,
-                        )
-                    }
-                    anchors.lastOrNull()?.sortOrder
-                }
-                if (loadStart == null || loadStart >= before) {
-                    // Fallback exhausted every probe but the earlier count
-                    // still saw rows. That contradiction almost always means
-                    // rows were DELETED mid-flight (truncate/retry renumbers
-                    // the tail); the old code hard-fused
-                    // `_hasOlderMessages=false` here, permanently hiding the
-                    // pill even when the DB still had older rows — the
-                    // "部分消息从会话页消失" bug. The DB recount inside
-                    // refreshHistoryEdges is the only authority on the edge.
-                    refreshHistoryEdges(scheduleTail = false)
-                    return@withLock
-                }
-                val pageRows = withContext(Dispatchers.IO) {
-                    chatRepository.hydrateDisplayRows(
-                        loadSortRange(
-                            SortRange(
-                                loadStart,
-                                if (before == Int.MAX_VALUE) before else before + 1,
-                            ),
-                        ),
-                    )
-                }
-                val rows = pageRows
-                if (rows.isNotEmpty()) {
-                    val current = _messages.value
-                    val known = current.flatMapTo(mutableSetOf()) { it.sourceDbIds }
-                    val older = rows.toChatMessages()
-                    val updated = current.map { message ->
-                        older.firstOrNull { incoming ->
-                            incoming.sourceDbIds.any(message.sourceDbIds::contains)
-                        } ?: message
-                    }
-                    val fresh = older.filter { message ->
-                        message.sourceDbIds.isEmpty() || message.sourceDbIds.none(known::contains)
-                    }
-                    if (fresh.size < older.size) {
-                        // Rows in this page are already painted — the cursor
-                        // should have excluded them. Never eat them silently:
-                        // log loudly so a double-splice shows up in the trace.
-                        AppLogger.warning(
-                            TAG,
-                            "loadOlder: page [$loadStart,$before) returned ${older.size} rows, " +
-                                "${older.size - fresh.size} already painted (cursor=${timeline.oldestSortOrder})",
-                        )
-                    }
-                    if (fresh.isNotEmpty() || updated != current) {
-                        _messages.value = fresh + updated
-                        added = true
-                    }
-                    timeline.noteBounds(rows)
-                }
-                // [T-load-older-no-tail-attach] 不在这里 scheduleTail：
-                // 用户刚点“加载更早”正在向上读历史，此时立刻触发
-                // ensureSessionTailLoaded 追加尾部 chunk 会连续两次突变
-                // _messages，LazyColumn 锚点被打掉 → 跳屏 + 一段记录
-                // 被悄悄加载。尾部 gap 由 isStreaming 翻转收集器与
-                // ensureSessionTailLoaded 的 queue 机制兜底，不需要
-                // 借翻历史的动作来抢跑。
-                refreshHistoryEdges(scheduleTail = false)
-            }
-            return added
-        } finally {
-            loadingOlderFlag.set(false)
-            _isLoadingHistory.value = false
-        }
-    }
-
-    /**
-     * The painted window must include the session tail. If rows exist after
-     * the newest cursor, append them. A click that only loads five turns
-     * is what left the newer transcript off screen.
-     */
-    fun ensureSessionTailLoaded() {
-        if (sessionId.isEmpty()) return
-        _sessionTailReady.value = false
-        if (_isStreaming.value || tailAttachJob?.isActive == true) {
-            tailAttachQueued = true
-            return
-        }
-        tailAttachQueued = false
-        tailAttachJob = viewModelScope.launch {
-            _isLoadingHistory.value = true
-            try {
-                var idlePasses = 0
-                while (!_isStreaming.value && idlePasses < 3) {
-                    val before = timeline.newestSortOrder
-                    drainMissingTail()
-                    refreshHistoryEdges(scheduleTail = false)
-                    val again = tailAttachQueued || _hasNewerMessages.value
-                    tailAttachQueued = false
-                    if (!again) break
-                    if (timeline.newestSortOrder == before) idlePasses++ else idlePasses = 0
-                }
-                _sessionTailReady.value = !_hasNewerMessages.value
-            } finally {
-                val restart = tailAttachQueued && !_isStreaming.value
-                tailAttachJob = null
-                tailAttachQueued = false
-                _isLoadingHistory.value = false
-                if (!_isStreaming.value && !_hasNewerMessages.value) _sessionTailReady.value = true
-                if (restart) ensureSessionTailLoaded()
-            }
-        }
-    }
-
-    private suspend fun drainMissingTail() {
-        var chunks = 0
-        while (!_isStreaming.value && chunks < 10_000) {
-            val endExclusive = withContext(Dispatchers.IO) {
-                chatRepository.dao.nextSortOrder(sessionId)
-            }
-            val missing = ChatHistoryWindow.missingTailRange(
-                timeline.newestSortOrder,
-                endExclusive,
-            ) ?: return
-            val chunkEnd = minOf(
-                missing.endExclusive.toLong(),
-                missing.startInclusive.toLong() + ChatHistoryWindow.TAIL_ATTACH_CHUNK.toLong(),
-            ).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-            if (chunkEnd <= missing.startInclusive) return
-            // One chunk = one critical section: fetch + splice + cursor under
-            // the same lock so a concurrent load-older page cannot splice in
-            // between (that race produced duplicated and reordered rows).
-            timeline.mutationMutex.withLock {
-                val rows = withContext(Dispatchers.IO) {
-                    chatRepository.hydrateDisplayRows(
-                        // Include the already-painted boundary row so a
-                        // toolUse immediately before this chunk can be paired
-                        // with its toolResult inside toChatMessages(). The
-                        // overlap is removed by sourceDbIds below.
-                        loadSortRange(
-                            SortRange(
-                                if (missing.startInclusive > Int.MIN_VALUE) missing.startInclusive - 1 else missing.startInclusive,
-                                chunkEnd,
-                            ),
-                        ),
-                    )
-                }
-                if (rows.isEmpty()) {
-                    // [T-android-timeline-ledger] A hydrate can legitimately
-                    // return nothing (body-store admission pressure) while the
-                    // DB still HAS rows in this range. The old code pushed the
-                    // cursor past the gap on empty rows — silently consuming
-                    // rows that were never painted. Verify against the DB:
-                    // consume only a genuinely empty range; otherwise leave
-                    // the cursor alone and stop this pass (a later attach
-                    // retries instead of spinning).
-                    val dbCount = withContext(Dispatchers.IO) {
-                        chatRepository.dao.countMessagesInSortRange(
-                            sessionId,
-                            missing.startInclusive,
-                            chunkEnd,
-                        )
-                    }
-                    if (dbCount > 0) {
-                        AppLogger.warning(
-                            TAG,
-                            "tail drain: range [${missing.startInclusive},$chunkEnd) has $dbCount rows " +
-                                "but hydrate returned none — leaving gap unconsumed",
-                        )
-                        return
-                    }
-                    timeline.forceNewestAtLeast(chunkEnd - 1)
-                    chunks++
-                    return@withLock
-                }
-                val missingMessages = rows.toChatMessages()
-                val current = _messages.value
-                val present = current.flatMapTo(mutableSetOf()) { it.sourceDbIds }
-                // The first row may be an overlap from the already-painted
-                // window. Replace that existing bubble as well: this is what
-                // makes a toolResult that arrived in the next chunk update the
-                // previously painted toolUse card instead of being silently
-                // discarded as a duplicate.
-                val updated = current.map { message ->
-                    missingMessages.firstOrNull { incoming ->
-                        incoming.sourceDbIds.any(message.sourceDbIds::contains)
-                    } ?: message
-                }
-                val freshStart = missingMessages.indexOfFirst { message ->
-                    message.sourceDbIds.none(present::contains)
-                }
-                if (freshStart >= 0) {
-                    val fresh = missingMessages.filter { message ->
-                        message.sourceDbIds.none(present::contains)
-                    }
-                    val insertAt = ChatHistoryWindow.missingTailInsertIndex(
-                        currentSourceIds = current.map { it.sourceDbIds },
-                        chunkSourceIds = missingMessages.map { it.sourceDbIds },
-                        freshStartIndex = freshStart,
-                    )
-                    _messages.value = if (insertAt < 0) {
-                        updated + fresh
-                    } else {
-                        updated.take(insertAt) + fresh + updated.drop(insertAt)
-                    }
-                } else if (updated != current) {
-                    _messages.value = updated
-                }
-                timeline.noteBounds(rows)
-            }
-            chunks++
-        }
-    }
+    // [T-android-split-chat-historypage] loadOlderMessages / loadOlderPage /
+    // ensureSessionTailLoaded / drainMissingTail moved verbatim to
+    // ChatViewModelHistoryPageExt.kt.
 
     /**
      * Streaming side-channel — see [StreamingDelta]. During a live agent
@@ -1254,7 +977,9 @@ class ChatViewModel(
     )
     val streamingById: StateFlow<Map<String, StreamingDelta>> = _streamingById.asStateFlow()
 
-    private val streamSession = StreamSessionController(
+    // [T-android-split-chat-turnpersist] internal (was private): the streaming
+    // delegate helpers moved to ChatViewModelTurnPersistExt.kt.
+    internal val streamSession = StreamSessionController(
         scope = viewModelScope,
         messages = _messages,
         streamingById = _streamingById,
@@ -1749,6 +1474,18 @@ class ChatViewModel(
     val promptQueue: StateFlow<List<QueuedPrompt>> = _promptQueue.asStateFlow()
 
     /**
+     * [T-plan-step-retry] One-shot plan-step retry request, shared with
+     * ChatViewModelPlanStepExt.kt (extensions cannot add fields, so the state
+     * lives here and the behavior lives in the ext). Set by
+     * [ChatViewModel.retryPlanStep] when the user retries a failed board step;
+     * consumed by `planBoardPrompt` at the NEXT request assembly, where it
+     * rides inside the `<plan_board>` block as one-shot steering. Null when
+     * nothing is pending.
+     */
+    internal val _planStepRetry = MutableStateFlow<PlanStepRetryRequest?>(null)
+    val planStepRetry: StateFlow<PlanStepRetryRequest?> = _planStepRetry.asStateFlow()
+
+    /**
      * Input-token count reported by the most recent API call, used by
      * [ContextPolicy] as the "estimated tokens" gate before sending. Zero
      * means either we've never called the model or the provider didn't return
@@ -1761,57 +1498,11 @@ class ChatViewModel(
     internal val _lastCacheHitRate = MutableStateFlow(0.0)
     val lastCacheHitRate: StateFlow<Double> = _lastCacheHitRate.asStateFlow()
 
-    /**
-     * [T-compact-estimate-fallback] Cheap token estimate of the in-memory
-     * agent history, used ONLY as a lower-bound floor when the last usage
-     * chunk is missing or stale (`_lastTurnContextTokens` is refreshed by a
-     * COMPLETED API call, so a tool-heavy stretch that has not produced a
-     * new usage value yet would otherwise look "empty" to ContextPolicy and
-     * skip compaction entirely). ASCII costs ~0.25 tok/char, CJK ~0.6 —
-     * the classic len/4 estimator is ~4x off for CJK and would let long
-     * Chinese sessions sail past the threshold.
-     */
-    internal fun estimateAgentHistoryTokens(): Int {
-        // Effective, not raw: with a compact marker in play the next request
-        // carries the summary + kept tail, not the full history. Feeding the
-        // raw size into the send-time / in-loop gates made every post-compact
-        // check look over-threshold.
-        return estimateMessagesTokens(effectiveAgentHistoryUncounted())
-    }
-
-    /**
-     * [T-android-progressive-trim] Token estimate over an arbitrary message
-     * list (extracted from estimateAgentHistoryTokens so the progressive-trim
-     * level decision can estimate the UNTRIMMED payload with the exact same
-     * arithmetic, calibration included).
-     */
-    internal fun estimateMessagesTokens(messages: List<LLMMessage>): Int {
-        var total = 0L
-        for (msg in messages) {
-            total += estimateMixedTokens(msg.content)
-            for (part in msg.contentParts) {
-                when (part) {
-                    is AgentContentPart.Text -> total += estimateMixedTokens(part.text)
-                    is AgentContentPart.ToolUse -> total += estimateMixedTokens(TokenScanMemo.toolUseInputJson(part.input))
-                    is AgentContentPart.ToolResult -> total += estimateMixedTokens(part.content)
-                    is AgentContentPart.ImageData -> total += 1_500
-                }
-            }
-        }
-        // [T-token-usage-calibration] 按模型维度用真实 usage 校准原始估算。
-        val modelKey = currentModel?.id ?: ""
-        return if (modelKey.isNotEmpty()) {
-            com.openminis.app.data.TokenUsageCalibration.estimate(modelKey, total.toInt())
-        } else {
-            total.toInt()
-        }
-    }
-
-    private fun estimateMixedTokens(text: String): Long = TokenScanMemo.mixedTokens(text)
-
-    /** max(real usage, estimate) so a stale-but-real reading always wins. */
-    internal fun contextTokensForPolicy(): Int =
-        maxOf(_lastTurnContextTokens.value, estimateAgentHistoryTokens())
+    // [T-android-split-chat-tokenext] estimateAgentHistoryTokens /
+    // estimateMessagesTokens / estimateMixedTokens / contextTokensForPolicy /
+    // refreshContextUsage / thinkingInfo / loadSessionTokenStats /
+    // dynamicMaxTokens / estimateContextTokens / countPartTokens moved
+    // verbatim to ChatViewModelTokenExt.kt.
 
     /**
      * Latest compact summary for the current session, loaded from the DB on
@@ -2272,8 +1963,9 @@ class ChatViewModel(
     internal val _supervisorArmed = MutableStateFlow(false)
     val supervisorArmed: StateFlow<Boolean> = _supervisorArmed.asStateFlow()
 
-    internal val _permissionMode = MutableStateFlow(com.openminis.app.security.PermissionMode.ASK)
-    val permissionMode: StateFlow<com.openminis.app.security.PermissionMode> = _permissionMode.asStateFlow()
+    // [#31] Four-tier gate. New chats start at SAFE_AUTO (the two-tier "ASK" behaviour) — zero change for upgrades.
+    internal val _permissionMode = MutableStateFlow(com.openminis.app.security.SessionPermissionMode.SAFE_AUTO)
+    val permissionMode: StateFlow<com.openminis.app.security.SessionPermissionMode> = _permissionMode.asStateFlow()
 
     /**
      * [T-android-enhanced-cache] Enhanced Cache (1-hour Anthropic cache TTL)
@@ -2397,43 +2089,40 @@ class ChatViewModel(
     }
 
     /**
-     * Third action on the approval card: approve this request AND flip the
-     * session-scoped allow-all switch, so later sensitive operations in this
-     * conversation execute without asking again. The switch lives in
-     * ApprovalGate and resets on session teardown (cleanupAll).
-     *
-     * [T-android-allow-all-means-all] The button says 全部允许, so it now
-     * enables the true all-tools switch — not just the same tool name.
-     * Previously shell got approved-all and file_write still prompted,
-     * which contradicted the label the user tapped.
+     * [#36] Third action on the approval card: approve this request AND
+     * allowlist its (tool, args-gist) key for the rest of the session.
+     * In-memory only — cleared on session teardown (cleanupAll).
      */
-    fun approveAllForSession(id: String) {
-        val sid = ApprovalGate.detailOf(id)?.sessionId ?: realSessionId.ifEmpty { sessionId }
-        ApprovalGate.enableSessionAllowAll(sid)
+    fun approveToolAlwaysForSession(id: String) {
+        val detail = ApprovalGate.detailOf(id)
+        val sid = detail?.sessionId ?: realSessionId.ifEmpty { sessionId }
+        ApprovalGate.allowToolForSession(detail?.toolName.orEmpty(), sid, detail?.argsGist.orEmpty())
         approvePendingTool(id)
     }
 
-    fun setSessionPermissionMode(mode: com.openminis.app.security.PermissionMode) {
-        val next = if (mode.isYoyo()) com.openminis.app.security.PermissionMode.ALLOW_ALL
-        else com.openminis.app.security.PermissionMode.ASK
-        _permissionMode.value = next
-        applyGateMode(next)
+    /**
+     * [#31] Faithful four-tier persistence. The old implementation folded
+     * every non-YOLO value into ASK — SAFE_AUTO/OFF choices would have been
+     * silently lost, so this now stores the tier verbatim.
+     */
+    fun setSessionPermissionMode(mode: com.openminis.app.security.SessionPermissionMode) {
+        _permissionMode.value = mode
+        applyGateMode(mode)
         val sid = realSessionId.ifEmpty { sessionId }
         if (!isDraft && sid.isNotBlank() && !sid.startsWith("__new__")) {
             viewModelScope.launch {
-                val stored = if (next.isYoyo()) "YOYO" else "ASK"
-                runCatching { chatRepository.dao.updatePermissionMode(sid, stored) }
+                runCatching { chatRepository.dao.updatePermissionMode(sid, mode.toStoredToken()) }
             }
         }
     }
 
-    internal fun applyGateMode(mode: com.openminis.app.security.PermissionMode) {
+    internal fun applyGateMode(mode: com.openminis.app.security.SessionPermissionMode) {
         val sid = realSessionId.ifEmpty { sessionId }
         SecurityGateHolder.setActiveSessionMode(mode, sid)
         // Preserve legacy behavior for older callers, but all gate state writes
         // above and below are explicitly keyed by this ViewModel's session.
         ApprovalGate.bindSession(sid)
-        if (mode.isYoyo()) ApprovalGate.enableSessionAllowAll(sid)
+        if (mode.isYolo()) ApprovalGate.enableSessionAllowAll(sid)
         else ApprovalGate.resetSessionAllowAll(sid)
     }
 
@@ -2843,38 +2532,6 @@ class ChatViewModel(
     // [T-context-ring] Live context token counter for the session-menu ring.
     val contextUsage = MutableStateFlow(com.openminis.app.data.model.ContextUsage(0L, 0L))
 
-    /**
-     * Recompute contextUsage for the session-menu ring.
-     *
-     * [T-android-context-ring-zero] The char estimate walks the effective
-     * (compacted) history — with a marker in play the raw list is not what
-     * the next request carries ([T-android-compact-stale-usage]).
-     * which for a long session is TAIL-PAGED (loadSessionTail) — a re-entered
-     * session showed ~0 tokens even while the provider reported 23939/24688.
-     * Prefer the REAL provider-reported context size from the last usage
-     * chunk; fall back to the char estimate only before the first API call.
-     */
-    fun refreshContextUsage() {
-        val reported = _lastTurnContextTokens.value
-        var usedChars = 0L
-        for (msg in effectiveAgentHistoryUncounted()) {
-            for (part in msg.contentParts) {
-                when (part) {
-                    is AgentContentPart.Text -> usedChars += part.text.length
-                    is AgentContentPart.ToolUse -> usedChars += TokenScanMemo.toolUseInputJson(part.input).length
-                    is AgentContentPart.ToolResult -> {
-                        usedChars += part.content.length
-                    }
-                    is AgentContentPart.ImageData -> {}
-                }
-            }
-        }
-        val estTokens = (usedChars / 3.5).toLong()
-        val used = if (reported > 0) reported.toLong() else estTokens
-        val window = currentModelContextWindow?.toLong() ?: 0L
-        contextUsage.value = com.openminis.app.data.model.ContextUsage(used, window)
-    }
-
     // ── Session token usage (iOS parity: TokenUsageSheet data) ─────────────
 
     /**
@@ -2901,49 +2558,9 @@ class ChatViewModel(
         val level: String,
     )
 
-    /** Read-only view of the current thinking configuration for the model. */
-    fun thinkingInfo(): ThinkingInfo? {
-        val model = currentModel ?: return null
-        val supported = model.supportsReasoning == true
-        val level = _thinkingLevel.value
-        val enabled = supported && level.isEnabled
-        val levelText = if (enabled) level.displayName else "—"
-        return ThinkingInfo(supported, enabled, levelText)
-    }
-
-    /**
-     * Load session-level token aggregates from the database. Suspend so the
-     * Token Usage sheet can fetch on demand without keeping a live subscription
-     * — token data rarely changes mid-view, and we want to avoid reactive
-     * overhead per token chunk.
-     */
-    suspend fun loadSessionTokenStats(): SessionTokenStats {
-        val sid = realSessionId.ifEmpty { sessionId }
-        if (sid.isEmpty()) return SessionTokenStats(0, 0, 0, 0, 0, 0)
-        val usages = chatRepository.sessionTokenUsages(sid)
-        var input = 0L
-        var output = 0L
-        var cacheRead = 0L
-        var cacheWrite = 0L
-        var context = 0
-        for (json in usages) {
-            try {
-                val obj = org.json.JSONObject(json)
-                input += obj.optLong("inputTokens", 0L)
-                output += obj.optLong("outputTokens", 0L)
-                cacheRead += obj.optLong("cacheReadTokens", 0L)
-                cacheWrite += obj.optLong("cacheCreationTokens", 0L)
-                val ctx = obj.optInt("latestContextTokens", 0)
-                if (ctx > 0) context = ctx
-            } catch (_: Exception) { /* skip malformed row */ }
-        }
-        val snapshot = _messages.value
-        val assistantCount = snapshot.count { it.role == "assistant" }
-        val toolCalls = snapshot.filter { it.role == "assistant" }
-            .sumOf { msg -> msg.toolBlocks.count { it.kind != "text" && it.kind != "info" } }
-        val loops = maxOf(toolCalls, assistantCount)
-        return SessionTokenStats(input, output, cacheRead, cacheWrite, context, loops)
-    }
+    // [T-android-split-chat-tokenext] thinkingInfo / loadSessionTokenStats live
+    // in ChatViewModelTokenExt.kt; the data classes stay nested because
+    // TokenUsageSheet references ChatViewModel.SessionTokenStats.
 
     // [T-android-split-chat] toggleMemorySheet / dismissMemorySheet moved to ChatViewModelUiStateExt.kt.
 
@@ -4155,7 +3772,7 @@ class ChatViewModel(
                             "skipping the paint so its rows survive (${result.restoredCount} restored)",
                     )
                 } else {
-                    _messages.value = tail.toChatMessages()
+                    _messages.value = toChatMessages(tail)
                     timeline.reset()
                     timeline.noteBounds(tail)
                     refreshHistoryEdges(scheduleTail = false)
@@ -4936,102 +4553,6 @@ class ChatViewModel(
     }
 
     /**
-     * Compute max output tokens that fits within the remaining context window.
-     * Logic mirrors iOS's dynamicMaxTokens():
-     *   result = min(provider.defaultMaxTokens, max(contextWindow - inputTokens, MIN_MAX_TOKENS))
-     *
-     * @param provider The current LLM provider (carries defaultMaxTokens).
-     * @param lastContextTokens API-reported input token count from the last call (0 = first call).
-     */
-    internal fun dynamicMaxTokens(provider: LLMProvider, lastContextTokens: Int = 0): Int {
-        val model = currentModel ?: return minOf(GLOBAL_MAX_TOKENS_CEILING, provider.defaultMaxOutputTokens)
-        // Ceiling: min(global cap, model.maxOutputTokens-or-provider-default).
-        // The global cap means we never send more than 128K regardless of
-        // what the model claims it can output.
-        val maxOutputCeiling = minOf(GLOBAL_MAX_TOKENS_CEILING, provider.effectiveMaxOutputTokens(model))
-        // Context window: model.contextWindow if known, else the shared
-        // model-id heuristic. [T-anthropic-context-window] Route through
-        // LLMModel.contextWindowTokens so the corrected Claude-1M / Gemini-1M
-        // values apply here too, instead of the stale local "everything 200K"
-        // copy that under-reported modern Claude/Gemini windows.
-        val contextWindow = model.contextWindowTokens
-        if (contextWindow <= 0) return maxOutputCeiling
-        val inputTokens = if (lastContextTokens > 0) lastContextTokens else 0
-        val remaining = contextWindow - inputTokens
-        val clamped = maxOf(remaining, MIN_MAX_TOKENS)
-        val result = minOf(maxOutputCeiling, clamped)
-        if (result < maxOutputCeiling) {
-            android.util.Log.i(TAG, "dynamicMaxTokens: $result (remaining=$remaining, ceiling=$maxOutputCeiling, window=$contextWindow, input=$inputTokens, model=${model.id})")
-        }
-        return result
-    }
-
-    // ─── Context Window Offload ──────────────────────────────────────────────
-    //
-    // Mirrors iOS `AIChatViewModel.swift`:
-    //   - estimateContextTokens()        (line 7451)
-    //   - offloadContextIfNeeded()       (line 7481)
-    // Per-tool writers live in [com.openminis.app.data.ContextOffload].
-    //
-    // The agent loop calls [offloadContextIfNeeded] once per turn just before
-    // the next API call. When token usage crosses the policy threshold, large
-    // tool outputs in older messages are written to disk under
-    // `filesDir/minis-sessions/<sid>/offloads/tools/` and replaced in
-    // [agentHistory] by `[CONTEXT OFFLOADED] … <linux path>` stubs. The model
-    // can later `file_read` the path to retrieve the original content.
-    //
-    // Why this matters: without offloading, a session that runs many large
-    // shell tools fills the context window and either trips compact (lossy)
-    // or hits the model's context-exhausted error. Offload is lossless —
-    // the data still exists, just on disk instead of in-prompt.
-
-    /**
-     * Char-based fallback estimate when the API hasn't reported a token
-     * baseline yet (first call in a turn). Mirrors iOS line 7451.
-     *
-     * Uses ~3.5 chars per token for mixed text + adds the tokenizer's
-     * image-aware count for image bytes. Underestimates JSON-heavy tool
-     * inputs slightly but is adequate as a "should we offload" gate —
-     * offload itself uses precise [BPETokenizer.countTokens] per-part
-     * for the candidate ranking.
-     */
-    internal fun estimateContextTokens(): Int {
-        var totalChars = 0
-        var imageTokens = 0
-        for (msg in agentHistory) {
-            for (part in msg.contentParts) {
-                when (part) {
-                    is AgentContentPart.Text -> totalChars += part.text.length
-                    is AgentContentPart.ToolUse -> totalChars += part.input.toString().length
-                    is AgentContentPart.ToolResult -> {
-                        totalChars += part.content.length
-                        part.imageData?.let { imageTokens += BPETokenizer.countImageTokens(it) }
-                    }
-                    is AgentContentPart.ImageData -> {
-                        imageTokens += BPETokenizer.countImageTokens(part.data)
-                    }
-                }
-            }
-        }
-        return (totalChars / 3.5).toInt() + imageTokens
-    }
-
-    /**
-     * Approximate token count for a single agent content part. Used to rank
-     * offload candidates by size. Matches iOS `BPETokenizer.countPartTokens`
-     * — text uses BPE, images use the grid-cell heuristic.
-     */
-    internal fun countPartTokens(part: AgentContentPart): Int = when (part) {
-        is AgentContentPart.Text -> BPETokenizer.countTokens(part.text)
-        is AgentContentPart.ToolUse -> BPETokenizer.countTokens(part.input.toString())
-        is AgentContentPart.ToolResult -> {
-            BPETokenizer.countTokens(part.content) +
-                (part.imageData?.let { BPETokenizer.countImageTokens(it) } ?: 0)
-        }
-        is AgentContentPart.ImageData -> BPETokenizer.countImageTokens(part.data)
-    }
-
-    /**
      * Offload candidate descriptor. `msgIdx` and `partIdx` index back into
      * [agentHistory] so we can mutate the part in place after writing the
      * stub to disk.
@@ -5047,354 +4568,18 @@ class ChatViewModel(
 
 
 
-    /**
-     * Finalize the current assistant message when [runAgentLoop] hits the
-     * MAX_AGENT_TURNS ceiling. Drops the streaming/awaiting flags so the
-     * "thinking" indicator clears, writes an inline error explaining *why*
-     * we stopped, and arms canResume so the user can continue from here.
-     * Mirrors iOS AIChatViewModel.swift:4922-4929 pattern (canResume + error).
-     */
-    internal fun finalizeAtTurnLimit(
-        assistantId: String,
-        text: String,
-        blocks: List<AssistantBlock>,
-        /** [T-android-resume-banner-race] The loop's epoch snapshot; see raiseCanResume. */
-        fromResumeEpoch: Long,
-    ) {
-        updateAssistantMessage(
-            assistantId, text, false, blocks,
-            isAwaitingModelResponse = false,
-        )
-        // [T-android-thinking-indicator-linger] updateAssistantMessage drains
-        // _streamingById[assistantId] above, but the agent loop ran on
-        // Dispatchers.IO while this finalize hops to Main — a late streaming
-        // delta can re-add the side-channel entry AFTER the drain, and since
-        // the loop has now exited no further isStreaming=false write will ever
-        // clear it. mergeStreamingOverlay (ChatScreen) forces isStreaming=true
-        // on any message with a side-channel entry, so that orphan keeps the
-        // "thinking" row alive forever. Defensively drop the entry here as the
-        // last Main-thread write of this turn.
-        // [T-android-stream-flush-review] Cancel the trailing flush too, so it
-        // can't re-add this orphan entry after we drop it on the error path.
-        clearStreamFlushState(assistantId)
-        if (_streamingById.value.containsKey(assistantId)) {
-            _streamingById.value = _streamingById.value - assistantId
-        }
-        setInlineError(
-            "Stopped after ${ToolLimitPrefs.mainSessionMaxTurns()} agent turns to prevent runaway " +
-            "tool use. The model kept calling tools without finishing — tap " +
-            "Resume to continue from here, or send a new message to start over.",
-        )
-        // [T-android-group-pause-badge-restamp] A LIVE interruption just
-        // happened: this is a real entry into the paused state, so the
-        // badge's 24h freshness stamp must be refreshed. Cancel any
-        // unconsumed re-detection mark left by a prior load so it cannot
-        // suppress the re-stamp here.
-        markLiveInterruption()
-        raiseCanResume(fromResumeEpoch)
-    }
-
-    /**
-     * Instance entry point used by the tool-dispatch path. The real logic lives
-     * in the companion so tests can reach it without a ChatViewModel.
-     */
-    internal fun preflightValidateToolCall(
-        name: String,
-        args: JSONObject,
-        tools: List<AgentToolDefinition>,
-    ): String? = preflightValidateToolCallImpl(name, args, tools)
-
-
-    internal suspend fun oneShotAsk(system: String, user: String): String {
-        val provider = currentProvider ?: throw IllegalStateException("no provider")
-        val buf = StringBuilder()
-        provider.streamMessage(
-            messages = listOf(LLMMessage(LLMMessage.Role.USER, user)),
-            systemPrompt = system,
-            maxTokens = 2048,
-            temperature = samplingTemperature(_activeEntryId.value),
-            tools = emptyList(),
-            thinkingLevel = ThinkingLevel.OFF,
-        ).collect { chunk ->
-            if (chunk is LLMStreamChunk.Text) buf.append(chunk.text)
-        }
-        return buf.toString().ifBlank { "(empty reasoning response)" }
-    }
-
-    /**
-     * [T-android-vision-group / GH#182] Placeholder text for an image the CURRENT
-     * main model can't natively see, to be carried on the outgoing image part and
-     * substituted by the provider's T264 branch. Returns null when the main model
-     * has native vision (pixels are attached, no placeholder needed) OR no Vision
-     * Group is configured (provider falls back to its historical literal). When a
-     * Vision Group IS configured, returns a hint naming [path] and steering the
-     * model to call read_image — closing the loop with executeReadImageTool.
-     */
-    internal fun visionPlaceholderFor(path: String?): String? {
-        if (currentModelHasNativeVision) return null
-        if (!com.openminis.app.tools.VisionGroupResolver.isConfigured(providerRepository, context)) return null
-        return com.openminis.app.tools.VisionGroupResolver.noVisionImagePlaceholder(path)
-    }
-
-
-
-    // ─── UI Helpers ──────────────────────────────────────────────────────
-
-    internal fun updateAssistantMessage(
-        id: String,
-        content: String,
-        isStreaming: Boolean,
-        toolBlocks: List<AssistantBlock>,
-        isAwaitingModelResponse: Boolean = false,
-    ) {
-        streamSession.updateAssistantMessage(id, content, isStreaming, toolBlocks, isAwaitingModelResponse)
-    }
-
-    internal fun flushStreamingDelta(id: String) = streamSession.flushStreamingDelta(id)
-
-    internal fun flushAllStreamingDeltas() = streamSession.flushAllStreamingDeltas()
-
-    /**
-     * Build the ordered AgentContentPart list for this turn by walking the slice of
-     * `allToolBlocks` that belongs to the current turn (from `turnStartBlockIndex` to
-     * the end). Text blocks become `Text`, tool_use blocks become `ToolUse` — the
-     * original stream order is preserved by the list slice order. Thinking and info
-     * blocks are skipped (they're persisted via `reasoningContent` or not at all).
-     */
-    internal fun buildTurnParts(
-        allToolBlocks: List<AssistantBlock>,
-        turnStartBlockIndex: Int,
-        toolCallInputs: Map<String, String>,
-    ): List<AgentContentPart> {
-        if (turnStartBlockIndex >= allToolBlocks.size) return emptyList()
-        val out = mutableListOf<AgentContentPart>()
-        for (i in turnStartBlockIndex until allToolBlocks.size) {
-            val block = allToolBlocks[i]
-            when (block.kind) {
-                "text" -> if (block.content.isNotEmpty()) {
-                    out.add(AgentContentPart.Text(block.content))
-                }
-                "tool_use" -> {
-                    val name = block.toolName
-                    if (name.isBlank()) continue
-                    val inputStr = toolCallInputs[block.id] ?: "{}"
-                    val inputJson = NonFiniteJson.parseOrNull(inputStr) ?: JSONObject()
-                    // [T-android-gemini3-thoughtsig / #179] Carry the block's
-                    // signature into the persisted/replayed ToolUse.
-                    out.add(AgentContentPart.ToolUse(block.id, name, inputJson, thoughtSignature = block.thoughtSignature))
-                }
-                // "thinking" / "info" → not persisted in parts
-                else -> { /* skip */ }
-            }
-        }
-        return out
-    }
-
-    /**
-     * Persist a single agent turn: the ordered list of AgentContentParts produced
-     * in this turn (text segments and tool_use blocks interleaved in the order they
-     * were emitted). Mirrors iOS's per-turn `persistAgentMessage` — one DB row per
-     * turn, no cross-turn accumulation, preserving `parts` array order.
-     *
-     * This is the right entry point for the agent loop; the legacy
-     * `persistAssistantMessage(text, usage, toolBlocks, ...)` accumulated all history
-     * on every call, which caused:
-     *   - Duplicate tool_use rows across turns (crashed LazyColumn key uniqueness)
-     *   - Orphan tool_result detection thrashing (sanitize injecting placeholders)
-     *   - Lost chronological text ↔ tool_use ordering within a single turn
-     */
-    /**
-     * Serialize a turn's [AgentContentPart] list into the on-disk parts_json
-     * shape (text + toolUse blocks). Shared by [persistAssistantTurn] (the
-     * authoritative per-turn row write) and the live session-list preview
-     * update ([T-android-session-last-message-live-tool-call]) so both produce
-     * an identical payload that [ChatRepository.extractTextPreview] understands.
-     */
-    internal fun buildAssistantPartsJson(
-        parts: List<AgentContentPart>,
-        toolBlockMeta: Map<String, AssistantBlock>,
-    ): String = buildString {
-        append("[")
-        parts.forEachIndexed { index, part ->
-            if (index > 0) append(",")
-            when (part) {
-                is AgentContentPart.Text -> {
-                    append("""{"type":"text","value":${escapeJson(part.text)}}""")
-                }
-                is AgentContentPart.ToolUse -> {
-                    // Skip tool_use with blank name — upstream bug guard.
-                    val name = part.name
-                    if (name.isBlank()) return@forEachIndexed
-                    val inputStr = part.input.toString()
-                    val meta = toolBlockMeta[part.id]
-                    val desc = meta?.toolTitle ?: ""
-                    val pageURL = meta?.browserURL ?: ""
-                    val imgPath = meta?.imageFilePath ?: ""
-                    // [P-process-card] Persist per-block timing so restored
-                    // sessions can rebuild it. Without these columns every
-                    // restored block had durationMs=0, so process cards
-                    // (which sum block durations) showed no duration at all
-                    // after a reload while live runs showed one.
-                    val durMs = meta?.durationMs ?: 0L
-                    val startMs = meta?.startTimeMs ?: 0L
-                    // [T-android-gemini3-thoughtsig / #179] Persist the captured
-                    // signature (null-literal when absent) so it survives a session
-                    // reload and can be replayed on the historical functionCall.
-                    val sigJson = part.thoughtSignature?.let { escapeJson(it) } ?: "null"
-                    append("""{"type":"toolUse","value":{"toolUseId":${escapeJson(part.id)},"name":${escapeJson(name)},"input":${escapeJson(inputStr)},"description":${escapeJson(desc)},"pageURL":${escapeJson(pageURL)},"imageFilePath":${escapeJson(imgPath)},"thoughtSignature":$sigJson,"durationMs":$durMs,"startTimeMs":$startMs}}""")
-                }
-                else -> { /* tool_result is persisted via persistToolResultMessage */ }
-            }
-        }
-        append("]")
-    }
-
-    internal suspend fun persistAssistantTurnForRun(
-        run: com.openminis.app.service.ActiveRun,
-        parts: List<AgentContentPart>,
-        usage: LLMUsage?,
-        reasoningContent: String? = null,
-        toolBlockMeta: Map<String, AssistantBlock> = emptyMap(),
-        assistantText: String? = null,
-        uiMessageId: String? = run.assistantMessageId,
-    ): String? = run.withPersistencePermit {
-        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
-            persistAssistantTurn(parts, usage, reasoningContent, toolBlockMeta, streamDurationMs = run.streamRate.takeDurationMs()).also { id ->
-                if (id != null) {
-                    withContext(Dispatchers.Main.immediate) { notePersistedUiRow(uiMessageId, id) }
-                    if (assistantText != null) run.markAssistantTurnPersisted(assistantText)
-                }
-            }
-        }
-    }
-
-    internal suspend fun persistToolResultMessageForRun(
-        run: com.openminis.app.service.ActiveRun,
-        parts: List<AgentContentPart>,
-        targetSessionId: String = realSessionId.ifEmpty { sessionId },
-        uiMessageId: String? = run.assistantMessageId,
-    ): String? = run.withPersistencePermit {
-        kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
-            val resultIds = parts.filterIsInstance<AgentContentPart.ToolResult>().mapTo(mutableSetOf()) { it.id }
-            persistToolResultMessage(parts, targetSessionId).also { dbId ->
-                if (dbId != null) withContext(Dispatchers.Main.immediate) { notePersistedUiRow(uiMessageId, dbId) }
-                val currentToolId = run.currentToolSnapshot()?.callId
-                if (dbId != null && currentToolId != null && currentToolId in resultIds) {
-                    run.setCurrentTool(null, null)
-                }
-            }
-        }
-    }
-
-    internal suspend fun persistAssistantTurn(
-        parts: List<AgentContentPart>,
-        usage: LLMUsage?,
-        reasoningContent: String? = null,
-        toolBlockMeta: Map<String, AssistantBlock> = emptyMap(),
-        // [T-android-usage-tok-s] Streamed-text wall clock (first→last delta of
-        // this persisted window) for the footer's tok/s readout; null = no text.
-        streamDurationMs: Long? = null,
-    ): String? {
-        if (parts.isEmpty()) return null
-        val partsJson = buildAssistantPartsJson(parts, toolBlockMeta)
-        val tokenJson = usage?.let {
-            val durSuffix = streamDurationMs?.let { d -> ",\"streamDurationMs\":$d" } ?: ""
-            """{"inputTokens":${it.inputTokens},"outputTokens":${it.outputTokens},"cacheCreationTokens":${it.cacheCreationInputTokens ?: 0},"cacheReadTokens":${it.cacheReadInputTokens ?: 0},"latestContextTokens":${it.latestContextTokens}$durSuffix}"""
-        }
-        val entity = chatRepository.appendMessage(
-            realSessionId.ifEmpty { sessionId }, "assistant", partsJson, tokenJson,
-            reasoningContent = reasoningContent,
-            // [T-token-attribution-snapshot] From the live request context, not
-            // the session row — see currentModelSnapshot().
-            modelSnapshot = currentModelSnapshot(),
-        )
-        return entity.id
-    }
-
-
-    /** Persist tool results as a user-role message (mirrors iOS behavior). */
-    internal suspend fun persistToolResultMessage(
-        parts: List<AgentContentPart>,
-        targetSessionId: String = realSessionId.ifEmpty { sessionId },
-    ): String? {
-        // [T-android-duplicate-toolcall-replay] Belt-and-braces: one row must
-        // never carry two toolResult parts for the same toolUseId — a replay
-        // that slipped past dispatch-time refusal would otherwise duplicate
-        // the persisted payload and re-enter the transcript on reload.
-        val results = parts.filterIsInstance<AgentContentPart.ToolResult>()
-            .distinctBy { it.id }
-        if (results.isEmpty()) return null
-        val partsJson = buildString {
-            append("[")
-            results.forEachIndexed { index, result ->
-                if (index > 0) append(",")
-                val snapshotText = escapeJson(result.content.lines().takeLast(30).joinToString("\n"))
-                append("""{"type":"toolResult","value":{"toolUseId":${escapeJson(result.id)},"name":${escapeJson(result.name)},"output":${escapeJson(result.content)},"success":${!result.isError},"snapshot":{"type":"text","text":$snapshotText}}}""")
-            }
-            append("]")
-        }
-        val entity = chatRepository.appendMessage(targetSessionId, "user", partsJson)
-        return entity.id
-    }
+    // [T-android-split-chat-turnpersist] finalizeAtTurnLimit /
+    // preflightValidateToolCall / oneShotAsk / visionPlaceholderFor /
+    // updateAssistantMessage / flushStreamingDelta / flushAllStreamingDeltas /
+    // buildTurnParts / buildAssistantPartsJson / persistAssistantTurnForRun /
+    // persistToolResultMessageForRun / persistAssistantTurn /
+    // persistToolResultMessage moved verbatim to ChatViewModelTurnPersistExt.kt.
 
 
     // ─── Legacy tool execution methods (kept for compatibility) ───────────
-
-    fun executeMemoryWrite(argsJson: String): MemoryTools.ToolResult {
-        val repo = sessionMemoryRepo()
-        if (!_memoryEnabled.value) {
-            return MemoryTools.ToolResult(
-                "Memory writes are disabled for this session. Reads are still available. The user can re-enable writes via the /memory slash command.",
-                false,
-            )
-        }
-        val result = MemoryTools.executeMemoryWrite(argsJson, repo)
-        val content = try {
-            JSONObject(argsJson).optString("content", "")
-        } catch (_: Exception) { "" }
-        _memoryToolRecords.value = _memoryToolRecords.value + MemoryToolRecord(
-            title = result.toolTitle,
-            isWrite = true,
-            preview = content.lines().firstOrNull { it.isNotBlank() }?.take(100) ?: "",
-            output = result.output,
-            writtenContent = content,
-        )
-        return result
-    }
-
-    fun executeMemoryGet(argsJson: String): MemoryTools.ToolResult {
-        val repo = sessionMemoryRepo()
-        val result = MemoryTools.executeMemoryGet(argsJson, repo)
-        val keywords = try {
-            JSONObject(argsJson).optString("keywords", "")
-        } catch (_: Exception) { "" }
-        _memoryToolRecords.value = _memoryToolRecords.value + MemoryToolRecord(
-            title = result.toolTitle,
-            isWrite = false,
-            preview = if (keywords.isNotBlank()) "Search: $keywords" else result.output.take(100),
-            output = result.output,
-            keywords = keywords,
-        )
-        return result
-    }
-
-    suspend fun executeBrowserUse(argsJson: String): BrowserToolResult {
-        val input = BrowserActionInput.parse(argsJson)
-            ?: return BrowserToolResult(text = "Error: Invalid browser_use input. Required: 'action' parameter.", success = false)
-
-        return try {
-            val result = browserTabPool.execute(input)
-            BrowserToolResult(
-                text = result.text,
-                success = result.success,
-                base64Image = result.base64Image,
-                imageFilePath = result.imageFilePath,
-                pageURL = result.pageURL,
-            )
-        } catch (e: Exception) {
-            BrowserToolResult(text = "Error: ${e.message}", success = false)
-        }
-    }
+    // [T-android-split-chat-toolhelpers] executeMemoryWrite / executeMemoryGet /
+    // executeBrowserUse / publishOverlayReplyExcerpt / escapeJson moved verbatim
+    // to ChatViewModelToolHelpersExt.kt. BrowserToolResult stays nested.
 
     data class BrowserToolResult(
         val text: String,
@@ -5404,31 +4589,9 @@ class ChatViewModel(
         val pageURL: String? = null,
     )
 
-    // ─── Misc Helpers ────────────────────────────────────────────────────
-
-
     /** LLM-based title + category generation, mirrors iOS generateSessionTitleIfNeeded(). */
     internal var titleGenerationAttempts = 0
     internal var titleGenerationInFlight = false
-
-
-
-    /**
-     * [T-android-overlay-reply-status-34599] Pull the most recent
-     * assistant text out of `_messages` and hand it to
-     * [SessionActivityTracker.publishLastReply]. The tracker truncates
-     * to a fixed-width excerpt and pairs it with [sessionId] so the
-     * floating overlay can render a "tap to open this chat" capsule
-     * after the stream completes. No-op when no assistant message has
-     * content yet (e.g. fail during the very first turn).
-     */
-    internal fun publishOverlayReplyExcerpt(sessionId: String) {
-        val snapshot = _messages.value
-        val text = snapshot.asReversed().firstOrNull { msg ->
-            msg.role == "assistant" && msg.content.isNotBlank()
-        }?.content
-        SessionActivityTracker.publishLastReply(sessionId, text)
-    }
 
     override fun cancelStream() {
         val job = streamJob
@@ -5611,432 +4774,14 @@ class ChatViewModel(
         _error.value = null
     }
 
-    internal fun escapeJson(text: String): String {
-        val sb = StringBuilder("\"")
-        for (c in text) {
-            when (c) {
-                '"' -> sb.append("\\\"")
-                '\\' -> sb.append("\\\\")
-                '\n' -> sb.append("\\n")
-                '\r' -> sb.append("\\r")
-                '\t' -> sb.append("\\t")
-                else -> {
-                    if (c.code < 0x20) sb.append("\\u%04x".format(c.code))
-                    else sb.append(c)
-                }
-            }
-        }
-        sb.append("\"")
-        return sb.toString()
-    }
+    // [T-android-split-chat-mapping] stripSystemReminders / stripAttachedFilesXml /
+    // buildToolResultMap / ToolResultData / toChatMessages / toLLMMessage /
+    // trimLoadedWindow moved verbatim to ChatViewModelChatMappingExt.kt.
 
-    /**
-     * Convert a flat list of MessageEntity into ChatMessages, merging toolResult
-     * data from user-role messages back into their corresponding AssistantBlocks.
-     * This mirrors iOS's toChatMessage() which reads both toolUse and toolResult parts.
-     */
-    /**
-     * Matches a `<system-reminder>...</system-reminder>` block, including any
-     * surrounding whitespace / newlines, so a part that is *only* a reminder
-     * collapses to empty text instead of leaving a blank gap. DOTALL so `.`
-     * spans newlines (reminders run multi-line in the cancel/resume paths).
-     *
-     * Only applied at the UI-render transform — agentHistory + DB rows keep
-     * the raw text so the LLM continues to see the reminder on subsequent
-     * turns (matches iOS, where system-reminder text is appended to
-     * agentHistory/AgentMessage parts but never to the chat-list ChatMessage).
-     */
-    private val systemReminderRegex =
-        Regex("\\s*<system-reminder>.*?</system-reminder>\\s*", RegexOption.DOT_MATCHES_ALL)
-
-    private fun stripSystemReminders(text: String): String =
-        if (!text.contains("<system-reminder>")) text
-        else systemReminderRegex.replace(text, "")
-
-    /**
-     * [T-android-retry-attachment-loss] Remove the `<user-attached-files>` XML
-     * inventory from a persisted text part for DISPLAY only. The XML is now
-     * persisted (iOS parity) so the model keeps the file paths across retry /
-     * reload, but it must never render in the user bubble — the file chips are
-     * rebuilt from the mediaRef parts instead. Mirrors the index-based strip
-     * already used by editMessage / the title-fallback path.
-     */
-    private fun stripAttachedFilesXml(text: String): String {
-        val startIdx = text.indexOf("<user-attached-files>")
-        if (startIdx < 0) return text
-        val endTag = "</user-attached-files>"
-        val endIdx = text.indexOf(endTag, startIdx)
-        return if (endIdx >= 0) {
-            text.substring(0, startIdx) + text.substring(endIdx + endTag.length)
-        } else {
-            text.substring(0, startIdx)
-        }
-    }
-
-    private fun buildToolResultMap(entities: List<MessageEntity>): Map<String, ToolResultData> {
-        val result = mutableMapOf<String, ToolResultData>()
-        for (entity in entities) {
-            if (entity.role != "user") continue
-            runCatching {
-                val array = org.json.JSONArray(entity.partsJson)
-                for (i in 0 until array.length()) {
-                    val obj = array.getJSONObject(i)
-                    if (obj.optString("type") != "toolResult") continue
-                    val value = obj.getJSONObject("value")
-                    val toolUseId = value.optString("toolUseId", "")
-                    if (toolUseId.isNotEmpty()) {
-                        result[toolUseId] = ToolResultData(
-                            output = value.optString("output", ""),
-                            success = value.optBoolean("success", true),
-                        )
-                    }
-                }
-            }
-        }
-        return result
-    }
-
-    internal fun List<MessageEntity>.toChatMessages(
-        toolResultContext: List<MessageEntity> = emptyList(),
-    ): List<ChatMessage> {
-        // Build the result index from this page plus a small boundary context,
-        // but convert UI rows from this page only. A toolUse and its toolResult
-        // commonly land on opposite sides of a page boundary; decoding the
-        // context without emitting it prevents the middle row from being
-        // filtered or merged away.
-        val toolResultMap = buildToolResultMap(this + toolResultContext)
-
-        // Second pass: convert messages, merging tool results into blocks
-        // Filter out user messages that only contain toolResult parts (no visible text)
-        return mapNotNull { entity ->
-            var text = ""
-            val blocks = mutableListOf<AssistantBlock>()
-            // T128: media attachments persisted under user messages as `mediaRef`
-            // parts. Restored to file:// URIs (stable across app restarts) and
-            // their original filenames so UserAttachmentList renders the same
-            // tiles after a session reload.
-            val restoredImageUris = mutableListOf<Uri>()
-            // [T-android-paste-mediaref] Names are collected PER COLUMN and
-            // concatenated image-first at the end, instead of appended to one
-            // list in part order.
-            //
-            // UserAttachmentList splits with `allFileNames.drop(imageUris.size)`,
-            // so the names list must be images-then-files regardless of the
-            // order the parts appear in. That used to be automatic: attachment
-            // mediaRefs were always written images-first. A pasted block breaks
-            // it — it lives in the BODY, so it can precede an image part, and a
-            // single in-order list would then start with a file name and shift
-            // every image caption onto the wrong tile.
-            val restoredImageNames = mutableListOf<String>()
-            val restoredFileNames = mutableListOf<String>()
-            // T150: file:// URIs of restored non-image attachments, in the
-            // same order as the non-image suffix of the joined name list.
-            // Powers the user-bubble file chip → FilePreviewScreen tap after
-            // a session reload.
-            val restoredAttachmentUris = mutableListOf<Uri>()
-            var speakerName: String? = null
-            var speakerVendor: String? = null
-
-            if (entity.role == "assistant" && !entity.reasoningContent.isNullOrEmpty()) {
-                blocks.add(AssistantBlock(
-                    id = "thinking_restored_${entity.id}",
-                    kind = "thinking",
-                    content = entity.reasoningContent,
-                    toolTitle = "Thinking",
-                    toolStatus = ToolBlockStatus.SUCCESS,
-                ))
-            }
-
-            try {
-                val array = org.json.JSONArray(entity.partsJson)
-                var textBlockCounter = 0
-                for (i in 0 until array.length()) {
-                    val obj = array.getJSONObject(i)
-                    when (obj.optString("type")) {
-                        com.openminis.app.tools.GroupChat.SPEAKER_PART -> {
-                            speakerName = obj.optString("value", "").takeIf { it.isNotBlank() }
-                            speakerVendor = obj.optString("vendor", "").takeIf { it.isNotBlank() }
-                                ?: com.openminis.app.tools.GroupChat.vendorKey(null, speakerName)
-                                    .takeIf { it != com.openminis.app.tools.GroupChat.VENDOR_UNKNOWN }
-                        }
-                        "text" -> {
-                            val raw = obj.optString("value", "")
-                            // Strip <system-reminder>...</system-reminder> blocks
-                            // here only — agentHistory in memory and the DB row
-                            // both keep the raw text, so the LLM still sees the
-                            // reminder on subsequent turns. UI just hides it.
-                            // If a part was *only* a reminder, the cleaned
-                            // string is empty and we skip it so we don't render
-                            // a phantom blank text block.
-                            // [T-android-retry-attachment-loss] Also strip the
-                            // now-persisted <user-attached-files> XML so it
-                            // doesn't render in the user bubble (file chips come
-                            // from mediaRef parts). The DB row + agentHistory
-                            // keep the raw XML so the model still sees paths.
-                            val t = stripAttachedFilesXml(stripSystemReminders(raw)).let {
-                                // [T-universal-think-tag-history] Last-resort UI
-                                // strip: a reasoning tag that leaked into the DB
-                                // (unterminated provider stream, tool-loop splice,
-                                // vendor spelling the stream parser pre-dated) must
-                                // never render in the bubble. DB + agentHistory keep
-                                // the raw text; this only cleans the painted copy.
-                                // [T-display-strip-unterminated] display mode: a
-                                // bare tag mention must not lose its tail.
-                                if (entity.role == "assistant") {
-                                    com.openminis.app.agent.MessageTransformerChain.applyForDisplay(it)
-                                } else it
-                            }.let {
-                                if (it != raw) it.trim() else it
-                            }
-                            if (t.isEmpty()) continue
-                            text += t
-                            // For assistant messages, also push the text as a block so
-                            // the renderer can preserve the original text↔tool ordering.
-                            // For user messages we keep using the `text` field only.
-                            if (entity.role == "assistant") {
-                                blocks.add(AssistantBlock(
-                                    id = "text_restored_${entity.id}_${textBlockCounter++}",
-                                    kind = "text",
-                                    content = t,
-                                ))
-                            }
-                        }
-                        "toolUse" -> {
-                            val value = obj.getJSONObject("value")
-                            val toolId = value.optString("toolUseId", "")
-                            if (toolId.startsWith("thinking_")) continue
-                            val toolInput = value.optString("input", "")
-                            // Merge tool result output (iOS: block.content = tr.output)
-                            val result = toolResultMap[toolId]
-                            val pageURL = value.optString("pageURL", "").ifEmpty { null }
-                            val imgPath = value.optString("imageFilePath", "").ifEmpty { null }
-                            blocks.add(AssistantBlock(
-                                id = toolId,
-                                kind = "tool_use",
-                                toolName = value.optString("name", ""),
-                                toolTitle = value.optString("description", ""),
-                                toolArgs = toolInput,
-                                content = result?.output?.lines()?.takeLast(80)?.joinToString("\n") ?: "",
-                                toolStatus = when {
-                                    result == null -> ToolBlockStatus.SUCCESS
-                                    !result.success && (
-                                        result.output.startsWith(CANCELLED_MARKER) ||
-                                            result.output.startsWith(LEGACY_CANCELLED_MARKER)
-                                    ) -> ToolBlockStatus.CANCELLED
-                                    result.success -> ToolBlockStatus.SUCCESS
-                                    else -> ToolBlockStatus.FAILED
-                                },
-                                browserURL = pageURL,
-                                imageFilePath = imgPath,
-                                // [P-process-card] Restore the persisted
-                                // per-block timing (written by
-                                // buildAssistantPartsJson since the process
-                                // cards landed). Rows written before the
-                                // field existed parse as 0 — same as before.
-                                durationMs = value.optLong("durationMs", 0L),
-                                startTimeMs = value.optLong("startTimeMs", 0L),
-                                // [T-android-gemini3-thoughtsig / #179] Restore the
-                                // persisted signature onto the rebuilt block.
-                                thoughtSignature = value.optString("thoughtSignature", "").ifEmpty { null },
-                            ))
-                        }
-                        "mediaRef" -> {
-                            if (entity.role != "user") continue
-                            val value = obj.optJSONObject("value") ?: continue
-                            val rel = value.optString("relativePath", "")
-                            if (rel.isEmpty()) continue
-                            val file = java.io.File(mediaStore.mediaBaseDir, rel)
-                            if (!file.exists()) continue
-                            val mime = value.optString("mimeType", "")
-                            val name = value.optString("originalFileName", "").ifEmpty { file.name }
-                            // T150: branch on mime so non-image mediaRefs land
-                            // in the file-chip column instead of polluting
-                            // imageUris (which feeds the image gallery).
-                            //
-                            // [T-android-paste-mediaref] A pasted block needs no
-                            // case of its own: it is text/plain, so it takes the
-                            // non-image branch and renders as the same file card
-                            // as an attached document — which is exactly the
-                            // requested behaviour. Note this ALSO relies on
-                            // parts being written images-first; a pasted ref
-                            // sits in the body (possibly before an image part),
-                            // so the names/uris pairing here is positional per
-                            // COLUMN, not per part index, and stays consistent
-                            // because each column is appended in part order.
-                            if (mime.startsWith("image/")) {
-                                restoredImageUris.add(Uri.fromFile(file))
-                                restoredImageNames.add(name)
-                            } else {
-                                restoredAttachmentUris.add(Uri.fromFile(file))
-                                restoredFileNames.add(name)
-                            }
-                        }
-                        // toolResult in user messages handled in first pass above
-                    }
-                }
-            } catch (e: Exception) {
-                // T-PARTS-FALLBACK: previously this catch dumped the entire
-                // partsJson into `text` as a degraded fallback. That meant
-                // any malformed (or unexpectedly large) row rendered its
-                // raw JSON — including any inlined base64 — as a plain
-                // user/assistant bubble, which then locked up Compose's
-                // StaticLayout for tens of seconds (see HangDetector report
-                // for session e84882d7 / 820 KB partsJson). Replace with a
-                // short, fixed-size placeholder so the row still appears
-                // (so the user can delete or scroll past it) but no longer
-                // pulls megabytes through the layout pass.
-                Log.w(
-                    TAG,
-                    "toChatMessages: failed to parse partsJson for id=${entity.id} " +
-                        "len=${entity.partsJson.length} role=${entity.role}: ${e.javaClass.simpleName}: ${e.message}",
-                )
-                text = "(message could not be parsed: ${e.javaClass.simpleName}, " +
-                    "${entity.partsJson.length} bytes)"
-            }
-
-            // Skip user messages with no visible content (toolResult-only internal messages,
-            // or messages that were entirely a system-reminder). A user message that is
-            // *only* an image attachment (no caption) still has visible content and must
-            // not be skipped — restoredImageUris carries it.
-            if (entity.role == "user" && text.isBlank() && restoredImageUris.isEmpty()) return@mapNotNull null
-            // Skip assistant messages that became empty after stripping system-reminders
-            // and have no tool / thinking blocks to fall back on — would otherwise
-            // render as a phantom blank assistant bubble.
-            if (entity.role == "assistant" && text.isBlank() && blocks.isEmpty()) return@mapNotNull null
-            ChatMessage(
-                id = entity.id,
-                role = entity.role,
-                content = text,
-                imageUris = restoredImageUris,
-                // Image names first, then file names — the invariant
-                // UserAttachmentList's `drop(imageUris.size)` relies on.
-                attachmentNames = restoredImageNames + restoredFileNames,
-                attachmentUris = restoredAttachmentUris,
-                toolBlocks = blocks,
-                sourceDbIds = listOf(entity.id),
-                speakerName = speakerName,
-                speakerVendor = speakerVendor,
-                // [T-error-persist-android] Restore the persisted terminal error
-                // so the inline error banner + Retry button survive a reload.
-                // Coalesce a blank value to null: the UI gate is `error?.let`, so
-                // a non-null "" would render an empty banner. Defends against any
-                // legacy/other-writer "" row.
-                error = entity.errorInfo?.let { status ->
-                    when (status) {
-                        com.openminis.app.data.db.PersistedMessageStatus.INTERRUPTED_INFO -> context.getString(R.string.chat_response_interrupted)
-                        else -> status
-                    }
-                }?.takeIf { it.isNotBlank() },
-            )
-        }.let { messages ->
-            // Merge consecutive assistant messages into one:
-            // agent loop persists each turn separately, but UI should show them as a single message.
-            val merged = mutableListOf<ChatMessage>()
-            for (msg in messages) {
-                val prev = merged.lastOrNull()
-                if (msg.role == "assistant" && prev?.role == "assistant" &&
-                    com.openminis.app.tools.GroupChat.shouldMergeAssistantTurns(prev.speakerName, msg.speakerName)
-                ) {
-                    // Merge: combine tool blocks, append text, keep the last id.
-                    // Deduplicate by block.id — the agent loop may persist the same tool
-                    // use in multiple consecutive turns (as it carries tool state across),
-                    // and duplicated ids would crash LazyColumn's key uniqueness check.
-                    // Keep the LAST occurrence so the most recent status (e.g. SUCCESS with
-                    // output) wins over an earlier STREAMING placeholder.
-                    val seen = mutableSetOf<String>()
-                    val combinedBlocks = (prev.toolBlocks + msg.toolBlocks)
-                        .asReversed()
-                        .filter { seen.add(it.id) }
-                        .asReversed()
-                    val combinedText = when {
-                        prev.content.isBlank() -> msg.content
-                        msg.content.isBlank() -> prev.content
-                        else -> prev.content + "\n\n" + msg.content
-                    }
-                    merged[merged.lastIndex] = prev.copy(
-                        id = msg.id,
-                        content = combinedText,
-                        toolBlocks = combinedBlocks,
-                        // T126-marker: keep every source dbId so Phase 2.5
-                        // can resolve markers that point at any of the
-                        // pre-merge rows (lastCompactedMessageId is often
-                        // an assistant row that gets folded into a later
-                        // assistant turn).
-                        sourceDbIds = prev.sourceDbIds + msg.sourceDbIds,
-                        // [T-error-persist-android] The error sticker is written
-                        // to the LAST assistant row of the turn, so the later row
-                        // (`msg`) wins; fall back to `prev` if only it carried one.
-                        error = msg.error ?: prev.error,
-                    )
-                } else {
-                    merged.add(msg)
-                }
-            }
-            merged
-        }
-    }
-
-
-    /**
-     * Rebuild model context from the newest persisted rows only. The database
-     * remains the complete transcript; no operation may parse the whole session
-     * merely to continue, retry, edit, or delete it.
-     */
-
-    internal fun appendBoundedHistory(message: LLMMessage) {
-        agentHistory.add(message)
-        trimAgentHistory()
-    }
-
-    internal fun appendBoundedHistoryAll(messages: Collection<LLMMessage>) {
-        agentHistory.addAll(messages)
-        trimAgentHistory()
-    }
-
-    internal fun trimAgentHistory() {
-        val dropped = ArrayList<LLMMessage>()
-        val byCount = ResidentWindow.countCut(agentHistory, MAX_AGENT_HISTORY_MESSAGES)
-        if (byCount > 0) {
-            dropped.addAll(agentHistoryHeadSnapshot(byCount))
-            removeAgentHistoryHead(byCount)
-            llmHistoryStartOffset += byCount
-        }
-        val byBytes = ResidentWindow.byteCut(agentHistory)
-        if (byBytes > 0) {
-            dropped.addAll(agentHistoryHeadSnapshot(byBytes))
-            removeAgentHistoryHead(byBytes)
-            llmHistoryStartOffset += byBytes
-        }
-        if (dropped.isNotEmpty()) {
-            rememberDigestLines(dropped.map { HistoryDigest.fromMessage(it) })
-        }
-    }
-
-    /**
-     * Rebuild the request-side history from Room immediately before a new send.
-     * The UI is intentionally paged, so `_messages` and the resident cache are
-     * not authoritative for model memory. This also repairs a ViewModel that was
-     * reopened on the tail and never had its older UI pages loaded.
-     */
-    internal suspend fun rebuildAgentHistoryFromDatabase(sid: String) {
-        val tail = chatRepository.loadRequestHistory(sid, MAX_AGENT_HISTORY_MESSAGES)
-        val parsed = tail.map { it.toLLMMessage() }
-        agentHistory.clear()
-        toolLoopDetector.reset()
-        appendBoundedHistoryAll(parsed)
-        llmHistoryStartOffset = (
-            chatRepository.dao.messageCountForSession(sid) - tail.size
-        ).coerceAtLeast(0)
-    }
-
-    internal suspend fun awaitBoundedHistoryRebuild(
-        sid: String,
-    ): List<com.openminis.app.data.db.MessageEntity> {
-        rebuildAgentHistoryFromDatabase(sid)
-        return chatRepository.hydrateDisplayRows(
-            chatRepository.loadMessagesTail(sid, MAX_AGENT_HISTORY_MESSAGES),
-        )
-    }
+    // [T-android-split-chat-agenthistory] appendBoundedHistory /
+    // appendBoundedHistoryAll / trimAgentHistory /
+    // rebuildAgentHistoryFromDatabase / awaitBoundedHistoryRebuild moved
+    // verbatim to ChatViewModelAgentHistoryExt.kt.
 
 
     // [T-delete-anchor-by-id] visibleUserCutoff / anchorHeadHasVisibleUserText
@@ -6046,155 +4791,6 @@ class ChatViewModel(
     // ChatDao.sortOrderForMessageId — see resolveDeleteCutoffSortOrder.
 
 
-    /**
-     * Appended rows stay. Dropping the older side here recreated the missing
-     * middle: the next page would start after a hole the user never asked to
-     * close. Model context is trimmed by [trimAgentHistory], not this list.
-     */
-    internal fun trimLoadedWindow(messages: List<ChatMessage>): List<ChatMessage> = messages
-
-    private data class ToolResultData(val output: String, val success: Boolean)
-
-    internal fun MessageEntity.toLLMMessage(): LLMMessage {
-        val r = if (role == "user") LLMMessage.Role.USER else LLMMessage.Role.ASSISTANT
-        val contentParts = mutableListOf<AgentContentPart>()
-        val imageParts = mutableListOf<LLMMessage.ImagePart>()
-        var textContent = ""
-
-        try {
-            val array = org.json.JSONArray(partsJson)
-            for (i in 0 until array.length()) {
-                val obj = array.getJSONObject(i)
-                when (obj.optString("type")) {
-                    "text" -> {
-                        val value = obj.optString("value", "")
-                        // [T-android-retry-attachment-loss] The persisted
-                        // <user-attached-files> XML must reach the model via a
-                        // contentPart (provider prefers contentParts), but it
-                        // must NOT fold into `content`. On a FRESH send the
-                        // `content` field is the clean caption (`trimmed`) and
-                        // the XML lives only in contentParts; keep restored
-                        // messages byte-identical so `.content` consumers
-                        // (summary, title fallback, edit) see the same string
-                        // as a fresh turn and don't get the XML twice.
-                        if (value.contains("<user-attached-files>")) {
-                            contentParts.add(AgentContentPart.Text(value))
-                        } else {
-                            textContent += value
-                            contentParts.add(AgentContentPart.Text(value))
-                        }
-                    }
-                    "toolUse" -> {
-                        val v = obj.getJSONObject("value")
-                        val inputStr = v.optString("input", "{}")
-                        val inputJson = NonFiniteJson.parseOrNull(inputStr) ?: JSONObject()
-                        contentParts.add(AgentContentPart.ToolUse(
-                            id = v.optString("toolUseId", ""),
-                            name = v.optString("name", ""),
-                            input = inputJson,
-                            // [T-android-gemini3-thoughtsig / #179] Restore the
-                            // persisted Gemini 3.x signature so a reloaded session
-                            // replays it (else the next gemini-3 turn 400s).
-                            thoughtSignature = v.optString("thoughtSignature", "").ifEmpty { null },
-                        ))
-                    }
-                    "toolResult" -> {
-                        val v = obj.getJSONObject("value")
-                        contentParts.add(AgentContentPart.ToolResult(
-                            id = v.optString("toolUseId", ""),
-                            name = v.optString("name", ""),
-                            content = v.optString("output", ""),
-                            isError = !v.optBoolean("success", true),
-                        ))
-                    }
-                    "mediaRef" -> {
-                        // T128: load persisted user-message images so the model
-                        // sees them on subsequent turns after a session reload.
-                        // T150: skip non-image mediaRefs here — their bytes
-                        // shouldn't be re-inlined into the LLM payload (parity
-                        // with the on-send path, which only inlines images).
-                        // The original turn's <user-attached-files> XML stayed
-                        // in the persisted text part, and the file is still
-                        // on disk under attachments/uploads, so the agent can
-                        // re-fetch via shell tools.
-                        val v = obj.optJSONObject("value") ?: continue
-                        val rel = v.optString("relativePath", "")
-                        if (rel.isEmpty()) continue
-                        val mime = v.optString("mimeType", "image/jpeg")
-                        // [T-android-paste-mediaref] A pasted block is stored as
-                        // a mediaRef but is CONTENT, not an attachment: read it
-                        // back off disk and inline it here, restoring exactly
-                        // the text the original send put in the prompt.
-                        //
-                        // This branch is what makes every history-replay path
-                        // correct at once — session reload, retry, rerun,
-                        // edit-resend and compaction all rebuild through this
-                        // one converter, so none of them needs its own handling.
-                        //
-                        // An unreadable file degrades to skipping the part
-                        // rather than aborting the message: losing one pasted
-                        // block is recoverable, failing to build the request is
-                        // not.
-                        if (PastedMedia.isPastedRef(mime, v.optString("originalFileName", null))) {
-                            val pf = java.io.File(mediaStore.mediaBaseDir, rel)
-                            val body = try {
-                                if (pf.exists()) pf.readText(Charsets.UTF_8) else null
-                            } catch (e: Exception) {
-                                AppLogger.warning(TAG, "[Paste] restore failed for $rel: ${e.message}")
-                                null
-                            }
-                            // [T-android-paste-missing-file] An unreadable
-                            // pasted file degrades to an explicit marker, never
-                            // to silence.
-                            //
-                            // The file can genuinely disappear — the user clears
-                            // app storage, a sync pass prunes it as an orphan,
-                            // the disk fills mid-write. Dropping the part on the
-                            // floor would leave the model reading a sentence
-                            // with a hole in the middle and no way to know
-                            // content was ever there, so it would answer
-                            // confidently about text it never saw. Saying so
-                            // lets it ask, and leaves a searchable trace when a
-                            // user reports a strange reply.
-                            val resolved = body ?: PastedMedia.MISSING_PLACEHOLDER
-                            if (body == null) {
-                                AppLogger.warning(
-                                    TAG,
-                                    "[Paste] missing pasted file for $rel — substituting placeholder",
-                                )
-                            }
-                            textContent += resolved
-                            contentParts.add(AgentContentPart.Text(resolved))
-                            continue
-                        }
-                        if (!mime.startsWith("image/")) continue
-                        val file = java.io.File(mediaStore.mediaBaseDir, rel)
-                        if (!file.exists()) continue
-                        val bytes = try { file.readBytes() } catch (_: Exception) { continue }
-                        val restoredPath = v.optString("linuxPath", "").ifEmpty { null }
-                        // [T-android-vision-group / GH#182] Seed the read_image
-                        // hint on restored images too, so a non-vision main model
-                        // with a Vision Group configured gets steered to read_image
-                        // on subsequent turns after a session reload (not the bare
-                        // "can't see it" literal).
-                        val restoredPlaceholder = visionPlaceholderFor(restoredPath)
-                        imageParts.add(LLMMessage.ImagePart(bytes, mime, linuxPath = restoredPath, noVisionPlaceholder = restoredPlaceholder))
-                        contentParts.add(AgentContentPart.ImageData(bytes, mime, linuxPath = restoredPath, noVisionPlaceholder = restoredPlaceholder))
-                    }
-                }
-            }
-        } catch (_: Exception) {
-            textContent = partsJson
-            contentParts.add(AgentContentPart.Text(partsJson))
-        }
-
-        return LLMMessage(
-            role = r,
-            content = textContent,
-            imageParts = imageParts,
-            contentParts = contentParts,
-            dbMessageId = id,
-            reasoningContent = reasoningContent,
-        )
-    }
+    // [T-android-split-chat-mapping] trimLoadedWindow / ToolResultData /
+    // toLLMMessage moved verbatim to ChatViewModelChatMappingExt.kt.
 }

@@ -37,26 +37,27 @@ object SecurityGateHolder {
             p.edit().putString(KEY_MODE, PermissionMode.ASK.name).apply()
         }
         activeSessionModes.clear()
-        legacyActiveSessionMode = PermissionMode.ASK
+        legacyActiveSessionMode = SessionPermissionMode.ASK
         gate.setPermissionMode(PermissionMode.ASK)
     }
 
-    private val activeSessionModes = java.util.concurrent.ConcurrentHashMap<String, PermissionMode>()
-    @Volatile private var legacyActiveSessionMode: PermissionMode = PermissionMode.ASK
+    // [#31] Session tiers (OFF/ASK/SAFE_AUTO/YOLO), stored faithfully — the
+    // old two-value registry folded everything non-YOLO into ASK.
+    private val activeSessionModes = java.util.concurrent.ConcurrentHashMap<String, SessionPermissionMode>()
+    @Volatile private var legacyActiveSessionMode: SessionPermissionMode = SessionPermissionMode.ASK
 
-    fun setActiveSessionMode(mode: PermissionMode, sessionId: String? = null) {
-        val normalized = if (mode.isYoyo()) PermissionMode.ALLOW_ALL else PermissionMode.ASK
-        if (sessionId.isNullOrBlank()) legacyActiveSessionMode = normalized
-        else activeSessionModes[sessionId] = normalized
+    fun setActiveSessionMode(mode: SessionPermissionMode, sessionId: String? = null) {
+        if (sessionId.isNullOrBlank()) legacyActiveSessionMode = mode
+        else activeSessionModes[sessionId] = mode
         // [Wave3 #16] No global gate writeback here any more: with concurrent
         // chats the global getter used to end up holding whichever session set
         // its mode last. Per-session reads go through [activeSessionMode];
         // decisions pass the caller's explicit mode.
     }
 
-    fun activeSessionMode(sessionId: String? = null): PermissionMode =
+    fun activeSessionMode(sessionId: String? = null): SessionPermissionMode =
         if (sessionId.isNullOrBlank()) legacyActiveSessionMode
-        else activeSessionModes[sessionId] ?: PermissionMode.ASK
+        else activeSessionModes[sessionId] ?: SessionPermissionMode.ASK
 
     /**
      * @param callerSessionId the chat that is asking, so the isolation policies
@@ -79,8 +80,10 @@ object SecurityGateHolder {
         val sessionAllowAll = ApprovalGate.isSessionAllowAll(callerSessionId)
         // A missing caller id is intentionally conservative: legacy global mode
         // state must never turn an unbound operation into YOYO.
-        val storedMode = callerSessionId?.let(::activeSessionMode) ?: PermissionMode.ASK
-        val mode = effectivePermissionMode(storedMode, sessionAllowAll)
+        // [#31] The stored value is the session TIER; compile it to the gate
+        // mode here so decide() keeps speaking plain PermissionMode.
+        val storedTier = callerSessionId?.let(::activeSessionMode) ?: SessionPermissionMode.ASK
+        val mode = effectivePermissionMode(storedTier.toGateMode(), sessionAllowAll)
         val decision = gate.withCallerSession(callerSessionId) { gate.decide(cmd, mode) }
         gate.audit(cmd, decision, null)
         return when (decision) {
@@ -109,6 +112,10 @@ object SecurityGateHolder {
                     canonical,
                     preview,
                     mustPrompt = decision.mustPrompt,
+                    // [#36] Gist-keyed allowlist: "always allow this session"
+                    // stores tool+target, and the next identical call skips
+                    // the dialog here.
+                    argsGist = ToolApprovalKey.gist(canonical, argsJson),
                 )
                 // Empty id = auto-approved by the session allow-all switch.
                 // Fatal confirms set mustPrompt, so rm -rf / still shows the dialog.

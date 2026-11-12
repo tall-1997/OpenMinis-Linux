@@ -48,6 +48,20 @@ object ContextOffload {
     }
 
     /**
+     * Guest-visible path of a written offload file, via the single host<->guest
+     * conversion point ([com.openminis.app.sandbox.PathResolver], #22). The
+     * host root is resolved with the same [SessionWorkspace.hostDir] call the
+     * shell bind uses, so `toGuest` answers exactly the path `file_read` will
+     * resolve back. Null on an unexpected layout change — callers treat it
+     * like an I/O failure and return the stub without a path.
+     */
+    private fun guestPathFor(context: Context, sessionId: String, file: File): String =
+        com.openminis.app.sandbox.PathResolver
+            .forSessionLayout(context.filesDir, sessionId)
+            .toGuest(file.absolutePath)
+            ?: "$LINUX_OFFLOADS_DIR/tools/${file.name}"
+
+    /**
      * Take the last 12 chars of [toolId] as a short, locally-unique suffix
      * for the on-disk filename. Anthropic IDs are `toolu_01…` (constant
      * 8-char prefix), so the trailing 12 chars are still distinguishing.
@@ -78,7 +92,7 @@ object ContextOffload {
         val file = File(dir, fileName)
         return try {
             file.writeText(content)
-            "$LINUX_OFFLOADS_DIR/tools/$fileName"
+            guestPathFor(context, sessionId, file)
         } catch (e: Exception) {
             AppLogger.warning(TAG, "offloadContent failed: ${e.message}")
             ""
@@ -110,7 +124,7 @@ object ContextOffload {
         val file = File(dir, fileName)
         return try {
             file.writeBytes(bytes)
-            "$LINUX_OFFLOADS_DIR/tools/$fileName"
+            guestPathFor(context, sessionId, file)
         } catch (e: Exception) {
             AppLogger.warning(TAG, "offloadImage failed: ${e.message}")
             ""

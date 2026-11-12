@@ -340,7 +340,14 @@ object ProviderFactory {
         // custom-rule path (Gemini/Anthropic use their own emitters), so this is the
         // only type that needs it.
         (provider as? OpenAIProvider)?.thinkingRuleInstanceId = instance.id
-        SamplingIdentity.bind(provider, instance.id)
+        // [T-llm-middleware] Bind the family tag + effective base URL the
+        // request middleware context reports (custom relay base only; null on
+        // the official direct path).
+        SamplingIdentity.bind(
+            provider, instance.id,
+            providerType = instance.providerType.name,
+            baseUrl = instance.effectiveBaseURL,
+        )
         // [T-llm-connection-warmup] This constructor path only runs on a
         // provider-cache miss (cold start, provider/model switch) — exactly
         // the moments where the FIRST request would otherwise pay the full

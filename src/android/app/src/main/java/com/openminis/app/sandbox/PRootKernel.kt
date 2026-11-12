@@ -850,17 +850,15 @@ object PRootKernel {
      * Returns null if no matching mount is found, or if `..` walks out of the
      * matched bind root / rootfs (that is how one session's file tool used to
      * read another's private tree).
+     *
+     * [T-path-resolver] Bind-map prefix match delegated to [PathResolver]
+     * (#22); longest-prefix + [SessionWorkspace.staysInside] semantics
+     * unchanged. The rootfs fallback stays here — it is the container root,
+     * not a bind mapping, and exists only once [boot] has run.
      */
     fun resolveHostPath(linuxPath: String): File? {
-        // Bind mounts, longest prefix match: the descending map visits the
-        // longest matching key first (prefixes of each other sort by length).
-        for ((mountPoint, hostBase) in bindMounts.descendingMap()) {
-            if (linuxPath == mountPoint || linuxPath.startsWith("$mountPoint/")) {
-                val relativePath = linuxPath.removePrefix(mountPoint).removePrefix("/")
-                val file = if (relativePath.isEmpty()) File(hostBase) else File(hostBase, relativePath)
-                return file.takeIf { SessionWorkspace.staysInside(File(hostBase), it) }
-            }
-        }
+        val mapped = PathResolver.ofBinds(bindMounts).toHost(linuxPath)
+        if (mapped != null) return mapped
 
         // Fallback: resolve relative to rootfs
         if (rootfsManagerRef == null) return null

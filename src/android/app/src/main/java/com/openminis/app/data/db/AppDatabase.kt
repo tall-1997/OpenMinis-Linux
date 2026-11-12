@@ -24,8 +24,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         com.openminis.app.data.instruction.InstructionStateEntity::class,
         com.openminis.app.data.instruction.InstructionUpdateEntity::class,
         AuditEntryEntity::class,
+        MemoryEmbeddingEntity::class,
     ],
-    version = 32, // keep DatabaseVersionGuard.CODE_DB_VERSION in lockstep
+    version = 33, // keep DatabaseVersionGuard.CODE_DB_VERSION in lockstep; 33 = memory_embeddings (#27)
     // [T-android-downgrade-compat] Kept ON so MigrationTestHelper and CI can
     // validate migrations against the committed schema json. The chain now
     // runs 12-29 complete. 13.json and 17.json were never exported by a
@@ -52,6 +53,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun instructionStateDao(): com.openminis.app.data.instruction.InstructionStateDao
     abstract fun automationRuleDao(): com.openminis.app.automation.AutomationRuleDao
     abstract fun auditEntryDao(): AuditEntryDao
+    abstract fun memoryEmbeddingDao(): MemoryEmbeddingDao
 
     companion object {
         @Volatile

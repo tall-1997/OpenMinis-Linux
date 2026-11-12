@@ -38,13 +38,13 @@ def git_show(ref: str, path: str) -> str:
     # Windows: Path joins with '\' but git paths inside a rev must be '/'.
     return subprocess.run(
         ["git", "show", f"{ref}:{path.replace(chr(92), '/')}"],
-        check=True, capture_output=True, text=True,
+        check=True, capture_output=True, text=True, encoding="utf-8",
     ).stdout
 
 def git_diff_added_names(base: str, head: str, path: str) -> set[str]:
     diff = subprocess.run(
         ["git", "diff", "--unified=0", base, head, "--", path],
-        check=True, capture_output=True, text=True,
+        check=True, capture_output=True, text=True, encoding="utf-8",
     ).stdout
     names: set[str] = set()
     for line in diff.splitlines():

@@ -339,6 +339,22 @@
     <string name="token_usage_cache_write">Penulisan Cache</string>
     <string name="token_usage_section_agent_loop">Loop Agen</string>
     <string name="token_usage_total_loops">Total Loop</string>
+    <!-- [#25] Context breakdown sheet -->
+    <string name="chat_menu_context_usage">Rincian Konteks</string>
+    <string name="context_usage_sheet_title">Rincian Konteks</string>
+    <string name="context_block_system">Prompt sistem &amp; alat</string>
+    <string name="context_block_skills_mcps">Skill &amp; MCP</string>
+    <string name="context_block_memory">Injeksi memori</string>
+    <string name="context_block_runtime">Konteks sementara giliran ini</string>
+    <string name="context_block_goal_plan">Injeksi tujuan &amp; rencana</string>
+    <string name="context_block_history">Jendela riwayat</string>
+    <string name="context_block_attachments">Lampiran &amp; gambar</string>
+    <string name="context_usage_note_estimate">Perkiraan kasar (±10%); disegarkan saat lembar ini dibuka</string>
+    <!-- [#41] Gen UI card -->
+    <string name="gen_ui_card_label">Kartu interaktif</string>
+    <string name="gen_ui_view_source">Lihat sumber</string>
+    <string name="gen_ui_view_render">Tampilkan render</string>
+    <string name="gen_ui_view_fullscreen">Layar penuh</string>
     <string name="common_on">Aktif</string>
     <string name="common_off">Nonaktif</string>
     <string name="common_yes">Ya</string>
@@ -619,6 +635,14 @@
     <string name="env_var_privacy_header">Privasi</string>
     <string name="env_var_privacy_toggle">Mode Privasi</string>
     <string name="env_var_privacy_footer">Jika aktif, setiap nilai variabel lingkungan yang muncul pada keluaran shell-execute akan diganti dengan bentuk tersamar (mis. `sk-1********ajhks`) sebelum sampai ke model. Nilai yang lebih pendek dari 8 karakter menjadi `*` seluruhnya. Keluaran yang terlihat oleh pengguna di obrolan tidak berubah.</string>
+    <string name="outbound_mask_toggle">Penyamaran privasi keluar</string>
+    <string name="outbound_mask_footer">Masking bentuk opt-in: string berbentuk kunci (termasuk kode), email, dan angka menyerupai telepon jadi placeholder. Kunci API embedding di bawah tersimpan plain text di prefs pribadi aplikasi. Riwayat perangkat tidak berubah.</string>
+    <string name="chat_menu_perm_yoyo">YOLO · otomatis penuh</string>
+    <string name="chat_menu_perm_safe_auto">Auto aman · alat read-only berjalan bebas</string>
+    <string name="chat_menu_perm_ask">Tanya · konfirmasi setiap panggilan</string>
+    <string name="chat_menu_perm_off">Mati · tolak semua alat</string>
+    <string name="gate_approval_allow_all">Selalu izinkan sesi ini (target saat ini)</string>
+    <string name="approval_action_allow_all_session">Selalu izinkan di sesi ini</string>
     <string name="env_var_section_header">Variabel</string>
     <string name="env_var_section_footer">Variabel lingkungan disuntikkan ke shell sandbox saat sesi dimulai. Nama diubah menjadi huruf kapital dan harus mengikuti aturan variabel shell POSIX.</string>
     <string name="env_var_empty_title">Belum Ada Variabel Lingkungan</string>
@@ -1837,6 +1861,7 @@
     <string name="usage_label_output_short">Output</string>
     <string name="plan_board_all_done">Semua langkah selesai</string>
     <string name="cd_plan_board_toggle">Bentangkan atau ciutkan papan rencana</string>
+    <string name="cd_plan_step_retry">Coba lagi langkah yang gagal ini</string>
     <string name="cd_goal_header">Buka detail tujuan</string>
     <string name="cd_goal_status_active">Tujuan sedang berjalan</string>
     <string name="cd_goal_status_paused">Tujuan dijeda</string>
@@ -2016,6 +2041,12 @@
     <string name="token_usage_saver_folded">Hasil alat terlipat</string>
     <string name="token_usage_saver_saved">Dihemat giliran ini</string>
     <string name="memory_center_overview">Sekilas</string>
+    <string name="memory_embedding_header">Recall semantik</string>
+    <string name="memory_embedding_toggle">Recall memori semantik dengan embedding</string>
+    <string name="memory_embedding_base_url">URL dasar embeddings</string>
+    <string name="memory_embedding_api_key">Kunci API embeddings</string>
+    <string name="memory_embedding_model">Model embedding</string>
+    <string name="memory_embedding_footer">Nonaktif secara default. Saat aktif, recall memori menambahkan pencarian kemiripan vektor melalui endpoint embeddings yang kompatibel dengan OpenAI, di samping pencarian kata kunci. Perubahan hanya berlaku setelah proses aplikasi dimulai ulang.</string>
     <string name="memory_center_stat_memory">File memori</string>
     <string name="memory_center_stat_recalls">Entri yang dipanggil</string>
     <string name="memory_center_stat_failures">Pengulangan yang diblokir</string>
@@ -2112,4 +2143,59 @@
     <!-- Queued-message edit sheet + git diff truncation notice -->
     <string name="chat_queued_edit_title">Edit pesan dalam antrean</string>
     <string name="git_panel_diff_truncated">Diff dipotong pada 200.000 karakter — teks lengkap ada di file repo itu sendiri.</string>
+    <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
+    <string name="provider_list_export_providers">Ekspor penyedia</string>
+    <string name="provider_transfer_export_title">Ekspor penyedia</string>
+    <string name="provider_transfer_export_body">%1$d penyedia akan diekspor ke berkas JSON.</string>
+    <string name="provider_transfer_include_keys">Sertakan kunci API</string>
+    <string name="provider_transfer_include_keys_risk">Kunci API ditulis ke berkas sebagai teks biasa. Siapa pun yang mendapatkan berkas ini dapat menggunakan kunci Anda — simpan berkas dengan aman dan hapus setelah impor.</string>
+    <string name="provider_transfer_export">Ekspor</string>
+    <string name="provider_transfer_export_success">%1$d penyedia diekspor</string>
+    <string name="provider_transfer_export_failed">Ekspor gagal</string>
+    <string name="provider_transfer_import_ok">%1$d penyedia diimpor</string>
+    <string name="provider_transfer_import_partial">%1$d penyedia diimpor, %2$d gagal</string>
+    <string name="provider_transfer_import_partial_detail">Mengimpor %1$d penyedia, %2$d gagal: %3$s</string>
+    <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
+    <string name="ssh_workspace_menu_title">Ruang Kerja SSH</string>
+    <string name="ssh_workspace_binding_title">Ruang Kerja SSH</string>
+    <string name="ssh_workspace_bound_to">Terikat ke %1$s (%2$s)</string>
+    <string name="ssh_workspace_bound_local">Bekerja di sandbox lokal</string>
+    <string name="ssh_workspace_option_local">Sandbox lokal</string>
+    <string name="ssh_workspace_option_local_subtitle">Shell berjalan di sandbox Linux perangkat ini</string>
+    <string name="ssh_workspace_no_hosts">Belum ada host SSH — tambahkan di Setelan → Ruang Kerja SSH.</string>
+    <string name="ssh_workspace_shell_only_note">Ruang kerja SSH hanya mendukung perintah shell; alat file ditolak selama ada host yang terikat.</string>
+    <string name="ssh_workspace_shell_only">Ruang kerja SSH hanya mendukung perintah shell — \'%1$s\' ditolak.</string>
+    <string name="ssh_workspace_shell_only_hint">Jalankan perintah jarak jauh dengan shell_execute, atau lepaskan ikatan sesi ini lewat menu obrolan → Ruang Kerja SSH untuk memulihkan alat file lokal.</string>
+    <string name="ssh_hosts_title">Host SSH</string>
+    <string name="ssh_hosts_subtitle">Host jarak jauh yang dapat dijangkau agen melalui SSH. Kredensial disimpan terenkripsi dan tidak pernah ditampilkan.</string>
+    <string name="ssh_hosts_row_subtitle">Tambahkan host, uji koneksi, kelola kunci host</string>
+    <string name="ssh_hosts_empty">Belum ada host.</string>
+    <string name="ssh_hosts_add">Tambahkan host</string>
+    <string name="ssh_hosts_add_cancel">Batal</string>
+    <string name="ssh_hosts_test">Uji koneksi</string>
+    <string name="ssh_hosts_testing">Menguji…</string>
+    <string name="ssh_hosts_test_ok">Koneksi berhasil</string>
+    <string name="ssh_hosts_test_failed">Koneksi gagal</string>
+    <string name="ssh_hosts_forget_key">Lupakan kunci host</string>
+    <string name="ssh_hosts_remove">Hapus</string>
+    <string name="ssh_hosts_pinned">Kunci host disematkan: %1$s…</string>
+    <string name="ssh_field_name">Nama (huruf/angka/._-)</string>
+    <string name="ssh_field_hostname">Nama host atau IP</string>
+    <string name="ssh_field_port">Port</string>
+    <string name="ssh_field_username">Nama pengguna</string>
+    <string name="ssh_auth_password">Kata sandi</string>
+    <string name="ssh_auth_key">Kunci privat</string>
+    <string name="ssh_field_password">Kata sandi</string>
+    <string name="ssh_field_private_key">Kunci privat PEM</string>
+    <string name="ssh_field_passphrase">Frasa sandi kunci (opsional)</string>
+    <string name="ssh_save">Simpan</string>
+
+    <!-- [T-handsfree-loop] (#40) Hands-free continuous voice conversation -->
+    <string name="handsfree_toggle">Bebas tangan</string>
+    <string name="handsfree_state_starting">Memulai…</string>
+    <string name="handsfree_state_listening">Mendengarkan…</string>
+    <string name="handsfree_state_thinking">Berpikir…</string>
+    <string name="handsfree_state_speaking">Berbicara…</string>
+    <string name="handsfree_exit_recognition">Bebas tangan berhenti: pengenalan suara berulang kali gagal. Ketuk Bebas tangan untuk mencoba lagi.</string>
+    <string name="handsfree_exit_tts">Bebas tangan berhenti: balasan tidak dapat dibacakan. Ketuk Bebas tangan untuk mencoba lagi.</string>
 </resources>

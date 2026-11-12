@@ -269,15 +269,19 @@ class SecurityGateImpl : SecurityGate {
         // tighten-only prefix layer (PrefixRulePolicy) went with it.
 
         // [1] Always pass: read-only tools (unless mode==DENY_ALL).
+        // [#31] ASK_ALL (strict asking) also exempts itself: every call,
+        // reads included, goes to the user.
         if ((cmd.toolName in READ_ONLY_TOOLS || (cmd.toolName == "browser_use" && isBrowserReadOnlyAction(cmd))) &&
-            mode != PermissionMode.DENY_ALL
+            mode != PermissionMode.DENY_ALL && mode != PermissionMode.ASK_ALL
         ) {
             return Decision.Allow("只读工具自动放行")
         }
 
         // [2] Always pass: coordinator tools (unless mode blocks them).
+        // [#31] ASK_ALL prompts on them too.
         if (cmd.toolName in COORDINATOR_TOOLS && mode != PermissionMode.DENY_ALL &&
-            mode != PermissionMode.READ_ONLY && mode != PermissionMode.PLAN
+            mode != PermissionMode.READ_ONLY && mode != PermissionMode.PLAN &&
+            mode != PermissionMode.ASK_ALL
         ) {
             return Decision.Allow("协调工具自动放行")
         }
@@ -353,7 +357,8 @@ class SecurityGateImpl : SecurityGate {
             // mode and must stay strictly stricter than YOYO. YOYO keeps the
             // confirm: its contract is "full-auto except fatal-confirm", and
             // a session that opened the gate has already said yes.
-            if (mode == PermissionMode.ASK) {
+            // [#31] ASK_ALL is at least as strict as ASK → same hard deny.
+            if (mode == PermissionMode.ASK || mode == PermissionMode.ASK_ALL) {
                 return Decision.Denied(
                     describeFatalViolation(command),
                 )
@@ -440,7 +445,8 @@ class SecurityGateImpl : SecurityGate {
         }
 
         // [7] Approval: low-risk auto-run. Everything else confirms.
-        if (isLowRisk(cmd, command, risk)) {
+        // [#31] ASK_ALL exempts itself — the tier promises "every call asks".
+        if (mode != PermissionMode.ASK_ALL && isLowRisk(cmd, command, risk)) {
             return Decision.Allow("审批：低风险自动放行")
         }
         return Decision.NeedConfirm(cmd.why, preview(cmd))

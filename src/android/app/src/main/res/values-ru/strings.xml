@@ -336,6 +336,22 @@
     <string name="token_usage_cache_write">Запись кэша</string>
     <string name="token_usage_section_agent_loop">Цикл Агента</string>
     <string name="token_usage_total_loops">Всего циклов</string>
+    <!-- [#25] Context breakdown sheet -->
+    <string name="chat_menu_context_usage">Разбивка контекста</string>
+    <string name="context_usage_sheet_title">Разбивка контекста</string>
+    <string name="context_block_system">Системный промпт и инструменты</string>
+    <string name="context_block_skills_mcps">Навыки и MCP</string>
+    <string name="context_block_memory">Внедрение памяти</string>
+    <string name="context_block_runtime">Временный контекст этого хода</string>
+    <string name="context_block_goal_plan">Внедрение цели и плана</string>
+    <string name="context_block_history">Окно истории</string>
+    <string name="context_block_attachments">Вложения и изображения</string>
+    <string name="context_usage_note_estimate">Грубые оценки (±10%); обновляются при открытии этой панели</string>
+    <!-- [#41] Gen UI card -->
+    <string name="gen_ui_card_label">Интерактивная карточка</string>
+    <string name="gen_ui_view_source">Показать исходник</string>
+    <string name="gen_ui_view_render">Показать рендер</string>
+    <string name="gen_ui_view_fullscreen">Полный экран</string>
     <string name="common_on">Вкл.</string>
     <string name="common_off">Выкл.</string>
     <string name="common_yes">Да</string>
@@ -616,6 +632,14 @@
     <string name="env_var_privacy_header">Конфиденциальность</string>
     <string name="env_var_privacy_toggle">Режим конфиденциальности</string>
     <string name="env_var_privacy_footer">Когда включено, любое значение переменной окружения, появляющееся в выводе выполнения команд оболочки, заменяется маскированной формой (например, `sk-1********ajhks`) перед передачей модели. Значения короче 8 символов заменяются полностью на `*`. Вывод, видимый пользователю в чате, остаётся неизменным.</string>
+    <string name="outbound_mask_toggle">Маскирование исходящих данных</string>
+    <string name="outbound_mask_footer">Опт-ин маскировка по форме: строки в форме ключей (в т.ч. в коде), эл. почта и телефоноподобные числа заменяются. Ключ embedding API ниже хранится открытым текстом в приватных prefs. История устройства не меняется.</string>
+    <string name="chat_menu_perm_yoyo">YOLO · полностью автоматически</string>
+    <string name="chat_menu_perm_safe_auto">Безопасное авто · инструменты чтения выполняются свободно</string>
+    <string name="chat_menu_perm_ask">Спрашивать · подтверждать каждый вызов</string>
+    <string name="chat_menu_perm_off">Выкл · отклонять все инструменты</string>
+    <string name="gate_approval_allow_all">Всегда разрешать в этой сессии (текущая цель)</string>
+    <string name="approval_action_allow_all_session">Всегда разрешать в этой сессии</string>
     <string name="env_var_section_header">Переменные</string>
     <string name="env_var_section_footer">Переменные окружения внедряются в оболочку песочницы при запуске сессии. Имена приводятся к верхнему регистру и должны соответствовать правилам имён переменных оболочки POSIX.</string>
     <string name="env_var_empty_title">Нет переменных окружения</string>
@@ -1840,6 +1864,7 @@
     <string name="usage_label_output_short">Вывод</string>
     <string name="plan_board_all_done">Все шаги выполнены</string>
     <string name="cd_plan_board_toggle">Развернуть или свернуть панель плана</string>
+    <string name="cd_plan_step_retry">Повторить этот неудавшийся шаг</string>
     <string name="cd_goal_header">Открыть сведения о цели</string>
     <string name="cd_goal_status_active">Цель в работе</string>
     <string name="cd_goal_status_paused">Цель приостановлена</string>
@@ -2019,6 +2044,12 @@
     <string name="token_usage_saver_folded">Свёрнутые результаты</string>
     <string name="token_usage_saver_saved">Сэкономлено за ход</string>
     <string name="memory_center_overview">Кратко</string>
+    <string name="memory_embedding_header">Семантический поиск</string>
+    <string name="memory_embedding_toggle">Семантический поиск памяти по эмбеддингам</string>
+    <string name="memory_embedding_base_url">Базовый URL эмбеддингов</string>
+    <string name="memory_embedding_api_key">API-ключ эмбеддингов</string>
+    <string name="memory_embedding_model">Модель эмбеддингов</string>
+    <string name="memory_embedding_footer">По умолчанию выключено. При включении к поиску по ключевым словам добавляется поиск по векторному сходству через совместимый с OpenAI эндпоинт эмбеддингов. Изменения вступают в силу только после перезапуска процесса приложения.</string>
     <string name="memory_center_stat_memory">Файлы памяти</string>
     <string name="memory_center_stat_recalls">Вызванные записи</string>
     <string name="memory_center_stat_failures">Заблокированные повторы</string>
@@ -2115,4 +2146,59 @@
     <!-- Queued-message edit sheet + git diff truncation notice -->
     <string name="chat_queued_edit_title">Изменить сообщение в очереди</string>
     <string name="git_panel_diff_truncated">Diff обрезан на 200 000 символах — полный текст находится в самом файле репозитория.</string>
+    <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
+    <string name="provider_list_export_providers">Экспорт провайдеров</string>
+    <string name="provider_transfer_export_title">Экспорт провайдеров</string>
+    <string name="provider_transfer_export_body">%1$d провайдеров будут экспортированы в JSON-файл.</string>
+    <string name="provider_transfer_include_keys">Включить API-ключи</string>
+    <string name="provider_transfer_include_keys_risk">API-ключи записываются в файл открытым текстом. Любой, кто получит этот файл, сможет использовать ваши ключи — храните файл в безопасности и удалите его после импорта.</string>
+    <string name="provider_transfer_export">Экспорт</string>
+    <string name="provider_transfer_export_success">Экспортировано провайдеров: %1$d</string>
+    <string name="provider_transfer_export_failed">Не удалось выполнить экспорт</string>
+    <string name="provider_transfer_import_ok">Импортировано провайдеров: %1$d</string>
+    <string name="provider_transfer_import_partial">Импортировано провайдеров: %1$d, ошибок: %2$d</string>
+    <string name="provider_transfer_import_partial_detail">Импортировано %1$d, с ошибками %2$d: %3$s</string>
+    <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
+    <string name="ssh_workspace_menu_title">SSH-рабочая область</string>
+    <string name="ssh_workspace_binding_title">SSH-рабочая область</string>
+    <string name="ssh_workspace_bound_to">Привязано к %1$s (%2$s)</string>
+    <string name="ssh_workspace_bound_local">Работа в локальной песочнице</string>
+    <string name="ssh_workspace_option_local">Локальная песочница</string>
+    <string name="ssh_workspace_option_local_subtitle">Оболочка работает в Linux-песочнице этого устройства</string>
+    <string name="ssh_workspace_no_hosts">SSH-хостов пока нет — добавьте один в Настройки → SSH-рабочая область.</string>
+    <string name="ssh_workspace_shell_only_note">SSH-рабочие области поддерживают только команды оболочки; файловые инструменты отклоняются, пока привязан хост.</string>
+    <string name="ssh_workspace_shell_only">SSH-рабочая область поддерживает только команды оболочки — «%1$s» отклонено.</string>
+    <string name="ssh_workspace_shell_only_hint">Выполняйте удалённые команды через shell_execute или отвяжите эту сессию в меню чата → SSH-рабочая область, чтобы вернуть локальные файловые инструменты.</string>
+    <string name="ssh_hosts_title">SSH-хосты</string>
+    <string name="ssh_hosts_subtitle">Удалённые хосты, доступные агенту по SSH. Учётные данные хранятся в зашифрованном виде и никогда не показываются.</string>
+    <string name="ssh_hosts_row_subtitle">Добавление хостов, проверка соединения, управление ключами хостов</string>
+    <string name="ssh_hosts_empty">Хостов пока нет.</string>
+    <string name="ssh_hosts_add">Добавить хост</string>
+    <string name="ssh_hosts_add_cancel">Отмена</string>
+    <string name="ssh_hosts_test">Проверить соединение</string>
+    <string name="ssh_hosts_testing">Проверка…</string>
+    <string name="ssh_hosts_test_ok">Соединение успешно</string>
+    <string name="ssh_hosts_test_failed">Не удалось подключиться</string>
+    <string name="ssh_hosts_forget_key">Забыть ключ хоста</string>
+    <string name="ssh_hosts_remove">Удалить</string>
+    <string name="ssh_hosts_pinned">Ключ хоста закреплён: %1$s…</string>
+    <string name="ssh_field_name">Имя (буквы/цифры/._-)</string>
+    <string name="ssh_field_hostname">Хост или IP</string>
+    <string name="ssh_field_port">Порт</string>
+    <string name="ssh_field_username">Имя пользователя</string>
+    <string name="ssh_auth_password">Пароль</string>
+    <string name="ssh_auth_key">Приватный ключ</string>
+    <string name="ssh_field_password">Пароль</string>
+    <string name="ssh_field_private_key">Приватный ключ PEM</string>
+    <string name="ssh_field_passphrase">Парольная фраза ключа (необязательно)</string>
+    <string name="ssh_save">Сохранить</string>
+
+    <!-- [T-handsfree-loop] (#40) Hands-free continuous voice conversation -->
+    <string name="handsfree_toggle">Режим без рук</string>
+    <string name="handsfree_state_starting">Запуск…</string>
+    <string name="handsfree_state_listening">Слушаю…</string>
+    <string name="handsfree_state_thinking">Думаю…</string>
+    <string name="handsfree_state_speaking">Говорю…</string>
+    <string name="handsfree_exit_recognition">Режим без рук остановлен: распознавание речи сбоило неоднократно. Нажмите «Режим без рук», чтобы повторить попытку.</string>
+    <string name="handsfree_exit_tts">Режим без рук остановлен: ответы не удалось озвучить. Нажмите «Режим без рук», чтобы повторить попытку.</string>
 </resources>

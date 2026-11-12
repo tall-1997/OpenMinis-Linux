@@ -67,7 +67,7 @@ internal fun ChatViewModel.runCodeBlockInline(lang: String, code: String) {
     // NeedConfirm 直接降级为提示（见 needConfirmHint 的文案）。
     val argsJson = JSONObject().put("command", plan.command).toString()
     val gateCommand = SecurityGateHolder.gate.classify("shell_execute", argsJson)
-    val mode = SecurityGateHolder.activeSessionMode(activeSessionId)
+    val mode = SecurityGateHolder.activeSessionMode(activeSessionId).toGateMode() // [#31] tier → gate mode
     val decision = SecurityGateHolder.gate.withCallerSession(activeSessionId) {
         SecurityGateHolder.gate.decide(gateCommand, mode)
     }

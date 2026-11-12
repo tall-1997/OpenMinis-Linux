@@ -334,6 +334,22 @@
     <string name="token_usage_cache_write">캐시 쓰기</string>
     <string name="token_usage_section_agent_loop">Agent 루프</string>
     <string name="token_usage_total_loops">총 루프 수</string>
+    <!-- [#25] Context breakdown sheet -->
+    <string name="chat_menu_context_usage">컨텍스트 분석</string>
+    <string name="context_usage_sheet_title">컨텍스트 분석</string>
+    <string name="context_block_system">시스템 프롬프트 및 도구</string>
+    <string name="context_block_skills_mcps">스킬 및 MCP</string>
+    <string name="context_block_memory">메모리 주입</string>
+    <string name="context_block_runtime">이번 턴 임시 컨텍스트</string>
+    <string name="context_block_goal_plan">목표 및 플랜 주입</string>
+    <string name="context_block_history">기록 창</string>
+    <string name="context_block_attachments">첨부 및 이미지</string>
+    <string name="context_usage_note_estimate">대략적인 추정치(±10%); 시트를 열 때 새로 고칩니다</string>
+    <!-- [#41] Gen UI card -->
+    <string name="gen_ui_card_label">인터랙티브 카드</string>
+    <string name="gen_ui_view_source">소스 보기</string>
+    <string name="gen_ui_view_render">렌더링 표시</string>
+    <string name="gen_ui_view_fullscreen">전체 화면</string>
     <string name="common_on">켜짐</string>
     <string name="common_off">꺼짐</string>
     <string name="common_yes">예</string>
@@ -614,6 +630,14 @@
     <string name="env_var_privacy_header">프라이버시</string>
     <string name="env_var_privacy_toggle">프라이버시 모드</string>
     <string name="env_var_privacy_footer">활성화하면 shell-execute 출력에 나타난 환경 변수 값이 모델로 전달되기 전에 마스킹됩니다(예: `sk-1********ajhks`). 8자 미만의 값은 모두 `*` 로 바뀝니다. 채팅에 표시되는 출력은 그대로 유지됩니다.</string>
+    <string name="outbound_mask_toggle">발신 프라이버시 마스킹</string>
+    <string name="outbound_mask_footer">옵트인 형태 마스킹: 키 형태 문자열(코드 포함), 이메일, 전화번호형 숫자를 자리표시자로 바꿉니다. 아래 embedding API 키는 앱 전용 prefs에 평문 저장. 기기 기록은 변경 없음.</string>
+    <string name="chat_menu_perm_yoyo">YOLO · 전체 자동</string>
+    <string name="chat_menu_perm_safe_auto">안전 자동 · 읽기 전용 도구는 자동 실행</string>
+    <string name="chat_menu_perm_ask">묻기 · 모든 호출 확인</string>
+    <string name="chat_menu_perm_off">끔 · 모든 도구 거부</string>
+    <string name="gate_approval_allow_all">이 세션에서 항상 허용(현재 대상)</string>
+    <string name="approval_action_allow_all_session">이 세션에서 항상 허용</string>
     <string name="env_var_section_header">변수</string>
     <string name="env_var_section_footer">환경 변수는 세션 시작 시 샌드박스 셸에 주입됩니다. 이름은 대문자로 변환되며 POSIX 셸 변수 규칙을 따라야 합니다.</string>
     <string name="env_var_empty_title">환경 변수 없음</string>
@@ -1829,6 +1853,7 @@
     <string name="usage_label_output_short">출력</string>
     <string name="plan_board_all_done">모든 단계 완료</string>
     <string name="cd_plan_board_toggle">계획 보드 펼치기/접기</string>
+    <string name="cd_plan_step_retry">실패한 이 단계 재시도</string>
     <string name="cd_goal_header">목표 세부정보 열기</string>
     <string name="cd_goal_status_active">목표 진행 중</string>
     <string name="cd_goal_status_paused">목표 일시정지됨</string>
@@ -2008,6 +2033,12 @@
     <string name="token_usage_saver_folded">접힌 도구 결과</string>
     <string name="token_usage_saver_saved">이번 턴 절약</string>
     <string name="memory_center_overview">한눈에 보기</string>
+    <string name="memory_embedding_header">의미 기반 검색</string>
+    <string name="memory_embedding_toggle">임베딩 의미 기반 기억 검색</string>
+    <string name="memory_embedding_base_url">임베딩 베이스 URL</string>
+    <string name="memory_embedding_api_key">임베딩 API 키</string>
+    <string name="memory_embedding_model">임베딩 모델</string>
+    <string name="memory_embedding_footer">기본값은 꺼짐입니다. 켜면 키워드 검색 외에 OpenAI 호환 임베딩 엔드포인트를 통한 벡터 유사도 검색이 기억 불러오기에 추가됩니다. 변경 사항은 앱 프로세스를 다시 시작한 후에 적용됩니다.</string>
     <string name="memory_center_stat_memory">메모리 파일</string>
     <string name="memory_center_stat_recalls">호출된 항목</string>
     <string name="memory_center_stat_failures">차단된 반복</string>
@@ -2104,4 +2135,59 @@
     <!-- Queued-message edit sheet + git diff truncation notice -->
     <string name="chat_queued_edit_title">대기열 메시지 편집</string>
     <string name="git_panel_diff_truncated">Diff가 200,000자에서 잘렸습니다 — 전체 내용은 저장소의 파일 자체에 있습니다.</string>
+    <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
+    <string name="provider_list_export_providers">공급자 내보내기</string>
+    <string name="provider_transfer_export_title">공급자 내보내기</string>
+    <string name="provider_transfer_export_body">%1$d개의 공급자를 JSON 파일로 내보냅니다.</string>
+    <string name="provider_transfer_include_keys">API 키 포함</string>
+    <string name="provider_transfer_include_keys_risk">API 키는 파일에 평문으로 기록됩니다. 이 파일을 획득한 누구나 키를 사용할 수 있으므로 안전하게 보관하고 가져온 후에는 삭제하세요.</string>
+    <string name="provider_transfer_export">내보내기</string>
+    <string name="provider_transfer_export_success">공급자 %1$d개를 내보냈습니다</string>
+    <string name="provider_transfer_export_failed">내보내기 실패</string>
+    <string name="provider_transfer_import_ok">공급자 %1$d개를 가져왔습니다</string>
+    <string name="provider_transfer_import_partial">공급자 %1$d개를 가져왔으며 %2$d개 실패</string>
+    <string name="provider_transfer_import_partial_detail">공급자 %1$d개를 가져왔습니다, %2$d개 실패: %3$s</string>
+    <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
+    <string name="ssh_workspace_menu_title">SSH 워크스페이스</string>
+    <string name="ssh_workspace_binding_title">SSH 워크스페이스</string>
+    <string name="ssh_workspace_bound_to">%1$s(%2$s)에 연결됨</string>
+    <string name="ssh_workspace_bound_local">로컬 샌드박스에서 작동 중</string>
+    <string name="ssh_workspace_option_local">로컬 샌드박스</string>
+    <string name="ssh_workspace_option_local_subtitle">이 기기의 Linux 샌드박스에서 셸이 실행됩니다</string>
+    <string name="ssh_workspace_no_hosts">아직 SSH 호스트가 없습니다. 설정 → SSH 워크스페이스에서 추가하세요.</string>
+    <string name="ssh_workspace_shell_only_note">SSH 워크스페이스는 셸 명령만 지원합니다. 호스트가 연결된 동안에는 파일 도구가 거부됩니다.</string>
+    <string name="ssh_workspace_shell_only">SSH 워크스페이스는 셸 명령만 지원 — \'%1$s\'이(가) 거부되었습니다.</string>
+    <string name="ssh_workspace_shell_only_hint">원격 명령은 shell_execute로 실행하거나, 채팅 메뉴 → SSH 워크스페이스에서 이 세션의 연결을 해제하면 로컬 파일 도구가 복원됩니다.</string>
+    <string name="ssh_hosts_title">SSH 호스트</string>
+    <string name="ssh_hosts_subtitle">에이전트가 SSH로 접근할 수 있는 원격 호스트입니다. 자격 증명은 암호화되어 저장되며 표시되지 않습니다.</string>
+    <string name="ssh_hosts_row_subtitle">호스트 추가, 연결 테스트, 호스트 키 관리</string>
+    <string name="ssh_hosts_empty">아직 호스트가 없습니다.</string>
+    <string name="ssh_hosts_add">호스트 추가</string>
+    <string name="ssh_hosts_add_cancel">취소</string>
+    <string name="ssh_hosts_test">연결 테스트</string>
+    <string name="ssh_hosts_testing">테스트 중…</string>
+    <string name="ssh_hosts_test_ok">연결 성공</string>
+    <string name="ssh_hosts_test_failed">연결 실패</string>
+    <string name="ssh_hosts_forget_key">호스트 키 잊기</string>
+    <string name="ssh_hosts_remove">삭제</string>
+    <string name="ssh_hosts_pinned">호스트 키 고정됨: %1$s…</string>
+    <string name="ssh_field_name">이름(영숫자/._-)</string>
+    <string name="ssh_field_hostname">호스트명 또는 IP</string>
+    <string name="ssh_field_port">포트</string>
+    <string name="ssh_field_username">사용자 이름</string>
+    <string name="ssh_auth_password">비밀번호</string>
+    <string name="ssh_auth_key">개인 키</string>
+    <string name="ssh_field_password">비밀번호</string>
+    <string name="ssh_field_private_key">PEM 개인 키</string>
+    <string name="ssh_field_passphrase">키 암호구(선택)</string>
+    <string name="ssh_save">저장</string>
+
+    <!-- [T-handsfree-loop] (#40) Hands-free continuous voice conversation -->
+    <string name="handsfree_toggle">핸즈프리</string>
+    <string name="handsfree_state_starting">시작 중…</string>
+    <string name="handsfree_state_listening">듣는 중…</string>
+    <string name="handsfree_state_thinking">생각 중…</string>
+    <string name="handsfree_state_speaking">말하는 중…</string>
+    <string name="handsfree_exit_recognition">핸즈프리 중지: 음성 인식이 반복적으로 실패했습니다. 핸즈프리를 탭하여 다시 시도하세요.</string>
+    <string name="handsfree_exit_tts">핸즈프리 중지: 답변을 읽어줄 수 없습니다. 핸즈프리를 탭하여 다시 시도하세요.</string>
 </resources>

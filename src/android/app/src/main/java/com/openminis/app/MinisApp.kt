@@ -163,7 +163,8 @@ class MinisApp : Application(), ImageLoaderFactory {
                 AppGraph.chatBinderOrNull()?.activeSessionId
             override fun sessionMode(id: String?): String? =
                 com.openminis.app.security.effectivePermissionMode(
-                    com.openminis.app.security.SecurityGateHolder.activeSessionMode(id),
+                    // [#31] activeSessionMode returns the session TIER now.
+                    com.openminis.app.security.SecurityGateHolder.activeSessionMode(id).toGateMode(),
                     com.openminis.app.service.ApprovalGate.isSessionAllowAll(id),
                 ).name
             override fun sessionAllowAll(id: String?): Boolean =
@@ -418,6 +419,8 @@ class MinisApp : Application(), ImageLoaderFactory {
 
         // Privacy Mode store + redactor wiring (repo handoff via AppGraph; mirrors iOS).
         com.openminis.app.data.EnvVarPrivacyStore.init(this)
+        // [#28] Outbound privacy masking prefs (default OFF, opt-in).
+        com.openminis.app.data.OutboundMaskPrefs.init(this)
         AppGraph.installRedactorEnvVarRepository(envVarRepository)
 
         // Start network monitoring (mirrors iOS); refreshes /etc/resolv.conf on connectivity changes.

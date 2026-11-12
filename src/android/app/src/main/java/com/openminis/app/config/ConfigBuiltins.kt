@@ -89,8 +89,8 @@ internal object ConfigBuiltins {
             ReadOnlyField(
                 path = "security.permissionMode",
                 displayName = "Permission mode",
-                description = "Effective tool gate for the current chat: ALLOW_ALL (YOYO) or ASK (approval). " +
-                    "Change it in the chat menu. Destructive commands still confirm under YOYO.",
+                description = "Effective tool gate tier for the current chat: OFF, ASK (ask every call), " +
+                    "SAFE_AUTO (read-only tools run, the rest ask) or YOLO (allow all; destructive commands still confirm).",
                 valueSchema = ConfigSchema.Str(),
                 reader = {
                     val sid = activeSessionIdOrNull()

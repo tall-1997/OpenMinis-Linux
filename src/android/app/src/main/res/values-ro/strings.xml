@@ -335,6 +335,22 @@
     <string name="token_usage_cache_write">Scrieri în cache</string>
     <string name="token_usage_section_agent_loop">Bucla Agentului</string>
     <string name="token_usage_total_loops">Total bucle</string>
+    <!-- [#25] Context breakdown sheet -->
+    <string name="chat_menu_context_usage">Defalcarea contextului</string>
+    <string name="context_usage_sheet_title">Defalcarea contextului</string>
+    <string name="context_block_system">Prompt de sistem și instrumente</string>
+    <string name="context_block_skills_mcps">Abilități și MCP</string>
+    <string name="context_block_memory">Injecție de memorie</string>
+    <string name="context_block_runtime">Contextul temporar al acestei ture</string>
+    <string name="context_block_goal_plan">Injecție de obiectiv și plan</string>
+    <string name="context_block_history">Fereastra istoricului</string>
+    <string name="context_block_attachments">Atașamente și imagini</string>
+    <string name="context_usage_note_estimate">Estimări aproximative (±10%); reîmprospătate la deschiderea acestei foi</string>
+    <!-- [#41] Gen UI card -->
+    <string name="gen_ui_card_label">Card interactiv</string>
+    <string name="gen_ui_view_source">Vezi sursa</string>
+    <string name="gen_ui_view_render">Afișează randarea</string>
+    <string name="gen_ui_view_fullscreen">Ecran complet</string>
     <string name="common_on">Activat</string>
     <string name="common_off">Dezactivat</string>
     <string name="common_yes">Da</string>
@@ -615,6 +631,14 @@
     <string name="env_var_privacy_header">Confidențialitate</string>
     <string name="env_var_privacy_toggle">Mod confidențial</string>
     <string name="env_var_privacy_footer">Când este activat, orice valoare a unei variabile de mediu care apare în ieșirea shell-execute este înlocuită cu o formă mascată (ex. `sk-1********ajhks`) înainte de a ajunge la model. Valorile mai scurte de 8 caractere devin integral `*`. Ieșirea vizibilă utilizatorului în conversație rămâne neschimbată.</string>
+    <string name="outbound_mask_toggle">Mascare confidențialitate la ieșire</string>
+    <string name="outbound_mask_footer">Mascares opt-in după formă: șiruri tip cheie (inclusiv în cod), e-mailuri și numere de telefon devin substituenți. Cheia API de embedding de mai jos e stocată în clar în prefs private. Istoricul dispozitivului neschimbat.</string>
+    <string name="chat_menu_perm_yoyo">YOLO · complet automat</string>
+    <string name="chat_menu_perm_safe_auto">Auto sigur · uneltele de citire rulează liber</string>
+    <string name="chat_menu_perm_ask">Întreabă · confirmă fiecare apel</string>
+    <string name="chat_menu_perm_off">Dezactivat · refuză toate uneltele</string>
+    <string name="gate_approval_allow_all">Permite întotdeauna în această sesiune (ținta curentă)</string>
+    <string name="approval_action_allow_all_session">Permite întotdeauna în această sesiune</string>
     <string name="env_var_section_header">Variabile</string>
     <string name="env_var_section_footer">Variabilele de mediu sunt injectate în shell-ul mediului izolat la începutul sesiunii. Numele sunt transformate în majuscule și trebuie să respecte regulile variabilelor de shell POSIX.</string>
     <string name="env_var_empty_title">Nicio variabilă de mediu</string>
@@ -1836,6 +1860,7 @@
     <string name="usage_label_output_short">Ieșire</string>
     <string name="plan_board_all_done">Toți pașii finalizați</string>
     <string name="cd_plan_board_toggle">Extinde sau restrânge tabla planului</string>
+    <string name="cd_plan_step_retry">Reîncearcă acest pas eșuat</string>
     <string name="cd_goal_header">Deschide detaliile obiectivului</string>
     <string name="cd_goal_status_active">Obiectiv în desfășurare</string>
     <string name="cd_goal_status_paused">Obiectiv pus în pauză</string>
@@ -2015,6 +2040,12 @@
     <string name="token_usage_saver_folded">Rezultate pliate</string>
     <string name="token_usage_saver_saved">Economisit în acest tur</string>
     <string name="memory_center_overview">Dintr-o privire</string>
+    <string name="memory_embedding_header">Reamintire semantică</string>
+    <string name="memory_embedding_toggle">Reamintire semantică a memoriei cu embeddings</string>
+    <string name="memory_embedding_base_url">URL de bază pentru embeddings</string>
+    <string name="memory_embedding_api_key">Cheie API pentru embeddings</string>
+    <string name="memory_embedding_model">Model de embeddings</string>
+    <string name="memory_embedding_footer">Dezactivat în mod implicit. Când este activat, reamintirea memoriei adaugă căutarea prin similaritate vectorială printr-un endpoint de embeddings compatibil OpenAI, pe lângă căutarea după cuvinte cheie. Modificările intră în vigoare doar după repornirea procesului aplicației.</string>
     <string name="memory_center_stat_memory">Fișiere de memorie</string>
     <string name="memory_center_stat_recalls">Intrări rechemate</string>
     <string name="memory_center_stat_failures">Repetări blocate</string>
@@ -2111,4 +2142,59 @@
     <!-- Queued-message edit sheet + git diff truncation notice -->
     <string name="chat_queued_edit_title">Editează mesajul din coadă</string>
     <string name="git_panel_diff_truncated">Diff trunchiat la 200.000 de caractere — textul complet se află în fișierul din depozit.</string>
+    <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
+    <string name="provider_list_export_providers">Exportare furnizori</string>
+    <string name="provider_transfer_export_title">Exportare furnizori</string>
+    <string name="provider_transfer_export_body">%1$d furnizori vor fi exportați într-un fișier JSON.</string>
+    <string name="provider_transfer_include_keys">Includeți cheile API</string>
+    <string name="provider_transfer_include_keys_risk">Cheile API sunt scrise în fișier ca text simplu. Oricine obține acest fișier vă poate folosi cheile — păstrați fișierul în siguranță și ștergeți-l după import.</string>
+    <string name="provider_transfer_export">Exportare</string>
+    <string name="provider_transfer_export_success">%1$d furnizori exportați</string>
+    <string name="provider_transfer_export_failed">Exportul a eșuat</string>
+    <string name="provider_transfer_import_ok">%1$d furnizori importați</string>
+    <string name="provider_transfer_import_partial">%1$d furnizori importați, %2$d eșuați</string>
+    <string name="provider_transfer_import_partial_detail">%1$d furnizori importați, %2$d eșuate: %3$s</string>
+    <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
+    <string name="ssh_workspace_menu_title">Spațiul de lucru SSH</string>
+    <string name="ssh_workspace_binding_title">Spațiul de lucru SSH</string>
+    <string name="ssh_workspace_bound_to">Legat la %1$s (%2$s)</string>
+    <string name="ssh_workspace_bound_local">Lucrează în sandbox-ul local</string>
+    <string name="ssh_workspace_option_local">Sandbox local</string>
+    <string name="ssh_workspace_option_local_subtitle">Shell-ul rulează în sandbox-ul Linux al acestui dispozitiv</string>
+    <string name="ssh_workspace_no_hosts">Nu există încă gazde SSH — adaugă una în Setări → Spațiul de lucru SSH.</string>
+    <string name="ssh_workspace_shell_only_note">Spațiile de lucru SSH acceptă doar comenzi shell; instrumentele de fișiere sunt refuzate cât timp o gazdă este legată.</string>
+    <string name="ssh_workspace_shell_only">Spațiul de lucru SSH acceptă doar comenzi shell — \'%1$s\' a fost refuzat.</string>
+    <string name="ssh_workspace_shell_only_hint">Rulează comenzile la distanță cu shell_execute sau dezleagă această sesiune din meniul de chat → Spațiul de lucru SSH pentru a restaura instrumentele locale de fișiere.</string>
+    <string name="ssh_hosts_title">Gazde SSH</string>
+    <string name="ssh_hosts_subtitle">Gazde la distanță pe care agentul le poate accesa prin SSH. Acreditările sunt stocate criptat și nu sunt afișate niciodată.</string>
+    <string name="ssh_hosts_row_subtitle">Adaugă gazde, testează conexiunile, gestionează cheile de gazdă</string>
+    <string name="ssh_hosts_empty">Nu există încă gazde.</string>
+    <string name="ssh_hosts_add">Adaugă gazdă</string>
+    <string name="ssh_hosts_add_cancel">Anulează</string>
+    <string name="ssh_hosts_test">Testează conexiunea</string>
+    <string name="ssh_hosts_testing">Se testează…</string>
+    <string name="ssh_hosts_test_ok">Conexiune reușită</string>
+    <string name="ssh_hosts_test_failed">Conexiunea a eșuat</string>
+    <string name="ssh_hosts_forget_key">Uită cheia gazdei</string>
+    <string name="ssh_hosts_remove">Elimină</string>
+    <string name="ssh_hosts_pinned">Cheia gazdei este fixată: %1$s…</string>
+    <string name="ssh_field_name">Nume (litere/cifre/._-)</string>
+    <string name="ssh_field_hostname">Gazdă sau IP</string>
+    <string name="ssh_field_port">Port</string>
+    <string name="ssh_field_username">Nume de utilizator</string>
+    <string name="ssh_auth_password">Parolă</string>
+    <string name="ssh_auth_key">Cheie privată</string>
+    <string name="ssh_field_password">Parolă</string>
+    <string name="ssh_field_private_key">Cheie privată PEM</string>
+    <string name="ssh_field_passphrase">Fraza-cheie (opțional)</string>
+    <string name="ssh_save">Salvează</string>
+
+    <!-- [T-handsfree-loop] (#40) Hands-free continuous voice conversation -->
+    <string name="handsfree_toggle">Mâini libere</string>
+    <string name="handsfree_state_starting">Se pornește…</string>
+    <string name="handsfree_state_listening">Ascult…</string>
+    <string name="handsfree_state_thinking">Gândește…</string>
+    <string name="handsfree_state_speaking">Vorbește…</string>
+    <string name="handsfree_exit_recognition">Mâini libere oprit: recunoașterea vocală a eșuat repetat. Atinge Mâini libere pentru a reîncerca.</string>
+    <string name="handsfree_exit_tts">Mâini libere oprit: răspunsurile nu au putut fi citite cu voce tare. Atinge Mâini libere pentru a reîncerca.</string>
 </resources>

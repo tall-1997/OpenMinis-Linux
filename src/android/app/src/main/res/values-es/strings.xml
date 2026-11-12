@@ -334,6 +334,22 @@
     <string name="token_usage_cache_write">Escritura de caché</string>
     <string name="token_usage_section_agent_loop">Bucle de Minis Ultra Agent</string>
     <string name="token_usage_total_loops">Bucles totales</string>
+    <!-- [#25] Context breakdown sheet -->
+    <string name="chat_menu_context_usage">Desglose del contexto</string>
+    <string name="context_usage_sheet_title">Desglose del contexto</string>
+    <string name="context_block_system">Prompt del sistema y herramientas</string>
+    <string name="context_block_skills_mcps">Skills y MCPs</string>
+    <string name="context_block_memory">Inyección de memoria</string>
+    <string name="context_block_runtime">Contexto temporal de este turno</string>
+    <string name="context_block_goal_plan">Inyección de objetivo y plan</string>
+    <string name="context_block_history">Ventana de historial</string>
+    <string name="context_block_attachments">Adjuntos e imágenes</string>
+    <string name="context_usage_note_estimate">Estimaciones aproximadas (±10 %); se actualizan al abrir esta hoja</string>
+    <!-- [#41] Gen UI card -->
+    <string name="gen_ui_card_label">Tarjeta interactiva</string>
+    <string name="gen_ui_view_source">Ver código fuente</string>
+    <string name="gen_ui_view_render">Mostrar render</string>
+    <string name="gen_ui_view_fullscreen">Pantalla completa</string>
     <string name="common_on">Activado</string>
     <string name="common_off">Desactivado</string>
     <string name="common_yes">Sí</string>
@@ -614,6 +630,13 @@
     <string name="env_var_privacy_header">Privacidad</string>
     <string name="env_var_privacy_toggle">Modo privacidad</string>
     <string name="env_var_privacy_footer">Cuando está activado, cualquier valor de variable de entorno que aparezca en la salida de shell se reemplaza por una forma enmascarada (por ejemplo, `sk-1********ajhks`) antes de llegar al modelo. Los valores de menos de 8 caracteres se convierten en `*`. La salida visible en el chat no cambia.</string>
+    <string name="outbound_mask_toggle">Enmascarado de privacidad saliente</string>
+    <string name="outbound_mask_footer">Enmascarado opcional por forma: cadenas tipo clave (código incluido), correos y números telefónicos se sustituyen. La clave API de embedding se guarda en texto plano en prefs privadas. Historial del dispositivo sin cambios.</string>
+    <string name="chat_menu_perm_yoyo">YOLO · todo automático</string>
+    <string name="chat_menu_perm_safe_auto">Auto seguro · las herramientas de lectura pasan libres</string>
+    <string name="chat_menu_perm_ask">Preguntar · confirmar cada llamada</string>
+    <string name="chat_menu_perm_off">Apagado · denegar todas las herramientas</string>
+    <string name="gate_approval_allow_all">Permitir siempre en esta sesión (objetivo actual)</string>
     <string name="env_var_section_header">Variables</string>
     <string name="env_var_section_footer">Las variables de entorno se inyectan en la shell del entorno aislado al iniciar la sesión. Los nombres se convierten a mayúsculas y deben cumplir las reglas de variables de shell POSIX.</string>
     <string name="env_var_empty_title">Sin variables de entorno</string>
@@ -1832,6 +1855,7 @@
     <string name="usage_label_output_short">Salida</string>
     <string name="plan_board_all_done">Todos los pasos completados</string>
     <string name="cd_plan_board_toggle">Expandir o contraer el panel del plan</string>
+    <string name="cd_plan_step_retry">Reintentar este paso fallido</string>
     <string name="cd_goal_header">Abrir detalles del objetivo</string>
     <string name="cd_goal_status_active">Objetivo en curso</string>
     <string name="cd_goal_status_paused">Objetivo en pausa</string>
@@ -2011,6 +2035,12 @@
     <string name="token_usage_saver_folded">Resultados plegados</string>
     <string name="token_usage_saver_saved">Ahorrado este turno</string>
     <string name="memory_center_overview">De un vistazo</string>
+    <string name="memory_embedding_header">Recuperación semántica</string>
+    <string name="memory_embedding_toggle">Recuperación semántica con embeddings</string>
+    <string name="memory_embedding_base_url">URL base de embeddings</string>
+    <string name="memory_embedding_api_key">Clave de API de embeddings</string>
+    <string name="memory_embedding_model">Modelo de embeddings</string>
+    <string name="memory_embedding_footer">Desactivado por defecto. Al activarlo, la recuperación de memoria añade búsqueda por similitud vectorial mediante un endpoint de embeddings compatible con OpenAI, además de la búsqueda por palabras clave. Los cambios surten efecto solo tras reiniciar el proceso de la app.</string>
     <string name="memory_center_stat_memory">Archivos de memoria</string>
     <string name="memory_center_stat_recalls">Entradas recuperadas</string>
     <string name="memory_center_stat_failures">Repeticiones bloqueadas</string>
@@ -2097,4 +2127,59 @@
     <!-- Queued-message edit sheet + git diff truncation notice -->
     <string name="chat_queued_edit_title">Editar mensaje en cola</string>
     <string name="git_panel_diff_truncated">Diff truncado en 200 000 caracteres; el texto completo está en el propio archivo del repositorio.</string>
+    <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
+    <string name="provider_list_export_providers">Exportar proveedores</string>
+    <string name="provider_transfer_export_title">Exportar proveedores</string>
+    <string name="provider_transfer_export_body">%1$d proveedores se exportarán a un archivo JSON.</string>
+    <string name="provider_transfer_include_keys">Incluir claves de API</string>
+    <string name="provider_transfer_include_keys_risk">Las claves de API se escriben en el archivo como texto plano. Cualquiera que obtenga este archivo puede usar sus claves — guárdelo en un lugar seguro y elimínelo después de importar.</string>
+    <string name="provider_transfer_export">Exportar</string>
+    <string name="provider_transfer_export_success">Se exportaron %1$d proveedores</string>
+    <string name="provider_transfer_export_failed">Error al exportar</string>
+    <string name="provider_transfer_import_ok">Se importaron %1$d proveedores</string>
+    <string name="provider_transfer_import_partial">Se importaron %1$d proveedores, %2$d fallaron</string>
+    <string name="provider_transfer_import_partial_detail">Se importaron %1$d proveedores, %2$d fallaron: %3$s</string>
+    <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
+    <string name="ssh_workspace_menu_title">Espacio de trabajo SSH</string>
+    <string name="ssh_workspace_binding_title">Espacio de trabajo SSH</string>
+    <string name="ssh_workspace_bound_to">Conectado a %1$s (%2$s)</string>
+    <string name="ssh_workspace_bound_local">Trabajando en el entorno local</string>
+    <string name="ssh_workspace_option_local">Entorno local</string>
+    <string name="ssh_workspace_option_local_subtitle">El shell se ejecuta en la sandbox Linux de este dispositivo</string>
+    <string name="ssh_workspace_no_hosts">Aún no hay hosts SSH: añade uno en Ajustes → Espacio de trabajo SSH.</string>
+    <string name="ssh_workspace_shell_only_note">Los espacios de trabajo SSH solo admiten comandos de shell; las herramientas de archivos se rechazan con un host vinculado.</string>
+    <string name="ssh_workspace_shell_only">El espacio de trabajo SSH solo admite comandos de shell: se rechazó \'%1$s\'.</string>
+    <string name="ssh_workspace_shell_only_hint">Ejecuta comandos remotos con shell_execute, o desvincula esta sesión desde el menú del chat → Espacio de trabajo SSH para restaurar las herramientas de archivos locales.</string>
+    <string name="ssh_hosts_title">Hosts SSH</string>
+    <string name="ssh_hosts_subtitle">Hosts remotos a los que el agente puede llegar por SSH. Las credenciales se guardan cifradas y nunca se muestran.</string>
+    <string name="ssh_hosts_row_subtitle">Añadir hosts, probar conexiones, gestionar claves de host</string>
+    <string name="ssh_hosts_empty">Aún no hay hosts.</string>
+    <string name="ssh_hosts_add">Añadir host</string>
+    <string name="ssh_hosts_add_cancel">Cancelar</string>
+    <string name="ssh_hosts_test">Probar conexión</string>
+    <string name="ssh_hosts_testing">Probando…</string>
+    <string name="ssh_hosts_test_ok">Conexión correcta</string>
+    <string name="ssh_hosts_test_failed">Error de conexión</string>
+    <string name="ssh_hosts_forget_key">Olvidar clave de host</string>
+    <string name="ssh_hosts_remove">Eliminar</string>
+    <string name="ssh_hosts_pinned">Clave de host fijada: %1$s…</string>
+    <string name="ssh_field_name">Nombre (letras/dígitos/._-)</string>
+    <string name="ssh_field_hostname">Host o IP</string>
+    <string name="ssh_field_port">Puerto</string>
+    <string name="ssh_field_username">Usuario</string>
+    <string name="ssh_auth_password">Contraseña</string>
+    <string name="ssh_auth_key">Clave privada</string>
+    <string name="ssh_field_password">Contraseña</string>
+    <string name="ssh_field_private_key">Clave privada PEM</string>
+    <string name="ssh_field_passphrase">Frase de la clave (opcional)</string>
+    <string name="ssh_save">Guardar</string>
+
+    <!-- [T-handsfree-loop] (#40) Hands-free continuous voice conversation -->
+    <string name="handsfree_toggle">Manos libres</string>
+    <string name="handsfree_state_starting">Iniciando…</string>
+    <string name="handsfree_state_listening">Escuchando…</string>
+    <string name="handsfree_state_thinking">Pensando…</string>
+    <string name="handsfree_state_speaking">Hablando…</string>
+    <string name="handsfree_exit_recognition">Manos libres detenido: el reconocimiento de voz falló repetidamente. Toca Manos libres para reintentar.</string>
+    <string name="handsfree_exit_tts">Manos libres detenido: no se pudieron leer las respuestas en voz alta. Toca Manos libres para reintentar.</string>
 </resources>

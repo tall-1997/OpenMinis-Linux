@@ -148,11 +148,11 @@ data class ScheduledTask(
     val runNowSlotMs: Long? = null,
     // [T-scheduled-new-session-permission] Only meaningful when targetMode is
     // NewSession: the tool-gate mode written onto the freshly created session
-    // row. Stored as the session-persistence token ("YOYO" | "ASK") that
-    // ChatViewModel.setSessionPermissionMode writes; null = app default ASK,
+    // row. Stored as a session-persistence token ("YOLO" | "SAFE_AUTO" since
+    // [#31]; legacy rows may still carry "YOYO"/"ASK"). null = app default,
     // which keeps pre-feature JSON rows loading unchanged. Normalized through
-    // [com.openminis.app.security.PermissionMode.sessionDefault] (YOYO →
-    // ALLOW_ALL, everything else → ASK) so an unknown token can never widen
+    // [com.openminis.app.security.SessionPermissionMode.fromStored] (YOLO/YOYO
+    // → YOLO, everything else → ASK) so an unknown token can never widen
     // the gate.
     val newSessionPermissionMode: String? = null,
     // [T-scheduled-new-session-folder] Only meaningful when targetMode is
@@ -166,17 +166,21 @@ data class ScheduledTask(
 
     /**
      * [T-scheduled-new-session-permission] Token to persist on the new
-     * session's `permission_mode` column: "YOYO" (ALLOW_ALL) or "ASK".
+     * session's `permission_mode` column: "YOLO" or "SAFE_AUTO".
      * null/blank/unknown on [newSessionPermissionMode] all normalize to ASK —
-     * same rule [com.openminis.app.security.PermissionMode.sessionDefault]
+     * same rule [com.openminis.app.security.SessionPermissionMode.fromStored]
      * applies when a chat restores its row, so a task can never grant a
      * wider gate than the chat layer itself would.
+     *
+     * [#31] The non-YOLO arm emits "SAFE_AUTO" (read-only auto + rest asks),
+     * which is exactly what the two-tier era's "ASK" token meant at the gate;
+     * emitting literal "ASK" now would compile to the strict ask-everything
+     * tier and stall headless runs on read-only calls.
      */
     fun newSessionPermissionToken(): String =
-        if (com.openminis.app.security.PermissionMode
-                .sessionDefault(newSessionPermissionMode)
-            == com.openminis.app.security.PermissionMode.ALLOW_ALL
-        ) "YOYO" else "ASK"
+        if (com.openminis.app.security.SessionPermissionMode
+                .fromStored(newSessionPermissionMode) == com.openminis.app.security.SessionPermissionMode.YOLO
+        ) "YOLO" else "SAFE_AUTO"
 
     /**
      * [T-scheduled-new-session-folder] Folder id to file the new session

@@ -113,8 +113,16 @@ object AutomationRuleTools {
                 ),
                 "permission_mode" to AgentToolParam(
                     "string",
-                    "Optional tool-gate for the created session: ASK (default) or YOYO (allow all tools).",
-                    enumValues = listOf("ASK", "YOYO"),
+                    // [#31] Four-tier tool gate; a headless run is unattended,
+                    // so anything stricter than YOLO executes as SAFE_AUTO (the
+                    // old "ASK" gate behaviour): read-only tools run, the rest
+                    // asks — but no one is there to answer, so write tools are
+                    // effectively skipped. Say so instead of promising ASK/OFF
+                    // semantics the runner cannot deliver.
+                    "Optional tool-gate for the created session: SAFE_AUTO (default; read-only tools run, " +
+                        "the rest are skipped unattended) or YOLO (allow all tools). " +
+                        "ASK and OFF are accepted but execute as SAFE_AUTO in unattended runs.",
+                    enumValues = listOf("SAFE_AUTO", "YOLO", "ASK", "OFF"),
                 ),
             ),
             required = listOf("tool_title", "name", "trigger", "action"),
@@ -151,7 +159,7 @@ object AutomationRuleTools {
                 "conditions" to AgentToolParam("array", "Replacement conditions array."),
                 "action" to AgentToolParam("object", "Replacement action ($ACTION_DOC)."),
                 "allowed_tools" to AgentToolParam("array", "Replacement tool whitelist."),
-                "permission_mode" to AgentToolParam("string", "ASK or YOYO."),
+                "permission_mode" to AgentToolParam("string", "SAFE_AUTO (default), YOLO, ASK or OFF."),
             ),
             required = listOf("tool_title", "id"),
             propertyOrdering = listOf(

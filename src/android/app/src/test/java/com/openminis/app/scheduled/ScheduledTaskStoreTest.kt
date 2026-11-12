@@ -49,8 +49,9 @@ class ScheduledTaskStoreTest {
         assertEquals("legacy-1", loaded[0].id)
         assertNull(loaded[0].newSessionPermissionMode)
         assertNull(loaded[0].newSessionFolderId)
-        // Defaults resolve at use time, not at parse time.
-        assertEquals("ASK", loaded[0].newSessionPermissionToken())
+        // Defaults resolve at use time, not at parse time; the headless
+        // default is SAFE_AUTO (the old "ASK" gate behaviour).
+        assertEquals("SAFE_AUTO", loaded[0].newSessionPermissionToken())
         assertTrue(loaded[0].resolvedNewSessionFolderId(emptySet()) == null)
     }
 

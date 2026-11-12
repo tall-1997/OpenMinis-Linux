@@ -386,6 +386,15 @@ internal fun ChatViewModel.sendMessage(
             ))
             // [T-context-ring] Refresh after user appends.
             refreshContextUsage()
+            // [T-memory-embedding-wiring] The user row is in the window, no
+            // assistant message exists for this turn yet — the state the first
+            // request's live-recall render will read. Fire the semantic prefetch
+            // NOW so the embeddings request overlaps the OAuth/prompt-assembly
+            // work below and the first turn's render hits the engine's cache.
+            // Fire-and-forget: silent, non-blocking, no-op when the feature is
+            // off (default). liveRecallInput() is the SAME construction the
+            // render uses, so the cache key matches.
+            prefetchSemanticRecall()
         }
 
         // Refresh OAuth token if needed before sending (mirrors iOS validAccessToken)

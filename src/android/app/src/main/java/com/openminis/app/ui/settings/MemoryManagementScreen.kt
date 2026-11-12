@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openminis.app.knowledge.AppNotes
 import com.openminis.app.knowledge.AppNotesStore
@@ -51,6 +52,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.openminis.app.data.repository.MemoryRepository
 import com.openminis.app.ui.components.DialogTextField
+import com.openminis.app.ui.components.RowLabel
+import com.openminis.app.ui.components.SectionTextField
 import com.openminis.app.ui.theme.m3Icon
 
 /**
@@ -142,6 +145,7 @@ fun MemoryManagementScreen(
                 showDivider = false,
             )
         }
+        EmbeddingRecallSection()
         Spacer(modifier = Modifier.height(16.dp))
 
         if (files.isEmpty()) {
@@ -434,6 +438,96 @@ fun MemoryFileEditScreen(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+/**
+ * [T-memory-embedding-settings] Semantic-recall configuration (#27): the
+ * embeddings endpoint Settings → Memory previously only exposed through raw
+ * prefs. Switch + base URL + API key (masked) + model, written straight to
+ * [com.openminis.app.data.memory.EmbeddingPrefs] — the switch immediately,
+ * the text fields on focus loss (the Settings convention, e.g. the model-group
+ * name field), so a keystroke-per-write flood never hits SharedPreferences.
+ *
+ * The runtime snapshot is read once per process (Application.onCreate), which
+ * is why the footer says changes take effect after the app restarts — the
+ * exact wording of EmbeddingPrefs' lifecycle.
+ *
+ * Fields are hidden while the switch is off: the default page stays one switch
+ * row, and flipping it on reveals the endpoint form. The feature only becomes
+ * ACTIVE when base URL AND key are non-blank (EmbeddingPrefs.snapshot's
+ * contract), so enabling alone changes nothing until the form is filled.
+ */
+@Composable
+private fun EmbeddingRecallSection() {
+    val context = LocalContext.current
+    var stored by remember {
+        mutableStateOf(com.openminis.app.data.memory.EmbeddingPrefs.stored(context))
+    }
+    SettingsSection(
+        header = stringResource(R.string.memory_embedding_header),
+        footer = stringResource(R.string.memory_embedding_footer),
+    ) {
+        SettingsSwitchRow(
+            title = stringResource(R.string.memory_embedding_toggle),
+            checked = stored.enabled,
+            onCheckedChange = { on ->
+                com.openminis.app.data.memory.EmbeddingPrefs.setEnabled(context, on)
+                stored = stored.copy(enabled = on)
+            },
+            showDivider = false,
+        )
+        if (stored.enabled) {
+            SettingsCardBlock {
+                RowLabel(text = stringResource(R.string.memory_embedding_base_url))
+                SectionTextField(
+                    value = stored.baseUrl,
+                    onValueChange = { stored = stored.copy(baseUrl = it) },
+                    placeholder = "https://api.openai.com",
+                    singleLine = true,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Next,
+                    ),
+                    fieldModifier = Modifier.onFocusChanged { fs ->
+                        if (!fs.isFocused && stored.baseUrl != com.openminis.app.data.memory.EmbeddingPrefs.stored(context).baseUrl) {
+                            com.openminis.app.data.memory.EmbeddingPrefs.setBaseUrl(context, stored.baseUrl)
+                        }
+                    },
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                RowLabel(text = stringResource(R.string.memory_embedding_api_key))
+                SectionTextField(
+                    value = stored.apiKey,
+                    onValueChange = { stored = stored.copy(apiKey = it) },
+                    singleLine = true,
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Next,
+                    ),
+                    fieldModifier = Modifier.onFocusChanged { fs ->
+                        if (!fs.isFocused && stored.apiKey != com.openminis.app.data.memory.EmbeddingPrefs.stored(context).apiKey) {
+                            com.openminis.app.data.memory.EmbeddingPrefs.setApiKey(context, stored.apiKey)
+                        }
+                    },
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                RowLabel(text = stringResource(R.string.memory_embedding_model))
+                SectionTextField(
+                    value = stored.model,
+                    onValueChange = { stored = stored.copy(model = it) },
+                    placeholder = com.openminis.app.data.memory.EmbeddingPrefs.DEFAULT_MODEL,
+                    singleLine = true,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                    ),
+                    fieldModifier = Modifier.onFocusChanged { fs ->
+                        if (!fs.isFocused && stored.model != com.openminis.app.data.memory.EmbeddingPrefs.stored(context).model) {
+                            com.openminis.app.data.memory.EmbeddingPrefs.setModel(context, stored.model)
+                        }
+                    },
+                )
+            }
         }
     }
 }

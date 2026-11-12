@@ -8,21 +8,24 @@ import org.junit.Test
 class SecurityGateSessionIsolationTest {
     @After fun cleanup() {
         ApprovalGate.cleanupAll()
-        SecurityGateHolder.setActiveSessionMode(PermissionMode.ASK, "a")
-        SecurityGateHolder.setActiveSessionMode(PermissionMode.ASK, "b")
+        SecurityGateHolder.setActiveSessionMode(SessionPermissionMode.ASK, "a")
+        SecurityGateHolder.setActiveSessionMode(SessionPermissionMode.ASK, "b")
     }
+
+    // [#31] The holder stores session TIERS (SessionPermissionMode) now;
+    // ALLOW_ALL was renamed to the YOLO tier at this boundary.
 
     @Test fun changingOneSessionModeDoesNotChangeAnother() {
-        SecurityGateHolder.setActiveSessionMode(PermissionMode.ALLOW_ALL, "a")
-        SecurityGateHolder.setActiveSessionMode(PermissionMode.ASK, "b")
-        assertEquals(PermissionMode.ALLOW_ALL, SecurityGateHolder.activeSessionMode("a"))
-        assertEquals(PermissionMode.ASK, SecurityGateHolder.activeSessionMode("b"))
-        SecurityGateHolder.setActiveSessionMode(PermissionMode.ASK, "a")
-        assertEquals(PermissionMode.ASK, SecurityGateHolder.activeSessionMode("b"))
+        SecurityGateHolder.setActiveSessionMode(SessionPermissionMode.YOLO, "a")
+        SecurityGateHolder.setActiveSessionMode(SessionPermissionMode.ASK, "b")
+        assertEquals(SessionPermissionMode.YOLO, SecurityGateHolder.activeSessionMode("a"))
+        assertEquals(SessionPermissionMode.ASK, SecurityGateHolder.activeSessionMode("b"))
+        SecurityGateHolder.setActiveSessionMode(SessionPermissionMode.ASK, "a")
+        assertEquals(SessionPermissionMode.ASK, SecurityGateHolder.activeSessionMode("b"))
     }
 
-    @Test fun nullCallerRemainsAskEvenWhenSessionIsYoyo() {
-        SecurityGateHolder.setActiveSessionMode(PermissionMode.ALLOW_ALL, "a")
-        assertEquals(PermissionMode.ASK, SecurityGateHolder.activeSessionMode(null))
+    @Test fun nullCallerRemainsAskEvenWhenSessionIsYolo() {
+        SecurityGateHolder.setActiveSessionMode(SessionPermissionMode.YOLO, "a")
+        assertEquals(SessionPermissionMode.ASK, SecurityGateHolder.activeSessionMode(null))
     }
 }

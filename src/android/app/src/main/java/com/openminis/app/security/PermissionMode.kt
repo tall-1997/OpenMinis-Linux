@@ -7,6 +7,13 @@ package com.openminis.app.security
 enum class PermissionMode {
     ALLOW_ALL,
     ASK,
+    /**
+     * [#31] Strict asking: EVERY tool call confirms, read-only tools
+     * included. Session tier `SessionPermissionMode.ASK` compiles to this;
+     * the pre-existing [ASK] keeps its read-only auto-allow and now backs
+     * the `SAFE_AUTO` tier. Sub-agent fences never use this value.
+     */
+    ASK_ALL,
     DENY_ALL,
     READ_ONLY,
     PLAN,

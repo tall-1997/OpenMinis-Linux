@@ -42,7 +42,7 @@ class SchemaMigrationDriftTest {
      * scripts/ci/check_schema_drift.py; a missing entry fails loudly rather
      * than replaying a half-empty chain.
      */
-    private val appDbSources = listOf("AppDatabase.kt", "AppMigrations.kt", "AuditMigrations.kt")
+    private val appDbSources = listOf("AppDatabase.kt", "AppMigrations.kt", "AuditMigrations.kt", "MemoryEmbeddingMigrations.kt")
     private val dbDir = resolveRepoFile(
         "src/main/java/com/openminis/app/data/db",
         "src/android/app/src/main/java/com/openminis/app/data/db",

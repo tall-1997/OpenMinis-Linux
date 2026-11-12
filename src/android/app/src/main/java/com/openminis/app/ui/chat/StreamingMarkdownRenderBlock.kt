@@ -108,6 +108,17 @@ internal fun RenderBlock(block: MdBlock) {
         }
 
         is MdBlock.CodeBlock -> {
+            // [#41] ```gen-ui fences become sandboxed interactive cards —
+            // but only once the fence CLOSED. While streaming, the growing
+            // block keeps the ordinary code path below (plain text), which
+            // matches the highlighter's own closed-only contract and keeps
+            // WebView churn out of the per-token re-render. Recognition
+            // rules live in [GenUi.isGenUiFence] (JVM-tested).
+            if (block.closed && GenUi.isGenUiFence(block.language)) {
+                GenUiCard(block)
+                ReportTranslateInkBlocked()
+                return
+            }
             val clipboardManager = LocalClipboardManager.current
             var copied by remember { mutableStateOf(false) }
             if (copied) {

@@ -27,6 +27,7 @@ import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Dashboard
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Dns
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Groups
@@ -127,6 +128,8 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     var showFeedbackSheet by remember { mutableStateOf(false) }
+    // [T-ssh-workspace] (#32) Inline host-management sheet (no nav route).
+    var showSshWorkspaceSheet by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
             MinisCenterTopBar(
@@ -263,6 +266,17 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.settings_section_tools),
                     onClick = onTerminalClick,
                 )
+                // [T-ssh-workspace] (#32) SSH host registry + connection test.
+                // Hosted inline as a sheet — AppNavigation is pinned at its
+                // architecture ceiling, so this destination does not get a
+                // nav route. Per-session binding lives in the chat menu.
+                SettingsRow(
+                    icon = Icons.Outlined.Dns,
+                    iconColor = IosTeal,
+                    title = stringResource(R.string.ssh_workspace_menu_title),
+                    subtitle = stringResource(R.string.ssh_hosts_row_subtitle),
+                    onClick = { showSshWorkspaceSheet = true },
+                )
                 // [T-tool-approval-removed] 审批门按 LO 裁决移除。
                 SettingsRow(
                     icon = Icons.Outlined.Language,
@@ -398,6 +412,12 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(24.dp))
         }
+    }
+
+    // [T-ssh-workspace] (#32) SSH hosts: add / test / remove. Inline sheet,
+    // same hosting style as the feedback sheet above.
+    if (showSshWorkspaceSheet) {
+        SshHostsManagerSheet(onDismiss = { showSshWorkspaceSheet = false })
     }
 
     if (showFeedbackSheet) {

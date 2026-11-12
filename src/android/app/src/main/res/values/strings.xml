@@ -443,7 +443,9 @@
     <string name="gate_approval_title">Tool needs approval</string>
     <string name="gate_approval_approve">Allow</string>
     <string name="gate_approval_deny">Deny</string>
-    <string name="gate_approval_allow_all">Allow all this session</string>
+    <!-- [#36] Three-state approval: the middle action allowlists this
+         (tool, args-gist) key for the rest of the session. -->
+    <string name="gate_approval_allow_all">Always allow this session (current target)</string>
     <string name="gate_intercept_denied">Blocked by SecurityGate</string>
     <string name="gate_intercept_rejected">Tool rejected</string>
     <string name="gate_intercept_dismiss">Dismiss</string>
@@ -525,8 +527,11 @@
     <string name="settings_storage_subtitle">Manage Ubuntu Linux rootfs and browse files</string>
     <string name="settings_section_permissions">Permissions</string>
     <string name="settings_permissions_subtitle">System privileges and per-tool access: accessibility, Shizuku, host su, privacy level. Agent permission for each tool is set on this page.</string>
-    <string name="chat_menu_perm_yoyo">YOYO · full auto</string>
-    <string name="chat_menu_perm_ask">Approval · confirm actions</string>
+    <!-- [#31] Four-tier session tool gate (cycle order ASK → SAFE_AUTO → YOLO → OFF). -->
+    <string name="chat_menu_perm_yoyo">YOLO · full auto</string>
+    <string name="chat_menu_perm_safe_auto">Safe auto · read-only tools run free</string>
+    <string name="chat_menu_perm_ask">Ask · confirm every call</string>
+    <string name="chat_menu_perm_off">Off · deny all tools</string>
 <string name="settings_section_logs">Logs</string>
     <string name="settings_logs_subtitle">View and export app logs</string>
     <string name="settings_section_about">About</string>
@@ -605,6 +610,22 @@
     <string name="token_usage_cache_hit_rate">Per-Turn Hit Rate</string>
     <string name="token_usage_section_agent_loop">Agent Loop</string>
     <string name="token_usage_total_loops">Total Loops</string>
+    <!-- [#25] Context breakdown sheet — prompt composition + per-block estimates -->
+    <string name="chat_menu_context_usage">Context Breakdown</string>
+    <string name="context_usage_sheet_title">Context Breakdown</string>
+    <string name="context_block_system">System prompt &amp; tools</string>
+    <string name="context_block_skills_mcps">Skills &amp; MCPs</string>
+    <string name="context_block_memory">Memory injection</string>
+    <string name="context_block_runtime">This turn’s temporary context</string>
+    <string name="context_block_goal_plan">Goal &amp; plan injection</string>
+    <string name="context_block_history">History window</string>
+    <string name="context_block_attachments">Attachments &amp; images</string>
+    <string name="context_usage_note_estimate">Rough estimates (±10%); refreshed when this sheet opens</string>
+    <!-- [#41] Gen UI card — sandboxed interactive HTML from the agent -->
+    <string name="gen_ui_card_label">Interactive card</string>
+    <string name="gen_ui_view_source">View source</string>
+    <string name="gen_ui_view_render">Show render</string>
+    <string name="gen_ui_view_fullscreen">Fullscreen</string>
     <string name="common_on">On</string>
     <string name="common_off">Off</string>
     <string name="common_yes">Yes</string>
@@ -937,6 +958,9 @@
     <string name="env_var_privacy_header">Privacy</string>
     <string name="env_var_privacy_toggle">Privacy Mode</string>
     <string name="env_var_privacy_footer">When enabled, any environment variable value that appears in shell-execute output is replaced with a masked form (e.g. `sk-1********ajhks`) before reaching the model. Values shorter than 8 characters become all `*`. The user-visible output in chat is unchanged.</string>
+    <!-- [#28] Outbound privacy masking (default OFF, opt-in). -->
+    <string name="outbound_mask_toggle">Outbound privacy masking</string>
+    <string name="outbound_mask_footer">Opt-in shape masking: key-shaped strings (code, JWT/base64), e-mails and phone-like numbers become placeholders. The embedding API key below is stored in plain text inside app-private prefs. Device history unchanged.</string>
     <string name="env_var_platform_header">Platform Integrations</string>
     <string name="env_var_platform_tier_2">Complete</string>
     <string name="env_var_platform_tier_1">Read-only</string>
@@ -2619,6 +2643,7 @@
     <string name="usage_label_output_short">Output</string>
     <string name="plan_board_all_done">All steps completed</string>
     <string name="cd_plan_board_toggle">Expand or collapse the plan board</string>
+    <string name="cd_plan_step_retry">Retry this failed step</string>
     <string name="cd_goal_header">Open goal details</string>
     <string name="cd_goal_status_active">Goal in progress</string>
     <string name="cd_goal_status_paused">Goal paused</string>
@@ -2799,6 +2824,12 @@
     <string name="token_usage_saver_folded">Folded tool results</string>
     <string name="token_usage_saver_saved">Saved this turn</string>
     <string name="memory_center_overview">At a glance</string>
+    <string name="memory_embedding_header">Semantic recall</string>
+    <string name="memory_embedding_toggle">Embedding semantic recall</string>
+    <string name="memory_embedding_base_url">Embeddings base URL</string>
+    <string name="memory_embedding_api_key">Embeddings API key</string>
+    <string name="memory_embedding_model">Embedding model</string>
+    <string name="memory_embedding_footer">Off by default. When on, memory recall adds vector-similarity search through an OpenAI-compatible embeddings endpoint on top of keyword search. Changes take effect only after the app process restarts.</string>
     <string name="memory_center_stat_memory">Memory files</string>
     <string name="memory_center_stat_recalls">Recalled entries</string>
     <string name="memory_center_stat_failures">Blocked repeats</string>
@@ -2874,4 +2905,60 @@
     <string name="sessionlist_archive">Archive</string>
     <string name="sessionlist_unarchive">Unarchive</string>
     <string name="sessionlist_section_archived">Archived (%1$d)</string>
+    <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
+    <string name="provider_list_export_providers">Export Providers</string>
+    <string name="provider_transfer_export_title">Export Providers</string>
+    <string name="provider_transfer_export_body">%1$d providers will be exported to a JSON file.</string>
+    <string name="provider_transfer_include_keys">Include API keys</string>
+    <string name="provider_transfer_include_keys_risk">API keys are written to the file in plain text. Anyone who obtains this file can use your keys — keep it safe and delete it after importing.</string>
+    <string name="provider_transfer_export">Export</string>
+    <string name="provider_transfer_export_success">Exported %1$d providers</string>
+    <string name="provider_transfer_export_failed">Export failed</string>
+    <string name="provider_transfer_import_ok">Imported %1$d providers</string>
+    <string name="provider_transfer_import_partial">Imported %1$d providers, %2$d failed</string>
+    <string name="provider_transfer_import_partial_detail">Imported %1$d providers, %2$d failed: %3$s</string>
+
+    <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
+    <string name="ssh_workspace_menu_title">SSH Workspace</string>
+    <string name="ssh_workspace_binding_title">SSH workspace</string>
+    <string name="ssh_workspace_bound_to">Bound to %1$s (%2$s)</string>
+    <string name="ssh_workspace_bound_local">Working in the local sandbox</string>
+    <string name="ssh_workspace_option_local">Local sandbox</string>
+    <string name="ssh_workspace_option_local_subtitle">Shell runs on this device\'s Linux sandbox</string>
+    <string name="ssh_workspace_no_hosts">No SSH hosts yet — add one in Settings → SSH Workspace.</string>
+    <string name="ssh_workspace_shell_only_note">SSH workspaces support shell commands only; file tools are refused while a host is bound.</string>
+    <string name="ssh_workspace_shell_only">SSH workspace supports shell commands only — \'%1$s\' was refused.</string>
+    <string name="ssh_workspace_shell_only_hint">Run remote commands with shell_execute, or unbind this session via chat menu → SSH Workspace to restore local file tools.</string>
+    <string name="ssh_hosts_title">SSH hosts</string>
+    <string name="ssh_hosts_subtitle">Remote hosts the agent can reach over SSH. Credentials are stored encrypted and never displayed.</string>
+    <string name="ssh_hosts_row_subtitle">Add hosts, test connections, manage host keys</string>
+    <string name="ssh_hosts_empty">No hosts yet.</string>
+    <string name="ssh_hosts_add">Add host</string>
+    <string name="ssh_hosts_add_cancel">Cancel</string>
+    <string name="ssh_hosts_test">Test connection</string>
+    <string name="ssh_hosts_testing">Testing…</string>
+    <string name="ssh_hosts_test_ok">Connection OK</string>
+    <string name="ssh_hosts_test_failed">Connection failed</string>
+    <string name="ssh_hosts_forget_key">Forget host key</string>
+    <string name="ssh_hosts_remove">Remove</string>
+    <string name="ssh_hosts_pinned">Host key pinned: %1$s…</string>
+    <string name="ssh_field_name">Name (letters/digits/._-)</string>
+    <string name="ssh_field_hostname">Hostname or IP</string>
+    <string name="ssh_field_port">Port</string>
+    <string name="ssh_field_username">Username</string>
+    <string name="ssh_auth_password">Password</string>
+    <string name="ssh_auth_key">Private key</string>
+    <string name="ssh_field_password">Password</string>
+    <string name="ssh_field_private_key">PEM private key</string>
+    <string name="ssh_field_passphrase">Key passphrase (optional)</string>
+    <string name="ssh_save">Save</string>
+
+    <!-- [T-handsfree-loop] (#40) Hands-free continuous voice conversation -->
+    <string name="handsfree_toggle">Hands-free</string>
+    <string name="handsfree_state_starting">Starting…</string>
+    <string name="handsfree_state_listening">Listening…</string>
+    <string name="handsfree_state_thinking">Thinking…</string>
+    <string name="handsfree_state_speaking">Speaking…</string>
+    <string name="handsfree_exit_recognition">Hands-free stopped: speech recognition failed repeatedly. Tap Hands-free to try again.</string>
+    <string name="handsfree_exit_tts">Hands-free stopped: replies could not be read aloud. Tap Hands-free to try again.</string>
 </resources>

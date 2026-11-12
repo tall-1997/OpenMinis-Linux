@@ -247,10 +247,11 @@ object ScheduledAgentRunner {
     /**
      * [T-scheduled-new-session-permission] Create the session row for a
      * NewSession fire and write through everything the task pinned:
-     *   - tool-gate permission mode → `permission_mode` column ("YOYO" or
-     *     "ASK", same tokens ChatViewModel.setSessionPermissionMode writes —
-     *     null on the task normalizes to ASK, so pre-feature tasks keep the
-     *     app-default gate),
+     *   - tool-gate permission mode → `permission_mode` column (canonical
+     *     four-tier tokens, e.g. "YOLO"/"SAFE_AUTO"; historical "YOYO"/"ASK"
+     *     inputs normalize — ASK means today's SAFE_AUTO, the gate behaviour
+     *     the two-tier era actually delivered — so pre-feature tasks keep
+     *     the app-default gate),
      *   - model binding (pre-existing behaviour),
      *   - session group ("folder") → filed via [ChatRepository.setFolderForSessions],
      *     the same path the chat screen's "New Chat in Group" uses, so the
