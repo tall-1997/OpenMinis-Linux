@@ -469,43 +469,6 @@ object SubAgentBatchRegistry {
         if (touched > 0) saveLocked(sessionId, context, out)
         touched
     }
-
-    /**
-     * [T-lane-awareness] What is in flight right now, rendered for the request.
-     *
-     * A wave used to be visible only in the tool result that launched it: once
-     * compaction dropped those blocks, the model could not tell "I already sent
-     * three workers at this" from "nobody is on it" and dispatched the same work
-     * again. The prototype closes the same hole by telling the router to check
-     * ticket summaries after compaction (`prompts/dispatch.md:44`); rendering
-     * from the registry makes it structural instead — nothing to remember.
-     *
-     * Null when no lane is pending or running, so an idle session pays nothing.
-     */
-    fun renderInFlight(
-        sessionId: String,
-        context: Context?,
-        maxBriefChars: Int = 240,
-    ): String? {
-        val lanes = unfinished(sessionId, context).flatMap { batch ->
-            batch.lanes.filter { !it.finished }.map { lane -> batch to lane }
-        }
-        if (lanes.isEmpty()) return null
-        return buildString {
-            append("<in_flight>\n")
-            append("Sub-agents already working. Do not re-dispatch these briefs; collect them with check_agent:\n")
-            lanes.take(8).forEach { (batch, lane) ->
-                append("- ${lane.kind}")
-                if (lane.title.isNotBlank()) append(" (${lane.title})")
-                append(" [${lane.state}] batch ${batch.id.take(8)}: ")
-                append(lane.promptDigest.replace('\n', ' ').take(maxBriefChars))
-                append("\n")
-            }
-            if (lanes.size > 8) append("- ... and ${lanes.size - 8} more\n")
-            append("</in_flight>")
-        }
-    }
-
     fun render(batch: Batch, verbose: Boolean = false): String = buildString {
         append("dispatch ").append(batch.id.take(8))
         append(if (batch.background) " (background)" else " (inline)")

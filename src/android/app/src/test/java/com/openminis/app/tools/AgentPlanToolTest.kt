@@ -551,18 +551,6 @@ class AgentPlanToolTest {
         assertTrue(result.output, result.output.contains("(0/3 done)"))
     }
 
-    @Test
-    fun snapshotDropsDescriptionsOfDoneItemsButKeepsOpenOnes() {
-        AgentPlanStore.clear(sidA, null)
-        val done = AgentPlanStore.add(sidA, null, "landed", "DONEDESC")
-        AgentPlanStore.add(sidA, null, "open", "OPENDESC")
-        AgentPlanStore.update(sidA, null, done.id, status = "done")
-        val snapshot = AgentPlanStore.boardSnapshotPrompt(AgentPlanStore.list(sidA, null))
-        assertNotNull(snapshot)
-        assertFalse(snapshot!!, snapshot.contains("DONEDESC"))
-        assertTrue(snapshot, snapshot.contains("OPENDESC"))
-    }
-
     private companion object {
         const val FIXED_NOW = 1_700_000_000_000L
     }

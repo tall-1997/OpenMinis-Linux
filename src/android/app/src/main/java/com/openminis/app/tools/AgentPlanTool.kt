@@ -405,36 +405,6 @@ object AgentPlanStore {
             }
         }
     }
-
-    /**
-     * Live board snapshot for the system prompt so the model sees the current
-     * progress every request without a tool round-trip. Empty board renders
-     * nothing (no section at all) to keep the prompt lean. Moved here from
-     * the deleted PlanModeStore: it renders the board, not any mode.
-     */
-    fun boardSnapshotPrompt(plans: List<Plan>): String? {
-        if (plans.isEmpty()) return null
-        // A finished board has nothing to advance: announcing it would tell the
-        // model to keep pushing items that already landed, and the card is on
-        // its way out. The empty-board "create one" contract lives in the
-        // agent_plan tool description, which is in the schema every turn.
-        if (plans.all { it.status == "done" }) return null
-        return buildString {
-            append("<plan_board>\n")
-            append("Current plan board. Advance it with agent_plan — target an item by its number (update id=\"2\", status=\"done\"), by its title, or rebuild the whole board with op=replace; the user sees it live:\n")
-            plans.forEachIndexed { i, p ->
-                append("${i + 1}. [${p.status}] ${p.title}")
-                // [T-plan-snapshot-diet] A landed item's description is
-                // history, not working state: this snapshot rides every
-                // turn, so done rows carry their title only. Open rows keep
-                // the description — it is the spec the model works from next.
-                if (p.description.isNotBlank() && p.status != "done") append(" — ${p.description}")
-                append("\n")
-            }
-            append("</plan_board>")
-        }
-    }
-
     private val DONE_ALIASES = setOf("done", "completed", "complete", "finished")
     private val ACTIVE_ALIASES = setOf("active", "in_progress", "inprogress", "in-progress", "doing")
     private val FAILED_ALIASES = setOf("failed", "error", "cancelled", "canceled", "blocked")

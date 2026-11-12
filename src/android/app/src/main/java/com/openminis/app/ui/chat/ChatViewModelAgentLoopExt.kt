@@ -263,7 +263,6 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         sanitizeAgentHistory()
         // [T-work-report-staleness] Per-turn count (retries re-collect the same request
         // and must not count): STALE_REQUEST_LIMIT unrefreshed rounds degrades the snapshot.
-        com.openminis.app.tools.AgentReportStore.noteRequestServed(activeSessionId)
 
         // Context window management: offload large tool outputs in older
         // messages to disk when this model's window threshold is crossed;

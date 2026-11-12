@@ -13,13 +13,58 @@ package com.openminis.app.data.model
  */
 object ToolIdNormalization {
 
-    /** 发送前的入口：只改写消息里的工具 ID，其余字段原样保留。 */
+    /**
+     * 发送前的入口：改写消息里的工具 ID，并把相邻的同角色 user 消息合并成一条。
+     *
+     * 合并的根因不是样式问题：宿主写入的一次性通知（召回、目标、计划重试）是
+     * user 角色，紧跟在工具结果的 user 载体之后。有的 provider 要求 user /
+     * assistant 交替，两条相邻 user 会被 400 拒绝或语义错位；合并成一条
+     * user（工具结果在前、通知文本在后）是所有 provider 都接受的形式，
+     * 也正是 ZCode 把提醒并入 tool result 同一消息的做法。
+     */
     fun normalizeMessages(messages: List<LLMMessage>): List<LLMMessage> {
         val normalized = normalize(messages.map { it.contentParts })
-        if (normalized == messages.map { it.contentParts }) return messages
-        return messages.mapIndexed { index, message ->
-            message.copy(contentParts = normalized[index])
+        val idFixed = if (normalized == messages.map { it.contentParts }) {
+            messages
+        } else {
+            messages.mapIndexed { index, message ->
+                message.copy(contentParts = normalized[index])
+            }
         }
+        return mergeConsecutiveUserTurns(idFixed)
+    }
+
+    /**
+     * Collapse consecutive USER messages into one. Only USER turns merge and
+     * their text parts are appended in order; assistant/system turns and tool
+     * parts keep their own positions.
+     */
+    fun mergeConsecutiveUserTurns(messages: List<LLMMessage>): List<LLMMessage> {
+        if (messages.size < 2) return messages
+        val out = ArrayList<LLMMessage>(messages.size)
+        for (message in messages) {
+            val previous = out.lastOrNull()
+            if (previous == null ||
+                previous.role != LLMMessage.Role.USER ||
+                message.role != LLMMessage.Role.USER
+            ) {
+                out += message
+                continue
+            }
+            val appended = if (message.contentParts.isEmpty()) {
+                listOf(AgentContentPart.Text(message.content))
+            } else {
+                message.contentParts
+            }
+            val combinedText = listOf(previous.content, message.content)
+                .filter { it.isNotBlank() }
+                .joinToString("\n\n")
+            out[out.lastIndex] = previous.copy(
+                content = combinedText,
+                contentParts = previous.contentParts + appended,
+            )
+        }
+        return out
     }
 
     fun normalize(history: List<List<AgentContentPart>>): List<List<AgentContentPart>> {
