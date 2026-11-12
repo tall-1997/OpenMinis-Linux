@@ -223,11 +223,37 @@ internal class ChatViewModelStallGuard(
             return DispatchedToolCall(name, Digest.sha256Hex("$name:${canonical.toString()}"))
         }
 
-        /** Result-signature hash over one turn's assembled tool results. */
+        /**
+         * Result-signature hash over one turn's assembled tool results.
+         *
+         * [T-goal-poll-counter-drift] Volatile accounting fields are scrubbed
+         * before hashing: usage counters (`tokens=`), wall-clock timers
+         * (`elapsed=`) and clock fields change on EVERY call by construction,
+         * so a state-read tool whose only varying output is a counter
+         * (update_goal op=get → tokens=/elapsed=) would otherwise hash
+         * differently on every turn, reset the frozen-repeat streak and mute
+         * the guard exactly where it is needed most (the 2026-11-12 7×
+         * update_goal furnace burned ~440k tokens under a live guard).
+         * Real progress still resets the streak: any content change outside
+         * these accounting patterns produces a new hash.
+         */
         internal fun resultShaOf(resultParts: List<String>): String? {
             if (resultParts.isEmpty()) return null
-            return Digest.sha256Hex(resultParts.joinToString("\u0000"))
+            return Digest.sha256Hex(resultParts.joinToString("\u0000") { part -> scrubVolatile(part) })
         }
+
+        /** Accounting fields that tick on every call without carrying progress. */
+        private val volatileNoise = listOf(
+            Regex("""tokens=\d+"""),
+            Regex("""elapsed=\d+ms"""),
+            Regex("""timestamp_ms=\d+"""),
+            Regex("""nextTriggerMs=\d+"""),
+            Regex("""\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?(\.\d+)?(Z|[+-]\d{2}:?\d{2})?"""),
+        )
+
+        /** Collapse accounting/clock noise so counter drift alone reads as frozen. */
+        private fun scrubVolatile(text: String): String =
+            volatileNoise.fold(text) { acc, pattern -> acc.replace(pattern, "\u0001") }
     }
 }
 
