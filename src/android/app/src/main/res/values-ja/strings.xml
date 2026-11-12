@@ -181,8 +181,8 @@
     <string name="zen_deleted_models_title">削除した無料モデルを復元（%1$d）</string>
     <string name="zen_deleted_models_subtitle">このプロバイダーで記録された削除を取り消します</string>
     <string name="provider_sync_mark_not_found">404 not found</string>
-    <string name="provider_sync_mark_connection">Connection failed</string>
-    <string name="provider_sync_mark_invalid">Invalid response</string>
+    <string name="provider_sync_mark_connection">接続失敗</string>
+    <string name="provider_sync_mark_invalid">無効な応答</string>
     <string name="add_provider_voice_templates_footer">音声認識と音声合成のプロバイダーです。プロバイダーの種類とベース URL は入力済みなので、API キーを追加するだけで使えます。</string>
     <string name="add_provider_voice_capability_tts">音声合成（TTS）</string>
     <string name="add_provider_voice_capability_asr">音声認識（ASR）</string>
@@ -257,8 +257,8 @@
     <string name="soul_icon_choose_image">画像を選択</string>
     <string name="soul_icon_image_hint">正方形に切り抜かれ、角が丸められます</string>
     <string name="soul_icon_use_default">デフォルトを使用</string>
-    <string name="soul_icon_use_model">Use Model Icon</string>
-    <string name="soul_icon_use_model_hint">Follow the vendor icon of the running model</string>
+    <string name="soul_icon_use_model">モデルアイコンを使用</string>
+    <string name="soul_icon_use_model_hint">実行中モデルのベンダーアイコンに追従</string>
     <string name="soul_icon_emoji_title">アイデンティティのアイコン</string>
     <string name="soul_icon_emoji_field">または絵文字を入力</string>
     <string name="soul_icon_set">設定</string>
@@ -752,8 +752,8 @@
     <string name="shizuku_state_need_permission">認可が必要です</string>
     <string name="shizuku_state_need_permission_subtitle">サービスは実行中ですが、Minis Ultra はまだ認可されていません。</string>
     <string name="shizuku_state_ready">準備完了</string>
-    <string name="shizuku_ready_subtitle">version=%1$d, uid=%2$d</string>
-    <string name="shizuku_ready_subtitle_sui">Sui (root) · version=%1$d, uid=%2$d</string>
+    <string name="shizuku_ready_subtitle">バージョン=%1$d、uid=%2$d</string>
+    <string name="shizuku_ready_subtitle_sui">Sui（root）· バージョン=%1$d、uid=%2$d</string>
     <string name="shizuku_badge_not_installed">未インストール</string>
     <string name="shizuku_badge_not_running">停止中</string>
     <string name="shizuku_badge_need_permission">要認可</string>
@@ -909,7 +909,7 @@
     <string name="provider_list_add_provider">AIプロバイダーを追加</string>
     <string name="provider_list_no_providers_configured">AIプロバイダーが設定されていません</string>
     <string name="provider_list_add_a_provider_to_get_started">開始するにはAIプロバイダーを追加してください。</string>
-    <string name="provider_list_import_provider">Import Provider</string>
+    <string name="provider_list_import_provider">プロバイダーをインポート</string>
     <string name="share_provider_json_title">プロバイダー設定を検出しました</string>
     <string name="share_expired_toast">共有内容の有効期限が切れました。もう一度共有してください。</string>
     <string name="share_provider_json_message">この JSON ファイルはエクスポートされたプロバイダーのようです。どうしますか？</string>
@@ -950,7 +950,7 @@
     <string name="provider_detail_refresh_models">モデルを更新</string>
     <string name="provider_detail_add_custom_model">カスタムモデルを追加</string>
     <string name="provider_detail_delete_provider">AIプロバイダーを削除</string>
-    <string name="provider_detail_delete_model">Delete Model</string>
+    <string name="provider_detail_delete_model">モデルを削除</string>
     <string name="provider_detail_hide_model">モデルを非表示</string>
     <string name="provider_detail_show_model">モデルを表示</string>
     <string name="provider_detail_sign_out">サインアウト</string>
@@ -984,7 +984,7 @@
     <string name="add_provider_signing_in">サインイン中…</string>
     <string name="add_provider_oauth_network_unreachable">サインインサーバーに接続できませんでした。ネットワークまたはプロキシの設定を確認して、もう一度お試しください。</string>
     <string name="add_provider_or_configure_manually">または手動で設定</string>
-    <string name="add_provider_for_third_party_coding_plans_e_g_minimax">For third-party Coding Plans (e.g. MiniMax, Kimi) or compatible proxy endpoints, enter the API base URL and bearer token manually.</string>
+    <string name="add_provider_for_third_party_coding_plans_e_g_minimax">サードパーティ Coding Plans（MiniMax、Kimi など）や互換プロキシエンドポイントでは、API base URL と Bearer トークンを手動入力してください。</string>
     <string name="add_provider_bearer_token">Bearer Token</string>
     <string name="add_custom_model_model_id">モデルID</string>
     <string name="add_custom_model_display_name_optional">表示名（省略可）</string>
@@ -1759,7 +1759,7 @@
     <string name="dev_suite_installing">インストール中…</string>
     <string name="dev_suite_failed">失敗</string>
     <string name="dev_suite_view_details">Details</string>
-    <string name="dev_suite_failure_details">Installation failure details</string>
+    <string name="dev_suite_failure_details">インストール失敗の詳細</string>
     <string name="dev_suite_ready">準備完了</string>
     <string name="dev_suite_not_installed">未導入</string>
     <string name="dev_suite_required">必須</string>
@@ -2135,18 +2135,18 @@
     <!-- Queued-message edit sheet + git diff truncation notice -->
     <string name="chat_queued_edit_title">キュー内のメッセージを編集</string>
     <string name="git_panel_diff_truncated">Diff は 200,000 文字で切り詰められました — 全文はリポジトリ内のファイル自体にあります。</string>
-    <string name="voice_service_no_audio_models">No audio models are listed for this provider. Model lists from some providers (Bailian, SiliconFlow) do not declare audio support — add the ASR/TTS model as a custom model with the audio modality, or choose another voice service.</string>
-    <string name="voice_error_network">Voice recognition failed: network error. Check your connection, or switch to the on-device engine or another provider.</string>
-    <string name="voice_error_transcription">Voice recognition returned no text. Speak again, or check the transcription provider\'s model and API key.</string>
-    <string name="voice_error_busy">The speech recognizer is busy. Wait a moment and try again.</string>
-    <string name="voice_error_audio">Audio capture failed. Check the microphone permission and make sure no other app is using the mic.</string>
-    <string name="voice_error_language">The selected language is not supported by this engine. Pick another language.</string>
-    <string name="voice_error_unknown">Voice recognition failed: %1$s</string>
-    <string name="thinking_rules_cache_not_ready">Custom rules are not active yet (%1$s). Requests currently use the built-in defaults; the next message after the cache loads will apply your rules.</string>
+    <string name="voice_service_no_audio_models">このプロバイダーには音声モデルが登録されていません。一部プロバイダー（Bailian、SiliconFlow）のモデルリストは音声対応を宣言しないため、ASR/TTS モデルを音声モダリティ付きのカスタムモデルとして追加するか、別の音声サービスを選んでください。</string>
+    <string name="voice_error_network">音声認識失敗: ネットワークエラー。接続を確認するか、オンデバイスエンジンまたは別のプロバイダーに切り替えてください。</string>
+    <string name="voice_error_transcription">音声認識がテキストを返しませんでした。もう一度話すか、書き起こしプロバイダーのモデルと API キーを確認してください。</string>
+    <string name="voice_error_busy">音声認識エンジンがビジー状態です。しばらく待って再試行してください。</string>
+    <string name="voice_error_audio">音声キャプチャに失敗しました。マイク権限を確認し、他のアプリがマイクを使用していないか確認してください。</string>
+    <string name="voice_error_language">選択した言語はこのエンジンでサポートされていません。別の言語を選んでください。</string>
+    <string name="voice_error_unknown">音声認識に失敗しました: %1$s</string>
+    <string name="thinking_rules_cache_not_ready">カスタムルールはまだ有効化されていません（%1$s）。現在のリクエストは内蔵デフォルトを使用中です。キャッシュ読込後の次のメッセージからルールが適用されます。</string>
     <string name="skill_display_name_skill_creator">Skill Creator</string>
     <string name="skill_display_name_android_sdk_mirrors">Android SDK Mirrors</string>
-    <string name="provider_detail_force_thinking">Force extended thinking</string>
-    <string name="provider_detail_force_thinking_footer">For Anthropic-compatible relays only. Sends thinking:{type:"enabled",budget_tokens:N} even when the model catalog says the model cannot reason. Use when the model supports thinking but the catalog entry is missing or wrong.</string>
+    <string name="provider_detail_force_thinking">拡張思考を強制</string>
+    <string name="provider_detail_force_thinking_footer">Anthropic 互換リレー専用。モデルカタログが推論非対応と示していても thinking:{type:"enabled",budget_tokens:N} を送信します。モデルが思考をサポートしているのにカタログ情報が欠落・誤りの場合に使用してください。</string>
     <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
     <string name="provider_list_export_providers">プロバイダーをエクスポート</string>
     <string name="provider_transfer_export_title">プロバイダーをエクスポート</string>
@@ -2206,51 +2206,52 @@
     <!-- [T-untranslated] English fallback for keys added by PR #325; pending translation -->
     <string name="a11y_app_policy_apps">Apps</string>
     <string name="a11y_app_policy_apps_count">%1$d listed</string>
-    <string name="a11y_app_policy_apps_hint">One Android package name per line, e.g. com.tencent.mm</string>
-    <string name="a11y_app_policy_blocklist">List is a blocklist</string>
-    <string name="a11y_app_policy_blocklist_sub">Off = only listed apps are allowed. On = listed apps are blocked.</string>
-    <string name="a11y_app_policy_enabled">Restrict by app</string>
-    <string name="a11y_app_policy_enabled_sub">Check the foreground package before every screen read or tap</string>
-    <string name="a11y_app_policy_footer">When enabled, ui_read and ui_action are checked against the current foreground app before they run. Apps outside the list (allow mode) or inside it (block mode) are refused with a visible message. The Minis app itself is always allowed.</string>
-    <string name="a11y_app_policy_section">Accessibility app access</string>
-    <string name="boot_hook_enable">Run /var/minis/boot.sh at startup</string>
-    <string name="boot_hook_enable_sub">Executes in the sandbox after the Linux rootfs boots</string>
-    <string name="boot_hook_footer">Off by default. This path is inside the writable sandbox, so any shell-capable agent can replace the script — enabling this lets such a file run silently on every launch. The switch is checked again immediately before execution, and the script\\\'s first-seen time plus size/mtime changes are written to the app log. Takes effect at the next launch.</string>
-    <string name="boot_hook_last_status">Last run</string>
-    <string name="boot_hook_section">Boot hook</string>
-    <string name="lifecycle_hooks_command_hint">One command line. A script path is usually best, e.g. bash /var/minis/hooks/on-response.sh. Leave empty to remove the hook.</string>
-    <string name="lifecycle_hooks_enable">Enable lifecycle hooks</string>
-    <string name="lifecycle_hooks_enable_sub">Execute the scripts below on their events</string>
-    <string name="lifecycle_hooks_events_footer">Scripts run in the sandbox, serialized on their own lane, with a 20-second timeout. Failures are logged and never block the chat.</string>
-    <string name="lifecycle_hooks_help_body">Each script receives MINIS_HOOK_EVENT, MINIS_HOOK_SESSION_ID and MINIS_HOOK_DETAIL. Scripts are one-shot PRoot processes: /proc of other commands is not visible across invocations and flock is unreliable, so use files for cross-run state. OnResponse fires once per completed agent reply; OnSessionEnd fires when the chat is deleted.</string>
-    <string name="lifecycle_hooks_help_header">Environment &amp; caveats</string>
-    <string name="lifecycle_hooks_master_footer">Off by default. While off, configured scripts are kept but never executed.</string>
-    <string name="lifecycle_hooks_not_set">Not set</string>
-    <string name="lifecycle_hooks_section_events">Events</string>
-    <string name="lifecycle_hooks_section_master">Master switch</string>
-    <string name="lifecycle_hooks_title">Lifecycle Hooks</string>
-    <string name="network_trusted_ca_count">%1$d certificate(s) imported</string>
-    <string name="network_trusted_ca_duplicate">That certificate is already imported.</string>
-    <string name="network_trusted_ca_failed">Could not read that file as a PEM/X.509 certificate.</string>
-    <string name="network_trusted_ca_footer">For a provider whose HTTPS endpoint uses a self-signed or private CA. The certificate is stored only inside Minis and is added to Android\\\'s trust anchors for this app; normal certificate and hostname checks stay on. It takes effect on the next provider request — no restart is needed.</string>
-    <string name="network_trusted_ca_import">Import PEM Certificate</string>
-    <string name="network_trusted_ca_imported">Imported %1$d certificate(s). Retry the request.</string>
-    <string name="network_trusted_ca_none">No certificates imported</string>
-    <string name="network_trusted_ca_remove_all">Remove All</string>
-    <string name="network_trusted_ca_removed">Imported certificates removed.</string>
-    <string name="network_trusted_ca_title">Trusted Certificates</string>
-    <string name="provider_detail_custom_headers">Custom request headers</string>
-    <string name="provider_detail_custom_headers_footer">One “Name: value” per line. Applied to chat, /models and Responses requests for this provider only. Host, Content-Length and Connection are managed by the HTTP client and cannot be overridden.</string>
+    <string name="a11y_app_policy_apps_hint">1行に1つの Android パッケージ名（例: com.tencent.mm）</string>
+    <string name="a11y_app_policy_blocklist">リストをブロックリストとして使用</string>
+    <string name="a11y_app_policy_blocklist_sub">オフ = リスト内のアプリのみ許可。オン = リスト内のアプリをブロック。</string>
+    <string name="a11y_app_policy_enabled">アプリごとに制限</string>
+    <string name="a11y_app_policy_enabled_sub">画面読み取りやタップの前に、前面アプリのパッケージ名を確認</string>
+    <string name="a11y_app_policy_footer">有効にすると、ui_read と ui_action は実行前に現在の前面アプリと照合されます。リスト外（許可モード）またはリスト内（ブロックモード）のアプリは可視メッセージ付きで拒否されます。Minis アプリ自体は常に許可されます。</string>
+    <string name="a11y_app_policy_section">ユーザー補助アプリのアクセス範囲</string>
+    <string name="boot_hook_enable">起動時に /var/minis/boot.sh を実行</string>
+    <string name="boot_hook_enable_sub">Linux rootfs 起動完了後、サンドボックス内で実行</string>
+    <string name="boot_hook_footer">デフォルトでオフ。このパスは書き込み可能なサンドボックス内にあるため、shell を実行できるエージェントなら誰でもスクリプトを差し替えられます——有効にすると、このファイルが毎回の起動時にサイレント実行されます。実行直前にスイッチが再チェックされ、スクリプトの初回検出時刻とサイズ/mtime 変化はアプリログに記録されます。次回起動時に有効になります。</string>
+    <string name="boot_hook_last_status">前回の実行</string>
+    <string name="boot_hook_section">起動フック</string>
+    <string name="lifecycle_hooks_command_hint">コマンド1行。通常はスクリプトパスが最適です（例: bash /var/minis/hooks/on-response.sh）。空欄でフックを削除。</string>
+    <string name="lifecycle_hooks_enable">ライフサイクルフックを有効化</string>
+    <string name="lifecycle_hooks_enable_sub">下記スクリプトを各イベントで実行</string>
+    <string name="lifecycle_hooks_events_footer">スクリプトはサンドボックス内で直列実行され（専用レーン）、タイムアウトは20秒です。失敗はログに記録されるだけで、チャットはブロックされません。</string>
+    <string name="lifecycle_hooks_help_body">各スクリプトは MINIS_HOOK_EVENT、MINIS_HOOK_SESSION_ID、MINIS_HOOK_DETAIL を受け取ります。スクリプトは使い捨ての PRoot プロセスです：呼び出しをまたいで他コマンドの /proc は見えず、flock も信頼できません。実行をまたぐ状態はファイルで保存してください。OnResponse はエージェントの応答完了ごとに1回、OnSessionEnd はチャット削除時に発火します。</string>
+    <string name="lifecycle_hooks_help_header">環境と注意点</string>
+    <string name="lifecycle_hooks_master_footer">デフォルトでオフ。オフの間は設定済みスクリプトが保持されますが、実行されません。</string>
+    <string name="lifecycle_hooks_not_set">未設定</string>
+    <string name="lifecycle_hooks_section_events">イベント</string>
+    <string name="lifecycle_hooks_section_master">マスタースイッチ</string>
+    <string name="lifecycle_hooks_title">ライフサイクルフック</string>
+    <string name="network_trusted_ca_count">%1$d 件の証明書をインポート済み</string>
+    <string name="network_trusted_ca_duplicate">その証明書は既にインポートされています。</string>
+    <string name="network_trusted_ca_failed">そのファイルを PEM/X.509 証明書として読み込めませんでした。</string>
+    <string name="network_trusted_ca_footer">HTTPS エンドポイントが自己署名またはプライベート CA を使うプロバイダー向け。証明書は Minis 内部にのみ保存され、このアプリ用の Android トラストアンカーに追加されます。通常の証明書・ホスト名検証は有効のままです。次回のプロバイダーリクエストから有効になり、再起動は不要です。</string>
+    <string name="network_trusted_ca_import">PEM 証明書をインポート</string>
+    <string name="network_trusted_ca_imported">%1$d 件の証明書をインポートしました。リクエストを再試行してください。</string>
+    <string name="network_trusted_ca_none">証明書はインポートされていません</string>
+    <string name="network_trusted_ca_remove_all">すべて削除</string>
+    <string name="network_trusted_ca_removed">インポート済み証明書を削除しました。</string>
+    <string name="network_trusted_ca_title">信頼する証明書</string>
+    <string name="provider_detail_custom_headers">カスタムリクエストヘッダー</string>
+    <string name="provider_detail_custom_headers_footer">1行に1つの「名前: 値」。このプロバイダーの chat、/models、Responses リクエストにのみ適用されます。Host、Content-Length、Connection は HTTP クライアントが管理するため上書きできません。</string>
     <string name="provider_detail_custom_headers_placeholder">X-Custom-Header: value</string>
-    <string name="provider_detail_opencode_session_footer">Off by default. When on, every chat request to this custom endpoint carries a stable per-conversation ID (x-opencode-session) so OpenCode-compatible relays can route and cache it. Only enable it for a gateway you trust: the ID identifies the conversation across turns.</string>
-    <string name="provider_detail_opencode_session_header">OpenCode session header</string>
-    <string name="provider_detail_opencode_session_toggle">Send x-opencode-session</string>
-    <string name="provider_detail_save_headers">Save Headers</string>
-    <string name="scheduled_task_prompt_template_hint">The current date/time and last run are added automatically. You can also use {{date}}, {{time}}, {{datetime}}, {{weekday}}, {{last_fired}}, {{last_fired_ago}} and {{task_label}}.</string>
-    <string name="settings_lifecycle_hooks">Lifecycle Hooks</string>
-    <string name="settings_lifecycle_hooks_subtitle">Run sandbox scripts on session start / response / end</string>
-    <string name="web_search_tool_enabled">Enable web_search</string>
-    <string name="web_search_tool_enabled_sub">Let the agent search the web from chat. Off → the tool is not offered at all.</string>
+    <string name="provider_detail_opencode_session_footer">デフォルトでオフ。オンにすると、このカスタムエンドポイントへのチャットリクエストごとに安定した会話単位の ID（x-opencode-session）が付与され、OpenCode 互換リレーのルーティングとキャッシュに役立ちます。信頼するゲートウェイでのみ有効にしてください：この ID は複数ターンの会話をまたいで同一会話を識別します。</string>
+    <string name="provider_detail_opencode_session_header">OpenCode セッションヘッダー</string>
+    <string name="provider_detail_opencode_session_toggle">x-opencode-session を送信</string>
+    <string name="provider_detail_save_headers">ヘッダーを保存</string>
+    <string name="scheduled_task_prompt_template_hint">現在の日付/時刻と前回実行は自動で付加されます。{{date}}、{{time}}、{{datetime}}、{{weekday}}、{{last_fired}}、{{last_fired_ago}}、{{task_label}} も使用できます。</string>
+    <string name="settings_lifecycle_hooks">ライフサイクルフック</string>
+    <string name="settings_lifecycle_hooks_subtitle">セッション開始 / 応答完了 / セッション終了時にサンドボックススクリプトを実行</string>
+    <string name="web_search_tool_enabled">web_search を有効化</string>
+    <string name="web_search_tool_enabled_sub">チャット内でエージェントによるウェブ検索を許可。オフ → このツールは提供されません。</string>
     <string name="web_search_tool_section">Tool</string>
-    <string name="web_search_tool_section_footer">Turning the tool off does not delete the engine configuration below; re-enable it to restore the same behaviour.</string>
+    <string name="web_search_tool_section_footer">ツールをオフにしても下のエンジン設定は削除されません。再度オンにすれば同じ動作に戻ります。</string>
+    <string name="tool_label_short_app_name">Minis Ultra</string>
 </resources>

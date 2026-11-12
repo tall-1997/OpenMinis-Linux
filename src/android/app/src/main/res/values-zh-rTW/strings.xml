@@ -226,8 +226,8 @@
     <string name="zen_deleted_models_title">恢復已刪除的免費模型（%1$d）</string>
     <string name="zen_deleted_models_subtitle">復原在此服務商上記錄的刪除</string>
     <string name="provider_sync_mark_not_found">404 not found</string>
-    <string name="provider_sync_mark_connection">Connection failed</string>
-    <string name="provider_sync_mark_invalid">Invalid response</string>
+    <string name="provider_sync_mark_connection">連線失敗</string>
+    <string name="provider_sync_mark_invalid">回應無效</string>
     <string name="add_provider_voice_templates_footer">語音轉文字與文字轉語音的服務商。供應商類型與基礎網址已預先填好——只要補上您的 API 金鑰即可。</string>
     <string name="add_provider_voice_capability_tts">語音合成（TTS）</string>
     <string name="add_provider_voice_capability_asr">語音辨識（ASR）</string>
@@ -811,8 +811,8 @@
     <string name="shizuku_state_need_permission">需要授權</string>
     <string name="shizuku_state_need_permission_subtitle">服務正在執行，但 Minis Ultra 尚未取得授權。</string>
     <string name="shizuku_state_ready">已就緒</string>
-    <string name="shizuku_ready_subtitle">version=%1$d, uid=%2$d</string>
-    <string name="shizuku_ready_subtitle_sui">Sui(root)· 版本=%1$d, uid=%2$d</string>
+    <string name="shizuku_ready_subtitle">已授權（版本=%1$d，uid=%2$d）</string>
+    <string name="shizuku_ready_subtitle_sui">Sui（root）·版本=%1$d，uid=%2$d</string>
     <string name="shizuku_badge_not_installed">未安裝</string>
     <string name="shizuku_badge_not_running">已停止</string>
     <string name="shizuku_badge_need_permission">需授權</string>
@@ -968,7 +968,7 @@
     <string name="provider_list_add_provider">添加 AI 服務商</string>
     <string name="provider_list_no_providers_configured">未配置 AI 服務商</string>
     <string name="provider_list_add_a_provider_to_get_started">添加一個 AI 服務商以開始使用。</string>
-    <string name="provider_list_import_provider">Import Provider</string>
+    <string name="provider_list_import_provider">匯入供應商</string>
     <string name="share_provider_json_title">偵測到服務商設定</string>
     <string name="share_expired_toast">分享內容已過期，請重新分享。</string>
     <string name="share_provider_json_message">這個 JSON 檔案看起來是匯出的服務商設定。你想怎麼處理？</string>
@@ -1009,7 +1009,7 @@
     <string name="provider_detail_refresh_models">重新整理模型</string>
     <string name="provider_detail_add_custom_model">添加自定義模型</string>
     <string name="provider_detail_delete_provider">刪除 AI 服務商</string>
-    <string name="provider_detail_delete_model">Delete Model</string>
+    <string name="provider_detail_delete_model">刪除模型</string>
     <string name="provider_detail_hide_model">隱藏模型</string>
     <string name="provider_detail_show_model">顯示模型</string>
     <string name="provider_detail_sign_out">退出登錄</string>
@@ -1043,7 +1043,7 @@
     <string name="add_provider_signing_in">正在登入…</string>
     <string name="add_provider_oauth_network_unreachable">無法連線至登入伺服器。請檢查您的網路或 Proxy 設定後再試一次。</string>
     <string name="add_provider_or_configure_manually">或手動配置</string>
-    <string name="add_provider_for_third_party_coding_plans_e_g_minimax">For third-party Coding Plans (e.g. MiniMax, Kimi) or compatible proxy endpoints, enter the API base URL and bearer token manually.</string>
+    <string name="add_provider_for_third_party_coding_plans_e_g_minimax">第三方 Coding Plans（如 MiniMax、Kimi）或相容代理端點，請手動填寫 API base URL 和 Bearer 權杖。</string>
     <string name="add_provider_bearer_token">Bearer Token</string>
     <string name="add_custom_model_model_id">模型 ID</string>
     <string name="add_custom_model_display_name_optional">顯示名稱（選填）</string>
@@ -2219,18 +2219,18 @@
     <!-- Queued-message edit sheet + git diff truncation notice -->
     <string name="chat_queued_edit_title">編輯排隊訊息</string>
     <string name="git_panel_diff_truncated">Diff 已在 200,000 字元處截斷——完整內容以儲存庫檔案為準。</string>
-    <string name="voice_service_no_audio_models">No audio models are listed for this provider. Model lists from some providers (Bailian, SiliconFlow) do not declare audio support — add the ASR/TTS model as a custom model with the audio modality, or choose another voice service.</string>
-    <string name="voice_error_network">Voice recognition failed: network error. Check your connection, or switch to the on-device engine or another provider.</string>
-    <string name="voice_error_transcription">Voice recognition returned no text. Speak again, or check the transcription provider\'s model and API key.</string>
-    <string name="voice_error_busy">The speech recognizer is busy. Wait a moment and try again.</string>
-    <string name="voice_error_audio">Audio capture failed. Check the microphone permission and make sure no other app is using the mic.</string>
-    <string name="voice_error_language">The selected language is not supported by this engine. Pick another language.</string>
-    <string name="voice_error_unknown">Voice recognition failed: %1$s</string>
-    <string name="thinking_rules_cache_not_ready">Custom rules are not active yet (%1$s). Requests currently use the built-in defaults; the next message after the cache loads will apply your rules.</string>
+    <string name="voice_service_no_audio_models">沒有支援語音輸入的模型</string>
+    <string name="voice_error_network">網路錯誤，辨識服務無法連線</string>
+    <string name="voice_error_transcription">轉寫失敗</string>
+    <string name="voice_error_busy">辨識服務忙碌中，請稍後再試</string>
+    <string name="voice_error_audio">錄音檔損壞或無法讀取</string>
+    <string name="voice_error_language">不支援的辨識語言</string>
+    <string name="voice_error_unknown">未知錯誤</string>
+    <string name="thinking_rules_cache_not_ready">思考規則快取尚未就緒，請稍後再試</string>
     <string name="skill_display_name_skill_creator">Skill Creator</string>
     <string name="skill_display_name_android_sdk_mirrors">Android SDK Mirrors</string>
-    <string name="provider_detail_force_thinking">Force extended thinking</string>
-    <string name="provider_detail_force_thinking_footer">For Anthropic-compatible relays only. Sends thinking:{type:"enabled",budget_tokens:N} even when the model catalog says the model cannot reason. Use when the model supports thinking but the catalog entry is missing or wrong.</string>
+    <string name="provider_detail_force_thinking">強制思考模式</string>
+    <string name="provider_detail_force_thinking_footer">對該供應商的所有模型請求強制開啟思考/推理欄位，忽略各模型的預設值。</string>
     <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
     <string name="provider_list_export_providers">匯出供應商</string>
     <string name="provider_transfer_export_title">匯出供應商</string>
@@ -2290,51 +2290,52 @@
     <!-- [T-untranslated] English fallback for keys added by PR #325; pending translation -->
     <string name="a11y_app_policy_apps">Apps</string>
     <string name="a11y_app_policy_apps_count">%1$d listed</string>
-    <string name="a11y_app_policy_apps_hint">One Android package name per line, e.g. com.tencent.mm</string>
-    <string name="a11y_app_policy_blocklist">List is a blocklist</string>
-    <string name="a11y_app_policy_blocklist_sub">Off = only listed apps are allowed. On = listed apps are blocked.</string>
-    <string name="a11y_app_policy_enabled">Restrict by app</string>
-    <string name="a11y_app_policy_enabled_sub">Check the foreground package before every screen read or tap</string>
-    <string name="a11y_app_policy_footer">When enabled, ui_read and ui_action are checked against the current foreground app before they run. Apps outside the list (allow mode) or inside it (block mode) are refused with a visible message. The Minis app itself is always allowed.</string>
-    <string name="a11y_app_policy_section">Accessibility app access</string>
-    <string name="boot_hook_enable">Run /var/minis/boot.sh at startup</string>
-    <string name="boot_hook_enable_sub">Executes in the sandbox after the Linux rootfs boots</string>
-    <string name="boot_hook_footer">Off by default. This path is inside the writable sandbox, so any shell-capable agent can replace the script — enabling this lets such a file run silently on every launch. The switch is checked again immediately before execution, and the script\\\'s first-seen time plus size/mtime changes are written to the app log. Takes effect at the next launch.</string>
-    <string name="boot_hook_last_status">Last run</string>
-    <string name="boot_hook_section">Boot hook</string>
-    <string name="lifecycle_hooks_command_hint">One command line. A script path is usually best, e.g. bash /var/minis/hooks/on-response.sh. Leave empty to remove the hook.</string>
-    <string name="lifecycle_hooks_enable">Enable lifecycle hooks</string>
-    <string name="lifecycle_hooks_enable_sub">Execute the scripts below on their events</string>
-    <string name="lifecycle_hooks_events_footer">Scripts run in the sandbox, serialized on their own lane, with a 20-second timeout. Failures are logged and never block the chat.</string>
-    <string name="lifecycle_hooks_help_body">Each script receives MINIS_HOOK_EVENT, MINIS_HOOK_SESSION_ID and MINIS_HOOK_DETAIL. Scripts are one-shot PRoot processes: /proc of other commands is not visible across invocations and flock is unreliable, so use files for cross-run state. OnResponse fires once per completed agent reply; OnSessionEnd fires when the chat is deleted.</string>
-    <string name="lifecycle_hooks_help_header">Environment &amp; caveats</string>
-    <string name="lifecycle_hooks_master_footer">Off by default. While off, configured scripts are kept but never executed.</string>
-    <string name="lifecycle_hooks_not_set">Not set</string>
-    <string name="lifecycle_hooks_section_events">Events</string>
-    <string name="lifecycle_hooks_section_master">Master switch</string>
-    <string name="lifecycle_hooks_title">Lifecycle Hooks</string>
-    <string name="network_trusted_ca_count">%1$d certificate(s) imported</string>
-    <string name="network_trusted_ca_duplicate">That certificate is already imported.</string>
-    <string name="network_trusted_ca_failed">Could not read that file as a PEM/X.509 certificate.</string>
-    <string name="network_trusted_ca_footer">For a provider whose HTTPS endpoint uses a self-signed or private CA. The certificate is stored only inside Minis and is added to Android\\\'s trust anchors for this app; normal certificate and hostname checks stay on. It takes effect on the next provider request — no restart is needed.</string>
-    <string name="network_trusted_ca_import">Import PEM Certificate</string>
-    <string name="network_trusted_ca_imported">Imported %1$d certificate(s). Retry the request.</string>
-    <string name="network_trusted_ca_none">No certificates imported</string>
-    <string name="network_trusted_ca_remove_all">Remove All</string>
-    <string name="network_trusted_ca_removed">Imported certificates removed.</string>
-    <string name="network_trusted_ca_title">Trusted Certificates</string>
-    <string name="provider_detail_custom_headers">Custom request headers</string>
-    <string name="provider_detail_custom_headers_footer">One “Name: value” per line. Applied to chat, /models and Responses requests for this provider only. Host, Content-Length and Connection are managed by the HTTP client and cannot be overridden.</string>
+    <string name="a11y_app_policy_apps_hint">每行一個 Android 套件名稱，例如 com.tencent.mm</string>
+    <string name="a11y_app_policy_blocklist">名單作為封鎖清單</string>
+    <string name="a11y_app_policy_blocklist_sub">關 = 僅允許名單內應用；開 = 封鎖名單內應用。</string>
+    <string name="a11y_app_policy_enabled">按應用限制</string>
+    <string name="a11y_app_policy_enabled_sub">每次讀取畫面或點按前檢查前台應用套件名稱</string>
+    <string name="a11y_app_policy_footer">啟用後，ui_read 和 ui_action 會在執行前對照目前前台應用檢查。不在名單內（允許模式）或在名單內（封鎖模式）的應用會被拒絕並顯示提示。Minis 應用本身始終允許。</string>
+    <string name="a11y_app_policy_section">無障礙應用存取範圍</string>
+    <string name="boot_hook_enable">啟動時執行 /var/minis/boot.sh</string>
+    <string name="boot_hook_enable_sub">在 Linux rootfs 啟動完成後於沙盒內執行</string>
+    <string name="boot_hook_footer">預設關閉。該路徑位於可寫沙盒內，任何能執行 shell 的智慧體都可以替換此腳本——開啟後這類檔案會在每次啟動時靜默執行。執行前會再次檢查開關，腳本的首見時間及大小/mtime 變化會寫入應用程式日誌。下次啟動時生效。</string>
+    <string name="boot_hook_last_status">上次執行</string>
+    <string name="boot_hook_section">啟動鉤子</string>
+    <string name="lifecycle_hooks_command_hint">一行命令。通常填腳本路徑最合適，例如 bash /var/minis/hooks/on-response.sh。留空即刪除該鉤子。</string>
+    <string name="lifecycle_hooks_enable">啟用生命週期鉤子</string>
+    <string name="lifecycle_hooks_enable_sub">在對應事件發生時執行下方腳本</string>
+    <string name="lifecycle_hooks_events_footer">腳本在沙盒內序列執行（獨立通道），逾時 20 秒。失敗只記錄日誌，不會阻塞聊天。</string>
+    <string name="lifecycle_hooks_help_body">每個腳本會收到 MINIS_HOOK_EVENT、MINIS_HOOK_SESSION_ID 和 MINIS_HOOK_DETAIL。腳本是一次性 PRoot 行程：跨次呼叫看不到其他命令的 /proc，flock 也不可靠，跨次狀態請用檔案保存。OnResponse 在每輪智慧體回覆完成後觸發一次；OnSessionEnd 在會話刪除時觸發。</string>
+    <string name="lifecycle_hooks_help_header">環境與注意事項</string>
+    <string name="lifecycle_hooks_master_footer">預設關閉。關閉期間已設定的腳本會保留，但不會執行。</string>
+    <string name="lifecycle_hooks_not_set">未設定</string>
+    <string name="lifecycle_hooks_section_events">事件</string>
+    <string name="lifecycle_hooks_section_master">總開關</string>
+    <string name="lifecycle_hooks_title">生命週期鉤子</string>
+    <string name="network_trusted_ca_count">%1$d 個已信任的 CA 憑證</string>
+    <string name="network_trusted_ca_duplicate">該憑證已在信任清單中</string>
+    <string name="network_trusted_ca_failed">匯入失敗，請檢查憑證格式</string>
+    <string name="network_trusted_ca_footer">用於 HTTPS 端點使用自簽名或私有 CA 的供應商。憑證僅保存在 Minis 內部，並加入本應用程式的 Android 信任錨；正常的憑證與主機名稱檢查仍然開啟。下一次供應商請求即生效——無需重新啟動。</string>
+    <string name="network_trusted_ca_import">匯入 CA 憑證</string>
+    <string name="network_trusted_ca_imported">已匯入 %1$s</string>
+    <string name="network_trusted_ca_none">尚未信任任何自訂 CA</string>
+    <string name="network_trusted_ca_remove_all">全部移除</string>
+    <string name="network_trusted_ca_removed">已移除 %1$s</string>
+    <string name="network_trusted_ca_title">信任的 CA 憑證</string>
+    <string name="provider_detail_custom_headers">自訂請求頭</string>
+    <string name="provider_detail_custom_headers_footer">每行一條「名稱: 值」。僅套用於該供應商的聊天、/models 與 Responses 請求。Host、Content-Length 和 Connection 由 HTTP 用戶端管理，不能覆寫。</string>
     <string name="provider_detail_custom_headers_placeholder">X-Custom-Header: value</string>
-    <string name="provider_detail_opencode_session_footer">Off by default. When on, every chat request to this custom endpoint carries a stable per-conversation ID (x-opencode-session) so OpenCode-compatible relays can route and cache it. Only enable it for a gateway you trust: the ID identifies the conversation across turns.</string>
-    <string name="provider_detail_opencode_session_header">OpenCode session header</string>
-    <string name="provider_detail_opencode_session_toggle">Send x-opencode-session</string>
-    <string name="provider_detail_save_headers">Save Headers</string>
-    <string name="scheduled_task_prompt_template_hint">The current date/time and last run are added automatically. You can also use {{date}}, {{time}}, {{datetime}}, {{weekday}}, {{last_fired}}, {{last_fired_ago}} and {{task_label}}.</string>
-    <string name="settings_lifecycle_hooks">Lifecycle Hooks</string>
-    <string name="settings_lifecycle_hooks_subtitle">Run sandbox scripts on session start / response / end</string>
-    <string name="web_search_tool_enabled">Enable web_search</string>
-    <string name="web_search_tool_enabled_sub">Let the agent search the web from chat. Off → the tool is not offered at all.</string>
+    <string name="provider_detail_opencode_session_footer">預設關閉。開啟後，送往該自訂端點的每個聊天請求都會攜帶穩定的會話級 ID（x-opencode-session），便於 OpenCode 相容閘道路由與快取。僅對你信任的閘道開啟：該 ID 會在多輪對話間標識同一會話。</string>
+    <string name="provider_detail_opencode_session_header">OpenCode 會話頭</string>
+    <string name="provider_detail_opencode_session_toggle">傳送 x-opencode-session</string>
+    <string name="provider_detail_save_headers">儲存請求頭</string>
+    <string name="scheduled_task_prompt_template_hint">目前日期/時間和上次執行會自動附加。你也可以使用 {{date}}、{{time}}、{{datetime}}、{{weekday}}、{{last_fired}}、{{last_fired_ago}} 和 {{task_label}}。</string>
+    <string name="settings_lifecycle_hooks">生命週期鉤子</string>
+    <string name="settings_lifecycle_hooks_subtitle">在會話開始 / 回覆完成 / 會話結束時執行沙盒腳本</string>
+    <string name="web_search_tool_enabled">啟用 web_search</string>
+    <string name="web_search_tool_enabled_sub">允許智慧體在聊天中搜尋網頁。關閉 → 完全不提供該工具。</string>
     <string name="web_search_tool_section">Tool</string>
-    <string name="web_search_tool_section_footer">Turning the tool off does not delete the engine configuration below; re-enable it to restore the same behaviour.</string>
+    <string name="web_search_tool_section_footer">關閉該工具不會刪除下方的引擎設定；重新開啟即可恢復原行為。</string>
+    <string name="tool_label_short_app_name">Minis</string>
 </resources>

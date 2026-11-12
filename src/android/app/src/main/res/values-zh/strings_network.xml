@@ -76,7 +76,7 @@
     <string name="network_proxy_delete">删除代理</string>
     <string name="network_cancel">取消</string>
     <string name="network_save">保存</string>
-    <string name="network_auth_key">Auth Key</string>
+    <string name="network_auth_key">认证密钥</string>
     <string name="network_auth_key_footer">在 Tailscale 管理控制台的“设置 &gt; 密钥”中创建 Auth Key。它只用于添加这台设备一次，不会被保存。</string>
     <string name="network_log_in">登录</string>
     <string name="network_provider_route">网络</string>

@@ -21,8 +21,8 @@
     <string name="attachment_pick_truncated_files">仅附加了前 %1$d 个文件。</string>
 
     <!-- Chat screen misc -->
-    <string name="chat_move_to_capsule">Move to…</string>
-    <string name="attachment_no_app_toast">No app available to open this attachment.</string>
+    <string name="chat_move_to_capsule">移动到…</string>
+    <string name="attachment_no_app_toast">没有应用可打开此附件。</string>
 
     <!-- Sub-agent live bar + detail sheet (ChatSubAgentBar) -->
     <string name="subagent_waiting_first_output">思考中，还没有输出</string>
