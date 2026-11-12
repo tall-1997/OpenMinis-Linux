@@ -340,6 +340,7 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     val dailyRecallQuery = if (memoryOn) liveRecallInput()?.query else null
     val dailyInjection = sessionMem?.loadRecentDailyFragments(dailyRecallQuery)
     val dailyFragments = dailyInjection?.fragments.orEmpty()
+    residentDailyFiles = dailyFragments.flatMap { listOf(it.date, "${it.date}.md") }.toSet()
     // [T-memory-window] Two-pass assembly: the per-day verbatim window and
     // the MemoryIndex TOC together cover every diary day exactly once. Pass 1
     // finds which days the budget admits verbatim; pass 2 rebuilds the TOC

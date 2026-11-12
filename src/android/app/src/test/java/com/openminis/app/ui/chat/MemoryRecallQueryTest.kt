@@ -7,6 +7,14 @@ import org.junit.Test
 class MemoryRecallQueryTest {
 
     @Test
+    fun `a file already in the system prompt is not recalled again`() {
+        val hits = listOf("2026-11-12.md" to "today", "2026-11-01.md" to "old")
+        val kept = recallHitsNotAlreadyResident(hits, setOf("2026-11-12.md")) { it.first }
+        assertEquals(listOf("2026-11-01.md" to "old"), kept)
+    }
+
+
+    @Test
     fun `a real user sentence is the query`() {
         assertEquals("pull the panel repo", memoryRecallQuery("pull the panel repo"))
     }

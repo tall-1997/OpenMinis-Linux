@@ -76,7 +76,10 @@ internal fun ChatViewModel.liveRecallPrompt(): String? {
     // exact query, so the render — which MUST stay synchronous and zero-network
     // (PromptPart.render is a plain () -> String?) — reuses it. Cache miss (or
     // the semantic feature off) degrades to the plain keyword path unchanged.
-    val hits = engine.recallForPromptCached(input.query)
+    val hits = recallHitsNotAlreadyResident(
+        engine.recallForPromptCached(input.query),
+        residentDailyFiles,
+    ) { it.source }
     if (hits.isEmpty()) return null
     // [T-recall-turn-dedup] The same memories are announced once per topic.
     // Every request of one turn must carry the block (each request is a fresh
@@ -153,6 +156,16 @@ internal fun ChatViewModel.liveRecallInput(): LiveRecallInput? {
  * Real-user text eligible as a memory query. Host reminders are not a query,
  * and a blank or tool-result carrier is not one either.
  */
+/**
+ * Drop recall hits whose file is already in the system prompt verbatim.
+ * ZCode does not re-select a memory that is already in context.
+ */
+internal fun <T> recallHitsNotAlreadyResident(
+    hits: List<T>,
+    residentFiles: Set<String>,
+    sourceOf: (T) -> String,
+): List<T> = hits.filter { sourceOf(it) !in residentFiles }
+
 internal fun memoryRecallQuery(userText: String): String? {
     val stripped = userText
         .replace(Regex("<system-reminder>[\\s\\S]*?</system-reminder>"), "")

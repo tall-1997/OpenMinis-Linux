@@ -1359,14 +1359,7 @@ class ChatViewModel(
     internal val _compactSummary = MutableStateFlow<String?>(null)
     override val compactSummary: StateFlow<String?> = _compactSummary.asStateFlow()
 
-    /**
-     * Byte offset at which the last [buildSystemPrompt] result switches from
-     * byte-stable (base, skills, MCP, global + daily memory) to per-turn
-     * dynamic (WorldBook hits, learned prefs, recall, runtime context).
-     * AnthropicProvider places its system cache_control breakpoint exactly here
-     * so the stable head is a cross-turn cache hit; -1 means "unknown, cache
-     * the whole system prompt as before".
-     */
+    /** Byte offset of the stable system-prompt prefix; -1 caches the whole prompt. */
     @Volatile internal var systemPromptStablePrefixLen: Int = -1
 
     // [T-recall-turn-dedup] Cross-turn dedup state for live recall: the turn
@@ -1377,6 +1370,9 @@ class ChatViewModel(
 
     /** [T-process-tail-content-dedupe] Last process tail (identical bytes reuse the instance). */
     @Volatile internal var processTailCache: String? = null
+
+    /** Daily files already pasted verbatim into the system prompt. Recall must not repeat them. */
+    @Volatile internal var residentDailyFiles: Set<String> = emptySet()
 
     /**
      * [T-recall-carrier-replay-once] Whether the last announcement was the
