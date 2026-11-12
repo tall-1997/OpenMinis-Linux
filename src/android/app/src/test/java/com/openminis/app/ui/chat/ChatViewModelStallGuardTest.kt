@@ -222,4 +222,54 @@ class ChatViewModelStallGuardTest {
         val two = ChatViewModelStallGuard.resultShaOf(listOf("out"))
         assertEquals(one, two)
     }
+
+    // ── [T-goal-poll-counter-drift] accounting counters are not progress ─────
+
+    @Test
+    fun counterDriftAloneKeepsTheStreakFrozen() {
+        // update_goal(op=get)-style results: only tokens=/elapsed= counters
+        // move between calls. The scrubber must collapse them to one hash so
+        // the frozen-repeat gate sees the idle poll it is.
+        val r1 = "Goal [active] — obj. tokens=5547695/unlimited elapsed=1107634ms"
+        val r2 = "Goal [active] — obj. tokens=5610182/unlimited elapsed=1128301ms"
+        val r3 = "Goal [active] — obj. tokens=5672760/unlimited elapsed=1149968ms"
+        val r4 = "Goal [active] — obj. tokens=5735430/unlimited elapsed=1171635ms"
+        turn(
+            name = "update_goal",
+            resultSha = ChatViewModelStallGuard.resultShaOf(listOf(r1)),
+            output = r1,
+        )
+        val d2 = turn(
+            name = "update_goal",
+            resultSha = ChatViewModelStallGuard.resultShaOf(listOf(r2)),
+            output = r2,
+        )
+        assertEquals(2, d2.repeatStreak)
+        assertTrue("counter drift alone is a frozen repeat: nudge at 2", d2.nudge != null)
+        val d3 = turn(
+            name = "update_goal",
+            resultSha = ChatViewModelStallGuard.resultShaOf(listOf(r3)),
+            output = r3,
+        )
+        assertEquals(3, d3.repeatStreak)
+        val d4 = turn(
+            name = "update_goal",
+            resultSha = ChatViewModelStallGuard.resultShaOf(listOf(r4)),
+            output = r4,
+        )
+        assertTrue("counter drift alone is a frozen repeat: break at 4", d4.stalled)
+    }
+
+    @Test
+    fun counterDriftPlusRealChangeStillResetsTheStreak() {
+        // Scrub control: when the result changes beyond the accounting
+        // counters, the hash must differ and the poll allowance must hold.
+        val r1 = "Goal [active] — obj. tokens=100/unlimited elapsed=1000ms"
+        val r2 = "Goal [complete] — obj. tokens=200/unlimited elapsed=2000ms"
+        turn(resultSha = ChatViewModelStallGuard.resultShaOf(listOf(r1)))
+        val d = turn(resultSha = ChatViewModelStallGuard.resultShaOf(listOf(r2)))
+        assertEquals(1, d.repeatStreak)
+        assertNull(d.nudge)
+        assertFalse(d.stalled)
+    }
 }

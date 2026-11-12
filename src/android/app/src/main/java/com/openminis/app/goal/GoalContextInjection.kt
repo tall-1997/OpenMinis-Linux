@@ -32,7 +32,7 @@ internal fun goalContextPrompt(goal: SessionGoalEntity): String = buildString {
     appendLine(quoteObjective(goal.objective))
     appendLine("</untrusted_objective_json>")
     appendLine("Current stored state: status=${goal.status}, tokens=${goal.tokensUsed}/${goal.tokenBudget?.toString() ?: "unlimited"}, elapsed=${goal.elapsedMs}ms.")
-    appendLine("Use update_goal(op=get) to verify current status before acting. Report complete only when the objective is verified; report the same blocked condition only when truly blocked.")
+    appendLine("The state line above is current as of this request. Do not re-verify it with update_goal(op=get) on consecutive turns — re-reading an unchanged goal burns tokens without progress; re-read only after a long-running operation or an external state change. Report complete only when the objective is verified; report the same blocked condition only when truly blocked.")
     appendLine("</goal_context>")
 }
 
