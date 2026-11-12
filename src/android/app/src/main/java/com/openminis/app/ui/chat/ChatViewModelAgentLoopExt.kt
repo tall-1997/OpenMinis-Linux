@@ -254,12 +254,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // that emits text across several turns doesn't re-fire it and cut off
     // its own speech mid-sentence.
     var didStopStaleReadAloud = false
-    // [T-android-loop-stall-guard] Per-run stall accounting (fresh instance
-    // per runAgentLoop = the run-start clear); rule 1/3 nudges ride the next
-    // request assembly (see applyStallNudge); rule 2 breaks with a report.
-    val stallGuard = ChatViewModelStallGuard()
     val toolExecutionLedger = ToolExecutionLedger()  // [T-tool-execution-ledger] one per run
-    var stallGuardNudge: String? = null
     // [T-main-session-turn-cap] The runaway guard is user-tunable
     // (Settings → Tool Limits); 200 is only the shipped default. Read once
     // per run so a mid-run settings change can't shift the range end under
@@ -554,11 +549,8 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 }
                 val requestHistory = ToolIdNormalization.normalizeMessages(
                     effectiveAgentHistory().let { history ->
-                        // [T-stall-resume][T-stall-guard] One-shot USER-note lane.
-                        val withResume = applyStallNudge(history, stallResumeContext)
-                        val guardNudge = stallGuardNudge
-                        stallGuardNudge = null
-                        applyStallNudge(withResume, guardNudge)
+                        // [T-stall-resume] One-shot continuation note only.
+                        applyStallNudge(history, stallResumeContext)
                     }
                 )
                 // [T-first-event-watchdog][T-routing-strategy-x] First-token budget.
@@ -1902,21 +1894,10 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             break
         }
 
-        // [T-android-loop-stall-guard] Record the dispatched turn; nudges are
-        // one-shot and never end the run (see enforceStallGuard).
-        when (val outcome = enforceStallGuard(stallGuard, turn, toolCalls, turnText, resultParts)) {
-            is StallLoopOutcome.Nudge -> stallGuardNudge = outcome.message
-            is StallLoopOutcome.BreakWithReport -> {
-                accumulatedText = accumulatedText + "\n\n" + outcome.report
-                withContext(Dispatchers.Main) {
-                    drainLiveAssistantUi(assistantId, accumulatedText, allToolBlocks)
-                }
-                markLiveInterruptionAndArmResume(loopResumeEpoch)
-                loopExitedNormally = true
-                break
-            }
-            StallLoopOutcome.Continue -> Unit
-        }
+        // [T-no-mid-task-speech] No stall nudge rides the loop: a synthetic
+        // USER turn makes the model stop and answer in prose, which is exactly
+        // what ZCode/DeepSeek-Harness avoid. Repeated calls still get a hint
+        // appended INSIDE the tool result (ToolLoopDetector), never as a turn.
 
         if (turn == 0) generateSessionTitleIfNeeded()  // auto-title after first exchange
 
