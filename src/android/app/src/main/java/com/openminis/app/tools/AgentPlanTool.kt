@@ -465,7 +465,7 @@ object AgentPlanTool {
                 "flip the item you are on to active, and to done the moment it lands - in the turn the work happens. " +
                 "When the ACTIVE item flips to done the next pending item is activated automatically — " +
                 "just mark done/failed as work settles; activating the next one yourself is harmless but not needed. " +
-            "update/remove need no ids either: target an item by its 1-based number from the snapshot, its exact " +
+            "update/remove need no ids either: target an item by its 1-based number (op=list shows the board), its exact " +
             "title, or a unique title prefix. Skip the board for single-shot answers and one-command lookups.",
         parameters = mapOf(
             "tool_title" to AgentToolParam("string", "A concise 5-10 word summary shown to the user."),

@@ -652,7 +652,7 @@ class MemoryRecallEngine(
 
     /**
      * [T-memory-embedding-wiring] Fire-and-forget semantic prefetch for the
-     * send pipeline. `liveRecallPrompt` renders synchronously (PromptPart.render
+     * send pipeline. `newRecallReminder` renders synchronously (kept off the main
      * is a plain lambda) and must never block on network, so the SEND path
      * instead calls this as early as possible with the SAME query the render
      * will build; the hybrid result lands in a one-slot cache that

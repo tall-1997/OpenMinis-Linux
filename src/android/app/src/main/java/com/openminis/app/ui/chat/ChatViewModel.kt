@@ -1345,9 +1345,6 @@ class ChatViewModel(
     /** Byte offset of the stable system-prompt prefix; -1 caches the whole prompt. */
     @Volatile internal var systemPromptStablePrefixLen: Int = -1
 
-    /** [T-process-tail-content-dedupe] Last process tail (identical bytes reuse the instance). */
-    @Volatile internal var processTailCache: String? = null
-
     /** Daily files already pasted verbatim into the system prompt. Recall must not repeat them. */
     @Volatile internal var residentDailyFiles: Set<String> = emptySet()
 

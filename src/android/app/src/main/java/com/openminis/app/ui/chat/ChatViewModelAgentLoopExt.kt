@@ -523,21 +523,13 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     loopExitedNormally = true
                     break@agentTurns
                 }
-                // [T-recall-once][T-goal-once] Notices go into the transcript once.
-                ensureSessionScopedNotices()
-                newRecallReminder()?.let { commitHiddenUserNote(it) }
-                val goalObjective = requestGoalState?.objective.orEmpty()
-                val goalPrompt = goalMount.prompt
-                if (goalMount.canContinue && goalPrompt != null && goalObjective.isNotBlank()) {
-                    // Hash the OBJECTIVE only: the rendered block carries
-                    // tokens/elapsed that change every request, which would
-                    // re-announce the goal (and post a user turn) every turn.
-                    val sha = com.openminis.app.util.Digest.sha256Hex(goalObjective)
-                    if (sha != goalAnnouncedSha) {
-                        goalAnnouncedSha = sha
-                        commitHiddenUserNote(goalPrompt)
-                    }
-                }
+                // [T-once-notices] Recall, plan retry and the goal are committed
+                // into the transcript once — never rebuilt per request.
+                commitSessionNoticesOnce(
+                    goalObjective = requestGoalState?.objective.orEmpty(),
+                    goalPrompt = goalMount.prompt,
+                    goalCanContinue = goalMount.canContinue,
+                )
                 val requestHistory = ToolIdNormalization.normalizeMessages(
                     effectiveAgentHistory().let { history ->
                         // [T-stall-resume] One-shot continuation note only.

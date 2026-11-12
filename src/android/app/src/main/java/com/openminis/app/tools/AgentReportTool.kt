@@ -49,7 +49,7 @@ object AgentReportStore {
 
     /**
      * [T-work-report-staleness] Requests served since the newest report. The
-     * `<work_report>` block is a snapshot of a past turn, re-rendered on every
+     * `<work_report>` block is NOT injected into requests any more; the last
      * request; without a counter nothing distinguishes "reported a moment ago"
      * from "reported two hours of tool rounds ago", and a stale snapshot read
      * as an enforced fact re-anchors every turn to the old step (the model
@@ -269,7 +269,7 @@ object AgentReportStore {
     }
 
     /**
-     * The block that rides on every request. Rendered from the store, so history
+     * Renderer retained for tests/tools; the request path no longer mounts it. Rendered from the store, so history
      * trimming cannot remove it; omitted only when nothing was ever reported.
      *
      * [T-work-report-staleness] A snapshot that nobody refreshed stops asserting
@@ -352,9 +352,9 @@ object AgentReportTool {
             "it failed (failed), or there is nothing to do (dropped). " +
             "Put a single concrete decision for the user in `question` - one question, not a list. " +
             "`blocked` and `failed` require `blocker`. Never report ready without evidence of checks run. " +
-            "This state is shown to the user and re-injected every turn, so it is how the run stays " +
-            "accountable for the task it was given. The <work_report> block re-shows your last " +
-            "summary on every request until you report again.",
+            "This state is shown to the user and your last report stays in the conversation's " +
+            "tool results, so it is how the run stays accountable for the task it was given. " +
+            "Do not call it again just because a previous report exists - call it when the stage changes.",
         parameters = mapOf(
             "tool_title" to AgentToolParam("string", "A concise 5-10 word summary shown to the user."),
             "status" to AgentToolParam(

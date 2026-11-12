@@ -406,7 +406,7 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     // entries for keywords from the latest user message, inject top-4 hits.
     // No embedding service: keyword density + recency + recall-count scoring.
     // [T-memory-recall-live] Recall moved out of the run-level system prompt and
-    // into per-turn injection (see [liveRecallPrompt]). Computed once per RUN, the
+    // into a one-shot note (see [newRecallReminder]). Computed once per RUN, the
     // query was the last user message — which does not change during a long tool
     // loop — so the fragment stayed frozen for up to maxTurns while the subtask
     // moved on. Null here keeps the dynamic-tail assembly byte-shape unchanged.

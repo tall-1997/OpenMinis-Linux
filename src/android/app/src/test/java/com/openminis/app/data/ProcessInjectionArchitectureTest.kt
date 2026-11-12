@@ -27,12 +27,15 @@ class ProcessInjectionArchitectureTest {
             "per-request process tail was the repeated-injection bug",
             loop.contains("processInjectedSystemPrompt("),
         )
-        assertTrue("recall is committed once", loop.contains("newRecallReminder()?.let { commitHiddenUserNote(it) }"))
-        assertTrue("goal is committed once", loop.contains("goalAnnouncedSha"))
+        assertTrue("notices are committed once", loop.contains("commitSessionNoticesOnce("))
         assertTrue(
             "the request prompt is only date-refreshed",
             loop.contains("refreshRuntimeContextDate("),
         )
+        val notes = ProductionSources.read("ui/chat/ChatViewModelHiddenNote.kt")
+        assertTrue("goal is announced once", notes.contains("goalAnnouncedSha"))
+        assertTrue("recall is committed once", notes.contains("newRecallReminder()?.let { commitHiddenUserNote(it) }"))
+        assertTrue("plan retry is not dropped", notes.contains("consumePlanStepRetryPrompt()"))
     }
 
     @Test

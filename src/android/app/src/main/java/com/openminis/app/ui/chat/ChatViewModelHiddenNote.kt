@@ -28,6 +28,31 @@ internal fun ChatViewModel.ensureSessionScopedNotices() {
     }
 }
 
+/**
+ * [T-once-notices] Everything that used to be rebuilt into every request:
+ * plan-step retry steering, recalled memory, and the goal objective. Each is
+ * committed once and then carried by history.
+ */
+internal suspend fun ChatViewModel.commitSessionNoticesOnce(
+    goalObjective: String,
+    goalPrompt: String?,
+    goalCanContinue: Boolean,
+) {
+    ensureSessionScopedNotices()
+    consumePlanStepRetryPrompt()?.let { commitHiddenUserNote(it) }
+    newRecallReminder()?.let { commitHiddenUserNote(it) }
+    if (!goalCanContinue || goalPrompt == null || goalObjective.isBlank()) return
+    // Hash the OBJECTIVE, not the rendered block: the block carries
+    // tokens/elapsed that tick every request and would re-announce every turn.
+    val sha = com.openminis.app.util.Digest.sha256Hex(goalObjective)
+    if (sha == goalAnnouncedSha) return
+    goalAnnouncedSha = sha
+    commitHiddenUserNote(
+        "Current objective — supersedes any earlier <goal_context> in this conversation.\n\n" +
+            goalPrompt,
+    )
+}
+
 internal suspend fun ChatViewModel.commitHiddenUserNote(text: String) {
     if (text.isBlank()) return
     // [T-hidden-user-note] Harness framing, not user speech: ZCode delivers
