@@ -1360,14 +1360,6 @@ class ChatViewModel(
     override val compactSummary: StateFlow<String?> = _compactSummary.asStateFlow()
 
     /**
-     * Set each [buildSystemPrompt] from whether a personality body was
-     * injected. [effectiveAgentHistory] then prefixes the latest user-text
-     * turn so existing sessions don't keep the previous generic voice.
-     */
-    @Volatile
-    internal var personaHistorySteering = false
-
-    /**
      * Byte offset at which the last [buildSystemPrompt] result switches from
      * byte-stable (base, skills, MCP, global + daily memory) to per-turn
      * dynamic (WorldBook hits, learned prefs, recall, runtime context).
@@ -2911,7 +2903,7 @@ class ChatViewModel(
                     "from outbound history (${scrubbed.savedChars} chars saved)",
             )
         }
-        val steered = if (personaHistorySteering) com.openminis.app.agent.PersonaPromptLogic.applyHistorySteering(scrubbed.history) else scrubbed.history
+        val steered = scrubbed.history
         // Rows trimmed out of the window stay as a clipped excerpt; the digest covers what this process dropped.
         // [T-message-transformers] 发送前清洗 assistant 文本里的思考残留。
         val cleaned = HistoryDigest.inject(
