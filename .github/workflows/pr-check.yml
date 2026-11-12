@@ -145,6 +145,15 @@ jobs:
       - name: Architecture policy ratchet
         run: python3 scripts/ci/check_architecture_policy.py
 
+      # [T-tool-execution-ledger] Structural ratchet: both execution lanes
+      # must route through ToolExecutionLedger.executeOnce BEFORE dispatching
+      # a side effect. #330 regressed on the spawn lane (awaitAll of
+      # executeRunSubAgent, then ledger.reuse()) which launched a second wave
+      # for a replayed call. Cheap tree-state check + Python state-machine
+      # replica; runs on every event so main pushes are covered too.
+      - name: Tool single-execution contract (both lanes)
+        run: python3 scripts/ci/check_tool_execution_contract.py
+
       # [T-announced-tools-core] The plan board fragment told the model to
       # "advance items with agent_plan" while agent_plan was long-tail, so the
       # board the user watched could never move (and could never be created:
