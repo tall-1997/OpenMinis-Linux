@@ -171,6 +171,7 @@ val turnSystemPrompt = refreshRuntimeContextDate(systemPrompt, LocalDate.now().t
 
 ---
 
+
 ## 五、影响面与风险
 
 | 改动 | 风险 | 缓解 |
@@ -180,6 +181,27 @@ val turnSystemPrompt = refreshRuntimeContextDate(systemPrompt, LocalDate.now().t
 | 移除 history graft | goal 首挂载/appendNewUser 语义 | 保留 goal 首挂载路径，仅去掉例行块 |
 
 ---
+
+## 六、P2 并行工具调用（已实施）
+
+轮次爆炸（样本 1289 轮 × 每轮恰好 1 个工具）的另一半原因是模型不敢批量发调用：调度器
+（`[T-parallel-tool-calls]` / `ToolCallLanes`）早已支持"只读并发、写屏障串行"，但系统提示
+从未告诉模型这件事。
+
+本次落地：
+
+1. **能力声明（不是约束）**：系统提示新增 `Parallel tool calls (capability, not advice)` 段，
+   明确"host 能并发执行同一响应里的多个独立调用"，并点名 parallel-safe 工具
+   （file_read/list_dir/grep/glob/web_fetch/web_search/read_image/ocr_image/memory_get/
+   search_sessions/read_session/code_graph/get_screen_time）与 serial barriers
+   （file_write/file_edit/multi_edit/shell_execute/spawn_agent/ask_user_question/cronjob）。
+2. **与真实 lane 表的一致性守护**：`ParallelToolsPromptTest` 用 `ToolCallLanes.laneFor()`
+   逐条核对提示里声明的工具——声明为并行却实际是 BARRIER（或反之）会直接测试失败，
+   防止提示与调度器漂移。
+3. **预期收益**：独立只读侦察类任务（读多文件、并行检索）轮次可降 30–50%，总耗时
+   约降 20–40%；链式任务（clone→build→test）受依赖限制收益 < 15%。工具执行耗时本身不变，
+   省下的是模型往返。
+
 
 ## 附录 A：UI/导出噪音（次要，首版内容）
 
