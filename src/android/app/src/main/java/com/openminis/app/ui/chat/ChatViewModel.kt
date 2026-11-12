@@ -1316,15 +1316,7 @@ class ChatViewModel(
     internal val _promptQueue = MutableStateFlow<List<QueuedPrompt>>(emptyList())
     val promptQueue: StateFlow<List<QueuedPrompt>> = _promptQueue.asStateFlow()
 
-    /**
-     * [T-plan-step-retry] One-shot plan-step retry request, shared with
-     * ChatViewModelPlanStepExt.kt (extensions cannot add fields, so the state
-     * lives here and the behavior lives in the ext). Set by
-     * [ChatViewModel.retryPlanStep] when the user retries a failed board step;
-     * consumed by `planBoardPrompt` at the NEXT request assembly, where it
-     * rides inside the `<plan_board>` block as one-shot steering. Null when
-     * nothing is pending.
-     */
+    /** [T-plan-step-retry] One-shot retry steering, consumed by [commitSessionNoticesOnce]. */
     internal val _planStepRetry = MutableStateFlow<PlanStepRetryRequest?>(null)
     val planStepRetry: StateFlow<PlanStepRetryRequest?> = _planStepRetry.asStateFlow()
 
@@ -1352,6 +1344,12 @@ class ChatViewModel(
     internal val announcedRecallKeys: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
     /** [T-goal-once] Objective sha already delivered. */
     @Volatile internal var goalAnnouncedSha: String? = null
+
+    /** [T-recall-once] Committed recall note; re-announced only after eviction. */
+    @Volatile internal var announcedRecallCarrier: String? = null
+
+    /** [T-goal-once] Marker of the committed objective note. */
+    @Volatile internal var goalAnnouncedCarrier: String? = null
 
     /** [T-recall-once] Session the notice bookkeeping belongs to. */
     @Volatile internal var noticesSessionId: String? = null

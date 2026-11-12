@@ -24,7 +24,9 @@ internal fun ChatViewModel.ensureSessionScopedNotices() {
     if (sid != noticesSessionId) {
         noticesSessionId = sid
         announcedRecallKeys.clear()
+        announcedRecallCarrier = null
         goalAnnouncedSha = null
+        goalAnnouncedCarrier = null
     }
 }
 
@@ -39,18 +41,32 @@ internal suspend fun ChatViewModel.commitSessionNoticesOnce(
     goalCanContinue: Boolean,
 ) {
     ensureSessionScopedNotices()
+    // [T-recall-once] Eviction, not repetition, is the reason to surface a
+    // memory again: compaction/trimming can drop the committed note, and a
+    // memory the model can no longer see must be allowed to return ONCE.
+    announcedRecallCarrier?.let { carrier ->
+        if (agentHistory.none { it.content.contains(carrier) }) {
+            announcedRecallKeys.clear()
+            announcedRecallCarrier = null
+        }
+    }
     consumePlanStepRetryPrompt()?.let { commitHiddenUserNote(it) }
-    newRecallReminder()?.let { commitHiddenUserNote(it) }
+    newRecallReminder()?.let { note ->
+        commitHiddenUserNote(note)
+        announcedRecallCarrier = note
+    }
     if (!goalCanContinue || goalPrompt == null || goalObjective.isBlank()) return
+    // Same eviction rule for the objective.
+    val goalMarker = "Current objective — supersedes any earlier <goal_context>"
+    val goalEvicted = goalAnnouncedCarrier != null &&
+        agentHistory.none { it.content.contains(goalMarker) }
     // Hash the OBJECTIVE, not the rendered block: the block carries
     // tokens/elapsed that tick every request and would re-announce every turn.
     val sha = com.openminis.app.util.Digest.sha256Hex(goalObjective)
-    if (sha == goalAnnouncedSha) return
+    if (sha == goalAnnouncedSha && !goalEvicted) return
     goalAnnouncedSha = sha
-    commitHiddenUserNote(
-        "Current objective — supersedes any earlier <goal_context> in this conversation.\n\n" +
-            goalPrompt,
-    )
+    goalAnnouncedCarrier = goalMarker
+    commitHiddenUserNote("$goalMarker in this conversation.\n\n$goalPrompt")
 }
 
 internal suspend fun ChatViewModel.commitHiddenUserNote(text: String) {

@@ -514,6 +514,25 @@ object AgentPlanTool {
         return "(${done}/${plans.size} done)"
     }
 
+    /**
+     * [T-board-in-receipt] The board no longer rides every request, so the
+     * receipt (the model's only durable view of the plan) carries the list:
+     * position, status and title, no ids, no descriptions. ZCode's TodoWrite
+     * returns the full list on every write for the same reason.
+     */
+    private fun boardLines(sessionId: String, context: Context?): String {
+        val plans = AgentPlanStore.list(sessionId, context)
+        if (plans.isEmpty()) return ""
+        val done = plans.count { it.status == "done" }
+        return buildString {
+            appendLine()
+            appendLine("Plan (${done}/${plans.size} done):")
+            plans.forEachIndexed { index, plan ->
+                appendLine("${index + 1}. [${plan.status}] ${plan.title}")
+            }
+        }.trimEnd()
+    }
+
     fun execute(argsJson: String, sessionId: String = "__default__", context: Context? = null): ToolExecutionResult {
         val toolTitle = runCatching { JSONObject(argsJson).optString("tool_title", NAME) }.getOrDefault(NAME)
         return try {
@@ -522,7 +541,7 @@ object AgentPlanTool {
             when (op) {
                 "add" -> {
                     val p = AgentPlanStore.add(sessionId, context, args.optString("title"), args.optString("description"), args.optString("status", "pending"), args.optString("id").takeIf { it.isNotBlank() })
-                    ToolExecutionResult("Added {${p.id}}: ${p.title} ${progressLine(sessionId, context)}", true, toolTitle = toolTitle)
+                    ToolExecutionResult("Added {${p.id}}: ${p.title} ${progressLine(sessionId, context)}${boardLines(sessionId, context)}", true, toolTitle = toolTitle)
                 }
                 "update" -> {
                     val ref = args.optString("id")
@@ -535,11 +554,11 @@ object AgentPlanTool {
                     val advanceNote = promoted?.let {
                         "\nAuto-activated next step {${it.id}}: ${it.title} — continue with it."
                     } ?: ""
-                    ToolExecutionResult("Updated {${p.id}}: ${p.title} [${p.status}] ${progressLine(sessionId, context)}$advanceNote", true, toolTitle = toolTitle)
+                    ToolExecutionResult("Updated {${p.id}}: ${p.title} [${p.status}] ${progressLine(sessionId, context)}$advanceNote${boardLines(sessionId, context)}", true, toolTitle = toolTitle)
                 }
                 "remove" -> {
                     val ref = args.optString("id")
-                    if (AgentPlanStore.remove(sessionId, context, ref)) ToolExecutionResult("Removed: ${ref} ${progressLine(sessionId, context)}", true, toolTitle = toolTitle)
+                    if (AgentPlanStore.remove(sessionId, context, ref)) ToolExecutionResult("Removed: ${ref} ${progressLine(sessionId, context)}${boardLines(sessionId, context)}", true, toolTitle = toolTitle)
                     else ToolExecutionResult("Error: plan item not found for \"$ref\". Current board: ${AgentPlanStore.render(sessionId, context)}", false, toolTitle = toolTitle)
                 }
                 "clear" -> { AgentPlanStore.clear(sessionId, context); ToolExecutionResult("(plan list cleared)", true, toolTitle = toolTitle) }
@@ -553,7 +572,7 @@ object AgentPlanTool {
                     }
                     AgentPlanStore.replace(sessionId, context, items)
                     val titles = items.take(10).joinToString(", ") { it.title } + if (items.size > 10) " +${items.size - 10} more" else ""
-                    ToolExecutionResult("Replaced plans: ${items.size} items — $titles ${progressLine(sessionId, context)}", true, toolTitle = toolTitle)
+                    ToolExecutionResult("Replaced plans: ${items.size} items — $titles ${progressLine(sessionId, context)}${boardLines(sessionId, context)}", true, toolTitle = toolTitle)
                 }
                 else -> ToolExecutionResult(AgentPlanStore.render(sessionId, context), true, toolTitle = toolTitle)
             }

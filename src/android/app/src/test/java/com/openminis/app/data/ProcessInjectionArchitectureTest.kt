@@ -34,7 +34,8 @@ class ProcessInjectionArchitectureTest {
         )
         val notes = ProductionSources.read("ui/chat/ChatViewModelHiddenNote.kt")
         assertTrue("goal is announced once", notes.contains("goalAnnouncedSha"))
-        assertTrue("recall is committed once", notes.contains("newRecallReminder()?.let { commitHiddenUserNote(it) }"))
+        assertTrue("recall is committed once", notes.contains("newRecallReminder()"))
+        assertTrue("recall re-surfaces only after eviction", notes.contains("announcedRecallCarrier"))
         assertTrue("plan retry is not dropped", notes.contains("consumePlanStepRetryPrompt()"))
     }
 
