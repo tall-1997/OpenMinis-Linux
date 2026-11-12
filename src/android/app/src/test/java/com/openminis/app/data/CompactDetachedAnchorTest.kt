@@ -3,6 +3,7 @@ package com.openminis.app.data
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.ui.chat.ChatViewModel
+import com.openminis.app.ui.chat.buildDetachedCompactHistory
 import com.openminis.app.ui.chat.dropOrphanedToolParts
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -56,7 +57,7 @@ class CompactDetachedAnchorTest {
     @Test
     fun `a short history is passed through with the summary inlined`() {
         val h = listOf(user(1), asst(1), user(2))
-        val out = ChatViewModel.buildDetachedCompactHistory("<summary/>", h, tailSize = 60)
+        val out = buildDetachedCompactHistory("<summary/>", h, tailSize = 60)
         assertEquals(3, out.size)
         assertEquals(LLMMessage.Role.USER, out.first().role)
         assertTrue(out.first().content.startsWith("<summary/>"))
@@ -66,7 +67,7 @@ class CompactDetachedAnchorTest {
     @Test
     fun `an oversized history is cut down to the tail budget`() {
         val h = history(200) // 400 entries
-        val out = ChatViewModel.buildDetachedCompactHistory("<summary/>", h, tailSize = 60)
+        val out = buildDetachedCompactHistory("<summary/>", h, tailSize = 60)
         // The cut walks back to the nearest round boundary, so it may include
         // at most the opening user turn of that round.
         assertTrue("expected a bounded tail, got ${out.size}", out.size in 60..61)
@@ -77,7 +78,7 @@ class CompactDetachedAnchorTest {
     @Test
     fun `leading assistant turns are peeled so the first message is user`() {
         val h = listOf(asst(1), asst(2), user(3), asst(3))
-        val out = ChatViewModel.buildDetachedCompactHistory("<summary/>", h, tailSize = 60)
+        val out = buildDetachedCompactHistory("<summary/>", h, tailSize = 60)
         assertEquals(LLMMessage.Role.USER, out.first().role)
         assertTrue(out.first().content.startsWith("<summary/>"))
     }
@@ -85,7 +86,7 @@ class CompactDetachedAnchorTest {
     @Test
     fun `a tail with no user turn still carries the summary`() {
         val h = listOf(asst(1), asst(2))
-        val out = ChatViewModel.buildDetachedCompactHistory("<summary/>", h, tailSize = 60)
+        val out = buildDetachedCompactHistory("<summary/>", h, tailSize = 60)
         assertEquals(3, out.size)
         assertEquals("<summary/>", out.last().content)
         assertEquals(LLMMessage.Role.USER, out.last().role)
@@ -95,7 +96,7 @@ class CompactDetachedAnchorTest {
     fun `the injected summary is strictly smaller than sending the whole history`() {
         // The point of the fix: bound what reaches the provider.
         val h = history(200)
-        val out = ChatViewModel.buildDetachedCompactHistory("<summary/>", h, tailSize = 60)
+        val out = buildDetachedCompactHistory("<summary/>", h, tailSize = 60)
         assertTrue(
             "expected ${out.size} sent messages vs ${h.size} in history",
             out.size < h.size,
@@ -111,7 +112,7 @@ class CompactDetachedAnchorTest {
             user(3),
         )
         // tailSize=3 → rawCut=4 → lands on assistant tool_use → walk back to u2 (index 3).
-        val out = ChatViewModel.buildDetachedCompactHistory("<summary/>", h, tailSize = 3)
+        val out = buildDetachedCompactHistory("<summary/>", h, tailSize = 3)
         assertEquals(LLMMessage.Role.USER, out.first().role)
         val (uses, results) = toolIds(out)
         assertEquals("every kept use must keep its result", uses, results)
@@ -126,7 +127,7 @@ class CompactDetachedAnchorTest {
             user(4), useMsg("call_4"),
         )
         for (tailSize in 1..h.size) {
-            val out = ChatViewModel.buildDetachedCompactHistory("<summary/>", h, tailSize = tailSize)
+            val out = buildDetachedCompactHistory("<summary/>", h, tailSize = tailSize)
             // A trailing in-flight use (the last message is the assistant's
             // tool_use, no result yet) is legitimate; every OTHER round kept
             // by the cut must be complete.

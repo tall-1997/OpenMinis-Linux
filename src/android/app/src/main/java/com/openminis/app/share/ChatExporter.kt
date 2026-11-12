@@ -380,8 +380,12 @@ private const val MAX_EXPORT_BODY_CHARS = 2000
                         val exportedBody = if (msg.bodyRef.isNullOrBlank()) {
                             body
                         } else if (body.length > MAX_EXPORT_BODY_CHARS) {
+                            // [T-export-quiet-transcript] Resource, not a
+                            // literal: the source-CJK gate scans Kotlin
+                            // strings, and export_* labels are deliberately
+                            // translatable="false" (export-language only).
                             body.take(MAX_EXPORT_BODY_CHARS) +
-                                "\n\n…（正文过长，已截断；完整内容保留在设备上的会话里）"
+                                "\n\n" + context.getString(R.string.export_body_truncated)
                         } else {
                             body
                         }
