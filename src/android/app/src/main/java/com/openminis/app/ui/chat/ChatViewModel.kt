@@ -515,109 +515,11 @@ class ChatViewModel(
                 // and the round-trip matcher compares trimmed values.
                 .trim()
 
-        // [T-preflight-tool-title-nonblocking] Fields kept in each tool's
-        // `required` list (so the schema keeps nudging the model to emit them —
-        // tool_title drives the live pill header) but which must NOT block the
-        // call when absent: they carry no execution semantics, so rejecting the
-        // whole call over a missing one is pure downside. Preflight skips these
-        // when checking for missing required fields. Mirrors iOS
-        // AIChatViewModel.preflightNonBlockingFields.
-        private val PREFLIGHT_NON_BLOCKING_FIELDS = setOf("tool_title")
-
-        /**
-         * (tool name → field names) where an EMPTY STRING is a semantically
-         * valid value and must not be treated as "missing".
-         *
-         * Distinct from [PREFLIGHT_NON_BLOCKING_FIELDS], which skips the
-         * missing-field check entirely: these fields must still be PRESENT in
-         * args — they are just allowed to hold "" as their content.
-         *
-         * The canonical case is `file_edit.new_string`, whose schema documents
-         * "Use empty string to delete old_string". Blocking it broke a promised
-         * deletion workflow and pushed the model into shell_execute + python
-         * file-rewrite workarounds. Mirrors iOS
-         * AIChatViewModel.preflightEmptyStringAllowedFields.
-         * [T-preflight-empty-string-allowed]
-         */
-        private val PREFLIGHT_EMPTY_STRING_ALLOWED_FIELDS: Map<String, Set<String>> = mapOf(
-            "file_edit" to setOf("new_string"),
-        )
-
-        /** True when "" is a legal value for this exact (tool, field) pair. */
-        internal fun preflightEmptyStringAllowed(tool: String, field: String): Boolean =
-            PREFLIGHT_EMPTY_STRING_ALLOWED_FIELDS[tool]?.contains(field) == true
-
-        /**
-         * Reject tool calls that have empty args or are missing required fields
-         * BEFORE [executeTool] runs. Returns null when the call is well-formed,
-         * or a human-readable reason string when it should be blocked.
-         *
-         * Driven off the canonical [AgentToolDefinition.required] list so the
-         * validator never drifts from the schema published to the model. For
-         * string fields we additionally require non-blank content — the model
-         * occasionally emits `{"path": ""}` which passes the "key exists" check
-         * but is just as broken as a missing key. We do NOT validate type beyond
-         * string-emptiness here; richer schema checks (enum, regex, integer
-         * range) belong in each tool's own helper because they need tool-specific
-         * context.
-         *
-         * Mirror of iOS preflightValidateToolCall in AIChatViewModel.swift.
-         *
-         * Lives in the companion (and is `internal`) because it is PURE — it reads
-         * only its parameters and companion constants — so unit tests can exercise
-         * it without constructing a ChatViewModel and its dependency graph. Mirrors
-         * the same `nonisolated static` move on iOS.
-         */
-        internal fun preflightValidateToolCallImpl(
-            name: String,
-            args: JSONObject,
-            tools: List<AgentToolDefinition>,
-        ): String? {
-            // Unknown tool names go through to the existing `else` branch in
-            // executeTool() which returns "Unknown tool: …". Preflight stays
-            // silent so we don't double-fail.
-            val toolDef = tools.firstOrNull { it.name == name } ?: return null
-            // Required fields that actually gate execution (everything except the
-            // non-blocking ones like tool_title — see PREFLIGHT_NON_BLOCKING_FIELDS).
-            val enforced = toolDef.required.filter { it !in PREFLIGHT_NON_BLOCKING_FIELDS }
-            // Empty args on a tool that requires anything → block. Gate on
-            // `enforced` so a tool whose only required field is non-blocking isn't
-            // rejected for empty args, and the message lists only real blockers.
-            if (args.length() == 0 && enforced.isNotEmpty()) {
-                return "Tool '$name' was called with empty arguments {} but requires: ${enforced.joinToString(", ")}."
-            }
-            val missing = mutableListOf<String>()
-            for (field in enforced) {
-                // Absent — or present as an explicit JSON null. org.json reports
-                // has() == true for `{"x": null}` and opt() hands back
-                // JSONObject.NULL, which is not a String, so a null previously
-                // slipped through BOTH checks and reached the tool as a non-String
-                // value. Both spellings are genuinely missing.
-                if (!args.has(field) || args.isNull(field)) {
-                    missing.add(field)
-                    continue
-                }
-                val raw = args.opt(field)
-                // Only the truly-empty literal "" is rejected — NOT whitespace.
-                // The earlier `.trim().isEmpty()` over-rejected legitimate payloads,
-                // most notably file_edit with `new_string: "\n"` (replace a block
-                // with a newline) or `old_string: "  "` (match consecutive spaces).
-                // Both are valid edits, neither is stream corruption.
-                //
-                // And even "" is legal for whitelisted (tool, field) pairs:
-                // file_edit.new_string == "" is the documented "delete old_string"
-                // form, not a missing value. [T-preflight-empty-string-allowed]
-                if (raw is String && raw.isEmpty() &&
-                    !preflightEmptyStringAllowed(name, field)
-                ) {
-                    missing.add(field)
-                }
-            }
-            if (missing.isNotEmpty()) {
-                return "Tool '$name' is missing required parameter(s): ${missing.joinToString(", ")}."
-            }
-            return null
-        }
+        // [F3 GH#61] 必填字段 / 空参数（required-field / empty-args）预检已下沉到
+        // 共享层 `ToolCallPreflight.requiredFieldViolation`，由
+        // `ToolCallPreflight.finalize` 对三个执行入口（主循环 / 子代理 / 群聊-
+        // 主管）统一调用。这里不再保留第二份实现：两份实现正是子代理/群聊绕过
+        // 预检、把 `{}` 当合法调用的根因。字段白名单随实现一起移走。
         // [T-android-stream-flush-dualpath] Newline fast-path thresholds (iOS parity).
         private const val NEWLINE_FLUSH_MIN_CHARS = 50
         private const val NEWLINE_FLUSH_MAX_LEN = 5_000
@@ -861,7 +763,7 @@ class ChatViewModel(
      * ChatScreen uses this to show / hide the "Load older messages" header
      * pill on the LazyColumn.
      */
-    private val _hasOlderMessages = MutableStateFlow(false)
+    internal val _hasOlderMessages = MutableStateFlow(false)
     val hasOlderMessages: StateFlow<Boolean> = _hasOlderMessages.asStateFlow()
     // [T-android-split-chat-historypage] internal (was private): read/written by
     // the tail-attach driver in ChatViewModelHistoryPageExt.kt.
@@ -878,50 +780,6 @@ class ChatViewModel(
     internal val taskAnchorText: StateFlow<String?> = _taskAnchorText.asStateFlow()
     internal val _isLoadingHistory = MutableStateFlow(false)
     val isLoadingHistory: StateFlow<Boolean> = _isLoadingHistory.asStateFlow()
-
-    internal suspend fun refreshHistoryEdges(scheduleTail: Boolean = true) {
-        val oldest = timeline.oldestSortOrder
-        val newest = timeline.newestSortOrder
-        if (oldest == null || newest == null) {
-            timeline.reset()
-            _hasOlderMessages.value = false
-            _hasNewerMessages.value = false
-            return
-        }
-        val before = chatRepository.dao.countMessagesBeforeSort(sessionId, oldest)
-        val after = chatRepository.dao.countMessagesAfterSort(sessionId, newest)
-        val loadedDbRows = if (newest == Int.MAX_VALUE) {
-            // Avoid overflowing the half-open upper bound at the integer edge.
-            chatRepository.dao.messageCountForSession(sessionId) - before - after
-        } else {
-            chatRepository.dao.countMessagesInSortRange(
-                sessionId = sessionId,
-                startInclusive = oldest,
-                endExclusive = newest + 1,
-            )
-        }
-        // Derive the counters from DB sequence ranges, never from the number
-        // of painted rows. One ChatMessage can represent several DB rows.
-        // [T-android-timeline-ledger] The edge booleans are DB-authoritative:
-        // nothing else in the app may write them (the old offset-based
-        // refreshHasOlderMessages double ledger is gone).
-        timeline.seedCounters(offset = before, total = before + loadedDbRows + after)
-        _hasOlderMessages.value = before > 0
-        _hasNewerMessages.value = after > 0
-        if (after == 0) _sessionTailReady.value = true
-        // A newer gap means the painted window is not the session tail.
-        // Attach it. Do not wait for a second control.
-        if (scheduleTail && after > 0) ensureSessionTailLoaded()
-    }
-
-    internal fun rememberDigestLines(lines: List<HistoryDigest.Line>) {
-        if (lines.isEmpty()) return
-        llmDigestLines.addAll(lines)
-        val retained = HistoryDigest.retainNewest(llmDigestLines)
-        llmDigestOmitted += (llmDigestLines.size - retained.size).coerceAtLeast(0)
-        llmDigestLines.clear()
-        llmDigestLines.addAll(retained)
-    }
 
     internal fun notePersistedUiRow(uiMessageId: String?, dbMessageId: String) {
         if (uiMessageId != null) {
@@ -1626,7 +1484,25 @@ class ChatViewModel(
     @Volatile
     internal var stoppedRun: com.openminis.app.service.ActiveRun? = null
 
+    /**
+     * [GH#258][GH#287] [com.openminis.app.network.AppTrustStore.generation] at
+     * the moment [currentProvider] was last assigned.
+     *
+     * An OkHttpClient freezes its TLS socket factory at build time, and this
+     * field keeps ONE provider alive across turns, so invalidating
+     * ProviderFactory's memo alone is not enough for an open chat: the field
+     * would keep the old client until the model/session changed. The setter
+     * records the generation, and `rebuildProviderIfEdited()` rebuilds when it
+     * no longer matches (a CA was imported/removed in Settings).
+     */
+    @Volatile
+    internal var providerTrustGeneration: Int = -1
+
     internal var currentProvider: LLMProvider? = null
+        set(value) {
+            field = value
+            providerTrustGeneration = com.openminis.app.network.AppTrustStore.generation
+        }
     internal var currentModel: LLMModel? = null
 
     // [port-upstream-1.16][T-android-provider-edit-mid-session] Watch state
@@ -1734,6 +1610,8 @@ class ChatViewModel(
             mcpNativeEnabled = mcpRepository != null,
             includeLongTail = true,
             hasSpeechModel = providerRepository.resolveVoiceInputEntry() != null,
+            // [GH#298] Settings → Web search 总开关。
+            webSearchEnabled = com.openminis.app.tools.WebSearchSettings.toolEnabled(context),
         ) + com.openminis.app.plugins.OnlinePluginStore.toolDefinitions(context) +
             com.openminis.app.plugins.LocalToolPluginStore.agentToolDefinitions(context)
         val matches = com.openminis.app.tools.FindTools.search(query, all, limit)
@@ -1765,6 +1643,9 @@ class ChatViewModel(
                 (if (multiAgentSettings.enabled.value) 8L else 0L) or
                 (com.openminis.app.plugins.OnlinePluginStore.toolDefinitionsStamp(context) shl 4) xor
                 (com.openminis.app.plugins.LocalToolPluginStore.toolsStamp(context) shl 20) xor
+                // [GH#298] 关掉 web_search 必须让 memo 失效，否则切换开关后
+                // 本次进程内仍会继续下发旧 schema。
+                (if (com.openminis.app.tools.WebSearchSettings.toolEnabled(context)) 0L else 1L shl 40) xor
                 enabledStamp
             agentToolsMemo?.takeIf { agentToolsMemoStamp == stamp }?.let { return it }
             val built = AgentTools.makeAgentTools(
@@ -1787,6 +1668,8 @@ class ChatViewModel(
                 includeLongTail = false,
                 enabledToolNames = enabledLongTailTools,
                 hasSpeechModel = providerRepository.resolveVoiceInputEntry() != null,
+                // [GH#298] 与 findAndEnableTools 同一开关。
+                webSearchEnabled = com.openminis.app.tools.WebSearchSettings.toolEnabled(context),
             ) + com.openminis.app.plugins.OnlinePluginStore.toolDefinitions(context) +
                 com.openminis.app.plugins.LocalToolPluginStore.agentToolDefinitions(context)
             agentToolsMemo = built
@@ -1849,6 +1732,32 @@ class ChatViewModel(
 
     fun ackClearChatConfirmRequest() {
         _clearChatConfirmRequested.value = false
+    }
+
+    /**
+     * [GH#325] Set by an explicit `/clear` or `/compact` in THIS process.
+     * Checked synchronously by [cleanupIfEmptyOnExit] so the race between the
+     * user leaving the screen and the durable marker write cannot delete a
+     * deliberately emptied session. The on-disk marker in [ChatSessionRetention]
+     * carries the same fact across restarts.
+     */
+    @Volatile
+    private var sessionExplicitlyEmptied = false
+
+    /**
+     * [GH#325] Mark the session as deliberately emptied (clear/compact) and
+     * persist the marker off the main thread. Idempotent; called from both
+     * entry points.
+     */
+    internal fun markSessionExplicitlyEmptied(reason: String) {
+        val sid = realSessionId.ifEmpty { sessionId }
+        if (sid.isEmpty()) return
+        sessionExplicitlyEmptied = true
+        val scope = (context.applicationContext as? com.openminis.app.MinisApp)
+            ?.appCoroutineScopes?.io ?: viewModelScope
+        scope.launch {
+            ChatSessionRetention.markExplicitlyEmptied(context.filesDir, sid, reason)
+        }
     }
 
     internal val _memoryToolRecords = MutableStateFlow<List<MemoryToolRecord>>(emptyList())
@@ -2451,7 +2360,25 @@ class ChatViewModel(
     val mentionSelectedIndex: StateFlow<Int> = _mentionSelectedIndex.asStateFlow()
 
     val currentModelSupportsReasoning: Boolean
-        get() = currentModel?.supportsReasoning == true
+        get() {
+            // [GH#311] A provider-level force switch overrides capability detection.
+            if (activeInstanceForcesThinking()) return true
+            val modelReasoning = currentModel?.supportsReasoning
+            if (modelReasoning != null) return modelReasoning
+            // [GH#180] The resolved `currentModel` is only populated once a
+            // model group (or a persisted session binding) has been resolved.
+            // A fresh chat with no default model group therefore reported
+            // "no reasoning" even when the session's own entry/model does
+            // support it, so the thinking-level entry (top-bar badge + the
+            // /thinking row) disappeared until the user picked a group. Ask
+            // the SESSION's bound entry directly — capability is a property
+            // of the model, never of the group.
+            val entry = _activeEntryId.value?.let { id ->
+                providerRepository.config.value.modelEntries.find { it.id == id }
+            }
+            if (entry != null) return entry.model.supportsReasoning != false
+            return false
+        }
 
     /**
      * [T-android-thinking-level-arch] The thinking ceiling the currently-bound
@@ -2466,7 +2393,7 @@ class ChatViewModel(
                 providerRepository.config.value.modelEntries.find { it.id == id }
             }
             if (entry != null) {
-                return entry.effectiveMaxThinkingLevel
+                return forcedThinkingCeiling(entry) // [OpenMinis#311]
             }
             val model = currentModel ?: return ThinkingLevel.XHIGH
             return model.catalogMaxThinkingLevel
@@ -2973,7 +2900,19 @@ class ChatViewModel(
      */
     internal fun effectiveAgentHistory(): List<LLMMessage> {
         val repaired = dropOrphanedToolParts(effectiveAgentHistoryUncounted())
-        val steered = if (personaHistorySteering) com.openminis.app.agent.PersonaPromptLogic.applyHistorySteering(repaired) else repaired
+        // [GH#352] A base64 image that entered history as TEXT (instead of an
+        // image content block) blows the model's context window on EVERY
+        // request and bricks the session. Scrub it from the outgoing copy only;
+        // the persisted rows are untouched.
+        val scrubbed = TextifiedImageGuard.scrub(repaired)
+        if (scrubbed.scrubbedParts > 0) {
+            com.openminis.app.logging.AppLogger.warning(
+                TAG,
+                "[GH#352] scrubbed ${scrubbed.scrubbedParts} textified image part(s) " +
+                    "from outbound history (${scrubbed.savedChars} chars saved)",
+            )
+        }
+        val steered = if (personaHistorySteering) com.openminis.app.agent.PersonaPromptLogic.applyHistorySteering(scrubbed.history) else scrubbed.history
         // Rows trimmed out of the window stay as a clipped excerpt; the digest covers what this process dropped.
         // [T-message-transformers] 发送前清洗 assistant 文本里的思考残留。
         val cleaned = HistoryDigest.inject(
@@ -3052,11 +2991,23 @@ class ChatViewModel(
         val model: LLMModel,
         val nextHint: String,
         val temperature: Double? = null,
+        /**
+         * [GH#221] Owning provider instance, so the compaction request can carry
+         * the same per-instance headers as the chat request (OpenCode Go's
+         * `x-opencode-session` rejects a summarisation call without it).
+         */
+        val instanceId: String? = null,
     ) {
         fun maxOutFor(userMessage: String): Int {
             val estimatedInput = userMessage.length / 4
             val window = model.contextWindow?.takeIf { it > 0 } ?: 128_000
-            return maxOf(1024, minOf(8192, window - estimatedInput))
+            // [GH#74] Budget against the model that will ACTUALLY serve this
+            // stage: its remaining headroom (window - input) AND its own output
+            // ceiling. The old formula ignored maxOutputTokens, so a stage whose
+            // declared ceiling was 4K asked for 8K and relied on the upstream to
+            // clamp or reject.
+            val declaredCeiling = model.maxOutputTokens?.takeIf { it > 0 }?.coerceAtMost(8192) ?: 8192
+            return maxOf(1024, minOf(declaredCeiling, window - estimatedInput))
         }
     }
 
@@ -3784,6 +3735,14 @@ class ChatViewModel(
     fun clearChat() {
         if (_isStreaming.value) cancelStream()
         val sid = activeSessionId
+        // [GH#325] /clear is an explicit, user-confirmed action. Record the
+        // retention marker BEFORE the wipe so the exit cleanup
+        // (cleanupIfEmptyOnExit) can never mistake "explicitly cleared" for
+        // "materialised but never used" and delete the session row + workspace
+        // on the way out. The in-memory flag covers the same-process race; the
+        // on-disk marker survives a process restart; an explicit session
+        // delete removes the whole directory with it.
+        markSessionExplicitlyEmptied("clear")
         // T-streaming-side-channel: ensure no stale stream delta survives a
         // session wipe; the messages list is about to be cleared, so any
         // pending key would be orphaned.
@@ -3837,10 +3796,28 @@ class ChatViewModel(
         }
         // Persist: drop messages + compact markers. Files (workspace,
         // attachments, offloads) intentionally retained.
-        viewModelScope.launch {
-            chatRepository.dao.deleteMessages(sid)
-            chatRepository.dao.deleteCompactMarkers(sid)
-            Log.i(TAG, "clearChat: session=$sid wiped (files preserved)")
+        //
+        // [GH#325] Run on the application scope, not viewModelScope: the user
+        // can clear and immediately leave the screen (which clears the VM) or
+        // the process can be reclaimed; a viewModelScope launch is cancelled
+        // at that point and the old rows come back on the next launch. Also
+        // blank the session-list preview in the same pass so a restart cannot
+        // show the pre-clear last message on a now-empty chat.
+        val appScope = (context.applicationContext as? com.openminis.app.MinisApp)
+            ?.appCoroutineScopes?.io
+        (appScope ?: viewModelScope).launch {
+            try {
+                // [GH#325] Marker FIRST, in the same coroutine as the wipe:
+                // a process death between the two must never leave a cleared
+                // session that looks "never used" on the next launch.
+                ChatSessionRetention.markExplicitlyEmptied(context.filesDir, sid, "clear")
+                chatRepository.dao.deleteMessages(sid)
+                chatRepository.dao.deleteCompactMarkers(sid)
+                chatRepository.dao.clearLastMessagePreview(sid)
+                Log.i(TAG, "clearChat: session=$sid wiped (files preserved)")
+            } catch (t: Throwable) {
+                Log.e(TAG, "clearChat: wipe failed for session=$sid", t)
+            }
         }
     }
 
@@ -4746,6 +4723,10 @@ class ChatViewModel(
      * Safe to call multiple times; the row-existence + count gates make it
      * idempotent. After deletion we release the cached VM so a stale entry
      * doesn't linger in `ChatViewModelStore`.
+     *
+     * [GH#325] Sessions explicitly emptied by `/clear` or `/compact` are
+     * excluded (in-memory flag + on-disk marker): auto-deleting those removed
+     * the session row and its workspace after a restart.
      */
     fun cleanupIfEmptyOnExit() {
         val sid = realSessionId
@@ -4756,6 +4737,17 @@ class ChatViewModel(
             try {
                 val count = chatRepository.messageCount(sid)
                 if (count > 0) return@launch
+                // [GH#325] NEVER auto-delete a session the user explicitly
+                // emptied (/clear, /compact). That action is deliberate and
+                // must persist across restart; only sessions materialised
+                // without ever being used are residue. See ChatSessionRetention.
+                if (sessionExplicitlyEmptied || ChatSessionRetention.isRetained(context.filesDir, sid)) {
+                    AppLogger.info(
+                        TAG,
+                        "cleanupIfEmptyOnExit: keeping explicitly-emptied session $sid (GH#325)",
+                    )
+                    return@launch
+                }
                 AppLogger.info(
                     TAG,
                     "cleanupIfEmptyOnExit: deleting empty session $sid (no persisted messages)",

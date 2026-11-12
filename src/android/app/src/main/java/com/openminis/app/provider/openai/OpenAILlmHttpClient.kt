@@ -1,5 +1,6 @@
 package com.openminis.app.provider.openai
 
+import com.openminis.app.network.applyAppTrustStore
 import com.openminis.app.provider.ZenFreeLaneGate
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
@@ -75,5 +76,8 @@ internal object OpenAILlmHttpClient {
         // gate has to sit on the wire where every call path (streaming,
         // subagents, vision, compaction, titles) picks it up at once.
         .addInterceptor(ZenFreeLaneGate)
+        // [GH#258][GH#287] Trust a user-imported CA on custom endpoints.
+        // Applied last so it only changes TLS when the store actually has one.
+        .applyAppTrustStore()
         .build()
 }

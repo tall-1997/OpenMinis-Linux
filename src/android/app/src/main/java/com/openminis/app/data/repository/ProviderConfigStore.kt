@@ -15,6 +15,7 @@ import com.openminis.app.provider.BuiltinFreeLane
 import com.openminis.app.provider.BuiltinFreeLanes
 import com.openminis.app.provider.FreeLaneHealth
 import com.openminis.app.provider.FreeLaneManifest
+import com.openminis.app.provider.thinking.ThinkingRuleResolver
 import java.io.File
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -230,7 +231,16 @@ internal class ProviderConfigStore(
     // "all your providers are gone" rather than "not loaded yet". Those run
     // off-main, so they still get the force-load.
     internal fun ensureConfigLoaded(): Boolean {
-        if (repo._configLoaded.value) return true
+        if (repo._configLoaded.value) {
+            // [OpenMinis#306] The async startup loader flips `_configLoaded`
+            // just before warming the custom thinking-rule cache. A consumer
+            // that reached this early-return in that window would build its
+            // first request against built-ins only. Off-main callers therefore
+            // finish the warm synchronously; main-thread callers only read
+            // (the request builder never runs on Main), so they cannot block.
+            if (!isOnMainThread()) warmThinkingRulesBlocking()
+            return true
+        }
         if (isOnMainThread()) {
             // [Wave3-fix-1] Refuse instead of runBlocking: never park Main for
             // the startup decode, and never let a mutation run against the
@@ -244,27 +254,48 @@ internal class ProviderConfigStore(
             return false
         }
         synchronized(repo.configLock) {
-            if (repo._configLoaded.value) return true
-            // A read-modify-write operation must never proceed from the empty
-            // placeholder when persisted data could not be read. Keep this
-            // failure observable to each caller so it can abort before mutation.
-            val loaded = try {
-                loadConfig()
-            } catch (e: Exception) {
-                android.util.Log.e(
-                    "ProviderRepo",
-                    "[ProviderStore] ensureConfigLoaded failed; staying unloaded for retry: ${e.message}",
-                )
-                throw IllegalStateException("Provider configuration could not be loaded; mutation aborted", e)
+            if (!repo._configLoaded.value) {
+                // A read-modify-write operation must never proceed from the empty
+                // placeholder when persisted data could not be read. Keep this
+                // failure observable to each caller so it can abort before mutation.
+                val loaded = try {
+                    loadConfig()
+                } catch (e: Exception) {
+                    android.util.Log.e(
+                        "ProviderRepo",
+                        "[ProviderStore] ensureConfigLoaded failed; staying unloaded for retry: ${e.message}",
+                    )
+                    throw IllegalStateException("Provider configuration could not be loaded; mutation aborted", e)
+                }
+                repo._config.value = loaded
+                repo._configLoaded.value = true
             }
-            repo._config.value = loaded
-            repo._configLoaded.value = true
         }
-        // [T-android-thinking-rules-phase2] Warm the resolver's custom-rule cache once
-        // config is available, so the (sync) request builder can read user rules.
-        repo.loadAllThinkingRulesIntoCache()
+        // [OpenMinis#306] This synchronous path is the one that can run on a
+        // COLD process (debug handlers, config bridge) before the startup
+        // loader has warmed anything. Fill the custom-rule cache INLINE here —
+        // same transaction the initial load uses — before signalling
+        // configLoadComplete; queueing it on the persist worker left the first
+        // request resolving built-ins only. The UI banner still surfaces a
+        // genuine fill failure via ThinkingRuleResolver.customRulesState.
+        warmThinkingRulesBlocking()
         if (!repo.configLoadComplete.isCompleted) repo.configLoadComplete.complete(Unit)
         return true
+    }
+
+    /**
+     * [OpenMinis#306] Block until the custom thinking-rule cache is
+     * authoritative (or terminally failed). Must only run off Main; the
+     * resolver state doubles as the completion latch — success and failure
+     * both leave NOT_LOADED, so a permanent Room failure cannot spin here.
+     */
+    private fun warmThinkingRulesBlocking() {
+        if (ThinkingRuleResolver.customRulesState !=
+            ThinkingRuleResolver.CustomRuleCacheState.NOT_LOADED
+        ) {
+            return
+        }
+        runBlocking { repo.warmThinkingRulesInline() }
     }
 
     /**

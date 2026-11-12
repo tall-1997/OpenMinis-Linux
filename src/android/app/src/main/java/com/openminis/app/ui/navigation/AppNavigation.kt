@@ -477,6 +477,8 @@ fun AppNavigation(
                 onAppearanceClick = { navController.safeNavigate(Routes.APPEARANCE) },
                 onBackgroundClick = { navController.safeNavigate(Routes.BACKGROUND) },
                 onWebSearchClick = { navController.safeNavigate(Routes.WEB_SEARCH) },
+                // [GH#131] Lifecycle hooks settings.
+                onLifecycleHooksClick = { navController.safeNavigate(Routes.LIFECYCLE_HOOKS) },
                 onTranslateClick = { navController.safeNavigate(Routes.TRANSLATE) },
                 onOpenBrowser = { navController.safeNavigate(Routes.HOME_BROWSER) },
                 onBrowserSettings = { navController.safeNavigate(Routes.HOME_BROWSER_SETTINGS) },
@@ -867,6 +869,13 @@ fun AppNavigation(
             )
         }
 
+        // [GH#131] Session lifecycle hooks (start / response / end → script).
+        composable(Routes.LIFECYCLE_HOOKS) {
+            com.openminis.app.ui.settings.LifecycleHooksScreen(
+                onBack = { navController.safePopBackStack() },
+            )
+        }
+
         // [T-dead-character-extras] Routes.CHARACTER_EXTRAS destination removed:
         // its only entry was SettingsScreen's onCharacterExtrasClick, a dead
         // callback no row ever invoked. The page (CharacterExtrasScreen) is
@@ -992,7 +1001,7 @@ fun AppNavigation(
  * composable instead of the whole AppNavigation body (which re-ran the
  * NavHost call and every destination lambda recreation before).
  */
-private class HtmlBrowserState {
+internal class HtmlBrowserState {
     var url by androidx.compose.runtime.mutableStateOf<String?>(null)
 }
 
@@ -1002,52 +1011,3 @@ private class HtmlBrowserState {
  * clears the state on dismiss. Same behavior as the previous inline tail
  * block, just isolated so only this composable recomposes on url flips.
  */
-@Composable
-private fun HtmlBrowserHost(state: HtmlBrowserState) {
-    val context = LocalContext.current
-    val pendingHtml = state.url
-    if (pendingHtml != null) {
-        val pool = (context.applicationContext as MinisApp).sharedBrowserTabPool
-        LaunchedEffect(pendingHtml) { pool.selectOrCreateTabForURL(pendingHtml) }
-        BrowserSheet(
-            tabPool = pool,
-            onDismiss = { state.url = null },
-        )
-    }
-}
-
-/**
- * [T-android-highfreq-read-isolation] Warm-share fallback host: collects
- * [com.openminis.app.share.ShareCoordinator.bufferVersion] and routes a share
- * that lands while the user sits on the session list into a fresh chat.
- * Collecting here (not in AppNavigation's body) means a share tick — which
- * happens on EVERY share, app-wide — recomposes only this child.
- *
- * T185 body unchanged: consumeBuffer is one-shot so a ChatScreen already in
- * the backstack won't double-inject.
- */
-@Composable
-private fun AppNavigationShareHost(navController: NavHostController) {
-    val shareBufferVersion by com.openminis.app.share.ShareCoordinator.bufferVersion.collectAsStateWithLifecycle()
-    LaunchedEffect(shareBufferVersion) {
-        if (shareBufferVersion == 0) return@LaunchedEffect
-        val current = navController.currentDestination?.route ?: return@LaunchedEffect
-        if (current == Routes.SESSION_LIST) {
-            navController.safeNavigate(Routes.chat("__new__${java.util.UUID.randomUUID()}")) {
-                popUpTo(Routes.SESSION_LIST) { inclusive = false }
-            }
-        }
-    }
-}
-
-/** 文件预览页里的 Markdown 链接：文件用文件预览路由，网页用浏览器路由。 */
-internal fun previewLink(navController: NavHostController, target: com.openminis.app.ui.markdown.MarkdownLinkResolver.Target) {
-    when (target) {
-        is com.openminis.app.ui.markdown.MarkdownLinkResolver.Target.File ->
-            navController.safeNavigate(Routes.filePreview(target.absolutePath))
-        is com.openminis.app.ui.markdown.MarkdownLinkResolver.Target.Web -> {
-            val encoded = java.net.URLEncoder.encode(target.url, "UTF-8")
-            navController.safeNavigate("${Routes.HOME_BROWSER}?url=$encoded")
-        }
-    }
-}

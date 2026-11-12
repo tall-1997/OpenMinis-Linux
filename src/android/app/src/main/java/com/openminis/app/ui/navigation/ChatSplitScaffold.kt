@@ -773,12 +773,12 @@ private fun NoConversationSelected(
             // Never scale a custom image ABOVE its stored resolution: icons are
             // saved at up to SoulIcon.STORED_PIXELS square and deliberately not
             // upscaled on save, so a 48px source blown up to a 64dp box would
-            // look soft. Cap the box at the bitmap's real size (in dp) and let
-            // a smaller icon simply render smaller and sharp. Emoji and the
-            // sparkle have no such limit — they are vectors/text.
+            // look soft. Cap the box at the bitmap's real size (in dp); emoji
+            // and the sparkle have no such limit — they are vectors/text.
+            val iconContext = LocalContext.current
             val density = LocalDensity.current
-            val iconBitmap = remember(soulMeta.icon) {
-                com.openminis.app.agent.SoulIcon.decode(soulMeta.icon)
+            val iconBitmap = remember(soulMeta.icon, iconContext) {
+                com.openminis.app.agent.SoulIcon.decode(soulMeta.icon, iconContext)
             }
             val iconSize = remember(iconBitmap, density) {
                 if (iconBitmap == null) EMPTY_STATE_ICON_SIZE

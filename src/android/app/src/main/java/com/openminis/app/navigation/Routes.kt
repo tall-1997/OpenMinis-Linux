@@ -111,6 +111,8 @@ object Routes {
     const val SKILL_FILE = "skill_file/{skillId}/{relativePath}"
     const val MINIS_SKILLS_BROWSER = "minis_skills_browser"
     const val WEB_SEARCH = "web_search"
+    // [GH#131] Lifecycle hooks settings page (session events → sandbox scripts).
+    const val LIFECYCLE_HOOKS = "lifecycle_hooks"
     const val TRANSLATE = "translate"
     const val TRANSLATE_PAD = "translate_pad"
     const val HOME_BROWSER = "home_browser"

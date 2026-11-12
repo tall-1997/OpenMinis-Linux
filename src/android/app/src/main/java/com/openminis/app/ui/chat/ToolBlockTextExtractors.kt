@@ -25,6 +25,39 @@ internal fun extractShellCommand(args: org.json.JSONObject, block: AssistantBloc
 }
 
 /**
+ * [T-shell-detail-dedupe GH#339] Drop a leading `$ <command>` echo from a
+ * shell block's stored output.
+ *
+ * The detail sheet renders the command itself (from `toolArgs`) at the top of
+ * the terminal card. Older/persisted blocks (and imports produced by hosts
+ * that prefixed the prompt) store the same line as the first line of
+ * `block.content`, so the sheet printed it twice. [extractShellCommand]'s
+ * fallback #3 documents that this shape exists; this is the render-side half.
+ * A genuine output line equal to the command without the `$ ` prefix is left
+ * alone — only the echoed form is stripped.
+ */
+internal fun stripShellCommandEcho(content: String, command: String): String {
+    if (content.isEmpty() || command.isEmpty()) return content
+    val cmd = command.trim()
+    if (cmd.isEmpty()) return content
+    // Only the `$ `-prefixed echo is stripped. A bare first line equal to the
+    // command is genuine output far more often (e.g. `ls` listing a file named
+    // `ls`), so it must be kept.
+    val prefixes = listOf("$ $cmd", "$ ${cmd.replace("\n", " ")}")
+    for (prefix in prefixes) {
+        if (!content.startsWith(prefix)) continue
+        // Only strip when the match is a WHOLE first line — a prefix of a
+        // longer output line ("$ ls -la /tmp" vs "$ ls -la /tmp2") must not
+        // lose that line's tail.
+        val rest = content.substring(prefix.length)
+        if (rest.isEmpty()) return ""
+        if (rest.startsWith("\n")) return rest.removePrefix("\n")
+        if (rest.startsWith("\r\n")) return rest.removePrefix("\r\n")
+    }
+    return content
+}
+
+/**
  * Tolerant partial-JSON string extractor — UI-side mirror of
  * StreamChunkJsonHelper.extractPartialStringValue. Used so detail-sheet renderers
  * (shell command, file path, write content) can show live content while the

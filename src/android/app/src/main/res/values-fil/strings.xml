@@ -2138,6 +2138,18 @@
     <!-- Queued-message edit sheet + git diff truncation notice -->
     <string name="chat_queued_edit_title">I-edit ang naka-queue na mensahe</string>
     <string name="git_panel_diff_truncated">Naputol ang diff sa 200,000 karakter — ang buong teksto ay nasa mismong file sa repo.</string>
+    <string name="voice_service_no_audio_models">No audio models are listed for this provider. Model lists from some providers (Bailian, SiliconFlow) do not declare audio support — add the ASR/TTS model as a custom model with the audio modality, or choose another voice service.</string>
+    <string name="voice_error_network">Voice recognition failed: network error. Check your connection, or switch to the on-device engine or another provider.</string>
+    <string name="voice_error_transcription">Voice recognition returned no text. Speak again, or check the transcription provider\'s model and API key.</string>
+    <string name="voice_error_busy">The speech recognizer is busy. Wait a moment and try again.</string>
+    <string name="voice_error_audio">Audio capture failed. Check the microphone permission and make sure no other app is using the mic.</string>
+    <string name="voice_error_language">The selected language is not supported by this engine. Pick another language.</string>
+    <string name="voice_error_unknown">Voice recognition failed: %1$s</string>
+    <string name="thinking_rules_cache_not_ready">Custom rules are not active yet (%1$s). Requests currently use the built-in defaults; the next message after the cache loads will apply your rules.</string>
+    <string name="skill_display_name_skill_creator">Skill Creator</string>
+    <string name="skill_display_name_android_sdk_mirrors">Android SDK Mirrors</string>
+    <string name="provider_detail_force_thinking">Force extended thinking</string>
+    <string name="provider_detail_force_thinking_footer">For Anthropic-compatible relays only. Sends thinking:{type:"enabled",budget_tokens:N} even when the model catalog says the model cannot reason. Use when the model supports thinking but the catalog entry is missing or wrong.</string>
     <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
     <string name="provider_list_export_providers">I-export ang mga provider</string>
     <string name="provider_transfer_export_title">I-export ang mga provider</string>
@@ -2193,4 +2205,55 @@
     <string name="handsfree_state_speaking">Nagsasalita…</string>
     <string name="handsfree_exit_recognition">Huminto ang hands-free: paulit-ulit na nabigo ang speech recognition. I-tap ang Hands-free para subukan muli.</string>
     <string name="handsfree_exit_tts">Huminto ang hands-free: hindi nabasa nang malakas ang mga sagot. I-tap ang Hands-free para subukan muli.</string>
+
+    <!-- [T-untranslated] English fallback for keys added by PR #325; pending translation -->
+    <string name="a11y_app_policy_apps">Apps</string>
+    <string name="a11y_app_policy_apps_count">%1$d listed</string>
+    <string name="a11y_app_policy_apps_hint">One Android package name per line, e.g. com.tencent.mm</string>
+    <string name="a11y_app_policy_blocklist">List is a blocklist</string>
+    <string name="a11y_app_policy_blocklist_sub">Off = only listed apps are allowed. On = listed apps are blocked.</string>
+    <string name="a11y_app_policy_enabled">Restrict by app</string>
+    <string name="a11y_app_policy_enabled_sub">Check the foreground package before every screen read or tap</string>
+    <string name="a11y_app_policy_footer">When enabled, ui_read and ui_action are checked against the current foreground app before they run. Apps outside the list (allow mode) or inside it (block mode) are refused with a visible message. The Minis app itself is always allowed.</string>
+    <string name="a11y_app_policy_section">Accessibility app access</string>
+    <string name="boot_hook_enable">Run /var/minis/boot.sh at startup</string>
+    <string name="boot_hook_enable_sub">Executes in the sandbox after the Linux rootfs boots</string>
+    <string name="boot_hook_footer">Off by default. This path is inside the writable sandbox, so any shell-capable agent can replace the script — enabling this lets such a file run silently on every launch. The switch is checked again immediately before execution, and the script\\\'s first-seen time plus size/mtime changes are written to the app log. Takes effect at the next launch.</string>
+    <string name="boot_hook_last_status">Last run</string>
+    <string name="boot_hook_section">Boot hook</string>
+    <string name="lifecycle_hooks_command_hint">One command line. A script path is usually best, e.g. bash /var/minis/hooks/on-response.sh. Leave empty to remove the hook.</string>
+    <string name="lifecycle_hooks_enable">Enable lifecycle hooks</string>
+    <string name="lifecycle_hooks_enable_sub">Execute the scripts below on their events</string>
+    <string name="lifecycle_hooks_events_footer">Scripts run in the sandbox, serialized on their own lane, with a 20-second timeout. Failures are logged and never block the chat.</string>
+    <string name="lifecycle_hooks_help_body">Each script receives MINIS_HOOK_EVENT, MINIS_HOOK_SESSION_ID and MINIS_HOOK_DETAIL. Scripts are one-shot PRoot processes: /proc of other commands is not visible across invocations and flock is unreliable, so use files for cross-run state. OnResponse fires once per completed agent reply; OnSessionEnd fires when the chat is deleted.</string>
+    <string name="lifecycle_hooks_help_header">Environment &amp; caveats</string>
+    <string name="lifecycle_hooks_master_footer">Off by default. While off, configured scripts are kept but never executed.</string>
+    <string name="lifecycle_hooks_not_set">Not set</string>
+    <string name="lifecycle_hooks_section_events">Events</string>
+    <string name="lifecycle_hooks_section_master">Master switch</string>
+    <string name="lifecycle_hooks_title">Lifecycle Hooks</string>
+    <string name="network_trusted_ca_count">%1$d certificate(s) imported</string>
+    <string name="network_trusted_ca_duplicate">That certificate is already imported.</string>
+    <string name="network_trusted_ca_failed">Could not read that file as a PEM/X.509 certificate.</string>
+    <string name="network_trusted_ca_footer">For a provider whose HTTPS endpoint uses a self-signed or private CA. The certificate is stored only inside Minis and is added to Android\\\'s trust anchors for this app; normal certificate and hostname checks stay on. It takes effect on the next provider request — no restart is needed.</string>
+    <string name="network_trusted_ca_import">Import PEM Certificate</string>
+    <string name="network_trusted_ca_imported">Imported %1$d certificate(s). Retry the request.</string>
+    <string name="network_trusted_ca_none">No certificates imported</string>
+    <string name="network_trusted_ca_remove_all">Remove All</string>
+    <string name="network_trusted_ca_removed">Imported certificates removed.</string>
+    <string name="network_trusted_ca_title">Trusted Certificates</string>
+    <string name="provider_detail_custom_headers">Custom request headers</string>
+    <string name="provider_detail_custom_headers_footer">One “Name: value” per line. Applied to chat, /models and Responses requests for this provider only. Host, Content-Length and Connection are managed by the HTTP client and cannot be overridden.</string>
+    <string name="provider_detail_custom_headers_placeholder">X-Custom-Header: value</string>
+    <string name="provider_detail_opencode_session_footer">Off by default. When on, every chat request to this custom endpoint carries a stable per-conversation ID (x-opencode-session) so OpenCode-compatible relays can route and cache it. Only enable it for a gateway you trust: the ID identifies the conversation across turns.</string>
+    <string name="provider_detail_opencode_session_header">OpenCode session header</string>
+    <string name="provider_detail_opencode_session_toggle">Send x-opencode-session</string>
+    <string name="provider_detail_save_headers">Save Headers</string>
+    <string name="scheduled_task_prompt_template_hint">The current date/time and last run are added automatically. You can also use {{date}}, {{time}}, {{datetime}}, {{weekday}}, {{last_fired}}, {{last_fired_ago}} and {{task_label}}.</string>
+    <string name="settings_lifecycle_hooks">Lifecycle Hooks</string>
+    <string name="settings_lifecycle_hooks_subtitle">Run sandbox scripts on session start / response / end</string>
+    <string name="web_search_tool_enabled">Enable web_search</string>
+    <string name="web_search_tool_enabled_sub">Let the agent search the web from chat. Off → the tool is not offered at all.</string>
+    <string name="web_search_tool_section">Tool</string>
+    <string name="web_search_tool_section_footer">Turning the tool off does not delete the engine configuration below; re-enable it to restore the same behaviour.</string>
 </resources>

@@ -50,6 +50,13 @@ class AlibabaVoiceProvider(providerId: String, baseURL: String, apiKey: String?)
      * /audio/transcriptions (404); its ASR is qwen3-asr-flash on
      * /chat/completions with the clip in an `input_audio` part. The old
      * default, paraformer-realtime-v2, is WebSocket-only.
+     *
+     * [GH#520] This is also the wiring for qwen omni models on a
+     * dashscope or &lt;workspace&gt;.maas.aliyuncs.com instance: routing them here (instead of
+     * the base class's generic chat-ASR path) is what puts the clip in the
+     * Data-URI `input_audio` part bailianBody() builds. The model id is still
+     * normalized by bailianModel() to the compatible-mode ASR model, so the
+     * request shape stays the documented one.
      */
     override suspend fun transcribe(request: VoiceInputRequest): VoiceInputResponse {
         val model = CloudAsrProtocols.bailianModel(request.model)
@@ -897,11 +904,11 @@ class OpenRouterVoiceProvider(providerId: String, baseURL: String, apiKey: Strin
     override suspend fun synthesize(request: VoiceOutputRequest): ByteArray {
         val modelId = request.model ?: defaultVoiceOutputModel()
         if (!usesChatAudioOutput(modelId)) {
-            // Not a known chat-audio model — behave exactly as before rather
-            // than guessing. (This path still 400s on OpenRouter, but that is
-            // the pre-existing state for those ids, not a regression, and it
-            // keeps a working relay-hosted TTS model working if one exists.)
-            return super.synthesize(request)
+            // [OpenMinis#280] OpenRouter has no /audio/speech; non-chat-audio ids fail there.
+            // Fail with the classification error instead of that misleading 400.
+            throw VoiceProviderException.Unsupported(
+                "OpenRouter has no /audio/speech endpoint; '$modelId' is not a chat-audio model (use openai/gpt-audio).",
+            )
         }
 
         val url = composedUrlString("/v1/chat/completions")

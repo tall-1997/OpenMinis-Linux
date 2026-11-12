@@ -60,10 +60,38 @@ class ShizukuOffloadHandler(private val context: Context) : NativeOffloadHandler
         // Allow" upgrades the stored level to BYPASS for next time. See
         // OffloadGate for the sync→suspend rationale (handler interface
         // is sync, manager API is suspend).
-        if (!OffloadGate.allow("shizuku_cli", "android-shizuku-cli", request)) {
+        //
+        // [GH#539] Registration is checked explicitly (unknown tools are
+        // BYPASS in checkPermission), and a refusal now names the layer that
+        // refused it: the Shizuku backend, the agent gate, or a registry
+        // mismatch.
+        val registered = com.openminis.app.offload.OffloadPermissionManager.isRegistered("shizuku_cli")
+        if (!registered || !OffloadGate.allow("shizuku_cli", "android-shizuku-cli", request)) {
+            val shizukuState = ShizukuManager.snapshot.value.state
+            val layer = when (shizukuState) {
+                ShizukuManager.State.READY -> OffloadDenial.SystemLayer.RUNNING
+                ShizukuManager.State.NEED_PERMISSION -> OffloadDenial.SystemLayer.NOT_AUTHORIZED
+                ShizukuManager.State.NOT_INSTALLED -> OffloadDenial.SystemLayer.NOT_INSTALLED
+                ShizukuManager.State.NOT_RUNNING -> OffloadDenial.SystemLayer.NOT_RUNNING
+            }
+            val fix = when (shizukuState) {
+                ShizukuManager.State.NOT_INSTALLED ->
+                    "Install Shizuku and start its service via adb or root, then authorize Minis."
+                ShizukuManager.State.NEED_PERMISSION ->
+                    "Grant Shizuku permission in Settings → Permissions → Shizuku."
+                else ->
+                    "Start the Shizuku service via adb or root, then retry."
+            }
             return errEnvelope(
                 "PERMISSION_DENIED",
-                "Agent is not allowed to use android-shizuku-cli. Open Settings → Permissions → Integrations to change.",
+                OffloadDenial.permissionDenied(
+                    toolName = "shizuku_cli",
+                    displayName = "android-shizuku-cli",
+                    systemName = "The Shizuku service",
+                    systemState = layer,
+                    systemFix = fix,
+                    settingsPath = "Settings → Permissions → Integrations",
+                ),
                 args,
             )
         }

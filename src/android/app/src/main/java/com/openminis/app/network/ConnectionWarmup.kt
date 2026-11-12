@@ -82,16 +82,40 @@ internal object ConnectionWarmup {
     }
 
     /** One shared warm-up client. Pool reference is the SAME instance every
-     *  provider uses — that identity is what makes warmup effective. */
-    private val warmClient: OkHttpClient by lazy {
-        OkHttpClient.Builder()
-            .dns(DohDns)
-            .connectTimeout(5, TimeUnit.SECONDS)
-            .readTimeout(5, TimeUnit.SECONDS)
-            .writeTimeout(5, TimeUnit.SECONDS)
-            .connectionPool(NetworkMonitor.sharedLLMConnectionPool)
-            .build()
-    }
+     *  provider uses — that identity is what makes warmup effective.
+     *
+     *  [GH#258][GH#287] generation-keyed like the provider clients: a warm-up
+     *  TLS handshake to a provider host behind the user's private CA must trust
+     *  that CA, and a CA import/delete must rebuild this client too — otherwise
+     *  warmup silently fails (or keeps trusting a removed anchor) for the life
+     *  of the process. */
+    private val warmClientLock = Any()
+
+    @Volatile
+    private var warmClientGeneration: Int = -1
+
+    @Volatile
+    private var warmClientBuilt: OkHttpClient? = null
+
+    private val warmClient: OkHttpClient
+        get() {
+            val generation = AppTrustStore.generation
+            warmClientBuilt?.let { if (warmClientGeneration == generation) return it }
+            synchronized(warmClientLock) {
+                warmClientBuilt?.let { if (warmClientGeneration == generation) return it }
+                val client = OkHttpClient.Builder()
+                    .dns(DohDns)
+                    .connectTimeout(5, TimeUnit.SECONDS)
+                    .readTimeout(5, TimeUnit.SECONDS)
+                    .writeTimeout(5, TimeUnit.SECONDS)
+                    .connectionPool(NetworkMonitor.sharedLLMConnectionPool)
+                    .applyAppTrustStore()
+                    .build()
+                warmClientBuilt = client
+                warmClientGeneration = generation
+                return client
+            }
+        }
 
     /**
      * Fire-and-forget warm of [basePath] (the provider's actual API base, or

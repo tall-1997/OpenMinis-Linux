@@ -171,7 +171,15 @@ class OpenAIProvider private constructor(
         oauthTokenProvider: suspend () -> String,
         model: LLMModel = LLMModel.codexMini,
         codexAccountId: String? = null,
-    ) : this(apiKey = null, oauthTokenProvider = oauthTokenProvider, model = model, codexAccountId = codexAccountId)
+        // [GH#221] 用户自定义请求头；OAuth 路径同样可注入（同名头以用户为准）。
+        extraHeaders: Map<String, String> = emptyMap(),
+    ) : this(
+        apiKey = null,
+        oauthTokenProvider = oauthTokenProvider,
+        model = model,
+        extraHeaders = extraHeaders,
+        codexAccountId = codexAccountId,
+    )
 
     companion object {
         /**
@@ -201,11 +209,14 @@ class OpenAIProvider private constructor(
             oauthTokenProvider: suspend () -> String,
             model: LLMModel,
             basePath: String,
+            // [GH#221] 自定义请求头，透传给主构造。
+            extraHeaders: Map<String, String> = emptyMap(),
         ): OpenAIProvider = OpenAIProvider(
             apiKey = null,
             oauthTokenProvider = oauthTokenProvider,
             model = model,
             basePath = basePath,
+            extraHeaders = extraHeaders,
             forceChatCompletions = true,
         )
     }
@@ -435,7 +446,9 @@ class OpenAIProvider private constructor(
         get() = isOpenRouter && model.id.lowercase().startsWith("anthropic/")
 
     /** Detect DashScope (Alibaba Qwen) base URL. */
-    private val isDashScope: Boolean = basePath.contains("dashscope")
+    // [GH#520] Same Bailian predicate as the voice factory / media router so a
+    // *.maas.aliyuncs.com instance is classified identically everywhere.
+    private val isDashScope: Boolean = com.openminis.app.data.model.BailianEndpoint.matches(basePath)
 
     /**
      * [T-android-mistral-reasoning-422] (GH OpenMinis#87, iOS 29065ca0)
@@ -504,30 +517,12 @@ class OpenAIProvider private constructor(
         }
 
     /**
-     * [T-thinking-off-explicit] The wire value for "thinking OFF", or null to
-     * keep the historical omit-the-field behavior. ALLOWLIST, not blanket
-     * (mirrors iOS OpenAIAgentProvider.explicitOffEffort): only vendors whose
-     * off tier is DOCUMENTED get an explicit value —
-     *   • official OpenAI base (non-Azure) → "none" (documented off tier);
-     *   • Volcano Ark (volces/ark bases, seed/doubao families) → "minimal"
-     *     (their smallest tier — Ark's non-off default is what motivated this).
-     * Everyone else (relays, NIM, xAI, MiMo, …) keeps field omission = the
-     * vendor's own default. Azure stays omission too: its off tier is
-     * model-dependent ('none' on gpt-5.1+, 'minimal' on original gpt-5,
-     * unsupported on o1/o3), so an explicit value risks a 400.
+     * [T-thinking-off-explicit] The explicit OFF tier for this endpoint, or
+     * null to omit the field. The allowlist + [OpenMinis#377] model-family
+     * floor logic lives in [OpenAIOffEffort] (kept out of this file for the
+     * architecture-policy line ceiling).
      */
-    private fun explicitOffEffort(): String? {
-        if (isAzure) return null
-        val base = basePath.lowercase()
-        if (base.startsWith("https://api.openai.com")) return "none"
-        val lid = model.id.lowercase()
-        if (base.contains("volces") || base.contains("ark.") ||
-            lid.contains("seed-") || lid.contains("doubao")
-        ) {
-            return "minimal"
-        }
-        return null
-    }
+    private fun explicitOffEffort(): String? = OpenAIOffEffort.resolve(isAzure, basePath, model)
 
     /**
      * Non-streaming entry point. Some providers (e.g. GPT-5.x via certain

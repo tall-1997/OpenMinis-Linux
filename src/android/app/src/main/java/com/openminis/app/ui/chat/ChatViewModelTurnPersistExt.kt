@@ -66,15 +66,9 @@ internal fun ChatViewModel.finalizeAtTurnLimit(
     raiseCanResume(fromResumeEpoch)
 }
 
-/**
- * Instance entry point used by the tool-dispatch path. The real logic lives
- * in the companion so tests can reach it without a ChatViewModel.
- */
-internal fun ChatViewModel.preflightValidateToolCall(
-    name: String,
-    args: JSONObject,
-    tools: List<AgentToolDefinition>,
-): String? = ChatViewModel.preflightValidateToolCallImpl(name, args, tools)
+// [F3 GH#61] preflightValidateToolCall 已删除：required-field / empty-args 预检
+// 下沉到共享层 ToolCallPreflight.requiredFieldViolation，由 ToolCallPreflight.finalize
+// 对三个执行入口（主循环/子代理/群聊-主管）统一调用；主循环不再保留第二份实现。
 
 internal suspend fun ChatViewModel.oneShotAsk(system: String, user: String): String {
     val provider = currentProvider ?: throw IllegalStateException("no provider")
@@ -86,6 +80,8 @@ internal suspend fun ChatViewModel.oneShotAsk(system: String, user: String): Str
         temperature = samplingTemperature(_activeEntryId.value),
         tools = emptyList(),
         thinkingLevel = ThinkingLevel.OFF,
+        // [GH#221] 一次性请求也带同一份额外头（OpenCode 会话头 + 用户 KV）。
+        extraHeaders = requestExtraHeaders(),
     ).collect { chunk ->
         if (chunk is LLMStreamChunk.Text) buf.append(chunk.text)
     }

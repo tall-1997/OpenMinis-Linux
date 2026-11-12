@@ -106,6 +106,12 @@ object HostStatusPublisher {
         json.put("app_foreground", (context.applicationContext as? MinisApp)?.isAppForeground() == true)
         json.put("wakelock_held", AgentForegroundService.wakeLockHeld)
         json.put("offload_handlers", JSONArray(NativeOffloadServer.registeredHandlers.sorted()))
+        // [OpenMinis#439 / #440] A clone / second-user instance can lose the
+        // abstract socket to the other process; the app keeps running with
+        // native offload disabled. Surface that state so "the tool just fails"
+        // is diagnosable from minis-proc.json instead of only in logcat.
+        json.put("offload_listening", NativeOffloadServer.isListening)
+        NativeOffloadServer.degradedReason?.let { json.put("offload_degraded", it) }
 
         val battery = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         if (battery != null) {

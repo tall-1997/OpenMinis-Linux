@@ -24,6 +24,12 @@ object WebSearchSettings {
     const val KEY_ZHIPU = "zhipu_key"
     const val KEY_KEYLESS_CN = "keyless_cn"
 
+    /**
+     * [GH#298] 工具总开关。默认 true（历史行为）；关闭后 AgentTools 不再往
+     * 工具清单里注册 web_search，运行时调用也会被拒（见 WebSearchTool.execute）。
+     */
+    const val KEY_TOOL_ENABLED = "tool_enabled"
+
     enum class Engine(val id: String, val needsKey: Boolean = false) {
         DDG("ddg"),
         SEARXNG("searxng"),
@@ -155,6 +161,14 @@ object WebSearchSettings {
 
     fun setKeylessFallbackEnabled(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_KEYLESS_CN, enabled).apply()
+    }
+
+    /** [GH#298] 是否向 agent 暴露 web_search 工具。默认开启。 */
+    fun toolEnabled(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_TOOL_ENABLED, true)
+
+    fun setToolEnabled(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_TOOL_ENABLED, enabled).apply()
     }
 
     private fun prefs(context: Context) =

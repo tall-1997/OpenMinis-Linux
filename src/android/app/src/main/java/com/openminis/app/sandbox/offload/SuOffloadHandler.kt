@@ -1,6 +1,7 @@
 package com.openminis.app.sandbox.offload
 
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.offload.OffloadPermissionManager
 import com.openminis.app.offload.ShizukuManager
 import com.openminis.app.sandbox.BoundedOutputBuffer
 import com.openminis.app.sandbox.GuestWorkloadPolicy
@@ -23,8 +24,26 @@ import java.util.concurrent.TimeUnit
  * via Shizuku (`sh -c`) when the binder is ready. Shizuku's own agent
  * permission is not required — `su_cli` is the gate; Shizuku is only the
  * elevation transport. `status` / help / version skip the permission gate.
+ *
+ * ## [GH#539] 注入缝
+ *
+ * 四条构造参数把“权限注册 / Agent gate / su 探测 / Shizuku 状态”从真实
+ * Android 单例上解耦，默认值就是生产行为，`AppGraph` 仍用无参构造。它们存在
+ * 的唯一理由是 deny 分支能在 JVM 单测里被钉住：该分支的错误体
+ * `{"ok":false,"error":{"code":"PERMISSION_DENIED",…}}` 与 exit 126 是 Agent
+ * 读到的契约，靠设备/root 才能覆盖等于没有回归保护。
  */
-class SuOffloadHandler : NativeOffloadHandler {
+class SuOffloadHandler(
+    /** [GH#539] 本 build 是否注册了 `su_cli`；未注册必须 fail closed。 */
+    private val isRegistered: (String) -> Boolean = { OffloadPermissionManager.isRegistered(it) },
+    /** [GH#539] Agent 三态 gate；false = 拒绝。 */
+    private val permissionGate: (String, String, NativeOffloadRequest) -> Boolean =
+        { toolName, displayName, request -> OffloadGate.allow(toolName, displayName, request) },
+    /** [GH#539] 宿主 su 二进制探测（默认真机路径）。 */
+    private val findSu: () -> String? = { SuCommand.findSuBinary() },
+    /** [GH#539] Shizuku binder 状态（默认真实单例）。 */
+    private val currentShizukuState: () -> ShizukuManager.State = { ShizukuManager.snapshot.value.state },
+) : NativeOffloadHandler {
 
     override fun handle(request: NativeOffloadRequest): NativeOffloadResult {
         val parsed = SuCommand.parse(request.argv)
@@ -34,12 +53,40 @@ class SuOffloadHandler : NativeOffloadHandler {
             SuCommand.Kind.STATUS -> status()
             SuCommand.Kind.INVALID -> NativeOffloadResult(2, "android-su: missing command. Try `su -c id` or `android-su --help`.\n")
             SuCommand.Kind.EXEC -> {
-                if (!OffloadGate.allow("su_cli", "android-su", request)) {
+                // [GH#539] 与 a11y / shizuku handler 对齐：
+                //  1) 先查权限注册表 —— checkPermission() 对未知工具默认 BYPASS，
+                //     不先查会让“本 build 没注册 su_cli”静默放行；
+                //  2) 拒绝文案走 OffloadDenial.permissionDenied 的三态文案，
+                //     明确指出是系统层（宿主 su / Shizuku）还是 Agent 权限层拒绝。
+                val registered = isRegistered("su_cli")
+                if (!registered || !permissionGate("su_cli", "android-su", request)) {
+                    val suFound = findSu() != null
+                    val shizukuState = currentShizukuState()
+                    val layer = when {
+                        suFound || shizukuState == ShizukuManager.State.READY ->
+                            OffloadDenial.SystemLayer.RUNNING
+                        shizukuState == ShizukuManager.State.NEED_PERMISSION ->
+                            OffloadDenial.SystemLayer.NOT_AUTHORIZED
+                        shizukuState == ShizukuManager.State.NOT_INSTALLED ->
+                            OffloadDenial.SystemLayer.NOT_INSTALLED
+                        else -> OffloadDenial.SystemLayer.NOT_RUNNING
+                    }
+                    val message = OffloadDenial.permissionDenied(
+                        toolName = "su_cli",
+                        displayName = "android-su",
+                        systemName = "The host superuser backend (Magisk/KernelSU su, Shizuku fallback)",
+                        systemState = layer,
+                        systemFix = "Install Magisk/KernelSU, or start and authorize Shizuku via adb or root.",
+                        settingsPath = "Settings → Permissions → Host su",
+                    )
+                    AppLogger.warning(TAG, "PERMISSION_DENIED: $message")
                     val body = JSONObject()
-                        .put("error", "permission_denied")
+                        .put("ok", false)
                         .put(
-                            "message",
-                            "Agent is not allowed to use android-su. Open Settings → Permissions → Host su to change.",
+                            "error",
+                            JSONObject()
+                                .put("code", "PERMISSION_DENIED")
+                                .put("message", message),
                         )
                         .toString()
                     return NativeOffloadResult(126, body + "\n")
@@ -50,9 +97,12 @@ class SuOffloadHandler : NativeOffloadHandler {
     }
 
     private fun status(): NativeOffloadResult {
-        val path = SuCommand.findSuBinary()
-        val shizukuReady = ShizukuManager.isReady()
-        val shizukuState = ShizukuManager.snapshot.value.state.name
+        val path = findSu()
+        // Same value ShizukuManager.isReady() reads, taken through the seam so
+        // the status envelope is testable without a live binder.
+        val state = currentShizukuState()
+        val shizukuReady = state == ShizukuManager.State.READY
+        val shizukuState = state.name
         val preferred = when {
             path != null -> "host-su"
             shizukuReady -> "shizuku"
@@ -95,7 +145,7 @@ class SuOffloadHandler : NativeOffloadHandler {
         }
         val armed = GuestWorkloadPolicy.clampHostTimeout(timeoutMs)
         val confined = SuCommand.confineHost(command)
-        val su = SuCommand.findSuBinary()
+        val su = findSu()
         if (su != null) {
             try {
                 val (code, output) = SuCommand.runHost(listOf(su, "-c", confined), armed, request.sessionId)

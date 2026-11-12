@@ -354,6 +354,16 @@ fun ProviderDetailScreen(
             }
         }
 
+        // ─── Custom Request Headers [GH#221] ────────────────────────
+        // 独立于 Room 的 per-instance KV：保存后 ProviderFactory 的 memo key
+        // 变化，下一次请求即生效（聊天 + /models + Responses / OAuth 路径）。
+        ProviderHeaderSection(instance.id)
+
+        // ─── OpenCode session header [GH#347] ───────────────────────
+        // 只有自定义 base 才有意义：官方端点按 host 自动带，无需开关；
+        // 默认关闭，用户显式信任该网关后才发稳定会话 ID。
+        OpenCodeSessionSection(instance.id, instance.customBaseURL)
+
         // ─── API Format (OpenAI API-key only) ───────────────────────
         if (instance.providerType == ProviderType.openAI &&
             instance.credentialType != com.openminis.app.data.model.ProviderCredential.oauth
@@ -412,8 +422,8 @@ fun ProviderDetailScreen(
                 )
             }
         }
-
-        // ─── Image Generation Endpoint ──────────────────────────────
+        // [OpenMinis#311] Force extended thinking for Anthropic-compatible relays.
+        if (instance.providerType == ProviderType.anthropic) ForceThinkingSection(instance, providerRepository)
         // [T-android-image-endpoint-mode] OpenAI-compatible providers only.
         // Picks how minis-model-use routes image-output models:
         // auto-probe / forced Images API / forced Chat Completions. Mirrors
@@ -819,164 +829,6 @@ fun ProviderDetailScreen(
 // ─── Credential blocks ─────────────────────────────────────────────────────────
 
 @Composable
-private fun OAuthCredentialBlock(
-    instance: com.openminis.app.data.model.ProviderInstance,
-    storedKey: String,
-    providerRepository: ProviderRepository,
-) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    // [T-android-openai-oauth-signout-signin-stuck] Drive the Sign In / Sign Out
-    // toggle off LOCAL Compose state instead of the `storedKey` parameter (read
-    // once per composition, never updates): the stale gate showed "Sign Out"
-    // after logout and left Sign In dead. `displayedKey` mirrors the live
-    // credential so the masked token / connected dot refresh together. Mirrors
-    // iOS ProviderInstanceDetailView's `oauthRefreshTrigger.toggle()`.
-    var displayedKey by remember(instance.id) { mutableStateOf(storedKey) }
-    // [T-oauth-keep-credentials] Rejected refresh → red dot + hint instead of
-    // the green one; cleared automatically when a fresh bundle lands.
-    var needsReauth by remember(instance.id) {
-        mutableStateOf(com.openminis.app.auth.OAuthManager.needsReauth(context, instance.id))
-    }
-    var isAuthenticating by remember(instance.id) { mutableStateOf(false) }
-    // [T-kimi-oauth] Device-code dialog state for Kimi re-auth (see
-    // AddProviderScreen.OAuthConfigSection for the rationale).
-    var kimiDeviceAuth by remember(instance.id) {
-        mutableStateOf<com.openminis.app.auth.KimiDeviceFlow.DeviceAuthorization?>(null)
-    }
-    var kimiLoginJob by remember(instance.id) { mutableStateOf<kotlinx.coroutines.Job?>(null) }
-    kimiDeviceAuth?.let { auth ->
-        KimiDeviceLoginDialog(
-            userCode = auth.userCode,
-            verificationUrl = auth.openUrl,
-            onCancel = {
-                kimiLoginJob?.cancel()
-                kimiDeviceAuth = null
-            },
-        )
-    }
-
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            "OAuth",
-            style = MaterialTheme.typography.bodyLarge,
-            fontWeight = FontWeight.Medium,
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        if (displayedKey.isNotEmpty()) {
-            Text(
-                maskedKey(displayedKey),
-                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
-            )
-            Box(
-                modifier = Modifier
-                    .padding(horizontal = 8.dp)
-                    .size(8.dp)
-                    .background(
-                        if (needsReauth) IosRed else IosGreen,
-                        CircleShape,
-                    ),
-            )
-            if (needsReauth) {
-                Text(
-                    stringResource(R.string.provider_oauth_login_expired),
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-        } else {
-            Spacer(modifier = Modifier.weight(1f))
-            Text(
-                stringResource(R.string.provider_oauth_not_connected),
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-    }
-    Spacer(modifier = Modifier.height(8.dp))
-    if (displayedKey.isNotEmpty()) {
-        MinisSmallButton(
-            onClick = {
-                // [T-android-openai-oauth-signout-signin-stuck] A real sign-out
-                // must clear BOTH credential stores: (1) the persisted OAuth
-                // token blob (access + refresh_token + expire_at, plus any manual
-                // bearer / account_id) via OAuthManager.logout(), and (2) the
-                // apiKey mirror that ProviderFactory.loadApiKey() reads. Before
-                // this fix only deleteApiKey() ran, so the refresh_token survived
-                // and validAccessToken() silently re-minted an access token —
-                // the user stayed effectively logged in. Then flip local state so
-                // the UI swaps to the Sign In button immediately.
-                com.openminis.app.auth.OAuthManager.forInstance(context, instance)?.logout()
-                providerRepository.deleteApiKey(instance.id)
-                displayedKey = ""
-                AppLogger.info(TAG, "OAuth signed out for ${instance.id} (tokens + apiKey cleared)")
-            },
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.errorContainer,
-                contentColor = MaterialTheme.colorScheme.error,
-            ),
-        ) {
-            Text(stringResource(R.string.provider_detail_sign_out))
-        }
-    } else {
-        MinisSmallButton(
-            onClick = {
-                if (isAuthenticating) return@MinisSmallButton
-                isAuthenticating = true
-                kimiLoginJob = scope.launch {
-                    try {
-                        val token = when (instance.providerType) {
-                            ProviderType.kimiCode ->
-                                com.openminis.app.auth.KimiOAuthManager.login(
-                                    context, instance.id, providerRepository,
-                                    onDeviceCode = { auth -> kimiDeviceAuth = auth },
-                                ).also { kimiDeviceAuth = null }
-                            ProviderType.anthropic ->
-                                com.openminis.app.auth.ClaudeOAuthManager.login(
-                                    context, instance.id, providerRepository,
-                                )
-                            ProviderType.openAI ->
-                                com.openminis.app.auth.OpenAIOAuthManager.login(
-                                    context, instance.id, providerRepository,
-                                )
-                            ProviderType.openRouter ->
-                                com.openminis.app.auth.OpenRouterOAuthManager.login(
-                                    context, instance.id, providerRepository,
-                                )
-                            ProviderType.xAI ->
-                                com.openminis.app.auth.XAIOAuthManager.login(
-                                    context, instance.id, providerRepository,
-                                )
-                            else -> null
-                        }
-                        // login() persists the token via providerRepository.saveApiKey;
-                        // reflect it locally so the UI flips to the connected state
-                        // without needing the parent to recompose.
-                        if (token != null) {
-                            displayedKey = providerRepository.loadApiKey(instance.id) ?: token
-                            // [T-oauth-keep-credentials] Fresh bundle landed —
-                            // clear the re-login flag so the dot turns green.
-                            needsReauth = false
-                            AppLogger.info(TAG, "OAuth signed in for ${instance.id}")
-                        }
-                    } catch (e: Exception) {
-                        AppLogger.warning(TAG, "OAuth sign-in failed for ${instance.id}: ${e.message}")
-                    } finally {
-                        isAuthenticating = false
-                        kimiDeviceAuth = null
-                    }
-                }
-            },
-        ) {
-            Text(stringResource(R.string.provider_detail_sign_in))
-        }
-    }
-}
-
-@Composable
 private fun ApiKeyCredentialBlock(
     storedKey: String,
     keyVisible: Boolean,
@@ -1054,7 +906,7 @@ private fun ApiKeyCredentialBlock(
     }
 }
 
-private fun maskedKey(key: String): String {
+internal fun maskedKey(key: String): String {
     if (key.length <= 10) return key.replace(Regex("."), "•")
     return key.take(6) + "..." + key.takeLast(4)
 }

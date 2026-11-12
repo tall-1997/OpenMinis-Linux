@@ -109,7 +109,16 @@ object KaTeXRendererCache {
      * cache in KatexWebViewPool.cacheKey, which has always included it.
      */
     fun cacheKey(latex: String, displayMode: Boolean, isDark: Boolean): String =
-        (if (displayMode) "D:" else "I:") + (if (isDark) "k:" else "l:") + latex
+        // [GH#189/#266] Normalize HERE, not only at the render call: the cache
+        // is read by MarkdownMathFlow with the span's ORIGINAL latex while it is
+        // written by KaTeXRenderView with the normalized one. Keying on raw
+        // CJK latex would make those two lookups disagree, so a CJK formula
+        // could never leave the split-Column warming fallback even after its
+        // bitmap was cached. Normalization is idempotent, so double-normalizing
+        // a render call is harmless.
+        (if (displayMode) "D:" else "I:") +
+            (if (isDark) "k:" else "l:") +
+            MathCjkLayout.normalize(latex)
 }
 
 /**
@@ -150,11 +159,16 @@ fun KaTeXRenderView(
     val density = LocalDensity.current
     val isDark = ChatColors.isDark
     val fontSize = 16f
+    // [GH#189/#266/#276] CJK runs inside math need `\text{}` (KaTeX's bundled
+    // fonts carry no CJK glyphs; raw math-mode CJK falls back per glyph and
+    // loses its metrics). Normalize at the render boundary only — the stored
+    // span keeps the model's original LaTeX.
+    val renderLatex = remember(latex) { MathCjkLayout.normalize(latex) }
     // [T-android-inapp-theme-popups #187] `isDark` must be a remember key too, not
     // just a cacheKey ingredient: without it the memo survives a theme flip and
     // hands back the previous theme's key, so the new key is never even computed.
-    val cacheKey = remember(latex, displayMode, isDark) {
-        KaTeXRendererCache.cacheKey(latex, displayMode, isDark)
+    val cacheKey = remember(renderLatex, displayMode, isDark) {
+        KaTeXRendererCache.cacheKey(renderLatex, displayMode, isDark)
     }
 
     // Check cache first
@@ -338,7 +352,7 @@ fun KaTeXRenderView(
                         webViewClient = object : WebViewClient() {
                             override fun onPageFinished(view: WebView?, url: String?) {
                                 super.onPageFinished(view, url)
-                                val escapedLatex = latex
+                                val escapedLatex = renderLatex
                                     .replace("\\", "\\\\")
                                     .replace("'", "\\'")
                                     .replace("\n", "\\n")

@@ -289,6 +289,15 @@ data class ProviderInstance(
     // so existing OpenAI instances are completely unaffected. Field name
     // matches iOS for cross-platform export/import interop.
     var azureMode: Boolean = false,
+    // [OpenMinis#311] Anthropic-compatible relays (DeepSeek / Bailian / a
+    // self-hosted gateway speaking /v1/messages) can be forced to accept
+    // extended thinking even when their catalog entry declares
+    // `supportsReasoning = false` (or the catalog has no entry at all). The
+    // provider-level switch bypasses the capability clamp and always emits the
+    // legacy `thinking:{type:"enabled",budget_tokens:N}` shape. Off by default
+    // so existing Anthropic instances (and the official endpoint) are
+    // byte-identical. iOS-compatible name: `forceThinkingEnabled`.
+    var forceThinkingEnabled: Boolean = false,
     // Favorites: pinned instances render in a dedicated section at the top of
     // the provider list. Default false so older JSON still deserializes.
     var pinned: Boolean = false,
@@ -317,14 +326,23 @@ data class ProviderInstance(
      * Deliberately NOT extended to official endpoints (no custom base URL —
      * an empty key against the official API is always a misconfiguration) or
      * OAuth instances (their credential is the token). Mirrors iOS
-     * `ProviderInstance.allowsEmptyAPIKey`; Android has no `openAIResponses`
-     * type — the `useResponsesAPI` flag rides on `.openAI`, so the type gate
-     * is just {openAI, anthropic}.
+     * `ProviderInstance.allowsEmptyAPIKey`.
+     *
+     * [GH#218] `openAIResponses` is a real type here (decode-only for the
+     * "add provider" screen, but fully usable once restored from an iOS
+     * package) and its third-party gateways are exactly the ones that often
+     * run without a key. Leaving it out made the client-side credential gate
+     * reject a Responses gateway whose key field is intentionally blank —
+     * the restored instance looked permanently unconfigured. The gate is a
+     * configuration-shape check, NOT a key-format check: never validate the
+     * key's prefix/length on the client; the server is the authority.
      */
     val allowsEmptyAPIKey: Boolean
         get() = credentialType == ProviderCredential.apiKey &&
             !customBaseURL.isNullOrBlank() &&
-            (providerType == ProviderType.openAI || providerType == ProviderType.anthropic)
+            (providerType == ProviderType.openAI ||
+                providerType == ProviderType.openAIResponses ||
+                providerType == ProviderType.anthropic)
 
     /**
      * [T-android-image-endpoint-mode] Whether the "Image Generation" endpoint
@@ -396,7 +414,7 @@ data class ModelOverrides(
     val maxThinkingLevel: ThinkingLevel? = null,
     /** Per-model auto-compact; null inherits the app default (on). */
     val autoCompactEnabled: Boolean? = null,
-    /** Compact when context usage reaches this percent (50–95). null = app default 90. */
+    /** Compact when context usage reaches this percent (50–95). null = app default 75. */
     val compactThresholdPercent: Int? = null,
     /** Same-provider retries on 429 / 5xx / network. null = default 5. */
     val maxRetries: Int? = null,

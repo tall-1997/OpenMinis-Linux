@@ -94,4 +94,39 @@ class BackupMergeTest {
         assertEquals(0, changed)
         assertTrue(changed == 0)
     }
+
+    // [GH#366] Restoring twice (or restoring a package whose own group list
+    // carries an older copy) used to append a second group with the same
+    // id/name: the by-name branch placed the local group, then the by-id branch
+    // added the later remote group unconditionally.
+    @Test
+    fun `a remote group matching local by name then by id does not duplicate`() {
+        val local = ProviderConfig(modelGroups = mutableListOf(group("g-local", "对话", listOf("e1"))))
+        val remote = ProviderConfig(
+            modelGroups = mutableListOf(
+                group("g-remote", "对话", listOf("e2")),
+                group("g-local", "对话", listOf("e3")),
+            ),
+        )
+
+        val (merged, _) = BackupMerge.merge(local, remote)
+
+        assertEquals(1, merged.modelGroups.size)
+        assertEquals("g-local", merged.modelGroups.single().id)
+        assertEquals(listOf("e1", "e2", "e3"), merged.modelGroups.single().memberEntryIds)
+    }
+
+    @Test
+    fun `duplicate ids inside the backup are collapsed`() {
+        val local = ProviderConfig()
+        val remote = ProviderConfig(
+            instances = mutableListOf(instance("p1", "一次"), instance("p1", "两次")),
+            modelEntries = mutableListOf(entry("e1", "glm", 1), entry("e1", "glm", 2)),
+        )
+
+        val (merged, _) = BackupMerge.merge(local, remote)
+
+        assertEquals(1, merged.instances.size)
+        assertEquals(1, merged.modelEntries.size)
+    }
 }

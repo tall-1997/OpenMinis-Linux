@@ -58,6 +58,12 @@ object AgentTools {
         includeLongTail: Boolean = true,
         /** Long-tail tools enabled by a prior find_tools call. */
         enabledToolNames: Set<String> = emptySet(),
+        /**
+         * [GH#298] Settings → Web search 的总开关。关掉时整个 web_search
+         * schema 都不出现（而不是出现后每次失败）——模型看不见才会改用
+         * browser_use / web_fetch。默认 true 保持历史行为。
+         */
+        webSearchEnabled: Boolean = true,
     ): List<AgentToolDefinition> {
         val all = buildList {
         add(shellExecuteDefinition())
@@ -76,7 +82,8 @@ object AgentTools {
             add(ReadImageTool.definition())
         }
         add(browserUseDefinition())
-        add(WebSearchTool.definition())
+        // [GH#298] web_search is removable; see the webSearchEnabled KDoc.
+        if (webSearchEnabled) add(WebSearchTool.definition())
         add(OcrTool.definition())
         add(ScreenTimeTool.definition())
         add(WebFetchTool.definition())
@@ -273,7 +280,7 @@ object AgentTools {
                     "Per-dispatch reasoning depth. Defaults to ULTRA; the provider clamps it to the selected model ceiling.",
                     enumValues = listOf("OFF", "LOW", "MEDIUM", "HIGH", "XHIGH", "MAX", "ULTRA"),
                 ),
-                "role" to AgentToolParam("string", "Catalog role (秘书助理, 产品经理, 架构师, 工程师, 前端设计师, 测试工程师, 侦察兵, 拆解工, 分析员) injects focus / do-not / when-silent / who-to-ask and a tool whitelist. Other strings are labels only."),
+                "role" to AgentToolParam("string", "Catalog role (秘书助理, 产品经理, 架构师, 工程师, 前端设计师, 测试工程师, 侦察兵, 拆解工, 分析员) injects focus / do-not / when-silent / who-to-ask and a tool whitelist. Sub-agent presets (代码审计/方案规划/调研/复现/提炼, plus 探索者/审查员/编码员/研究员) are read-only by default and enforce their own tool scope. Other strings are labels only."),
                 "skills" to AgentToolParam("string", "Comma-separated skill ids the worker should read first."),
                 "model" to AgentToolParam("string", "Optional model-entry id from the configured sub-agent pool. Omit to round-robin."),
                 "tool_title" to AgentToolParam("string", "Short live-status title, e.g. 'Review RootfsManager'."),
@@ -299,7 +306,7 @@ background=true detaches the wave: this call returns a dispatch_id at once inste
                 ),
                 "tool_title" to AgentToolParam("string", "Short live-status title when not using tasks[]."),
                 "prompt" to AgentToolParam("string", "Legacy single-task brief. Ignored when tasks[] is non-empty."),
-                "role" to AgentToolParam("string", "Catalog role (秘书助理, 产品经理, 架构师, 工程师, 前端设计师, 测试工程师, 侦察兵, 拆解工, 分析员) injects focus / do-not / when-silent / who-to-ask and a tool whitelist. Other strings are labels only."),
+                "role" to AgentToolParam("string", "Catalog role (秘书助理, 产品经理, 架构师, 工程师, 前端设计师, 测试工程师, 侦察兵, 拆解工, 分析员) injects focus / do-not / when-silent / who-to-ask and a tool whitelist. Sub-agent presets (代码审计/方案规划/调研/复现/提炼, plus 探索者/审查员/编码员/研究员) are read-only by default and enforce their own tool scope. Other strings are labels only."),
                 "skills" to AgentToolParam("string", "Comma-separated skill ids the worker should read first."),
                 "model" to AgentToolParam("string", "Optional model-entry id from the configured sub-agent pool. Omit to round-robin."),
                 "kind" to AgentToolParam(

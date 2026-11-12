@@ -41,4 +41,32 @@ class ToolOutputSpillTest {
         assertFalse(preview.contains("M".repeat(100)))
         assertTrue(preview.length < output.length)
     }
+
+    /**
+     * [T-tool-output-offload-loop GH#343] Every bounded placeholder this object
+     * produces is recognised, so a second processing pass returns it verbatim
+     * instead of writing a placeholder that points at a placeholder.
+     */
+    @Test
+    fun `offload placeholders are detected`() {
+        val capped = ToolOutputSpill.cappedPreview("shell_execute", "H".repeat(8_000))
+        assertTrue(ToolOutputSpill.isOffloadPlaceholder(capped))
+        assertTrue(
+            ToolOutputSpill.isOffloadPlaceholder(
+                "[tool output offloaded to save context — 20000 chars. Full output saved to /var/minis/workspace/tool-spill/t.txt]",
+            ),
+        )
+        assertTrue(ToolOutputSpill.isOffloadPlaceholder("[tool output trimmed for context: 5 chars total]"))
+        assertFalse(ToolOutputSpill.isOffloadPlaceholder("plain command output"))
+    }
+
+    /** [T-tool-output-offload-loop GH#343] Only the spill dir counts as a read-back target. */
+    @Test
+    fun `only spill guest paths are recognised`() {
+        assertTrue(ToolOutputSpill.isSpillGuestPath("/var/minis/workspace/tool-spill/abc.txt"))
+        assertTrue(ToolOutputSpill.isSpillGuestPath("/var/minis/workspace/tool-spill/trim-abc.txt"))
+        assertFalse(ToolOutputSpill.isSpillGuestPath("/var/minis/workspace/notes.txt"))
+        assertFalse(ToolOutputSpill.isSpillGuestPath("/var/minis/workspace/tool-spill"))
+        assertFalse(ToolOutputSpill.isSpillGuestPath(null))
+    }
 }

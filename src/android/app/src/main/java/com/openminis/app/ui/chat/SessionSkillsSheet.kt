@@ -172,7 +172,10 @@ fun SessionSkillsSheet(
                     ) {
                         filteredSkills.forEachIndexed { index, skill ->
                             SkillRowItem(
-                                name = skill.name,
+                                // [OpenMinis#267] Built-in skills carry English
+                                // frontmatter names; show the localized display
+                                // name (user-imported skills stay verbatim).
+                                name = com.openminis.app.ui.settings.localizedSkillName(skill),
                                 description = skill.description,
                                 importSource = skill.importSource,
                                 isEnabled = overrides[skill.id] ?: skill.isEnabled,

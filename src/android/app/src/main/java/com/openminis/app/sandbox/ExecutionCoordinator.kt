@@ -38,7 +38,16 @@ object ExecutionCoordinator {
     data class CommandResult(
         val output: String,
         val exitCode: Int,
-        val durationMs: Long
+        val durationMs: Long,
+        /**
+         * [GH#358] True only when the command itself timed out — THIS shell's
+         * watchdog fired, or a native-offload handler reported its own timeout.
+         *
+         * 中文：exitCode=124 是 timeout 工具的通用退出码，用户命令可以合法返回
+         * 124；工具超时必须读这个内部判定，不能裸判 124。默认 false 让不关心
+         * 超时的调用方保持原语义。
+         */
+        val timedOut: Boolean = false,
     )
 
     private var appContextRef: Context? = null
@@ -262,12 +271,34 @@ object ExecutionCoordinator {
                 // text alone silently dropped `resourceClass`.
                 callerBudget = budget,
             )
+            // [GH#358] A timed-out command leaves the shell object in a state
+            // a later command must never reuse (cancelled pending callback,
+            // possibly blocked stdin writer). Drop THIS instance from the
+            // per-session registry so getOrCreateShell() builds a fresh one
+            // on the next call; the per-session mutex itself stays (queued
+            // callers already reference it and withLock releases it normally).
+            // The verdict comes from the shell's internal flag ONLY — never the
+            // bare exit code (a user command may legitimately exit 124) and
+            // never the output text (a user command can echo the timeout
+            // marker itself; see ShellChannelRecovery).
+            val timedOut = shell.consumeTimedOut()
+            if (ShellChannelRecovery.shouldDiscardChannel(exitCode, rawOutput, timedOut)) {
+                discardTimedOutChannel(sessionId, shell)
+            }
 
             val durationMs = System.currentTimeMillis() - startTime
             val sanitized = TerminalSanitizer.sanitize(rawOutput)
             val (stripped, loggedExit) = TerminalSanitizer.dropOffloadTrace(sanitized)
             var effectiveExit = exitCode
             if (effectiveExit == 0 && loggedExit != null && loggedExit != 0) effectiveExit = loggedExit
+            // [GH#358] A native-offload handler timeout is a REAL command
+            // timeout (the guest watchdog fired), even though the persistent
+            // shell itself is healthy. Keep the tool result's TIMEOUT status for
+            // it, but do NOT use it to discard the channel (see above). The
+            // offload trace carries the handler's own 124, distinct from a user
+            // command that exits 124.
+            val handlerTimedOut = (effectiveExit == 0 && stripped.contains("handler_timeout")) ||
+                loggedExit == 124
             if (effectiveExit == 0 && stripped.contains("handler_timeout")) effectiveExit = 124
             val truncated = TerminalSanitizer.truncateIfNeeded(stripped)
             val output = if (effectiveExit != 0 && effectiveExit != 124) {
@@ -280,6 +311,10 @@ object ExecutionCoordinator {
                 output = MCPToolPolicy.filterToolsOutput(appContext, command, output),
                 exitCode = effectiveExit,
                 durationMs = durationMs,
+                // [GH#358] Only the shell's own watchdog verdict counts for the
+                // CHANNEL (see shouldDiscardChannel above). For the tool's
+                // TIMEOUT status, an offload handler timeout also qualifies.
+                timedOut = timedOut || handlerTimedOut,
             )
         }
         } finally {
@@ -362,6 +397,25 @@ object ExecutionCoordinator {
     }
 
     fun sessionBindMounts(sessionId: String): Map<String, String> = buildSessionBindMounts(sessionId)
+
+    /**
+     * [GH#358] Explicit channel teardown after a timeout: reset the shell
+     * object and unregister only THIS instance (`remove(key, value)`), so a
+     * concurrently rebuilt shell is never thrown away. The session mutex is
+     * deliberately kept — waiters are already parked on it and `withLock`
+     * releases it when this command returns.
+     */
+    private fun discardTimedOutChannel(sessionId: String, shell: PersistentShell) {
+        shell.resetAfterTimeout()
+        val removed = shells.remove(sessionId, shell)
+        lastInjectedKeys.remove(sessionId)
+        lastIdle.remove(sessionId)
+        Log.w(
+            TAG,
+            "[GH#358] discarded timed-out shell for session=$sessionId removed=$removed " +
+                "reset=[${ShellChannelRecovery.RESET_FIELDS}] — next command builds a fresh channel",
+        )
+    }
 
     internal fun hasLiveShell(sessionId: String): Boolean = shells[sessionId]?.isAlive == true
 

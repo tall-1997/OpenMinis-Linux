@@ -2,6 +2,7 @@ package com.openminis.app.ui.chat
 
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
+import com.openminis.app.tools.ToolCallPreflight
 import org.json.JSONObject
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -9,11 +10,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * [T-preflight-empty-string-allowed] Tests for `preflightValidateToolCall`.
+ * [T-preflight-empty-string-allowed] Tests for the required-field / empty-args
+ * preflight.
  *
- * Mirrors iOS MinisTests/ToolPreflightTests.swift. The function is pure and
- * lives in ChatViewModel's companion precisely so these can run without
- * constructing a ChatViewModel.
+ * [F3 GH#61] The logic moved from `ChatViewModel.preflightValidateToolCallImpl`
+ * (main-loop only) into the shared `ToolCallPreflight.requiredFieldViolation`,
+ * which `ToolCallPreflight.finalize` runs for the main loop, sub-agents and
+ * group chat alike. Mirrors iOS MinisTests/ToolPreflightTests.swift.
  */
 class ToolPreflightTest {
 
@@ -47,7 +50,7 @@ class ToolPreflightTest {
     private val tools = listOf(fileEdit, shellExecute, withToolTitle)
 
     private fun validate(name: String, json: String): String? =
-        ChatViewModel.preflightValidateToolCallImpl(name, JSONObject(json), tools)
+        ToolCallPreflight.requiredFieldViolation(name, JSONObject(json), tools)
 
     // ── The reported bug: empty new_string is the documented delete form ──
 
@@ -117,11 +120,11 @@ class ToolPreflightTest {
 
     @Test
     fun `the whitelist helper is scoped to the exact tool and field`() {
-        assertTrue(ChatViewModel.preflightEmptyStringAllowed("file_edit", "new_string"))
-        assertTrue(!ChatViewModel.preflightEmptyStringAllowed("file_edit", "old_string"))
+        assertTrue(ToolCallPreflight.emptyStringAllowed("file_edit", "new_string"))
+        assertTrue(!ToolCallPreflight.emptyStringAllowed("file_edit", "old_string"))
         // Another tool must not inherit file_edit's allowance.
-        assertTrue(!ChatViewModel.preflightEmptyStringAllowed("file_write", "new_string"))
-        assertTrue(!ChatViewModel.preflightEmptyStringAllowed("shell_execute", "command"))
+        assertTrue(!ToolCallPreflight.emptyStringAllowed("file_write", "new_string"))
+        assertTrue(!ToolCallPreflight.emptyStringAllowed("shell_execute", "command"))
     }
 
     // ── JSON null counts as missing ──
@@ -198,7 +201,7 @@ class ToolPreflightTest {
             required = listOf("count"),
         )
         assertNull(
-            ChatViewModel.preflightValidateToolCallImpl(
+            ToolCallPreflight.requiredFieldViolation(
                 "numeric_tool", JSONObject("""{"count":0}"""), listOf(numeric),
             ),
         )

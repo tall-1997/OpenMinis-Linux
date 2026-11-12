@@ -42,15 +42,24 @@ internal fun ChatViewModel.startProviderEditWatch() {
 
 /**
  * Rebuild [ChatViewModel.currentProvider] from the active model entry when its
- * provider instance was edited since it was built. Called where a turn takes
- * `currentProvider` (send, retry, resume, rerun); never mid-stream.
+ * provider instance was edited since it was built, or when the app trust store
+ * was changed (CA import/delete — [com.openminis.app.network.AppTrustStore.generation]).
+ * Called where a turn takes `currentProvider` (send, retry, resume, rerun);
+ * never mid-stream.
  */
 internal fun ChatViewModel.rebuildProviderIfEdited() {
-    if (pendingProviderEdits.isEmpty() || _isStreaming.value) return
+    // [GH#258][GH#287] A CA imported/removed changes AppTrustStore.generation;
+    // the provider held here was built under the previous TLS material, so it
+    // must be rebuilt exactly like an edited instance — otherwise an open chat
+    // keeps the old socket until the process restarts.
+    val trustChanged = providerTrustGeneration !=
+        com.openminis.app.network.AppTrustStore.generation
+    if (_isStreaming.value) return
+    if (pendingProviderEdits.isEmpty() && !trustChanged) return
     val entryId = _activeEntryId.value ?: return
     val entry = providerRepository.config.value.modelEntries.find { it.id == entryId } ?: return
     val id = entry.providerInstanceId
-    if (id !in pendingProviderEdits) return
+    if (id !in pendingProviderEdits && !trustChanged) return
     // [FIX-R2-13, review §三 逻辑] The pending edit is consumed only where the
     // outcome is known; it used to be dropped up front, so a deleted instance
     // or a missing credential left the chat on the OLD endpoint (with the edit
@@ -81,6 +90,7 @@ internal fun ChatViewModel.rebuildProviderIfEdited() {
     pendingProviderEdits = pendingProviderEdits - id
     AppLogger.info(
         ChatViewModel.TAG,
-        "[provider-edit] rebuilt provider for edited instance ${id.take(8)} (responses=${instance.useResponsesAPI})",
+        "[provider-edit] rebuilt provider for edited instance ${id.take(8)} " +
+            "(responses=${instance.useResponsesAPI}, caReload=$trustChanged)",
     )
 }

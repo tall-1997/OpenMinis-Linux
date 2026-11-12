@@ -72,12 +72,13 @@ fun BackupHistoryDetailScreen(
     onOpenDestination: ((String) -> Unit)? = null,
 ) {
     var confirmRemove by remember { mutableStateOf(false) }
-    // [T-backup-delete-files-too] Offering to delete the packages too only
-    // makes sense when we can name the file AND some destination actually
-    // received it.
-    val canDeleteFiles = onRemoveWithFiles != null &&
-        !record.packageName.isNullOrEmpty() &&
-        record.destinations.any { it.succeeded }
+    // [GH#367] Offering to delete the package too must not depend on a
+    // DESTINATION having succeeded: a local-only record (no destination, or
+    // every delivery failed) still has a `.minisbak` in the app sandbox that
+    // the user can only remove from here. The deletion path keeps that local
+    // file when a destination can no longer be verified, so this entry can
+    // never silently destroy a remote copy.
+    val canDeleteFiles = onRemoveWithFiles != null && !record.packageName.isNullOrEmpty()
 
     SettingsScaffold(
         title = formatTimestamp(record.startedAt),

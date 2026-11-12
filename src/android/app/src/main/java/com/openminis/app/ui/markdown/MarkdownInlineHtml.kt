@@ -32,7 +32,7 @@ internal object MarkdownInlineHtml {
     fun normalize(markdown: String): String {
         if (!markdown.contains('<')) return markdown
         val n = markdown.length
-        val codeMask = MarkdownParser.buildCodeMask(markdown)
+        val codeMask = MarkdownMathHelpers.buildCodeMask(markdown)
         // One flag per char: does its line look like a table row (leading
         // pipe after indent)? Only the <br>→newline conversion honours this —
         // span conversions are safe inside a cell.

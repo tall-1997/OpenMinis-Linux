@@ -318,12 +318,28 @@ interface LLMProvider : ModelProvider {
     ): Flow<LLMStreamChunk>
 
     /**
+     * [OpenMinis#311] Provider-level "force thinking" capability.
+     *
+     * A model catalog describes the OFFICIAL models of a vendor; an
+     * Anthropic-compatible relay (DeepSeek / Bailian / self-hosted gateway)
+     * can expose ids whose catalog row says `supportsReasoning = false` while
+     * the endpoint in fact accepts extended thinking. When a provider opts in
+     * here, an ENABLED level bypasses [catalogMaxThinkingLevel] in
+     * [clampThinkingLevel]; an OFF request is unchanged. Default false keeps
+     * every existing provider byte-identical.
+     */
+    val forcesThinkingWhenEnabled: Boolean get() = false
+
+    /**
      * [T-android-thinking-level-arch] Cap a requested thinking level to the
      * current [model]'s ceiling by rank. Used by the [sendMessage]/[streamMessage]
      * default entries above; the catalog ceiling is resolved off the live
      * `model`.
      */
     fun clampThinkingLevel(level: ThinkingLevel): ThinkingLevel {
+        // [OpenMinis#311] A forcing provider is the operator's assertion that
+        // the catalog is wrong for this endpoint.
+        if (forcesThinkingWhenEnabled && level.isEnabled) return level
         val ceiling = model.catalogMaxThinkingLevel
         return if (level.rank > ceiling.rank) ceiling else level
     }

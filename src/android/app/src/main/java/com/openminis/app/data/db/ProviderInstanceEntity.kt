@@ -23,6 +23,10 @@ data class ProviderInstanceEntity(
     // MIGRATION_1_2's ALTER TABLE backfills existing rows to off, matching the
     // entity default and the JSON model's `azureMode = false`.
     @ColumnInfo(name = "azure_mode") val azureMode: Int = 0,
+    // [OpenMinis#311] Anthropic-compatible relays: force extended thinking on
+    // even when the catalog declares the model non-reasoning. NOT NULL
+    // DEFAULT 0 so MIGRATION_6_7 backfills existing rows to off.
+    @ColumnInfo(name = "force_thinking") val forceThinking: Int = 0,
     // [GH#68 T-android-image-endpoint-persist] Kotlin enum .name of
     // ImageEndpointMode ("auto"/"imagesGenerations"/"chatCompletions"). These
     // two were on the JSON model but never given Room columns, so every save

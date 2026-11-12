@@ -373,7 +373,13 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     // narrowest-scope-first, so a long GLOBAL.md can never displace this chat's
     // own rules. Null when memory is off or nothing was admitted.
     val memoryAllocation = memoryAssembly?.allocation
-    val globalMemoryFragment = memoryAllocation?.rendered
+    // [GH#357] Split the block: standing rules stay in the byte-stable head,
+    // while the daily-log window (+TOC) moves to the dynamic tail. A single
+    // memory_write rewrites a daily log, and before this split that was a
+    // cache-prefix miss for the whole prompt on the following turn.
+    val memoryBlocks = com.openminis.app.data.repository.MemoryBlockSplit.split(memoryAllocation)
+    val globalMemoryFragment = memoryBlocks.stable
+    val dailyMemoryFragment = memoryBlocks.transient
     // [T-memory-recall] Lightweight FTS recall: search ALL historical memory
     // entries for keywords from the latest user message, inject top-4 hits.
     // No embedding service: keyword density + recency + recall-count scoring.
@@ -548,6 +554,8 @@ internal fun assembleDynamicTail(
     runtimeContext: String,
     personalityReminder: String?,
     taskAnchor: String? = null,
+    /** [GH#357] Daily-log memory window: volatile, so it belongs in this tail. */
+    dailyMemoryFragment: String? = null,
 ): String = buildString {
     if (worldBookFragment.isNotEmpty()) append(worldBookFragment)
     if (learnedPrefsFragment != null) {
@@ -557,6 +565,14 @@ internal fun assembleDynamicTail(
     if (recalledMemoryFragment != null && recalledMemoryFragment.isNotBlank()) {
         append("\n\n")
         append(recalledMemoryFragment)
+    }
+    // [GH#357] After recall and before the task anchor: the daily window is
+    // per-turn context (a memory_write changes it), so it must never sit in
+    // the cached prefix. Keeping it adjacent to the other memory fragments
+    // preserves the model-facing reading order.
+    if (dailyMemoryFragment != null && dailyMemoryFragment.isNotBlank()) {
+        append("\n\n")
+        append(dailyMemoryFragment)
     }
     // [T-task-anchor] Ahead of the runtime context: the anchor is stable
     // across turns (unlike the date line below it) and belongs with the
@@ -571,6 +587,43 @@ internal fun assembleDynamicTail(
         append("\n\n")
         append(personalityReminder)
     }
+}
+
+/**
+ * [GH#563] Re-stamp the day in the runtime-context line of an already-built
+ * system prompt.
+ *
+ * 中文：时间快照必须随轮刷新。长期会话/AI 长循环里系统提示只组装一次，
+ * 日期会停留在会话开始那天；这里只替换动态尾部里的日期字节，不破坏稳定前缀。
+ *
+ * The prompt is assembled once per send, but an agent loop can keep issuing
+ * requests for hours (and a queued prompt is drained with the prompt from the
+ * earlier send), so the injected `- Current date:` could be days old — the
+ * reported "session thinks today is 11-09" drift. Replacing just the date
+ * keeps the byte-stable head untouched: the runtime context lives after
+ * [ChatViewModel.systemPromptStablePrefixLen], in the uncached dynamic tail.
+ *
+ * Pure and deliberately narrow: no marker (a provider-specific prompt) or a
+ * blank/None prompt is returned unchanged, and only the runtime-context date
+ * is rewritten.
+ *
+ * [GH#563] The marker is searched with `lastIndexOf`, not `indexOf`. The
+ * runtime context is appended LAST (memory recall / task anchor come before
+ * it), so the last occurrence is the real one; an earlier occurrence can come
+ * from recalled memory, a task anchor or the SOUL body — the first-match
+ * version rewrote THAT date and left the actual runtime line stale.
+ */
+internal fun refreshRuntimeContextDate(prompt: String?, dateStr: String): String? {
+    val base = prompt ?: return null
+    if (base.isEmpty() || dateStr.isBlank()) return prompt
+    val marker = "- Current date: "
+    val markerAt = base.lastIndexOf(marker)
+    if (markerAt < 0) return prompt
+    val valueStart = markerAt + marker.length
+    val valueEnd = base.indexOf(' ', valueStart)
+    if (valueEnd < 0) return prompt
+    if (base.substring(valueStart, valueEnd) == dateStr) return prompt
+    return base.substring(0, valueStart) + dateStr + base.substring(valueEnd)
 }
 
 /**

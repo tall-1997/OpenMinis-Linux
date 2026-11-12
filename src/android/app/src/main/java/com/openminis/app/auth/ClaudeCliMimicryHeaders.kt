@@ -26,38 +26,50 @@ import okhttp3.Request
  * so adding it would widen the gap between what we advertise and what we send
  * rather than close it.
  *
- * **Keep in lockstep with `AnthropicProvider.buildHeaders`'s `isOAuth` block**
- * — the values are one registered client identity, and a fingerprint that
- * matches on one path but not the other is the exact shape of this bug.
- * `ClaudeCliMimicryHeadersTest` fails if the two drift apart.
+ * **One definition for both paths.** `AnthropicProvider.buildRequest`'s
+ * `isOAuth` block applies this same object via
+ * [applyClaudeCliMimicryHeaders]; a fingerprint that matches on one path but
+ * not the other is the exact shape of this bug, so there is no second copy to
+ * drift.
  *
  * Mirrors the iOS set in `OAuthHTTPClient`'s interceptor.
  */
 object ClaudeCliMimicryHeaders {
 
     /**
+     * [GH#423][GH#301] The single source of the CLI identity's version.
+     *
+     * The backend gates new models on this number and the floor only rises.
+     * It used to be written twice — 2.1.280 here and 2.1.195 in
+     * `AnthropicProvider.buildRequest` — so the OAuth auth path and the chat
+     * path advertised different clients, and moving the floor meant finding
+     * both literals. [ClaudeCliVersion] resolves it from a build pin, the npm
+     * dist-tag cache (24 h), or its fallback.
+     */
+    val userAgent: String
+        get() = "claude-cli/${ClaudeCliVersion.current} (external, cli)"
+
+    /**
      * Header name → value, in the order the chat path sends them.
      *
-     * Values are pinned on purpose. `User-Agent` is version-gated by the
-     * backend (below claude-cli/2.1.251 a Fable 5.1 request is refused
-     * outright, and below 2.1.280 an Opus 5.5 one is; the floor only rises)
-     * outright), while the `X-Stainless-*` values describe the TypeScript SDK
-     * and Node runtime rather than the CLI, and move on their own cadence.
-     * Bumping either speculatively is how a working fingerprint gets broken.
+     * The `X-Stainless-*` values describe the TypeScript SDK and Node runtime
+     * rather than the CLI, and move on their own cadence. Bumping either
+     * speculatively is how a working fingerprint gets broken.
      */
-    val ALL: List<Pair<String, String>> = listOf(
-        "User-Agent" to "claude-cli/2.1.280 (external, cli)",
-        "X-Stainless-Lang" to "js",
-        "X-Stainless-Package-Version" to "0.106.0",
-        "X-Stainless-OS" to "Linux",
-        "X-Stainless-Arch" to "arm64",
-        "X-Stainless-Runtime" to "node",
-        "X-Stainless-Runtime-Version" to "v24.18.0",
-        "X-Stainless-Retry-Count" to "0",
-        "X-Stainless-Timeout" to "600",
-        "X-App" to "cli",
-        "Anthropic-Dangerous-Direct-Browser-Access" to "true",
-    )
+    val ALL: List<Pair<String, String>>
+        get() = listOf(
+            "User-Agent" to userAgent,
+            "X-Stainless-Lang" to "js",
+            "X-Stainless-Package-Version" to "0.106.0",
+            "X-Stainless-OS" to "Linux",
+            "X-Stainless-Arch" to "arm64",
+            "X-Stainless-Runtime" to "node",
+            "X-Stainless-Runtime-Version" to "v24.18.0",
+            "X-Stainless-Retry-Count" to "0",
+            "X-Stainless-Timeout" to "600",
+            "X-App" to "cli",
+            "Anthropic-Dangerous-Direct-Browser-Access" to "true",
+        )
 }
 
 /**

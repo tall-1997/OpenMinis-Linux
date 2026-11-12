@@ -42,6 +42,7 @@ import java.io.InputStreamReader
 import java.util.concurrent.TimeUnit
 import com.openminis.app.provider.failOnSilentEmptyCompletion
 import com.openminis.app.provider.thinking.ThinkingRuleResolver
+import com.openminis.app.network.applyAppTrustStore
 
 class GeminiProvider(
     private val apiKey: String,
@@ -54,6 +55,12 @@ class GeminiProvider(
      * param). Null = classic API-key mode, byte-identical requests.
      */
     private val oauthTokenProvider: (suspend () -> String?)? = null,
+    /**
+     * [GH#221] 用户为该 provider 实例配置的自定义请求头。在 [applyAuth] 里
+     * 最后应用（两条请求路径共用），因此同名头以用户配置为准；Host /
+     * Content-Length 等在存储层已被拒绝。空 map = 行为不变。
+     */
+    private val extraHeaders: Map<String, String> = emptyMap(),
 ) : LLMProvider {
     override val name = "Google"
 
@@ -64,6 +71,8 @@ class GeminiProvider(
     private suspend fun applyAuth(request: okhttp3.Request.Builder): okhttp3.Request {
         val token = oauthTokenProvider?.invoke()
         if (token != null) request.header("Authorization", "Bearer $token")
+        // [GH#221] 用户请求头最后应用；?key= 查询参数认证与 Bearer 均不受影响。
+        for ((key, value) in extraHeaders) request.header(key, value)
         return request.build()
     }
     override val callGateKey: String
@@ -79,6 +88,11 @@ class GeminiProvider(
         // [T-android-stale-conn-retry-hang] Shared pool — see NetworkMonitor.
         // Network-transition eviction must reach provider connections.
         .connectionPool(com.openminis.app.network.NetworkMonitor.sharedLLMConnectionPool)
+        // [GH#258][GH#287] Custom-base endpoints may present a private CA.
+        .applyAppTrustStore()
+        // [GH#188] See AnthropicProvider: upload-aware TTFB clock + targeted
+        // connection eviction on timeout.
+        .eventListener(com.openminis.app.provider.UploadAwareTtfbListener())
         .build()
 
     override suspend fun sendMessageClamped(
@@ -147,12 +161,19 @@ class GeminiProvider(
             .applyUserAgentOverride(null)
         val authedRequest = applyAuth(request)
 
-        val call = client.newCall(authedRequest)
+        val watch = com.openminis.app.provider.TtfbWatchState()
+        val call = client.newCall(
+            authedRequest.newBuilder()
+                .tag(com.openminis.app.provider.TtfbWatchState::class.java, watch)
+                .build(),
+        )
         val cancelOnExit = call.cancelOnCancellation(
             kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job],
         )
         try {
-        val response = com.openminis.app.provider.StreamTtfb.execute(call, "Gemini")
+        val response = com.openminis.app.provider.StreamTtfb.execute(
+            call, "Gemini", watch = watch,
+        )
         if (!response.isSuccessful) {
             val errorBody = response.body?.string() ?: ""
             response.close()
@@ -451,6 +472,11 @@ class GeminiProvider(
             model.id,
             level,
             budgetTokensMax = model.budgetTokensMax,
+            // [OpenMinis#226] Audio-output (TTS) models reject thinkingConfig
+            // with a 400 regardless of how their id is spelled. The modality is
+            // the property actually responsible, so pass it instead of relying
+            // on the "-tts" suffix heuristic alone.
+            hasAudioOutput = "audio" in model.outputModalities.orEmpty(),
             // [T-gemini-budget-min-dead] budgetTokensMin intentionally NOT
             // passed: the Gemini wire API has no minimum-thinking field
             // (thinkingBudget is a single value, 3.x uses thinkingLevel), so

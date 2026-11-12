@@ -86,7 +86,7 @@ yum install python3          # → apt-get install -y python3
 |---|---|---|
 | `applicationId` | `com.openminis.app` | `com.openminis.linux` |
 | 启动器名称 | Minis | Minis Ultra |
-| 抽象套接字 | `native-offload` | `native-offload-linux` |
+| 抽象套接字 | `native-offload` | `native-offload-linux-<pid>`（每进程独立，分身/多用户不再抢名） |
 | Debug JSON-RPC | `127.0.0.1:5321` | `127.0.0.1:5322` |
 | 客户机 | Alpine musl | Ubuntu 24.04 glibc |
 | Rootfs 目录 | `files/alpine-rootfs` | `files/ubuntu-rootfs` |

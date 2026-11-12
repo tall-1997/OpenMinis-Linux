@@ -40,7 +40,16 @@ internal suspend fun ChatViewModel.generateCompactSummary(conversationText: Stri
         temperature = attempt.temperature,
         imageParts = emptyList(),
         tools = emptyList(),
+        // [OpenMinis#377] Compaction pins OFF so the summariser never spends
+        // reasoning budget. OFF used to put the vendor's *allowlist* off tier on
+        // the wire verbatim ("none" on official OpenAI), which gpt-5 / o-series
+        // reject with a 400 — "compact failed" on a model that had just answered
+        // a normal turn. The provider-level OFF clamp now snaps that value down
+        // to the model's lowest LEGAL tier (minimal/low) and omits the field
+        // when the model declares no such tier, so keep OFF here.
         thinkingLevel = ThinkingLevel.OFF,
+        // [GH#221] Summarisation uses the same per-instance headers as chat.
+        extraHeaders = providerExtraHeaders(attempt.instanceId),
     ).text
     if (text.isBlank()) throw IllegalStateException("empty compact summary from ${attempt.label}")
     return text

@@ -58,12 +58,14 @@ object OffloadPermissionManager {
     )
 
     /**
-     * Registry of all tools and their permission categories. Defaults are
-     * BYPASS across the board to mirror iOS — the user opted into running an
-     * agent app, so background access is permitted unless they explicitly
-     * downgrade an entry to ASK_ONCE / NOT_ALLOWED. Tools omitted from this
-     * registry (e.g. the former `open_url` and `model_use` entries) fall
-     * through to BYPASS via [getLevel]'s unknown-tool branch — no separate
+     * Registry of all tools and their permission categories. Most defaults are
+     * BYPASS to mirror iOS — the user opted into running an agent app, so
+     * background access is permitted unless they explicitly downgrade an entry
+     * to ASK_ONCE / NOT_ALLOWED. The exceptions are chat-transcript access and
+     * the privileged system CLIs ([GH#539]), which default to ASK_ONCE so a
+     * newly installed build never drives other apps silently. Tools omitted
+     * from this registry (e.g. the former `open_url` and `model_use` entries)
+     * fall through to BYPASS via [getLevel]'s unknown-tool branch — no separate
      * "always permit" carve-out needed.
      */
     val toolRegistry: List<ToolPermissionInfo> = listOf(
@@ -95,12 +97,18 @@ object OffloadPermissionManager {
         ToolPermissionInfo("notification", "Notifications", PermissionCategory.SYSTEM, PermissionLevel.BYPASS, showInSettings = false),
         ToolPermissionInfo("device_info", "Device Info", PermissionCategory.SYSTEM, PermissionLevel.BYPASS, showInSettings = false),
         // T330: integrations — opt-in by default. These tools can drive
-        // other apps and read on-screen content, so the safer posture is
-        // NOT_ALLOWED until the user picks otherwise even when the
-        // underlying system layer (Shizuku binder / Accessibility service)
-        // is already authorized.
-        ToolPermissionInfo("a11y_cli", "android-a11y-cli", PermissionCategory.INTEGRATIONS, PermissionLevel.NOT_ALLOWED),
-        ToolPermissionInfo("shizuku_cli", "android-shizuku-cli", PermissionCategory.INTEGRATIONS, PermissionLevel.NOT_ALLOWED),
+        // other apps and read on-screen content, so they must not run
+        // silently: [GH#539] changed the default from NOT_ALLOWED to
+        // ASK_ONCE, the same conservative "ask before first use" posture as
+        // the rest of the tool-approval system. NOT_ALLOWED made the first
+        // call fail even when the user had just deliberately enabled the
+        // Accessibility service / Shizuku, and the only fix was a Settings
+        // trip they were never offered. ASK_ONCE still opens no door on its
+        // own — the user must approve the first call — but it keeps the
+        // system-layer grant and the agent gate from contradicting each
+        // other.
+        ToolPermissionInfo("a11y_cli", "android-a11y-cli", PermissionCategory.INTEGRATIONS, PermissionLevel.ASK_ONCE),
+        ToolPermissionInfo("shizuku_cli", "android-shizuku-cli", PermissionCategory.INTEGRATIONS, PermissionLevel.ASK_ONCE),
         // Host Magisk/KernelSU `su` passthrough. Default BYPASS so a rooted
         // device can `su -c` without Shizuku; still visible in Settings so
         // the user can drop it to ASK_ONCE / NOT_ALLOWED.
@@ -354,6 +362,19 @@ object OffloadPermissionManager {
         val stored = prefs.getString("level_$toolName", null)
         return stored?.let { runCatching { PermissionLevel.valueOf(it) }.getOrNull() } ?: info.defaultLevel
     }
+
+    /**
+     * [GH#539] Whether [toolName] is part of this build's permission registry.
+     *
+     * The gate keeps the documented "unknown tool → BYPASS" behaviour for
+     * registry-less tools, but the privileged CLI handlers call this first so a
+     * registry/build mismatch fails closed with a "not registered" explanation
+     * instead of silently allowing an automation surface. It is also the
+     * registration half of [com.openminis.app.sandbox.offload.OffloadDenial]'s
+     * three-state message.
+     */
+    fun isRegistered(toolName: String): Boolean =
+        toolRegistry.any { it.toolName == toolName }
 
     fun getLevel(toolName: String): PermissionLevel {
         val context = contextRef

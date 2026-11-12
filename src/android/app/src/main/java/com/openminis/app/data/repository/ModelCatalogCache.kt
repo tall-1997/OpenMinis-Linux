@@ -3,6 +3,7 @@ package com.openminis.app.data.repository
 import android.content.Context
 import android.content.SharedPreferences
 import com.openminis.app.data.model.ModelEntry
+import com.openminis.app.data.model.ProviderConfig
 import com.openminis.app.data.model.ProviderCredential
 import com.openminis.app.data.model.ProviderInstance
 import com.openminis.app.data.model.ProviderType
@@ -116,6 +117,21 @@ internal class ModelCatalogCache(
         forceRefresh: Boolean = false,
         clearFirst: Boolean = false,
     ): ModelRefreshResult {
+        // [OpenMinis#306] 入口守卫：Main 线程冷启动窗口里 config 还是空占位，
+        // 这里一旦继续，后面的 addMissingBuiltInModels / replaceEntries 就会
+        // 把空占位（或只含本实例种子的占位）写回 store，`replaceDiff` 会据此
+        // 删掉全部已存 instances。ensureConfigLoaded() 在主线程未加载时返回
+        // false（拒绝 runBlocking 那 ~8s 的启动解码），必须立即 abort —— 连
+        // 网络请求都不要发。调用点由 rememberCoroutineScope（Main）启动的
+        // AddProviderScreen 也一并改到 Dispatchers.IO，双保险。
+        if (!repo.ensureConfigLoaded()) {
+            android.util.Log.w(
+                "ProviderRepo",
+                "[ModelList] refreshModels refused for ${instance.label}: config not loaded yet " +
+                    "(main-thread cold-start window) — aborting before any write",
+            )
+            return ModelRefreshResult.FAILURE
+        }
         val liveForce = forceRefresh || clearFirst
         // [T-refresh-no-destructive-clear] `clearFirst` used to wipe this
         // instance's model entries BEFORE the network call. A hard refresh does
@@ -200,6 +216,9 @@ internal class ModelCatalogCache(
 
         if (apiKey != null) {
             val baseURL = instance.effectiveBaseURL
+            // [GH#221] 用户自定义请求头；models 刷新与聊天请求走同一份 KV。
+            val userHeaders =
+                com.openminis.app.provider.ProviderHeaderStore.headersFor(instance.id)
             val models = try {
                 when (instance.providerType) {
                     ProviderType.anthropic -> AnthropicModelsApi.fetchModels(
@@ -210,6 +229,7 @@ internal class ModelCatalogCache(
                         // [T-provider-custom-user-agent] models-list UA override.
                         customUserAgent = instance.customUserAgent,
                         cacheScope = instance.id,
+                        extraHeaders = userHeaders,
                     )
                     ProviderType.gemini -> GeminiModelsApi.fetchModels(
                         apiKey,
@@ -218,14 +238,18 @@ internal class ModelCatalogCache(
                         forceRefresh = liveForce,
                         cacheScope = instance.id,
                         baseURL = instance.effectiveBaseURL,
+                        extraHeaders = userHeaders,
                     )
                     // [T-provider-custom-user-agent] models-list UA override.
                     // [T-android-provider-type-parity] openAIResponses lists
                     // models from the same /v1/models endpoint — only the
                     // completion endpoint differs.
                     ProviderType.openAI, ProviderType.openAIResponses ->
-                        OpenAIModelsApi.fetchModels(apiKey, baseURL, context = context, forceRefresh = liveForce, customUserAgent = instance.customUserAgent, cacheScope = instance.id)
-                    ProviderType.openRouter -> OpenRouterModelsApi.fetchModels(apiKey, context = context, forceRefresh = liveForce, cacheScope = instance.id)
+                        OpenAIModelsApi.fetchModels(apiKey, baseURL, context = context, forceRefresh = liveForce, customUserAgent = instance.customUserAgent, cacheScope = instance.id, extraHeaders = userHeaders)
+                    // [GH#221] openRouter /models used to drop userHeaders while
+                    // the other three families passed them — a relay that gates
+                    // the model list on a custom header refreshed empty here.
+                    ProviderType.openRouter -> OpenRouterModelsApi.fetchModels(apiKey, context = context, forceRefresh = liveForce, cacheScope = instance.id, extraHeaders = userHeaders)
                     // [T-provider-dynamic-catalog-reconcile] xAI: fetch the live
                     // catalog, fall back to the built-in list.
                     //
@@ -265,6 +289,7 @@ internal class ModelCatalogCache(
                         forceRefresh = liveForce,
                         customUserAgent = instance.customUserAgent,
                         cacheScope = instance.id,
+                        extraHeaders = userHeaders,
                     ).ifEmpty { com.openminis.app.provider.xai.XAIModelsApi.fetchModelsOAuth() }
                     // [T-kimi-oauth] Kimi Code: unlike Codex OAuth, the Kimi
                     // OAuth token CAN call the models endpoint — real fetch
@@ -278,6 +303,7 @@ internal class ModelCatalogCache(
                         forceRefresh = liveForce,
                         customUserAgent = instance.customUserAgent,
                         cacheScope = instance.id,
+                        extraHeaders = userHeaders,
                     )
                     // [T-android-provider-type-parity] No models endpoint to
                     // query for a type this build cannot drive; the instance
@@ -360,28 +386,19 @@ internal class ModelCatalogCache(
      * would seed with them. Never removes or changes an entry: it only brings
      * the list up to what deleting and re-adding the provider would give.
      * Returns whether anything was added.
+     *
+     * [OpenMinis#306] The actual body lives in [addMissingBuiltInModelsGuarded]
+     * so the cold-start guard is testable with an injected fake repository.
      */
-    private fun addMissingBuiltInModels(instance: ProviderInstance): Boolean {
-        // Same seed rule as addInstance: OAuth always, API-key only off a
-        // third-party OpenAI-compatible base (which must not inherit allOpenAI).
-        val seeds = instance.credentialType == ProviderCredential.oauth ||
-            !repo.configStore.isThirdPartyOpenAICompat(instance)
-        if (!seeds) return false
-        synchronized(repo.configLock) {
-            repo.ensureConfigLoaded()
-            val config = repo.workingCopy()
-            val have = config.modelEntries
-                .filter { it.providerInstanceId == instance.id }
-                .map { it.baseModel.id }
-                .toSet()
-            val missing = instance.providerType.builtInModels.filter { it.id !in have }
-            if (missing.isEmpty()) return false
-            config.modelEntries.addAll(missing.map { ModelEntry(providerInstanceId = instance.id, baseModel = it) })
-            repo.saveConfig(config)
-            android.util.Log.i("ProviderRepo", "[ModelList] ${instance.label}: added built-in ${missing.map { it.id }}")
-            return true
-        }
-    }
+    private fun addMissingBuiltInModels(instance: ProviderInstance): Boolean =
+        addMissingBuiltInModelsGuarded(
+            instance = instance,
+            configLock = repo.configLock,
+            ensureConfigLoaded = { repo.ensureConfigLoaded() },
+            isThirdPartyOpenAICompat = { repo.configStore.isThirdPartyOpenAICompat(it) },
+            workingCopy = { repo.workingCopy() },
+            saveConfig = { repo.saveConfig(it) },
+        )
 
     /**
      * Auto-refresh variant: skips instances where the user has added custom models,
@@ -502,5 +519,61 @@ internal class ModelCatalogCache(
             // reaching here have already exhausted effectiveBaseURL.
             ProviderType.antigravity, ProviderType.unsupported -> "https://api.openai.com/v1"
         }
+    }
+}
+
+/**
+ * [OpenMinis#306] Guarded "seed missing built-ins" step.
+ *
+ * The repository operations are function parameters so the cold-start contract
+ * can be unit-tested with a fake repository: `ensureConfigLoaded = { false }`
+ * is exactly the Main-thread refusal returned during the startup decode
+ * window, and the test asserts [saveConfig] is never called. A second test
+ * keeps the loaded path honest (seeds are still added and saved once).
+ *
+ * Why the guard has to live inside the lock and BEFORE [workingCopy]:
+ * [ModelCatalogCache.addMissingBuiltInModels] used to call
+ * `repo.ensureConfigLoaded()` and ignore its false. The following
+ * `workingCopy()` was then the empty cold-start placeholder, and
+ * `saveConfig(empty)` made `ProviderConfigDao.replaceDiff` treat every stored
+ * instance as stale and DELETE it — the reported "cold start wiped all
+ * provider config" failure.
+ */
+internal fun addMissingBuiltInModelsGuarded(
+    instance: ProviderInstance,
+    configLock: Any,
+    ensureConfigLoaded: () -> Boolean,
+    isThirdPartyOpenAICompat: (ProviderInstance) -> Boolean,
+    workingCopy: () -> ProviderConfig,
+    saveConfig: (ProviderConfig) -> Unit,
+): Boolean {
+    // Same seed rule as addInstance: OAuth always, API-key only off a
+    // third-party OpenAI-compatible base (which must not inherit allOpenAI).
+    val seeds = instance.credentialType == ProviderCredential.oauth ||
+        !isThirdPartyOpenAICompat(instance)
+    if (!seeds) return false
+    synchronized(configLock) {
+        // [OpenMinis#306] 主线程未加载时 ensureConfigLoaded() 返回 false；
+        // 旧代码忽略它继续 workingCopy() + saveConfig()，等于把空占位写回去。
+        // 这里必须直接拒绝，且不能触碰 workingCopy（空占位就是 wipe 源）。
+        if (!ensureConfigLoaded()) {
+            android.util.Log.w(
+                "ProviderRepo",
+                "[ModelList] addMissingBuiltInModels refused for ${instance.label}: config not " +
+                    "loaded yet (main-thread cold-start window) — not writing the empty placeholder",
+            )
+            return false
+        }
+        val config = workingCopy()
+        val have = config.modelEntries
+            .filter { it.providerInstanceId == instance.id }
+            .map { it.baseModel.id }
+            .toSet()
+        val missing = instance.providerType.builtInModels.filter { it.id !in have }
+        if (missing.isEmpty()) return false
+        config.modelEntries.addAll(missing.map { ModelEntry(providerInstanceId = instance.id, baseModel = it) })
+        saveConfig(config)
+        android.util.Log.i("ProviderRepo", "[ModelList] ${instance.label}: added built-in ${missing.map { it.id }}")
+        return true
     }
 }

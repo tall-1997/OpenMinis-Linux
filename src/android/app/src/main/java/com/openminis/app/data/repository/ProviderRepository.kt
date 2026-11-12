@@ -158,13 +158,14 @@ class ProviderRepository(
             }
             // Completed in every path, including the failure one: awaitConfigLoaded()
             // callers (refreshAllModelsIfNeeded) would otherwise suspend forever.
+            // [OpenMinis#306] …but warm the custom-rule cache FIRST, and await it
+            // here on this IO coroutine. The old order (complete, then enqueue the
+            // warm on the persist worker) left a window where a consumer that
+            // awaited config-loaded could build its first request against a cache
+            // that still held built-ins only — the reported "custom rule does not
+            // apply after a cold start".
+            warmThinkingRulesInline()
             if (!configLoadComplete.isCompleted) configLoadComplete.complete(Unit)
-            // The async loader sets _configLoaded directly, so normal readers
-            // no longer pass through ensureConfigLoaded(). Warm the synchronous
-            // request-builder cache explicitly here; otherwise the first cold
-            // start after this refactor would silently resolve built-in-only
-            // thinking rules until a later mutation happened to warm it.
-            loadAllThinkingRulesIntoCache()
             // [T-android-provider-voice] Reconcile voice-template seeds after
             // the initial load (add new template models, drop retired seeds,
             // heal corrupted modality). Mirrors iOS ProviderConfigStore.init.
@@ -255,8 +256,17 @@ class ProviderRepository(
         )
     }
 
-    fun addInstance(instance: ProviderInstance): Unit = synchronized(configLock) {
-        if (!ensureConfigLoaded()) return
+    /**
+     * [OpenMinis#306] Adds [instance] with its built-in/voice seeds.
+     *
+     * @return false when the config is still unloaded (Main-thread cold-start
+     *   window) or unreadable; nothing was persisted and the caller must not
+     *   treat the provider as created. Callers that save a credential next
+     *   (Settings add flow, config/debug import) MUST check this — otherwise
+     *   they write an API key for an instance that does not exist.
+     */
+    fun addInstance(instance: ProviderInstance): Boolean = synchronized(configLock) {
+        if (!ensureConfigLoaded()) return false
         val config = workingCopy()
         config.instances.add(instance)
         // Seed built-in model entries ONLY when the seed is appropriate for this
@@ -308,6 +318,7 @@ class ProviderRepository(
         saveConfig(config)
         // Stale from the start so the next sweep/SWR fetches it.
         invalidateModelCache(instance.id)
+        true
     }
     /** Voice-template seed reconciliation; implementation in [ProviderConfigStore]. */
     fun ensureVoiceTemplateModels() = configStore.ensureVoiceTemplateModels()
@@ -1121,19 +1132,19 @@ class ProviderRepository(
         val customRules: List<ThinkingRule> = emptyList(),
         val builtIns: List<ThinkingRule> = emptyList(),
         val sampleModelId: String? = null,
+        /**
+         * [OpenMinis#306] Non-null when the custom-rule cache could not be
+         * loaded (or has not loaded yet). The section renders it as a visible
+         * banner: silently falling back to built-in defaults is exactly the
+         * "my rule does nothing" failure this surfaces.
+         */
+        val loadError: String? = null,
+        /** [OpenMinis#306] True once the cache is authoritative. */
+        val cacheReady: Boolean = false,
     )
 
-    suspend fun thinkingRulesSnapshot(instanceId: String): ThinkingRulesSnapshot =
-        withContext(kotlinx.coroutines.Dispatchers.IO) {
-            ensureConfigLoaded()
-            val customRules = runCatching {
-                providerDao.loadThinkingRules(instanceId).map { it.toRule() }
-            }.getOrDefault(emptyList())
-            val builtIns = builtInThinkingRulesForDisplay(instanceId)
-            val sampleModelId = _config.value.modelEntries
-                .firstOrNull { it.providerInstanceId == instanceId }?.model?.id
-            ThinkingRulesSnapshot(customRules, builtIns, sampleModelId)
-        }
+    // [OpenMinis#306] Snapshot for the provider-detail rules screen; impl in ProviderRepositoryThinkingRules.kt.
+    suspend fun thinkingRulesSnapshot(instanceId: String): ThinkingRulesSnapshot = loadThinkingRulesSnapshot(instanceId)
 
     fun firstModelId(instanceId: String): String? {
         if (!ensureConfigLoaded()) return null
@@ -1150,45 +1161,44 @@ class ProviderRepository(
                     .mapValues { (_, rs) -> rs.sortedBy { it.sortOrder }.map { it.toRule() } }
                 thinkingRulesCache = byInstance
                 ThinkingRuleResolver.setAllCustomRules(byInstance)
+                // [OpenMinis#306] The fill succeeded — the request path may now
+                // trust customRulesFor(); clear any earlier visible failure.
+                ThinkingRuleResolver.markCustomRulesLoaded()
             }.onFailure {
+                // [OpenMinis#306] Do not swallow: the request builder keeps
+                // resolving built-in defaults, and the provider-detail screen
+                // shows this reason instead of pretending the rule applied.
                 android.util.Log.w("ProviderRepo", "[ThinkingRules] cache warm failed: ${it.message}")
+                ThinkingRuleResolver.markCustomRulesLoadFailed(
+                    it.message ?: it.javaClass.simpleName,
+                )
             }
         })
     }
+
+    /**
+     * [OpenMinis#306] Fill the custom-rule cache INLINE (suspend); impl in
+     * ProviderRepositoryThinkingRules.kt. Called by the cold-start config
+     * loader BEFORE it signals [configLoadComplete].
+     */
+    suspend fun warmThinkingRulesInline() = fillThinkingRulesCacheInline()
 
     /**
      * [T-android-save-off-main-thread] Last-warm snapshot of `provider_thinking_rules`
      * by instance id, filled off-thread by [loadAllThinkingRulesIntoCache] and kept
      * current by every rule mutation. Lets the non-suspend [thinkingRules] read be a
      * map lookup instead of a `runBlocking` DAO query on the composition thread.
+     * internal so ProviderRepositoryThinkingRules.kt can publish into it.
      */
     @Volatile
-    private var thinkingRulesCache: Map<String, List<ThinkingRule>> = emptyMap()
+    internal var thinkingRulesCache: Map<String, List<ThinkingRule>> = emptyMap()
 
     /**
-     * Re-warm the rule cache after a mutation. Reloads every instance's rows
-     * rather than just [instanceId] so a rename/reorder can never leave a stale
-     * entry behind; the table is small (user-authored rules only).
-     *
-     * [T-android-save-off-main-thread] suspend because the DAO read is a
-     * suspend query — every caller is already on the persistence worker
-     * ([saveThinkingRuleSuspending] / [deleteThinkingRuleSuspending] /
-     * [reorderThinkingRulesSuspending]).
+     * Re-warm the rule cache after a mutation; impl in
+     * ProviderRepositoryThinkingRules.kt (architecture-policy line ceiling).
      */
-    private suspend fun republishThinkingCache(instanceId: String) {
-        runCatching {
-            val rows = providerDao.loadAllThinkingRules()
-                .groupBy { it.providerInstanceId }
-                .mapValues { (_, rs) -> rs.sortedBy { it.sortOrder }.map { it.toRule() } }
-            thinkingRulesCache = rows
-            ThinkingRuleResolver.setAllCustomRules(rows)
-        }.onFailure {
-            android.util.Log.w(
-                "ProviderRepo",
-                "[ThinkingRules] republish after $instanceId failed: ${it.message}",
-            )
-        }
-    }
+    private suspend fun republishThinkingCache(instanceId: String) =
+        republishThinkingRulesCache(instanceId)
 
     /**
      * Insert or update a custom rule. [id] null ⇒ new rule minted at the TOP of the
@@ -1298,7 +1308,8 @@ class ProviderRepository(
             isOpenRouter = base.contains("openrouter.ai"),
             usesUnifiedReasoningEffort = base.contains("volces") || base.contains("ark.") || base.contains("venice.ai"),
             isMistral = base.contains("mistral.ai"),
-            isDashScope = base.contains("dashscope"),
+            // [GH#520] Shared predicate: dashscope + per-workspace maas hosts.
+            isDashScope = com.openminis.app.data.model.BailianEndpoint.matches(base),
             offEffort = null,
         )
         val modelIds = config.modelEntries.filter { it.providerInstanceId == instanceId }.map { it.model.id }

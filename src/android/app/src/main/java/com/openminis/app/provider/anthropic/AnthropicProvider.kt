@@ -43,6 +43,8 @@ import java.util.concurrent.TimeUnit
 import com.openminis.app.provider.failOnSilentEmptyCompletion
 import com.openminis.app.provider.thinking.ThinkingLadder
 import com.openminis.app.provider.thinking.ThinkingRuleResolver
+import com.openminis.app.network.applyAppTrustStore
+import com.openminis.app.auth.applyClaudeCliMimicryHeaders
 
 class AnthropicProvider(
     private val apiKey: String,
@@ -56,11 +58,19 @@ class AnthropicProvider(
      * request. Only set for custom-base Anthropic-compat instances.
      */
     private val customUserAgent: String? = null,
+    /**
+     * [GH#221] 用户为该 provider 实例配置的自定义请求头（Settings → Provider →
+     * Custom request headers）。在 [buildRequest] 末尾应用，因此可以覆盖默认
+     * 头（Host/Content-Length 等在存储层已被拒绝）。空 map = 行为不变。
+     */
+    private val extraHeaders: Map<String, String> = emptyMap(),
     private val oauthIdentifierPromptProvider: () -> String = {
         com.openminis.app.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
     },
+    private val forceThinkingEnabled: Boolean = false, // [OpenMinis#311] force thinking
 ) : LLMProvider {
     override val name = "Anthropic"
+    override val forcesThinkingWhenEnabled: Boolean get() = forceThinkingEnabled
     override val callGateKey: String
         get() = ProviderKeyGate.key(basePath, apiKey, model.id)
     override val defaultMaxOutputTokens: Int get() = 64_000
@@ -103,6 +113,12 @@ class AnthropicProvider(
         // [T-android-stale-conn-retry-hang] Shared pool — see NetworkMonitor.
         // Network-transition eviction must reach provider connections.
         .connectionPool(com.openminis.app.network.NetworkMonitor.sharedLLMConnectionPool)
+        // [GH#258][GH#287] Custom-base providers may present a private CA.
+        .applyAppTrustStore()
+        // [GH#188] Fill the per-call TtfbWatchState from requestBodyEnd /
+        // connectionAcquired so the watchdog can start its TTFB clock after
+        // the upload and evict THIS connection on timeout.
+        .eventListener(com.openminis.app.provider.UploadAwareTtfbListener())
         .build()
 
     override suspend fun sendMessageClamped(
@@ -165,13 +181,20 @@ class AnthropicProvider(
             headerMap[name] = request.headers[name] ?: ""
         }
 
-        val call = client.newCall(request)
+        val watch = com.openminis.app.provider.TtfbWatchState()
+        val call = client.newCall(
+            request.newBuilder()
+                .tag(com.openminis.app.provider.TtfbWatchState::class.java, watch)
+                .build(),
+        )
         // Install before execute: cancel must unblock the header wait too.
         val cancelOnExit = call.cancelOnCancellation(
             kotlinx.coroutines.currentCoroutineContext()[kotlinx.coroutines.Job],
         )
         try {
-        val response = com.openminis.app.provider.StreamTtfb.execute(call, "Anthropic")
+        val response = com.openminis.app.provider.StreamTtfb.execute(
+            call, "Anthropic", watch = watch,
+        )
         val durationMs = System.currentTimeMillis() - startTime
         // [T-quota-claude-subscription] Errors included: a 429 still reports usage.
         if (isOAuth) com.openminis.app.quota.QuotaObservationSink.recordAnthropicResponse(quotaInstanceId, response.headers)
@@ -296,9 +319,28 @@ class AnthropicProvider(
                     }
                     "content_block_stop" -> {
                         if (currentToolId != null && currentToolName != null) {
-                            val args = NonFiniteJson.parseOrNull(toolInputBuffer.toString()) ?: JSONObject()
+                            val rawArgs = toolInputBuffer.toString()
+                            val parsed = NonFiniteJson.parseOrNull(rawArgs)
+                            if (parsed == null && rawArgs.isNotBlank()) {
+                                // [GH#61/#83/#146] Never substitute a silent
+                                // `{}`. The final accumulated buffer may be
+                                // newer than the last ToolInputDelta (stride
+                                // gate); emit it so ToolJsonRepair sees the
+                                // exact truncation tail, and carry it on the
+                                // completion for preflight to report.
+                                send(LLMStreamChunk.ToolInputDelta(currentToolId!!, rawArgs))
+                                android.util.Log.w(
+                                    "ToolChain[Provider]",
+                                    "→ ToolCallComplete id=$currentToolId name=$currentToolName " +
+                                        "invalid argsLen=${rawArgs.length} rawTail=${rawArgs.take(200)}",
+                                )
+                            }
+                            val args = parsed ?: JSONObject()
                             android.util.Log.d("ToolChain[Provider]", "→ ToolCallComplete id=$currentToolId name=$currentToolName args=${args.toString().take(300)}")
-                            send(LLMStreamChunk.ToolCallComplete(currentToolId!!, currentToolName!!, args))
+                            send(LLMStreamChunk.ToolCallComplete(
+                                currentToolId!!, currentToolName!!, args,
+                                rawArgs = rawArgs.takeIf { parsed == null && it.isNotBlank() },
+                            ))
                             currentToolId = null
                             currentToolName = null
                             toolInputBuffer.clear()
@@ -326,8 +368,21 @@ class AnthropicProvider(
             // [T-anthropic-tool-drain] Relay drops mid-tool_use never send
             // content_block_stop — flush so the agent loop doesn't hang.
             if (currentToolId != null && currentToolName != null) {
-                val drainedArgs = NonFiniteJson.parseOrNull(toolInputBuffer.toString()) ?: JSONObject()
-                send(LLMStreamChunk.ToolCallComplete(currentToolId!!, currentToolName!!, drainedArgs))
+                val rawArgs = toolInputBuffer.toString()
+                val parsed = NonFiniteJson.parseOrNull(rawArgs)
+                if (parsed == null && rawArgs.isNotBlank()) {
+                    // [GH#61/#83/#146] Same contract as content_block_stop.
+                    send(LLMStreamChunk.ToolInputDelta(currentToolId!!, rawArgs))
+                    com.openminis.app.logging.AppLogger.warning(
+                        "AnthropicProvider",
+                        "tool drain id=$currentToolId name=$currentToolName carried invalid " +
+                            "argsLen=${rawArgs.length} — carrying raw tail for repair",
+                    )
+                }
+                send(LLMStreamChunk.ToolCallComplete(
+                    currentToolId!!, currentToolName!!, parsed ?: JSONObject(),
+                    rawArgs = rawArgs.takeIf { parsed == null && it.isNotBlank() },
+                ))
                 currentToolId = null
                 currentToolName = null
                 toolInputBuffer.clear()
@@ -416,16 +471,14 @@ class AnthropicProvider(
             SamplingIdentity.of(this), model.id, temperature, thinkingLevel.isEnabled,
         )?.let { body.put("temperature", it) }
 
-        // Thinking / extended thinking. Two shapes: Claude 4.6+ adaptive
-        // (thinking.type="adaptive" + output_config.effort; the legacy form is
-        // silently ignored — the "thinking on but no thoughts" symptom) and
-        // <=4.5 legacy (budget_tokens + temperature=1; 4.6+ rejects temperature,
-        // guarded above). [T-thinking-rules-phase2] WHICH shape is
-        // ThinkingRuleResolver.anthropicThinkingShape's call; emission stays here
-        // for the companions the abstract shape does not model. Pinned by
-        // ThinkingWireGeminiAnthropicSnapshotTest.
+        // Thinking shape selection lives in ThinkingRuleResolver.anthropicThinkingShape;
+        // emission stays here for the companions it does not model (pinned by
+        // ThinkingWireGeminiAnthropicSnapshotTest).
         val thinkShape = ThinkingRuleResolver.anthropicThinkingShape(
-            model.id, model.supportsReasoning, thinkingLevel, maxTokens,
+            model.id,
+            if (forceThinkingEnabled) true else model.supportsReasoning, // [OpenMinis#311]
+            thinkingLevel,
+            maxTokens,
         )
         com.openminis.app.logging.AppLogger.info(
             "Thinking",
@@ -1099,20 +1152,12 @@ class AnthropicProvider(
             builder.header("anthropic-beta", betaFlags.joinToString(","))
         }
 
-        // Stainless / CLI fingerprint headers — only on OAuth; bump in lockstep
-        // with sub2api when the real CLI version moves.
+        // [GH#423][GH#301] Stainless / CLI fingerprint headers — only on OAuth.
+        // Same definition as the OAuth auth path: one registered client
+        // identity, one version source (ClaudeCliVersion), no second literal
+        // to forget when the backend's model gate moves.
         if (isOAuth) {
-            builder.header("User-Agent", "claude-cli/2.1.195 (external, cli)")
-            builder.header("X-Stainless-Lang", "js")
-            builder.header("X-Stainless-Package-Version", "0.106.0")
-            builder.header("X-Stainless-OS", "Linux")
-            builder.header("X-Stainless-Arch", "arm64")
-            builder.header("X-Stainless-Runtime", "node")
-            builder.header("X-Stainless-Runtime-Version", "v24.18.0")
-            builder.header("X-Stainless-Retry-Count", "0")
-            builder.header("X-Stainless-Timeout", "600")
-            builder.header("X-App", "cli")
-            builder.header("Anthropic-Dangerous-Direct-Browser-Access", "true")
+            builder.applyClaudeCliMimicryHeaders()
         }
 
         if (isOAuth) {
@@ -1130,13 +1175,18 @@ class AnthropicProvider(
 
         // [T-provider-custom-user-agent] Applied last so a non-blank override
         // wins over the OAuth claude-cli UA above. null/blank → branded Minis UA
-        // on the apiKey path, but on OAuth keep the claude-cli/2.1.195
-        // fingerprint: the backend pairs UA + X-Stainless-* and rejects calls
-        // whose UA doesn't match the registered client identity.
+        // on the apiKey path, but on OAuth keep the claude-cli fingerprint: the
+        // backend pairs UA + X-Stainless-* and rejects calls whose UA doesn't
+        // match the registered client identity.
         builder.applyUserAgentOverride(
             customUserAgent,
             defaultUserAgent = if (isOAuth) null else com.openminis.app.provider.MinisUserAgent.DEFAULT,
         )
+        // [GH#221] 用户请求头最后应用：与 OpenAIProvider 的 per-call
+        // extraHeaders 一致，同名 header 以用户配置为准。
+        for ((key, value) in extraHeaders) {
+            builder.header(key, value)
+        }
         return builder.build()
     }
 

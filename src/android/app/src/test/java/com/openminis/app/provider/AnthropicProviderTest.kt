@@ -664,4 +664,63 @@ class AnthropicProviderTest {
         // Sanity: the OAuth mimicry betas we DO expect are still present.
         assertTrue("oauth beta present", beta.contains("oauth-2025-04-20"))
     }
+
+    /**
+     * [OpenMinis#311] Anthropic-compatible relays expose non-Claude ids whose
+     * catalog row says `supportsReasoning = false`; the provider-level force
+     * switch must defeat the capability clamp and put the legacy
+     * `thinking:{type:"enabled",budget_tokens:N}` shape on the wire. Without the
+     * switch the same request stays OFF (control).
+     */
+    @Test
+    fun `force thinking lifts the capability clamp and emits enabled thinking`() = runBlocking {
+        val relayModel = LLMModel(
+            id = "deepseek-v3.2",
+            displayName = "DeepSeek V3.2",
+            provider = "Anthropic-compat",
+            supportsReasoning = false,
+        )
+        val base = server.url("/").toString().trimEnd('/')
+        val plain = AnthropicProvider(apiKey = "sk-test", model = relayModel, basePath = base)
+        assertEquals(
+            "without the switch a non-reasoning catalog row clamps to OFF",
+            ThinkingLevel.OFF,
+            plain.clampThinkingLevel(ThinkingLevel.HIGH),
+        )
+
+        val forcing = AnthropicProvider(
+            apiKey = "sk-test",
+            model = relayModel,
+            basePath = base,
+            forceThinkingEnabled = true,
+        )
+        assertEquals(
+            "the force switch must bypass the clamp for an ENABLED level",
+            ThinkingLevel.HIGH,
+            forcing.clampThinkingLevel(ThinkingLevel.HIGH),
+        )
+        assertEquals(
+            "OFF stays OFF — the switch force-enables, it does not override the user",
+            ThinkingLevel.OFF,
+            forcing.clampThinkingLevel(ThinkingLevel.OFF),
+        )
+
+        server.enqueue(
+            MockResponse()
+                .setHeader("Content-Type", "application/json")
+                .setBody("""{"content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}"""),
+        )
+        forcing.sendMessage(
+            listOf(LLMMessage(LLMMessage.Role.USER, "hi")), null, 4096,
+            thinkingLevel = ThinkingLevel.HIGH,
+        )
+        val body = JSONObject(server.takeRequest().body.readUtf8())
+        val thinking = body.optJSONObject("thinking")
+        assertNotNull("forced request must carry the thinking object: $body", thinking)
+        assertEquals("enabled", thinking?.optString("type"))
+        assertTrue(
+            "legacy budget shape must carry a positive budget_tokens: $body",
+            (thinking?.optInt("budget_tokens") ?: 0) > 0,
+        )
+    }
 }
