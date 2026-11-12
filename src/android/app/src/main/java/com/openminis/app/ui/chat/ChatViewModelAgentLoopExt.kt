@@ -176,7 +176,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     var goalContinuations = 0
     // [T-subagent-background] Bounded nudges for uncollected detached waves.
     var subAgentCollectNudges = 0
-    val goalRunRequested = goalExecutionRun
+    var goalRunRequested = goalExecutionRun
     // [T-perf-ui-batch] Non-text mutations batch through a 200ms window on Dispatchers.Default.
     val uiBatcher = UiUpdateBatcher(viewModelScope, ::updateAssistantMessage)
     uiBatcher.start()
@@ -267,6 +267,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // [T-android-queued-message-interrupt-*] Shared by both mid-loop
     // injection sites: switch loop-scope state to the injected bubble.
     fun swapLoopStateToInjectedBubble(newAssistantId: String) {
+        goalRunRequested = false
         assistantId = newAssistantId
         accumulatedText = ""
         allToolBlocks.clear()
@@ -275,7 +276,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         toolCallRawArgs.clear()
         _canResume.value = false
     }
-    for (turn in 0 until maxTurns) {
+    agentTurns@ for (turn in 0 until maxTurns) {
         currentCoroutineContext().ensureActive()
         // Sanitize history before each API call (mirrors iOS pre-API validation)
         sanitizeAgentHistory()
@@ -534,12 +535,12 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 commitInstructionSnapshot(
                     com.openminis.app.data.instruction.InstructionStateStore.goalInstructionValues(requestGoalState),
                 )
-                if (goalRunRequested && !goalMount.canContinue) {
+                if (com.openminis.app.goal.shouldSkipGoalRunRequest(goalRunRequested, turn > 0, goalMount)) {
                     withContext(Dispatchers.Main) {
                         updateAssistantMessage(assistantId, accumulatedText, false, allToolBlocks)
                     }
                     loopExitedNormally = true
-                    break
+                    break@agentTurns
                 }
                 val requestHistory = ToolIdNormalization.normalizeMessages(
                     // [T-process-tail-injection] Process blocks + goal ride the
@@ -1890,8 +1891,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             )
         }.onFailure { AppLogger.warning(ChatViewModel.TAG_STREAM, "Goal usage accounting failed: ${it.message}") }
         else Result.success(null)
-        // [T-android-goal-early-exit] Broken usage lookup or terminal /
-        // paused state ends the loop. See GoalContextInjection.
+        // Goal completion dismounts steering; only hard stops end this reply.
         if (com.openminis.app.goal.shouldExitForGoalState(goalUsageResult, goalMountedForCurrentRequest)) {
             withContext(Dispatchers.Main) {
                 updateAssistantMessage(assistantId, accumulatedText, false, allToolBlocks)
@@ -1938,8 +1938,6 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             // normal next-turn dispatch so the queue doesn't pin the loop.
         }
     }
-    // Two ways to leave the for-loop above:
-    //   (a) `break` from the "no tool calls" happy-path → loopExitedNormally=true,
     uiBatcher.flush()
     uiBatcher.stop()
     if (!loopExitedNormally) {

@@ -131,9 +131,28 @@ class GoalContextInjectionTest {
         assertTrue(!shouldExitForGoalState(Result.success(active), true))
     }
 
-    @Test fun `terminal and paused goal statuses exit`() {
+    @Test fun `completing a mounted goal still delivers the tool result to the model`() {
         val active = GoalStateMachine.create("s", "ship it", 500, 1)
-        for (status in listOf(GoalStatus.COMPLETE, GoalStatus.BLOCKED, GoalStatus.PAUSED, GoalStatus.BUDGET_LIMITED)) {
+        val completed = active.copy(status = GoalStatus.COMPLETE)
+        assertTrue(!shouldExitForGoalState(Result.success(completed), true))
+        val mount = goalMount(completed) { fail("completed goal must not steer the reply"); "" }
+        assertNull(mount.prompt)
+        assertTrue(!shouldSkipGoalRunRequest(true, true, mount))
+    }
+
+    @Test fun `only an unstarted goal kick requires a mounted goal at dispatch`() {
+        val active = GoalStateMachine.create("s", "ship it", 500, 1)
+        val mount = goalMount(active) { "goal prompt" }
+        val missing = goalMount(null) { error("no goal") }
+        assertTrue(!shouldSkipGoalRunRequest(true, false, mount))
+        assertTrue(shouldSkipGoalRunRequest(true, false, missing))
+        assertTrue(!shouldSkipGoalRunRequest(true, true, missing))
+        assertTrue(!shouldSkipGoalRunRequest(false, false, missing))
+    }
+
+    @Test fun `blocked paused and budget limited goals still exit after tool dispatch`() {
+        val active = GoalStateMachine.create("s", "ship it", 500, 1)
+        for (status in listOf(GoalStatus.BLOCKED, GoalStatus.PAUSED, GoalStatus.BUDGET_LIMITED)) {
             assertTrue(shouldExitForGoalState(Result.success(active.copy(status = status)), true))
         }
     }
