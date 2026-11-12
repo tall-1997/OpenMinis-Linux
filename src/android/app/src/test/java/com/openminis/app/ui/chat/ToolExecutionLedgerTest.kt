@@ -7,8 +7,9 @@ import org.junit.Assert.assertSame
 import org.junit.Test
 
 /**
- * [T-tool-execution-ledger] ZCode's streaming contract: one call id executes
- * once and owns exactly one result. A replay reuses that result.
+ * [T-tool-execution-ledger] ZCode's streaming contract: one call executes once
+ * and owns exactly one result. The key is (id, name, args) because a provider
+ * may reuse a numbered id for a different call in a later turn.
  */
 class ToolExecutionLedgerTest {
 
@@ -16,27 +17,37 @@ class ToolExecutionLedgerTest {
         AgentContentPart.ToolResult(id = id, name = "shell_execute", content = content)
 
     @Test
-    fun `a recorded call is reused by id`() {
+    fun `a recorded call is reused by id name and args`() {
         val ledger = ToolExecutionLedger()
         val part = part("call_1")
-        ledger.record("call_1", part)
-        assertSame(part, ledger.reuse("call_1"))
+        ledger.record("call_1", "shell_execute", "sha-a", part)
+        assertSame(part, ledger.reuse("call_1", "shell_execute", "sha-a"))
     }
 
     @Test
     fun `an unrecorded call is not reused`() {
         val ledger = ToolExecutionLedger()
-        assertNull(ledger.reuse("call_missing"))
-        assertNull(ledger.reuse(""))
+        assertNull(ledger.reuse("call_missing", "shell_execute", "sha-a"))
+        assertNull(ledger.reuse("", "shell_execute", "sha-a"))
+    }
+
+    @Test
+    fun `the same id with different arguments is a different call`() {
+        val ledger = ToolExecutionLedger()
+        ledger.record("call_0", "shell_execute", "sha-old", part("call_0", "old"))
+        assertNull(
+            "a provider that numbers calls per response must not get a stale result",
+            ledger.reuse("call_0", "shell_execute", "sha-new"),
+        )
+        assertNull(ledger.reuse("call_0", "read_file", "sha-old"))
     }
 
     @Test
     fun `a replay cannot overwrite the first result`() {
         val ledger = ToolExecutionLedger()
-        val first = part("call_2", "first")
-        ledger.record("call_2", first)
-        ledger.record("call_2", part("call_2", "second"))
-        assertEquals("first", ledger.reuse("call_2")?.content)
+        ledger.record("call_2", "shell_execute", "sha-x", part("call_2", "first"))
+        ledger.record("call_2", "shell_execute", "sha-x", part("call_2", "second"))
+        assertEquals("first", ledger.reuse("call_2", "shell_execute", "sha-x")?.content)
         assertEquals(1, ledger.size())
     }
 }

@@ -476,8 +476,10 @@ private suspend fun ChatViewModel.runPlannedCall(
         updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, ctx.allToolBlocks.toList())
     }
     // [T-tool-execution-ledger] A replay of an already-completed call reuses
-    // its recorded result instead of running side effects twice.
-    ctx.ledger.reuse(call.id)?.let { prior ->
+    // its recorded result instead of running side effects twice. The key
+    // includes name+args: a provider may reuse a numbered id for a new call.
+    val ledgerArgsSha = com.openminis.app.util.Digest.sha256Hex(call.argsStr)
+    ctx.ledger.reuse(call.id, call.name, ledgerArgsSha)?.let { prior ->
         AppLogger.warning(
             ChatViewModel.TAG_STREAM,
             "[ToolLedger] reused recorded result for replayed call id=${call.id} name=${call.name}",
@@ -496,7 +498,7 @@ private suspend fun ChatViewModel.runPlannedCall(
     currentCoroutineContext().ensureActive()
     Log.d("ToolChain[VM]", "[turn=${ctx.turn}] executeTool END name=${call.name} success=${result.success} title=${result.toolTitle} outputLen=${result.output.length} output=${result.output.take(200)}")
     val part = finalizePlannedCall(ctx, call, result)
-    ctx.ledger.record(call.id, part)
+    ctx.ledger.record(call.id, call.name, ledgerArgsSha, part)
     executedParts[call.id] = part
 }
 
@@ -540,14 +542,15 @@ private suspend fun ChatViewModel.fanOutSpawnCalls(
         }.awaitAll()
     }
     for (peer in peers) {
-        val prior = ctx.ledger.reuse(peer.id)
+        val peerArgsSha = com.openminis.app.util.Digest.sha256Hex(peer.argsStr)
+        val prior = ctx.ledger.reuse(peer.id, peer.name, peerArgsSha)
         if (prior != null) {
             execution.executedParts[peer.id] = prior
             continue
         }
         val peerResult = execution.parallelSubResults[peer.id] ?: continue
         val part = finalizePlannedCall(ctx, peer, peerResult)
-        ctx.ledger.record(peer.id, part)
+        ctx.ledger.record(peer.id, peer.name, peerArgsSha, part)
         execution.executedParts[peer.id] = part
     }
 }

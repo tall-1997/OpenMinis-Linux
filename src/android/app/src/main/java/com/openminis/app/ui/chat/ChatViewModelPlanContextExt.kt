@@ -38,8 +38,11 @@ internal fun ChatViewModel.newRecallReminder(): String? {
     if (hits.isEmpty()) return null
     val fresh = recallFreshHits(hits, announcedRecallKeys) { "${it.day}:${it.line}" }
     if (fresh.isEmpty()) return null
+    // Mark delivered only after the fragment actually rendered: a blank render
+    // (envelope budget) must not burn the lines out of the session.
+    val fragment = engine.formatAsPromptFragment(fresh).takeIf { it.isNotBlank() } ?: return null
     announcedRecallKeys.addAll(hits.map { "${it.day}:${it.line}" })
-    return engine.formatAsPromptFragment(fresh).takeIf { it.isNotBlank() }
+    return fragment
 }
 
 /**

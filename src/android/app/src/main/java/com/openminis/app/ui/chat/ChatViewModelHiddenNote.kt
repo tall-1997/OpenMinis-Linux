@@ -53,7 +53,9 @@ internal suspend fun ChatViewModel.commitSessionNoticesOnce(
     consumePlanStepRetryPrompt()?.let { commitHiddenUserNote(it) }
     newRecallReminder()?.let { note ->
         commitHiddenUserNote(note)
-        announcedRecallCarrier = note
+        // A bounded prefix is enough to prove the note is still in context;
+        // scanning for the whole block on every turn is needless work.
+        announcedRecallCarrier = note.take(80)
     }
     if (!goalCanContinue || goalPrompt == null || goalObjective.isBlank()) return
     // Same eviction rule for the objective.
