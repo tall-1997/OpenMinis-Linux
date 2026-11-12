@@ -84,9 +84,12 @@ internal suspend fun ChatViewModel.commitSessionNoticesOnce(
         }
     }
     if (ledgerDirty) {
+        // Pin the session: a switch during the write must not file this
+        // session's delivery record under the next one.
+        val sid = noticesSessionId ?: activeSessionId
         val filesDir = context.filesDir
         val state = NoticeLedgerStore.State(announcedRecallKeys.toSet(), goalAnnouncedSha)
-        withContext(Dispatchers.IO) { NoticeLedgerStore.save(filesDir, activeSessionId, state) }
+        withContext(Dispatchers.IO) { NoticeLedgerStore.save(filesDir, sid, state) }
     }
 }
 

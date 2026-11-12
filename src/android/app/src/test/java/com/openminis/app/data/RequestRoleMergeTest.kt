@@ -60,4 +60,24 @@ class RequestRoleMergeTest {
         val merged = ToolIdNormalization.normalizeMessages(listOf(user("a"), user("b")))
         assertEquals(1, merged.size)
     }
+
+    @Test
+    fun `a tool result group is never merged into a text turn`() {
+        val results = user(
+            "",
+            AgentContentPart.ToolResult(id = "call_9", name = "shell_execute", content = "ok"),
+        )
+        val merged = ToolIdNormalization.mergeConsecutiveUserTurns(listOf(user("hi"), results))
+        assertEquals("tool blocks keep their own message", 2, merged.size)
+        assertEquals("call_9", (merged[1].contentParts[0] as AgentContentPart.ToolResult).id)
+    }
+
+    @Test
+    fun `a blank follower is dropped instead of adding an empty block`() {
+        val merged = ToolIdNormalization.mergeConsecutiveUserTurns(
+            listOf(user("hi"), LLMMessage(role = LLMMessage.Role.USER, content = "", contentParts = emptyList())),
+        )
+        assertEquals(1, merged.size)
+        assertEquals(1, merged[0].contentParts.size)
+    }
 }

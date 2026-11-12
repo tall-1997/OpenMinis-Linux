@@ -35,34 +35,41 @@ object ToolIdNormalization {
     }
 
     /**
-     * Collapse consecutive USER messages into one. Only USER turns merge and
-     * their text parts are appended in order; assistant/system turns and tool
-     * parts keep their own positions.
+     * Collapse a following USER message into the previous USER message when the
+     * follower is TEXT-ONLY (a host notice or a queued prompt). Tool-result
+     * carriers stay their own message: merging a result group into a text turn
+     * would reorder tool blocks, which providers validate. A blank follower is
+     * dropped rather than appended as an empty text block.
      */
     fun mergeConsecutiveUserTurns(messages: List<LLMMessage>): List<LLMMessage> {
         if (messages.size < 2) return messages
         val out = ArrayList<LLMMessage>(messages.size)
         for (message in messages) {
             val previous = out.lastOrNull()
-            if (previous == null ||
-                previous.role != LLMMessage.Role.USER ||
-                message.role != LLMMessage.Role.USER
-            ) {
-                out += message
+            val mergeable = previous != null &&
+                previous.role == LLMMessage.Role.USER &&
+                message.role == LLMMessage.Role.USER &&
+                message.contentParts.none {
+                    it is AgentContentPart.ToolUse || it is AgentContentPart.ToolResult
+                }
+            val hasPayload = message.content.isNotBlank() || message.contentParts.any {
+                it !is AgentContentPart.Text || it.text.isNotBlank()
+            }
+            if (mergeable && !hasPayload) continue
+            if (mergeable) {
+                val appended = message.contentParts.ifEmpty {
+                    listOf(AgentContentPart.Text(message.content))
+                }
+                val combinedText = listOf(previous!!.content, message.content)
+                    .filter { it.isNotBlank() }
+                    .joinToString("\n\n")
+                out[out.lastIndex] = previous.copy(
+                    content = combinedText,
+                    contentParts = previous.contentParts + appended,
+                )
                 continue
             }
-            val appended = if (message.contentParts.isEmpty()) {
-                listOf(AgentContentPart.Text(message.content))
-            } else {
-                message.contentParts
-            }
-            val combinedText = listOf(previous.content, message.content)
-                .filter { it.isNotBlank() }
-                .joinToString("\n\n")
-            out[out.lastIndex] = previous.copy(
-                content = combinedText,
-                contentParts = previous.contentParts + appended,
-            )
+            out += message
         }
         return out
     }
