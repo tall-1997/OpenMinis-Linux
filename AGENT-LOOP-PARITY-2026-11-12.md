@@ -9,7 +9,7 @@
 ## 0. 结论
 
 机制层经 #327/#329/#330 三轮已换成 ZCode/Harness 形状（五原则全落地）；
-**体验层仍有 3 项 P0 差距 + 1 项 P1 + 1 项零空间微增强**，P0 三项用户每天都会撞到（B1 工具输出不可见、
+**体验层仍有 2 项 P0 差距 + 1 项 P1 + 1 项零空间微增强**——P0：stop 不杀进程、goal 无完成验证（B1 工具输出不可见、
 B3 打断不 kill 进程、B5 无完成验证）。全部差距已在**代码层实锤**（不是猜测），
 路线图三批可开工。
 
@@ -33,7 +33,7 @@ B3 打断不 kill 进程、B5 无完成验证）。全部差距已在**代码层
 
 | # | 维度 | 现状（文件:行号） | 判定 |
 |---|------|-------------------|------|
-| B1 | 工具过程可见 | 工具卡 = 状态卡（ToolBlockStatus 六态生命周期 + 失败染色 + 耗时）；**live output tail：无**——输出只在详情 sheet（`ToolBlockTextExtractors.kt` 是 detail-sheet 渲染支持，grep `liveOutput/outputTail` 全仓 0 命中）；BoundedOutputBuffer 有环形缓冲但无逐块 UI 推送 | ❌ 差距 |
+| B1 | 工具过程可见 | **已完整实现（v4 复核修正——此前 grep 的实现名找错了）**：ShellOutputPreview（150ms 节流，50 行 tail）逐块推送 toolBlocks.content；process card 运行中默认展开（`stepExpanded = step.running`，ChatProcessCards.kt:209）+ visibleThinkingTail 尾 8k + ThinkingAutoFollow 自动滚动 + 实时计时；点击进详情 sheet 看全量 | ✅ 已对齐 |
 | B2 | 进度行 + 排队 | **活动 pill 已覆盖**（用户空间顾虑采纳，不加新行）：RUNNING 工具卡自带 工具名 + 实时计时 + 红色停止钮（ChatComposerWidgets.kt:340-368）；忙碌输入排队已有。微差距：运行中输入框 placeholder 未切换为排队/可停提示（ZCode 双态——进度提示长在输入框身上，零空间） | 🟡 微差距 |
 | B3 | 打断 | `finishStoppedRun`（StopRunExt:43-110）把 RUNNING/STREAMING/PENDING 块即刻标 **CANCELLED** + partial text 抢救 + 持久化打断轮——UI 即时 ✓；**但全程无 JobRegistry.signal/进程 kill 调用**：沙盒里的进程（900s build）在标记 CANCELLED 后继续跑完 | ❌ 差距 |
 | B4 | 中途插话 | 排队 + 边界独立轮（QueueInterrupt→drainQueueIntoStandaloneTurn） | ✅ |
@@ -47,11 +47,10 @@ B3 打断不 kill 进程、B5 无完成验证）。全部差距已在**代码层
 
 | 优先级 | 差距 | 用户体感 | 对齐动作 |
 |--------|------|----------|----------|
-| P0-1 | **B1 工具输出不可见** | 60s build = 60s 转圈，"不知道它在干嘛"= 感知层面的"不干活" | **运行期单行 tail**（用户空间顾虑二轮采纳，不做滚动区）：RUNNING 态卡片底部一行最新输出（单行省略、等宽、逐块刷新），完成/失败即收起归零；全量输出仍在详情 sheet。可选：FGS 通知栏 contentText 同步最新行（切出 App 也能看） |
-| P0-2 | **B3 stop 不杀进程** | 点停止后 build 还在后台烧 CPU/电量，会话显示已停——"打断不了" | finishStoppedRun 内对 currentTool 快照调 JobRegistry.signal(进程组) + LLM 请求 cancel（已有）+ 卡片 CANCELLED（已有）；给工具结果态补 `killed` 语义 |
-| P0-3 | **B5 无完成验证** | 模型自说"完成了"但验收标准没核——交付不可信 | goal 状态机加 host 侧 verifier：turn 结束后按 objective 的显式验收项（文件存在/命令退出码/test 通过/gate）逐项核验；不通过 → 结构化 system-reminder（source=goal-continuation 形态）回灌一轮；通过 → 交付回复（#328 已修时机） |
+| P0-1 | **B3 stop 不杀进程** | 点停止后 build 还在后台烧 CPU/电量，会话显示已停——"打断不了" | finishStoppedRun 内对 currentTool 快照调 JobRegistry.signal(进程组) + LLM 请求 cancel（已有）+ 卡片 CANCELLED（已有）；给工具结果态补 `killed` 语义 |
+| P0-2 | **B5 无完成验证** | 模型自说"完成了"但验收标准没核——交付不可信 | goal 状态机加 host 侧 verifier：turn 结束后按 objective 的显式验收项（文件存在/命令退出码/test 通过/gate）逐项核验；不通过 → 结构化 system-reminder（source=goal-continuation 形态）回灌一轮；通过 → 交付回复（#328 已修时机） |
 | P1-1 | **B2 运行中输入框提示缺双态** | 排队提示不在输入框身上（活动 pill 已覆盖工具名/时长/停止） | 运行中 placeholder 切换为「输入将排队，任务结束后发送」——ZCode busyPlaceholder 同款，零空间占用 |
-| P1-3 | **B7 goal-continuation 结构化合成轮** | goal 长任务的续跑驱动不稳（注入式靠 prompt 组装，易被 trim） | goal 续跑改为带 `source=goal-continuation` 标记的结构化 USER 轮（host 生成、ledger 去重、isGoalContinuation 识别函数）——ZCode 正牌形态 |
+| P1-2 | **B7 goal-continuation 结构化合成轮** | goal 长任务的续跑驱动不稳（注入式靠 prompt 组装，易被 trim） | goal 续跑改为带 `source=goal-continuation` 标记的结构化 USER 轮（host 生成、ledger 去重、isGoalContinuation 识别函数）——ZCode 正牌形态 |
 
 ## 4. 已对齐项（不再动）
 
@@ -62,15 +61,14 @@ B4 插话排队边界轮；B6 的 A1 判据 + PostAnchorTail 预算；B7 的 com
 
 ## 5. 路线图（三批）
 
-### 第一批（P0 三件，体感决定性）
-1. **运行期单行 live tail**（用户空间顾虑二轮采纳，不做滚动区）：BoundedOutputBuffer 最新行 → RUNNING 卡片底部单行 Text（逐块刷新，完成即收起——运行期占 1 行、完成后零占用）；全量仍在详情 sheet。可选：FGS 通知栏同步最新行。
-2. **stop = kill**：finishStoppedRun 接 JobRegistry.signal + 工具结果补 killed 态；验证 900s build 第 5 秒停止第 6 秒进程死。
-3. **goal host verifier**：objective 解析显式验收项（文件/命令/test/gate）→ turn 后逐项核验 → 不过回灌 `source=goal-continuation` 结构化轮 → 过则交付。
-- **验收（用户屏幕所见）**：build 运行时卡片底部一行实时输出（占 1 行、完成即收起，正文不被顶走）；第 5 秒停止进程真死；"完成"必然对应验收项真实通过。
+### 第一批（P0 两件）
+1. **stop = kill**：finishStoppedRun 接 JobRegistry.signal + 工具结果补 killed 态；验证 900s build 第 5 秒停止第 6 秒进程死。
+2. **goal host verifier**：objective 解析显式验收项（文件/命令/test/gate）→ turn 后逐项核验 → 不过回灌 `source=goal-continuation` 结构化轮 → 过则交付。
+- **验收（用户屏幕所见）**：第 5 秒停止进程真死；"完成"必然对应验收项真实通过。（live output tail 已在——ShellOutputPreview 逐块推送 + 默认展开 + 自动跟随，v4 复核修正，不重做。）
 
-### 第二批（P1 三件，控制权与透明）
-4. 运行中输入框 placeholder 双态（「输入将排队…」，ZCode busyPlaceholder 同款，零新增空间——用户空间顾虑采纳，不做常驻进度行）。
-5. goal-continuation 结构化合成轮（source 标记 + ledger 去重 + 识别函数）。
+### 第二批（P1 两件，控制权与透明）
+3. 运行中输入框 placeholder 双态（「输入将排队…」，ZCode busyPlaceholder 同款，零新增空间——用户空间顾虑采纳，不做常驻进度行）。
+4. goal-continuation 结构化合成轮（source 标记 + ledger 去重 + 识别函数）。
 - **验收**：运行中一眼可停（活动 pill 停止钮 + 输入框排队提示）；goal 断点续跑跨重启。（进度行不新增——用户空间顾虑采纳，活动 pill + 输入框双态已覆盖。）
 
 ### 第三批（真机回归）
@@ -109,6 +107,7 @@ B4 插话排队边界轮；B6 的 A1 判据 + PostAnchorTail 预算；B7 的 com
 | postAnchor 尾预算随窗口缩放（≤35%，上限 60k） | ✅ | AgentHistoryExt（#327 A2 幸存 + 动态化） |
 | WorkingMemoryLedger 驱逐再交付 | ✅ | WorkingMemoryLedger.kt + HiddenNote hydration 分支 + ToolTurnExec 双 lane append |
 | fanOutSpawnCalls 单次执行契约 | ✅ | 采纳手机端 #332 executeOnce 单一边界（原子声明 + in-flight join + replay 卡 settle + Python 状态机 CI 门），WorkingMemory 记账在 owner-only producer 内 |
-| live output tail / stop=kill / goal verifier | 未实现 | 路线图第一批剩余（见 §5） |
+| live output tail | ✅ 已在（ShellOutputPreview + 默认展开 + 自动跟随——v4 修正） |
+| stop=kill / goal verifier | 未实现 | 路线图第一批剩余（见 §5） |
 
 集成说明：本分支 rebase 到 fix/spawn-lane-single-execution（#332）之上——#332 的 executeOnce 单一执行边界与本分支的 WorkingMemory 记账互补（owner-only producer 内记账，replay 不重复记账）。走廊不变量：summary + preAnchor(≤20% 窗口) + postAnchor(≤35% 窗口) ≤ 80% 阈值，任何窗口无震荡。
