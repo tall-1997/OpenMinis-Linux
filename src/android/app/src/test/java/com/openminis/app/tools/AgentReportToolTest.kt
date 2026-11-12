@@ -179,7 +179,7 @@ class AgentReportToolTest {
         assertTrue(prompt.contains("just now"))
         assertTrue(prompt.contains("snapshot, not live state"))
         assertTrue(prompt.contains("never restate this summary"))
-        assertTrue(prompt.contains("until you call agent_report again"))
+        assertTrue(prompt.contains("do not call agent_report merely because this block is present"))
     }
 
     @Test

@@ -316,11 +316,9 @@ object AgentReportStore {
 
     /** Refresh-first contract: the block repeats until the model reports again. */
     private const val STAGE_RULE =
-        "This block repeats on every request until you call agent_report again — when the " +
-            "conversation has moved past the summary above, report again even if the status is " +
-            "unchanged: progress for a step that landed, blocked/failed with the concrete " +
-            "prerequisite, ready only with evidence, and question for a single concrete thing " +
-            "the user must decide."
+        "This is a snapshot of the last report, not a new instruction. Continue the user's " +
+            "latest task; do not call agent_report merely because this block is present. " +
+            "Report again only when the stage actually changed."
 
     /** Tool-result rendering: what the model sees after reporting. */
     fun render(report: Report): String {

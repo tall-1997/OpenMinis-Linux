@@ -57,10 +57,10 @@ internal fun ChatViewModel.planBoardPrompt(): String? = runCatching {
  * and a user turning the task over with "continue" produced an almost empty
  * query, i.e. no recall at all.
  *
- * The query now folds in where the turn actually is: the latest user text plus
- * the tail of the assistant's own reasoning. That is a cheap heuristic, not a
- * semantic drift detector — but it is recomputed from live state, which is the
- * property that was missing.
+ * The query is the latest real user text only (ZCode
+ * findLatestMemoryRecallQuery). The assistant tail is not part of it: the
+ * model's own restatement of an old task was keeping that task's memory
+ * selected.
  */
 internal fun ChatViewModel.liveRecallPrompt(): String? {
     if (!_memoryEnabled.value) return null
@@ -138,16 +138,27 @@ internal class LiveRecallInput(
 )
 
 internal fun ChatViewModel.liveRecallInput(): LiveRecallInput? {
-    val lastUser = _messages.value.lastOrNull { it.role == "user" && !it.isQueued }
-    val recentUser = lastUser?.content.orEmpty()
-    val recentAssistant = _messages.value
-        .lastOrNull { it.role == "assistant" }
-        ?.content
-        ?.takeLast(ASSISTANT_TAIL_CHARS)
-        .orEmpty()
-    val query = (recentUser + "\n" + recentAssistant).trim()
-    if (query.length < MIN_QUERY_CHARS) return null
-    return LiveRecallInput(query, lastUser?.id.orEmpty())
+    // [T-memory-query-real-user] ZCode findLatestMemoryRecallQuery: the query
+    // is the latest real user text only. Folding in the assistant tail made
+    // the model's own restatement of an old task keep hitting that task's
+    // daily log, so the log was injected again and the run resumed it.
+    val lastUser = _messages.value.lastOrNull { message ->
+        message.role == "user" && !message.isQueued && memoryRecallQuery(message.content) != null
+    } ?: return null
+    val query = memoryRecallQuery(lastUser.content) ?: return null
+    return LiveRecallInput(query, lastUser.id)
+}
+
+/**
+ * Real-user text eligible as a memory query. Host reminders are not a query,
+ * and a blank or tool-result carrier is not one either.
+ */
+internal fun memoryRecallQuery(userText: String): String? {
+    val stripped = userText
+        .replace(Regex("<system-reminder>[\\s\\S]*?</system-reminder>"), "")
+        .trim()
+    if (stripped.length < MIN_QUERY_CHARS) return null
+    return stripped
 }
 
 /**
