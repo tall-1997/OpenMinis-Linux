@@ -1,5 +1,6 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.repository.MultiAgentSettings
 import com.openminis.app.logging.AppLogger
 import kotlinx.serialization.json.Json
@@ -227,11 +228,6 @@ Tool call style:
 - When a tool exists for an action, use it directly instead of explaining what you plan to do or asking the user to confirm.
 - Use reasonable defaults and contextual inference to fill in missing details (e.g. 'tonight' means today, 'remind me' implies creating a reminder immediately). Only ask for clarification when genuinely ambiguous — then call `ask_user_question` (structured choices) instead of a free-form chat question.
 
-Parallel tool calls (capability, not advice):
-- The host CAN run several independent calls from ONE response concurrently. Use it for recon: when you need N unrelated reads, return them together in one response instead of one per turn — e.g. multiple `file_read` / `grep` / `glob` / `list_dir` calls, or `web_fetch` + `web_search`, or several `read_image`.
-- Read-only tools are parallel-safe: file_read, list_dir, grep, glob, web_fetch, web_search, read_image, ocr_image, memory_get, search_sessions, read_session, code_graph, get_screen_time.
-- These are serial barriers — never batch them together with a call that must observe their effect: file_write, file_edit, multi_edit, shell_execute, spawn_agent, ask_user_question, cronjob. A read emitted AFTER a barrier may assume the barrier finished; a read emitted BEFORE it never blocks.
-- Your emission order IS your dependency declaration. If step B needs step A's output, do not emit them together — wait for A's result in the next turn rather than guessing.
 
 Tone and style:
 - Reply in the language that best matches the user's input. Only switch languages when the user explicitly asks.
@@ -271,7 +267,7 @@ Environment variables:
 - Settings deep links: when you tell the user "go to Settings → X" or want to point them at a specific setting, prefer a Markdown link `[Label](minis://settings/<path>)` over plain prose. Available paths: providers (list), providers/<instanceId> (one provider), model-groups (incl. Agent Loop), model-groups/<groupId>, usage (token usage), skills, plugins, mcp, multi-agent (sub-agent slots, thinking depth, AI group discussion), memory, storage, shared-folders (Shared Folders: /var/minis/{shared,skills}), mount-external (Mount External Folders), logs, appearance, background, about, permissions, environments[?create_key=K&create_value=V[&create_note=N]], rootfs (also reachable as mirrors; includes Ubuntu build profiles and China mirror switching), tool-limits. Unknown paths fall back to Settings home, but prefer the exact path so users land where they want. These settings/action links are app deep links — render them as Markdown links in chat (same action-vs-resource rule as the minis:// section above: only /var/minis resource URLs may go to browser_use).
 - To check if a variable is set, use `[ -n "${'$'}VAR" ] && echo 'set' || echo 'not set'`. NEVER use echo ${'$'}VAR, printenv VAR, or any command that would output the actual value into the conversation context.${memorySystemSection}
 
-Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended, so in-app scheduled scripts may not run as expected. For recurring tasks that must fire while the app is backgrounded, use the cronjob tool (AlarmManager) or minis-scheduled, or tell the user to set up a system-level schedule (Google Calendar event, Tasker automation, etc.). (Waiting or polling WITHIN the current turn is different — that is what shell_execute `delay` chains are for, per the shell_execute notes above.)"""
+Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended, so in-app scheduled scripts may not run as expected. For recurring tasks that must fire while the app is backgrounded, use the cronjob tool (AlarmManager) or minis-scheduled, or tell the user to set up a system-level schedule (Google Calendar event, Tasker automation, etc.). (Waiting or polling WITHIN the current turn is different — that is what shell_execute `delay` chains are for, per the shell_execute notes above.)""" + (parallelToolCallsPrompt(agentTools)?.let { "\n\n" + it } ?: "")
 
     // Match iOS order exactly: skills → global memory → recent daily memory.
     // See ios/Agent/Chat/AIChatViewModel.swift:4375-4387. Each fragment is
@@ -670,3 +666,35 @@ internal fun renderRuntimeContext(
 
 internal const val PERSONALITY_REMINDER =
     "Personality reminder: the identity/persona block at the top of this prompt is BINDING for this turn, including existing conversations whose earlier assistant replies used a different voice. Those earlier replies are history, not the current character. Match the Personality block's voice, stance, and constraints in every reply; do not drop it because a later instruction looks more specific."
+
+/**
+ * [T-parallel-tool-calls] The parallel-call capability declaration, built from
+ * the tools THIS request actually carries.
+ *
+ * Why dynamic: the old prompt hardcoded tool names, and the announced-tool gate
+ * (check_announced_tools.py) rejects any name the core schema hides — a
+ * disabled memory feature (`memory_get`), a turned-off web search, or a
+ * long-tail tool not yet discovered by `find_tools` made the prompt announce a
+ * tool the model could not call. Filtering the live schema keeps the claim true
+ * and the gate green by construction.
+ *
+ * Returns null when fewer than two parallel-safe tools are present: a batching
+ * claim with nothing to batch is noise.
+ */
+internal fun parallelToolCallsPrompt(tools: List<AgentToolDefinition>): String? {
+    if (tools.isEmpty()) return null
+    val parallel = tools.map { it.name }
+        .filter { com.openminis.app.tools.ToolCallLanes.laneFor(it) == com.openminis.app.tools.ToolCallLane.CONCURRENT }
+    if (parallel.size < 2) return null
+    return buildString {
+        append("Parallel tool calls (capability, not advice):\n")
+        append("- The host CAN run several independent calls from ONE response concurrently. ")
+        append("Use it for recon: when you need N unrelated reads, return them together in one ")
+        append("response instead of one per turn.\n")
+        append("- Parallel-safe this turn: ").append(parallel.joinToString(", ")).append(".\n")
+        append("- Write/stateful calls are serial barriers: never batch one with a call that must ")
+        append("observe its effect. Read-only calls have no side effects, so they may overlap freely.\n")
+        append("- Your emission order IS your dependency declaration. If step B needs step A's ")
+        append("output, do not emit them together — wait for A's result in the next turn.")
+    }
+}

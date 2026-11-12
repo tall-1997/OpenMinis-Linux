@@ -1,83 +1,73 @@
 package com.openminis.app.data
 
 import com.openminis.app.ProductionSources
+import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.tools.ToolCallLane
 import com.openminis.app.tools.ToolCallLanes
-import org.junit.Assert.assertEquals
+import com.openminis.app.ui.chat.parallelToolCallsPrompt
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * [T-parallel-tool-calls] The system prompt's parallel-call capability
- * declaration must match the REAL lane table.
+ * [T-parallel-tool-calls] The parallel-call declaration is built from the LIVE
+ * tool schema, not a hardcoded list.
  *
- * Two failure modes this pins:
- *  - prompt drift: the prompt names a tool as parallel-safe while
- *    [ToolCallLanes] classifies it BARRIER (the model batches calls the host
- *    then serializes, so the promised speed-up never materializes);
- *  - silent regression: the declaration is deleted, and the model falls back
- *    to one tool per turn (the 1289-turns × 1-call shape measured in the
- *    reported session).
+ * Why: the announced-tool gate (`check_announced_tools.py`) rejects a prompt
+ * that names a tool the core schema hides. A hardcoded list announced
+ * `memory_get` with memory disabled, `web_search` with the feature off, and
+ * long-tail tools before `find_tools` surfaced them. The declaration now
+ * filters the request's own tool list through [ToolCallLanes], so it can only
+ * name tools the model can actually call.
  */
 class ParallelToolsPromptTest {
 
-    private val prompt = ProductionSources.read("ui/chat/ChatViewModelPromptExt.kt")
-
-    private fun declaredParallelTools(): List<String> =
-        Regex("""Read-only tools are parallel-safe: ([^\n.]+)""")
-            .find(prompt)
-            ?.groupValues
-            ?.get(1)
-            ?.split(',')
-            ?.map { it.trim().removeSuffix(".") }
-            ?.filter { it.isNotEmpty() }
-            ?: emptyList()
-
-    private fun declaredBarriers(): List<String> =
-        Regex("""serial barriers[^\n]*?: ([^\n.]+)""")
-            .find(prompt)
-            ?.groupValues
-            ?.get(1)
-            ?.split(',')
-            ?.map { it.trim().removeSuffix(".") }
-            ?.filter { it.isNotEmpty() }
-            ?: emptyList()
+    private fun tool(name: String) = AgentToolDefinition(name = name, description = "", parameters = emptyMap())
 
     @Test
-    fun `the prompt declares the parallel-call capability`() {
-        assertTrue(
-            "the prompt must tell the model independent calls can be batched",
-            prompt.contains("Parallel tool calls (capability, not advice)"),
-        )
-        assertTrue(
-            "the declaration must name recon tools concretely",
-            declaredParallelTools().isNotEmpty(),
+    fun `no declaration when fewer than two parallel-safe tools are present`() {
+        assertNull(parallelToolCallsPrompt(emptyList()))
+        assertNull(
+            "a single read-only tool has nothing to batch with",
+            parallelToolCallsPrompt(listOf(tool("file_read"), tool("shell_execute"))),
         )
     }
 
     @Test
-    fun `every tool declared parallel-safe is CONCURRENT in the lane table`() {
-        val declared = declaredParallelTools()
-        assertTrue(declared.size >= 8)
-        for (name in declared) {
-            assertEquals(
-                "prompt promises '$name' runs concurrently but the lane table says BARRIER",
-                ToolCallLane.CONCURRENT,
-                ToolCallLanes.laneFor(name),
+    fun `the declaration lists only live parallel-safe tools`() {
+        val prompt = parallelToolCallsPrompt(
+            listOf(tool("file_read"), tool("grep"), tool("web_fetch"), tool("shell_execute")),
+        )
+        requireNotNull(prompt)
+        assertTrue(prompt.contains("Parallel tool calls (capability, not advice)"))
+        assertTrue("parallel-safe names must appear", prompt.contains("file_read"))
+        assertTrue(prompt.contains("grep"))
+        assertTrue(prompt.contains("web_fetch"))
+        assertFalse("barriers must never be announced as parallel-safe", prompt.contains("shell_execute"))
+    }
+
+    @Test
+    fun `every announced parallel tool is CONCURRENT in the lane table`() {
+        val names = listOf("file_read", "grep", "glob", "list_dir", "web_fetch", "read_image")
+        val prompt = requireNotNull(parallelToolCallsPrompt(names.map { tool(it) }))
+        val declared = prompt.substringAfter("Parallel-safe this turn: ").substringBefore(".")
+        for (name in declared.split(",").map { it.trim() }) {
+            if (name.isEmpty()) continue
+            assertTrue(
+                "prompt promised '$name' runs concurrently but the lane table says BARRIER",
+                ToolCallLanes.laneFor(name) == ToolCallLane.CONCURRENT,
             )
         }
     }
 
     @Test
-    fun `every tool declared a barrier is BARRIER in the lane table`() {
-        val declared = declaredBarriers()
-        assertTrue("the declaration must name write/stateful barriers", declared.isNotEmpty())
-        for (name in declared) {
-            assertEquals(
-                "prompt calls '$name' a serial barrier but the lane table says CONCURRENT",
-                ToolCallLane.BARRIER,
-                ToolCallLanes.laneFor(name),
-            )
-        }
+    fun `the base prompt no longer hardcodes a tool-name list`() {
+        val src = ProductionSources.read("ui/chat/ChatViewModelPromptExt.kt")
+        assertFalse(
+            "a hardcoded 'parallel-safe: <names>' line is what the announced-tool gate rejected",
+            src.contains("Read-only tools are parallel-safe:"),
+        )
+        assertTrue("the declaration must be built from the live schema", src.contains("parallelToolCallsPrompt(agentTools)"))
     }
 }
