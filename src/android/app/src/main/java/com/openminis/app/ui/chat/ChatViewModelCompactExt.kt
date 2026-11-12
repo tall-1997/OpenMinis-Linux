@@ -419,6 +419,7 @@ private inline fun ChatViewModel.compactAllImpl(
             // re-announced on the next turn.
             lastRecallTurnKey = null
             lastRecallTurnKeys = null
+            lastRecallCarrierReplayed = false
         } catch (e: TimeoutCancellationException) {
             // [T-android-compact-runaway] MUST precede the CancellationException
             // arm — TimeoutCancellationException extends it, so the generic

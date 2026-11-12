@@ -174,3 +174,6 @@ __pycache__/
 
 # Mimosa security-scanner hook-state snapshots (per-session per-file baselines)
 .mimosa/
+
+# local analysis scratch (never commit)
+.tmp-issue/

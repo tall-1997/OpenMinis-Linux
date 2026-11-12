@@ -7,11 +7,35 @@ import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.ui.chat.retention.ResidentWindow
 import kotlinx.coroutines.flow.first
 
-internal fun ChatViewModel.effectiveAgentHistoryUncounted(): List<LLMMessage> {
+/**
+ * [T-android-inloop-compact-truthful-gate] The effective history in two
+ * flavors:
+ *  - default (`applyProgressiveTrim = true`) — what the next request actually
+ *    carries, after [progressivelyTrimmed] stripped thinking / offloaded old
+ *    tool outputs. Used for calibration and display.
+ *  - `applyProgressiveTrim = false` — the same slice UNTRIMMED, i.e. what the
+ *    request would weigh without the emergency diet. The in-loop / send-time
+ *    compact gates read this: ProgressiveTrim masks a 270k-token pile-up down
+ *    to ~41k of stubs, which let the 80% threshold stay silent forever while
+ *    900 stale tool rounds were re-assembled every turn. Compaction shrinks
+ *    THIS slice (the marker moves forward), so the post-compact check passes
+ *    and the gate cannot thrash — unlike a raw `agentHistory` floor, which
+ *    stays over-threshold after a successful compact and would trip the
+ *    "already compacted" dead end.
+ *
+ * v1 (legacy) markers and the unresolvable-anchor fallback intentionally
+ * bypass [progressivelyTrimmed] in BOTH flavors — their wire format is frozen
+ * by contract.
+ */
+internal fun ChatViewModel.effectiveAgentHistoryUncounted(
+    applyProgressiveTrim: Boolean = true,
+): List<LLMMessage> {
     val summary = _compactSummary.value
     val marker = _cachedLatestMarker
     // No compact in play → return full history untouched.
-    if (summary.isNullOrBlank() || marker == null) return progressivelyTrimmed(agentHistory.toList())
+    if (summary.isNullOrBlank() || marker == null) {
+        return maybeProgressivelyTrimmed(agentHistory.toList(), applyProgressiveTrim)
+    }
 
     val summaryWrappedText = "<context-summary>\n" +
         "The following is a summary of the earlier conversation that was compacted to save context space.\n" +
@@ -84,7 +108,10 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(): List<LLMMessage> {
                         "summary+tail injection (tail=${DETACHED_TAIL_MESSAGES})",
                 )
             }
-            return progressivelyTrimmed(detachedCompactHistory(effectiveSummaryWrappedText))
+            return maybeProgressivelyTrimmed(
+                detachedCompactHistory(effectiveSummaryWrappedText),
+                applyProgressiveTrim,
+            )
         }
 
         // Step 1: walk back from anchor collecting user-text turns. Stop
@@ -176,10 +203,35 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(): List<LLMMessage> {
         // it must be a view over an immutable snapshot, never over the live
         // COWAL (whose subList views throw CME if the parent array swaps).
         val postAnchorSnap = agentHistory.toList()
-        val postAnchor = if (anchorIdx + 1 < postAnchorSnap.size) {
+        val postAnchorRaw = if (anchorIdx + 1 < postAnchorSnap.size) {
             postAnchorSnap.subList(anchorIdx + 1, postAnchorSnap.size)
         } else {
             emptyList()
+        }
+
+        // [T-android-postanchor-tail-budget] Hard tail window on the active
+        // region. Without a marker move for hours the postAnchor slice grows
+        // unbounded (observed: 909 stale tool rounds fully re-assembled every
+        // turn) — the summary covers those rounds, so keep only the newest
+        // ones that fit the budget and drop the oldest WHOLE rounds (never a
+        // half turn: the splitter decides only at user-round boundaries, so a
+        // tool_use is never orphaned from its tool_result). Request-assembly
+        // only; DB persistence is untouched. The dropped-rounds notice is
+        // injected at the head of the kept slice as a USER text line.
+        val tailBudget = PostAnchorTail.Budget(
+            budgetTokens = PostAnchorTail.BUDGET_TOKENS,
+            estimate = WalkBack::estimateMessageTokens,
+        )
+        val postAnchorOutcome = PostAnchorTail.apply(postAnchorRaw, tailBudget)
+        val postAnchor = postAnchorOutcome.kept
+        if (postAnchorOutcome.droppedRounds > 0) {
+            AppLogger.info(
+                ChatViewModel.TAG,
+                "[CompactDiag] eAH v2 postAnchor tail budget: kept=${postAnchor.size} " +
+                    "droppedRounds=${postAnchorOutcome.droppedRounds} " +
+                    "droppedMessages=${postAnchorOutcome.droppedMessages} " +
+                    "droppedTokens≈${postAnchorOutcome.droppedTokens} budget=${tailBudget.budgetTokens}",
+            )
         }
 
         // DIAG: explain how the slice was sized using post-prune /
@@ -216,7 +268,7 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(): List<LLMMessage> {
             result.addAll(postAnchor)
             result.add(LLMMessage(role = LLMMessage.Role.USER, content = effectiveSummaryWrappedText))
         }
-        return progressivelyTrimmed(result)
+        return maybeProgressivelyTrimmed(result, applyProgressiveTrim)
     }
 
     // ─── v1 (legacy) markers ──────────────────────────────────────
@@ -257,6 +309,12 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(): List<LLMMessage> {
     Log.w(ChatViewModel.TAG, "[Compact] effectiveAgentHistory: marker ${marker.id.take(8)} unresolvable in agentHistory (size=${agentHistory.size}); returning full history")
     return agentHistory.toList()
 }
+
+/** Apply [progressivelyTrimmed] only when the caller asked for it. */
+private fun ChatViewModel.maybeProgressivelyTrimmed(
+    list: List<LLMMessage>,
+    apply: Boolean,
+): List<LLMMessage> = if (apply) progressivelyTrimmed(list) else list
 
 /**
  * [T-android-progressive-trim] Apply progressive context trimming to an

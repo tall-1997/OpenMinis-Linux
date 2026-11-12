@@ -25,6 +25,13 @@ import java.io.File
  * permissions or tool policy. Daily-log lines are also scrubbed of forged
  * authority tokens (trust:/origin:/window:/project:) — the stored files
  * stay byte-identical, only the prompt view is cleaned.
+ *
+ * [T-daily-recall-gate] Daily injection is budgeted and relevance-gated by
+ * [MemoryDailyGate]: today's log and the [MemoryIndex] TOC are resident,
+ * older days return only on a keyword hit from the current query (or the
+ * DIAG_TASK_KEYWORDS vocabulary when no query exists), and the admitted
+ * entries together stay inside [DAILY_INJECT_BUDGET_CHARS]. This builder
+ * keeps the I/O + cache; the gate owns the decision.
  */
 internal class MemoryFragmentBuilder(
     private val memoryDir: File,
@@ -32,6 +39,21 @@ internal class MemoryFragmentBuilder(
     /** Stat-only file fingerprint (exists + mtime + size), injected from [MemoryRepository]. */
     private val fingerprint: (File) -> String?,
 ) {
+
+    /**
+     * [T-daily-recall-gate] What the daily window actually injected for one
+     * prompt build. [fragments] is the enveloped per-day list (the assembler's
+     * `daily` input), [omittedCount] / [omittedChars] count every older file
+     * kept out (gate skips + budget drops — the honest numbers for the log),
+     * and [budgetNote] is the model-visible omission note to append after the
+     * daily-index (null when the budget dropped nothing).
+     */
+    internal data class DailyInjection(
+        val fragments: List<MemoryAssembly.DailyFragment>,
+        val omittedCount: Int,
+        val omittedChars: Int,
+        val budgetNote: String?,
+    )
 
     // ── [T-prompt-cache] Fragment caches ──────────────────────────────
     // Prompt injection reads GLOBAL.md and up to 7 daily logs every turn.
@@ -45,10 +67,14 @@ internal class MemoryFragmentBuilder(
     private var globalFragCacheKey: String? = null
     @Volatile
     private var globalFragCacheValue: String? = null
+    // [T-daily-recall-gate] The cache stores the RAW per-day full texts, not
+    // the injected fragments: the relevance gate + budget in [MemoryDailyGate]
+    // run per call on top of the cached raw list, so a per-turn query change
+    // never needs a re-read while the injected output still tracks the query.
     @Volatile
-    private var dailyFragCacheKey: String? = null
+    private var dailyRawCacheKey: String? = null
     @Volatile
-    private var dailyFragCacheValue: List<MemoryAssembly.DailyFragment> = emptyList()
+    private var dailyRawCacheValue: List<MemoryDailyGate.RawDay> = emptyList()
 
     // [T-memory-instruction-dedupe] Raw GLOBAL.md body memo, keyed like the
     // fragment cache. Dedupe compares bodies across scopes, and the rendered
@@ -143,24 +169,26 @@ internal class MemoryFragmentBuilder(
             }
 
     /**
-     * Loads up to [MemoryRepository.MAX_RECENT_FILES] most recent non-empty
-     * daily logs (within a [MemoryRepository.MAX_LOOKBACK_DAYS]-day window),
-     * one enveloped fragment per day, newest first. Tiered line caps —
-     * [MemoryRepository.MAX_INJECT_LINES] for the newest day in the window,
-     * [MemoryRepository.MAX_INJECT_LINES_OLDER] for the rest — keep the whole
-     * 7-day window inside [MemoryPromptBudget.DEFAULT_BUDGET_CHARS]; days the
-     * budget still cannot admit drop to a MemoryIndex TOC row instead of
-     * vanishing (see [MemoryAssembly]). Same per-entry labels and
-     * "(N more lines, use memory_get to search)" continuation as the old
-     * single-block shape. The block caption is NOT baked into any day —
-     * [MemoryAssembly.DAILY_BLOCK_HEADER] is reserved and inserted by the
-     * assembler, so it survives a budget that drops the newest day whole.
+     * [T-daily-recall-gate] The daily window for system-prompt injection.
+     *
+     * Resident: today's log (deep view) — never gated, never budget-dropped.
+     * Conditional: every older day, admitted only when [recallQuery]'s
+     * keywords hit that file's content (case-insensitive substring on the
+     * FULL text; when no query can be built the DIAG_TASK_KEYWORDS vocabulary
+     * is the keyword set instead). The admitted entries together stay inside
+     * [DAILY_INJECT_BUDGET_CHARS]; overflow drops the oldest first, and every
+     * kept-out file still surfaces as a MemoryIndex TOC row.
+     *
+     * [recallQuery] is the live-recall fold (latest user text + assistant
+     * tail) handed down from the prompt builder — a plain state read, zero
+     * network, zero engine calls.
      */
-    fun loadRecentDailyFragments(): List<MemoryAssembly.DailyFragment> {
+    fun loadRecentDailyFragments(recallQuery: String? = null): DailyInjection {
         val now = System.currentTimeMillis()
         // [T-prompt-cache] Stat-only key: today's date + fingerprint of each
         // candidate file in the 30-day lookback window. 30 stats are ~0.5 ms
-        // vs. reading + parsing 7 files on every turn.
+        // vs. reading + parsing 7 files on every turn. The cached value is the
+        // RAW window; see the field comment for why the gate runs outside it.
         val todayStr = IsoTime.formatLocalDate(now)
         val keyBuilder = StringBuilder().append(todayStr)
         for (dayOffset in 0 until MemoryRepository.MAX_LOOKBACK_DAYS) {
@@ -169,95 +197,88 @@ internal class MemoryFragmentBuilder(
             keyBuilder.append('|').append(fp)
         }
         val key = keyBuilder.toString()
-        if (dailyFragCacheKey == key) return dailyFragCacheValue
-        val result = loadRecentDailyFragmentsUncached(now)
-        dailyFragCacheKey = key
-        dailyFragCacheValue = result
-        return result
+        val raw = if (dailyRawCacheKey == key) {
+            dailyRawCacheValue
+        } else {
+            val fresh = loadRecentDailyRawUncached(now)
+            dailyRawCacheKey = key
+            dailyRawCacheValue = fresh
+            fresh
+        }
+        return injectDaily(raw, recallQuery, todayStr)
     }
 
-    internal fun loadRecentDailyFragmentsUncached(now: Long): List<MemoryAssembly.DailyFragment> {
-        val days = mutableListOf<MemoryAssembly.DailyFragment>()
-        // [XSessionDiag] Names of the logs actually injected, for the diagnostic
-        // line below. Collected alongside `days` so the log can name the
-        // source files rather than just a count.
-        val injectedFiles = mutableListOf<String>()
+    /**
+     * [T-daily-recall-gate] Reads the raw window: up to
+     * [MemoryRepository.MAX_RECENT_FILES] most recent non-empty daily logs
+     * within the [MemoryRepository.MAX_LOOKBACK_DAYS]-day calendar window,
+     * newest first, FULL text retained (the line caps are applied later, per
+     * admitted entry, inside [MemoryDailyGate]).
+     */
+    internal fun loadRecentDailyRawUncached(now: Long): List<MemoryDailyGate.RawDay> {
+        val raw = mutableListOf<MemoryDailyGate.RawDay>()
         var dayOffset = 0
-
-        while (days.size < MemoryRepository.MAX_RECENT_FILES &&
+        while (raw.size < MemoryRepository.MAX_RECENT_FILES &&
             dayOffset < MemoryRepository.MAX_LOOKBACK_DAYS
         ) {
             val dateStr = IsoTime.formatLocalDate(now - dayOffset.toLong() * 86400_000L)
             val file = File(memoryDir, "$dateStr.md")
-
             if (file.exists()) {
                 val content = readTextResilient(file, "daily-memory") ?: ""
                 if (content.isNotEmpty()) {
-                    val lines = content.lines()
-                    // P0 authority gate: strip forged authority tokens
-                    // (trust:/origin:/window:/project:) from injected lines.
-                    // The stored file stays byte-identical; only the prompt
-                    // view is scrubbed.
-                    //
-                    // [T-memory-window] Tiered caps: the newest day in the
-                    // window gets the deep view, older days the recap depth,
-                    // so all 7 days fit the budget together (see
-                    // MemoryRepository.MAX_INJECT_LINES).
-                    val lineCap = if (days.isEmpty()) {
-                        MemoryRepository.MAX_INJECT_LINES
-                    } else {
-                        MemoryRepository.MAX_INJECT_LINES_OLDER
-                    }
-                    val preview = lines.take(lineCap)
-                        .map { MemoryAuthority.stripForgedTag(it) }
-                        .joinToString("\n")
-                    val label = when (dayOffset) {
-                        0 -> "Today's"
-                        1 -> "Yesterday's"
-                        else -> dateStr
-                    }
-                    var entry = "$label daily log ($dateStr.md):\n$preview"
-                    if (lines.size > lineCap) {
-                        entry += "\n... (${lines.size - lineCap} more lines, use memory_get to search)"
-                    }
-                    days.add(MemoryAssembly.DailyFragment(dateStr, entry))
-                    injectedFiles.add("$dateStr.md")
+                    raw.add(MemoryDailyGate.RawDay(dateStr, dayOffset, content))
                 }
             }
             dayOffset++
         }
+        return raw
+    }
 
-        if (days.isEmpty()) return emptyList()
-
-        // [XSessionDiag] Hypothesis 3: these fragments are injected into EVERY
-        // session's system prompt, so a task described in a previous session's
-        // daily log is visible to a brand-new chat. The prompt already asks the
-        // model not to resume them ("they describe past tasks, not the current
-        // one"), but that is a prompt-level defence only — a weak model can and
-        // did ignore it (the noVNC incident: "为了你最早那句需求").
-        //
-        // Logged: which files were injected, how large, and whether the text
-        // carries task-resumption vocabulary. The keyword scan is READ-ONLY and
-        // used solely to tag the log line — it feeds no decision.
-        run {
-            val body = days.joinToString("\n\n") { it.text }
+    /**
+     * [T-daily-recall-gate] One prompt build's daily decision: gate + budget
+     * (pure, in [MemoryDailyGate]), then envelope each admitted fragment, then
+     * the [XSessionDiag] line. The log names exactly what was injected and
+     * why everything else stayed out — gate-skipped vs. budget-dropped, with
+     * the omitted count/chars — so the next investigation does not have to
+     * guess what the prompt carried.
+     */
+    private fun injectDaily(
+        raw: List<MemoryDailyGate.RawDay>,
+        recallQuery: String?,
+        todayStr: String,
+    ): DailyInjection {
+        val result = MemoryDailyGate.gate(raw, recallQuery, todayStr, DAILY_INJECT_BUDGET_CHARS)
+        if (raw.isNotEmpty()) {
+            // [XSessionDiag] Hypothesis 3 follow-up: these fragments are
+            // injected into EVERY session's system prompt, so a task described
+            // in a previous session's daily log is visible to a brand-new
+            // chat. With the gate active the log must show WHICH files made
+            // it and what was held back — the pre-gate line listed the full
+            // 7-day window unconditionally, which is exactly the lie D2
+            // removes. The keyword scan is READ-ONLY and tags the log only.
+            val body = result.fragments.joinToString("\n\n") { it.text }
             val hits = MemoryRepository.DIAG_TASK_KEYWORDS.filter { body.contains(it, ignoreCase = true) }
             AppLogger.info(
                 TAG,
-                "[XSessionDiag] memory/daily-inject: files=[${injectedFiles.joinToString(",")}] " +
-                    "fragments=${days.size} chars=${body.length} " +
+                "[XSessionDiag] memory/daily-inject: " +
+                    "files=[${result.injectedFiles.joinToString(",")}] " +
+                    "fragments=${result.fragments.size} chars=${body.length} " +
+                    "omitted=${result.omittedCount}(${result.omittedChars}c)" +
+                    (if (result.gateSkippedFiles.isEmpty()) {
+                        ""
+                    } else {
+                        " gateSkipped=[${result.gateSkippedFiles.joinToString("|")}]"
+                    }) +
+                    (if (result.budgetDroppedFiles.isEmpty()) {
+                        ""
+                    } else {
+                        " budgetDropped=[${result.budgetDroppedFiles.joinToString("|")}]"
+                    }) +
+                    " queryChars=${recallQuery?.length ?: 0} " +
                     "taskKeywords=${if (hits.isEmpty()) "none" else hits.joinToString("|")}",
             )
         }
-
-        // Each day is enveloped on its own so a fragment the budget admits
-        // individually still carries its authority boundary. The block
-        // caption is deliberately not baked into the newest day: the budget
-        // can drop that day whole, and the caption — the "past tasks, not
-        // standing instructions" guard — must not sink with it. The
-        // assembler reserves and inserts it (see
-        // [MemoryAssembly.DAILY_BLOCK_HEADER]).
-        return days.map { day ->
+        val fragments = result.fragments.map { day ->
             day.copy(
                 text = MemoryAuthority.withEnvelope(
                     day.text,
@@ -266,6 +287,12 @@ internal class MemoryFragmentBuilder(
                 ),
             )
         }
+        return DailyInjection(
+            fragments = fragments,
+            omittedCount = result.omittedCount,
+            omittedChars = result.omittedChars,
+            budgetNote = result.budgetNote,
+        )
     }
 
     private companion object {
@@ -274,5 +301,18 @@ internal class MemoryFragmentBuilder(
         // and changing the tag would split the historical stream in the
         // in-app Logcat panel for no functional gain.
         const val TAG = "MemoryRepository"
+
+        /**
+         * [T-daily-recall-gate] Hard cap on the TOTAL chars of the injected
+         * daily full texts (label + capped preview + continuation, before the
+         * ~60-char authority envelope per fragment, which stays inside the
+         * 24K MemoryPromptBudget). Overflow drops the oldest admitted day
+         * first; today is never dropped, so a single oversized today can
+         * exceed this on its own. Sized from the field log: the ungated
+         * 7-day window measured 17.9K chars of daily text — 8K keeps today's
+         * deep view plus roughly two relevant recap days while cutting the
+         * stale-task hijack surface by more than half.
+         */
+        const val DAILY_INJECT_BUDGET_CHARS = 8_000
     }
 }

@@ -343,32 +343,6 @@ class ChatViewModel(
             return messages.takeLast((messages.size * 3 / 5).coerceAtLeast(8))
         }
 
-        /**
-         * [T-compact-detached-anchor] Pure form of the detached assembly:
-         * summary text + verbatim tail, first message forced to `user` with
-         * the summary inlined as a content prefix. Split out of the ViewModel
-         * so the fallback path is covered by tests without an Android host.
-         */
-        internal fun buildDetachedCompactHistory(
-            summaryWrappedText: String,
-            history: List<LLMMessage>,
-            tailSize: Int,
-        ): List<LLMMessage> {
-            val tail = if (history.size > tailSize) {
-                history.subList(history.size - tailSize, history.size).toList()
-            } else {
-                history.toList()
-            }
-            val start = tail.indexOfFirst { it.role == LLMMessage.Role.USER }
-            if (start < 0) {
-                return tail + LLMMessage(role = LLMMessage.Role.USER, content = summaryWrappedText)
-            }
-            val out = ArrayList<LLMMessage>(tail.size - start + 1)
-            val first = tail[start]
-            out.add(first.copy(content = summaryWrappedText + "\n\n" + first.content))
-            out.addAll(tail.subList(start + 1, tail.size))
-            return out
-        }
 
         /** Floor for the dynamic wall-clock timeout. */
         internal const val COMPACT_TIMEOUT_BASE_MS = 90_000L
@@ -590,7 +564,18 @@ class ChatViewModel(
         internal const val MAX_STREAM_DROP_CONTINUATIONS = 3
         // [T-android-split-chat-tokenext] internal (was private): consumed by
         // dynamicMaxTokens, which moved to ChatViewModelTokenExt.kt.
-        internal const val MIN_MAX_TOKENS = 1024
+        //
+        // [T-reasoning-token-budget] 4096, not 1024. With a reasoning model the
+        // same budget covers BOTH the reasoning channel and the visible answer
+        // (OpenAI-compatible `max_tokens` / `max_completion_tokens` include
+        // reasoning). A 1024 floor let a long-thinking model spend the whole
+        // allowance on reasoning and return `finish_reason=length` with an
+        // EMPTY answer — the turn then looks like an empty turn, the loop
+        // retries or stops, and the user sees a run that "repeats itself and
+        // does no work". The floor is only reached when the remaining context
+        // window is nearly exhausted; 4096 still fits that case and leaves the
+        // visible answer room on every reasoning model we ship.
+        internal const val MIN_MAX_TOKENS = 4096
         /**
          * Hard ceiling on max_tokens we ever send to a provider, regardless
          * of what the model itself claims. Some models advertise 128K+
@@ -1397,6 +1382,20 @@ class ChatViewModel(
     // announced for it. Compaction resets both so memories can return.
     @Volatile internal var lastRecallTurnKey: String? = null
     @Volatile internal var lastRecallTurnKeys: Set<String>? = null
+
+    /** [T-process-tail-content-dedupe] Last process tail (identical bytes reuse the instance). */
+    @Volatile internal var processTailCache: String? = null
+
+    /**
+     * [T-recall-carrier-replay-once] Whether the last announcement was the
+     * "carrier evicted" replay. After compaction evicts the message that
+     * carried the recall block, the memories are absent from context and must
+     * be re-surfaced — but only ONCE: without this flag the carrier-alive
+     * condition stays false for every following turn of a compacted session,
+     * and the same memories are re-announced on every request (context bloat
+     * plus the model reading the same "past task" notes over and over).
+     */
+    @Volatile internal var lastRecallCarrierReplayed: Boolean = false
 
     /** True when a compact-summary LLM call is in flight (UI disables further sends). */
     internal val _isCompacting = MutableStateFlow(false)

@@ -33,37 +33,20 @@ internal fun ChatViewModel.finalizeAtTurnLimit(
     /** [T-android-resume-banner-race] The loop's epoch snapshot; see raiseCanResume. */
     fromResumeEpoch: Long,
 ) {
-    updateAssistantMessage(
-        assistantId, text, false, blocks,
-        isAwaitingModelResponse = false,
-    )
-    // [T-android-thinking-indicator-linger] updateAssistantMessage drains
-    // _streamingById[assistantId] above, but the agent loop ran on
-    // Dispatchers.IO while this finalize hops to Main — a late streaming
-    // delta can re-add the side-channel entry AFTER the drain, and since
-    // the loop has now exited no further isStreaming=false write will ever
-    // clear it. mergeStreamingOverlay (ChatScreen) forces isStreaming=true
-    // on any message with a side-channel entry, so that orphan keeps the
-    // "thinking" row alive forever. Defensively drop the entry here as the
+    // [T-android-thinking-indicator-linger][T-android-stream-flush-review]
+    // Shared live-interruption tail (see drainLiveAssistantUi): the agent
+    // loop ran on IO while this finalize hops to Main, so a late delta could
+    // re-add the side-channel entry after the drain — drop it here as the
     // last Main-thread write of this turn.
-    // [T-android-stream-flush-review] Cancel the trailing flush too, so it
-    // can't re-add this orphan entry after we drop it on the error path.
-    clearStreamFlushState(assistantId)
-    if (_streamingById.value.containsKey(assistantId)) {
-        _streamingById.value = _streamingById.value - assistantId
-    }
+    drainLiveAssistantUi(assistantId, text, blocks)
     setInlineError(
         "Stopped after ${ToolLimitPrefs.mainSessionMaxTurns()} agent turns to prevent runaway " +
         "tool use. The model kept calling tools without finishing — tap " +
         "Resume to continue from here, or send a new message to start over.",
     )
     // [T-android-group-pause-badge-restamp] A LIVE interruption just
-    // happened: this is a real entry into the paused state, so the
-    // badge's 24h freshness stamp must be refreshed. Cancel any
-    // unconsumed re-detection mark left by a prior load so it cannot
-    // suppress the re-stamp here.
-    markLiveInterruption()
-    raiseCanResume(fromResumeEpoch)
+    // happened: real entry into the paused state.
+    markLiveInterruptionAndArmResume(fromResumeEpoch)
 }
 
 // [F3 GH#61] preflightValidateToolCall 已删除：required-field / empty-args 预检

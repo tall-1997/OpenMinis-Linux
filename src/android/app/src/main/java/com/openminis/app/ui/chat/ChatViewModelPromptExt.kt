@@ -1,5 +1,6 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.repository.MultiAgentSettings
 import com.openminis.app.logging.AppLogger
 import kotlinx.serialization.json.Json
@@ -227,6 +228,7 @@ Tool call style:
 - When a tool exists for an action, use it directly instead of explaining what you plan to do or asking the user to confirm.
 - Use reasonable defaults and contextual inference to fill in missing details (e.g. 'tonight' means today, 'remind me' implies creating a reminder immediately). Only ask for clarification when genuinely ambiguous — then call `ask_user_question` (structured choices) instead of a free-form chat question.
 
+
 Tone and style:
 - Reply in the language that best matches the user's input. Only switch languages when the user explicitly asks.
 - Be concise. Prefer action over explanation — when the user asks for something that can be done via shell, do it directly.
@@ -265,7 +267,7 @@ Environment variables:
 - Settings deep links: when you tell the user "go to Settings → X" or want to point them at a specific setting, prefer a Markdown link `[Label](minis://settings/<path>)` over plain prose. Available paths: providers (list), providers/<instanceId> (one provider), model-groups (incl. Agent Loop), model-groups/<groupId>, usage (token usage), skills, plugins, mcp, multi-agent (sub-agent slots, thinking depth, AI group discussion), memory, storage, shared-folders (Shared Folders: /var/minis/{shared,skills}), mount-external (Mount External Folders), logs, appearance, background, about, permissions, environments[?create_key=K&create_value=V[&create_note=N]], rootfs (also reachable as mirrors; includes Ubuntu build profiles and China mirror switching), tool-limits. Unknown paths fall back to Settings home, but prefer the exact path so users land where they want. These settings/action links are app deep links — render them as Markdown links in chat (same action-vs-resource rule as the minis:// section above: only /var/minis resource URLs may go to browser_use).
 - To check if a variable is set, use `[ -n "${'$'}VAR" ] && echo 'set' || echo 'not set'`. NEVER use echo ${'$'}VAR, printenv VAR, or any command that would output the actual value into the conversation context.${memorySystemSection}
 
-Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended, so in-app scheduled scripts may not run as expected. For recurring tasks that must fire while the app is backgrounded, use the cronjob tool (AlarmManager) or minis-scheduled, or tell the user to set up a system-level schedule (Google Calendar event, Tasker automation, etc.). (Waiting or polling WITHIN the current turn is different — that is what shell_execute `delay` chains are for, per the shell_execute notes above.)"""
+Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended, so in-app scheduled scripts may not run as expected. For recurring tasks that must fire while the app is backgrounded, use the cronjob tool (AlarmManager) or minis-scheduled, or tell the user to set up a system-level schedule (Google Calendar event, Tasker automation, etc.). (Waiting or polling WITHIN the current turn is different — that is what shell_execute `delay` chains are for, per the shell_execute notes above.)""" + (parallelToolCallsPrompt(agentTools)?.let { "\n\n" + it } ?: "")
 
     // Match iOS order exactly: skills → global memory → recent daily memory.
     // See ios/Agent/Chat/AIChatViewModel.swift:4375-4387. Each fragment is
@@ -326,7 +328,15 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     val sessionGlobal = if ("session-global" in keptInstructionKeys) {
         sessionMem?.loadGlobalMemoryFragment(sessionScoped = true)
     } else null
-    val dailyFragments = sessionMem?.loadRecentDailyFragments().orEmpty()
+    // [T-daily-recall-gate] Resident daily injection is today's log + the
+    // MemoryIndex TOC; older days return only on relevance. The gate query is
+    // the same live-recall fold the per-turn block uses (latest user text +
+    // assistant tail) — a pure state read, zero network, zero engine calls.
+    // A fold too short to query (liveRecallInput null) falls back to the
+    // DIAG_TASK_KEYWORDS vocabulary inside the gate.
+    val dailyRecallQuery = if (memoryOn) liveRecallInput()?.query else null
+    val dailyInjection = sessionMem?.loadRecentDailyFragments(dailyRecallQuery)
+    val dailyFragments = dailyInjection?.fragments.orEmpty()
     // [T-memory-window] Two-pass assembly: the per-day verbatim window and
     // the MemoryIndex TOC together cover every diary day exactly once. Pass 1
     // finds which days the budget admits verbatim; pass 2 rebuilds the TOC
@@ -361,12 +371,20 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
             daily = dailyFragments,
             header = com.openminis.app.data.repository.MemoryAssembly.DAILY_BLOCK_HEADER,
         ) { excludeDates ->
-            com.openminis.app.data.repository.MemoryIndex.fragment(
+            val toc = com.openminis.app.data.repository.MemoryIndex.fragment(
                 sessionDir = com.openminis.app.sandbox.SessionWorkspace
                     .memoryDir(context.filesDir, memorySessionId),
                 sharedDir = com.openminis.app.data.repository.MemoryIndex.sharedDir(context.filesDir),
                 excludeDates = excludeDates,
             )
+            // [T-daily-recall-gate] The budget note rides AFTER the index rows
+            // (same block, next line) so the model sees why older notes are
+            // missing and how to fetch them. Non-null only when the hard
+            // budget actually dropped days; those days are also TOC rows, so
+            // nothing becomes invisible.
+            listOfNotNull(toc, dailyInjection?.budgetNote)
+                .joinToString("\n")
+                .takeIf { it.isNotBlank() }
         }
     } else null
     // [T-memory-prompt-budget] One budget for the whole memory block, admitted
@@ -407,6 +425,10 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
             "worldBookChars=${worldBookFragment.length} " +
             "projectRulesChars=${projectRulesFragment?.length ?: 0} " +
             "memoryBudget=${memoryAllocation?.describe() ?: "off"} " +
+            // [T-daily-recall-gate] D2 honesty: how many older daily files the
+            // gate/budget kept out of this build, and their full-text chars —
+            // the kept= list above lists only what was truly injected.
+            "dailyOmitted=${dailyInjection?.omittedCount ?: 0}(${dailyInjection?.omittedChars ?: 0}c) " +
             "globalChars=${globalMemoryFragment?.length ?: 0} " +
             "recall=perTurn",
     )
@@ -644,3 +666,35 @@ internal fun renderRuntimeContext(
 
 internal const val PERSONALITY_REMINDER =
     "Personality reminder: the identity/persona block at the top of this prompt is BINDING for this turn, including existing conversations whose earlier assistant replies used a different voice. Those earlier replies are history, not the current character. Match the Personality block's voice, stance, and constraints in every reply; do not drop it because a later instruction looks more specific."
+
+/**
+ * [T-parallel-tool-calls] The parallel-call capability declaration, built from
+ * the tools THIS request actually carries.
+ *
+ * Why dynamic: the old prompt hardcoded tool names, and the announced-tool gate
+ * (check_announced_tools.py) rejects any name the core schema hides — a
+ * disabled memory feature (`memory_get`), a turned-off web search, or a
+ * long-tail tool not yet discovered by `find_tools` made the prompt announce a
+ * tool the model could not call. Filtering the live schema keeps the claim true
+ * and the gate green by construction.
+ *
+ * Returns null when fewer than two parallel-safe tools are present: a batching
+ * claim with nothing to batch is noise.
+ */
+internal fun parallelToolCallsPrompt(tools: List<AgentToolDefinition>): String? {
+    if (tools.isEmpty()) return null
+    val parallel = tools.map { it.name }
+        .filter { com.openminis.app.tools.ToolCallLanes.laneFor(it) == com.openminis.app.tools.ToolCallLane.CONCURRENT }
+    if (parallel.size < 2) return null
+    return buildString {
+        append("Parallel tool calls (capability, not advice):\n")
+        append("- The host CAN run several independent calls from ONE response concurrently. ")
+        append("Use it for recon: when you need N unrelated reads, return them together in one ")
+        append("response instead of one per turn.\n")
+        append("- Parallel-safe this turn: ").append(parallel.joinToString(", ")).append(".\n")
+        append("- Write/stateful calls are serial barriers: never batch one with a call that must ")
+        append("observe its effect. Read-only calls have no side effects, so they may overlap freely.\n")
+        append("- Your emission order IS your dependency declaration. If step B needs step A's ")
+        append("output, do not emit them together — wait for A's result in the next turn.")
+    }
+}

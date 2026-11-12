@@ -254,6 +254,11 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // that emits text across several turns doesn't re-fire it and cut off
     // its own speech mid-sentence.
     var didStopStaleReadAloud = false
+    // [T-android-loop-stall-guard] Per-run stall accounting (fresh instance
+    // per runAgentLoop = the run-start clear); rule 1/3 nudges ride the next
+    // request assembly (see applyStallNudge); rule 2 breaks with a report.
+    val stallGuard = ChatViewModelStallGuard()
+    var stallGuardNudge: String? = null
     // [T-main-session-turn-cap] The runaway guard is user-tunable
     // (Settings → Tool Limits); 200 is only the shipped default. Read once
     // per run so a mid-run settings change can't shift the range end under
@@ -343,10 +348,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                         thinkingLevel = turnThinkingLevel,
                     ))
                 }
-                clearStreamFlushState(sealedId)
-                if (_streamingById.value.containsKey(sealedId)) {
-                    _streamingById.value = _streamingById.value - sealedId
-                }
+                dropStreamingEntry(sealedId)
                 // Same loop-scope reset the queued-prompt swap performs, so
                 // the new bubble starts empty and buildTurnParts slices only
                 // the new turn's blocks.
@@ -373,19 +375,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 // [T-android-inloop-stop-thinking-orphan] Finalize the
                 // assistant message before leaving the loop.
                 withContext(Dispatchers.Main) {
-                    updateAssistantMessage(
-                        assistantId, accumulatedText, false, allToolBlocks,
-                        isAwaitingModelResponse = false,
-                    )
-                    // Same orphan guard finalizeAtTurnLimit carries: the loop
-                    // ran on IO while this hops to Main, so a late delta can
-                    // re-add the side-channel entry after the drain, and
-                    // mergeStreamingOverlay would then force isStreaming=true
-                    // again with no further writer left to clear it.
-                    clearStreamFlushState(assistantId)
-                    if (_streamingById.value.containsKey(assistantId)) {
-                        _streamingById.value = _streamingById.value - assistantId
-                    }
+                    drainLiveAssistantUi(assistantId, accumulatedText, allToolBlocks)
                 }
                 // No persistAssistantTurn here: this guard runs BEFORE the
                 // turn body, so nothing new has been produced yet and the
@@ -397,13 +387,9 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     text = context.getString(R.string.vm_context_full_unreduced),
                     iconKind = "compact",
                 )
-                // [T-android-group-pause-badge-restamp] A LIVE interruption just
-                // happened: this is a real entry into the paused state, so the
-                // badge's 24h freshness stamp must be refreshed. Cancel any
-                // unconsumed re-detection mark left by a prior load so it cannot
-                // suppress the re-stamp here.
-                markLiveInterruption()
-                raiseCanResume(loopResumeEpoch)
+                // [T-android-group-pause-badge-restamp] A LIVE interruption
+                // just happened: real entry into the paused state.
+                markLiveInterruptionAndArmResume(loopResumeEpoch)
                 // Android's equivalent of iOS's `hitTurnLimit = false`: this
                 // is a deliberate stop, NOT the runaway-ceiling path, so the
                 // post-loop tail must not slap a fake "hit 200 turns" error
@@ -556,23 +542,19 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     break
                 }
                 val requestHistory = ToolIdNormalization.normalizeMessages(
-                    withGoalAndPlanContext(
-                    effectiveAgentHistory(),
-                    goalMount.prompt,
-                    appendNewUser = goalExecutionRun && turn == 0,
-                ).let { history ->
-                    // [T-stall-resume] A previous attempt stalled mid-stream:
-                    // append the bounded continuation note so this attempt picks
-                    // up where it stopped instead of regenerating the same text.
-                    val resumeNote = stallResumeContext
-                    if (resumeNote == null) history else history + LLMMessage(
-                        role = LLMMessage.Role.USER,
-                        content = resumeNote,
-                        contentParts = listOf(
-                            com.openminis.app.data.model.AgentContentPart.Text(resumeNote),
-                        ),
-                    )
-                })
+                    // [T-process-tail-injection] Process blocks + goal ride the
+                    // system prompt tail; the history stays byte-clean (no grafting
+                    // onto the tool_result carrier).
+                    effectiveAgentHistory().let { history ->
+                        // [T-stall-resume] A previous attempt stalled mid-stream:
+                        // [T-stall-resume][T-android-loop-stall-guard] One-shot
+                        // USER-note lane (never persisted; cleared on first use).
+                        val withResume = applyStallNudge(history, stallResumeContext)
+                        val guardNudge = stallGuardNudge
+                        stallGuardNudge = null
+                        applyStallNudge(withResume, guardNudge)
+                    }
+                )
                 // [T-first-event-watchdog] A hung relay never throws — this stream
                 // cancels itself and surfaces a TransientError for the retry chain.
                 // [T-routing-strategy-x] First-token budget via GroupRoutingState so the main loop and the group-chat lane agree.
@@ -584,10 +566,11 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 val streamIdleTimeoutMs = firstEventTimeoutMs * 2
                 // [GH#221] 用户头 + OpenCode 会话头走同一通道。
                 val requestHeaders = requestExtraHeaders()
-                // [GH#563] 每次请求前重刷日期；日期在动态尾部，不扰动缓存前缀。
-                val turnSystemPrompt = refreshRuntimeContextDate(
-                    systemPrompt,
-                    java.time.LocalDate.now().toString(),
+                // [GH#563] refresh the date per request; process blocks + goal ride the tail.
+                // goal 每轮都在 tail，历史不追加（见上方复审注释），避免同一请求两份。
+                val turnSystemPrompt = processInjectedSystemPrompt(
+                    refreshRuntimeContextDate(systemPrompt, java.time.LocalDate.now().toString()),
+                    goalMount.prompt,
                 )
                 streamPhase.startAttempt()
                 currentProvider.streamMessage(
@@ -1146,10 +1129,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                                 thinkingLevel = turnThinkingLevel,
                             ))
                         }
-                        clearStreamFlushState(sealedId)
-                        if (_streamingById.value.containsKey(sealedId)) {
-                            _streamingById.value = _streamingById.value - sealedId
-                        }
+                        dropStreamingEntry(sealedId)
                         assistantId = freshAssistantId
                         accumulatedText = ""
                         allToolBlocks.clear()
@@ -1678,13 +1658,9 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                         )
                     }
                 }
-                // [T-android-group-pause-badge-restamp] A LIVE interruption just
-                // happened: this is a real entry into the paused state, so the
-                // badge's 24h freshness stamp must be refreshed. Cancel any
-                // unconsumed re-detection mark left by a prior load so it cannot
-                // suppress the re-stamp here.
-                markLiveInterruption()
-                raiseCanResume(loopResumeEpoch)
+                // [T-android-group-pause-badge-restamp] A LIVE interruption
+                // just happened: real entry into the paused state.
+                markLiveInterruptionAndArmResume(loopResumeEpoch)
                 // Deliberate stop, not the runaway ceiling — keep the
                 // post-loop tail from adding a fake turn-limit error.
                 loopExitedNormally = true
@@ -1812,8 +1788,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 }
                 if (activeRun?.isStopped != true) {
                     withContext(Dispatchers.Main) { setInlineError(hint) }
-                    markLiveInterruption()
-                    raiseCanResume(loopResumeEpoch)
+                    markLiveInterruptionAndArmResume(loopResumeEpoch)
                 }
             }
             // Auto-title after first exchange
@@ -1923,6 +1898,26 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             }
             loopExitedNormally = true
             break
+        }
+
+        // [T-android-loop-stall-guard] Record this dispatched turn after the
+        // results are in history and the goal ledger settled, then act on the
+        // outcome (see enforceStallGuard): rule 1/3 arms a one-shot nudge for
+        // the next request assembly; rule 2 breaks the run with a final
+        // report. The break's UI teardown stays loop-local — it is bound to
+        // assistantId/accumulatedText/allToolBlocks.
+        when (val outcome = enforceStallGuard(stallGuard, turn, toolCalls, turnText, resultParts)) {
+            is StallLoopOutcome.Nudge -> stallGuardNudge = outcome.message
+            is StallLoopOutcome.BreakWithReport -> {
+                accumulatedText = accumulatedText + "\n\n" + outcome.report
+                withContext(Dispatchers.Main) {
+                    drainLiveAssistantUi(assistantId, accumulatedText, allToolBlocks)
+                }
+                markLiveInterruptionAndArmResume(loopResumeEpoch)
+                loopExitedNormally = true
+                break
+            }
+            StallLoopOutcome.Continue -> Unit
         }
 
         if (turn == 0) generateSessionTitleIfNeeded()  // auto-title after first exchange

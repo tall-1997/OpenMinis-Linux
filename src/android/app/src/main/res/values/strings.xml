@@ -2924,6 +2924,8 @@
     <string name="export_role_user" translatable="false">👤 用户</string>
     <string name="export_role_assistant" translatable="false">🤖 助手</string>
     <string name="export_md_tool" translatable="false">工具</string>
+    <!-- [T-export-quiet-transcript] Kept in the export language on purpose, like the other export_* labels: translatable=false keeps it out of the translation gate and out of the Kotlin-source CJK gate. -->
+    <string name="export_body_truncated" translatable="false">…（正文过长，已截断；完整内容保留在设备上的会话里）</string>
     <string name="export_md_model" translatable="false">模型</string>
     <string name="export_md_exported_at" translatable="false">导出时间</string>
     <!-- Add-provider vendor presets ([T-android-vendor-presets]): one-tap

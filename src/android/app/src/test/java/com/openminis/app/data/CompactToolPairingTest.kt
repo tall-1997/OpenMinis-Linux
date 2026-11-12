@@ -141,20 +141,26 @@ class CompactToolPairingTest {
         assertEquals("continue", repaired[0].content)
     }
 
+    /**
+     * [T-orphan-use-removal] A mid-history unanswered call is the surviving
+     * half of a pair that history trimming cut apart. The old repair
+     * fabricated an "interrupted by an unexpected error" result, so the model
+     * read a failed call and re-issued the SAME call on the next turn — the
+     * reported "repeats itself and does no work" loop. The slice must instead
+     * drop the orphaned use, leaving a fully paired transcript.
+     */
     @Test
-    fun `orphan sweep synthesises a result for a mid-history unanswered call`() {
+    fun `orphan sweep removes a mid-history unanswered call instead of fabricating an error`() {
         val slice = listOf(
             assistantToolUse("call_LOST"),  // never answered, and NOT the tail
             userText("next question"),
         )
         val repaired = dropOrphanedToolParts(slice)
         val (uses, results) = allIds(repaired)
-        assertEquals("the call is preserved, not deleted", setOf("call_LOST"), uses)
-        assertEquals("and it is now paired", setOf("call_LOST"), results)
-        val synthesized = repaired.first { m ->
-            m.contentParts.any { it is AgentContentPart.ToolResult }
-        }.contentParts.filterIsInstance<AgentContentPart.ToolResult>().first()
-        assertTrue("the placeholder is flagged as an error", synthesized.isError)
+        assertTrue("the orphaned call must not reach the provider", uses.isEmpty())
+        assertTrue("no fabricated result may be injected", results.isEmpty())
+        assertEquals("the emptied assistant row is dropped, the text turn survives", 1, repaired.size)
+        assertEquals("next question", repaired[0].content)
     }
 
     /**
@@ -179,8 +185,8 @@ class CompactToolPairingTest {
 
     /**
      * The exemption is scoped to the TAIL only. An unanswered call earlier in
-     * the slice is a genuine orphan and must still be repaired, even when the
-     * history also ends on a live in-flight call.
+     * the slice is a genuine orphan and is removed, even when the history also
+     * ends on a live in-flight call.
      */
     @Test
     fun `exemption covers only the tail, not earlier unanswered calls`() {
@@ -191,8 +197,8 @@ class CompactToolPairingTest {
         )
         val repaired = dropOrphanedToolParts(slice)
         val (uses, results) = allIds(repaired)
-        assertTrue("both calls survive", uses.containsAll(setOf("call_OLD", "call_INFLIGHT")))
-        assertEquals("only the stale one is paired", setOf("call_OLD"), results)
+        assertEquals("only the in-flight call survives", setOf("call_INFLIGHT"), uses)
+        assertTrue("no fabricated result may be injected", results.isEmpty())
     }
 
     @Test
@@ -218,8 +224,10 @@ class CompactToolPairingTest {
             ),
         )
         val repaired = dropOrphanedToolParts(slice)
-        assertTrue(repaired.any { it.contentParts.any { p -> p is AgentContentPart.ToolResult && p.name == "shell_execute" && p.isError } })
-        assertTrue(repaired.none { it.contentParts.any { p -> p is AgentContentPart.ToolResult && p.name == "different_tool" } })
+        assertTrue(
+            "neither half of a name-mismatched pair may survive",
+            repaired.all { it.contentParts.isEmpty() },
+        )
     }
 
     @Test

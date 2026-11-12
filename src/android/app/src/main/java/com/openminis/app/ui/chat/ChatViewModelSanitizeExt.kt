@@ -29,41 +29,41 @@ internal fun ChatViewModel.sanitizeAgentHistory() {
 
         val toolUseIds = toolUses.map { it.id }.toSet()
 
-        // Check next message for matching tool_results
-        val next = agentHistory.getOrNull(i + 1)
-        val nextResultIds = next?.contentParts
-            ?.filterIsInstance<AgentContentPart.ToolResult>()
-            ?.map { it.id }?.toSet() ?: emptySet()
+        // [T-sanitize-orphan-removal] Pair against the WHOLE remaining history,
+        // not just the next row: a compaction divider (a system message) can sit
+        // between the tool_use and its tool_result, and scanning only the next
+        // message would call a correctly paired call an orphan.
+        val resultIdsAhead = HashSet<String>()
+        for (j in (i + 1)..agentHistory.lastIndex) {
+            for (part in agentHistory[j].contentParts) {
+                if (part is AgentContentPart.ToolResult) resultIdsAhead.add(part.id)
+            }
+        }
 
-        val missingIds = toolUseIds - nextResultIds
+        val missingIds = toolUseIds - resultIdsAhead
         if (missingIds.isEmpty()) { i++; continue }
 
-        // Some tool_uses have no matching tool_result in the next message.
-        // If next message is a user message, add the missing results to it.
-        // Otherwise, inject a new user message with placeholder results.
-        val placeholders = toolUses.filter { it.id in missingIds }.map { use ->
-            AgentContentPart.ToolResult(
-                id = use.id, name = use.name,
-                content = "Tool execution was interrupted by an unexpected error.",
-                isError = true,
-            )
+        // A tool_use with no result this late is a history casualty (trim,
+        // abort, crash), not a tool failure: normal execution appends the
+        // result before the next request. The old repair fabricated an
+        // "interrupted by an unexpected error" result — the model read its call
+        // as FAILED and re-issued it on the next turn (the reported "repeats
+        // itself and does no work"), which is also why dropOrphanedToolParts
+        // stopped synthesising that placeholder. Remove the orphaned use
+        // instead: the assistant row keeps its text, and the provider still
+        // receives a fully paired transcript.
+        val keptParts = msg.contentParts.filterNot {
+            it is AgentContentPart.ToolUse && it.id in missingIds
         }
-        Log.w(ChatViewModel.TAG, "sanitize: injecting ${placeholders.size} placeholder tool_result(s) after history[$i]")
-
-        if (next != null && next.role == LLMMessage.Role.USER &&
-            next.contentParts.any { it is AgentContentPart.ToolResult }) {
-            // Append missing results to the existing user message
-            agentHistory[i + 1] = next.copy(
-                contentParts = next.contentParts + placeholders
-            )
-        } else {
-            // Insert a new user message with just the placeholder results
-            agentHistory.add(i + 1, LLMMessage(
-                role = LLMMessage.Role.USER, content = "",
-                contentParts = placeholders,
-            ))
-            trimAgentHistory()
+        Log.w(
+            ChatViewModel.TAG,
+            "sanitize: removing ${msg.contentParts.size - keptParts.size} orphaned tool_use(s) from history[$i]",
+        )
+        if (keptParts.isEmpty() && msg.content.isBlank()) {
+            agentHistory.removeAt(i)
+            continue // the next message shifted into this index; do not advance
         }
+        agentHistory[i] = msg.copy(contentParts = keptParts)
         i++
     }
 
