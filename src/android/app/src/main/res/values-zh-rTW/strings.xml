@@ -532,6 +532,7 @@
     <string name="chat_response_interrupted">已中斷</string>
     <string name="read_aloud_unavailable">朗讀失敗：沒有可用的語音引擎。請檢查語音輸出設定，或安裝系統語音引擎。</string>
     <string name="chat_error_stream_dropped_partial">連線中斷，此回覆可能不完整。點擊重試以繼續。</string>
+    <string name="chat_composer_queued_hint">輸入將排隊，當前任務結束後發送</string>
     <string name="chat_input_placeholder">傳訊息給 %1$s（@ 提及檔案）</string>
     <string name="chat_input_placeholder_hint_1">試試用 @ 提及檔案，讓 %1$s 讀取</string>
     <string name="chat_input_placeholder_hint_2">輸入 / 使用技能和快捷指令</string>

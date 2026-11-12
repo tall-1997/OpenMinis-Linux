@@ -41,9 +41,13 @@ class PersistentShell(
 
     @Volatile
     private var stdinWriter: BufferedWriter? = null
+    /** [T-shell-env-writer] Writer access for the extracted env/PATH helpers. */
+    internal fun stdinWriterOrNull(): BufferedWriter? = stdinWriter
 
     /** Serializes stdin writes: concurrent writers would splice two commands into one line and corrupt both. */
     private val stdinLock = Any()
+    /** [T-shell-env-writer] Lock access for the extracted env/PATH helpers. */
+    internal val stdinWriteLock: Any get() = stdinLock
 
     private val isStarting = AtomicBoolean(false)
 
@@ -482,6 +486,9 @@ class PersistentShell(
 
         val writer = stdinWriter
         if (writer == null || !isAlive) {
+            // [stop=kill] No live channel: never let a stale user-kill flag
+            // label the eventual replacement shell's first result.
+            killedByUser = false
             // [T-android-shell-death-diagnosability] Surface WHY the shell is
             // down, not just that it is. The exit code and proot's own last
             // words (captured by outputTail; stderr is merged into stdout in
@@ -607,6 +614,9 @@ class PersistentShell(
                 // one exits. Leaving it alive makes the timeout a no-op and lets
                 // the old marker/output land on the next command.
                 Log.w(TAG, "command timed out after ${armed / 1000}s; killing shell tree")
+                // [stop=kill] A timeout is never a user kill: a Stop that landed
+                // right at the wall must not leak its flag onto this verdict.
+                killedByUser = false
                 // [GH#358] Set the internal verdict BEFORE the reset clears the
                 // callback: callers must distinguish this real watchdog timeout
                 // from a user command that merely exited 124. The marker shown to
@@ -622,7 +632,10 @@ class PersistentShell(
                 resetAfterTimeout()
                 Pair("[Command timed out after ${armed / 1000}s; guest process group killed]", 124)
             } else {
-                result
+                // [stop=kill] Head-label the killed command's result for the
+                // model; a normally-exiting command in the stop race consumes
+                // the flag without being labelled.
+                applyKilledByUserMarker(result)
             }
             } finally {
                 SandboxWorkload.clearDeadline(process)
@@ -631,56 +644,6 @@ class PersistentShell(
     }
 
     /** Apply a full environment snapshot to the running shell. */
-    suspend fun applyEnvironment(
-        envVars: Map<String, String>,
-        previousKeys: Set<String> = emptySet(),
-    ) {
-        if (!isAlive) return
-        val writer = stdinWriter ?: return
-        withContext(Dispatchers.IO) {
-            try {
-                synchronized(stdinLock) {
-                    for (key in previousKeys - envVars.keys) {
-                        // Keys reach the shell verbatim inside `unset`/`export`
-                        // lines; a crafted key would execute shell syntax, so
-                        // illegal names are logged and skipped, not sanitized.
-                        if (!TerminalSession.ENV_KEY.matches(key)) {
-                            Log.w(TAG, "applyEnvironment: skipping illegal env key '${key.take(32)}'")
-                            continue
-                        }
-                        writer.write("unset $key\n")
-                    }
-                    for ((key, value) in envVars) {
-                        if (!TerminalSession.ENV_KEY.matches(key)) {
-                            Log.w(TAG, "applyEnvironment: skipping illegal env key '${key.take(32)}'")
-                            continue
-                        }
-                        // Escape single quotes in values
-                        val escaped = value.replace("'", "'\\''")
-                        writer.write("export $key='$escaped'\n")
-                    }
-                    writer.flush()
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to apply env vars: ${e.message}")
-            }
-        }
-    }
-
-    suspend fun refreshPath() {
-        if (!isAlive) return
-        val writer = stdinWriter ?: return
-        withContext(Dispatchers.IO) {
-            try {
-                synchronized(stdinLock) {
-                    writer.write(PersistentShellEnvironment.pathRefreshCommand(
-                        RootfsManager.getInstance(context).currentGuestPath()))
-                    writer.flush()
-                }
-            } catch (e: Exception) { Log.w(TAG, "PATH refresh failed: ${e.message}") }
-        }
-    }
-
     /**
      * [GH#358] Reclaim the per-session shell channel after a command timeout.
      *
@@ -791,4 +754,42 @@ class PersistentShell(
             Log.i(TAG, "Persistent shell stopped")
         }, "PersistentShell-reap").apply { isDaemon = true; start() }
     }
+
+    /** [stop=kill] Armed by [interruptRunningCommand]; consumed on the next result. */
+    @Volatile
+    private var killedByUser = false
+
+    /**
+     * [stop=kill] Kill the RUNNING foreground command's tree from the host
+     * side while this shell stays alive. The pending callback completes on
+     * its own (guest bash falls through the `__minis_rc=$?` tail, DONE marker
+     * echoes the signal exit 137) — no channel reset, cwd/env/packages
+     * survive. Returns true when a command was actually pending.
+     */
+    fun interruptRunningCommand(): Boolean {
+        val root = process
+        val hadPending = pendingCallback != null
+        if (root == null || !hadPending) return false // stop epoch alone gates the next command
+        // Flag BEFORE the kill: the completion must not race ahead of the
+        // marker it is supposed to explain.
+        killedByUser = true
+        val victims = SandboxWorkload.killCommandTree(root, "user-stop")
+        Log.w(TAG, "[stop-tool] running command killed by user: victims=${victims.size}")
+        return true
+    }
+
+    /**
+     * Read-and-clear the user-kill verdict for the command that just
+     * returned. Only a signal-range exit counts (guest SIGKILL 137, shell
+     * death -1): a command that exited normally in the stop race must not
+     * be labelled, and 124 stays the timeout's own code.
+     */
+    private fun consumeKilledByUser(exitCode: Int): Boolean {
+        val flagged = killedByUser
+        killedByUser = false
+        return flagged && ShellStopKill.isSignalExit(exitCode)
+    }
+
+    private fun applyKilledByUserMarker(result: Pair<String, Int>): Pair<String, Int> =
+        Pair(ShellStopKill.markedOutput(consumeKilledByUser(result.second), result.first), result.second)
 }

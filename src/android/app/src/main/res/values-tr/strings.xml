@@ -482,6 +482,7 @@
     <string name="chat_typing_indicator">%1$s düşünüyor</string>
     <string name="read_aloud_unavailable">Sesli okuma başarısız: kullanılabilir ses motoru yok. Ses Çıkışı ayarlarını denetleyin ya da bir sistem konuşma motoru kurun.</string>
     <string name="chat_error_stream_dropped_partial">Bağlantı koptu — bu yanıt eksik olabilir. Devam etmek için Yeniden Dene\'ye dokunun.</string>
+    <string name="chat_composer_queued_hint">Girdi kuyruğa alınacak ve geçerli görev bittiğinde gönderilecek</string>
     <string name="chat_input_placeholder">%1$s için mesaj (@ ile dosya)</string>
     <string name="chat_input_placeholder_hint_1">%1$s için @ ile dosya belirtin</string>
     <string name="chat_input_placeholder_hint_2">SKILL ve hızlı komutlar için / yazın</string>

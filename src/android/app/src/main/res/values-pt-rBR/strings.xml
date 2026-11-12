@@ -482,6 +482,7 @@
     <string name="chat_typing_indicator">%1$s está pensando</string>
     <string name="read_aloud_unavailable">Falha na leitura em voz alta: nenhum mecanismo de voz utilizável. Verifique as configurações de saída de voz ou instale um mecanismo de fala do sistema.</string>
     <string name="chat_error_stream_dropped_partial">A conexão caiu — esta resposta pode estar incompleta. Toque em Tentar de novo para continuar.</string>
+    <string name="chat_composer_queued_hint">A entrada entrará na fila e será enviada quando a tarefa atual terminar</string>
     <string name="chat_input_placeholder">Mensagem para %1$s (@ = arquivos)</string>
     <string name="chat_input_placeholder_hint_1">Use @ para indicar arquivos a %1$s</string>
     <string name="chat_input_placeholder_hint_2">Digite / para SKILLs e comandos</string>

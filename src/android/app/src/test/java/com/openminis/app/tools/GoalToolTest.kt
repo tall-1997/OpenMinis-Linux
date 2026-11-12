@@ -116,4 +116,25 @@ class GoalToolTest {
         val result = GoalTool.execute("""{"op":"nuke"}""", "s1", manager)
         assertFalse(result.success)
     }
+
+    /**
+     * [T-goal-completion-verifier] No Context (JVM tests) means no board to
+     * read, so the verifier passes on the model's call — the honest boundary:
+     * the host only arbitrates the plan layer it can actually see.
+     */
+    @Test
+    fun `op=complete without a context is accepted and lands complete`() = runTest {
+        val (manager, fake) = managerWithGoal()
+        val result = GoalTool.execute("""{"op":"complete"}""", "s1", manager)
+        assertTrue(result.success)
+        assertEquals(GoalStatus.COMPLETE, fake.rows.getValue("s1").status)
+    }
+
+    @Test
+    fun `op=complete without a goal fails the tool`() = runTest {
+        val (manager, _) = managerWithGoal()
+        manager.clearByUser("s1")
+        val result = GoalTool.execute("""{"op":"complete"}""", "s1", manager)
+        assertFalse(result.success)
+    }
 }

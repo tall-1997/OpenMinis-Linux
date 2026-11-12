@@ -482,6 +482,7 @@
     <string name="chat_typing_indicator">%1$s กำลังคิด</string>
     <string name="read_aloud_unavailable">อ่านออกเสียงไม่สำเร็จ: ไม่มีเอนจินเสียงที่ใช้งานได้ ตรวจสอบการตั้งค่าเอาต์พุตเสียง หรือติดตั้งเอนจินเสียงของระบบ</string>
     <string name="chat_error_stream_dropped_partial">การเชื่อมต่อหลุด — คำตอบนี้อาจไม่สมบูรณ์ แตะ ลองอีกครั้ง เพื่อดำเนินการต่อ</string>
+    <string name="chat_composer_queued_hint">ข้อความจะเข้าคิวและส่งเมื่องานปัจจุบันเสร็จสิ้น</string>
     <string name="chat_input_placeholder">ส่งข้อความถึง %1$s (@ เพื่ออ้างไฟล์)</string>
     <string name="chat_input_placeholder_hint_1">ใช้ @ เพื่ออ้างไฟล์ให้ %1$s อ่าน</string>
     <string name="chat_input_placeholder_hint_2">พิมพ์ / เพื่อใช้ SKILL และคำสั่งลัด</string>

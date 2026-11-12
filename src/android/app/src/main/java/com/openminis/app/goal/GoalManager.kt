@@ -4,6 +4,8 @@ import com.openminis.app.data.db.GoalOrigin
 import com.openminis.app.data.db.GoalStatus
 import com.openminis.app.data.db.SessionGoalEntity
 import com.openminis.app.data.repository.ChatRepository
+import com.openminis.app.goal.GoalCompletionVerifier.Verification
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -44,6 +46,22 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
 
         private val locks = Array(64) { Mutex() }
         private fun bump() { version.value = version.value + 1 }
+
+        /**
+         * [T-goal-completion-verifier] Consecutive host rejections per
+         * session, counted across manager instances (the manager is built
+         * ad-hoc everywhere, so the count lives on the companion like
+         * [version]). In-process on purpose: the count is loop-control
+         * bookkeeping, not goal state — persisting it would need a Room
+         * migration for a number that only matters within one run. A process
+         * restart clears it, which costs at most one more reject-continue
+         * cycle — the same trade [com.openminis.app.tools.AgentPlanStore]
+         * makes for its un-persisted finished stamps.
+         */
+        private val completionRejections = ConcurrentHashMap<String, Int>()
+
+        /** Test seam: reset the per-session rejection counters. */
+        internal fun resetCompletionRejections() = completionRejections.clear()
     }
 
     private suspend fun <T> locked(sessionId: String, block: suspend () -> T): T =
@@ -154,6 +172,95 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
             persistence.save(it)
             bump()
         }
+    }
+
+    /**
+     * The outcome of a host-verified completion
+     * ([T-goal-completion-verifier]). [accepted] covers both the happy path
+     * and the forced one — the Goal row moved to COMPLETE either way.
+     * [rejected] means the row was NOT touched: the Goal stays ACTIVE and
+     * [Verification.reason] is the rejection's channel back to the model.
+     */
+    sealed class VerifiedCompletion {
+        abstract val goal: SessionGoalEntity
+        abstract val verification: Verification
+
+        /** Accepted as-is (nothing to verify, or the board checked out). */
+        class Accepted(
+            override val goal: SessionGoalEntity,
+            override val verification: Verification,
+        ) : VerifiedCompletion()
+
+        /**
+         * Rejected but the limit was reached: the model's call is accepted
+         * anyway ([GoalCompletionVerifier.MAX_REJECTIONS] in a row means the
+         * verifier and the model disagree persistently, and dead-locking the
+         * Goal helps nobody). [forcedReason] records the verifier's standing
+         * objection for the transcript.
+         */
+        class Forced(
+            override val goal: SessionGoalEntity,
+            override val verification: Verification,
+            val forcedReason: String,
+        ) : VerifiedCompletion()
+
+        /** Rejected: the Goal row was NOT touched, it stays ACTIVE. */
+        class Rejected(
+            override val goal: SessionGoalEntity,
+            override val verification: Verification,
+        ) : VerifiedCompletion()
+    }
+
+    /**
+     * [T-goal-completion-verifier] Host-verified completion for
+     * `update_goal(op=complete)`. The model's call is NOT the last word: the
+     * verifier ([GoalCompletionVerifier.verifyCompletion]) arbitrates the
+     * plan board layer, and a rejected call leaves the Goal row untouched —
+     * the Goal stays ACTIVE, the rejection count for the session advances,
+     * and the tool result carries [Verification.reason] back to the model.
+     *
+     * After [GoalCompletionVerifier.MAX_REJECTIONS] consecutive rejections
+     * the model's call is accepted anyway
+     * ([VerifiedCompletion.Forced]) — the verifier and the model disagree
+     * persistently, and dead-locking the Goal against its own agent helps
+     * nobody. A pass (empty board) or an accepted board resets the count.
+     *
+     * [planStatuses] is the plan board statuses the caller read for this
+     * session (empty list = no board); reading is the caller's job so this
+     * method stays persistence-only and JVM tests drive the seam without a
+     * Context.
+     */
+    suspend fun completeByModelVerified(
+        sessionId: String,
+        planStatuses: List<String>,
+    ): VerifiedCompletion = locked(sessionId) {
+        val current = checkNotNull(persistence.load(sessionId)) { "No Goal exists for this session" }
+        val verification = GoalCompletionVerifier.verifyCompletion(planStatuses)
+        if (verification.allowed) {
+            completionRejections.remove(sessionId)
+            return@locked VerifiedCompletion.Accepted(
+                goal = GoalStateMachine.modelUpdate(current, GoalStatus.COMPLETE, null, System.currentTimeMillis()).also {
+                    persistence.save(it)
+                    bump()
+                },
+                verification = verification,
+            )
+        }
+        val rejections = (completionRejections[sessionId] ?: 0) + 1
+        if (rejections < GoalCompletionVerifier.MAX_REJECTIONS) {
+            completionRejections[sessionId] = rejections
+            return@locked VerifiedCompletion.Rejected(goal = current, verification = verification)
+        }
+        // Limit reached: accept the model's call, record the disagreement.
+        completionRejections.remove(sessionId)
+        VerifiedCompletion.Forced(
+            goal = GoalStateMachine.modelUpdate(current, GoalStatus.COMPLETE, null, System.currentTimeMillis()).also {
+                persistence.save(it)
+                bump()
+            },
+            verification = verification,
+            forcedReason = GoalCompletionVerifier.forcedAcceptanceReason(planStatuses),
+        )
     }
 
     suspend fun recordUsage(sessionId: String, tokens: Long, elapsedMs: Long): SessionGoalEntity? = locked(sessionId) {

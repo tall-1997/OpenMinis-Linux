@@ -87,4 +87,25 @@ internal object ProcessTree {
         // state, ppid, pgrp
         return fields.getOrNull(2)?.toIntOrNull() ?: 0
     }
+
+    /**
+     * `/proc/<pid>/cmdline` is NUL-separated argv with a trailing NUL; an
+     * empty read (zombie gone between listing and reading) yields no args.
+     */
+    fun parseCmdlineArgs(raw: String): List<String> =
+        raw.split('\u0000').filter { it.isNotEmpty() }
+
+    /**
+     * [stop=kill] The persistent shell's own guest bash — the incarnation
+     * [GuardianScript.persistentBoot] exec's into (`exec /bin/bash
+     * --noprofile --norc`). A user-stop kill pass must spare exactly this
+     * process: it is the reader of the command pipe; its death would cost
+     * cwd/env/packages and force a shell rebuild. A command that happens to
+     * spawn a nested bash is a descendant of this one, never this argv as a
+     * direct tracee of proot, so the exact argv match is safe.
+     */
+    val GUEST_SHELL_ARGV = listOf("/bin/bash", "--noprofile", "--norc")
+
+    fun isGuestShellBash(rawCmdline: String?): Boolean =
+        rawCmdline != null && parseCmdlineArgs(rawCmdline) == GUEST_SHELL_ARGV
 }

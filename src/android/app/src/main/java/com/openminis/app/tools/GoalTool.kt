@@ -1,7 +1,10 @@
 package com.openminis.app.tools
 
+import android.content.Context
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
+import com.openminis.app.goal.GoalCompletionVerifier
+import com.openminis.app.goal.GoalContinuation
 import com.openminis.app.goal.GoalManager
 import org.json.JSONObject
 
@@ -29,7 +32,11 @@ object GoalTool {
             "op=clear DELETES the Goal (any status except paused) — use it when the task it described is " +
             "over or has been replaced and you are about to record a different objective; a Goal the human " +
             "paused is refused on purpose, report the conflict instead of forcing it. " +
-            "op=complete and op=blocked report outcome, which the harness treats as the model's call. " +
+            "op=complete and op=blocked report outcome. op=complete is VERIFIED by the " +
+            "host: while the plan board still has pending or failed steps the completion is " +
+            "rejected and the Goal stays active — the tool result tells you what the board " +
+            "still owes. After repeated rejections the host accepts the call and records its " +
+            "objection. " +
             "Creating the task board with agent_plan already records the Goal from its objective — call " +
             "op=create explicitly only for a long-running objective that has no board. " +
             "You may never pause or resume the Goal: those control whether the session keeps working, " +
@@ -52,7 +59,25 @@ object GoalTool {
         propertyOrdering = listOf("tool_title", "op", "objective", "token_budget", "condition"),
     )
 
-    suspend fun execute(argsJson: String, sessionId: String, manager: GoalManager): ToolExecutionResult {
+    /**
+     * [T-goal-completion-verifier] [context] is how op=complete reaches the
+     * plan board: the verifier arbitrates the board layer, so the dispatcher
+     * passes the session's Context through and the board statuses are read
+     * here (empty when there is no Context — JVM tests drive the manager
+     * seam directly instead).
+     */
+    private fun planStatuses(sessionId: String, context: Context?): List<String> {
+        context ?: return emptyList()
+        return runCatching { AgentPlanStore.list(sessionId, context).map { it.status } }
+            .getOrDefault(emptyList())
+    }
+
+    suspend fun execute(
+        argsJson: String,
+        sessionId: String,
+        manager: GoalManager,
+        context: Context? = null,
+    ): ToolExecutionResult {
         return try {
             val args = JSONObject(argsJson)
             val op = args.optString("op")
@@ -86,7 +111,33 @@ object GoalTool {
                     val budget = if (args.has("token_budget")) args.optLong("token_budget").takeIf { it > 0 } else null
                     manager.createByModel(sessionId, objective, budget)
                 }
-                "complete" -> manager.updateByModel(sessionId, "complete", null)
+                "complete" -> {
+                    // [T-goal-completion-verifier] The host verifies before
+                    // the completion lands: a rejected call leaves the Goal
+                    // row untouched (it stays ACTIVE) and the tool result
+                    // carries the verifier's reason back to the model — the
+                    // rejection's only channel. After
+                    // [GoalCompletionVerifier.MAX_REJECTIONS] rejections the
+                    // call is accepted anyway and the verifier's standing
+                    // objection rides the receipt.
+                    val statuses = planStatuses(sessionId, context)
+                    when (val outcome = manager.completeByModelVerified(sessionId, statuses)) {
+                        is GoalManager.VerifiedCompletion.Rejected ->
+                            return ToolExecutionResult(
+                                outcome.verification.reason ?: "Completion rejected by host verification",
+                                false,
+                                toolTitle = args.optString("tool_title", "Goal"),
+                            )
+                        is GoalManager.VerifiedCompletion.Forced ->
+                            return ToolExecutionResult(
+                                manager.render(outcome.goal) + "\n" + outcome.forcedReason,
+                                true,
+                                toolTitle = args.optString("tool_title", "Goal"),
+                            )
+                        // Accepted falls through to the shared render path.
+                        is GoalManager.VerifiedCompletion.Accepted -> outcome.goal
+                    }
+                }
                 "blocked" -> manager.updateByModel(sessionId, "blocked", args.optString("condition").takeIf(String::isNotBlank))
                 else -> return ToolExecutionResult("Invalid Goal operation", false)
             }

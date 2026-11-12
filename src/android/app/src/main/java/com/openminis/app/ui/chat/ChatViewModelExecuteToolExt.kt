@@ -366,6 +366,10 @@ internal suspend fun ChatViewModel.executeTool(
             argsJson,
             activeSessionId,
             com.openminis.app.goal.GoalManager(chatRepository),
+            // [T-goal-completion-verifier] The completion verifier reads the
+            // plan board for this session; no Context (JVM tests) means an
+            // empty board and the verifier passes on the model's call.
+            context,
         )
         // [T-mcp-native] In-process MCP servers/tools/call — replaces the
         // shell_execute → minis-mcp-cli → daemon round trip for main chats.

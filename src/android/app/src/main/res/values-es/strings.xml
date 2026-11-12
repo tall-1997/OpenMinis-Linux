@@ -482,6 +482,7 @@
     <string name="chat_typing_indicator">%1$s está pensando</string>
     <string name="read_aloud_unavailable">No se pudo leer en voz alta: no hay un motor de voz utilizable. Revisa los ajustes de salida de voz o instala un motor de voz del sistema.</string>
     <string name="chat_error_stream_dropped_partial">Se cortó la conexión; esta respuesta puede estar incompleta. Toca Reintentar para continuar.</string>
+    <string name="chat_composer_queued_hint">La entrada se pondrá en cola y se enviará al terminar la tarea actual</string>
     <string name="chat_input_placeholder">Mensaje a %1$s (@ para mencionar archivos)</string>
     <string name="chat_input_placeholder_hint_1">Usa @ para mencionar archivos que %1$s pueda leer</string>
     <string name="chat_input_placeholder_hint_2">Escribe / para acceder a SKILLs y comandos rápidos</string>
