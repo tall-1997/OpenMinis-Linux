@@ -340,13 +340,13 @@
     <string name="context_block_system">System prompt at mga tool</string>
     <string name="context_block_skills_mcps">Mga skill at MCP</string>
     <string name="context_block_memory">Iniksyon ng memorya</string>
-<string name="context_block_runtime">Pansamantalang context ng turn na ito</string>
+    <string name="context_block_runtime">Pansamantalang context ng turn na ito</string>
     <string name="context_block_goal_plan">Iniksyon ng layunin at plano</string>
     <string name="context_block_history">Bintana ng kasaysayan</string>
     <string name="context_block_attachments">Mga kalakip at larawan</string>
     <string name="context_usage_note_estimate">Tinatayang mga bilang (±10%); sasariwa kapag binuksan ang sheet na ito</string>
     <!-- [#41] Gen UI card -->
-<string name="gen_ui_card_label">Interactive card</string>
+    <string name="gen_ui_card_label">Interactive card</string>
     <string name="gen_ui_view_source">Tingnan ang source</string>
     <string name="gen_ui_view_render">Ipakita ang render</string>
     <string name="gen_ui_view_fullscreen">Fullscreen</string>
@@ -631,7 +631,7 @@
     <string name="env_var_privacy_toggle">Privacy Mode</string>
     <string name="env_var_privacy_footer">Kapag naka-enable, pinapalitan ng nakatakip na anyo (hal. `sk-1********ajhks`) ang anumang halaga ng environment variable na lumalabas sa output ng shell-execute bago ito makarating sa model. Nagiging puro `*` ang mga halagang mas maikli sa 8 karakter. Hindi nagbabago ang output na nakikita ng user sa chat.</string>
     <string name="outbound_mask_toggle">Mask ng privacy sa papalabas</string>
-<string name="outbound_mask_footer">Kapag naka-enable, ang mga string na hugis key (kabilang ang mga API key sa code, JWT/base64 token), email, at mga numerong hugis telepono ay pinapalitan ng placeholder sa mga kahilingan sa model provider. Protektado ng word boundaries ang mga code identifier at diff lines. Hindi nagbabago ang chat history sa device. Default na naka-off.</string>
+    <string name="outbound_mask_footer">Opt-in shape masking: key-shaped strings (kasama ang code), emails, at phone-like numbers nagiging placeholder. Ang embedding API key sa ibaba ay plain text sa app-private prefs. Hindi nagbabago ang device history.</string>
     <string name="chat_menu_perm_yoyo">YOLO · buong awtomatiko</string>
     <string name="chat_menu_perm_safe_auto">Ligtas na auto · ang read-only na tools ay papayagan</string>
     <string name="chat_menu_perm_ask">Magtanong · kumpirmahin bawat tawag</string>

@@ -342,13 +342,13 @@
     <string name="context_block_system">Prompt systemowy i narzędzia</string>
     <string name="context_block_skills_mcps">Umiejętności i MCP</string>
     <string name="context_block_memory">Wstrzyknięcie pamięci</string>
-<string name="context_block_runtime">Tymczasowy kontekst tej tury</string>
+    <string name="context_block_runtime">Tymczasowy kontekst tej tury</string>
     <string name="context_block_goal_plan">Wstrzyknięcie celu i planu</string>
     <string name="context_block_history">Okno historii</string>
     <string name="context_block_attachments">Załączniki i obrazy</string>
     <string name="context_usage_note_estimate">Szacunki przybliżone (±10%); odświeżane po otwarciu arkusza</string>
     <!-- [#41] Gen UI card -->
-<string name="gen_ui_card_label">Karta interaktywna</string>
+    <string name="gen_ui_card_label">Karta interaktywna</string>
     <string name="gen_ui_view_source">Pokaż źródło</string>
     <string name="gen_ui_view_render">Pokaż render</string>
     <string name="gen_ui_view_fullscreen">Pełny ekran</string>
@@ -633,7 +633,7 @@
     <string name="env_var_privacy_toggle">Tryb prywatności</string>
     <string name="env_var_privacy_footer">Gdy włączone, każda wartość zmiennej środowiskowej pojawiająca się w wyniku shell-execute jest zastępowana formą zamaskowaną (np. `sk-1********ajhks`), zanim trafi do modelu. Wartości krótsze niż 8 znaków stają się w całości `*`. Wynik widoczny dla użytkownika w czacie pozostaje bez zmian.</string>
     <string name="outbound_mask_toggle">Maskowanie prywatności wychodzącej</string>
-<string name="outbound_mask_footer">Po włączeniu ciągi o kształcie klucza (w tym klucze API w kodzie, tokeny JWT/base64), adresy e-mail i liczby przypominające telefony są zastępowane placeholderami w żądaniach do dostawcy modelu. Identyfikatory kodu i linie diff są chronione granicami słów. Historia czatu na urządzeniu pozostaje bez zmian. Domyślnie wyłączone.</string>
+    <string name="outbound_mask_footer">Maskowanie opt-in po kształcie: ciągi typu klucz (też w kodzie), e-maile i liczby jak telefony zamieniane na placeholdery. Klucz embedding API poniżej zapisany jawnie w prefs aplikacji. Historia urządzenia bez zmian.</string>
     <string name="chat_menu_perm_yoyo">YOLO · pełna automatyka</string>
     <string name="chat_menu_perm_safe_auto">Bezpieczne auto · narzędzia tylko do odczytu działają swobodnie</string>
     <string name="chat_menu_perm_ask">Pytaj · potwierdź każde wywołanie</string>

@@ -340,13 +340,13 @@
     <string name="context_block_system">Sistem istemi ve araçlar</string>
     <string name="context_block_skills_mcps">Beceriler ve MCP\'ler</string>
     <string name="context_block_memory">Bellek enjeksiyonu</string>
-<string name="context_block_runtime">Bu turun geçici bağlamı</string>
+    <string name="context_block_runtime">Bu turun geçici bağlamı</string>
     <string name="context_block_goal_plan">Hedef ve plan enjeksiyonu</string>
     <string name="context_block_history">Geçmiş penceresi</string>
     <string name="context_block_attachments">Ekler ve görseller</string>
     <string name="context_usage_note_estimate">Kaba tahminler (±%10); bu panel açıldığında yenilenir</string>
     <!-- [#41] Gen UI card -->
-<string name="gen_ui_card_label">Etkileşimli kart</string>
+    <string name="gen_ui_card_label">Etkileşimli kart</string>
     <string name="gen_ui_view_source">Kaynağı gör</string>
     <string name="gen_ui_view_render">Görselleştirmeyi göster</string>
     <string name="gen_ui_view_fullscreen">Tam ekran</string>
@@ -631,7 +631,7 @@
     <string name="env_var_privacy_toggle">Gizlilik Modu</string>
     <string name="env_var_privacy_footer">Etkinleştirildiğinde, shell-execute çıktısında görünen her ortam değişkeni değeri, modele ulaşmadan önce maskelenmiş biçimiyle (örn. `sk-1********ajhks`) değiştirilir. 8 karakterden kısa değerler tümüyle `*` olur. Sohbette kullanıcının gördüğü çıktı değişmez.</string>
     <string name="outbound_mask_toggle">Giden gizlilik maskeleme</string>
-<string name="outbound_mask_footer">Etkinleştirildiğinde anahtar biçimli dizeler (kod içindeki API anahtarları, JWT/base64 belirteçleri dahil), e-postalar ve telefon benzeri sayılar model sağlayıcısına giden isteklerde yer tutucularla değiştirilir. Kod tanımlayıcıları ve diff satırları kelime sınırlarıyla korunur. Bu cihazdaki sohbet geçmişi değişmez. Varsayılan olarak kapalı.</string>
+    <string name="outbound_mask_footer">Opt-in şekil maskeleme: anahtar biçimli dizeler (kod dahil), e-postalar ve telefon benzeri sayılar yer tutucuya dönüşür. Aşağıdaki embedding API anahtarı uygulama prefs’te düz metin saklanır. Cihaz geçmişi değişmez.</string>
     <string name="chat_menu_perm_yoyo">YOLO · tam otomatik</string>
     <string name="chat_menu_perm_safe_auto">Güvenli otomatik · salt okunur araçlar serbest çalışır</string>
     <string name="chat_menu_perm_ask">Sor · her çağrıyı onayla</string>

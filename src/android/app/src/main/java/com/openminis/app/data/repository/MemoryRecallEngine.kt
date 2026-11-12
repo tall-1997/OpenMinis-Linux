@@ -608,35 +608,12 @@ class MemoryRecallEngine(
      * vector write failed earlier is repaired on the next recall
      * ("失败静默，下次检索触发补算").
      */
-    suspend fun recallForPromptHybrid(query: String): List<RecallHit> {
-        val fts = recall(query)
-        val support = embeddingSupport ?: return applyStreakFilter(fts)
-        val fileScopes = buildList {
-            add(memoryDirProvider())
-            sharedDirProvider?.invoke()?.let { add(it) }
-        }
-        // Scope-restricted: the shared vector table must never surface
-        // another session's private diary lines into this conversation.
-        val semantic = runCatching {
-            support.semanticHits(query, RECALL_LIMIT, fileScopes.map { it.absolutePath })
-        }.getOrNull().orEmpty()
-        // Even with hits served, backfill catches up on lines whose embedding
-        // failed earlier; when the provider is down both calls no-op silently.
-        runCatching { support.backfillAsync(fileScopes) }
-        val merged = if (semantic.isEmpty()) {
-            fts
-        } else {
-            SemanticRecallFusion.merge(
-                fts = fts,
-                semantic = semantic,
-                limit = RECALL_LIMIT,
-                perFileCap = MAX_HITS_PER_FILE,
-                archiveCutoff = LocalDate.now().minusDays(ARCHIVE_AFTER_DAYS),
-                dayKeyOf = { dayKeyOf(it) },
-            )
-        }
-        return applyStreakFilter(merged)
-    }
+    suspend fun recallForPromptHybrid(query: String): List<RecallHit> =
+        // Single accounting point: the bare body carries no anti-nag
+        // bookkeeping; this wrapper applies it exactly once. The inline copy
+        // this used to be drifted from [recallHybridUnaccounted] — keep the
+        // delegation, the duplication was the double-counting bug's cousin.
+        applyStreakFilter(recallHybridUnaccounted(query))
 
     /**
      * The hybrid body WITHOUT the anti-nag bookkeeping: FTS + semantic fusion

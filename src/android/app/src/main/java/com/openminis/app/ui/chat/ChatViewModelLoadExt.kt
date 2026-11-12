@@ -261,7 +261,8 @@ internal fun ChatViewModel.loadSession() {
         _sessionTitle.value = session.title ?: "New Chat"
         _sessionCategory.value = session.category
         _memoryEnabled.value = session.memoryEnabled != 0
-        // [#31] Four-tier compat read: "ASK"→ASK, "YOLO"/"YOYO"→YOLO,
+        // [#31] Four-tier compat read: legacy "ASK"→SAFE_AUTO (the behaviour the
+        // two-tier era delivered), "YOLO"/"YOYO"→YOLO,
         // "SAFE_AUTO"/"OFF" literal, unknown → ASK (never widens the gate).
         _permissionMode.value = com.openminis.app.security.SessionPermissionMode.fromStored(
             session.permissionMode,

@@ -340,13 +340,13 @@
     <string name="context_block_system">システムプロンプトとツール</string>
     <string name="context_block_skills_mcps">スキルとMCP</string>
     <string name="context_block_memory">メモリ注入</string>
-<string name="context_block_runtime">このターンの臨時コンテキスト</string>
+    <string name="context_block_runtime">このターンの臨時コンテキスト</string>
     <string name="context_block_goal_plan">ゴールとプランの注入</string>
     <string name="context_block_history">履歴ウィンドウ</string>
     <string name="context_block_attachments">添付と画像</string>
     <string name="context_usage_note_estimate">概算値（±10%）。シートを開いたときに更新されます</string>
     <!-- [#41] Gen UI card -->
-<string name="gen_ui_card_label">インタラクティブカード</string>
+    <string name="gen_ui_card_label">インタラクティブカード</string>
     <string name="gen_ui_view_source">ソースを表示</string>
     <string name="gen_ui_view_render">レンダリングを表示</string>
     <string name="gen_ui_view_fullscreen">フルスクリーン</string>
@@ -631,7 +631,7 @@
     <string name="env_var_privacy_toggle">プライバシーモード</string>
     <string name="env_var_privacy_footer">有効にすると、shell-execute の出力に含まれる環境変数の値はモデルに渡される前にマスクされます（例: `sk-1********ajhks`）。8 文字未満の値はすべて `*` に置き換えられます。チャットに表示される出力は変更されません。</string>
     <string name="outbound_mask_toggle">送信プライバシーマスキング</string>
-<string name="outbound_mask_footer">有効にすると、モデルプロバイダーへ送信するリクエスト内の鍵型文字列（コード内の API キーや JWT/base64 トークンを含む）、メールアドレス、電話番号型の数字がプレースホルダーに置き換えられます。コード識別子や diff 行は語境界で保護されます。端末内のチャット履歴は変更されません。既定はオフ。</string>
+    <string name="outbound_mask_footer">オプトインの形状マスキング：鍵型の文字列（コード内を含む）、メール、電話番号型の数字をプレースホルダーに置換。下の embedding API キーはアプリ非公開 prefs に平文保存。端末内履歴は変更なし。</string>
     <string name="chat_menu_perm_yoyo">YOLO · 全自動</string>
     <string name="chat_menu_perm_safe_auto">安全自動 · 読み取り系ツールは自動実行</string>
     <string name="chat_menu_perm_ask">確認 · 毎回の呼び出しを確認</string>

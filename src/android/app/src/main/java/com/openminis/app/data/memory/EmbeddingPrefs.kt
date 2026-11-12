@@ -26,10 +26,16 @@ import android.content.SharedPreferences
  *
  * Keys (prefs file `minis_embedding_prefs`):
  *  - `embedding.enabled`  boolean, default **false**
- *  - `embedding.base_url` string — e.g. `https://api.openai.com` (no
+ *  - `embedding.base_url` string, no default (a bare host — the
  *    `/v1/embeddings` suffix; it is appended, see
  *    [OpenAICompatibleEmbeddingProvider.endpoint])
- *  - `embedding.api_key`  string
+ *  - `embedding.api_key`  string — **HONEST BOUNDARY: stored in PLAIN TEXT**
+ *    in this app-private prefs file, unlike provider credentials which live
+ *    in EncryptedSharedPreferences. The other credential boxes are bound to
+ *    the provider domain this file deliberately stays out of; the Settings
+ *    footer discloses the plaintext storage so the user can decide with the
+ *    key's real sensitivity in mind. Follow-up: migrate into the encrypted
+ *    box when the layering constraint lifts.
  *  - `embedding.model`    string, default `text-embedding-3-small`
  *
  * The feature is ACTIVE only when enabled AND base_url AND api_key AND model

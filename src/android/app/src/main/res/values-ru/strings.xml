@@ -342,13 +342,13 @@
     <string name="context_block_system">Системный промпт и инструменты</string>
     <string name="context_block_skills_mcps">Навыки и MCP</string>
     <string name="context_block_memory">Внедрение памяти</string>
-<string name="context_block_runtime">Временный контекст этого хода</string>
+    <string name="context_block_runtime">Временный контекст этого хода</string>
     <string name="context_block_goal_plan">Внедрение цели и плана</string>
     <string name="context_block_history">Окно истории</string>
     <string name="context_block_attachments">Вложения и изображения</string>
     <string name="context_usage_note_estimate">Грубые оценки (±10%); обновляются при открытии этой панели</string>
     <!-- [#41] Gen UI card -->
-<string name="gen_ui_card_label">Интерактивная карточка</string>
+    <string name="gen_ui_card_label">Интерактивная карточка</string>
     <string name="gen_ui_view_source">Показать исходник</string>
     <string name="gen_ui_view_render">Показать рендер</string>
     <string name="gen_ui_view_fullscreen">Полный экран</string>
@@ -633,7 +633,7 @@
     <string name="env_var_privacy_toggle">Режим конфиденциальности</string>
     <string name="env_var_privacy_footer">Когда включено, любое значение переменной окружения, появляющееся в выводе выполнения команд оболочки, заменяется маскированной формой (например, `sk-1********ajhks`) перед передачей модели. Значения короче 8 символов заменяются полностью на `*`. Вывод, видимый пользователю в чате, остаётся неизменным.</string>
     <string name="outbound_mask_toggle">Маскирование исходящих данных</string>
-<string name="outbound_mask_footer">При включении строки в форме ключей (включая API-ключи в коде, JWT/base64-токены), адреса эл. почты и похожие на телефоны числа заменяются заполнителями в запросах к поставщику модели. Идентификаторы кода и строки diff защищены границами слов. История чата на устройстве не меняется. По умолчанию выключено.</string>
+    <string name="outbound_mask_footer">Опт-ин маскировка по форме: строки в форме ключей (в т.ч. в коде), эл. почта и телефоноподобные числа заменяются. Ключ embedding API ниже хранится открытым текстом в приватных prefs. История устройства не меняется.</string>
     <string name="chat_menu_perm_yoyo">YOLO · полностью автоматически</string>
     <string name="chat_menu_perm_safe_auto">Безопасное авто · инструменты чтения выполняются свободно</string>
     <string name="chat_menu_perm_ask">Спрашивать · подтверждать каждый вызов</string>

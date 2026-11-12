@@ -102,13 +102,22 @@ class SshWorkspaceBindings(private val store: SshWorkspaceStore) {
      * claimed the session was working locally; the class promise above says
      * binding state is "reported, never silently ignored", and sweeping at
      * removal is the only place that promise can be kept honestly.
+     *
+     * Returns the number of bindings cleared so the remover can TELL the
+     * agent/user their shells now run locally — without that sentence the
+     * model keeps assuming remote execution after a mid-run host removal.
      */
-    fun unbindAllForHost(hostId: String) {
+    fun unbindAllForHost(hostId: String): Int {
         val target = hostId.trim()
-        if (target.isEmpty()) return
+        if (target.isEmpty()) return 0
+        var cleared = 0
         for ((owner, bound) in all()) {
-            if (bound == target) store.remove(bindingKey(owner))
+            if (bound == target) {
+                store.remove(bindingKey(owner))
+                cleared++
+            }
         }
+        return cleared
     }
 
     /** Every binding, oldest-first by key — for the management UI. */

@@ -528,6 +528,14 @@ interface ChatDao : MessageHeadDao, ChatTruncationDao, SessionBindingDao, UsageS
     @Query("SELECT * FROM sessions WHERE branch_of = :source ORDER BY updated_at DESC")
     suspend fun branchChildren(source: String): List<ChatSessionEntity>
 
+    /**
+     * Defensive sweep for rows predating the gate. NOTE the deliberate
+     * asymmetry with the read path ([com.openminis.app.security.SecurityGateHolder]
+     * maps "DENY_ALL" → OFF): this backfill treats DENY_ALL as blank — the
+     * token was never a legal SESSION persistent value (it is a sub-agent
+     * fence value), so rewriting it to the legacy 'ASK' default (read back as
+     * SAFE_AUTO) is the faithful "the row never said anything" semantics.
+     */
     @Query(
         """
         UPDATE sessions SET permission_mode = 'ASK'

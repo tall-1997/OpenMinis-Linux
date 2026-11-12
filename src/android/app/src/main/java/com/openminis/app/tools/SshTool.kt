@@ -164,13 +164,22 @@ object SshTool {
                         // Same sweep as the management sheet: a binding left
                         // pointing at a host the agent just deleted would
                         // route shells nowhere while the binding sheet claimed
-                        // local execution.
+                        // local execution. The count goes into the RESULT so
+                        // the model stops assuming remote execution.
                         val boundId = host?.id ?: hostRef
-                        appContext?.let { ctx ->
+                        val cleared = appContext?.let { ctx ->
                             com.openminis.app.ssh.SshWorkspaceBindings
                                 .forContext(ctx).unbindAllForHost(boundId)
+                        } ?: 0
+                        val sweepNote = if (cleared > 0) {
+                            " $cleared workspace binding(s) cleared — shell_execute now runs on the local sandbox in the affected chats."
+                        } else {
+                            ""
                         }
-                        ToolExecutionResult("Removed SSH host '$hostRef' (credentials and pinned host key deleted).", true, toolTitle = title)
+                        ToolExecutionResult(
+                            "Removed SSH host '$hostRef' (credentials and pinned host key deleted).$sweepNote",
+                            true, toolTitle = title,
+                        )
                     } else {
                         notFound(hostRef)
                     }

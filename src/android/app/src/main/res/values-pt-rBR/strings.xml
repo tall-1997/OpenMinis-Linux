@@ -340,13 +340,13 @@
     <string name="context_block_system">Prompt do sistema e ferramentas</string>
     <string name="context_block_skills_mcps">Skills e MCPs</string>
     <string name="context_block_memory">Injeção de memória</string>
-<string name="context_block_runtime">Contexto temporário desta rodada</string>
+    <string name="context_block_runtime">Contexto temporário desta rodada</string>
     <string name="context_block_goal_plan">Injeção de objetivo e plano</string>
     <string name="context_block_history">Janela do histórico</string>
     <string name="context_block_attachments">Anexos e imagens</string>
     <string name="context_usage_note_estimate">Estimativas aproximadas (±10%); atualizadas ao abrir esta folha</string>
     <!-- [#41] Gen UI card -->
-<string name="gen_ui_card_label">Cartão interativo</string>
+    <string name="gen_ui_card_label">Cartão interativo</string>
     <string name="gen_ui_view_source">Ver código-fonte</string>
     <string name="gen_ui_view_render">Mostrar render</string>
     <string name="gen_ui_view_fullscreen">Tela cheia</string>
@@ -631,7 +631,7 @@
     <string name="env_var_privacy_toggle">Modo de privacidade</string>
     <string name="env_var_privacy_footer">Quando ativado, qualquer valor de variável de ambiente que apareça na saída do shell-execute é substituído por uma forma mascarada (ex.: `sk-1********ajhks`) antes de chegar ao modelo. Valores com menos de 8 caracteres viram só `*`. A saída visível para você na conversa não muda.</string>
     <string name="outbound_mask_toggle">Máscara de privacidade de saída</string>
-<string name="outbound_mask_footer">Ao ativar, strings com forma de chave (incluindo chaves de API em código, tokens JWT/base64), e-mails e números com forma de telefone são substituídos por marcadores nas solicitações ao provedor do modelo. Identificadores de código e linhas de diff são protegidos por limites de palavra. O histórico neste dispositivo permanece inalterado. Desativado por padrão.</string>
+    <string name="outbound_mask_footer">Máscara opcional por forma: strings tipo chave (incluindo código), e-mails e números telefônicos viram placeholders. A chave API de embedding é salva em texto plano nas prefs privadas. Histórico do dispositivo inalterado.</string>
     <string name="chat_menu_perm_yoyo">YOLO · totalmente automático</string>
     <string name="chat_menu_perm_safe_auto">Auto seguro · ferramentas de leitura passam livremente</string>
     <string name="chat_menu_perm_ask">Perguntar · confirmar cada chamada</string>

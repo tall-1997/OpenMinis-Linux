@@ -101,6 +101,11 @@ class SessionForkManager(
         val new = chatRepository.createSession(
             modelId = source.modelId,
             title = dupTitle,
+            // Canonical token written in ONE shot: the old two-step (default
+            // row, then updatePermissionMode) left a crash window where a
+            // strict-tier source duplicated into a wider default row.
+            permissionMode = com.openminis.app.security.SessionPermissionMode
+                .fromStored(source.permissionMode).toStoredToken(),
         )
         // Mirror iOS: carry over the source's category onto the copy so the
         // session-list icon + colour stay consistent with the original.
@@ -125,14 +130,9 @@ class SessionForkManager(
         source.thinkingOverride?.let { override ->
             chatRepository.dao.updateThinkingOverride(new.id, override)
         }
-        // [#31] Four-tier faithful fork: the source token re-reads through
-        // SessionPermissionMode (compat: "YOLO"/"YOYO"→YOLO, unknown→ASK) and
-        // the fork stores the canonical tier token verbatim.
-        val forkedMode = com.openminis.app.security.SessionPermissionMode.fromStored(source.permissionMode)
-        chatRepository.dao.updatePermissionMode(
-            new.id,
-            forkedMode.toStoredToken(),
-        )
+        // [#31] The token was already written canonically at createSession
+        // (single write, no crash window). fromStored/toStoredToken below is
+        // no longer needed as a second write — the rows agree by construction.
         // [T-session-duplicate-compact-marker-android] Track old→new message id
         // and old→new sort_order so copied compact markers (which reference DB
         // message ids + legacy sort_orders) can be remapped onto the freshly

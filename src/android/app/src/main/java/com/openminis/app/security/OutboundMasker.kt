@@ -32,7 +32,9 @@ object OutboundMasker {
     private val API_KEY_PATTERNS = listOf(
         // Left boundary: "risk-assessment" / "task-list" must NOT mask — the
         // suffix after "sk-" is a plain word, not a key. A key is a token the
-        // user (or a config file) wrote as its own unit.
+        // user (or a config file) wrote as its own unit. Note the boundary
+        // excludes only [A-Za-z0-9]: "x-sk-…" (hyphen before the key) DOES
+        // mask — over-masking toward privacy is the accepted direction there.
         Regex("(?<![A-Za-z0-9])sk-[A-Za-z0-9_\\-]{8,}"),
         Regex("(?<![A-Za-z0-9])Bearer\\s+[A-Za-z0-9._\\-]{8,}", RegexOption.IGNORE_CASE),
         Regex("(?<![A-Za-z0-9])ghp_[A-Za-z0-9]{8,}"),

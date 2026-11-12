@@ -341,13 +341,13 @@
     <string name="context_block_system">Prompt de sistem și instrumente</string>
     <string name="context_block_skills_mcps">Abilități și MCP</string>
     <string name="context_block_memory">Injecție de memorie</string>
-<string name="context_block_runtime">Contextul temporar al acestei ture</string>
+    <string name="context_block_runtime">Contextul temporar al acestei ture</string>
     <string name="context_block_goal_plan">Injecție de obiectiv și plan</string>
     <string name="context_block_history">Fereastra istoricului</string>
     <string name="context_block_attachments">Atașamente și imagini</string>
     <string name="context_usage_note_estimate">Estimări aproximative (±10%); reîmprospătate la deschiderea acestei foi</string>
     <!-- [#41] Gen UI card -->
-<string name="gen_ui_card_label">Card interactiv</string>
+    <string name="gen_ui_card_label">Card interactiv</string>
     <string name="gen_ui_view_source">Vezi sursa</string>
     <string name="gen_ui_view_render">Afișează randarea</string>
     <string name="gen_ui_view_fullscreen">Ecran complet</string>
@@ -632,7 +632,7 @@
     <string name="env_var_privacy_toggle">Mod confidențial</string>
     <string name="env_var_privacy_footer">Când este activat, orice valoare a unei variabile de mediu care apare în ieșirea shell-execute este înlocuită cu o formă mascată (ex. `sk-1********ajhks`) înainte de a ajunge la model. Valorile mai scurte de 8 caractere devin integral `*`. Ieșirea vizibilă utilizatorului în conversație rămâne neschimbată.</string>
     <string name="outbound_mask_toggle">Mascare confidențialitate la ieșire</string>
-<string name="outbound_mask_footer">Când este activată, șirurile cu formă de cheie (inclusiv chei API în cod, jetoane JWT/base64), e-mailurile și numerele asemănătoare telefoanelor sunt înlocuite cu substituenți în cererile către furnizorul modelului. Identificatorii de cod și liniile diff sunt protejați de limite de cuvinte. Istoricul chatului pe acest dispozitiv rămâne neschimbat. Implicit dezactivată.</string>
+    <string name="outbound_mask_footer">Mascares opt-in după formă: șiruri tip cheie (inclusiv în cod), e-mailuri și numere de telefon devin substituenți. Cheia API de embedding de mai jos e stocată în clar în prefs private. Istoricul dispozitivului neschimbat.</string>
     <string name="chat_menu_perm_yoyo">YOLO · complet automat</string>
     <string name="chat_menu_perm_safe_auto">Auto sigur · uneltele de citire rulează liber</string>
     <string name="chat_menu_perm_ask">Întreabă · confirmă fiecare apel</string>

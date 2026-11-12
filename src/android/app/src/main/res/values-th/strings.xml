@@ -340,13 +340,13 @@
     <string name="context_block_system">พรอมป์ระบบและเครื่องมือ</string>
     <string name="context_block_skills_mcps">สกิลและ MCP</string>
     <string name="context_block_memory">การฉีดความจำ</string>
-<string name="context_block_runtime">บริบทชั่วคราวของรอบนี้</string>
+    <string name="context_block_runtime">บริบทชั่วคราวของรอบนี้</string>
     <string name="context_block_goal_plan">การฉีดเป้าหมายและแผน</string>
     <string name="context_block_history">หน้าต่างประวัติ</string>
     <string name="context_block_attachments">ไฟล์แนบและรูปภาพ</string>
     <string name="context_usage_note_estimate">ค่าประมาณคร่าว ๆ (±10%); รีเฟรชเมื่อเปิดชีตนี้</string>
     <!-- [#41] Gen UI card -->
-<string name="gen_ui_card_label">การ์ดแบบโต้ตอบ</string>
+    <string name="gen_ui_card_label">การ์ดแบบโต้ตอบ</string>
     <string name="gen_ui_view_source">ดูซอร์ส</string>
     <string name="gen_ui_view_render">แสดงผล</string>
     <string name="gen_ui_view_fullscreen">เต็มหน้าจอ</string>
@@ -631,7 +631,7 @@
     <string name="env_var_privacy_toggle">โหมดความเป็นส่วนตัว</string>
     <string name="env_var_privacy_footer">เมื่อเปิดใช้ ค่าของตัวแปรสภาพแวดล้อมใดๆ ที่ปรากฏในผลลัพธ์ของ shell-execute จะถูกแทนที่ด้วยรูปแบบปกปิด (เช่น `sk-1********ajhks`) ก่อนส่งถึงโมเดล ค่าที่สั้นกว่า 8 อักขระจะกลายเป็น `*` ทั้งหมด ส่วนผลลัพธ์ที่ผู้ใช้เห็นในแชทจะไม่เปลี่ยนแปลง</string>
     <string name="outbound_mask_toggle">การปกปิดความเป็นส่วนตัวขาออก</string>
-<string name="outbound_mask_footer">เมื่อเปิดใช้ สตริงรูปแบบคีย์ (รวม API key ในโค้ด, โทเคน JWT/base64) อีเมล และตัวเลขที่คล้ายเบอร์โทรจะถูกแทนที่ด้วย placeholder ในคำขอที่ส่งไปผู้ให้บริการโมเดล ตัวระบุโค้ดและบรรทัด diff ได้รับการป้องกันด้วยขอบเขตคำ ประวัติแชทในเครื่องไม่เปลี่ยนแปลง ค่าเริ่มต้นปิด</string>
+    <string name="outbound_mask_footer">มาสกิงแบบเลือกเปิด: สตริงรูปแบบคีย์ (รวมในโค้ด) อีเมล และเลขคล้ายเบอร์โทรจะถูกแทนที่ คีย์ API embedding ด้านล่างเก็บเป็นข้อความล้วนใน prefs ส่วนตัวของแอป ประวัติในเครื่องไม่เปลี่ยน</string>
     <string name="chat_menu_perm_yoyo">YOLO · อัตโนมัติทั้งหมด</string>
     <string name="chat_menu_perm_safe_auto">อัตโนมัติปลอดภัย · เครื่องมืออ่านอย่างเดียวทำงานอิสระ</string>
     <string name="chat_menu_perm_ask">ถาม · ยืนยันทุกการเรียก</string>

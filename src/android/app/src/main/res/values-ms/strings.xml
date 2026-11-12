@@ -340,13 +340,13 @@
     <string name="context_block_system">Prompt sistem &amp; alat</string>
     <string name="context_block_skills_mcps">Kemahiran &amp; MCP</string>
     <string name="context_block_memory">Suntikan memori</string>
-<string name="context_block_runtime">Konteks sementara giliran ini</string>
+    <string name="context_block_runtime">Konteks sementara giliran ini</string>
     <string name="context_block_goal_plan">Suntikan matlamat &amp; pelan</string>
     <string name="context_block_history">Tetingkap sejarah</string>
     <string name="context_block_attachments">Lampiran &amp; imej</string>
     <string name="context_usage_note_estimate">Anggaran kasar (±10%); disegarkan semasa lembaran ini dibuka</string>
     <!-- [#41] Gen UI card -->
-<string name="gen_ui_card_label">Kad interaktif</string>
+    <string name="gen_ui_card_label">Kad interaktif</string>
     <string name="gen_ui_view_source">Lihat sumber</string>
     <string name="gen_ui_view_render">Tunjuk render</string>
     <string name="gen_ui_view_fullscreen">Skrin penuh</string>
@@ -631,7 +631,7 @@
     <string name="env_var_privacy_toggle">Mod Privasi</string>
     <string name="env_var_privacy_footer">Apabila didayakan, sebarang nilai pemboleh ubah persekitaran yang muncul dalam output shell-execute akan digantikan dengan bentuk bertopeng (cth. `sk-1********ajhks`) sebelum sampai kepada model. Nilai yang lebih pendek daripada 8 aksara menjadi `*` sepenuhnya. Output yang dilihat pengguna dalam sembang kekal tidak berubah.</string>
     <string name="outbound_mask_toggle">Topeng privasi data keluar</string>
-<string name="outbound_mask_footer">Apabila diaktifkan, rentetan berbentuk kunci (termasuk kunci API dalam kod, token JWT/base64), e-mel dan nombor menyerupai telefon digantikan dengan pemegang tempat dalam permintaan kepada penyedia model. Pengecam kod dan baris dilindungi sempadan perkataan. Sejarah sembang pada peranti tidak berubah. Lalai dimatikan.</string>
+    <string name="outbound_mask_footer">Penyamaran bentuk opt-in: rentetan berbentuk kunci (termasuk kod), e-mel dan nombor telefon menjadi pemegang tempat. Kunci API embedding di bawah disimpan teks jelas dalam prefs peribadi. Sejarah peranti tidak berubah.</string>
     <string name="chat_menu_perm_yoyo">YOLO · automatik penuh</string>
     <string name="chat_menu_perm_safe_auto">Auto selamat · alat baca sahaja dibenarkan</string>
     <string name="chat_menu_perm_ask">Tanya · sahkan setiap panggilan</string>

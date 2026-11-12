@@ -616,13 +616,13 @@
     <string name="context_block_system">System prompt &amp; tools</string>
     <string name="context_block_skills_mcps">Skills &amp; MCPs</string>
     <string name="context_block_memory">Memory injection</string>
-<string name="context_block_runtime">This turn’s temporary context</string>
+    <string name="context_block_runtime">This turn’s temporary context</string>
     <string name="context_block_goal_plan">Goal &amp; plan injection</string>
     <string name="context_block_history">History window</string>
     <string name="context_block_attachments">Attachments &amp; images</string>
     <string name="context_usage_note_estimate">Rough estimates (±10%); refreshed when this sheet opens</string>
     <!-- [#41] Gen UI card — sandboxed interactive HTML from the agent -->
-<string name="gen_ui_card_label">Interactive card</string>
+    <string name="gen_ui_card_label">Interactive card</string>
     <string name="gen_ui_view_source">View source</string>
     <string name="gen_ui_view_render">Show render</string>
     <string name="gen_ui_view_fullscreen">Fullscreen</string>
@@ -960,7 +960,7 @@
     <string name="env_var_privacy_footer">When enabled, any environment variable value that appears in shell-execute output is replaced with a masked form (e.g. `sk-1********ajhks`) before reaching the model. Values shorter than 8 characters become all `*`. The user-visible output in chat is unchanged.</string>
     <!-- [#28] Outbound privacy masking (default OFF, opt-in). -->
     <string name="outbound_mask_toggle">Outbound privacy masking</string>
-<string name="outbound_mask_footer">When enabled, key-shaped strings (including API keys in code, JWT/base64 tokens), e-mail addresses and phone-like numbers are replaced with placeholders in requests sent to the model provider. Code identifiers and diff lines are protected by token boundaries. Chat history on this device is unchanged. Default off.</string>
+    <string name="outbound_mask_footer">Opt-in shape masking: key-shaped strings (code, JWT/base64), e-mails and phone-like numbers become placeholders. The embedding API key below is stored in plain text inside app-private prefs. Device history unchanged.</string>
     <string name="env_var_platform_header">Platform Integrations</string>
     <string name="env_var_platform_tier_2">Complete</string>
     <string name="env_var_platform_tier_1">Read-only</string>

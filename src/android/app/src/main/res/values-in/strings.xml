@@ -345,13 +345,13 @@
     <string name="context_block_system">Prompt sistem &amp; alat</string>
     <string name="context_block_skills_mcps">Skill &amp; MCP</string>
     <string name="context_block_memory">Injeksi memori</string>
-<string name="context_block_runtime">Konteks sementara giliran ini</string>
+    <string name="context_block_runtime">Konteks sementara giliran ini</string>
     <string name="context_block_goal_plan">Injeksi tujuan &amp; rencana</string>
     <string name="context_block_history">Jendela riwayat</string>
     <string name="context_block_attachments">Lampiran &amp; gambar</string>
     <string name="context_usage_note_estimate">Perkiraan kasar (±10%); disegarkan saat lembar ini dibuka</string>
     <!-- [#41] Gen UI card -->
-<string name="gen_ui_card_label">Kartu interaktif</string>
+    <string name="gen_ui_card_label">Kartu interaktif</string>
     <string name="gen_ui_view_source">Lihat sumber</string>
     <string name="gen_ui_view_render">Tampilkan render</string>
     <string name="gen_ui_view_fullscreen">Layar penuh</string>
@@ -636,7 +636,7 @@
     <string name="env_var_privacy_toggle">Mode Privasi</string>
     <string name="env_var_privacy_footer">Jika aktif, setiap nilai variabel lingkungan yang muncul pada keluaran shell-execute akan diganti dengan bentuk tersamar (mis. `sk-1********ajhks`) sebelum sampai ke model. Nilai yang lebih pendek dari 8 karakter menjadi `*` seluruhnya. Keluaran yang terlihat oleh pengguna di obrolan tidak berubah.</string>
     <string name="outbound_mask_toggle">Penyamaran privasi keluar</string>
-<string name="outbound_mask_footer">Saat diaktifkan, string berbentuk kunci (termasuk kunci API dalam kode, token JWT/base64), email, dan angka menyerupai telepon diganti placeholder dalam permintaan ke penyedia model. Pengenal kode dan baris diff dilindungi batas kata. Riwayat obrolan di perangkat tidak berubah. Nonaktif secara bawaan.</string>
+    <string name="outbound_mask_footer">Masking bentuk opt-in: string berbentuk kunci (termasuk kode), email, dan angka menyerupai telepon jadi placeholder. Kunci API embedding di bawah tersimpan plain text di prefs pribadi aplikasi. Riwayat perangkat tidak berubah.</string>
     <string name="chat_menu_perm_yoyo">YOLO · otomatis penuh</string>
     <string name="chat_menu_perm_safe_auto">Auto aman · alat read-only berjalan bebas</string>
     <string name="chat_menu_perm_ask">Tanya · konfirmasi setiap panggilan</string>

@@ -50,7 +50,7 @@ class ChatRepository(
         // here; existing call sites that omit it keep the prior
         // memoryEnabled=1 behavior (legacy default).
         memoryEnabled: Boolean = true,
-        permissionMode: String = "ASK",
+        permissionMode: String = com.openminis.app.security.SessionPermissionMode.SAFE_AUTO.toStoredToken(),
     ): ChatSessionEntity {
         val now = System.currentTimeMillis()
         val session = ChatSessionEntity(

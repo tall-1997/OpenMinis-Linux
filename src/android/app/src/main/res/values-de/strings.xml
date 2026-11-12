@@ -340,13 +340,13 @@
     <string name="context_block_system">Systemprompt &amp; Tools</string>
     <string name="context_block_skills_mcps">Skills &amp; MCPs</string>
     <string name="context_block_memory">Speicher-Injektion</string>
-<string name="context_block_runtime">Temporärer Kontext dieses Zugs</string>
+    <string name="context_block_runtime">Temporärer Kontext dieses Zugs</string>
     <string name="context_block_goal_plan">Ziel- &amp; Plan-Injektion</string>
     <string name="context_block_history">Verlaufs-Fenster</string>
     <string name="context_block_attachments">Anhänge &amp; Bilder</string>
     <string name="context_usage_note_estimate">Grobe Schätzungen (±10 %); beim Öffnen dieses Sheets aktualisiert</string>
     <!-- [#41] Gen UI card -->
-<string name="gen_ui_card_label">Interaktive Karte</string>
+    <string name="gen_ui_card_label">Interaktive Karte</string>
     <string name="gen_ui_view_source">Quelltext anzeigen</string>
     <string name="gen_ui_view_render">Darstellung anzeigen</string>
     <string name="gen_ui_view_fullscreen">Vollbild</string>
@@ -631,7 +631,7 @@
     <string name="env_var_privacy_toggle">Datenschutzmodus</string>
     <string name="env_var_privacy_footer">Wenn aktiviert, werden in der Ausgabe von shell-execute erkannte Werte von Umgebungsvariablen vor der Weitergabe an das Modell maskiert (z. B. `sk-1********ajhks`). Werte mit weniger als 8 Zeichen werden vollständig durch `*` ersetzt. Die für den Nutzer sichtbare Ausgabe im Chat bleibt unverändert.</string>
     <string name="outbound_mask_toggle">Ausgehende Datenschutz-Maskierung</string>
-<string name="outbound_mask_footer">Bei Aktivierung werden schlüsselförmige Zeichenketten (einschließlich API-Schlüssel in Code, JWT-/Base64-Tokens), E-Mail-Adressen und telefonnummernartige Ziffern in Anforderungen an den Modellanbieter durch Platzhalter ersetzt. Code-Bezeichner und Diff-Zeilen sind durch Wortgrenzen geschützt. Der Chatverlauf auf diesem Gerät bleibt unverändert. Standardmäßig aus.</string>
+    <string name="outbound_mask_footer">Opt-in-Formmaskierung: schlüsselförmige Strings (auch im Code), E-Mails und telefonähnliche Zahlen werden ersetzt. Der Embedding-API-Schlüssel unten liegt Klartext in App-Prefs. Geräteverlauf unverändert.</string>
     <string name="chat_menu_perm_yoyo">YOLO · vollautomatisch</string>
     <string name="chat_menu_perm_safe_auto">Sicher automatisch · Lese-Tools laufen frei</string>
     <string name="chat_menu_perm_ask">Fragen · jeden Aufruf bestätigen</string>
