@@ -62,10 +62,10 @@ internal fun goalMount(
 /**
  * The loop's early-exit decision after per-turn goal usage accounting.
  * A mounted goal ends the loop when the usage lookup failed (a broken
- * mount must not keep spinning the run) or the stored goal reached a
- * state that can no longer continue (terminal, paused, or budget-limited
- * — the next /goal resume re-mounts it). Unmounted requests never exit
- * here: ordinary user turns have no goal to follow.
+ * mount must not keep spinning the run) or reaches a hard stop: blocked,
+ * paused, or budget-limited. Completion only dismounts the goal: the
+ * provider still needs the tool result to finish the current reply.
+ * Unmounted requests never exit here.
  */
 internal fun shouldExitForGoalState(
     goalUsageResult: Result<SessionGoalEntity?>,
@@ -75,12 +75,18 @@ internal fun shouldExitForGoalState(
     if (goalUsageResult.isFailure) return true
     val status = goalUsageResult.getOrNull()?.status ?: return false
     return status in setOf(
-        GoalStatus.COMPLETE,
         GoalStatus.BLOCKED,
         GoalStatus.PAUSED,
         GoalStatus.BUDGET_LIMITED,
     )
 }
+
+/** An internal Goal kick needs an active Goal to start, not to finish its reply. */
+internal fun shouldSkipGoalRunRequest(
+    goalRunRequested: Boolean,
+    requestStarted: Boolean,
+    mount: GoalMount,
+): Boolean = goalRunRequested && !requestStarted && !mount.canContinue
 
 internal fun withGoalContext(
     history: List<LLMMessage>,
