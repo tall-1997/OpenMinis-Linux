@@ -62,59 +62,27 @@ internal fun ChatViewModel.planBoardPrompt(): String? = runCatching {
  * model's own restatement of an old task was keeping that task's memory
  * selected.
  */
-internal fun ChatViewModel.liveRecallPrompt(): String? {
+/** [T-recall-once] ZCode's rule as data: a delivered line never comes back. */
+internal fun <T> recallFreshHits(
+    hits: List<T>,
+    announced: Set<String>,
+    keyOf: (T) -> String,
+): List<T> = hits.filter { keyOf(it) !in announced }
+
+/** [T-recall-once] One-shot recall fragment; committed once, never rebuilt. */
+internal fun ChatViewModel.newRecallReminder(): String? {
     if (!_memoryEnabled.value) return null
     val input = liveRecallInput() ?: return null
     val engine = recallEngineForLiveRecall() ?: return null
-    // [T-memory-recall-anti-nag] recallForPrompt, not recall: the query-keyed
-    // memo cannot dedupe across turns (the query changes every turn with the
-    // assistant tail), so the same few memories were re-announced every turn.
-    // The hit-keyed streak inside the engine stops a memory after three
-    // consecutive announcements and re-arms it when it drops out of the hits.
-    // [T-memory-embedding-wiring] recallForPromptCached, not recallForPrompt:
-    // the send pipeline prefetched the hybrid (FTS + semantic) result for this
-    // exact query, so the render — which MUST stay synchronous and zero-network
-    // (PromptPart.render is a plain () -> String?) — reuses it. Cache miss (or
-    // the semantic feature off) degrades to the plain keyword path unchanged.
     val hits = recallHitsNotAlreadyResident(
         engine.recallForPromptCached(input.query),
         residentDailyFiles,
     ) { it.source }
     if (hits.isEmpty()) return null
-    // [T-recall-turn-dedup] The same memories are announced once per topic.
-    // Every request of one turn must carry the block (each request is a fresh
-    // context), but a NEW turn re-announces only when the recalled lines
-    // changed — otherwise the fragment would repeat verbatim every round.
-    // The engine's hit-keyed cap (recallForPrompt) composes on top of this:
-    // when the recalled set drifts every round, each memory still stops being
-    // re-injected after RECALL_REPEAT_CAP consecutive rounds and re-arms when
-    // it drops out of the hits (task pivot).
-    val turnKey = input.lastUserId
-    val keys = hits.map { "${it.day}:${it.line}" }.toSet()
-    // If the message that carried the previous block fell out of the window,
-    // the memories are gone from context — announce again, but only ONCE per
-    // eviction (see [shouldAnnounceRecall] and [lastRecallCarrierReplayed]).
-    val carrierAlive = lastRecallTurnKey == null ||
-        _messages.value.any { it.id == lastRecallTurnKey }
-    if (!shouldAnnounceRecall(
-            turnKey,
-            lastRecallTurnKey,
-            keys,
-            lastRecallTurnKeys,
-            carrierAlive,
-            lastRecallCarrierReplayed,
-        )
-    ) {
-        return null
-    }
-    lastRecallTurnKey = turnKey
-    lastRecallTurnKeys = keys
-    lastRecallCarrierReplayed = !carrierAlive
-    // [T-memory-recall-count] formatAsPromptFragment already accepts the
-    // entries it actually rendered (post fragment budget); accepting the FULL
-    // hit list on top used to count every injection twice, with the extra
-    // keys never shown anywhere.
-    return engine.formatAsPromptFragment(hits).takeIf { it.isNotBlank() }
+    val fresh = recallFreshHits(hits, announcedRecallKeys) { "${it.day}:${it.line}" }
+    if (fresh.isEmpty()) return null
+    announcedRecallKeys.addAll(hits.map { "${it.day}:${it.line}" })
+    return engine.formatAsPromptFragment(fresh).takeIf { it.isNotBlank() }
 }
 
 /**

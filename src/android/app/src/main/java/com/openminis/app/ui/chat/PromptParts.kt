@@ -64,7 +64,10 @@ internal object PromptParts {
                 "runtime/in_flight" -> vm.inFlightLanesPrompt()
                 "runtime/jobs" -> vm.backgroundJobsPrompt()
                 "runtime/plan_board" -> vm.planBoardPrompt()
-                "runtime/recall" -> vm.liveRecallPrompt()
+                // [T-recall-once] Recall is delivered once into the transcript
+                // (see newRecallReminder/commitHiddenUserNote), never rebuilt
+                // into the per-request prompt.
+                "runtime/recall" -> null
                 else -> null
             }
         }

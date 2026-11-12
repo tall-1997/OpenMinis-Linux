@@ -543,36 +543,36 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     loopExitedNormally = true
                     break@agentTurns
                 }
+                // [T-recall-once][T-goal-once] Notices go into the transcript once.
+                newRecallReminder()?.let { commitHiddenUserNote(it) }
+                goalMount.prompt?.takeIf { goalMount.canContinue }?.let { prompt ->
+                    val sha = com.openminis.app.util.Digest.sha256Hex(prompt)
+                    if (sha != goalAnnouncedSha) {
+                        goalAnnouncedSha = sha
+                        commitHiddenUserNote(prompt)
+                    }
+                }
                 val requestHistory = ToolIdNormalization.normalizeMessages(
-                    // [T-process-tail-injection] Process blocks + goal ride the
-                    // system prompt tail; the history stays byte-clean (no grafting
-                    // onto the tool_result carrier).
                     effectiveAgentHistory().let { history ->
-                        // [T-stall-resume] A previous attempt stalled mid-stream:
-                        // [T-stall-resume][T-android-loop-stall-guard] One-shot
-                        // USER-note lane (never persisted; cleared on first use).
+                        // [T-stall-resume][T-stall-guard] One-shot USER-note lane.
                         val withResume = applyStallNudge(history, stallResumeContext)
                         val guardNudge = stallGuardNudge
                         stallGuardNudge = null
                         applyStallNudge(withResume, guardNudge)
                     }
                 )
-                // [T-first-event-watchdog] A hung relay never throws — this stream
-                // cancels itself and surfaces a TransientError for the retry chain.
-                // [T-routing-strategy-x] First-token budget via GroupRoutingState so the main loop and the group-chat lane agree.
+                // [T-first-event-watchdog][T-routing-strategy-x] First-token budget.
                 val firstEventTimeoutMs = GroupRoutingState.resolveFirstEventTimeoutMs(providerRepository,
                     _selectedGroupId.value,
                     (if (currentModelSupportsReasoning) _thinkingLevel.value else ThinkingLevel.OFF).isEnabled)
-                // [T-stream-stall-watchdog] Phase 2: silence past twice the first-event
-                // budget means the stream stalled, not started slow.
+                // [T-stream-stall-watchdog] 2x first-event budget = stalled, not slow.
                 val streamIdleTimeoutMs = firstEventTimeoutMs * 2
                 // [GH#221] 用户头 + OpenCode 会话头走同一通道。
                 val requestHeaders = requestExtraHeaders()
-                // [GH#563] refresh the date per request; process blocks + goal ride the tail.
-                // goal 每轮都在 tail，历史不追加（见上方复审注释），避免同一请求两份。
-                val turnSystemPrompt = processInjectedSystemPrompt(
-                    refreshRuntimeContextDate(systemPrompt, java.time.LocalDate.now().toString()),
-                    goalMount.prompt,
+                // [GH#563][T-no-repeated-injection] Date only; state lives in history.
+                val turnSystemPrompt = refreshRuntimeContextDate(
+                    systemPrompt,
+                    java.time.LocalDate.now().toString(),
                 )
                 streamPhase.startAttempt()
                 currentProvider.streamMessage(

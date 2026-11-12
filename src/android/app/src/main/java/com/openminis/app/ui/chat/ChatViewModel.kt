@@ -1328,12 +1328,7 @@ class ChatViewModel(
     internal val _planStepRetry = MutableStateFlow<PlanStepRetryRequest?>(null)
     val planStepRetry: StateFlow<PlanStepRetryRequest?> = _planStepRetry.asStateFlow()
 
-    /**
-     * Input-token count reported by the most recent API call, used by
-     * [ContextPolicy] as the "estimated tokens" gate before sending. Zero
-     * means either we've never called the model or the provider didn't return
-     * a usage payload — in which case we treat the turn as low-pressure.
-     */
+    /** Input tokens from the last API call; 0 = unknown (treated as low pressure). */
     internal val _lastTurnContextTokens = MutableStateFlow(0)
     val lastTurnContextTokens: StateFlow<Int> = _lastTurnContextTokens.asStateFlow()
 
@@ -1341,21 +1336,9 @@ class ChatViewModel(
     internal val _lastCacheHitRate = MutableStateFlow(0.0)
     val lastCacheHitRate: StateFlow<Double> = _lastCacheHitRate.asStateFlow()
 
-    // [T-android-split-chat-tokenext] estimateAgentHistoryTokens /
-    // estimateMessagesTokens / estimateMixedTokens / contextTokensForPolicy /
-    // refreshContextUsage / thinkingInfo / loadSessionTokenStats /
-    // dynamicMaxTokens / estimateContextTokens / countPartTokens moved
-    // verbatim to ChatViewModelTokenExt.kt.
+    // [T-android-split-chat-tokenext] Token helpers live in ChatViewModelTokenExt.kt.
 
-    /**
-     * Latest compact summary for the current session, loaded from the DB on
-     * [loadSession] and re-populated after [compactAll] finishes. When non-null,
-     * [effectiveAgentHistory] prepends it as a `<context-summary>` user message
-     * so the model sees a condensed recap of the turns we folded away while
-     * keeping the full [agentHistory] on disk as an audit trail. Mirrors iOS
-     * Phase-B compact semantics (summary synthesized at inference time, never
-     * baked back into agentHistory).
-     */
+    /** Compact summary prepended as `<context-summary>`; never written back to agentHistory. */
     internal val _compactSummary = MutableStateFlow<String?>(null)
     override val compactSummary: StateFlow<String?> = _compactSummary.asStateFlow()
 
@@ -1373,6 +1356,11 @@ class ChatViewModel(
 
     /** Daily files already pasted verbatim into the system prompt. Recall must not repeat them. */
     @Volatile internal var residentDailyFiles: Set<String> = emptySet()
+
+    /** [T-recall-once] Memory lines already delivered this session. */
+    internal val announcedRecallKeys: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+    /** [T-goal-once] Objective sha already delivered. */
+    @Volatile internal var goalAnnouncedSha: String? = null
 
     /**
      * [T-recall-carrier-replay-once] Whether the last announcement was the
