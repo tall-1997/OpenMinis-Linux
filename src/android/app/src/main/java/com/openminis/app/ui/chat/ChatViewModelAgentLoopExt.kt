@@ -541,24 +541,43 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     loopExitedNormally = true
                     break
                 }
+                // [T-process-tail-injection] Process blocks (stage, lanes,
+                // jobs, plan board, recall, goal context) no longer ride the
+                // history: the last user message inside this loop is the
+                // tool_result carrier, so grafting them there mixed process
+                // narration into tool output and re-injected the same blocks on
+                // every turn. They go to the system prompt's dynamic tail
+                // instead (processInjectedSystemPrompt below); the history stays
+                // byte-clean.
+                //
+                // [T-process-tail-injection-review] The Goal context goes to the
+                // tail on EVERY turn too — no first-mount user turn. A first-mount
+                // row would stay in the history while the tail keeps carrying the
+                // block, i.e. the same objective twice per request after turn 0.
                 val requestHistory = ToolIdNormalization.normalizeMessages(
-                    withGoalAndPlanContext(
-                    effectiveAgentHistory(),
-                    goalMount.prompt,
-                    appendNewUser = goalExecutionRun && turn == 0,
-                ).let { history ->
-                    // [T-stall-resume] A previous attempt stalled mid-stream:
-                    // append the bounded continuation note so this attempt
-                    // picks up where it stopped instead of regenerating the
-                    // same text. [T-android-loop-stall-guard] The rule 1/3
-                    // nudge rides the same one-shot USER-note lane (assembly
-                    // artifact, never persisted; cleared on first use — see
-                    // applyStallNudge).
-                    val withResume = applyStallNudge(history, stallResumeContext)
-                    val guardNudge = stallGuardNudge
-                    stallGuardNudge = null
-                    applyStallNudge(withResume, guardNudge)
-                })
+                    // [T-process-tail-injection] Process blocks (stage, lanes,
+                    // jobs, plan board, recall, goal context) no longer ride the
+                    // history: the last user message inside this loop is the
+                    // tool_result carrier, so grafting them there mixed process
+                    // narration into tool output and re-injected the same blocks
+                    // on every turn. They go to the system prompt's dynamic tail
+                    // instead (processInjectedSystemPrompt below); the history
+                    // stays byte-clean. Goal context rides the tail on every
+                    // turn too — a first-mount row would duplicate it after turn 0.
+                    effectiveAgentHistory().let { history ->
+                        // [T-stall-resume] A previous attempt stalled mid-stream:
+                        // append the bounded continuation note so this attempt
+                        // picks up where it stopped instead of regenerating the
+                        // same text. [T-android-loop-stall-guard] The rule 1/3
+                        // nudge rides the same one-shot USER-note lane (assembly
+                        // artifact, never persisted; cleared on first use — see
+                        // applyStallNudge).
+                        val withResume = applyStallNudge(history, stallResumeContext)
+                        val guardNudge = stallGuardNudge
+                        stallGuardNudge = null
+                        applyStallNudge(withResume, guardNudge)
+                    }
+                )
                 // [T-first-event-watchdog] A hung relay never throws — this stream
                 // cancels itself and surfaces a TransientError for the retry chain.
                 // [T-routing-strategy-x] First-token budget via GroupRoutingState so the main loop and the group-chat lane agree.
@@ -571,9 +590,12 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 // [GH#221] 用户头 + OpenCode 会话头走同一通道。
                 val requestHeaders = requestExtraHeaders()
                 // [GH#563] 每次请求前重刷日期；日期在动态尾部，不扰动缓存前缀。
-                val turnSystemPrompt = refreshRuntimeContextDate(
-                    systemPrompt,
-                    java.time.LocalDate.now().toString(),
+                // [T-process-tail-injection] 过程块（阶段/车道/任务/计划板/召回/goal）
+                // 走系统提示动态尾段（tail 在 stablePrefixLen 之后，缓存前缀不变）。
+                // goal 每轮都在 tail，历史不追加（见上方复审注释），避免同一请求两份。
+                val turnSystemPrompt = processInjectedSystemPrompt(
+                    refreshRuntimeContextDate(systemPrompt, java.time.LocalDate.now().toString()),
+                    goalMount.prompt,
                 )
                 streamPhase.startAttempt()
                 currentProvider.streamMessage(

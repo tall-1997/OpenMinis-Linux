@@ -89,12 +89,24 @@ internal fun ChatViewModel.liveRecallPrompt(): String? {
     val turnKey = input.lastUserId
     val keys = hits.map { "${it.day}:${it.line}" }.toSet()
     // If the message that carried the previous block fell out of the window,
-    // the memories are gone from context — announce again regardless.
+    // the memories are gone from context — announce again, but only ONCE per
+    // eviction (see [shouldAnnounceRecall] and [lastRecallCarrierReplayed]).
     val carrierAlive = lastRecallTurnKey == null ||
         _messages.value.any { it.id == lastRecallTurnKey }
-    if (!shouldAnnounceRecall(turnKey, lastRecallTurnKey, keys, lastRecallTurnKeys, carrierAlive)) return null
+    if (!shouldAnnounceRecall(
+            turnKey,
+            lastRecallTurnKey,
+            keys,
+            lastRecallTurnKeys,
+            carrierAlive,
+            lastRecallCarrierReplayed,
+        )
+    ) {
+        return null
+    }
     lastRecallTurnKey = turnKey
     lastRecallTurnKeys = keys
+    lastRecallCarrierReplayed = !carrierAlive
     // [T-memory-recall-count] formatAsPromptFragment already accepts the
     // entries it actually rendered (post fragment budget); accepting the FULL
     // hit list on top used to count every injection twice, with the extra
@@ -187,6 +199,13 @@ internal fun ChatViewModel.prefetchSemanticRecall() {
  * Same-turn requests always announce (each request is a fresh context);
  * a new turn re-announces only when the recalled lines differ from the
  * previous turn's. Compaction resets the state so memories can return.
+ *
+ * [T-recall-carrier-replay-once] A carrier that fell out of the window (the
+ * compaction path evicted it) re-surfaces the block EXACTLY once
+ * ([carrierReplayAlreadyDone] latches). Without the latch the condition stays
+ * true on every following turn of a compacted session, so the same memories
+ * ride along on every request — the model reads the same past-task notes over
+ * and over and the context keeps growing.
  */
 internal fun shouldAnnounceRecall(
     turnKey: String,
@@ -194,10 +213,12 @@ internal fun shouldAnnounceRecall(
     keys: Set<String>,
     lastKeys: Set<String>?,
     lastCarrierAlive: Boolean,
+    carrierReplayAlreadyDone: Boolean = false,
 ): Boolean {
     if (turnKey == lastTurnKey) return true
     if (lastKeys == null) return true
-    return keys != lastKeys || !lastCarrierAlive
+    if (keys != lastKeys) return true
+    return !lastCarrierAlive && !carrierReplayAlreadyDone
 }
 
 private const val ASSISTANT_TAIL_CHARS = 400
@@ -207,9 +228,12 @@ private const val MIN_QUERY_CHARS = 4
 /**
  * [T-plan-board-live] Goal context plus the live plan board, in one pass.
  *
- * Both blocks ride on the last user message (see [withGoalContext]), and both are
- * stripped before re-adding — otherwise every turn would stack another copy onto
- * the history it already sits in.
+ * LEGACY ([T-process-tail-injection]): the agent loop no longer calls this.
+ * It used to ride every block on the LAST user message, which inside the loop
+ * is the tool_result carrier — process narration mixed into tool output, and
+ * every turn re-injected it. Process blocks now go through
+ * [processInjectedSystemPrompt] instead. Kept for callers/tests that still
+ * exercise the history-graft shape; new code must not use it.
  */
 internal fun ChatViewModel.withGoalAndPlanContext(
     history: List<LLMMessage>,
@@ -223,6 +247,67 @@ internal fun ChatViewModel.withGoalAndPlanContext(
     val combined = blocks.joinToString("\n\n").takeIf { it.isNotBlank() }
     return withGoalContext(history, combined, appendNewUser)
 }
+
+/**
+ * [T-process-tail-injection] The per-request process blocks (stage, lanes,
+ * jobs, plan board, recall, plus the routine Goal context) rendered as ONE
+ * string for the SYSTEM PROMPT's dynamic tail.
+ *
+ * Why the system prompt and not the history: inside the agent loop the last
+ * user message is the tool_result carrier, so the old `withGoalAndPlanContext`
+ * graft made the model read process narration as part of a tool output — and
+ * every turn re-injected the same blocks onto a fresh carrier. Sending them
+ * once per request in the prompt tail keeps the history byte-clean (no
+ * process text mixed into tool results) and keeps them visible to the model on
+ * every request, which is what these blocks actually need.
+ *
+ * Cache contract: the blocks go AFTER `systemPromptStablePrefixLen`, so the
+ * stable head is untouched and provider prefix caching still hits.
+ */
+internal fun ChatViewModel.processInjectionTail(goalPrompt: String? = null): String {
+    val parts = PromptParts.render(PromptParts.validate(PromptParts.of(this)))
+    val blocks = parts + listOfNotNull(goalPrompt?.takeIf { it.isNotBlank() })
+    if (blocks.isEmpty()) return ""
+    val raw = blocks.joinToString("\n\n").trim()
+    // [T-process-tail-content-dedupe] Content-level dedupe: when nothing the
+    // host injects has changed, reuse the previous string so the tail bytes are
+    // identical across requests (stable cache suffix, zero re-render churn).
+    val out = reuseProcessTail(raw, processTailCache)
+    processTailCache = out
+    return out
+}
+
+/**
+ * [T-process-tail-content-dedupe] Pure core of the tail dedupe: identical
+ * bytes reuse the previous instance instead of rebuilding a new string.
+ */
+internal fun reuseProcessTail(raw: String, cached: String?): String =
+    if (cached != null && cached == raw) cached else raw
+
+/**
+ * [T-process-tail-injection] The outgoing system prompt for one request:
+ * the run-level prompt (date refreshed) with the process tail appended.
+ *
+ * The tail rides after the stable prefix, so `systemPromptStablePrefixLen`
+ * keeps pointing at the same byte offset and the provider's prefix cache is
+ * unaffected. `goalPrompt` is passed only on the requests that do NOT
+ * first-mount it as a user turn (the first turn of a goal run), so the goal
+ * context never appears twice in one request.
+ */
+internal fun ChatViewModel.processInjectedSystemPrompt(
+    systemPrompt: String?,
+    goalPrompt: String? = null,
+): String? {
+    val tail = processInjectionTail(goalPrompt)
+    if (tail.isBlank()) return systemPrompt
+    return if (systemPrompt.isNullOrBlank()) tail else systemPrompt + "\n\n" + tail
+}
+
+/**
+ * [T-process-tail-injection] True when the host has anything to inject this
+ * request. Kept for callers that only need the decision (tests, diagnostics).
+ */
+internal fun ChatViewModel.hasProcessInjection(): Boolean = processInjectionTail().isNotBlank()
 
 /**
  * [T-work-report] Current stage and last report, rebuilt from the store.

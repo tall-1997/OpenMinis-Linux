@@ -47,4 +47,24 @@ class RecallTurnDedupTest {
     fun newTurnWithIdenticalLinesAnnouncesWhenCarrierLeftTheWindow() {
         assertTrue(shouldAnnounceRecall("turn-b", "turn-a", keys, keys, lastCarrierAlive = false))
     }
+
+    /**
+     * [T-recall-carrier-replay-once] The evicted-carrier replay is a ONE-SHOT:
+     * once the block has been re-surfaced after compaction, later turns must
+     * stay quiet even though the carrier is still gone. Otherwise a compacted
+     * session re-announces the same memories on every request.
+     */
+    @Test
+    fun newTurnWithIdenticalLinesSkipsAfterTheCarrierReplayAlreadyHappened() {
+        assertFalse(
+            shouldAnnounceRecall(
+                "turn-c",
+                "turn-b",
+                keys,
+                keys,
+                lastCarrierAlive = false,
+                carrierReplayAlreadyDone = true,
+            ),
+        )
+    }
 }
