@@ -125,10 +125,30 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
         // [T-compact-preanchor-prune, port iOS 8b76cd74]
         val keepN = ChatViewModel.COMPACT_KEEP_RECENT_USER_TURNS
         val preAnchorCap = 100
+        // [T-compact-window-scaled-budget] The preAnchor token budget scales
+        // with the model's window (≤20%, min 8k) — hoisted here because the
+        // walkBack runs before the postAnchor tail budget below, and both
+        // must agree on one corridor so summary + preAnchor + postAnchor
+        // never crosses the compact threshold.
+        val windowTokens = effectiveContextWindowTokens()
+        val preAnchorBudget = if (windowTokens != null) {
+            WalkBack.COMPACT_PREANCHOR_TOKEN_BUDGET.coerceAtMost((windowTokens * 0.20).toInt().coerceAtLeast(8_000))
+        } else {
+            WalkBack.COMPACT_PREANCHOR_TOKEN_BUDGET
+        }
         val walkBack = walkBackUserTurnsBounded(
             anchorIdx = anchorIdx,
             maxUserTextTurns = keepN,
             maxMessages = preAnchorCap,
+            // [T-compact-token-budget-first] With a token budget supplied,
+            // WalkBack decides on tokens FIRST and the message cap stops
+            // vetoing: an agent-dense session can put 100+ tool rounds
+            // between the anchor and the last user-text turn, and the bare
+            // cap made preAnchor permanently empty (live: 605-message run,
+            // 432 rounds dropped by the tail budget, walkBack returning 0
+            // every request — the work memory between summary and tail
+            // vanished on every request).
+            maxEstimatedTokens = preAnchorBudget,
         )
         val priorIdxResolved: Int? = walkBack.priorIdx
         val priorIdx = walkBack.priorIdx ?: (anchorIdx + 1) // empty preAnchor sentinel
@@ -219,13 +239,30 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
         // tool_use is never orphaned from its tool_result). Request-assembly
         // only; DB persistence is untouched. The dropped-rounds notice is
         // injected at the head of the kept slice as a USER text line.
+        //
+        // [T-compact-window-scaled-budget] postAnchor tail budget scales with
+        // the model's window too (≤35%, ceiling 60k) — preAnchorBudget was
+        // computed above (≤20%) so summary + preAnchor + postAnchor stays
+        // under the 80% compact threshold on every model (no oscillation).
+        val postAnchorBudget = if (windowTokens != null) {
+            minOf(PostAnchorTail.BUDGET_TOKENS, (windowTokens * 0.35).toInt().coerceAtLeast(8_000))
+        } else {
+            PostAnchorTail.BUDGET_TOKENS
+        }
         val tailBudget = PostAnchorTail.Budget(
-            budgetTokens = PostAnchorTail.BUDGET_TOKENS,
+            budgetTokens = postAnchorBudget,
             estimate = WalkBack::estimateMessageTokens,
         )
         val postAnchorOutcome = PostAnchorTail.apply(postAnchorRaw, tailBudget)
         val postAnchor = postAnchorOutcome.kept
         if (postAnchorOutcome.droppedRounds > 0) {
+            // [T-working-memory-ledger] The dropped rounds were never
+            // summarized (compact did not fire — the trimmed request sits
+            // under the threshold), so their knowledge lives only in the
+            // WorkingMemory ledger. Flag the hydration: the once-notice
+            // layer delivers the ledger's one-line records into the
+            // transcript (evict-then-deliver, same as the state snapshot).
+            stateHydrationPending = true
             AppLogger.info(
                 ChatViewModel.TAG,
                 "[CompactDiag] eAH v2 postAnchor tail budget: kept=${postAnchor.size} " +
