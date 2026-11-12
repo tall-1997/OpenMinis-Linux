@@ -139,4 +139,29 @@ class AgentReportToolTest {
         assertFalse(invalid.success)
     }
 
+    // [T-report-recovery] The report no longer rides every request, so the
+    // model re-reads it instead of re-reporting after its context is compacted.
+    @Test
+    fun opGetReadsTheCurrentReportBack() {
+        val empty = AgentReportTool.execute("""{"tool_title":"t","op":"get"}""", sid, null)
+        assertTrue(empty.output, empty.success)
+        assertTrue(empty.output.contains("no report yet"))
+
+        AgentReportStore.record(
+            sid, null, "blocked", "waiting on a person",
+            blocker = "no token", question = "Rotate now?",
+        )
+        val read = AgentReportTool.execute("""{"tool_title":"t","op":"get"}""", sid, null)
+        assertTrue(read.output, read.success)
+        assertTrue(read.output.contains("waiting on a person"))
+        assertTrue(read.output.contains("Rotate now?"))
+        assertEquals("get must not write", 1, AgentReportStore.history(sid, null).size)
+    }
+
+    @Test
+    fun recordingStillRequiresStatusAndSummary() {
+        val missing = AgentReportTool.execute("""{"tool_title":"t"}""", sid, null)
+        assertFalse(missing.success)
+        assertTrue(missing.output.contains("required"))
+    }
 }

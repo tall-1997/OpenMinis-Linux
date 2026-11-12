@@ -232,6 +232,20 @@ object AgentReportStore {
     /** Human-readable stage token, e.g. `needs-answer`. */
     fun stageToken(stage: Stage): String = stage.name.lowercase().replace('_', '-')
 
+    /**
+     * [T-report-recovery] Content view for `op=get`: the stored report as data.
+     * [render] is a write receipt (it never echoes the summary), so recovery
+     * needs its own projection.
+     */
+    fun renderSnapshot(report: Report): String = buildString {
+        append("status: ${report.status}\n")
+        append("stage: ${stageToken(stageOf(report))}\n")
+        append("summary: ${report.summary}\n")
+        if (report.blocker.isNotBlank()) append("blocker: ${report.blocker}\n")
+        if (report.question.isNotBlank()) append("question: ${report.question}\n")
+        if (report.evidence.isNotBlank()) append("evidence: ${report.evidence}\n")
+    }.trimEnd()
+
     /** Tool-result rendering: what the model sees after reporting. */
     fun render(report: Report): String {
         val stage = stageOf(report)
@@ -266,8 +280,14 @@ object AgentReportTool {
             "`blocked` and `failed` require `blocker`. Never report ready without evidence of checks run. " +
             "This state is shown to the user and your last report stays in the conversation's " +
             "tool results, so it is how the run stays accountable for the task it was given. " +
-            "Do not call it again just because a previous report exists - call it when the stage changes.",
+            "Do not call it again just because a previous report exists - call it when the stage changes. " +
+            "If an earlier report left your context, read it back with op=get instead of re-reporting.",
         parameters = mapOf(
+            "op" to AgentToolParam(
+                "string",
+                "Omit to record a report. get reads the current report back; clear removes it.",
+                enumValues = listOf("get", "clear"),
+            ),
             "tool_title" to AgentToolParam("string", "A concise 5-10 word summary shown to the user."),
             "status" to AgentToolParam(
                 "string",
@@ -279,8 +299,10 @@ object AgentReportTool {
             "question" to AgentToolParam("string", "A single concrete decision the user must make, if any."),
             "evidence" to AgentToolParam("string", "Checks actually run, with their results."),
         ),
-        required = listOf("tool_title", "status", "summary"),
-        propertyOrdering = listOf("tool_title", "status", "summary", "blocker", "question", "evidence"),
+        // status/summary are required to RECORD; op=get/clear need neither, so
+        // the contract is enforced in execute() instead of the schema.
+        required = listOf("tool_title"),
+        propertyOrdering = listOf("tool_title", "op", "status", "summary", "blocker", "question", "evidence"),
     )
 
     fun execute(
@@ -291,9 +313,37 @@ object AgentReportTool {
         val toolTitle = runCatching { JSONObject(argsJson).optString("tool_title", NAME) }.getOrDefault(NAME)
         return try {
             val args = JSONObject(argsJson)
-            if (args.optString("op") == "clear") {
-                AgentReportStore.clear(sessionId, context)
-                return ToolExecutionResult("(report cleared)", true, toolTitle = toolTitle)
+            when (args.optString("op")) {
+                "clear" -> {
+                    AgentReportStore.clear(sessionId, context)
+                    return ToolExecutionResult("(report cleared)", true, toolTitle = toolTitle)
+                }
+                // [T-report-recovery] The report no longer rides every request;
+                // after compaction the model must be able to read the current
+                // one back (same shape as agent_plan op=list / check_agent).
+                "get" -> {
+                    val current = AgentReportStore.latest(sessionId, context)
+                        ?: return ToolExecutionResult(
+                            "(no report yet — record one with status/summary)",
+                            true,
+                            toolTitle = toolTitle,
+                        )
+                    return ToolExecutionResult(
+                        "Current report:\n" + AgentReportStore.renderSnapshot(current),
+                        true,
+                        toolTitle = toolTitle,
+                    )
+                }
+            }
+            val op = args.optString("op").ifBlank { "report" }
+            if (op == "report" &&
+                (args.optString("status").isBlank() || args.optString("summary").isBlank())
+            ) {
+                return ToolExecutionResult(
+                    "Error: status and summary are required to record a report",
+                    false,
+                    toolTitle = toolTitle,
+                )
             }
             val report = AgentReportStore.record(
                 sessionId = sessionId,
