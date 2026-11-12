@@ -7,6 +7,7 @@ import com.openminis.app.R
 import com.openminis.app.data.db.ChatSessionEntity
 import com.openminis.app.data.db.MessageEntity
 import com.openminis.app.data.repository.ChatRepository
+import com.openminis.app.data.repository.fullBodyForCopy
 import com.openminis.app.logging.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -385,7 +386,16 @@ object ChatExporter {
         if (total <= 0) return
         var offset = 0
         while (offset < total) {
-            val batch = repository.loadMessagePageRaw(sessionId, offset, BATCH_SIZE)
+            // [T-body-spill-export] Resolve offloaded bodies before rendering.
+            // loadMessagePageRaw reads the projection, whose parts_json is the
+            // `body stored (N bytes)` placeholder for every oversized body, so
+            // an export of a long session showed the placeholder instead of the
+            // real transcript. fullBodyForCopy resolves through the
+            // content-addressed blob (the stored row is untouched).
+            val batch = repository.loadMessagePageRaw(sessionId, offset, BATCH_SIZE).map { row ->
+                val full = runCatching { repository.fullBodyForCopy(row) }.getOrNull()
+                if (full.isNullOrBlank() || full == row.partsJson) row else row.copy(partsJson = full)
+            }
             if (batch.isEmpty()) break
             block(batch)
             offset += batch.size
