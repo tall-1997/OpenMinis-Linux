@@ -487,6 +487,7 @@
     <string name="chat_typing_indicator">%1$s sedang berpikir</string>
     <string name="read_aloud_unavailable">Gagal membacakan: tidak ada mesin suara yang dapat digunakan. Periksa pengaturan Output Suara atau pasang mesin ucapan sistem.</string>
     <string name="chat_error_stream_dropped_partial">Koneksi terputus — balasan ini mungkin tidak lengkap. Ketuk Coba Lagi untuk melanjutkan.</string>
+    <string name="chat_composer_queued_hint">Input akan masuk antrean dan terkirim saat tugas saat ini selesai</string>
     <string name="chat_input_placeholder">Pesan untuk %1$s (@ sebut berkas)</string>
     <string name="chat_input_placeholder_hint_1">Coba @ untuk sebut berkas bagi %1$s</string>
     <string name="chat_input_placeholder_hint_2">Ketik / untuk SKILL dan perintah cepat</string>

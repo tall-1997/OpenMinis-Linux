@@ -484,6 +484,7 @@
     <string name="chat_typing_indicator">%1$s думает</string>
     <string name="read_aloud_unavailable">Не удалось озвучить: нет доступного голосового движка. Проверьте настройки голосового вывода или установите системный синтезатор речи.</string>
     <string name="chat_error_stream_dropped_partial">Соединение прервано — этот ответ может быть неполным. Нажмите «Повторить», чтобы продолжить.</string>
+    <string name="chat_composer_queued_hint">Ввод будет в очереди и отправится после завершения текущей задачи</string>
     <string name="chat_input_placeholder">Сообщение для %1$s (@ для упоминания файлов)</string>
     <string name="chat_input_placeholder_hint_1">Используйте @, чтобы упомянуть файлы для чтения %1$s</string>
     <string name="chat_input_placeholder_hint_2">Введите /, чтобы открыть SKILL и быстрые команды</string>

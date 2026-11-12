@@ -1467,7 +1467,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     checkNotNull(activeRun) { "Agent loop has no persistence owner" }, turnParts, lastUsage, turnReasoningContent, blockMeta, accumulatedText,
                 )
                 if (activeRun?.isStopped == true) { loopExitedNormally = true; break }
-                val steering = goalManager.continuationPrompt(goal)
+                val steering = com.openminis.app.goal.GoalContinuation.note(goal)
                 appendBoundedHistory(
                     LLMMessage(
                         role = LLMMessage.Role.USER,

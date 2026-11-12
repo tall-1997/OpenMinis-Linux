@@ -4788,7 +4788,7 @@ fun ChatScreen(
                                             label = "composerPlaceholder",
                                         ) { idx ->
                                             Text(
-                                                composerPlaceholderText(idx, soulName.name),
+                                                composerPlaceholderText(idx, soulName.name, queued = isStreaming),
                                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
                                                 fontSize = 16.5.sp * chatInputFontScale,
                                                 maxLines = 1,

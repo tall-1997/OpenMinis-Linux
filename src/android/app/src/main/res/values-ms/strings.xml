@@ -482,6 +482,7 @@
     <string name="chat_typing_indicator">%1$s sedang berfikir</string>
     <string name="read_aloud_unavailable">Gagal membacakan: tiada enjin suara yang boleh digunakan. Semak tetapan Output Suara atau pasang enjin pertuturan sistem.</string>
     <string name="chat_error_stream_dropped_partial">Sambungan terputus — balasan ini mungkin tidak lengkap. Ketik Cuba Lagi untuk meneruskan.</string>
+    <string name="chat_composer_queued_hint">Input akan beraturan dan dihantar apabila tugasan semasa selesai</string>
     <string name="chat_input_placeholder">Mesej untuk %1$s (@ sebut fail)</string>
     <string name="chat_input_placeholder_hint_1">Cuba @ untuk sebut fail bagi %1$s</string>
     <string name="chat_input_placeholder_hint_2">Taip / untuk SKILL dan perintah pantas</string>

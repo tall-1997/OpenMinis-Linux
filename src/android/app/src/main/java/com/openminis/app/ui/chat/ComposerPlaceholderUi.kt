@@ -72,7 +72,13 @@ internal fun animationsDisabled(context: Context): Boolean =
  * one per soul name.
  */
 @Composable
-internal fun composerPlaceholderText(index: Int, soulName: String): String {
+internal fun composerPlaceholderText(index: Int, soulName: String, queued: Boolean = false): String {
+    // [T-composer-queued-hint] Running-task double state (ZCode busyPlaceholder
+    // shape): while the agent is streaming, the placeholder announces that new
+    // input will be QUEUED — the prompt queue delivers it at a tool-result
+    // boundary as a standalone turn. Zero extra screen space: the hint lives
+    // in the existing placeholder slot.
+    if (queued) return stringResource(R.string.chat_composer_queued_hint)
     val hints = listOf(
         R.string.chat_input_placeholder_hint_1,
         R.string.chat_input_placeholder_hint_2,

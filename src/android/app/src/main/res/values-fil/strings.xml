@@ -482,6 +482,7 @@
     <string name="chat_typing_indicator">Nag-iisip si %1$s</string>
     <string name="read_aloud_unavailable">Nabigong basahin nang malakas: walang magamit na voice engine. Suriin ang mga setting ng Voice Output o mag-install ng speech engine ng system.</string>
     <string name="chat_error_stream_dropped_partial">Naputol ang koneksyon — maaaring hindi kumpleto ang sagot na ito. I-tap ang Subukan Muli para magpatuloy.</string>
+    <string name="chat_composer_queued_hint">Iqueu ang input at ipapadala kapag natapos ang kasalukuyang task</string>
     <string name="chat_input_placeholder">Mensahe kay %1$s (@ para sa file)</string>
     <string name="chat_input_placeholder_hint_1">Gamitin ang @ para sa file ni %1$s</string>
     <string name="chat_input_placeholder_hint_2">I-type ang / para sa SKILL at command</string>

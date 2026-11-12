@@ -483,6 +483,7 @@
     <string name="chat_typing_indicator">%1$s se gândește</string>
     <string name="read_aloud_unavailable">Citirea cu voce tare a eșuat: niciun motor vocal utilizabil. Verifică setările de ieșire vocală sau instalează un motor de sinteză al sistemului.</string>
     <string name="chat_error_stream_dropped_partial">Conexiunea s-a întrerupt — acest răspuns poate fi incomplet. Atinge Reîncearcă pentru a continua.</string>
+    <string name="chat_composer_queued_hint">Intrarea va fi pusă în coadă și trimisă după terminarea sarcinii curente</string>
     <string name="chat_input_placeholder">Mesaj pentru %1$s (@ = fișiere)</string>
     <string name="chat_input_placeholder_hint_1">Folosește @ pentru fișierele lui %1$s</string>
     <string name="chat_input_placeholder_hint_2">Scrie / pentru SKILL și comenzi</string>

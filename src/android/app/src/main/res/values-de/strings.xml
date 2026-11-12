@@ -482,6 +482,7 @@
     <string name="chat_typing_indicator">%1$s denkt nach</string>
     <string name="read_aloud_unavailable">Vorlesen fehlgeschlagen: keine nutzbare Sprachausgabe. Prüfe die Sprachausgabe-Einstellungen oder installiere eine System-Sprachausgabe.</string>
     <string name="chat_error_stream_dropped_partial">Die Verbindung wurde unterbrochen — diese Antwort ist möglicherweise unvollständig. Zum Fortfahren erneut versuchen.</string>
+    <string name="chat_composer_queued_hint">Eingabe wird eingereiht und nach Abschluss der aktuellen Aufgabe gesendet</string>
     <string name="chat_input_placeholder">Nachricht an %1$s (@ um Dateien zu erwähnen)</string>
     <string name="chat_input_placeholder_hint_1">Mit @ Dateien erwähnen, die %1$s lesen soll</string>
     <string name="chat_input_placeholder_hint_2">/ eingeben für SKILLs und Schnellbefehle</string>

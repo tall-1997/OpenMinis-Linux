@@ -249,13 +249,13 @@ object ExecutionCoordinator {
             val envVars = AppGraph.executionEnvVarRepositoryOrNull()?.allAsDict() ?: emptyMap()
             val previousKeys = lastInjectedKeys[sessionId] ?: emptySet()
             if (envVars.isNotEmpty() || previousKeys.isNotEmpty()) {
-                shell.applyEnvironment(envVars, previousKeys = previousKeys)
+                ShellEnvWriter.applyEnvironment(shell, envVars, previousKeys = previousKeys)
                 lastInjectedKeys[sessionId] = envVars.keys.toSet()
             }
             // Plugin installers add command links to the guest PATH while this
             // persistent shell remains alive. Refresh both PATH and bash's
             // command hash before every command so the next command sees it.
-            shell.refreshPath()
+            ShellEnvWriter.refreshPath(shell, appContext)
 
             // [port-upstream-1.16 / FIX-261025-05] Last checkpoint before the
             // command is written to the shell's stdin. Past this point the
@@ -555,8 +555,10 @@ object ExecutionCoordinator {
     }
 
     /**
-     * Stop the shell for a specific session (e.g. user tapped cancel).
-     * The shell process is killed; next command will recreate it.
+     * Stop the running command for a specific session (e.g. user tapped cancel).
+     * [stop=kill] The running command's process tree is killed; the persistent
+     * shell itself stays alive with its cwd/env/packages, and the stop epoch
+     * keeps queued commands from starting.
      */
     fun stopCurrentCommand(sessionId: String? = null) {
         if (sessionId != null) {
@@ -605,7 +607,7 @@ object ExecutionCoordinator {
             .onFailure { Log.w(TAG, "syncHostTimezoneFiles failed: ${it.message}") }
         val tzMap = mapOf("TZ" to tz)
         for ((_, shell) in shells) {
-            if (shell.isAlive) shell.applyEnvironment(tzMap)
+            if (shell.isAlive) ShellEnvWriter.applyEnvironment(shell, tzMap)
         }
         TerminalSession.broadcastTimezone(tz)
     }
@@ -638,16 +640,29 @@ object ExecutionCoordinator {
             PRootKernel.updateProxy(appContext) +
             com.openminis.app.network.NetworkShellEnvironment.proxyVariables()
         for ((_, shell) in shells) {
-            if (shell.isAlive) shell.applyEnvironment(env)
+            if (shell.isAlive) ShellEnvWriter.applyEnvironment(shell, env)
         }
         TerminalSession.broadcastProxy(env)
     }
 
+    /**
+     * [stop=kill] User Stop for one session: kill the RUNNING command's
+     * process tree but KEEP the shell. The old path removed the shell and
+     * called [PersistentShell.stop], which took the whole persistent shell
+     * down — cwd, env and installed packages gone, next command paying a
+     * full rebuild — while the UI had already shown CANCELLED. The epoch
+     * bump in [stopCurrentCommand] already keeps queued commands from
+     * starting; the interrupt makes the pending command's DONE marker fire
+     * (signal exit 137), so the session mutex opens at once and the shell
+     * continues serving the session with its state intact.
+     */
     private fun stopOne(sessionId: String) {
-        val shell = shells.remove(sessionId)
-        lastInjectedKeys.remove(sessionId)
-        shell?.stop()
-        Log.i(TAG, "[$sessionId] Shell stopped by user")
+        val shell = shells[sessionId] ?: return
+        val interrupted = shell.interruptRunningCommand()
+        Log.i(
+            TAG,
+            "[$sessionId] Stop: ${if (interrupted) "running command killed by user, shell kept" else "nothing running, shell kept"}",
+        )
     }
 
     fun ownerSessionId(sessionId: String): String {

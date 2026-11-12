@@ -482,6 +482,7 @@
     <string name="chat_typing_indicator">%1$s が考えています</string>
     <string name="read_aloud_unavailable">読み上げに失敗しました：利用可能な音声エンジンがありません。音声出力設定を確認するか、システムの音声合成エンジンをインストールしてください。</string>
     <string name="chat_error_stream_dropped_partial">接続が切断されました。この返信は不完全な可能性があります。再試行してください。</string>
+    <string name="chat_composer_queued_hint">入力はキューに入り、現在のタスク終了後に送信されます</string>
     <string name="chat_input_placeholder">%1$s にメッセージ（@ でファイルを参照）</string>
     <string name="chat_input_placeholder_hint_1">@ でファイルを指定すると %1$s が読み取れます</string>
     <string name="chat_input_placeholder_hint_2">/ を入力すると SKILL とクイックコマンドを使えます</string>

@@ -128,6 +128,48 @@ internal object SandboxWorkload {
         runCatching { AndroidProcess.killProcess(pid) }
     }
 
+    /**
+     * [stop=kill] Kill the RUNNING foreground command tree of a persistent
+     * shell while the shell itself stays alive.
+     *
+     * [killOwned] cannot serve this: its trailing `Os.kill(-pid, SIGKILL)`
+     * is a process-GROUP signal, and the shell is that group's leader
+     * ([adopt] setpgid'd it at spawn), so the group kill would take the
+     * shell down with the command — exactly what a user Stop must not do
+     * (the shell carries cwd, env and installed packages; rebuilding it is
+     * the expensive fallback, not the design).
+     *
+     * This walks the same /proc tables and SIGKILLs every descendant of the
+     * shell's host process EXCEPT the guest shell bash itself
+     * ([ProcessTree.isGuestShellBash] — the `exec /bin/bash --noprofile
+     * --norc` incarnation). The command watchdog subshell is a descendant
+     * too and dies with the rest, so it cannot later fire its own
+     * `kill -TERM -$$` at the group and take the shell down after the fact.
+     * [KILL_PASSES] absorbs processes that were still forking during an
+     * earlier pass.
+     *
+     * Returns the pids that were signalled.
+     */
+    fun killCommandTree(process: java.lang.Process?, reason: String): Set<Int> {
+        val rootPid = process?.let { pidOf(it) } ?: return emptySet()
+        if (rootPid <= 0) return emptySet()
+        val killed = LinkedHashSet<Int>()
+        repeat(KILL_PASSES) {
+            for (pid in discover(rootPid)) {
+                if (pid == rootPid) continue
+                if (ProcessTree.isGuestShellBash(
+                        runCatching { File("/proc/$pid/cmdline").readText() }.getOrNull()
+                    )
+                ) continue
+                if (killed.add(pid)) {
+                    Log.w(TAG, "interrupt pid=$pid reason=$reason")
+                    signal(pid)
+                }
+            }
+        }
+        return killed
+    }
+
     private fun adopt(pid: Int) {
         val failed = runCatching {
             val method = Os::class.java.getMethod("setpgid", Integer.TYPE, Integer.TYPE)

@@ -72,8 +72,8 @@ B4 插话排队边界轮；B6 的 A1 判据 + PostAnchorTail 预算；B7 的 com
 - **验收**：运行中一眼可停（活动 pill 停止钮 + 输入框排队提示）；goal 断点续跑跨重启。（进度行不新增——用户空间顾虑采纳，活动 pill + 输入框双态已覆盖。）
 
 ### 第三批（真机回归）
-7. 重放 minis-2026-11-12.log 场景：992 条历史 + cargo build 循环——核对 ledger 无重执行、compact 触发、hint 形态、插话边界、重启不重播通知、verifier 行为。
-8. DeepSeek Harness 发行版（`D:\DeepSeek Harness`）同法提取对照（其 primary-runtime 为 pnpm 环境目录，主 loop 在 app.asar 内，需 asar 解包）——确认无族内差异遗漏。
+5. 重放 minis-2026-11-12.log 场景：992 条历史 + cargo build 循环——核对 ledger 无重执行、compact 触发、hint 形态、插话边界、重启不重播通知、verifier 行为。
+6. DeepSeek Harness 发行版（`D:\DeepSeek Harness`）同法提取对照（其 primary-runtime 为 pnpm 环境目录，主 loop 在 app.asar 内，需 asar 解包）——确认无族内差异遗漏。
 
 ---
 

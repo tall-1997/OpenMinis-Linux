@@ -482,6 +482,7 @@
     <string name="chat_typing_indicator">%1$s réfléchit</string>
     <string name="read_aloud_unavailable">Lecture à voix haute impossible : aucun moteur vocal disponible. Vérifiez les réglages de sortie vocale ou installez un moteur de synthèse système.</string>
     <string name="chat_error_stream_dropped_partial">La connexion a été interrompue — cette réponse est peut-être incomplète. Appuyez sur Réessayer pour continuer.</string>
+    <string name="chat_composer_queued_hint">La saisie sera mise en file et envoyée à la fin de la tâche en cours</string>
     <string name="chat_input_placeholder">Message à %1$s (@ pour mentionner des fichiers)</string>
     <string name="chat_input_placeholder_hint_1">Utilisez @ pour mentionner des fichiers à lire par %1$s</string>
     <string name="chat_input_placeholder_hint_2">Tapez / pour les SKILLs et les commandes rapides</string>
