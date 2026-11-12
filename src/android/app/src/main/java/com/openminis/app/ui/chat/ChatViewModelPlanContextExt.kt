@@ -186,32 +186,6 @@ internal fun ChatViewModel.prefetchSemanticRecall() {
     }
 }
 
-/**
- * [T-recall-turn-dedup] Pure decision: true = announce the fragment now.
- * Same-turn requests always announce (each request is a fresh context);
- * a new turn re-announces only when the recalled lines differ from the
- * previous turn's. Compaction resets the state so memories can return.
- *
- * [T-recall-carrier-replay-once] A carrier that fell out of the window (the
- * compaction path evicted it) re-surfaces the block EXACTLY once
- * ([carrierReplayAlreadyDone] latches). Without the latch the condition stays
- * true on every following turn of a compacted session, so the same memories
- * ride along on every request — the model reads the same past-task notes over
- * and over and the context keeps growing.
- */
-internal fun shouldAnnounceRecall(
-    turnKey: String,
-    lastTurnKey: String?,
-    keys: Set<String>,
-    lastKeys: Set<String>?,
-    lastCarrierAlive: Boolean,
-    carrierReplayAlreadyDone: Boolean = false,
-): Boolean {
-    if (turnKey == lastTurnKey) return true
-    if (lastKeys == null) return true
-    if (keys != lastKeys) return true
-    return !lastCarrierAlive && !carrierReplayAlreadyDone
-}
 
 private const val ASSISTANT_TAIL_CHARS = 400
 

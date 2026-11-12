@@ -18,18 +18,32 @@ import kotlinx.coroutines.withContext
  * so a synthetic turn never renders as a user bubble — the same treatment
  * [commitStreamDropReminder] uses.
  */
+/** [T-recall-once] Reset one-shot notice bookkeeping when the session changes. */
+internal fun ChatViewModel.ensureSessionScopedNotices() {
+    val sid = activeSessionId
+    if (sid != noticesSessionId) {
+        noticesSessionId = sid
+        announcedRecallKeys.clear()
+        goalAnnouncedSha = null
+    }
+}
+
 internal suspend fun ChatViewModel.commitHiddenUserNote(text: String) {
     if (text.isBlank()) return
+    // [T-hidden-user-note] Harness framing, not user speech: ZCode delivers
+    // recalled memory / objective as a `<system-reminder>` notice so the model
+    // does not treat it as a request to answer.
+    val framed = "<system-reminder>\n$text\n</system-reminder>"
     appendBoundedHistory(
         LLMMessage(
             role = LLMMessage.Role.USER,
-            content = text,
-            contentParts = listOf(AgentContentPart.Text(text)),
+            content = framed,
+            contentParts = listOf(AgentContentPart.Text(framed)),
         ),
     )
     // Read the session id up front: the IO hop can outlive a session switch.
     val sid = activeSessionId
-    val partsJson = """[{"type":"text","value":${escapeJson(text)}}]"""
+    val partsJson = """[{"type":"text","value":${escapeJson(framed)}}]"""
     val persisted = withContext(Dispatchers.IO) {
         runCatching { chatRepository.appendMessage(sid, "user", partsJson) }.getOrNull()
     } ?: return

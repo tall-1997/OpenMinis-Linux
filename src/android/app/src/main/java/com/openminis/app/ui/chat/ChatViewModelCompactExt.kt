@@ -417,9 +417,8 @@ private inline fun ChatViewModel.compactAllImpl(
             // [T-recall-turn-dedup] The compacted context no longer carries the
             // announced block — forget it so the same memories can be
             // re-announced on the next turn.
-            lastRecallTurnKey = null
-            lastRecallTurnKeys = null
-            lastRecallCarrierReplayed = false
+            // [T-recall-once] Delivered-memory bookkeeping survives compaction:
+            // a compacted note that is re-selected would be a repeated injection.
         } catch (e: TimeoutCancellationException) {
             // [T-android-compact-runaway] MUST precede the CancellationException
             // arm — TimeoutCancellationException extends it, so the generic

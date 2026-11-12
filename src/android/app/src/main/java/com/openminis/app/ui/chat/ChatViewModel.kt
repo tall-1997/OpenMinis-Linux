@@ -1345,12 +1345,6 @@ class ChatViewModel(
     /** Byte offset of the stable system-prompt prefix; -1 caches the whole prompt. */
     @Volatile internal var systemPromptStablePrefixLen: Int = -1
 
-    // [T-recall-turn-dedup] Cross-turn dedup state for live recall: the turn
-    // identity (last non-queued user message id) and the recalled line keys
-    // announced for it. Compaction resets both so memories can return.
-    @Volatile internal var lastRecallTurnKey: String? = null
-    @Volatile internal var lastRecallTurnKeys: Set<String>? = null
-
     /** [T-process-tail-content-dedupe] Last process tail (identical bytes reuse the instance). */
     @Volatile internal var processTailCache: String? = null
 
@@ -1362,16 +1356,8 @@ class ChatViewModel(
     /** [T-goal-once] Objective sha already delivered. */
     @Volatile internal var goalAnnouncedSha: String? = null
 
-    /**
-     * [T-recall-carrier-replay-once] Whether the last announcement was the
-     * "carrier evicted" replay. After compaction evicts the message that
-     * carried the recall block, the memories are absent from context and must
-     * be re-surfaced — but only ONCE: without this flag the carrier-alive
-     * condition stays false for every following turn of a compacted session,
-     * and the same memories are re-announced on every request (context bloat
-     * plus the model reading the same "past task" notes over and over).
-     */
-    @Volatile internal var lastRecallCarrierReplayed: Boolean = false
+    /** [T-recall-once] Session the notice bookkeeping belongs to. */
+    @Volatile internal var noticesSessionId: String? = null
 
     /** True when a compact-summary LLM call is in flight (UI disables further sends). */
     internal val _isCompacting = MutableStateFlow(false)

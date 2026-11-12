@@ -74,14 +74,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     val generationRunId = com.openminis.app.agent.GenerationRunLifecycle.start(
         context, activeSessionId, provider.model.displayName, runAnchor,
     )
-    // [T-android-mem-probe-trust] Send-path context shape. The existing
-    // `messages-shape` probe only runs on session LOAD, so the 2026-08-15
-    // log described the session as it was opened, never as it was sent —
-    // and the send is where the memory goes. `historySize` alone says
-    // nothing about payload: 17 messages carrying a 100 KB tool_result each
-    // is a very different request from 1500 short ones. Logged once per
-    // agent loop (not per turn) to stay cheap; the walk is O(parts) over
-    // already-resident strings.
+    // [T-android-mem-probe-trust] Log the send-path context shape once per run.
     runCatching {
         var chars = 0L
         var maxOne = 0
@@ -150,17 +143,8 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // other tools get 5Hz so command/url previews stay legible.
     var lastFileToolInputMs = 0L
     var lastOtherToolInputMs = 0L
-    // [T-android-throttle-ladder-converge] Ladder body moved to
-    // [StreamingThrottle.ladderFor]. This surface deliberately keeps its
-    // FASTER 150ms first tier (vs the flush/parse surfaces' 200ms) — the
-    // delta gate only applies to short inputs, where the pill's command/url
-    // preview benefits from the lower latency; the rest of the ladder is
-    // shared.
-    // Fallback state — mirrors iOS streamWithGroupFallback.
-    // [T-android-model-switch-midrun-adopt] Both are reassigned at the top of
-    // every request when the user picked a different model since the previous
-    // one started: the run keeps going, and the next request uses the new
-    // model with the fallback chain rebuilt for it.
+    // [T-android-throttle-ladder-converge] 150ms first tier for this surface.
+    // [T-android-model-switch-midrun-adopt] Fallback state is re-read per request.
     var currentProvider = provider
     var remainingFallbacks = fallbackProviders.toMutableList()
     val fallbackReasons = mutableListOf<String>()
@@ -255,6 +239,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // its own speech mid-sentence.
     var didStopStaleReadAloud = false
     val toolExecutionLedger = ToolExecutionLedger()  // [T-tool-execution-ledger] one per run
+    val repeatTracker = ToolRepeatTracker()  // [T-frozen-repeat-hint] hint-only
     // [T-main-session-turn-cap] The runaway guard is user-tunable
     // (Settings → Tool Limits); 200 is only the shipped default. Read once
     // per run so a mid-run settings change can't shift the range end under
@@ -539,12 +524,18 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     break@agentTurns
                 }
                 // [T-recall-once][T-goal-once] Notices go into the transcript once.
+                ensureSessionScopedNotices()
                 newRecallReminder()?.let { commitHiddenUserNote(it) }
-                goalMount.prompt?.takeIf { goalMount.canContinue }?.let { prompt ->
-                    val sha = com.openminis.app.util.Digest.sha256Hex(prompt)
+                val goalObjective = requestGoalState?.objective.orEmpty()
+                val goalPrompt = goalMount.prompt
+                if (goalMount.canContinue && goalPrompt != null && goalObjective.isNotBlank()) {
+                    // Hash the OBJECTIVE only: the rendered block carries
+                    // tokens/elapsed that change every request, which would
+                    // re-announce the goal (and post a user turn) every turn.
+                    val sha = com.openminis.app.util.Digest.sha256Hex(goalObjective)
                     if (sha != goalAnnouncedSha) {
                         goalAnnouncedSha = sha
-                        commitHiddenUserNote(prompt)
+                        commitHiddenUserNote(goalPrompt)
                     }
                 }
                 val requestHistory = ToolIdNormalization.normalizeMessages(
@@ -1839,6 +1830,9 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 }
             }
         }
+
+        // [T-frozen-repeat-hint] One hint inside the tool result; never a USER turn.
+        ToolRepeatTracker.applyHint(repeatTracker, toolCalls, resultParts)
 
         currentCoroutineContext().ensureActive()
         if (activeRun?.isStopped == true) { loopExitedNormally = true; break }
