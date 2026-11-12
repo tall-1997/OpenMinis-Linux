@@ -545,6 +545,16 @@ private suspend fun ChatViewModel.runPlannedCall(
         )
         currentCoroutineContext().ensureActive()
         Log.d("ToolChain[VM]", "[turn=${ctx.turn}] executeTool END name=${call.name} success=${result.success} title=${result.toolTitle} outputLen=${result.output.length} output=${result.output.take(200)}")
+        // [T-working-memory-ledger] Host-side one-line record of this round
+        // for the evict-then-deliver handover (the tail budget drops
+        // unsummarized rounds; this line is what gets delivered in their
+        // place). INSIDE the owner-only producer and BEFORE the tail
+        // expression: a replay must not record the same work twice, and the
+        // producer must yield the ToolResult.
+        WorkingMemoryStore.append(
+            ctx.activeSessionId, ctx.turn, call.name,
+            ledgerArgsSha.take(8), result.output.take(120),
+        )
         finalizePlannedCall(ctx, call, result)
     }
     executedParts[call.id] = part
@@ -575,9 +585,15 @@ private suspend fun ChatViewModel.fanOutSpawnCalls(
     plannedCalls: List<PlannedToolCall>,
     execution: ToolTurnExecution,
 ) {
+    // [T-tool-execution-ledger] Single-execution boundary (from #332):
+    // ledger.executeOnce claims (id, name, argsSha) BEFORE any side effect;
+    // replays and in-flight duplicates join the owner's result instead of
+    // launching a second sub-agent wave. [T-working-memory-ledger] The
+    // owner-only producer also records one WorkingMemory line — replays are
+    // NOT recorded again (the same work was logged when it first ran).
+    val peers = plannedCalls.filter { SubAgentKind.isSpawnTool(it.name) }
     val cap = MultiAgentSettings.clampConcurrent(multiAgentSettings.maxConcurrent.value)
     val sem = Semaphore(cap)
-    val peers = plannedCalls.filter { SubAgentKind.isSpawnTool(it.name) }
     val writerCount = peers.sumOf { peer ->
         parseSubAgentBatch(peer.argsStr, ToolLimitPrefs.subagentMaxTurns())
             .count { spawn -> SubAgentKind.canWrite(spawn.kind) }
@@ -608,6 +624,10 @@ private suspend fun ChatViewModel.fanOutSpawnCalls(
                         parallelWriters = writerCount,
                         waveIndex = peerIdx,
                         waveSize = peers.size,
+                    )
+                    WorkingMemoryStore.append(
+                        ctx.activeSessionId, ctx.turn, peer.name,
+                        peerArgsSha.take(8), peerResult.output.take(120),
                     )
                     finalizePlannedCall(ctx, peer, peerResult)
                 }

@@ -79,6 +79,14 @@ internal suspend fun ChatViewModel.commitSessionNoticesOnce(
                 ledgerDirty = true
             }
         }
+        // [T-working-memory-ledger] The trimmed/evicted rounds may include
+        // work that no plan/report snapshot covers (raw tool rounds). The
+        // ledger's one-line records of undelivered rounds ride the same
+        // hydration: delivered once into the transcript, then carried by it.
+        WorkingMemoryStore.renderUndelivered(activeSessionId)?.let { note ->
+            commitHiddenUserNote(note)
+            ledgerDirty = true
+        }
     }
     // After a hydration, the state note is the carrier; drop it if it is gone.
     if (stateSnapshotSha != null &&

@@ -78,13 +78,31 @@ class WalkBackTokenBudgetTest {
     }
 
     @Test
-    fun messageCapStillWinsWhenItFiresFirst() {
+    fun tokenBudgetTakesPrecedenceOverTheMessageCap() {
+        // [T-compact-token-budget-first] With a token budget supplied, the
+        // message count stops vetoing: a generous budget walks past the cap
+        // and collects turns until the BUDGET fires (agent-dense sessions
+        // put 100+ tool rounds between user-text turns — the count-only cap
+        // made preAnchor permanently empty on device).
         val result = WalkBack.bounded(
             unitHistory(),
             anchorIdx = 5,
             maxUserTextTurns = 3,
             maxMessages = 2,
             maxEstimatedTokens = 1_000,
+        )
+        assertEquals(WalkBack.STOP_USER_TEXT_TARGET_MET, result.stopReason)
+        assertEquals(3, result.userTextTurnsFound)
+    }
+
+    @Test
+    fun messageCapStillGuardsLegacyCallersWithoutABudget() {
+        // No token budget → the count cap remains the only guard.
+        val result = WalkBack.bounded(
+            unitHistory(),
+            anchorIdx = 5,
+            maxUserTextTurns = 3,
+            maxMessages = 2,
         )
         assertEquals(WalkBack.STOP_MESSAGE_CAP_WOULD_EXCEED, result.stopReason)
     }
