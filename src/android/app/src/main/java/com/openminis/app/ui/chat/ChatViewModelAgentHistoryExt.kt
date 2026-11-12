@@ -125,17 +125,12 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
         // [T-compact-preanchor-prune, port iOS 8b76cd74]
         val keepN = ChatViewModel.COMPACT_KEEP_RECENT_USER_TURNS
         val preAnchorCap = 100
-        // [T-compact-window-scaled-budget] The preAnchor token budget scales
-        // with the model's window (≤20%, min 8k) — hoisted here because the
-        // walkBack runs before the postAnchor tail budget below, and both
-        // must agree on one corridor so summary + preAnchor + postAnchor
-        // never crosses the compact threshold.
+        // [T-preanchor-dynamic-budget GH#344] SINGLE source: 20% of the
+        // model's effective window, floor 8k, ceiling 40k (no window → 40k).
+        // The old inline min(15k, max(0.2w, 8k)) saturated at 15k for every
+        // window ≥ 75k, so the dynamic term never ran on 128k/200k models.
         val windowTokens = effectiveContextWindowTokens()
-        val preAnchorBudget = if (windowTokens != null) {
-            WalkBack.COMPACT_PREANCHOR_TOKEN_BUDGET.coerceAtMost((windowTokens * 0.20).toInt().coerceAtLeast(8_000))
-        } else {
-            WalkBack.COMPACT_PREANCHOR_TOKEN_BUDGET
-        }
+        val preAnchorBudget = WalkBack.preAnchorTokenBudget(windowTokens)
         val walkBack = walkBackUserTurnsBounded(
             anchorIdx = anchorIdx,
             maxUserTextTurns = keepN,

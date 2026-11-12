@@ -57,6 +57,13 @@ jobs:
       - name: Tool single-execution contract (both lanes)
         run: python3 scripts/ci/check_tool_execution_contract.py
 
+      # [T-preanchor-dynamic-budget / T-tool-title-single-source GH#344]
+      # A direct push to main must never bring back the 15k ceiling, the
+      # inline corridor, a bare canonical title fallback, or an
+      # ifEmpty{toolName} renderer.
+      - name: preAnchor budget + tool title contract
+        run: python3 scripts/ci/check_tool_title_and_budget_contract.py
+
   # [T-main-unit-test-gate] pr-check.yml only fires on pull_request, so a
   # direct push to main never ran the JVM suite — a4706d0f landed with a
   # source-drift guard failure and every later PR inherited a red merge

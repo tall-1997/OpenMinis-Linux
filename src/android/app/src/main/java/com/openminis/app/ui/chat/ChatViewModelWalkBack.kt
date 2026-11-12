@@ -27,18 +27,43 @@ internal data class WalkBackResult(
 internal object WalkBack {
 
     /**
-     * [T-compact-token-budget-first] PreAnchor token budget for the compact
-     * corridor. Supplied to [bounded] so the TOKEN estimate decides before
-     * the message count — an agent-dense session puts 100+ tool rounds
-     * between the anchor and the last user-text turn, and a count-only cap
-     * made preAnchor permanently empty while the tail budget dropped the
-     * uncovered middle on the other side (live: 444k tokens of work memory
-     * vanishing per request). ≈60k chars of corridor — sized WITH the 60k postAnchor
-     * tail budget so summary + preAnchor + postAnchor stays under the
-     * compact threshold on every realistic window (no threshold oscillation).
+     * [T-compact-token-budget-first] [T-preanchor-dynamic-budget GH#344]
+     * Ceiling of the preAnchor compact corridor. Supplied to [bounded] so the
+     * TOKEN estimate decides before the message count — an agent-dense
+     * session puts 100+ tool rounds between the anchor and the last
+     * user-text turn, and a count-only cap made preAnchor permanently empty
+     * while the tail budget dropped the uncovered middle on the other side
+     * (live: 444k tokens of work memory vanishing per request). Sized WITH
+     * the 60k postAnchor tail budget so summary + preAnchor + postAnchor
+     * stays under the compact threshold on every realistic window.
+     *
+     * 40k is the corridor PR #331 declared; the old 15_000 made the
+     * "≤20% window" dynamic term dead code for every window ≥ 75k. The
+     * actual per-window value comes from [preAnchorTokenBudget] — this
+     * constant is only the ceiling and the no-window fallback.
      */
-    internal const val COMPACT_PREANCHOR_TOKEN_BUDGET = 15_000
+    internal const val COMPACT_PREANCHOR_TOKEN_BUDGET = 40_000
 
+    /** [T-preanchor-dynamic-budget GH#344] Parity §113: `preAnchor(≤20% 窗口)`. */
+    internal const val PREANCHOR_WINDOW_FRACTION = 0.20
+    internal const val PREANCHOR_TOKEN_FLOOR = 8_000
+
+    /**
+     * [T-preanchor-dynamic-budget GH#344] SINGLE source for the preAnchor
+     * token budget. ChatViewModelAgentHistoryExt used to inline
+     * `min(15_000, max(0.2·window, 8_000))` — the 15k ceiling saturated for
+     * every window ≥ 75k (128k/200k models), so the 20% term never
+     * influenced the result and the declared 40k corridor was dead code.
+     * Now the no-window fallback AND every windowed call share this one
+     * floor / fraction / ceiling triple. Pure arithmetic — no Android or
+     * context dependency — so JVM unit tests assert the whole corridor.
+     */
+    internal fun preAnchorTokenBudget(windowTokens: Int?): Int {
+        if (windowTokens == null) return COMPACT_PREANCHOR_TOKEN_BUDGET
+        return (windowTokens * PREANCHOR_WINDOW_FRACTION).toInt()
+            .coerceAtLeast(PREANCHOR_TOKEN_FLOOR)
+            .coerceAtMost(COMPACT_PREANCHOR_TOKEN_BUDGET)
+    }
 
     internal const val STOP_USER_TEXT_TARGET_MET = "userTextTargetMet"
     internal const val STOP_MESSAGE_CAP_WOULD_EXCEED = "messageCapWouldExceed"

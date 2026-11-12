@@ -393,7 +393,7 @@ internal suspend fun ChatViewModel.finalizePlannedCall(
             ctx.allToolBlocks[blockIdx] = ctx.allToolBlocks[blockIdx].copy(
                 toolStatus = finalStatus,
                 content = finalContentWithNotice,
-                toolTitle = result.toolTitle.ifEmpty { ctx.allToolBlocks[blockIdx].toolTitle },
+                toolTitle = resolveToolTitle(name, call.argsStr, ctx.allToolBlocks[blockIdx].toolTitle),
                 durationMs = elapsed,
                 browserURL = result.pageURL ?: ctx.allToolBlocks[blockIdx].browserURL,
                 imageFilePath = result.imageFilePath ?: ctx.allToolBlocks[blockIdx].imageFilePath,
@@ -472,9 +472,11 @@ private suspend fun ChatViewModel.settleReplayedCall(
     synchronized(ctx.allToolBlocks) {
         val idx = ctx.allToolBlocks.indexOfFirst { it.id == callId }
         if (idx >= 0) {
-            ctx.allToolBlocks[idx] = ctx.allToolBlocks[idx].copy(
+            val prev = ctx.allToolBlocks[idx]
+            ctx.allToolBlocks[idx] = prev.copy(
                 toolStatus = settledReplayStatus(part),
                 content = part.content,
+                toolTitle = displayToolTitle(prev.toolName, prev.toolArgs, prev.toolTitle),
             )
         }
     }
@@ -512,11 +514,10 @@ private suspend fun ChatViewModel.runPlannedCall(
         },
     ) {
         // Owner-only: everything below has a side effect and must run once.
-        // [T-android-overlay-tool-title] Pull tool_title uniformly from
-        // args for ALL tools, at the moment execution actually starts.
-        // [P1-17] Routed through the shared extractToolTitle (complete-JSON
-        // path first, streaming partial fallback); blank/absent → null.
-        val dispatchToolTitle = extractToolTitle(call.argsStr, fallback = null)
+        // [T-tool-title-single-source GH#344] The status bar shows the same
+        // concrete title as the card: model title / args summary / friendly
+        // label. A bare name never reaches the overlay.
+        val dispatchToolTitle = resolveToolTitle(call.name, call.argsStr)
         SessionActivityTracker.updateToolStatus(
             status = "Running: ${call.name}",
             toolName = call.name,

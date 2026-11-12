@@ -102,9 +102,12 @@ internal suspend fun ChatViewModel.executeTool(
         context, canonical, argsJson, activeSessionId,
     )
     if (gated != null) return gated
-    // [P1-17] Routed through the shared extractToolTitle: complete-JSON first,
-    // streaming partial fallback, canonical name when absent/blank.
-    val toolTitle = extractToolTitle(argsJson, fallback = canonical) ?: canonical
+    // [T-tool-title-single-source GH#344] NEVER fall back to the bare
+    // canonical name: an untitled file_read / read_image used to persist as
+    // snake_case (executeTool's result.toolTitle was non-empty, so
+    // finalizePlannedCall's ifEmpty fallback never restored the friendly
+    // label). The resolver derives "Reading /path" from args instead.
+    val toolTitle = resolveToolTitle(canonical, argsJson)
 
     // [T-android-action-guard] Loop/refusal guard for screen-side tools
     // (ui_read / ui_action / virtual screen): the Repeat ladder can refuse
