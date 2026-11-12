@@ -59,7 +59,9 @@ object MountedFolderCoordinator {
      * failed (e.g. cloud provider, removable volume unmounted) silently
      * drop out of the snapshot until their state changes.
      *
-     * Returns `(linuxDir, hostPath)` pairs.
+     * Returns `(linuxDir, hostPath)` pairs. This is also the mounted-folder
+     * source for [PathResolver] (#22) — the same pairs feed PRoot's `-b`
+     * argv and the path resolver, so the two can never disagree.
      */
     fun bindMountSpecs(store: MountedFoldersStore): List<Pair<String, String>> =
         store.entries.value

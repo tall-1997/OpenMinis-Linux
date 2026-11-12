@@ -167,24 +167,22 @@ object SessionWorkspace {
 
     /**
      * Resolve a `/var/minis/<subdir>/...` path to the same host file the shell
-     * bind uses. Returns null for `..` or paths this layout does not own.
+     * bind uses. Returns null for paths this layout does not own.
+     *
+     * [T-path-resolver] Delegates to [PathResolver] (the single host<->guest
+     * conversion point, #22) built over this layout's mappings. Signature and
+     * call sites unchanged. Two deliberate edge deltas vs the previous inline
+     * logic, both strictly safer or equivalent:
+     *  - a `..` hop that STAYS inside the mapped root now resolves (judged by
+     *    the same lexical [staysInside] guard the kernel bind resolver always
+     *    applied) instead of being rejected wholesale; a hop that escapes the
+     *    root still returns null, so nothing new can leave the jail;
+     *  - containment is judged on the canonical view (symlink-aware), matching
+     *    [acceptsResolved] — a direct caller no longer resolves a symlink that
+     *    canonically lands outside its own tree.
      */
-    fun resolveGuestPath(filesDir: File, sessionId: String, linuxPath: String): File? {
-        if (!linuxPath.startsWith("/var/minis/")) return null
-        val rest = linuxPath.removePrefix("/var/minis/")
-        if (rest.isEmpty()) return null
-        val parts = rest.split('/')
-        if (parts.any { it == ".." }) return null
-        val subdir = parts[0]
-        if (subdir.isEmpty()) return null
-        val root = when (subdir) {
-            in SESSION_SUBDIRS -> hostDir(filesDir, sessionId, subdir)
-            in GLOBAL_BIND_SUBDIRS -> File(File(filesDir, GLOBAL_DIR), subdir)
-            else -> return null
-        }
-        val tail = parts.drop(1).filter { it.isNotEmpty() }.joinToString("/")
-        return if (tail.isEmpty()) root else File(root, tail)
-    }
+    fun resolveGuestPath(filesDir: File, sessionId: String, linuxPath: String): File? =
+        PathResolver.forSessionLayout(filesDir, sessionId).toHost(linuxPath)
 
     fun ensureProjectDirs(filesDir: File, folderId: String) {
         if (!isSafeId(folderId)) return
@@ -212,6 +210,16 @@ object SessionWorkspace {
         if (!isSafeId(sessionId)) return false
         folderIds.remove(sessionId)
         val dir = base(filesDir, sessionId)
+        // [T-memory-embedding-recall] Drop the semantic vectors recorded under
+        // THIS session's private memory dir before the files vanish (#27).
+        // The literal tree being deleted, not [memoryDir] — a filed session's
+        // memoryDir resolves into the shared project, whose vectors belong to
+        // the surviving project, and a subagent id would resolve to its
+        // owner. No-op when the embedding runtime is off (prefs default OFF).
+        runCatching {
+            com.openminis.app.data.memory.MemoryEmbeddingRuntime
+                .indexerOrNull()?.deleteScopeAsync(File(dir, "memory"))
+        }
         if (!dir.exists()) return true
         return dir.deleteRecursively()
     }

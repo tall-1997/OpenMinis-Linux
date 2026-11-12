@@ -31,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -121,6 +122,13 @@ internal fun PlanBoardBody(
     expanded: Boolean,
     onToggle: () -> Unit,
     /**
+     * [T-plan-step-retry] Retry affordance for FAILED steps, null when the
+     * host has no VM to route to. Only failed rows grow the trailing retry
+     * glyph and become tappable — retry is a deliberate second attempt at
+     * something that errored, never a way to re-open landed or pending work.
+     */
+    onRetryStep: ((String) -> Unit)? = null,
+    /**
      * [T-plan-goal-one-row] The session Goal's objective, when one exists.
      *
      * The goal used to own a separate 44dp header row above this one, so a chat
@@ -185,7 +193,10 @@ internal fun PlanBoardBody(
                         .heightIn(max = 200.dp)
                         .verticalScroll(rememberScrollState()),
                 ) {
-                    board.forEach { PlanBoardRow(it) }
+                    board.forEach { step ->
+                        val retry: (() -> Unit)? = onRetryStep?.let { cb -> { cb(step.id) } }
+                        PlanBoardRow(step, onRetry = retry)
+                    }
                 }
                 HorizontalDivider(
                     modifier = Modifier.padding(top = 2.dp),
@@ -337,15 +348,35 @@ private fun PlanBoardProgress(fraction: Float, color: Color) {
     }
 }
 
-/** One board item: status glyph + title (strikethrough when done). */
+/**
+ * One board item: status glyph + title (strikethrough when done).
+ *
+ * [T-plan-step-retry] A FAILED row with [onRetry] also carries a trailing
+ * refresh glyph and is tappable end-to-end (44dp-equivalent within the 28dp
+ * rhythm via the row's full width) — the only row-level action the board
+ * offers, so a failed step never dead-ends: one tap re-arms it and kicks the
+ * run through [ChatViewModel.retryPlanStep].
+ */
 @Composable
-private fun PlanBoardRow(plan: AgentPlanStore.Plan) {
+private fun PlanBoardRow(plan: AgentPlanStore.Plan, onRetry: (() -> Unit)? = null) {
     val done = plan.status == "done"
     val active = plan.status == "active"
+    val failed = plan.status == "failed"
+    val retryable = failed && onRetry != null
+    val retryLabel = stringResource(R.string.cd_plan_step_retry)
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = 28.dp),
+            .heightIn(min = 28.dp)
+            .then(
+                if (retryable) {
+                    Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable(role = Role.Button, onClickLabel = retryLabel) { onRetry() }
+                } else {
+                    Modifier
+                },
+            ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Fixed 14dp slot so every title starts on the same x no matter which
@@ -385,7 +416,7 @@ private fun PlanBoardRow(plan: AgentPlanStore.Plan) {
             style = MaterialTheme.typography.bodySmall,
             fontWeight = when {
                 active -> FontWeight.SemiBold
-                plan.status == "failed" -> FontWeight.Medium
+                failed -> FontWeight.Medium
                 else -> FontWeight.Normal
             },
             textDecoration = if (done) TextDecoration.LineThrough else null,
@@ -396,6 +427,18 @@ private fun PlanBoardRow(plan: AgentPlanStore.Plan) {
             },
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
         )
+        if (retryable) {
+            // The affordance rides the END like the summary row's chevron; the
+            // title took a weight(1f) so the glyph stays pinned to the edge.
+            Icon(
+                imageVector = Icons.Filled.Refresh,
+                contentDescription = retryLabel,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(14.dp),
+            )
+            Spacer(Modifier.width(4.dp))
+        }
     }
 }

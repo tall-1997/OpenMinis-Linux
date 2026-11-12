@@ -204,15 +204,70 @@ object AgentPlanStore {
         }
     }
 
-    fun update(sessionId: String, context: Context?, id: String, title: String? = null, description: String? = null, status: String? = null, position: Int? = null): Plan? = lock(sessionId).withLock {
+    fun update(sessionId: String, context: Context?, id: String, title: String? = null, description: String? = null, status: String? = null, position: Int? = null): Plan? =
+        updateWithAdvance(sessionId, context, id, title, description, status, position)?.first
+
+    /**
+     * [T-plan-step-execution] update plus the step-execution semantics: when the
+     * item that WAS active flips to done, the next pending item (lowest position)
+     * is activated in the SAME save — the model marks one step landed and the
+     * board itself walks to the next one, instead of waiting for a second
+     * agent_plan round that the model sometimes forgets to send. Scope is
+     * deliberately narrow so the plain update() contract is untouched:
+     *
+     * - Only an active→done flip promotes. Marking a pending item done (recon
+     *   that turned out unnecessary) does not jump the cursor; marking failed
+     *   never advances past a failure.
+     * - A replace states every status explicitly, so it never auto-advances.
+     *
+     * Returns the updated item plus the item auto-activated by the advance
+     * (null when none was promoted) so the tool receipt can name it.
+     */
+    fun updateWithAdvance(
+        sessionId: String,
+        context: Context?,
+        id: String,
+        title: String? = null,
+        description: String? = null,
+        status: String? = null,
+        position: Int? = null,
+    ): Pair<Plan, Plan?>? = lock(sessionId).withLock {
         val plans = loadLocked(sessionId, context)
         val index = resolveIndex(plans, id)
         if (index < 0) return@withLock null
         val old = plans[index]
         val next = old.copy(title = title?.trim()?.takeIf { it.isNotEmpty() } ?: old.title, description = description ?: old.description, status = status?.let { normalizeStatus(it) } ?: old.status, position = position ?: old.position, updatedAt = System.currentTimeMillis())
         val out = plans.toMutableList().also { it[index] = next }
+        var promoted: Plan? = null
+        if (old.status == "active" && next.status == "done") {
+            val target = out.filter { it.status == "pending" }.minByOrNull { it.position }
+            if (target != null) {
+                val targetIndex = out.indexOfFirst { it.id == target.id }
+                val activated = target.copy(status = "active", updatedAt = System.currentTimeMillis())
+                out[targetIndex] = activated
+                promoted = activated
+            }
+        }
         saveLocked(sessionId, context, out)
-        next
+        next to promoted
+    }
+
+    /**
+     * [T-plan-step-retry] User-initiated retry of a FAILED step (the board
+     * row's retry affordance): the failed item goes back to active so the run
+     * — kicked by the caller — picks it up again. Only failed items qualify:
+     * retry is a deliberate second attempt at something that errored, not a
+     * way to re-open landed work. Null when the ref is unknown or the item is
+     * not in the failed state.
+     */
+    fun retryStep(sessionId: String, context: Context?, ref: String): Plan? = lock(sessionId).withLock {
+        val plans = loadLocked(sessionId, context)
+        val index = resolveIndex(plans, ref)
+        if (index < 0) return@withLock null
+        if (plans[index].status != "failed") return@withLock null
+        val updated = plans[index].copy(status = "active", updatedAt = System.currentTimeMillis())
+        saveLocked(sessionId, context, plans.toMutableList().also { it[index] = updated })
+        updated
     }
 
     fun remove(sessionId: String, context: Context?, id: String): Boolean = lock(sessionId).withLock {
@@ -406,8 +461,10 @@ object AgentPlanTool {
             // states what they are FOR. Creating a board without an objective
             // left the Goal card empty and the purpose only in the transcript.
             "ALWAYS pass objective on add/replace: the concrete completion goal of the whole " +
-            "task, in one sentence — it becomes the session Goal and survives the turn. " +
-            "flip the item you are on to active, and to done the moment it lands - in the turn the work happens. " +
+                "task, in one sentence — it becomes the session Goal and survives the turn. " +
+                "flip the item you are on to active, and to done the moment it lands - in the turn the work happens. " +
+                "When the ACTIVE item flips to done the next pending item is activated automatically — " +
+                "just mark done/failed as work settles; activating the next one yourself is harmless but not needed. " +
             "update/remove need no ids either: target an item by its 1-based number from the snapshot, its exact " +
             "title, or a unique title prefix. Skip the board for single-shot answers and one-command lookups.",
         parameters = mapOf(
@@ -469,9 +526,16 @@ object AgentPlanTool {
                 }
                 "update" -> {
                     val ref = args.optString("id")
-                    val p = AgentPlanStore.update(sessionId, context, ref, args.optString("title").takeIf { it.isNotBlank() }, if (args.has("description")) args.optString("description") else null, args.optString("status").takeIf { it.isNotBlank() }, if (args.has("position")) args.optInt("position") else null)
+                    val (p, promoted) = AgentPlanStore.updateWithAdvance(sessionId, context, ref, args.optString("title").takeIf { it.isNotBlank() }, if (args.has("description")) args.optString("description") else null, args.optString("status").takeIf { it.isNotBlank() }, if (args.has("position")) args.optInt("position") else null)
                         ?: return ToolExecutionResult("Error: plan item not found for \"$ref\". Current board: ${AgentPlanStore.render(sessionId, context)}", false, toolTitle = toolTitle)
-                    ToolExecutionResult("Updated {${p.id}}: ${p.title} [${p.status}] ${progressLine(sessionId, context)}", true, toolTitle = toolTitle)
+                    // [T-plan-step-execution] The receipt names the step the
+                    // board auto-activated, so the model continues with it
+                    // instead of issuing a redundant activate call. Still a
+                    // one-liner: no board echo, no descriptions.
+                    val advanceNote = promoted?.let {
+                        "\nAuto-activated next step {${it.id}}: ${it.title} — continue with it."
+                    } ?: ""
+                    ToolExecutionResult("Updated {${p.id}}: ${p.title} [${p.status}] ${progressLine(sessionId, context)}$advanceNote", true, toolTitle = toolTitle)
                 }
                 "remove" -> {
                     val ref = args.optString("id")

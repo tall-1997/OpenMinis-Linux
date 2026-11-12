@@ -114,7 +114,10 @@ class ReasoningTagDisplayModeTest {
 
     @Test
     fun hydrationCallsDisplayVariantNotSendVariant() {
-        val src = ProductionSources.read("ui/chat/ChatViewModel.kt")
+        // [#42] The hydration block was mechanically split into the mapping
+        // Ext file; scan both so the guard follows the code.
+        val src = ProductionSources.read("ui/chat/ChatViewModel.kt") +
+            ProductionSources.read("ui/chat/ChatViewModelChatMappingExt.kt")
         // The restored-bubble strip site must use applyForDisplay.
         assertTrue(
             "hydration strip must call applyForDisplay (bare mentions must not lose their tail)",

@@ -67,7 +67,10 @@ class MultiAgentPageCleanupTest {
         // path must keep resolving types through it.
         val dispatch = ProductionSources.read("tools/DispatchAgentsTool.kt")
         assertTrue(dispatch.contains("SubAgentTypeStore.find"))
-        val subAgent = ProductionSources.read("ui/chat/ChatViewModelSubAgentExt.kt")
+        // 执行主循环已拆到 ChatViewModelSubAgentRun.kt（架构行数上限），
+        // 两处都必须保持经 SubAgentTypeStore 解析类型。
+        val subAgent = ProductionSources.read("ui/chat/ChatViewModelSubAgentExt.kt") +
+            ProductionSources.read("ui/chat/ChatViewModelSubAgentRun.kt")
         assertTrue(subAgent.contains("SubAgentTypeStore.find"))
     }
 

@@ -111,6 +111,7 @@ object SshTool {
             route(
                 argsJson = argsJson,
                 backend = backend,
+                appContext = context.applicationContext,
                 pathResolver = { guestPath -> PRootKernel.resolveSessionHostPath(sessionId, guestPath, context) },
                 // [T-env-disable] getActiveValue: a disabled variable must not
                 // reach a remote host either.
@@ -128,6 +129,8 @@ object SshTool {
         backend: SshBackend,
         pathResolver: (String) -> File?,
         envResolver: (String) -> String?,
+        /** Android context, for the workspace-binding sweep on remove_host. Null in JVM tests. */
+        appContext: Context? = null,
     ): ToolExecutionResult {
         val args = try {
             JSONObject(argsJson)
@@ -151,9 +154,35 @@ object SshTool {
                 "add_host" -> addHost(args, backend, pathResolver, envResolver)
 
                 "remove_host" -> needHost() ?: run {
+                    // [#32] Resolve the id BEFORE deletion (hostRef may be a
+                    // name), so workspace bindings — which store ids — can be
+                    // swept with the same host either way.
+                    val host = runCatching { backend.store.list() }.getOrNull()
+                        ?.firstOrNull { it.id == hostRef || it.name == hostRef }
                     val removed = backend.removeHost(hostRef)
-                    if (removed) ToolExecutionResult("Removed SSH host '$hostRef' (credentials and pinned host key deleted).", true, toolTitle = title)
-                    else notFound(hostRef)
+                    if (removed) {
+                        // Same sweep as the management sheet: a binding left
+                        // pointing at a host the agent just deleted would
+                        // route shells nowhere while the binding sheet claimed
+                        // local execution. The count goes into the RESULT so
+                        // the model stops assuming remote execution.
+                        val boundId = host?.id ?: hostRef
+                        val cleared = appContext?.let { ctx ->
+                            com.openminis.app.ssh.SshWorkspaceBindings
+                                .forContext(ctx).unbindAllForHost(boundId)
+                        } ?: 0
+                        val sweepNote = if (cleared > 0) {
+                            " $cleared workspace binding(s) cleared — shell_execute now runs on the local sandbox in the affected chats."
+                        } else {
+                            ""
+                        }
+                        ToolExecutionResult(
+                            "Removed SSH host '$hostRef' (credentials and pinned host key deleted).$sweepNote",
+                            true, toolTitle = title,
+                        )
+                    } else {
+                        notFound(hostRef)
+                    }
                 }
 
                 "forget_host_key" -> needHost() ?: run {

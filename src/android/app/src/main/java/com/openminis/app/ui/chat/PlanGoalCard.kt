@@ -269,6 +269,12 @@ internal fun PlanGoalCard(viewModel: ChatViewModel, modifier: Modifier = Modifie
                             total = total,
                             allDone = allDone,
                             expanded = expanded,
+                            // [T-plan-step-retry] Failed rows grow a retry
+                            // affordance routed through the VM: the store flip
+                            // is synchronous (the row shows the active spinner
+                            // next frame) and the one-shot steering rides the
+                            // next request — kicked immediately when idle.
+                            onRetryStep = { planId -> viewModel.retryPlanStep(planId) },
                             goalObjective = goalDisplay?.objective,
                             // [T-goal-panel-reachability] The goal row that
                             // normally opens the sheet is hidden whenever a

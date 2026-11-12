@@ -101,9 +101,36 @@ object SamplingIdentity {
     private val ids: MutableMap<LLMProvider, String> =
         Collections.synchronizedMap(WeakHashMap())
 
-    fun bind(provider: LLMProvider, instanceId: String) {
+    // [T-llm-middleware] Provider-family tag + effective API base for the
+    // request middleware context (see [providerTypeOf] / [baseURLOf]). Same
+    // weak lifecycle as [ids]; never consulted by the sampling logic itself.
+    private val providerTypes: MutableMap<LLMProvider, String> =
+        Collections.synchronizedMap(WeakHashMap())
+    private val baseUrls: MutableMap<LLMProvider, String> =
+        Collections.synchronizedMap(WeakHashMap())
+
+    fun bind(
+        provider: LLMProvider,
+        instanceId: String,
+        providerType: String? = null,
+        baseUrl: String? = null,
+    ) {
         if (instanceId.isNotBlank()) ids[provider] = instanceId
+        if (!providerType.isNullOrBlank()) providerTypes[provider] = providerType
+        if (!baseUrl.isNullOrBlank()) baseUrls[provider] = baseUrl
     }
 
     fun of(provider: LLMProvider): String = ids[provider].orEmpty()
+
+    /**
+     * [T-llm-middleware] The bound provider type name (e.g. "anthropic"), or
+     * null for directly-constructed providers (tests, one-shot lanes).
+     */
+    fun providerTypeOf(provider: LLMProvider): String? = providerTypes[provider]
+
+    /**
+     * [T-llm-middleware] The bound effective API base URL (custom relay base
+     * only — null on the official direct path and for unbound providers).
+     */
+    fun baseURLOf(provider: LLMProvider): String? = baseUrls[provider]
 }

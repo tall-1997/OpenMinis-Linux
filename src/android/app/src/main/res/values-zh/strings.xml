@@ -407,7 +407,7 @@
     <string name="gate_approval_title">工具需要批准</string>
     <string name="gate_approval_approve">允许</string>
     <string name="gate_approval_deny">拒绝</string>
-    <string name="gate_approval_allow_all">本会话全部允许</string>
+    <string name="gate_approval_allow_all">本会话总是允许（当前目标）</string>
     <string name="gate_intercept_denied">已被 SecurityGate 拦截</string>
     <string name="gate_intercept_rejected">工具已被拒绝</string>
     <string name="gate_intercept_dismiss">关闭</string>
@@ -489,8 +489,10 @@
     <string name="settings_storage_subtitle">管理 Ubuntu rootfs 并浏览文件</string>
     <string name="settings_section_permissions">权限</string>
     <string name="settings_permissions_subtitle">系统权限与逐工具访问：无障碍、Shizuku、主机 su、隐私档位；各工具的 Agent 权限在此页逐项配置。</string>
-    <string name="chat_menu_perm_yoyo">YOYO · 全授权</string>
-    <string name="chat_menu_perm_ask">审批 · 部分授权</string>
+    <string name="chat_menu_perm_yoyo">YOLO · 全授权</string>
+    <string name="chat_menu_perm_safe_auto">安全自动 · 只读工具自动放行</string>
+    <string name="chat_menu_perm_ask">询问 · 每次调用都确认</string>
+    <string name="chat_menu_perm_off">关闭 · 拒绝所有工具</string>
 <string name="settings_section_logs">日志</string>
     <string name="settings_logs_subtitle">查看与导出应用日志</string>
     <string name="settings_section_about">关于</string>
@@ -560,6 +562,22 @@
     <string name="token_usage_cache_write">缓存写入</string>
     <string name="token_usage_section_agent_loop">Agent 循环</string>
     <string name="token_usage_total_loops">总循环次数</string>
+    <!-- [#25] Context breakdown sheet -->
+    <string name="chat_menu_context_usage">上下文分解</string>
+    <string name="context_usage_sheet_title">上下文分解</string>
+    <string name="context_block_system">系统提示与工具</string>
+    <string name="context_block_skills_mcps">技能与 MCP</string>
+    <string name="context_block_memory">记忆注入</string>
+    <string name="context_block_runtime">本轮临时上下文</string>
+    <string name="context_block_goal_plan">目标与计划注入</string>
+    <string name="context_block_history">历史窗口</string>
+    <string name="context_block_attachments">附件与图片</string>
+    <string name="context_usage_note_estimate">粗略估计（±10%）；打开此面板时刷新</string>
+    <!-- [#41] Gen UI card -->
+    <string name="gen_ui_card_label">交互卡片</string>
+    <string name="gen_ui_view_source">查看源码</string>
+    <string name="gen_ui_view_render">显示渲染</string>
+    <string name="gen_ui_view_fullscreen">全屏</string>
     <string name="common_on">开</string>
     <string name="common_off">关</string>
     <string name="common_yes">是</string>
@@ -863,6 +881,8 @@
     <string name="env_var_privacy_header">隐私</string>
     <string name="env_var_privacy_toggle">隐私模式</string>
     <string name="env_var_privacy_footer">开启后，shell-execute 输出中检测到的环境变量值在送达模型前会被打码（例如 `sk-1********ajhks`）。少于 8 个字符的值会被全部替换为 `*`。聊天中用户可见的输出保持不变。</string>
+    <string name="outbound_mask_toggle">出站隐私遮蔽</string>
+    <string name="outbound_mask_footer">选择性开启的形状遮蔽：密钥形状字符串（含代码内密钥）、邮箱与电话号码会被替换为占位符；下方 embedding API 密钥以明文保存在应用私有 prefs 中。本机聊天记录不变。</string>
     <string name="env_var_platform_header">平台集成</string>
     <string name="env_var_platform_tier_2">完整</string>
     <string name="env_var_platform_tier_1">只读</string>
@@ -2424,6 +2444,7 @@
     <string name="usage_label_output_short">输出</string>
     <string name="plan_board_all_done">所有步骤已完成</string>
     <string name="cd_plan_board_toggle">展开或收起计划看板</string>
+    <string name="cd_plan_step_retry">重试这个失败的步骤</string>
     <string name="cd_goal_header">打开目标详情</string>
     <string name="cd_goal_status_active">目标进行中</string>
     <string name="cd_goal_status_paused">目标已暂停</string>
@@ -2603,6 +2624,12 @@
     <string name="token_usage_saver_folded">已折叠工具结果</string>
     <string name="token_usage_saver_saved">本轮节省</string>
     <string name="memory_center_overview">概览</string>
+    <string name="memory_embedding_header">语义召回</string>
+    <string name="memory_embedding_toggle">Embedding 语义记忆召回</string>
+    <string name="memory_embedding_base_url">Embeddings Base URL</string>
+    <string name="memory_embedding_api_key">Embeddings API Key</string>
+    <string name="memory_embedding_model">Embedding 模型</string>
+    <string name="memory_embedding_footer">默认关闭。开启后，记忆召回在关键词检索之外，增加通过 OpenAI 兼容 embeddings 端点的向量相似度检索。更改需重启应用进程后生效。</string>
     <string name="memory_center_stat_memory">记忆文件</string>
     <string name="memory_center_stat_recalls">被召回条目</string>
     <string name="memory_center_stat_failures">已拦截的重复</string>
@@ -2698,4 +2725,59 @@
     <string name="sessionlist_archive">归档</string>
     <string name="sessionlist_unarchive">取消归档</string>
     <string name="sessionlist_section_archived">已归档（%1$d）</string>
+    <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
+    <string name="provider_list_export_providers">导出供应商</string>
+    <string name="provider_transfer_export_title">导出供应商</string>
+    <string name="provider_transfer_export_body">将把 %1$d 个供应商导出为 JSON 文件。</string>
+    <string name="provider_transfer_include_keys">包含 API 密钥</string>
+    <string name="provider_transfer_include_keys_risk">API 密钥将以明文写入文件。任何获取该文件的人都可以使用你的密钥——请妥善保管，导入后及时删除。</string>
+    <string name="provider_transfer_export">导出</string>
+    <string name="provider_transfer_export_success">已导出 %1$d 个供应商</string>
+    <string name="provider_transfer_export_failed">导出失败</string>
+    <string name="provider_transfer_import_ok">已导入 %1$d 个供应商</string>
+    <string name="provider_transfer_import_partial">已导入 %1$d 个供应商，%2$d 个失败</string>
+    <string name="provider_transfer_import_partial_detail">已导入 %1$d 个供应商，%2$d 个失败：%3$s</string>
+    <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
+    <string name="ssh_workspace_menu_title">SSH 工作区</string>
+    <string name="ssh_workspace_binding_title">SSH 工作区</string>
+    <string name="ssh_workspace_bound_to">已绑定 %1$s（%2$s）</string>
+    <string name="ssh_workspace_bound_local">正在本地沙盒中工作</string>
+    <string name="ssh_workspace_option_local">本地沙盒</string>
+    <string name="ssh_workspace_option_local_subtitle">Shell 在本设备的 Linux 沙盒中运行</string>
+    <string name="ssh_workspace_no_hosts">还没有 SSH 主机——在 设置 → SSH 工作区 中添加。</string>
+    <string name="ssh_workspace_shell_only_note">SSH 工作区仅支持 shell 命令；绑定主机期间文件类工具将被拒绝。</string>
+    <string name="ssh_workspace_shell_only">SSH 工作区当前仅支持 shell 命令——已拒绝 \'%1$s\'。</string>
+    <string name="ssh_workspace_shell_only_hint">用 shell_execute 执行远程命令，或在聊天菜单 → SSH 工作区 解绑本会话以恢复本地文件工具。</string>
+    <string name="ssh_hosts_title">SSH 主机</string>
+    <string name="ssh_hosts_subtitle">Agent 可通过 SSH 访问的远程主机。凭据加密存储，从不显示。</string>
+    <string name="ssh_hosts_row_subtitle">添加主机、测试连接、管理主机密钥</string>
+    <string name="ssh_hosts_empty">还没有主机。</string>
+    <string name="ssh_hosts_add">添加主机</string>
+    <string name="ssh_hosts_add_cancel">取消</string>
+    <string name="ssh_hosts_test">测试连接</string>
+    <string name="ssh_hosts_testing">测试中…</string>
+    <string name="ssh_hosts_test_ok">连接成功</string>
+    <string name="ssh_hosts_test_failed">连接失败</string>
+    <string name="ssh_hosts_forget_key">忘记主机密钥</string>
+    <string name="ssh_hosts_remove">移除</string>
+    <string name="ssh_hosts_pinned">主机密钥已固定：%1$s…</string>
+    <string name="ssh_field_name">名称（字母/数字/._-）</string>
+    <string name="ssh_field_hostname">主机名或 IP</string>
+    <string name="ssh_field_port">端口</string>
+    <string name="ssh_field_username">用户名</string>
+    <string name="ssh_auth_password">密码</string>
+    <string name="ssh_auth_key">私钥</string>
+    <string name="ssh_field_password">密码</string>
+    <string name="ssh_field_private_key">PEM 私钥</string>
+    <string name="ssh_field_passphrase">密钥口令（可选）</string>
+    <string name="ssh_save">保存</string>
+
+    <!-- [T-handsfree-loop] (#40) Hands-free continuous voice conversation -->
+    <string name="handsfree_toggle">免提模式</string>
+    <string name="handsfree_state_starting">正在启动…</string>
+    <string name="handsfree_state_listening">正在聆听…</string>
+    <string name="handsfree_state_thinking">正在思考…</string>
+    <string name="handsfree_state_speaking">正在朗读…</string>
+    <string name="handsfree_exit_recognition">免提模式已停止：语音识别连续失败。点按免提模式可重试。</string>
+    <string name="handsfree_exit_tts">免提模式已停止：回复朗读失败。点按免提模式可重试。</string>
 </resources>

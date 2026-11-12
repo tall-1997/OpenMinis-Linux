@@ -46,6 +46,11 @@ object MemoryRecallEngineCache {
         val engine = MemoryRecallEngine(
             memoryDirProvider = { memoryDir },
             sharedDirProvider = sharedDir?.let { dir -> { dir } },
+            // [T-memory-embedding-recall] #27: attach the semantic-recall seam
+            // when the runtime is on (prefs default OFF). Null keeps the
+            // engine keyword-only — [recallForPrompt] never consults it, and
+            // the hybrid path is opt-in per call site.
+            embeddingSupport = com.openminis.app.data.memory.MemoryEmbeddingRuntime.recallSupportOrNull(),
         )
         engine.loadRecallCounts()
         synchronized(engines) {

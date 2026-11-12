@@ -23,7 +23,7 @@ import kotlin.coroutines.resume
 class PersistentShell(
     private val context: Context,
     private val sessionId: String,
-    private val sessionBindMounts: Map<String, String>,  // linuxPath -> hostPath
+    internal val sessionBindMounts: Map<String, String>,  // linuxPath -> hostPath
 ) {
 
     companion object {
@@ -49,7 +49,7 @@ class PersistentShell(
 
     /** Pending command callback — only one command at a time. */
     @Volatile
-    private var pendingCallback: CommandCallback? = null
+    private var pendingCallback: ShellCommandCallback? = null
 
     /**
      * [GH#358] Channel generation. Bumped on every spawn / timeout reset / stop.
@@ -87,34 +87,8 @@ class PersistentShell(
     val isAlive: Boolean
         get() = process?.isAlive == true
 
-    /** [diag] Read back the mount this shell was started with (frozen at boot). */
-    fun debugBindMount(linuxPath: String): String? = sessionBindMounts[linuxPath]
-
-    /** Copy of the binds this process was started with. */
-    fun bindSnapshot(): Map<String, String> = sessionBindMounts.toMap()
-
-    private class CommandCallback(
-        val marker: String,
-        /** [GH#358] Generation that created this callback; see [channelGeneration]. */
-        val generation: Long,
-        val output: BoundedOutputBuffer = BoundedOutputBuffer(),
-        val lineCallback: ((String) -> Unit)?,
-        var onComplete: ((String, Int) -> Unit)? = null,
-    ) {
-        val framer = MarkerFramer(marker)
-        val heartbeat = SilentOutputHeartbeat()
-        fun appendOutput(text: String) {
-            if (text.isNotEmpty()) heartbeat.onOutput()
-            output.append(text)
-        }
-    }
-
-    /** lineCallback may come from the reader thread and the heartbeat job. */
-    private val lineCallbackLock = Any()
-
-    private fun emitLine(callback: (String) -> Unit, line: String) {
-        synchronized(lineCallbackLock) { callback(line) }
-    }
+    /** 行回调的限速/CR 处理（拆分自本文件，见 [ShellLineFeeder]）。 */
+    private val lineFeeder = ShellLineFeeder()
 
     /**
      * Ensure the persistent shell process is running.
@@ -206,11 +180,7 @@ class PersistentShell(
         )
         // Fresh capture per process incarnation — a respawned shell must not
         // report its predecessor's dying output as its own.
-        synchronized(outputTail) {
-            outputHead.setLength(0)
-            outputTail.setLength(0)
-            outputTotal = 0
-        }
+        deathTailStore.reset()
         lastExitCode = null
         utf8 = Utf8ChunkDecoder()
         // [GH#358] New process = new reader generation. Any reader thread still
@@ -329,7 +299,7 @@ class PersistentShell(
         // that is what a user can actually send us.
         val alive = isAlive
         val exit = runCatching { process?.exitValue() }.getOrNull()
-        val early = synchronized(outputTail) { outputHead.toString().take(300) }
+        val early = deathTailStore.headPreview(300)
         com.openminis.app.logging.AppLogger.info(
             TAG,
             "spawn outcome: alive=$alive" +
@@ -341,54 +311,12 @@ class PersistentShell(
         Log.i(TAG, "Persistent shell started")
     }
 
-    /**
-     * [T-android-shell-death-diagnosability] Captured shell output for
-     * premature-death reporting, including chunks that arrive with no pending
-     * callback — which readLoop previously discarded outright. In release
-     * builds stderr is merged into stdout (redirectErrorStream), so proot's
-     * dying words land exactly in that discarded window.
-     *
-     * HEAD + rolling TAIL, not tail-only. The first crDroid field log proved
-     * tail-only insufficient: proot prints its one-line cause FIRST ("proot
-     * error: …") and then talloc_enable_leak_report() dumps a multi-KB
-     * allocation tree at exit — which evicted the cause and left us staring at
-     * HandlerEntry leak rows. The head is where the answer lives; the tail
-     * still shows how it ended.
-     */
-    private val outputHead = StringBuilder()
-    private val outputTail = StringBuilder()
-    private var outputTotal = 0
+    /** [T-android-shell-death-diagnosability] premature-death capture（拆分：见 [ShellDeathTail]）。 */
+    private val deathTailStore = ShellDeathTail()
 
-    private fun appendTail(text: String) {
-        synchronized(outputTail) {
-            outputTotal += text.length
-            if (outputHead.length < OUTPUT_HEAD_MAX) {
-                outputHead.append(text.take(OUTPUT_HEAD_MAX - outputHead.length))
-            }
-            outputTail.append(text)
-            val over = outputTail.length - OUTPUT_TAIL_MAX
-            if (over > 0) outputTail.delete(0, over)
-        }
-    }
+    private fun appendTail(text: String) = deathTailStore.append(text)
 
-    /**
-     * Captured output (trimmed) for premature-death reporting: the head (where
-     * proot's error line lives), plus the tail when output outgrew the head
-     * window, with the elided middle marked.
-     */
-    fun deathTail(): String = synchronized(outputTail) {
-        val head = outputHead.toString().trim()
-        if (outputTotal <= OUTPUT_HEAD_MAX) return head // head holds everything
-        // Tail buffer starts at byte (outputTotal - tail.length); the head
-        // covers [0, OUTPUT_HEAD_MAX). Drop any overlap from the tail so the
-        // two windows concatenate without duplication.
-        val overlap = OUTPUT_HEAD_MAX - (outputTotal - outputTail.length)
-        val tail = outputTail.substring(overlap.coerceIn(0, outputTail.length)).trim()
-        if (tail.isEmpty()) return head
-        val elided = (-overlap).coerceAtLeast(0)
-        val sep = if (elided > 0) "\n…[$elided bytes elided]…\n" else "\n"
-        "$head$sep$tail"
-    }
+    fun deathTail(): String = deathTailStore.capture()
 
     /** Exit code of the dead shell process, when known. */
     @Volatile
@@ -419,7 +347,7 @@ class PersistentShell(
         val step = cb.framer.push(text, endOfInput)
         if (step.output.isNotEmpty()) {
             cb.appendOutput(step.output)
-            cb.lineCallback?.let { feedLines(step.output, it) }
+            cb.lineCallback?.let { lineFeeder.feed(step.output, it) }
         }
         if (step.completed && pendingCallback === cb) {
             cb.onComplete?.invoke(cb.output.toString(), step.exitCode)
@@ -488,43 +416,6 @@ class PersistentShell(
         Log.i(TAG, "Persistent shell process exited")
     }
 
-    // [T-line-budget-sync] The byte budget is 512 KiB/s; 250 lines/s (~200 KiB/s
-    // of typical text) keeps real-time progress inside it with burst headroom.
-    // Captured output is unaffected (snapshot keeps everything).
-    private val lineBudget = TokenBucket(ratePerSec = 250.0, burst = 500)
-
-    private fun feedLines(text: String, callback: (String) -> Unit) {
-        val lines = text.split('\n')
-        if (!lineBudget.tryTake(System.currentTimeMillis())) {
-            // Over budget. Dropping the whole chunk froze the live stream view
-            // at an older frame for the length of the burst; keep only the
-            // newest emitted-worthy line(s) so a progress meter still shows its
-            // latest state. This path thins the REAL-TIME line callback only:
-            // captured output is untouched because dispatchDecoded runs
-            // appendOutput(step.output) BEFORE feedLines.
-            val first = maxOf(0, lines.size - 2)
-            for (i in first until lines.size) {
-                val line = lines[i].split('\r').lastOrNull { it.isNotEmpty() }.orEmpty()
-                val complete = i < lines.size - 1 || text.endsWith('\n')
-                if (line.isNotEmpty() && (complete || i == lines.size - 1)) {
-                    emitLine(callback, line)
-                }
-            }
-            return
-        }
-        for (i in lines.indices) {
-            // CR overwrites a progress meter. Keep the latest non-empty
-            // segment so "50%\r51%\r" becomes "51%", not "5051".
-            val line = lines[i].split('\r').lastOrNull { it.isNotEmpty() }.orEmpty()
-            if (line.isNotEmpty() && (i < lines.size - 1 || text.endsWith('\n'))) {
-                emitLine(callback, line)
-            } else if (line.isNotEmpty() && i == lines.size - 1) {
-                // Partial line — still feed it for real-time updates
-                emitLine(callback, line)
-            }
-        }
-    }
-
     /**
      * Execute a command in the persistent shell and wait for completion.
      *
@@ -553,50 +444,17 @@ class PersistentShell(
     private var sourcedOffloadSignature: String? = null
 
     private fun offloadExitPrelude(): String {
-        val names = NativeOffloadServer.registeredHandlers
-            .filter { it.matches(Regex("[A-Za-z0-9._+-]+")) }
-            .sorted()
-        if (names.isEmpty()) {
-            sourcedOffloadSignature = null
+        val outcome = OffloadShellPrelude.ensure(
+            rootfsDir = RootfsManager.getInstance(context).rootfsDir,
+            lastSignature = sourcedOffloadSignature,
+        )
+        if (outcome == null) {
+            // 没有已注册 handler：清空签名，下次有 handler 时重新 source。
+            if (NativeOffloadServer.registeredHandlers.isEmpty()) sourcedOffloadSignature = null
             return ""
         }
-        val signature = names.joinToString(",")
-        if (signature == sourcedOffloadSignature) return ""  // already in this shell
-        val body = buildString {
-            appendLine("minis_offload_wrap() {")
-            appendLine("  local name=\"\$1\"")
-            appendLine("  shift")
-            appendLine("  local out rc first")
-            appendLine("  out=\$(command \"\$name\" \"\$@\" 2>&1)")
-            appendLine("  rc=\$?")
-            appendLine("  first=\$(printf '%s\\n' \"\$out\" | head -n 1)")
-            appendLine("  case \"\$first\" in")
-            appendLine("    __MINIS_OFFLOAD_RC=*__)")
-            appendLine("      rc=\${first#__MINIS_OFFLOAD_RC=}")
-            appendLine("      rc=\${rc%__}")
-            appendLine("      out=\$(printf '%s\\n' \"\$out\" | tail -n +2)")
-            appendLine("      ;;")
-            appendLine("  esac")
-            appendLine("  printf '%s\\n' \"\$out\"")
-            appendLine("  case \"\$out\" in")
-            appendLine("    *handler_timeout*) return 124 ;;")
-            appendLine("  esac")
-            appendLine("  return \$rc")
-            appendLine("}")
-            for (name in names) {
-                append(name).append("() { minis_offload_wrap ").append(name).appendLine(" \"\$@\"; }")
-            }
-        }
-        val file = File(RootfsManager.getInstance(context).rootfsDir, "etc/minis-offload-exit.sh")
-        runCatching {
-            // Only touch the disk when the script content actually changed.
-            if (!file.isFile || file.readText() != body) {
-                file.parentFile?.mkdirs()
-                file.writeText(body)
-            }
-        }.onFailure { return "" }
-        sourcedOffloadSignature = signature
-        return ". /etc/minis-offload-exit.sh 2>/dev/null || true\n"
+        sourcedOffloadSignature = outcome.second
+        return outcome.first
     }
 
     suspend fun executeCommand(
@@ -680,7 +538,7 @@ class PersistentShell(
             try {
             val result = withTimeoutOrNull(armed) {
                 coroutineScope {
-                val cb = CommandCallback(
+                val cb = ShellCommandCallback(
                     marker = marker,
                     // [GH#358] Bind the callback to the current channel generation;
                     // the reader validates it before delivering any bytes.
@@ -692,7 +550,7 @@ class PersistentShell(
                     launchSilentHeartbeat(
                         cb.heartbeat,
                         { pendingCallback === cb },
-                    ) { line -> emitLine(lineCallback, line) }
+                    ) { line -> lineFeeder.emitLine(lineCallback, line) }
                 } else {
                     null
                 }

@@ -12,7 +12,8 @@
     <string name="approval_default_preview">Agent requests to run a sensitive operation</string>
     <string name="approval_action_approve">Approve</string>
     <string name="approval_action_deny">Deny</string>
-    <string name="approval_action_allow_all_session">Allow all this session</string>
+    <!-- [#36] "Always allow" allowlists this (tool, args-gist) key for the session. -->
+    <string name="approval_action_allow_all_session">Always allow this session (current target)</string>
 
     <!-- Crash recovery (ChatScreen) -->
     <string name="crash_recovery_snackbar">Last generation was interrupted (model %1$s, started at %2$s) — content produced before the interruption is preserved in the conversation</string>

@@ -259,6 +259,7 @@ class MemoryRepository(private val memoryDir: File) {
             writeTextAtomic(file, newContent)
             val newRevision = Digest.sha256Hex(newContent).take(16)
             Log.i(TAG, "Memory written to $fileName (${content.length} chars, revision $newRevision)")
+            indexForEmbeddingsAsync(file)
             "Memory saved to $fileName (${content.length} chars, revision $newRevision)"
         } catch (e: Exception) {
             Log.e(TAG, "Failed to write memory", e)
@@ -517,13 +518,23 @@ class MemoryRepository(private val memoryDir: File) {
 
     fun saveFile(name: String, content: String) {
         if (name == LearnedPrefsStore.FILE_NAME) return
-        writeTextAtomic(File(memoryDir, name), content)
+        val file = File(memoryDir, name)
+        writeTextAtomic(file, content)
+        indexForEmbeddingsAsync(file)
     }
 
     fun deleteFile(name: String): Boolean {
         if (name == GLOBAL_FILE) return false // Cannot delete GLOBAL.md
         if (name == LearnedPrefsStore.FILE_NAME) return false
-        return File(memoryDir, name).delete()
+        val deleted = File(memoryDir, name).delete()
+        if (deleted) {
+            // [#27] Vectors outlive the file otherwise — a deleted diary
+            // would stay semantically recallable, and there is no file left
+            // for a re-index to drop the rows.
+            com.openminis.app.data.memory.MemoryEmbeddingRuntime.indexerOrNull()
+                ?.deleteSourceAsync(memoryDir, name)
+        }
+        return deleted
     }
 
     // -- Entry-level operations (used by Session Memory revoke/edit) --
@@ -581,6 +592,7 @@ class MemoryRepository(private val memoryDir: File) {
                 return try {
                     writeTextAtomic(file, newContent)
                     Log.i(TAG, "Revoked memory entry from $dateStr.md")
+                    indexForEmbeddingsAsync(file)
                     EntryMutationResult.Success(dateStr)
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to write $dateStr.md after revoke", e)
@@ -623,6 +635,7 @@ class MemoryRepository(private val memoryDir: File) {
                 return try {
                     writeTextAtomic(file, newFileContent)
                     Log.i(TAG, "Replaced memory entry body in $dateStr.md")
+                    indexForEmbeddingsAsync(file)
                     EntryMutationResult.Success(dateStr)
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to write $dateStr.md after edit", e)
@@ -639,6 +652,21 @@ class MemoryRepository(private val memoryDir: File) {
     }
 
     // -- Internal --
+
+    /**
+     * [T-memory-embedding-recall] Fire-and-forget (re)index of a memory file
+     * for semantic recall (#27). No-op unless the embedding runtime is
+     * attached (prefs default OFF — this hook costs one volatile read).
+     * Deliberately NOT called for GLOBAL.md: the recall engine excludes it as
+     * a candidate (its full text rides in the system prompt), so its vectors
+     * would never be read.
+     */
+    private fun indexForEmbeddingsAsync(file: File) {
+        if (file.name == GLOBAL_FILE) return
+        runCatching {
+            com.openminis.app.data.memory.MemoryEmbeddingRuntime.indexerOrNull()?.indexFileAsync(file)
+        }
+    }
 
     private fun formatFileSize(bytes: Long): String {
         if (bytes < 1024) return "$bytes B"

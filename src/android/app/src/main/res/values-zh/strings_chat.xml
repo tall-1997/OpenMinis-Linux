@@ -11,7 +11,7 @@
     <string name="approval_default_preview">Agent 请求执行敏感操作</string>
     <string name="approval_action_approve">同意</string>
     <string name="approval_action_deny">拒绝</string>
-    <string name="approval_action_allow_all_session">本次会话全部允许</string>
+    <string name="approval_action_allow_all_session">本会话总是允许（当前目标）</string>
 
     <!-- Crash recovery (ChatScreen) -->
     <string name="crash_recovery_snackbar">上次有中断的生成（模型 %1$s，开始于 %2$s）——中断前的内容已保留在对话中</string>

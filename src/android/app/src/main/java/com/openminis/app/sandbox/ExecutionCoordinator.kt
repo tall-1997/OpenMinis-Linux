@@ -174,7 +174,7 @@ object ExecutionCoordinator {
         // partition. Block-device writes stay refused in every mode.
         val yoyo = com.openminis.app.security.SecurityGateHolder
             .activeSessionMode(sessionId)
-            .isYoyo()
+            .isYolo() // [#31] tier isYolo; was PermissionMode.isYoyo
         val refused = GuestWorkloadPolicy.hostRefusal(command, allowRootDeletion = yoyo)
             ?: DiskPressure.refusal(appContext, command)
             ?: run {

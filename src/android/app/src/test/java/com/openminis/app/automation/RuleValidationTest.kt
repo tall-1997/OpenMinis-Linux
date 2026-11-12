@@ -131,8 +131,15 @@ class RuleValidationTest {
 
     @Test
     fun permissionModeNormalizesToSessionTokens() {
-        assertEquals("YOYO", ok(base().copy(permissionMode = "yoyo")).permissionMode)
-        assertEquals("ASK", ok(base().copy(permissionMode = "whatever")).permissionMode)
+        // [#31] Four-tier tokens; unknown values degrade to SAFE_AUTO (the
+        // old "ASK" gate behaviour) so they can never widen the gate.
+        assertEquals("YOLO", ok(base().copy(permissionMode = "yoyo")).permissionMode)
+        assertEquals("SAFE_AUTO", ok(base().copy(permissionMode = "whatever")).permissionMode)
+        assertEquals("SAFE_AUTO", ok(base().copy(permissionMode = "SAFE_AUTO")).permissionMode)
+        assertEquals("OFF", ok(base().copy(permissionMode = "OFF")).permissionMode)
+        // [#31] The legacy "ASK" token normalizes to SAFE_AUTO — the gate
+        // behaviour the two-tier era actually meant.
+        assertEquals("SAFE_AUTO", ok(base().copy(permissionMode = "ASK")).permissionMode)
         assertNull(ok(base().copy(permissionMode = " ")).permissionMode)
     }
 

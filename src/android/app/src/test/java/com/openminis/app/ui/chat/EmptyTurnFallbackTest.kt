@@ -193,6 +193,10 @@ class EmptyTurnFallbackTest {
 
     @Test
     fun `the reminder is still once per run`() {
-        assertEquals(2, branch.split("didInjectEmptyToolReminder = true").size - 1)
+        // 注入实现已拆到 EmptyTurnRecoveryInject.kt：两个注入分支各返回 (true, true)，
+        // 委托处再置位一次，保证每轮只注入一次（拆分后位置变化，行为不变）。
+        val injectSrc = ProductionSources.read("ui/chat/EmptyTurnRecoveryInject.kt")
+        assertEquals(2, injectSrc.split("true to true").size - 1)
+        assertEquals(1, branch.split("didInjectEmptyToolReminder = true").size - 1)
     }
 }

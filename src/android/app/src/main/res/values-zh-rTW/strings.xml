@@ -382,6 +382,22 @@
     <string name="token_usage_cache_write">緩存寫入</string>
     <string name="token_usage_section_agent_loop">Agent 循環</string>
     <string name="token_usage_total_loops">總循環次數</string>
+    <!-- [#25] Context breakdown sheet -->
+    <string name="chat_menu_context_usage">上下文分解</string>
+    <string name="context_usage_sheet_title">上下文分解</string>
+    <string name="context_block_system">系統提示與工具</string>
+    <string name="context_block_skills_mcps">技能與 MCP</string>
+    <string name="context_block_memory">記憶注入</string>
+    <string name="context_block_runtime">本輪臨時上下文</string>
+    <string name="context_block_goal_plan">目標與計畫注入</string>
+    <string name="context_block_history">歷史視窗</string>
+    <string name="context_block_attachments">附件與圖片</string>
+    <string name="context_usage_note_estimate">粗略估計（±10%）；開啟此面板時重新整理</string>
+    <!-- [#41] Gen UI card -->
+    <string name="gen_ui_card_label">互動卡片</string>
+    <string name="gen_ui_view_source">檢視原始碼</string>
+    <string name="gen_ui_view_render">顯示渲染</string>
+    <string name="gen_ui_view_fullscreen">全螢幕</string>
     <string name="common_on">開</string>
     <string name="common_off">關</string>
     <string name="common_yes">是</string>
@@ -664,6 +680,13 @@
     <string name="env_var_privacy_header">隱私</string>
     <string name="env_var_privacy_toggle">隱私模式</string>
     <string name="env_var_privacy_footer">開啟後，shell-execute 輸出中偵測到的環境變數值會在送達模型前被打碼（例如 `sk-1********ajhks`）。少於 8 個字元的值會被全部替換為 `*`。聊天中使用者可見的輸出維持不變。</string>
+    <string name="outbound_mask_toggle">出站隱私遮蔽</string>
+    <string name="outbound_mask_footer">選擇性開啟的形狀遮蔽：金鑰形狀字串（含程式碼內金鑰）、信箱與電話號碼會被替換為佔位符；下方 embedding API 金鑰以明文保存在應用私有 prefs 中。本機聊天記錄不變。</string>
+    <string name="chat_menu_perm_yoyo">YOLO · 全授權</string>
+    <string name="chat_menu_perm_safe_auto">安全自動 · 唯讀工具自動放行</string>
+    <string name="chat_menu_perm_ask">詢問 · 每次呼叫都確認</string>
+    <string name="chat_menu_perm_off">關閉 · 拒絕所有工具</string>
+    <string name="approval_action_allow_all_session">本工作階段總是允許</string>
     <string name="env_var_platform_header">平台整合</string>
     <string name="env_var_platform_tier_2">完整</string>
     <string name="env_var_platform_tier_1">唯讀</string>
@@ -1798,7 +1821,7 @@
     <string name="selection_copy_as_rich_text">以格式化文字複製</string>
     <string name="selection_copy_as_plain_text">以純文字複製</string>
     <string name="chat_input_placeholder_hint_5">Minis Ultra 可以把 ↩︎ 鍵設為傳送或換行</string>
-    <string name="gate_approval_allow_all">本工作階段全部允許</string>
+    <string name="gate_approval_allow_all">本會話總是允許（當前目標）</string>
     <string name="db_quarantine_title">資料庫已自動修復</string>
     <string name="db_quarantine_body">本機資料庫在 %1$s 的啟動完整性檢查中未通過，無法安全開啟。你的聊天與設定並未刪除：損毀的檔案已被移出，應用以全新的空資料庫啟動。</string>
     <string name="db_quarantine_copy_at">損毀副本保留於：\n%1$s</string>
@@ -1914,6 +1937,7 @@
     <string name="usage_label_output_short">輸出</string>
     <string name="plan_board_all_done">所有步驟已完成</string>
     <string name="cd_plan_board_toggle">展開或收起計畫看板</string>
+    <string name="cd_plan_step_retry">重試這個失敗的步驟</string>
     <string name="cd_goal_header">開啟目標詳細資訊</string>
     <string name="cd_goal_status_active">目標進行中</string>
     <string name="cd_goal_status_paused">目標已暫停</string>
@@ -2093,6 +2117,12 @@
     <string name="token_usage_saver_folded">已折疊工具結果</string>
     <string name="token_usage_saver_saved">本輪節省</string>
     <string name="memory_center_overview">概覽</string>
+    <string name="memory_embedding_header">語意召回</string>
+    <string name="memory_embedding_toggle">Embedding 語意記憶召回</string>
+    <string name="memory_embedding_base_url">Embeddings Base URL</string>
+    <string name="memory_embedding_api_key">Embeddings API Key</string>
+    <string name="memory_embedding_model">Embedding 模型</string>
+    <string name="memory_embedding_footer">預設關閉。開啟後，記憶召回在關鍵字搜尋之外，會加入透過 OpenAI 相容 embeddings 端點的向量相似度搜尋。變更需重啟應用程式程序後才會生效。</string>
     <string name="memory_center_stat_memory">記憶檔案</string>
     <string name="memory_center_stat_recalls">被召回條目</string>
     <string name="memory_center_stat_failures">已攔截的重複</string>
@@ -2201,4 +2231,59 @@
     <string name="skill_display_name_android_sdk_mirrors">Android SDK Mirrors</string>
     <string name="provider_detail_force_thinking">Force extended thinking</string>
     <string name="provider_detail_force_thinking_footer">For Anthropic-compatible relays only. Sends thinking:{type:"enabled",budget_tokens:N} even when the model catalog says the model cannot reason. Use when the model supports thinking but the catalog entry is missing or wrong.</string>
+    <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
+    <string name="provider_list_export_providers">匯出供應商</string>
+    <string name="provider_transfer_export_title">匯出供應商</string>
+    <string name="provider_transfer_export_body">將把 %1$d 個供應商匯出為 JSON 檔案。</string>
+    <string name="provider_transfer_include_keys">包含 API 金鑰</string>
+    <string name="provider_transfer_include_keys_risk">API 金鑰將以明文寫入檔案。任何取得該檔案的人都能使用你的金鑰——請妥善保管，匯入後立即刪除。</string>
+    <string name="provider_transfer_export">匯出</string>
+    <string name="provider_transfer_export_success">已匯出 %1$d 個供應商</string>
+    <string name="provider_transfer_export_failed">匯出失敗</string>
+    <string name="provider_transfer_import_ok">已匯入 %1$d 個供應商</string>
+    <string name="provider_transfer_import_partial">已匯入 %1$d 個供應商，%2$d 個失敗</string>
+    <string name="provider_transfer_import_partial_detail">已匯入 %1$d 個供應商，%2$d 個失敗：%3$s</string>
+    <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
+    <string name="ssh_workspace_menu_title">SSH 工作區</string>
+    <string name="ssh_workspace_binding_title">SSH 工作區</string>
+    <string name="ssh_workspace_bound_to">已綁定 %1$s（%2$s）</string>
+    <string name="ssh_workspace_bound_local">正在本機沙盒中工作</string>
+    <string name="ssh_workspace_option_local">本機沙盒</string>
+    <string name="ssh_workspace_option_local_subtitle">Shell 在本裝置的 Linux 沙盒中執行</string>
+    <string name="ssh_workspace_no_hosts">尚無 SSH 主機——請在 設定 → SSH 工作區 新增。</string>
+    <string name="ssh_workspace_shell_only_note">SSH 工作區僅支援 shell 命令；綁定主機期間檔案類工具將被拒絕。</string>
+    <string name="ssh_workspace_shell_only">SSH 工作區目前僅支援 shell 命令——已拒絕 \'%1$s\'。</string>
+    <string name="ssh_workspace_shell_only_hint">用 shell_execute 執行遠端命令，或在聊天選單 → SSH 工作區 解綁本工作階段以還原本機檔案工具。</string>
+    <string name="ssh_hosts_title">SSH 主機</string>
+    <string name="ssh_hosts_subtitle">Agent 可透過 SSH 存取的遠端主機。憑證加密儲存，永不顯示。</string>
+    <string name="ssh_hosts_row_subtitle">新增主機、測試連線、管理主機金鑰</string>
+    <string name="ssh_hosts_empty">尚無主機。</string>
+    <string name="ssh_hosts_add">新增主機</string>
+    <string name="ssh_hosts_add_cancel">取消</string>
+    <string name="ssh_hosts_test">測試連線</string>
+    <string name="ssh_hosts_testing">測試中…</string>
+    <string name="ssh_hosts_test_ok">連線成功</string>
+    <string name="ssh_hosts_test_failed">連線失敗</string>
+    <string name="ssh_hosts_forget_key">忘記主機金鑰</string>
+    <string name="ssh_hosts_remove">移除</string>
+    <string name="ssh_hosts_pinned">主機金鑰已釘選：%1$s…</string>
+    <string name="ssh_field_name">名稱（字母/數字/._-）</string>
+    <string name="ssh_field_hostname">主機名稱或 IP</string>
+    <string name="ssh_field_port">連接埠</string>
+    <string name="ssh_field_username">使用者名稱</string>
+    <string name="ssh_auth_password">密碼</string>
+    <string name="ssh_auth_key">私鑰</string>
+    <string name="ssh_field_password">密碼</string>
+    <string name="ssh_field_private_key">PEM 私鑰</string>
+    <string name="ssh_field_passphrase">金鑰通關密語（選填）</string>
+    <string name="ssh_save">儲存</string>
+
+    <!-- [T-handsfree-loop] (#40) Hands-free continuous voice conversation -->
+    <string name="handsfree_toggle">免持模式</string>
+    <string name="handsfree_state_starting">正在啟動…</string>
+    <string name="handsfree_state_listening">正在聆聽…</string>
+    <string name="handsfree_state_thinking">正在思考…</string>
+    <string name="handsfree_state_speaking">正在朗讀…</string>
+    <string name="handsfree_exit_recognition">免持模式已停止：語音辨識連續失敗。點按免持模式可重試。</string>
+    <string name="handsfree_exit_tts">免持模式已停止：回覆朗讀失敗。點按免持模式可重試。</string>
 </resources>

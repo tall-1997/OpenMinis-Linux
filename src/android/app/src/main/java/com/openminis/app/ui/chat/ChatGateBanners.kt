@@ -35,7 +35,7 @@ fun ChatGateBanners(
     approvals: Map<String, ApprovalGate.ApprovalRequest>,
     intercepts: List<InterceptEvent>,
     onApprove: (String) -> Unit,
-    onApproveAll: (String) -> Unit,
+    onApproveAlways: (String) -> Unit,
     onDeny: (String) -> Unit,
     onDismissIntercept: (String) -> Unit,
 ) {
@@ -75,10 +75,15 @@ fun ChatGateBanners(
                         Button(onClick = { onApprove(req.id) }) {
                             Text(stringResource(R.string.gate_approval_approve))
                         }
-                        // [T-session-allow-all] Approve this request and
-                        // stop asking for the rest of the session.
-                        OutlinedButton(onClick = { onApproveAll(req.id) }) {
-                            Text(stringResource(R.string.gate_approval_allow_all))
+                        // [#36] Three-state approval: approve this request and
+                        // allowlist its (tool, args-gist) key for the session.
+                        // Hidden for fatal confirmations — the allowlist can
+                        // never skip those (mustPrompt short-circuits first),
+                        // so the button would only store a dead key.
+                        if (!req.fatalConfirm) {
+                            OutlinedButton(onClick = { onApproveAlways(req.id) }) {
+                                Text(stringResource(R.string.gate_approval_allow_all))
+                            }
                         }
                         OutlinedButton(onClick = { onDeny(req.id) }) {
                             Text(stringResource(R.string.gate_approval_deny))

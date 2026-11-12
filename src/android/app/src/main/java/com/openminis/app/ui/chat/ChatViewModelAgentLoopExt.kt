@@ -132,9 +132,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // can reconstruct how the model assembled (or failed to assemble) the
     // args.
     val toolInputChunkRings: MutableMap<String, MutableList<String>> = mutableMapOf()
-    // [GH#61/#83/#146] Provider-reported unparseable argument tails for this
-    // stream attempt, keyed by the same deduped id toolCalls uses. Run-scoped
-    // storage (so the bubble-swap helper can clear it), reset at every turn.
+    // [GH#61/#83/#146] 本轮无法解析的参数尾巴（keyed by toolCall id，每轮清空）。
     val toolCallRawArgs = mutableMapOf<String, String>()
     var accumulatedText = ""
     var lastContextTokens = 0  // updated each turn from API usage
@@ -158,8 +156,6 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // delta gate only applies to short inputs, where the pill's command/url
     // preview benefits from the lower latency; the rest of the ladder is
     // shared.
-    fun textDeltaThrottleMs(len: Int, unflushedChars: Int): Long =
-        StreamingThrottle.throttleFor(len, unflushedChars, firstTierMs = 150L)
     // Fallback state — mirrors iOS streamWithGroupFallback.
     // [T-android-model-switch-midrun-adopt] Both are reassigned at the top of
     // every request when the user picked a different model since the previous
@@ -527,14 +523,8 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 // A new model starts a new failure streak.
                 emptyStreakEntryIds.clear()
             }
-            // [GH#521] Per-attempt phase clocks: request → headers (`Started`)
-            // → first real token. The two numbers are logged separately so
-            // "slow upload", "slow gateway headers" and "headers then silent"
-            // stop hiding behind one mislabelled `ttfbMs`. Declared outside
-            // the try so the error path can report the phase it died in.
-            var attemptStartNanos = 0L
-            var headersAtNanos = 0L
-            var firstTokenAtNanos = 0L
+            // [GH#521] Per-attempt phase clocks (see [StreamPhaseReport]).
+            val streamPhase = StreamPhaseReport()
             try {
                 // [T-android-enhanced-cache] Stamp the per-turn Enhanced
                 // Cache flag onto the active provider here — the single
@@ -592,21 +582,14 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 // [T-stream-stall-watchdog] Phase 2: silence past twice the first-event
                 // budget means the stream stalled, not started slow.
                 val streamIdleTimeoutMs = firstEventTimeoutMs * 2
-                // [GH#221] 用户自定义头 + OpenCode 会话头统一走同一通道。
+                // [GH#221] 用户头 + OpenCode 会话头走同一通道。
                 val requestHeaders = requestExtraHeaders()
-                // [GH#563] Re-stamp the runtime-context date before every request
-                // of this run. A long agent loop (or a queued prompt drained
-                // hours later) otherwise kept the date of the turn that started
-                // the loop, so "today/tomorrow" answers drifted. The date sits
-                // in the dynamic tail (after systemPromptStablePrefixLen), so
-                // this does not disturb the cached prefix.
+                // [GH#563] 每次请求前重刷日期；日期在动态尾部，不扰动缓存前缀。
                 val turnSystemPrompt = refreshRuntimeContextDate(
                     systemPrompt,
                     java.time.LocalDate.now().toString(),
                 )
-                attemptStartNanos = System.nanoTime()
-                headersAtNanos = 0L
-                firstTokenAtNanos = 0L
+                streamPhase.startAttempt()
                 currentProvider.streamMessage(
                     applyRequestImageBudget(requestHistory),
                     turnSystemPrompt, dynamicMaxTokens(currentProvider, lastContextTokens),
@@ -618,25 +601,12 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 ).streamStallWatchdog(
                     firstTimeoutMs = firstEventTimeoutMs,
                     idleTimeoutMs = streamIdleTimeoutMs,
-                    // [GH#521] Distinct headers→first-token phase. `Started`
-                    // satisfies the phase-1 budget (HTTP headers are in), so
-                    // without this the only bound after headers was the 2×
-                    // idle budget (90-180s) and a 15-28s silent gateway looked
-                    // healthy.
-                    // 中文：headers 到达后单独看首 token，超时走 transient 重试。
+                    // [GH#521] headers 之后单独计首 token；否则 15-28s 静默网关会被 2× idle 掩盖。
                     firstContentTimeoutMs = firstEventTimeoutMs,
                     firstContentReason = "connected (stream established) but no first token " +
                         "within ${firstEventTimeoutMs / 1000}s — retrying",
                 ).collect { chunk ->
-            // [GH#521] Phase clocks. `Started` = headers; the first
-            // content-bearing chunk is the real first token (usage/finished
-            // markers do not count).
-            val chunkAt = System.nanoTime()
-            if (chunk is LLMStreamChunk.Started) {
-                if (headersAtNanos == 0L) headersAtNanos = chunkAt
-            } else if (firstTokenAtNanos == 0L && chunk.countsAsFirstTokenProgress()) {
-                firstTokenAtNanos = chunkAt
-            }
+            streamPhase.onChunk(chunk)
             // [T-stream-trace-live] 运行时轨迹录制（日志页开关控制，默认关）。
             com.openminis.app.provider.StreamTraceRecorder.record(chunk)
             when (chunk) {
@@ -775,7 +745,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     pendingChunkSb.append(strippedDelta)
                     val len = turnTextSb.length
                     val unflushed = len - lastFlushedLen
-                    val throttle = textDeltaThrottleMs(len, unflushed)
+                    val throttle = StreamingThrottle.throttleFor(len, unflushed, firstTierMs = 150L)
                     val newlineFlush = len < 5_000 && chunk.text.contains('\n') && unflushed >= 50
                     val nowMs = System.currentTimeMillis()
                     if (nowMs - lastUiUpdateMs >= throttle || newlineFlush) {
@@ -938,10 +908,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     }
                     android.util.Log.d("ToolChain[VM]", "[turn=$turn] ToolCallComplete id=$toolCompleteId name=${chunk.name} args=${argsString.take(300)}")
                     toolCalls.add(Triple(toolCompleteId, chunk.name, chunk.args))
-                    // [GH#61/#83/#146] Keep the exact unparsed tail next to
-                    // the call. The parsed `args` above is `{}` in this case;
-                    // ToolJsonRepair/preflight must see the bytes that failed
-                    // instead of treating it as a genuine no-argument call.
+                    // [GH#61/#83/#146] 保留真实失败字节，供 preflight 修复/拒绝。
                     chunk.rawArgs?.let { toolCallRawArgs[toolCompleteId] = it }
                     // [T-android-gemini3-thoughtsig / #179] Stash the Gemini
                     // 3.x thought signature keyed by the (deduped) tool call id.
@@ -1076,30 +1043,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 lastFileToolInputMs = 0L
                 lastOtherToolInputMs = 0L
                 collectDone = true
-                // [GH#521] Separate the two numbers users and logs need:
-                // headersMs = request start → HTTP headers; firstTokenMs =
-                // request start → first content-bearing chunk. A null
-                // firstTokenMs with headersMs set is precisely the
-                // "200 OK, then silent" shape this issue reported.
-                if (headersAtNanos != 0L) {
-                    val headersMs = (headersAtNanos - attemptStartNanos) / 1_000_000L
-                    val firstTokenMs = if (firstTokenAtNanos != 0L) {
-                        (firstTokenAtNanos - attemptStartNanos) / 1_000_000L
-                    } else {
-                        -1L
-                    }
-                    val waitAfterHeaders = if (firstTokenAtNanos != 0L) {
-                        ((firstTokenAtNanos - headersAtNanos) / 1_000_000L).toString()
-                    } else {
-                        "none"
-                    }
-                    AppLogger.info(
-                        ChatViewModel.TAG_STREAM,
-                        "[T-first-token] turn=$turn sid=${activeSessionId.take(8)} " +
-                            "model=${currentProvider.model.id} headersMs=$headersMs " +
-                            "firstTokenMs=$firstTokenMs waitAfterHeadersMs=$waitAfterHeaders",
-                    )
-                }
+                streamPhase.logSuccess(turn, activeSessionId, currentProvider.model.id)
                 com.openminis.app.agent.GenerationRunLifecycle.succeeded(context, generationRunId)
                 // [T-stall-resume] The stream attempt succeeded — no resume
                 // context should leak into a later turn.
@@ -1120,23 +1064,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             } catch (e: Exception) {
                 if (e is CancellationException && e.cause == null) { CancellationDiagnostic.log(provider.model.displayName, activeSessionId, e, _isStreaming.value); throw e }  // [T-cancel-diag] record timeline, real job cancellation
                 val actual = unwrapFlowException(e)
-                // [GH#521] Report the phase the attempt died in. headersMs=0
-                // means we never got past the request/upload+headers stage;
-                // headersMs>0 with firstTokenMs=0 is the post-headers stall.
-                if (headersAtNanos != 0L) {
-                    val firstTokenPhase = if (firstTokenAtNanos != 0L) {
-                        ((firstTokenAtNanos - attemptStartNanos) / 1_000_000L).toString()
-                    } else {
-                        "none"
-                    }
-                    AppLogger.warning(
-                        ChatViewModel.TAG_STREAM,
-                        "[T-first-token] attempt failed turn=$turn " +
-                            "headersMs=${(headersAtNanos - attemptStartNanos) / 1_000_000L} " +
-                            "firstTokenMs=$firstTokenPhase " +
-                            "error=${actual.javaClass.simpleName}: ${actual.message?.take(160)}",
-                    )
-                }
+                streamPhase.logFailure(turn, actual)
                 val isRateLimit = actual is com.openminis.app.data.model.LLMError.RateLimited
                 val is5xx = actual is com.openminis.app.data.model.LLMError.ProviderError &&
                     ChatViewModel.HTTP_5XX_STATUS_RE.containsMatchIn(actual.detail)
@@ -1805,32 +1733,10 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 // tool_result; the object owns the decision, the loop the
                 // mutation and the once-per-run guard.
                 val plan = EmptyTurnRecovery.plan(agentHistory, didInjectEmptyToolReminder)
-                fun injectEmptyTurnReminder(): Boolean = when (plan) {
-                    is EmptyTurnRecovery.Plan.NudgeExistingPart -> {
-                        didInjectEmptyToolReminder = true
-                        // Drop the empty assistant turn we just appended.
-                        agentHistory.removeAt(agentHistory.size - 1)
-                        val tail = agentHistory[plan.tailIndex]
-                        val newParts = tail.contentParts.toMutableList()
-                        newParts[plan.partIndex] = when (val part = newParts[plan.partIndex]) {
-                            is AgentContentPart.ToolResult -> part.copy(content = part.content + EmptyTurnRecovery.REMINDER)
-                            is AgentContentPart.Text -> AgentContentPart.Text(part.text + EmptyTurnRecovery.REMINDER)
-                            else -> part
-                        }
-                        agentHistory[plan.tailIndex] = tail.copy(contentParts = newParts)
-                        true
-                    }
-                    is EmptyTurnRecovery.Plan.AppendStandalone -> {
-                        didInjectEmptyToolReminder = true
-                        agentHistory.removeAt(agentHistory.size - 1)
-                        agentHistory.add(LLMMessage(
-                            role = LLMMessage.Role.USER,
-                            content = EmptyTurnRecovery.REMINDER,
-                            contentParts = listOf(AgentContentPart.Text(EmptyTurnRecovery.REMINDER)),
-                        ))
-                        true
-                    }
-                    is EmptyTurnRecovery.Plan.GiveUp -> false
+                fun injectEmptyTurnReminder(): Boolean {
+                    val (injected, didInject) = injectEmptyTurnReminderImpl(plan, agentHistory)
+                    if (didInject) didInjectEmptyToolReminder = true
+                    return injected
                 }
                 // [port-upstream-1.16][T-b13-empty-fallback] In a model group
                 // an empty turn IS a failure: Always switches member at once
@@ -1917,23 +1823,16 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         }
         AppLogger.info(ChatViewModel.TAG_STREAM, "runAgentLoop turn=$turn dispatching ${toolCalls.size} tool call(s), continuing")
 
-        // [T-android-session-last-message-live-tool-call] Push a live
-        // preview to the session list NOW, before the (possibly long-
-        run {
-            val livePreviewParts = buildTurnParts(allToolBlocks, turnStartBlockIndex, toolInputMap)
-            val liveMeta = allToolBlocks.filter { it.kind == "tool_use" }.associateBy { it.id }
-            if (livePreviewParts.isNotEmpty()) {
-                chatRepository.updateSessionPreview(
-                    realSessionId.ifEmpty { sessionId },
-                    buildAssistantPartsJson(livePreviewParts, liveMeta),
-                )
-            }
-        }
+        // [T-android-session-last-message-live-tool-call] Push a live preview to the
+        // session list NOW, before the (possibly long-running) tool dispatch; the
+        // list row otherwise lags one turn behind.
+        pushLiveSessionPreview(
+            allToolBlocks = allToolBlocks,
+            turnStartBlockIndex = turnStartBlockIndex,
+            toolInputMap = toolInputMap,
+        )
 
-        // [T-truncated-tool-call-reject] finish_reason=length/max_tokens 且
-        // 带工具调用 → 参数极可能被截断。拒绝判定已收敛到共享
-        // ToolCallPreflight（按 turnFinishReason 在每个执行入口生效），这里
-        // 只负责把 finish reason 传进本轮上下文。
+        // [T-truncated-tool-call-reject] finish_reason=length/max_tokens 由 ToolCallPreflight 统一拒绝。
         val turnCtx = ToolTurnContext(
             activeSessionId = activeSessionId,
             assistantId = assistantId,
@@ -1984,23 +1883,15 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             )
         }
 
-        // Persist the assistant+tools turn (with full input JSON and thinking).
-        // Capture the persisted DB id so we can back-fill agentHistory's last
-        // assistant entry — compact-marker boundary resolution depends on it.
+        // 持久化本轮 assistant+tools，并回填 agentHistory 的 dbMessageId（compact 边界依赖）。
         val turnParts = buildTurnParts(allToolBlocks, turnStartBlockIndex, toolInputMap)
         val blockMeta = allToolBlocks.filter { it.kind == "tool_use" }.associateBy { it.id }
-        val assistantDbId = persistAssistantTurnForRun(
-            checkNotNull(activeRun) { "Agent loop has no persistence owner" }, turnParts, lastUsage, turnReasoningContent, blockMeta, accumulatedText,
+        val assistantDbId = persistAssistantTurnForRunAndBackfill(
+            activeRun, turnParts, blockMeta, lastUsage, turnReasoningContent, accumulatedText, agentHistory,
         )
         if (activeRun?.isStopped == true) { loopExitedNormally = true; break }
-        if (assistantDbId != null) {
-            val lastIdx = agentHistory.indexOfLast { it.role == LLMMessage.Role.ASSISTANT && it.dbMessageId == null }
-            if (lastIdx >= 0) {
-                agentHistory[lastIdx] = agentHistory[lastIdx].copy(dbMessageId = assistantDbId)
-            }
-        }
 
-        // Persist tool results as user-role message (mirrors iOS)
+        // tool_result 作为 user 角色消息持久化（镜像 iOS）。
         val toolResultDbId = persistToolResultMessageForRun(
             checkNotNull(activeRun) { "Agent loop has no persistence owner" },
             resultParts,
@@ -2008,7 +1899,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         )
         if (activeRun?.isStopped == true) { loopExitedNormally = true; break }
 
-        // Add tool results to history
+        // 工具结果进入历史。
         appendBoundedHistory(LLMMessage(
             role = LLMMessage.Role.USER,
             content = "",
@@ -2036,8 +1927,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
 
         if (turn == 0) generateSessionTitleIfNeeded()  // auto-title after first exchange
 
-        // [T-android-queued-message-interrupt-on-toolclose] At the post-tool-
-        // result boundary a queued prompt abandons the running plan and
+    // [T-android-queued-message-interrupt-on-toolclose] 工具结果边界上的排队消息会打断运行计划。
         // starts a standalone turn. See drainQueueIntoStandaloneTurn.
         if (_promptQueue.value.isNotEmpty()) {
             AppLogger.info(
@@ -2092,10 +1982,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             )
         }
     }
-    // [T-android-tts-scene-announcements] Loop converged — announce to the
-    // user if they opted in (scene pref, default off). The sink is owned by
-    // the UI layer; every failure mode (no engine bound, engine not yet
-    // initialized, pref off) is swallowed inside the coordinator.
+    // [T-android-tts-scene-announcements] 收敛后按用户开关播报（默认关，失败全吞在 coordinator 内）。
     runCatching {
         val sink = announcementSink ?: return@runCatching
         com.openminis.app.speech.VoiceAnnouncementCoordinator(sink)

@@ -9,7 +9,7 @@
     <string name="approval_default_preview">El agente solicita ejecutar una operación sensible</string>
     <string name="approval_action_approve">Aprobar</string>
     <string name="approval_action_deny">Denegar</string>
-    <string name="approval_action_allow_all_session">Permitir todo en esta sesión</string>
+    <string name="approval_action_allow_all_session">Permitir siempre en esta sesión (objetivo actual)</string>
 
     <!-- Crash recovery (ChatScreen) -->
     <string name="crash_recovery_snackbar">La última generación quedó interrumpida (modelo %1$s, iniciada a las %2$s); el contenido producido antes de la interrupción se conserva en la conversación</string>

@@ -793,5 +793,8 @@ internal object AppMigrations {
     // [#35 session archive] sessions.archived_at.
     MIGRATION_31_32,
     MIGRATION_32_31,
+    // [#27 memory embeddings] declared in MemoryEmbeddingMigrations.kt.
+    MemoryEmbeddingMigrations.MIGRATION_32_33,
+    MemoryEmbeddingMigrations.MIGRATION_33_32,
     )
 }

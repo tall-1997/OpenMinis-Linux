@@ -222,7 +222,9 @@ fun ScheduledTaskEditScreen(
             vm.listModels().firstOrNull { it.entryId == eid }?.modelId
         },
         startDateMs = startDateMs, endDateMs = endDateMs,
-        newSessionPermissionMode = if (newSessionPermYoyo) "YOYO" else "ASK",
+        // [#31] Non-YOLO emits SAFE_AUTO — the tier that reproduces the old
+        // "ASK" gate behaviour (read-only auto, the rest asks).
+        newSessionPermissionMode = if (newSessionPermYoyo) "YOLO" else "SAFE_AUTO",
         newSessionFolderId = newSessionFolderId,
     )
 

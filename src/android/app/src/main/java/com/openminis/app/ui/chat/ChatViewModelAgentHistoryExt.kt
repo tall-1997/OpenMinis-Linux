@@ -4,6 +4,7 @@ import android.util.Log
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
+import com.openminis.app.ui.chat.retention.ResidentWindow
 import kotlinx.coroutines.flow.first
 
 internal fun ChatViewModel.effectiveAgentHistoryUncounted(): List<LLMMessage> {
@@ -295,4 +296,70 @@ internal fun ChatViewModel.progressivelyTrimmed(list: List<LLMMessage>): List<LL
         )
     }
     return trimmed
+}
+
+// ── Bounded-history append + trim + DB rebuild ──────────────────────────────
+// [T-android-split-chat-agenthistory] Moved verbatim from ChatViewModel.kt
+// (mechanical split, zero behavior change); member functions became ChatViewModel
+// extensions with identical signatures.
+
+/**
+ * Rebuild model context from the newest persisted rows only. The database
+ * remains the complete transcript; no operation may parse the whole session
+ * merely to continue, retry, edit, or delete it.
+ */
+
+internal fun ChatViewModel.appendBoundedHistory(message: LLMMessage) {
+    agentHistory.add(message)
+    trimAgentHistory()
+}
+
+internal fun ChatViewModel.appendBoundedHistoryAll(messages: Collection<LLMMessage>) {
+    agentHistory.addAll(messages)
+    trimAgentHistory()
+}
+
+internal fun ChatViewModel.trimAgentHistory() {
+    val dropped = ArrayList<LLMMessage>()
+    val byCount = ResidentWindow.countCut(agentHistory, ChatViewModel.MAX_AGENT_HISTORY_MESSAGES)
+    if (byCount > 0) {
+        dropped.addAll(agentHistoryHeadSnapshot(byCount))
+        removeAgentHistoryHead(byCount)
+        llmHistoryStartOffset += byCount
+    }
+    val byBytes = ResidentWindow.byteCut(agentHistory)
+    if (byBytes > 0) {
+        dropped.addAll(agentHistoryHeadSnapshot(byBytes))
+        removeAgentHistoryHead(byBytes)
+        llmHistoryStartOffset += byBytes
+    }
+    if (dropped.isNotEmpty()) {
+        rememberDigestLines(dropped.map { HistoryDigest.fromMessage(it) })
+    }
+}
+
+/**
+ * Rebuild the request-side history from Room immediately before a new send.
+ * The UI is intentionally paged, so `_messages` and the resident cache are
+ * not authoritative for model memory. This also repairs a ViewModel that was
+ * reopened on the tail and never had its older UI pages loaded.
+ */
+internal suspend fun ChatViewModel.rebuildAgentHistoryFromDatabase(sid: String) {
+    val tail = chatRepository.loadRequestHistory(sid, ChatViewModel.MAX_AGENT_HISTORY_MESSAGES)
+    val parsed = tail.map { toLLMMessage(it) }
+    agentHistory.clear()
+    toolLoopDetector.reset()
+    appendBoundedHistoryAll(parsed)
+    llmHistoryStartOffset = (
+        chatRepository.dao.messageCountForSession(sid) - tail.size
+    ).coerceAtLeast(0)
+}
+
+internal suspend fun ChatViewModel.awaitBoundedHistoryRebuild(
+    sid: String,
+): List<com.openminis.app.data.db.MessageEntity> {
+    rebuildAgentHistoryFromDatabase(sid)
+    return chatRepository.hydrateDisplayRows(
+        chatRepository.loadMessagesTail(sid, ChatViewModel.MAX_AGENT_HISTORY_MESSAGES),
+    )
 }

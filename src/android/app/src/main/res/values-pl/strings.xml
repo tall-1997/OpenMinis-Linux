@@ -336,6 +336,22 @@
     <string name="token_usage_cache_write">Zapis pamięci podręcznej</string>
     <string name="token_usage_section_agent_loop">Pętla Agenta</string>
     <string name="token_usage_total_loops">Łączna liczba pętli</string>
+    <!-- [#25] Context breakdown sheet -->
+    <string name="chat_menu_context_usage">Podział kontekstu</string>
+    <string name="context_usage_sheet_title">Podział kontekstu</string>
+    <string name="context_block_system">Prompt systemowy i narzędzia</string>
+    <string name="context_block_skills_mcps">Umiejętności i MCP</string>
+    <string name="context_block_memory">Wstrzyknięcie pamięci</string>
+    <string name="context_block_runtime">Tymczasowy kontekst tej tury</string>
+    <string name="context_block_goal_plan">Wstrzyknięcie celu i planu</string>
+    <string name="context_block_history">Okno historii</string>
+    <string name="context_block_attachments">Załączniki i obrazy</string>
+    <string name="context_usage_note_estimate">Szacunki przybliżone (±10%); odświeżane po otwarciu arkusza</string>
+    <!-- [#41] Gen UI card -->
+    <string name="gen_ui_card_label">Karta interaktywna</string>
+    <string name="gen_ui_view_source">Pokaż źródło</string>
+    <string name="gen_ui_view_render">Pokaż render</string>
+    <string name="gen_ui_view_fullscreen">Pełny ekran</string>
     <string name="common_on">Włączone</string>
     <string name="common_off">Wyłączone</string>
     <string name="common_yes">Tak</string>
@@ -616,6 +632,14 @@
     <string name="env_var_privacy_header">Prywatność</string>
     <string name="env_var_privacy_toggle">Tryb prywatności</string>
     <string name="env_var_privacy_footer">Gdy włączone, każda wartość zmiennej środowiskowej pojawiająca się w wyniku shell-execute jest zastępowana formą zamaskowaną (np. `sk-1********ajhks`), zanim trafi do modelu. Wartości krótsze niż 8 znaków stają się w całości `*`. Wynik widoczny dla użytkownika w czacie pozostaje bez zmian.</string>
+    <string name="outbound_mask_toggle">Maskowanie prywatności wychodzącej</string>
+    <string name="outbound_mask_footer">Maskowanie opt-in po kształcie: ciągi typu klucz (też w kodzie), e-maile i liczby jak telefony zamieniane na placeholdery. Klucz embedding API poniżej zapisany jawnie w prefs aplikacji. Historia urządzenia bez zmian.</string>
+    <string name="chat_menu_perm_yoyo">YOLO · pełna automatyka</string>
+    <string name="chat_menu_perm_safe_auto">Bezpieczne auto · narzędzia tylko do odczytu działają swobodnie</string>
+    <string name="chat_menu_perm_ask">Pytaj · potwierdź każde wywołanie</string>
+    <string name="chat_menu_perm_off">Wyłączone · odmów wszystkich narzędzi</string>
+    <string name="gate_approval_allow_all">Zawsze zezwalaj w tej sesji (bieżący cel)</string>
+    <string name="approval_action_allow_all_session">Zawsze zezwalaj w tej sesji</string>
     <string name="env_var_section_header">Zmienne</string>
     <string name="env_var_section_footer">Zmienne środowiskowe są wstrzykiwane do powłoki piaskownicy na początku sesji. Nazwy są zapisywane wielkimi literami i muszą być zgodne z regułami zmiennych powłoki POSIX.</string>
     <string name="env_var_empty_title">Brak zmiennych środowiskowych</string>
@@ -1839,6 +1863,7 @@
     <string name="usage_label_output_short">Wyjście</string>
     <string name="plan_board_all_done">Wszystkie kroki ukończone</string>
     <string name="cd_plan_board_toggle">Rozwiń lub zwiń tablicę planu</string>
+    <string name="cd_plan_step_retry">Ponów ten nieudany krok</string>
     <string name="cd_goal_header">Otwórz szczegóły celu</string>
     <string name="cd_goal_status_active">Cel w toku</string>
     <string name="cd_goal_status_paused">Cel wstrzymany</string>
@@ -2018,6 +2043,12 @@
     <string name="token_usage_saver_folded">Zwinięte wyniki narzędzi</string>
     <string name="token_usage_saver_saved">Zaoszczędzono w tej turze</string>
     <string name="memory_center_overview">W skrócie</string>
+    <string name="memory_embedding_header">Wyszukiwanie semantyczne</string>
+    <string name="memory_embedding_toggle">Semantyczne przypominanie za pomocą embeddingów</string>
+    <string name="memory_embedding_base_url">Bazowy adres URL embeddingów</string>
+    <string name="memory_embedding_api_key">Klucz API embeddingów</string>
+    <string name="memory_embedding_model">Model embeddingów</string>
+    <string name="memory_embedding_footer">Domyślnie wyłączone. Po włączeniu przypominanie pamięci dodaje wyszukiwanie podobieństwa wektorowego przez punkt końcowy embeddingów zgodny z OpenAI, obok wyszukiwania słów kluczowych. Zmiany zaczynają obowiązywać dopiero po ponownym uruchomieniu procesu aplikacji.</string>
     <string name="memory_center_stat_memory">Pliki pamięci</string>
     <string name="memory_center_stat_recalls">Przywołane wpisy</string>
     <string name="memory_center_stat_failures">Zablokowane powtórzenia</string>
@@ -2126,4 +2157,59 @@
     <string name="skill_display_name_android_sdk_mirrors">Android SDK Mirrors</string>
     <string name="provider_detail_force_thinking">Force extended thinking</string>
     <string name="provider_detail_force_thinking_footer">For Anthropic-compatible relays only. Sends thinking:{type:"enabled",budget_tokens:N} even when the model catalog says the model cannot reason. Use when the model supports thinking but the catalog entry is missing or wrong.</string>
+    <!-- [#24] Batch provider config export/import — provider list menu + export dialog -->
+    <string name="provider_list_export_providers">Eksportuj dostawców</string>
+    <string name="provider_transfer_export_title">Eksportuj dostawców</string>
+    <string name="provider_transfer_export_body">%1$d dostawców zostanie wyeksportowanych do pliku JSON.</string>
+    <string name="provider_transfer_include_keys">Dołącz klucze API</string>
+    <string name="provider_transfer_include_keys_risk">Klucze API są zapisywane do pliku jako zwykły tekst. Każdy, kto zdobędzie ten plik, może używać Twoich kluczy — przechowuj plik bezpiecznie i usuń go po zaimportowaniu.</string>
+    <string name="provider_transfer_export">Eksportuj</string>
+    <string name="provider_transfer_export_success">Wyeksportowano dostawców: %1$d</string>
+    <string name="provider_transfer_export_failed">Eksport nie powiódł się</string>
+    <string name="provider_transfer_import_ok">Zaimportowano dostawców: %1$d</string>
+    <string name="provider_transfer_import_partial">Zaimportowano dostawców: %1$d, niepowodzenia: %2$d</string>
+    <string name="provider_transfer_import_partial_detail">Zaimportowano %1$d, nie powiodło się %2$d: %3$s</string>
+    <!-- [T-ssh-workspace] (#32) SSH workspace binding + host management -->
+    <string name="ssh_workspace_menu_title">Obszar roboczy SSH</string>
+    <string name="ssh_workspace_binding_title">Obszar roboczy SSH</string>
+    <string name="ssh_workspace_bound_to">Powiązano z %1$s (%2$s)</string>
+    <string name="ssh_workspace_bound_local">Pracuje w lokalnej piaskownicy</string>
+    <string name="ssh_workspace_option_local">Lokalna piaskownica</string>
+    <string name="ssh_workspace_option_local_subtitle">Powłoka działa w linuksowej piaskownicy tego urządzenia</string>
+    <string name="ssh_workspace_no_hosts">Nie ma jeszcze hostów SSH — dodaj jeden w Ustawienia → Obszar roboczy SSH.</string>
+    <string name="ssh_workspace_shell_only_note">Obszary robocze SSH obsługują tylko polecenia powłoki; narzędzia plikowe są odrzucane, dopóki host jest powiązany.</string>
+    <string name="ssh_workspace_shell_only">Obszar roboczy SSH obsługuje tylko polecenia powłoki — odrzucono \'%1$s\'.</string>
+    <string name="ssh_workspace_shell_only_hint">Wykonuj zdalne polecenia przez shell_execute albo odwiąż tę sesję w menu czatu → Obszar roboczy SSH, aby przywrócić lokalne narzędzia plikowe.</string>
+    <string name="ssh_hosts_title">Hosty SSH</string>
+    <string name="ssh_hosts_subtitle">Zdalne hosty, do których agent może dotrzeć przez SSH. Dane logowania są przechowywane zaszyfrowane i nigdy nie są wyświetlane.</string>
+    <string name="ssh_hosts_row_subtitle">Dodawanie hostów, testowanie połączeń, zarządzanie kluczami hostów</string>
+    <string name="ssh_hosts_empty">Nie ma jeszcze hostów.</string>
+    <string name="ssh_hosts_add">Dodaj hosta</string>
+    <string name="ssh_hosts_add_cancel">Anuluj</string>
+    <string name="ssh_hosts_test">Testuj połączenie</string>
+    <string name="ssh_hosts_testing">Testowanie…</string>
+    <string name="ssh_hosts_test_ok">Połączenie OK</string>
+    <string name="ssh_hosts_test_failed">Błąd połączenia</string>
+    <string name="ssh_hosts_forget_key">Zapomnij klucz hosta</string>
+    <string name="ssh_hosts_remove">Usuń</string>
+    <string name="ssh_hosts_pinned">Klucz hosta przypięty: %1$s…</string>
+    <string name="ssh_field_name">Nazwa (litery/cyfry/._-)</string>
+    <string name="ssh_field_hostname">Host lub IP</string>
+    <string name="ssh_field_port">Port</string>
+    <string name="ssh_field_username">Nazwa użytkownika</string>
+    <string name="ssh_auth_password">Hasło</string>
+    <string name="ssh_auth_key">Klucz prywatny</string>
+    <string name="ssh_field_password">Hasło</string>
+    <string name="ssh_field_private_key">Klucz prywatny PEM</string>
+    <string name="ssh_field_passphrase">Hasło klucza (opcjonalne)</string>
+    <string name="ssh_save">Zapisz</string>
+
+    <!-- [T-handsfree-loop] (#40) Hands-free continuous voice conversation -->
+    <string name="handsfree_toggle">Hands-free</string>
+    <string name="handsfree_state_starting">Uruchamianie…</string>
+    <string name="handsfree_state_listening">Słucham…</string>
+    <string name="handsfree_state_thinking">Myślę…</string>
+    <string name="handsfree_state_speaking">Mówię…</string>
+    <string name="handsfree_exit_recognition">Hands-free zatrzymane: rozpoznawanie mowy wielokrotnie zawiodło. Dotknij Hands-free, aby spróbować ponownie.</string>
+    <string name="handsfree_exit_tts">Hands-free zatrzymane: nie udało się odczytać odpowiedzi na głos. Dotknij Hands-free, aby spróbować ponownie.</string>
 </resources>

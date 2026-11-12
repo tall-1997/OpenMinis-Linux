@@ -2037,7 +2037,7 @@ fun ChatScreen(
                 approvals = pendingApprovals,
                 intercepts = interceptEvents,
                 onApprove = { viewModel.approvePendingTool(it) },
-                onApproveAll = { viewModel.approveAllForSession(it) },
+                onApproveAlways = { viewModel.approveToolAlwaysForSession(it) },
                 onDeny = { viewModel.denyPendingTool(it) },
                 onDismissIntercept = { InterceptFeedback.dismiss(it) },
             )
@@ -4269,8 +4269,13 @@ fun ChatScreen(
                     // InlineVoiceInputView). The legacy in-composer waveform
                     // branch below only serves captures started OUTSIDE the
                     // panel (none today, kept as a safety net).
+                    // [T-handsfree-loop] (#40) The panel is wrapped by the
+                    // hands-free controller (toggle + status banner drive the
+                    // continuous loop); params forward verbatim, and the
+                    // ceiling-pinned ChatScreen's only touch point is here.
                     if (com.openminis.app.ui.chat.voice.VoiceModePrefs.isVoiceActive) {
-                        com.openminis.app.ui.chat.voice.InlineVoiceInputPanel(
+                        com.openminis.app.ui.chat.voice.HandsFreeVoicePanel(
+                            viewModel = viewModel,
                             providerRepository = providerRepository,
                             inputText = inputText,
                             onInputTextChange = { text ->
@@ -4278,11 +4283,6 @@ fun ChatScreen(
                                 viewModel.updateSlashMenuState(text)
                             },
                             ensureMicPermission = { ensureMicPermissionFlow() },
-                            // [T-android-correction-context-wiring] Feed AI
-                            // correction the live conversation context. Reads the
-                            // FULL message list (not the windowed uiMessages) so
-                            // older turns still contribute rare-term grounding;
-                            // evaluated lazily at correction time.
                             conversationContextProvider = {
                                 com.openminis.app.speech.correction.VoiceCorrection
                                     .buildConversationContext(context, viewModel.messages.value)

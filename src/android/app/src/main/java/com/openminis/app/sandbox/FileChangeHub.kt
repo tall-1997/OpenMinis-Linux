@@ -297,7 +297,19 @@ object FileChangeHub {
             .getOrDefault(MAX_DEPTH + 1)
 
     private fun relOf(root: WatchRoot, dir: File): String =
-        runCatching { dir.relativeTo(root.host).path }.getOrDefault("")
+        // [T-path-resolver] The relative-path arithmetic lives in the shared
+        // conversion primitive (#22). The "" fallback preserves the old
+        // runCatching behaviour exactly: observers are structurally under
+        // their root, so the fallback is unreachable — but an event must
+        // always carry a publishable guest path.
+        PathResolver.relUnderHost(root.host, dir) ?: ""
+
+    // [T-path-resolver] The prefix+rel join below is deliberately NOT routed
+    // through PathResolver.toGuest: event translation is ROOT-SCOPED. Nested
+    // binds (a user mount inside the sdcard tree) are watched by both roots,
+    // and each observer must publish under its OWN prefix — the global
+    // longest-host-root match would collapse every deep event onto the
+    // innermost prefix and change the event contract above.
 
     private fun guestPathOf(root: WatchRoot, dir: File, name: String): String {
         val rel = relOf(root, dir)

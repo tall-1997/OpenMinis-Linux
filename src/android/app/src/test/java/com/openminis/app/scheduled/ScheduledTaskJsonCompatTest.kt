@@ -76,25 +76,32 @@ class ScheduledTaskJsonCompatTest {
     )
 
     @Test
-    fun permissionTokenDefaultsToAsk() {
-        // Null (pre-feature rows), blank, and unknown tokens must all land on
-        // ASK — the same normalization PermissionMode.sessionDefault applies
-        // when a chat restores its row, so a task can never widen the gate.
+    fun permissionTokenDefaultsToSafeAuto() {
+        // [#31] Null (pre-feature rows), blank, and unknown tokens all land on
+        // the ASK tier via SessionPermissionMode.fromStored (never widens the
+        // gate), and the token emitted for that tier is "SAFE_AUTO" — the
+        // gate behaviour the two-tier era's "ASK" token produced (read-only
+        // auto, the rest asks). A literal "ASK" would now compile to the
+        // strict ask-everything tier and stall headless runs on reads.
         val base = base()
-        assertEquals("ASK", base.copy(newSessionPermissionMode = null).newSessionPermissionToken())
-        assertEquals("ASK", base.copy(newSessionPermissionMode = "ASK").newSessionPermissionToken())
-        assertEquals("ASK", base.copy(newSessionPermissionMode = "").newSessionPermissionToken())
-        // The enum-name ALLOW_ALL is NOT a session token — only "YOYO" is.
-        assertEquals("ASK", base.copy(newSessionPermissionMode = "ALLOW_ALL").newSessionPermissionToken())
-        assertEquals("ASK", base.copy(newSessionPermissionMode = "DENY_ALL").newSessionPermissionToken())
+        assertEquals("SAFE_AUTO", base.copy(newSessionPermissionMode = null).newSessionPermissionToken())
+        assertEquals("SAFE_AUTO", base.copy(newSessionPermissionMode = "ASK").newSessionPermissionToken())
+        assertEquals("SAFE_AUTO", base.copy(newSessionPermissionMode = "").newSessionPermissionToken())
+        // The enum-name ALLOW_ALL is NOT a session token — it degrades to ASK.
+        assertEquals("SAFE_AUTO", base.copy(newSessionPermissionMode = "ALLOW_ALL").newSessionPermissionToken())
+        assertEquals("SAFE_AUTO", base.copy(newSessionPermissionMode = "SAFE_AUTO").newSessionPermissionToken())
+        // DENY_ALL is a non-YOLO token: the task editor only offers the
+        // YOLO toggle, so every non-YOLO input emits SAFE_AUTO.
+        assertEquals("SAFE_AUTO", base.copy(newSessionPermissionMode = "DENY_ALL").newSessionPermissionToken())
     }
 
     @Test
-    fun permissionTokenYoyoMapsToAllowAll() {
-        // "YOYO" is the only full-auto token; lowercase survives because
-        // sessionDefault uppercases before comparing.
-        assertEquals("YOYO", base().copy(newSessionPermissionMode = "YOYO").newSessionPermissionToken())
-        assertEquals("YOYO", base().copy(newSessionPermissionMode = "yoyo").newSessionPermissionToken())
+    fun permissionTokenYoyoMapsToYolo() {
+        // "YOLO"/historical "YOYO" are the only full-auto tokens; lowercase
+        // survives because fromStored uppercases before comparing.
+        assertEquals("YOLO", base().copy(newSessionPermissionMode = "YOYO").newSessionPermissionToken())
+        assertEquals("YOLO", base().copy(newSessionPermissionMode = "yoyo").newSessionPermissionToken())
+        assertEquals("YOLO", base().copy(newSessionPermissionMode = "YOLO").newSessionPermissionToken())
     }
 
     @Test
