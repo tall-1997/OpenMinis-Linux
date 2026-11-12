@@ -555,24 +555,34 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     loopExitedNormally = true
                     break
                 }
+                // [T-process-tail-injection] Process blocks (stage, lanes,
+                // jobs, plan board, recall) no longer ride the history: the
+                // last user message inside this loop is the tool_result
+                // carrier, so grafting them there mixed process narration into
+                // tool output and re-injected the same blocks on every turn.
+                // They go to the system prompt's dynamic tail instead
+                // (processInjectedSystemPrompt below); the history stays
+                // byte-clean. Only a goal run's FIRST mount may append a user
+                // turn (the objective IS the user's instruction).
                 val requestHistory = ToolIdNormalization.normalizeMessages(
-                    withGoalAndPlanContext(
-                    effectiveAgentHistory(),
-                    goalMount.prompt,
-                    appendNewUser = goalExecutionRun && turn == 0,
-                ).let { history ->
-                    // [T-stall-resume] A previous attempt stalled mid-stream:
-                    // append the bounded continuation note so this attempt picks
-                    // up where it stopped instead of regenerating the same text.
-                    val resumeNote = stallResumeContext
-                    if (resumeNote == null) history else history + LLMMessage(
-                        role = LLMMessage.Role.USER,
-                        content = resumeNote,
-                        contentParts = listOf(
-                            com.openminis.app.data.model.AgentContentPart.Text(resumeNote),
-                        ),
-                    )
-                })
+                    com.openminis.app.goal.withGoalFirstMount(
+                        effectiveAgentHistory(),
+                        goalMount.prompt,
+                        appendNewUser = goalExecutionRun && turn == 0,
+                    ).let { history ->
+                        // [T-stall-resume] A previous attempt stalled mid-stream:
+                        // append the bounded continuation note so this attempt picks
+                        // up where it stopped instead of regenerating the same text.
+                        val resumeNote = stallResumeContext
+                        if (resumeNote == null) history else history + LLMMessage(
+                            role = LLMMessage.Role.USER,
+                            content = resumeNote,
+                            contentParts = listOf(
+                                com.openminis.app.data.model.AgentContentPart.Text(resumeNote),
+                            ),
+                        )
+                    }
+                )
                 // [T-first-event-watchdog] A hung relay never throws — this stream
                 // cancels itself and surfaces a TransientError for the retry chain.
                 // [T-routing-strategy-x] First-token budget via GroupRoutingState so the main loop and the group-chat lane agree.
@@ -585,9 +595,13 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 // [GH#221] 用户头 + OpenCode 会话头走同一通道。
                 val requestHeaders = requestExtraHeaders()
                 // [GH#563] 每次请求前重刷日期；日期在动态尾部，不扰动缓存前缀。
-                val turnSystemPrompt = refreshRuntimeContextDate(
-                    systemPrompt,
-                    java.time.LocalDate.now().toString(),
+                // [T-process-tail-injection] 过程块（阶段/车道/任务/计划板/召回）
+                // 走系统提示动态尾段（tail 在 stablePrefixLen 之后，缓存前缀不变）。
+                // 首挂载轮把 goal 作为独立 user 消息，tail 里不再重复同一份。
+                val goalPromptInTail = if (goalExecutionRun && turn == 0) null else goalMount.prompt
+                val turnSystemPrompt = processInjectedSystemPrompt(
+                    refreshRuntimeContextDate(systemPrompt, java.time.LocalDate.now().toString()),
+                    goalPromptInTail,
                 )
                 streamPhase.startAttempt()
                 currentProvider.streamMessage(

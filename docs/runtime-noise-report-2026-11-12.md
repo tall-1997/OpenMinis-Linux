@@ -1,116 +1,196 @@
-# 运行过程噪音：根因与成熟项目对照报告
+# 运行噪音的真实根因：每轮请求对历史重复注入过程块
 
-- **日期**：2026-11-12
-- **样本**：用户会话 `2e93dfc0`（glm-5.3-flash / NewAPI 代理）+ `minis-2026-11-12.log`（8.4 MB）
-- **结论**：噪音是**结构性**的——"每轮一个工具的单步 run 不触发折叠" + "导出无合并/无截断" + "对外置正文的占位符泄漏"。不是 UI 配色或文案问题，靠调阈值/提示词无法解决。
+- **日期**：2026-11-12（修订版，取代同文件首版）
+- **纠偏说明**：首版把"噪音"理解成 UI 显示/导出格式，方向错了。本文按你澄清的口径重写：**噪音 = 上下文里被不停重复注入的过程信息**，它在模型每次请求时重复出现，干扰推理与推进。首版的 UI/导出部分降级为附录（次要，且已有部分修复）。
+- **结论**：这不是"某个块泄漏一次"的 bug，而是**注入架构**问题——过程块被 graft 到历史消息上、且**每轮重新组装一次**。历次修复（strip 正则、hit-key 去重、阈值、召回闩锁）都作用在"注入的下游"，没有动"注入的位置与频率"，所以反复复发。
 
 ---
 
-## 一、量化证据（会话导出 `messages.md`，149 KB / 3192 块）
+## 一、机制（代码证据，不是猜测）
 
-| 指标 | 数值 | 含义 |
+### 1. 注入发生在每一轮请求里
+
+`ChatViewModelAgentLoopExt.kt:558`（**在 `for (turn in 0 until maxTurns)` 循环体内**）：
+
+```kotlin
+val requestHistory = ToolIdNormalization.normalizeMessages(
+    withGoalAndPlanContext(
+        effectiveAgentHistory(),          // 每轮从 agentHistory 复制一份
+        goalMount.prompt,
+        appendNewUser = goalExecutionRun && turn == 0,
+    ).let { history -> /* 必要时追加 stall 续写 note */ }
+)
+```
+
+`withGoalAndPlanContext` → `PromptParts.render(...)` → `withGoalContext(history, combined)`。
+
+`PromptParts.KEYS`（`PromptParts.kt`）把**五个过程块**纳入注入注册表（**每个块按需注入**：render 返回 null/空白时跳过，不是无条件五块齐发）：
+
+```
+runtime/work_report   ← AgentReportStore.stagePrompt()（当前阶段 + 最近报告）
+runtime/in_flight     ← SubAgentBatchRegistry.renderInFlight()（在跑的子代理车道）
+runtime/jobs          ← JobRegistry.list()（后台任务）
+runtime/plan_board    ← AgentPlanStore.boardSnapshotPrompt()（计划板快照）
+runtime/recall        ← liveRecallPrompt()（记忆召回，唯一有跨轮去重）
+```
+
+### 2. 注入目标是"最后一条 USER 消息"——turn≥1 时那是 tool_result 载体
+
+`GoalContextInjection.kt:92`：
+
+```kotlin
+var userIndex = requestHistory.indexOfLast { it.role == LLMMessage.Role.USER }
+...
+requestHistory[userIndex] = user.copy(
+    content = user.content + "\n\n" + prompt,          // 过程块拼接
+    contentParts = user.contentParts + AgentContentPart.Text(prompt),
+)
+```
+
+`runAgentLoopBody` 每轮工具执行后会 `appendBoundedHistory(LLMMessage(role = USER, contentParts = resultParts))`，于是：
+
+- **turn 0**：最后一条 USER 是**用户真实消息**（或 goal 模式的追加消息），过程块拼在它后面；
+- **turn ≥ 1**：最后一条 USER **就是 tool_result 载体**，过程块被拼进**工具结果消息**——模型看到的是"工具输出 + 过程旁白"的混合体；
+- 每个 turn 都产生一个新的 tool_result 载体，过程块**随之每轮出现一次**；
+- 内容是否变化取决于各 store 状态（计划板是 per-turn 快照、车道/任务随运行状态变、召回按轮判定），但**无论变不变，每个请求都会重新注入一遍**——这就是"不停的重复注入"。
+
+### 3. "strip 旧块再注入"只修了表面
+
+`withGoalContext` 确实会在注入前 strip 旧块，但：
+
+- 只 strip **最后一条 USER** 上的 3 类标签：`<goal_context>`、`<plan_board>`、`<external_data`；
+- `work_report` / `in_flight` / `jobs` **没有 strip 规则**；
+- `external_data`（召回）的 strip 还带条件：只有本轮确实要注入召回（`prompt.contains("<external_data")`）才 strip 旧帧——否则旧块保留；
+- strip 是"防御历史里已有的副本"，不是"防止重复注入"——每轮副本是新构建的，strip 拦不住"每轮重新注入相同内容"。
+
+### 3b. #321 的修复反而在提示词里**确认**了每轮重复
+
+`AgentReportTool.stagePrompt` 的 `STAGE_RULE` 原文：
+
+> "This block repeats on every request until you call agent_report again …"
+
+也就是说"每轮重复注入"不但是实现行为，还被写进了对模型的指令：#321 把"陈旧快照断言旧结论"改成了"陈旧时降级为一句提示"，但没有改变"每轮都注入"，并且这条规则**推动模型每轮调用 agent_report 刷新**（更多工具轮次）。这是"修过多次但没修到位"的直接例子。
+
+
+### 4. 顺带确认：系统提示是 run 级一次构建，每轮只替换日期字节
+
+`ChatViewModelPromptExt.buildSystemPromptWithSections` 由 send/retry/resume/rerun 在**每次 run 开始时**调用一次（`ChatViewModelSendExt.kt:433` 等）；`runAgentLoopBody` 里每轮只执行：
+
+```kotlin
+val turnSystemPrompt = refreshRuntimeContextDate(systemPrompt, LocalDate.now().toString())
+```
+
+`refreshRuntimeContextDate` 只替换 `- Current date: YYYY-MM-DD` 这一段，其余字节不动（已核实实现）。也就是说：
+
+- **系统提示：一次构建、多轮复用**（前缀缓存友好，动态段不随 plan/report 更新）；
+- **过程块：每轮历史注入**（缓存不友好，且干扰模型）。
+
+这个不对称正是问题所在：真正需要"每轮最新"的是过程块（plan/report），它们却在历史里；而本该稳定的历史，反而每轮被改写。
+
+### 5. 核实记录（本次审核逐条验证）
+
+| 断言 | 证据 | 结论 |
 |---|---|---|
-| 工具块 | **1289**（shell_execute **1200**） | 导出 41.0% 的字符是工具流水账 |
-| assistant 文本块 | 301 | 每轮旁白（"进度有点拖沓…"）单独成段 |
-| **空块** | **1023** | 纯 tool_result 载体，导出渲染为空 `## 用户` 段 |
-| `body stored (N bytes)` 块 | **658（占 23.1% 字符）** | 外置正文占位符被当正文导出 |
-| `system-reminder` 块 | 3 | 断流续写提醒（DB 保留，导出可见） |
-| **每轮工具数** | **恒为 1（1289 轮 × 1）** | 串行单工具循环 ⇒ 轮次爆炸 |
-| 行数/字节 | 3191 条消息、20 word avg | 长会话被过程噪音撑爆 |
+| 注入调用在 turn 循环内 | `ChatViewModelAgentLoopExt.kt:273` `for (turn in 0 until maxTurns)` → L558-562 | ✅ |
+| turn≥1 最后一条 USER 是 tool_result 载体 | `appendBoundedHistory(LLMMessage(USER, contentParts = resultParts))` | ✅（turn 0 为用户消息，报告已区分） |
+| 五块"全部"每轮注入 | `render` 对 null/blank 跳过 | ❌ 修正为"按需注入；有内容时每轮注入" |
+| "内容大多没变" | 无请求体级证据；`boardSnapshotPrompt` 是 per-turn 快照 | ❌ 删除该断言（改为"是否变化取决于 store"） |
+| strip 只覆盖 3 类标签 | `GoalContextInjection.kt:109-117` | ✅ |
+| 召回是唯一有跨轮去重的块 | `shouldAnnounceRecall`（其他四块无） | ✅；补充：同轮内每个请求仍注入（`turnKey == lastTurnKey → true`） |
+| 系统提示 run 级一次构建 | `runAgentLoopBody(systemPrompt)` 参数；send/retry/resume 各构建一次 | ✅ |
+| 每轮只刷日期 | `refreshRuntimeContextDate` 仅替换日期 bytes | ✅ |
+| #321 修复只改内容未改频率 | `stagePrompt` 陈旧分支仍返回提示块；`STAGE_RULE` 明写 "repeats on every request" | ✅（补充为第 3b 节） |
+| 导出降噪"实测" | python 按同一导出回放**模拟**，非真机导出 | ❌ 修正为"回放模拟"（附录 A） |
 
-日志侧：每轮 `runAgentLoop turn=N dispatching 1 tool call(s)`（214 条），同一命令 `sha` 在 6 秒内被重放 2–3 次；`finish_reason=length reasoningLen=94525 contentLen=0`；`auto-continuation 1/3`。
-
----
-
-## 二、成熟项目怎么做（重点）
-
-### 1. progress-first + 折叠（codex / opencode）
-
-- codex 的 TUI 诉求是 "progress-first TUI with **collapsible** tool output"，工具输出默认**折叠**、点击展开（[codex#41601](https://github.com/openai/codex/issues/41601)）；同类的 "hide or collapse code snippets in progress output"（[codex#32817](https://github.com/openai/codex/issues/32817)）。
-- opencode 有专门的 "compact tool output with **click-to-expand**"（[PR#7260](https://github.com/anomalyco/opencode/pull/7260)）、"collapse execute child details"（[PR#41624](https://github.com/anomalyco/opencode/pull/41624)）、"choose how much tool output shows before Click to expand"（[PR#54039](https://github.com/anomalyco/opencode/pull/54039)）。
-- **要点**：工具输出**永远默认折叠**，且一个"步骤组"只占一行；用户需要时才展开。
-
-### 2. reasoning 合并成一个折叠块（opencode）
-
-- "collapse **fragmented reasoning parts** and strip thinking echo"（[PR#32152](https://github.com/anomalyco/opencode/pull/32152)）：provider 把思考拆成碎片（我们的 `reasoningLen=94525` 就是碎片累加），成熟做法是**合并成一个 Thinking 折叠块**并把模型回显（thinking echo）剥离，而不是逐碎片渲染。
-
-### 3. 状态行/页脚承载过程信息（codex）
-
-- codex 把会话级过程状态放在 **status line + footer**（[DeepWiki: Status Line and Footer Rendering](https://deepwiki.com/openai/codex/4.1.4-status-line-and-footer-rendering)），对话流里只留结果。
-- 我们的对应物是 `SessionActivityTracker`（"Running: shell_execute"）+ overlay——但**没有把"断流/续写/空回合/压缩"这些系统事件收敛到状态行**，它们以 inline error / system-reminder / 额外卡片形式进入对话流（日志里 3 次 resume reminder，UI 上 3 次断流提示）。
-
-### 4. quiet / final-answer-only 模式（codex）
-
-- codex 有明确的 "final-answer-only / **quiet transcript** mode"（[codex#36845](https://github.com/openai/codex/issues/36845)）：导出/转录只保留最终回答与关键错误，过程不进入转录。
-- 我们的导出是"全量转录"：1289 个工具行 + 1023 个空块 + 658 个占位符——**这是用户直接看到的"噪音文件"**。
-
-### 5. 并行工具调用（codex / opencode 的 agent loop）
-
-- 成熟编码 agent 的模型一次响应会带**多个独立 tool_calls**，并行执行后回灌（我们 wave5 的 `[T-parallel-tool-calls]` 调度器已具备能力，日志也出现过 `accumulators=2`）。
-- 我们样本里 **1289 轮 × 恰好 1 个工具**：模型每轮只发一个，于是"每步 = 一次完整请求"——轮次放大 1289 倍，既是速度问题，也是噪音来源。
 
 ---
 
-## 三、我们已有的机制（不是从零开始）
+## 二、成熟项目怎么处理（codex / opencode / DeepSeek Harness）
 
-`ChatFlatItems.kt` 的 `ChatRound` 折叠已经相当成熟：
-
-- 一个 round 一个 fold bar（"one round, one bar, round-wide totals"）；
-- **RUNNING 的 round 永远展开**，完成后自动折叠，保留最新 2 步（`LATEST 2 steps` 的"刚才在干什么"tail）；
-- **≥2 步的 process RUN 折叠为 summary bar**（"a bar summarising two rows is noise"）；
-- 流式更新走 `UiUpdateBatcher`（200ms 批次）；
-- 断流续写提醒以 `null` UI id 持久化（`commitStreamDropReminder`），不渲染为用户气泡。
-
-**所以 UI 层设计方向是对的**——缺口在于：
-
-| 缺口 | 证据 | 影响 |
+| 项目 | 做法 | 对我们的启示 |
 |---|---|---|
-| **1 步的 run 不折叠** | `SEGMENT_MIN_STEPS` = 2；样本每轮恰好 1 步 | 1289 个单步卡片全部可见 = "运行过程全是工具卡片" |
-| **导出无合并/无截断/无跳过** | `ChatExporter` 逐消息写 `## role`；空 tool_result 写空段 | 导出 = 工具流水账 |
-| **外置正文占位符泄漏到导出** | 已修（`fullBodyForCopy`），但**修复后**导出体积会暴涨 | 需配套截断 |
-| **reasoning 碎片直接渲染/导出** | `reasoningLen=94525` 由多段 reasoning_content 累加 | 超长思考占满视口 |
-| **系统事件进对话流** | inline error banner、`system-reminder` 行 | 断流/续写/空回合在界面上"喊话" |
+| **codex** | 上下文 = system prompt（稳定）+ 对话消息；进度/计划状态由**工具**与**状态行**承载，不注入历史。TUI 只显示 progress-first 单行，过程不进入对话流（[#41601](https://github.com/openai/codex/issues/41601)、[#36845](https://github.com/openai/codex/issues/36845)）。 | 过程信息不该"塞进用户消息"；它属于系统/状态层。 |
+| **opencode** | 消息是 part 模型（text/tool/reasoning），**注入只发生在 system prompt 与 rules 文件**；工具输出默认折叠（[#7260](https://github.com/anomalyco/opencode/pull/7260)、[#32152](https://github.com/anomalyco/opencode/pull/32152)）。 | user 消息保持"用户说的话"，不被过程块污染。 |
+| **DeepSeek Harness** | 系统提示 + 会话消息分离；上下文压缩按 span/轮次边界；工具调用与结果严格成对。（与我们已修的压缩边界方向一致） | 注入层与对话层分离是通用设计。 |
+
+**共性**：成熟 agent 的"过程状态"要么在**系统侧**（system prompt 的稳定/动态段），要么在**工具状态**里（plan/todo 工具、后台任务 registry 由工具查询），**不会每轮拼接到用户消息上**。
 
 ---
 
-## 四、修复方案（结构性，按优先级）
+## 三、为什么"之前修复过但没真实修复到位"
 
-### P0 —— 导出降噪（用户直接可见的"噪音文件"）
+历次提交都作用在下游症状上：
 
-1. **跳过空载体**：`role=user` 且无文本、无媒体、无工具结果文本的纯 tool_result 行不输出 `## 用户` 段（1023 行噪音 → 0）。
-2. **合并连续工具-only 段**：相邻且只有工具调用的 assistant 消息合并为一个块：`> **工具** shell_execute ×N`（1200 行 → 少量合并行）。
-3. **单块截断**：外置正文解析后单块最多保留 N 字符（默认 2000）+ "…（已截断，完整内容见会话）"，避免修复 stub 后体积爆炸。
-4. **系统提醒不导出**：`<system-reminder>` 断流续写提醒不写进 markdown（DB 保留，供 resume 用）。
+| 提交 | 修的是什么 | 为什么没根治 |
+|---|---|---|
+| `4fed29bb` (#321) | work_report 陈旧快照不再每轮注入 | 只处理 work_report 一个块的行为，注入位置/频率没变 |
+| `bb1acb00` (#311) | goal 旧目标劫持/清理缺口 | 处理 goal 生命周期，注入仍每轮 graft |
+| `2b9560a2` / `36e2ffae` | 召回跨轮去重 | recall 是 5 个块里唯一有去重的；其余 4 个仍每轮注入 |
+| `withGoalContext` 的 strip 正则 | 历史里已有的副本 | 防的是"副本残留"，不是"每轮重复注入" |
+| 阈值/循环检测器（warning 10 / critical 20） | 拦住极端重复 | 阈值放宽时无效，且不减少上下文干扰 |
 
-### P1 —— 运行中 UI 降噪
-
-5. **单步 run 合并**：把相邻的 1 步 process run 并入 round 折叠条（`SEGMENT_MIN_STEPS` 对"连续单步"不生效的缺口）；保持"运行中展开、完成后折叠、保留最新 2 步"的既定语义。
-6. **reasoning 合并为单块**：同一轮的多段 reasoning 合并渲染成一个 Thinking 折叠块（默认折叠），并按 `opencode#32152` 剥离 thinking echo。
-7. **系统事件收敛到状态行**：断流/续写/空回合/压缩的提示进入顶部状态行或 overlay（codex status line 模式），不再以 inline error 反复出现在对话流；错误只在**最终失败**时出现一次。
-
-### P2 —— 减少轮次（根因性的"噪音源"）
-
-8. **并行工具调用**：在工具 schema / 系统能力说明中显式声明"可以一次返回多个独立 tool_calls"（`[T-parallel-tool-calls]` 已支持调度），让模型把"读三个文件"这类操作合并成一轮；这是协议能力，不是措辞约束。
-9. **重复调用合并显示**：同参数同结果的连续调用在 UI 合并为 `×N`（根因修复后应显著减少）。
+**根因级缺陷 = 注入位置（历史 user 消息）+ 注入频率（每轮）+ 缺少统一的"注入层"抽象**。
 
 ---
 
-## 五、本次已完成的修复（与噪音直接相关）
+## 四、修复设计（结构性，P0）——**已实施**
 
-- `ChatExporter.forEachBatch` 现在用 `fullBodyForCopy` 解析外置正文（stub 不再被当正文导出）→ 对应上表"外置正文占位符泄漏"。
-- **导出降噪已实施（P0）**，并用同一份真实会话回放验证：
-  - 纯 tool_result 载体（1023 行）不再输出 `## 用户` 空段；
-  - 连续工具-only 轮合并为 `> **工具** name ×N`（1289 个工具块 → 535 个合并段）；
-  - 外置正文单块截断 2000 字符（防止修复 stub 后体积爆炸）；
-  - **实测：3192 块 → 1415 块（−56%），字符 68,632 → 48,664（−29%），空段 0**。
-- 压缩尾部按完整轮次边界切分（`safeTailStart`）+ 孤儿 `tool_use` 成对移除 → 直接减少"重复工具卡片"的根源。
-- 召回块在压缩逐出后只重播一次 → 消除"每个请求重复宣布记忆"的重复噪音。
+> 实施状态（2026-11-12）：4.1 / 4.2 / 4.3 / 4.4 全部落地，编译与全量单测通过。
+> 新增 `withGoalFirstMount`、`processInjectionTail` / `processInjectedSystemPrompt` /
+> `reuseProcessTail`，以及三组回归测试（`ProcessInjectionArchitectureTest`、
+> `GoalFirstMountTest`、`ProcessTailDedupeTest`）。
+> 附录 A 的 P1「单步 run 折叠」**未实施**：它与既有契约「单步思考不得被丢弃」
+> （[P-process-card-single-step]，用户曾投诉该块消失）直接冲突，正确做法是
+> 「round 级卡」重构（全部过程块归一个卡，折叠时一行、展开时全列出），属于
+> UI 渲染层的独立改动，需要单独一轮验证，不能混在本次注入层迁移里。
 
-## 六、验收方式
 
-- 用同一会话重新导出：**空 `## 用户` 段 = 0**、`body stored (` 出现 = 0、连续工具行合并后 ≤ 原 1/5。
-- 运行中：任一轮完成后折叠条只留一行 + 最新 2 步；断流/续写不产生对话流条目（仅状态行）。
-- 单测：导出格式化（合并/跳过/截断）与 `ChatRound` 单步合并各加一组回归测试。
+### 4.1 注入层从"历史"上移到"系统提示动态段"
+
+- `runAgentLoopBody` 不再调用 `withGoalAndPlanContext(...)`；`requestHistory` 只做 `ToolIdNormalization.normalizeMessages(effectiveAgentHistory())`（+ 必要的 stall 续写 note）。
+- 过程块改由 `buildSystemPromptWithSections` 的 **dynamic tail** 承载：`PromptParts.render(...)` 的输出拼在 `stablePrefixLen` 之后（`assembleDynamicTail` 已有该位置，worldBook/learnedPrefs/runtimeContext/personalityReminder 就在那里）。
+- 每轮请求前重建 **dynamic tail**（`systemPrompt.head + buildDynamicTail()`），head（identity + 工具说明 + 技能 + MCP + 全局记忆）保持不变 → **缓存前缀仍然命中**（`systemPromptStablePrefixLen` 语义不变）。
+- 效果：历史里不再有过程块；每轮过程块在 system prompt 的同一位置出现**一次**；模型不再把过程块当工具输出。
+
+### 4.2 过程块只在内容变化时重建（内容级去重）
+
+- `PromptParts.render` 的结果按 key 计算内容 hash，与上一轮比较：**全部未变 → 复用字符串**（零重建成本，也是天然的"无重复注入"）。
+- 变化的块（如 plan 步骤完成、report 更新）才重建 → 模型只看到"变化的部分"，减少干扰。
+- 这与 recall 已有的 hit-key 去重是同一层语义，统一收口到 `PromptParts`。
+
+### 4.3 收敛 goal 的特殊注入
+
+- `goalMount.prompt` 的 `appendNewUser`（goal 模式下 turn 0 追加新 user 消息）保留（那是"目标就是用户指令"的语义）；但 `<goal_context>` 的**例行续写提示**移入 system prompt 动态段，不再每轮挂在 tool_result 上。
+- `withGoalContext` 的历史 graft 分支保留为**遗留兼容**（仅 goal 首次挂载），不再用于每轮注入。
+
+### 4.4 验收
+
+- 抓取一轮请求体（或代理侧日志）：同一个 run 的连续 turn，**历史最后一条 user 消息只含工具结果**；过程块只出现在 system prompt 尾部一次。
+- 对比 system prompt 长度：注入前后 stablePrefixLen 不变，dynamic tail 只含当前块（无重复）。
+- 回归测试：`withGoalContext` 的 5 块+goal 注入单测迁移为 `PromptParts` 的动态段测试；断言同一 run 两次构建（内容未变）产出**字节相同**的 tail。
+
+---
+
+## 五、影响面与风险
+
+| 改动 | 风险 | 缓解 |
+|---|---|---|
+| 注入位置迁移 | 模型可能依赖"过程块在用户消息里"的位置（历史中就是那样训练的）；迁移后需验证 plan 跟随行为 | 先在 debug 构建中 A/B（同一会话两种模式对比 plan 完成率） |
+| 每轮重建 dynamic tail | 可能破坏 prompt 缓存（tail 变化） | head 严格不变、tail 只在内容变化时变；保持 `systemPromptStablePrefixLen` |
+| 移除 history graft | goal 首挂载/appendNewUser 语义 | 保留 goal 首挂载路径，仅去掉例行块 |
+
+---
+
+## 附录 A：UI/导出噪音（次要，首版内容）
+
+- 首版量化的导出噪音（1289 工具块 / 1023 空段 / 658 stub）**不是**你说的噪音，但属于次生问题；其中导出静默转录（P0）已实施，并按同一份真实导出**回放模拟**验证：块数 3192→1415（−56%）、字符 −29%、空段 0。（模拟脚本按导出块序列套用同一规则；真机导出需设备侧再确认一次。）
+- UI 侧已有 `ChatRound` 折叠（运行中展开、完成折叠、保留最新 2 步、≥2 步 run 合并）；缺口是"单步 run 不折叠"，列在 P1。
+
+## 附录 B：首版已确认有效的修复（与本主题相关）
+
+- 压缩尾部按完整轮次边界切分（`safeTailStart`）+ 孤儿 `tool_use` 成对移除；
+- 召回块在压缩逐出后只重播一次（`lastRecallCarrierReplayed`）；
+- 导出器解析外置正文（不再显示 `body stored`）。
 
 ---
 
@@ -118,8 +198,6 @@
 
 - [openai/codex #41601 progress-first TUI with collapsible tool output](https://github.com/openai/codex/issues/41601)
 - [openai/codex #36845 final-answer-only / quiet transcript mode](https://github.com/openai/codex/issues/36845)
-- [openai/codex #32817 hide/collapse code snippets in progress output](https://github.com/openai/codex/issues/32817)
 - [anomalyco/opencode #7260 compact tool output with click-to-expand](https://github.com/anomalyco/opencode/pull/7260)
-- [anomalyco/opencode #54039 choose how much tool output shows before Click to expand](https://github.com/anomalyco/opencode/pull/54039)
 - [anomalyco/opencode #32152 collapse fragmented reasoning parts and strip thinking echo](https://github.com/anomalyco/opencode/pull/32152)
 - [DeepWiki: codex Status Line and Footer Rendering](https://deepwiki.com/openai/codex/4.1.4-status-line-and-footer-rendering)

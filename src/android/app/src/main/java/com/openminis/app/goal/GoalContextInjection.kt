@@ -82,6 +82,29 @@ internal fun shouldExitForGoalState(
     )
 }
 
+/**
+ * [T-process-tail-injection] First mount of a Goal run: the objective is the
+ * USER'S instruction, so it may append one standalone user turn. Everything
+ * else the host injects (plan board, stage, lanes, jobs, recall) no longer
+ * touches the history at all — see [com.openminis.app.ui.chat.ChatViewModel.processInjectedSystemPrompt].
+ *
+ * The old path appended every block onto the LAST user message, which inside
+ * the agent loop is the tool_result carrier: the model read process narration
+ * as part of a tool output, and every turn re-injected the same blocks.
+ */
+internal fun withGoalFirstMount(
+    history: List<LLMMessage>,
+    goalPrompt: String?,
+    appendNewUser: Boolean,
+): List<LLMMessage> {
+    if (!appendNewUser || goalPrompt.isNullOrBlank()) return history
+    return history + LLMMessage(
+        role = LLMMessage.Role.USER,
+        content = goalPrompt,
+        contentParts = listOf(AgentContentPart.Text(goalPrompt)),
+    )
+}
+
 internal fun withGoalContext(
     history: List<LLMMessage>,
     prompt: String?,

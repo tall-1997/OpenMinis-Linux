@@ -1450,6 +1450,13 @@ class ChatViewModel(
     @Volatile internal var lastRecallTurnKeys: Set<String>? = null
 
     /**
+     * [T-process-tail-content-dedupe] Last rendered process-injection tail.
+     * When none of the host-injected blocks changed, the same string instance
+     * is reused so consecutive requests carry byte-identical prompt tails.
+     */
+    @Volatile internal var processTailCache: String? = null
+
+    /**
      * [T-recall-carrier-replay-once] Whether the last announcement was the
      * "carrier evicted" replay. After compaction evicts the message that
      * carried the recall block, the memories are absent from context and must
