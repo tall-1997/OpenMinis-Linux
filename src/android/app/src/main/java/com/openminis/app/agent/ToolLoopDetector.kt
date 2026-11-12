@@ -113,24 +113,17 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
         // 2. global_circuit_breaker — universal backstop, before poll-specific
         //    rule so a runaway non-poll loop can't slip past on lower thresholds.
         if (noProgressStreak >= config.globalCircuitBreakerThreshold) {
-            val msg = "[LOOP BLOCKED] CRITICAL: $toolName has repeated identical " +
-                "no-progress outcomes $noProgressStreak times. Session execution " +
-                "blocked by global circuit breaker."
+            val msg = "[LOOP WARNING] $toolName has repeated identical no-progress " +
+                "outcomes $noProgressStreak times. The call still runs; change strategy " +
+                "if this is not waiting on something."
             AppLogger.warning("ToolLoopDetector",
-                "CRITICAL global_circuit_breaker tool=$toolName streak=$noProgressStreak")
-            return LoopCheckResult(Level.CRITICAL, msg)
+                "WARNING global_circuit_breaker tool=$toolName streak=$noProgressStreak")
+            return LoopCheckResult(Level.WARNING, msg, "global:$toolName:$argsHash")
         }
 
-        // 3. known_poll_no_progress — poll tools have a tighter critical bar
-        //    because polling without progress is the canonical waste case.
+        // 3. known_poll_no_progress — warn, but do not refuse the call. A long
+        //    task polls on purpose; blocking it is what made runs die mid-wait.
         if (isPollTool(toolName, params)) {
-            if (noProgressStreak >= config.criticalThreshold) {
-                val msg = "[LOOP BLOCKED] CRITICAL: Called $toolName $noProgressStreak " +
-                    "times with identical no-progress results. Session execution blocked."
-                AppLogger.warning("ToolLoopDetector",
-                    "CRITICAL known_poll_no_progress tool=$toolName streak=$noProgressStreak")
-                return LoopCheckResult(Level.CRITICAL, msg)
-            }
             if (noProgressStreak >= config.warningThreshold) {
                 val msg = "[LOOP WARNING] You have called $toolName $noProgressStreak " +
                     "times with no progress. Stop polling and either (1) increase wait " +

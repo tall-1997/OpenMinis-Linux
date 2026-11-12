@@ -9,7 +9,7 @@ import org.junit.Test
 
 /**
  * [T-android-loop-stall-guard] Pure JVM tests for the per-runAgentLoop stall
- * accounting: rule 1 (nudge at 2 frozen repeats), rule 2 (break at 4), rule 3
+ * accounting: rule 1 (nudge at 2 frozen repeats, never a hard stop), rule 3
  * (silent-turn progress nudge at 12), and the reset semantics (different tool
  * interleave, changed results, text turns, run reset).
  */
@@ -56,25 +56,13 @@ class ChatViewModelStallGuardTest {
         assertFalse(d3.stalled)
     }
 
-    // ── rule 2: break at 4 consecutive frozen repeats ────────────────────────
-
     @Test
-    fun fourthConsecutiveRepeatBreaksTheRun() {
+    fun fourthConsecutiveRepeatDoesNotStopTheRun() {
         repeat(3) { turn() }
         val d = turn(output = "final tail output")
-        assertTrue(d.stalled)
+        assertFalse(d.stalled)
+        assertNull(d.breakReport)
         assertEquals(4, d.repeatStreak)
-        val report = d.breakReport!!
-        assertTrue(report.contains("the same command (execute_shell) was executed 4 times in a row with an unchanged result"))
-        assertTrue(report.contains("Last output: final tail output"))
-    }
-
-    @Test
-    fun breakReportQuotesAtMost500TailChars() {
-        repeat(3) { turn(output = "y".repeat(2000)) }
-        val d = turn(output = "y".repeat(2000))
-        val tail = d.breakReport!!.substringAfter("Last output: ")
-        assertEquals(500, tail.length)
     }
 
     // ── resets ───────────────────────────────────────────────────────────────
@@ -257,7 +245,7 @@ class ChatViewModelStallGuardTest {
             resultSha = ChatViewModelStallGuard.resultShaOf(listOf(r4)),
             output = r4,
         )
-        assertTrue("counter drift alone is a frozen repeat: break at 4", d4.stalled)
+        assertFalse("a frozen poll is not a reason to stop the task", d4.stalled)
     }
 
     @Test

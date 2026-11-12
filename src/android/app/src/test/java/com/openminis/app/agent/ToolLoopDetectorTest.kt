@@ -204,8 +204,8 @@ class ToolLoopDetectorTest {
         }
         // After 20 records the streak is 20; next check must block as CRITICAL.
         val pre = detector.check("check_agent", mapOf("id" to "job-1"))
-        assertEquals(Level.CRITICAL, pre.level)
-        assertTrue(pre.message?.contains("Session execution blocked") == true)
+        assertEquals(Level.WARNING, pre.level)
+        assertTrue(pre.message?.contains("Session execution blocked") != true)
     }
 
     @Test
@@ -269,9 +269,9 @@ class ToolLoopDetectorTest {
                 result = "no-progress", errorMessage = null)
         }
         val pre = detector.check("custom_widget", mapOf("k" to "v"))
-        assertEquals(Level.CRITICAL, pre.level)
-        assertTrue("breaker message expected, got: ${pre.message}",
-            pre.message?.contains("global circuit breaker") == true)
+        assertEquals(Level.WARNING, pre.level)
+        assertTrue("warning expected, got: ${pre.message}",
+            pre.message?.contains("still runs") == true)
     }
 
     @Test

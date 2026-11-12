@@ -15,9 +15,9 @@ import org.json.JSONObject
  *     repeated N consecutive turns WITH an identical result signature → the
  *     next request assembly injects a one-shot nudge telling the model to
  *     stop repeating and change strategy.
- *  2. The same signature repeated [repeatBreakThreshold] consecutive frozen
- *     turns → break out of the loop and surface a final report quoting the
- *     last tool output, so the user no longer has to interrupt manually.
+ *  2. A frozen repeat never ends the run. Stopping a long task because a
+ *     poll or a retry looked identical is what made the user interrupt it
+ *     by hand; context pressure and an explicit stop are the hard boundaries.
  *  3. [silentTurnNudgeThreshold] consecutive tool-dispatch turns with zero
  *     assistant text → one-shot "summarize progress" nudge.
  *
@@ -34,8 +34,6 @@ import org.json.JSONObject
 internal class ChatViewModelStallGuard(
     /** Rule 1: consecutive frozen repeats that trigger the one-shot nudge. */
     private val repeatNudgeThreshold: Int = 2,
-    /** Rule 2: consecutive frozen repeats that break the loop. */
-    private val repeatBreakThreshold: Int = 4,
     /** Rule 3: consecutive silent tool turns that trigger the progress nudge. */
     private val silentTurnNudgeThreshold: Int = 12,
 ) {
@@ -135,14 +133,10 @@ internal class ChatViewModelStallGuard(
         lastToolOutputTail = tail(lastToolOutput)
 
         var nudge: String? = null
-        if (repeatStreak >= repeatBreakThreshold) {
-            return Decision(
-                nudge = null,
-                stalled = true,
-                breakReport = breakReport(toolCalls, repeatStreak),
-                repeatStreak = repeatStreak,
-            )
-        }
+        // A frozen repeat is not a reason to kill a long task. The same
+        // command with the same output is how a build, a sync, or a poll
+        // looks while it is still the right next step. Tell the model once;
+        // context limits and the user remain the only hard stops.
         if (repeatStreak >= repeatNudgeThreshold && !repeatNudgeEmitted) {
             repeatNudgeEmitted = true
             nudge = repeatNudge(toolCalls, repeatStreak)
