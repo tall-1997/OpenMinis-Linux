@@ -556,20 +556,20 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     break
                 }
                 // [T-process-tail-injection] Process blocks (stage, lanes,
-                // jobs, plan board, recall) no longer ride the history: the
-                // last user message inside this loop is the tool_result
-                // carrier, so grafting them there mixed process narration into
-                // tool output and re-injected the same blocks on every turn.
-                // They go to the system prompt's dynamic tail instead
-                // (processInjectedSystemPrompt below); the history stays
-                // byte-clean. Only a goal run's FIRST mount may append a user
-                // turn (the objective IS the user's instruction).
+                // jobs, plan board, recall, goal context) no longer ride the
+                // history: the last user message inside this loop is the
+                // tool_result carrier, so grafting them there mixed process
+                // narration into tool output and re-injected the same blocks on
+                // every turn. They go to the system prompt's dynamic tail
+                // instead (processInjectedSystemPrompt below); the history stays
+                // byte-clean.
+                //
+                // [T-process-tail-injection-review] The Goal context goes to the
+                // tail on EVERY turn too — no first-mount user turn. A first-mount
+                // row would stay in the history while the tail keeps carrying the
+                // block, i.e. the same objective twice per request after turn 0.
                 val requestHistory = ToolIdNormalization.normalizeMessages(
-                    com.openminis.app.goal.withGoalFirstMount(
-                        effectiveAgentHistory(),
-                        goalMount.prompt,
-                        appendNewUser = goalExecutionRun && turn == 0,
-                    ).let { history ->
+                    effectiveAgentHistory().let { history ->
                         // [T-stall-resume] A previous attempt stalled mid-stream:
                         // append the bounded continuation note so this attempt picks
                         // up where it stopped instead of regenerating the same text.
@@ -595,13 +595,12 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 // [GH#221] 用户头 + OpenCode 会话头走同一通道。
                 val requestHeaders = requestExtraHeaders()
                 // [GH#563] 每次请求前重刷日期；日期在动态尾部，不扰动缓存前缀。
-                // [T-process-tail-injection] 过程块（阶段/车道/任务/计划板/召回）
+                // [T-process-tail-injection] 过程块（阶段/车道/任务/计划板/召回/goal）
                 // 走系统提示动态尾段（tail 在 stablePrefixLen 之后，缓存前缀不变）。
-                // 首挂载轮把 goal 作为独立 user 消息，tail 里不再重复同一份。
-                val goalPromptInTail = if (goalExecutionRun && turn == 0) null else goalMount.prompt
+                // goal 每轮都在 tail，历史不追加（见上方复审注释），避免同一请求两份。
                 val turnSystemPrompt = processInjectedSystemPrompt(
                     refreshRuntimeContextDate(systemPrompt, java.time.LocalDate.now().toString()),
-                    goalPromptInTail,
+                    goalMount.prompt,
                 )
                 streamPhase.startAttempt()
                 currentProvider.streamMessage(

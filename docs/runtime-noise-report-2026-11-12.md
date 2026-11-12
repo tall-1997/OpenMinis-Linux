@@ -203,6 +203,29 @@ val turnSystemPrompt = refreshRuntimeContextDate(systemPrompt, LocalDate.now().t
    省下的是模型往返。
 
 
+## 七、对抗复审记录（2026-11-12）
+
+对未推送的四笔提交做了一次对抗审查，发现并修复三处真问题：
+
+1. **goal 上下文双份**（c5f4da04 引入）：首挂载轮把 `<goal_context>` 追加成 user 消息，
+   而 tail 从第二轮起又携带同一份 → turn≥1 的请求里 objective 出现两次。修复：删除
+   `withGoalFirstMount`，goal 上下文**只走系统提示 tail**（每轮一份），历史不追加。
+   架构测试改为守护"first-mount 不得回归"。
+2. **sanitizeAgentHistory 仍在制造"工具失败"**（既有缺陷，与本轮修复矛盾）：它对每个
+   无结果的 `tool_use` 注入 `"Tool execution was interrupted by an unexpected error."`
+   占位结果——模型读到"调用失败"就重发同一调用，正是"重复且不干活"的另一条路径，且
+   与 dropOrphanedToolParts 的"成对移除"策略相反。修复：改为**移除孤儿的 tool_use**
+   （保留同条 assistant 的文本），并把配对扫描从"仅下一条消息"扩到"剩余整段历史"
+   （compaction divider 是 system 消息，只查下一条会误判正确配对为孤儿）。
+3. **导出未剥离 system-reminder**（4b005d2b 的 P0.4 缺口）：断流续写提醒
+   （`<system-reminder>The connection dropped…`）会作为正文进入导出。修复：
+   `stripSystemReminders` 在 `extractMarkdownBody` 的 text 分支剥离，提醒仍保留在 DB
+   供 resume 使用。
+
+已知风险（记录，不改代码）：`MIN_MAX_TOKENS = 4096` 在上下文剩余不足 4096 时可能大于
+剩余窗口；多数 OpenAI 兼容网关不校验该组合（截断而非报错），且此时 in-loop context
+check 本应触发压缩。保留作为 reasoning 预算下限，若真机出现 provider 400 再收紧。
+
 ## 附录 A：UI/导出噪音（次要，首版内容）
 
 - 首版量化的导出噪音（1289 工具块 / 1023 空段 / 658 stub）**不是**你说的噪音，但属于次生问题；其中导出静默转录（P0）已实施，并按同一份真实导出**回放模拟**验证：块数 3192→1415（−56%）、字符 −29%、空段 0。（模拟脚本按导出块序列套用同一规则；真机导出需设备侧再确认一次。）

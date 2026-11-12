@@ -571,7 +571,11 @@ private const val MAX_EXPORT_BODY_CHARS = 2000
             val obj = arr.optJSONObject(i) ?: continue
             when (obj.optString("type")) {
                 "text" -> {
-                    val value = stripAttachedFilesInventory(obj.optString("value"))
+                    // [T-export-quiet-transcript] Host-injected control notices
+                    // (stream-drop continuation reminders, empty-turn nudges)
+                    // are machinery, not conversation: keep them in the DB for
+                    // resume, leave them out of the transcript.
+                    val value = stripSystemReminders(stripAttachedFilesInventory(obj.optString("value")))
                     if (value.isNotEmpty()) {
                         // Blank line between parts so consecutive text blocks
                         // read as separate Markdown paragraphs, not one run-on.
@@ -645,6 +649,19 @@ private const val MAX_EXPORT_BODY_CHARS = 2000
      * text-part value — model-facing metadata, not chat content. Shared by
      * the plain-text and Markdown exports ([T-android-retry-attachment-loss]).
      */
+    /**
+     * [T-export-quiet-transcript] Removes host-injected `<system-reminder>`
+     * control notices (stream-drop continuation, empty-turn nudges) from an
+     * exported text part. The rows stay in the database — resume depends on
+     * them — they just do not belong in a human-readable transcript.
+     */
+    private fun stripSystemReminders(value: String): String {
+        if (!value.contains("<system-reminder")) return value
+        return value
+            .replace(Regex("<system-reminder>[\\s\\S]*?</system-reminder>"), "")
+            .trim()
+    }
+
     private fun stripAttachedFilesInventory(value: String): String {
         val start = value.indexOf("<user-attached-files>")
         if (start < 0) return value

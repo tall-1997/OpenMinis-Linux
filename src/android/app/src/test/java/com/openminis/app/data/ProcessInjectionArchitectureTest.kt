@@ -25,13 +25,22 @@ class ProcessInjectionArchitectureTest {
             "process blocks must not be grafted onto the tool_result carrier",
             loop.contains("withGoalAndPlanContext("),
         )
-        assertTrue(
-            "the loop must build the request history from history + first-mount only",
+        assertFalse(
+            "goal context must ride the prompt tail only — a first-mount history row " +
+                "would duplicate the objective (history row + tail) after turn 0",
             loop.contains("withGoalFirstMount("),
+        )
+        assertTrue(
+            "the loop must build the request history from the history itself",
+            loop.contains("effectiveAgentHistory().let { history ->"),
         )
         assertTrue(
             "the process tail must be injected through the system prompt",
             loop.contains("processInjectedSystemPrompt("),
+        )
+        assertTrue(
+            "goal context must be passed to the tail on every turn",
+            loop.contains("goalMount.prompt,"),
         )
     }
 
@@ -50,17 +59,15 @@ class ProcessInjectionArchitectureTest {
     }
 
     @Test
-    fun `goal context has a single-request path, not a per-turn graft`() {
+    fun `goal context has a single injection path, not a history row plus a tail copy`() {
         val goal = ProductionSources.read("goal/GoalContextInjection.kt")
-        assertTrue("first-mount helper must exist", goal.contains("internal fun withGoalFirstMount("))
-        assertTrue(
-            "the first-mount helper must carry the process-tail-injection rationale",
-            goal.contains("T-process-tail-injection"),
+        assertFalse(
+            "the removed first-mount helper must not come back",
+            goal.contains("internal fun withGoalFirstMount("),
         )
-        val context = ProductionSources.read("ui/chat/ChatViewModelPlanContextExt.kt")
         assertTrue(
             "the legacy history graft must be marked LEGACY",
-            context.contains("LEGACY"),
+            ProductionSources.read("ui/chat/ChatViewModelPlanContextExt.kt").contains("LEGACY"),
         )
     }
 }
