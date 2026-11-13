@@ -2180,6 +2180,16 @@
     <string name="git_panel_no_branches">沒有分支</string>
     <string name="git_panel_no_stashes">沒有暫存記錄</string>
     <string name="git_panel_switch_branch">切換分支</string>
+
+    <string name="git_panel_branch_search">搜尋分支</string>
+
+    <string name="git_panel_uncommitted_count">未提交的變更：%1$d 個檔案</string>
+
+    <string name="git_panel_detached_head">游離 HEAD</string>
+
+    <string name="git_panel_create_branch">建立並檢出新分支…</string>
+
+    <string name="git_panel_branch_name_hint">分支名稱</string>
     <string name="sessionlist_export_markdown">Markdown</string>
     <!-- [#38] 更新對話框：更新說明展開/收合 -->
     <string name="check_update_notes_expand">展開全部</string>

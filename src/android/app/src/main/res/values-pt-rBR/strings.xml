@@ -2099,6 +2099,16 @@
     <string name="git_panel_no_branches">Sem branches</string>
     <string name="git_panel_no_stashes">Sem stashes</string>
     <string name="git_panel_switch_branch">Trocar de branch</string>
+
+    <string name="git_panel_branch_search">Pesquisar branches</string>
+
+    <string name="git_panel_uncommitted_count">Alterações não commitadas: %1$d arquivos</string>
+
+    <string name="git_panel_detached_head">HEAD desanexado</string>
+
+    <string name="git_panel_create_branch">Criar e fazer checkout de novo branch…</string>
+
+    <string name="git_panel_branch_name_hint">Nome do branch</string>
     <string name="sessionlist_export_markdown">Markdown</string>
     <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
     <string name="check_update_notes_expand">Mostrar tudo</string>

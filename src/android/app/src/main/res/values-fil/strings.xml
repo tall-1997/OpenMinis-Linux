@@ -2099,6 +2099,16 @@
     <string name="git_panel_no_branches">Walang branches</string>
     <string name="git_panel_no_stashes">Walang stash</string>
     <string name="git_panel_switch_branch">Lumipat ng branch</string>
+
+    <string name="git_panel_branch_search">Maghanap ng branches</string>
+
+    <string name="git_panel_uncommitted_count">Hindi na-commit na mga pagbabago: %1$d file</string>
+
+    <string name="git_panel_detached_head">detached HEAD</string>
+
+    <string name="git_panel_create_branch">Gumawa at mag-checkout ng bagong branch…</string>
+
+    <string name="git_panel_branch_name_hint">Pangalan ng branch</string>
     <string name="sessionlist_export_markdown">Markdown</string>
     <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
     <string name="check_update_notes_expand">Ipakita lahat</string>

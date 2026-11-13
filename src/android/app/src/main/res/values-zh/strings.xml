@@ -2686,6 +2686,16 @@
     <string name="git_panel_no_branches">没有分支</string>
     <string name="git_panel_no_stashes">没有暂存记录</string>
     <string name="git_panel_switch_branch">切换分支</string>
+
+    <string name="git_panel_branch_search">搜索分支</string>
+
+    <string name="git_panel_uncommitted_count">未提交的更改：%1$d 个文件</string>
+
+    <string name="git_panel_detached_head">游离 HEAD</string>
+
+    <string name="git_panel_create_branch">创建并检出新分支…</string>
+
+    <string name="git_panel_branch_name_hint">分支名</string>
     <string name="git_panel_diff_truncated">Diff 已在 200,000 字符处截断——完整内容以仓库文件为准。</string>
     <string name="sessionlist_export_markdown">Markdown</string>
     <!-- 添加供应商页的厂商预设（[T-android-vendor-presets]）：一键预填主流厂商
