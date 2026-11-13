@@ -51,6 +51,15 @@ data class LLMModel(
     // overwrite what it said. Nullable so decoding a config persisted before
     // this field existed yields "unknown" instead of a synthesized answer.
     val limitsReportedByEndpoint: Boolean? = null,
+    // [T-thinking-ultra-manual] The operator's thinking-CEILING assertion,
+    // folded from ModelOverrides.maxThinkingLevel by ModelEntry.model. Lives
+    // on LLMModel (not just the override) so EVERY consumer of the resolved
+    // model sees the same ceiling — most importantly
+    // LLMProvider.clampThinkingLevel, which previously clamped a picker-
+    // selected ULTRA back down to the catalog MAX at the send boundary
+    // (UI offered 至高, the wire sent "max"). null = catalog rules decide.
+    // Nullable with default for backward/forward-compatible JSON.
+    val maxThinkingLevel: ThinkingLevel? = null,
 ) {
     companion object {
         // Anthropic — mirrors iOS LLMTypes.swift allAnthropic.

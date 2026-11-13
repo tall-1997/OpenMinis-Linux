@@ -1011,7 +1011,7 @@
     <string name="modeldetail_thinking_level_auto">Oto</string>
     <string name="modeldetail_thinking_level_effective_auto">Aktif: %1$s (bawaan katalog)</string>
     <string name="modeldetail_thinking_level_effective_override">Aktif: %1$s (manual)</string>
-    <string name="modeldetail_thinking_level_footer">Membatasi tingkat penalaran yang ditawarkan pemilih obrolan untuk model ini. Oto mengikuti deklarasi katalog. Ultra hanya dikirim apa adanya jika penyedia mendeklarasikannya; jika tidak, dipetakan ke max.</string>
+    <string name="modeldetail_thinking_level_footer">Membatasi tingkat penalaran yang ditawarkan pemilih obrolan untuk model ini. Oto mengikuti deklarasi katalog. Ultra dikirim apa adanya jika penyedia mendeklarasikannya atau jika Anda mengatur batas ini ke Ultra secara manual; jika tidak, dipetakan ke max.</string>
     <string name="modeldetail_capabilities_footer">Jendela konteks dan token output maksimum (dalam token). Kosongkan untuk menggunakan nilai bawaan penyedia. Aktifkan Penalaran untuk model yang mendukung penalaran mendalam.</string>
     <string name="modeldetail_provider_default">Bawaan penyedia</string>
     <string name="modeldetail_max_tokens_exceeds_warning">Melebihi batas yang dilaporkan penyedia (%1$d). Nilai tetap disimpan, tetapi dapat menyebabkan galat.</string>

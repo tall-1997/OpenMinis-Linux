@@ -1006,7 +1006,7 @@
     <string name="modeldetail_thinking_level_auto">Auto</string>
     <string name="modeldetail_thinking_level_effective_auto">Em vigor: %1$s (padrão do catálogo)</string>
     <string name="modeldetail_thinking_level_effective_override">Em vigor: %1$s (manual)</string>
-    <string name="modeldetail_thinking_level_footer">Limita os níveis de raciocínio que o seletor de chat oferece para este modelo. Auto segue a declaração do catálogo. Ultra só é enviado literalmente se o provedor o declarar; caso contrário, é mapeado para max.</string>
+    <string name="modeldetail_thinking_level_footer">Limita os níveis de raciocínio que o seletor de chat oferece para este modelo. Auto segue a declaração do catálogo. Ultra é enviado literalmente se o provedor o declarar ou se você definir manualmente este teto como Ultra; caso contrário, é mapeado para max.</string>
     <string name="modeldetail_capabilities_footer">Janela de contexto e máximo de tokens de saída (em tokens). Deixe em branco para usar os padrões do provedor. Ative o Raciocínio nos modelos que aceitam raciocínio estendido.</string>
     <string name="modeldetail_provider_default">Padrão do provedor</string>
     <string name="modeldetail_max_tokens_exceeds_warning">Acima do limite informado pelo provedor (%1$d). O valor é salvo, mas pode causar erros.</string>

@@ -60,6 +60,7 @@ class ThinkingRulesRegressionTest {
         supportsReasoning: Boolean? = true,
         reasoningEffortValues: List<String>? = null,
         interleavedReasoningField: String? = null,
+        maxThinkingLevel: ThinkingLevel? = null,
     ) = LLMModel(
         id = id,
         displayName = id,
@@ -67,6 +68,7 @@ class ThinkingRulesRegressionTest {
         supportsReasoning = supportsReasoning,
         reasoningEffortValues = reasoningEffortValues,
         interleavedReasoningField = interleavedReasoningField,
+        maxThinkingLevel = maxThinkingLevel,
     )
 
     private fun plainHistory(): List<LLMMessage> = listOf(
@@ -430,6 +432,69 @@ class ThinkingRulesRegressionTest {
                 reasoningEffortValues = listOf("low", "medium", "high", "xhigh", "max", "ultra"),
             ),
             level = ThinkingLevel.MAX,
+        )
+        assertEquals("max", body.optString("reasoning_effort"))
+    }
+
+    /**
+     * [T-thinking-ultra-manual] The SECOND exception: a manual ULTRA ceiling
+     * on the model params page IS the operator's vocabulary assertion — the
+     * picker offers 至高, so the wire must carry the literal tier. Before the
+     * fix, the send-boundary clamp was override-blind (LLMModel had no
+     * maxThinkingLevel field to fold into) and folded the level to MAX, then
+     * wireEffort sent "max" — the UI offered one thing, the request carried
+     * another. This model has NO declared "ultra" tier (a relay's unknown-
+     * model stamp looks exactly like this set), so only the override makes
+     * the literal legal to send.
+     */
+    @Test
+    fun `manual ultra ceiling reaches the wire as the literal`() {
+        val body = capture(
+            model = model(
+                "my-relay-model",
+                reasoningEffortValues = listOf("low", "medium", "high", "xhigh", "max"),
+                maxThinkingLevel = ThinkingLevel.ULTRA,
+            ),
+            level = ThinkingLevel.ULTRA,
+        )
+        assertEquals(
+            "manual ULTRA ceiling is the operator's vocabulary assertion: $body",
+            "ultra",
+            body.optString("reasoning_effort"),
+        )
+    }
+
+    /**
+     * [T-thinking-ultra-manual] The override widens the wire ONLY when the
+     * level itself is ULTRA — a MAX request on an override-ULTRA model still
+     * sends "max" (the exception widens ULTRA only, mirroring the declared
+     * case above).
+     */
+    @Test
+    fun `max on a manual-ultra model still sends max`() {
+        val body = capture(
+            model = model(
+                "my-relay-model",
+                reasoningEffortValues = listOf("low", "medium", "high", "xhigh", "max"),
+                maxThinkingLevel = ThinkingLevel.ULTRA,
+            ),
+            level = ThinkingLevel.MAX,
+        )
+        assertEquals("max", body.optString("reasoning_effort"))
+    }
+
+    /**
+     * [T-thinking-ultra-manual] No override, no declaration — the ORIGINAL
+     * invariant still holds: ULTRA folds to "max" (b38bf3d5, iOS evidence).
+     */
+    @Test
+    fun `ultra without override or declaration still folds to max`() {
+        val body = capture(
+            model = model(
+                "my-relay-model",
+                reasoningEffortValues = listOf("low", "medium", "high", "xhigh", "max"),
+            ),
+            level = ThinkingLevel.ULTRA,
         )
         assertEquals("max", body.optString("reasoning_effort"))
     }

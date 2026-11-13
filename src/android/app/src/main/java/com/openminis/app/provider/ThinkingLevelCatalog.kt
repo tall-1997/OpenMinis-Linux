@@ -204,8 +204,16 @@ object ThinkingLevelCatalog {
 
 /**
  * [T-android-thinking-level-arch] "How high can this model's thinking go?"
- * resolved through the built-in tiers only (no user override — see
- * [ModelEntry.effectiveMaxThinkingLevel] for that):
+ * resolved through the tiers available on the RESOLVED model: the folded
+ * operator override ([LLMModel.maxThinkingLevel], from
+ * [ModelOverrides.maxThinkingLevel]) first, then the catalog family rule,
+ * then the declared effort set's top tier. This is the ceiling the chat
+ * picker clamps against AND — via the fold — the ceiling
+ * [LLMProvider.clampThinkingLevel] clamps against at the send boundary, so
+ * the picker and the wire can no longer disagree (the UI offered 至高 while
+ * the send-boundary clamp folded it back to MAX). KDoc's "no user override"
+ * phrase above predates the fold; the override now lives ON the model.
+ */
  *   1. supportsReasoning == false → OFF (checked BEFORE catalog rules so a
  *      broadened family rule can't lift a non-reasoning member's ceiling).
  *   2. ThinkingLevelCatalog rule.
@@ -221,6 +229,11 @@ val LLMModel.catalogMaxThinkingLevel: ThinkingLevel
         // ceiling of that family's non-reasoning members (mimo-v2.5-tts/-asr).
         // [T-fallback-thinking-preclamp]
         if (supportsReasoning == false) return ThinkingLevel.OFF
+        // [T-thinking-ultra-manual] The folded operator override is the
+        // highest-priority source (its ModelOverrides doc says exactly that):
+        // it beats the declared set AND the id rules, and — via the fold —
+        // the provider-side clamp now honors it too.
+        maxThinkingLevel?.let { return it }
         // [T-thinking-levels-data-driven] A declared effort set is a stronger
         // statement than any id-substring rule: it names the exact tiers the
         // backend accepts. Take its top tier as the ceiling so a model whose
@@ -245,6 +258,11 @@ val LLMModel.catalogMaxThinkingLevel: ThinkingLevel
         // ceiling to ULTRA through the same selectableThinkingLevels path —
         // the backend named the tier, so it is reachable by definition.
         selectableThinkingLevels.lastOrNull()?.let { return it }
+        // [T-thinking-ultra-manual] A folded operator override is returned
+        // FIRST (before this point), so an entry-bound model with only the
+        // override and no catalog/declared opinion can still fall through to
+        // the generic default — its picker reachability comes from
+        // effectiveMaxThinkingLevel (override-aware), not this default.
         return ThinkingLevelCatalog.declaredMaxLevel(id) ?: ThinkingLevel.XHIGH
     }
 
@@ -340,7 +358,7 @@ val LLMModel.selectableThinkingLevels: List<ThinkingLevel>
  * model.
  */
 val ModelEntry.effectiveMaxThinkingLevel: ThinkingLevel
-    get() {
-        if (model.supportsReasoning == false) return ThinkingLevel.OFF
-        return overrides.maxThinkingLevel ?: model.catalogMaxThinkingLevel
-    }
+    // [T-thinking-ultra-manual] The override is folded onto model.maxThinkingLevel
+    // and catalogMaxThinkingLevel returns it first (after the capability guard),
+    // so this single read now covers override + declared set + id rules.
+    get() = model.catalogMaxThinkingLevel

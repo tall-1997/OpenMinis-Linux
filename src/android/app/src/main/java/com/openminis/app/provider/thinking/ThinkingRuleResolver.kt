@@ -20,6 +20,16 @@ data class ThinkingResolveContext(
     val instanceId: String? = null,
     val supportsReasoning: Boolean?,
     val declaredEffortValues: List<String>?,
+    /**
+     * [T-thinking-ultra-manual] The folded operator ceiling override
+     * ([LLMModel.maxThinkingLevel], folded from ModelOverrides). When it is
+     * ULTRA, the wire layer treats the manual setting as the operator's
+     * vocabulary assertion: a picker-selected ULTRA emits the literal "ultra"
+     * tier and the generic declared-set clamp does not second-guess it (same
+     * authority contract as a CustomPath rule's own vocabulary). Defaults
+     * null so every existing construction site keeps its behaviour.
+     */
+    val ceilingOverride: ThinkingLevel? = null,
     /** Numeric `budget_tokens` bounds from models.dev, when the catalog has them. */
     val budgetTokensMin: Int? = null,
     val budgetTokensMax: Int? = null,
@@ -554,7 +564,15 @@ object ThinkingRuleResolver {
                     ThinkingEffort.effortOrDeclaredUltra(ctx),
                     lid,
                 )
-                val clamped = ThinkingEffort.clampEffort(requested, ctx.declaredEffortValues)
+                // [T-thinking-ultra-manual] clampRequested keeps the manual
+                // override's "ultra" from being walked back down to "max" by
+                // the declared set — the override is the operator's vocabulary
+                // assertion, not a client guess to second-guess.
+                val clamped = ThinkingEffort.clampRequested(
+                    requested,
+                    ctx.declaredEffortValues,
+                    ctx.ceilingOverride,
+                )
                 body.put("reasoning_effort", clamped)
                 requested to clamped
             }

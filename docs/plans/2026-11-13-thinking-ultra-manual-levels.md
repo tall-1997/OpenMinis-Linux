@@ -38,10 +38,11 @@
 | `core/model/src/main/kotlin/com/openminis/app/data/model/ModelContextWindowHeuristic.kt` | `UNKNOWN_REASONING_EFFORT` 加 `"ultra"`（未知模型默认 6 档，与 session schema 对齐） |
 | `app/src/main/java/com/openminis/app/ui/chat/ChatViewModel.kt` | `currentModelMaxThinkingLevel` 未知模型兜底 XHIGH → ULTRA（与 UNKNOWN_REASONING_EFFORT 一致；clamp 逻辑保证 wire 安全） |
 
-wire 发射（已正确，仅核对不改）：
-- OpenAI Responses：`MAX, ULTRA -> "max"` ✅（endpoint 不收 "ultra" 字面量）
-- Anthropic：`XHIGH, MAX, ULTRA -> "max"` ✅
-- `clampEffort`（ThinkingEffort.kt）：声明集不含 ultra 时 ULTRA 被夹到声明集最高档 ✅（需补 ultra 进 ladder 常量核对）
+wire 发射（[T-thinking-ultra-declared][T-thinking-ultra-manual] 修正后）：
+- OpenAI Responses：`effortOrDeclaredUltra`（声明集含 ultra 或手动上限=ULTRA → 字面 "ultra"；否则 `MAX, ULTRA -> "max"`）✅
+- Anthropic：`XHIGH, MAX, ULTRA -> "max"` ✅（Anthropic 词汇表无 ultra；手动上限在该路径仍折叠为 max+orchestration）
+- `clampEffort`（ThinkingEffort.kt）：声明集不含 ultra 时 ULTRA 被夹到声明集最高档 ✅
+- `clampRequested`：手动 ULTRA 上限断言的 "ultra" 旁路声明集钳切（操作员词汇权威）✅；DeepSeekSibling 保留 vendor 钳切（其词汇无 ultra）✅
 
 ### B. 模型参数页手动思考等级控制（Apple 风格 UI）
 
@@ -57,7 +58,7 @@ wire 发射（已正确，仅核对不改）：
 | 文件 | 改动 |
 |---|---|
 | `app/src/main/java/com/openminis/app/provider/ThinkingLevelCatalog.kt` | `catalogMaxThinkingLevel` 声明集路径：声明集含 `"ultra"` 时 ceiling 升到 ULTRA（当前映射表静默丢弃 ultra 档，模型明明支持却选不到） |
-| `app/src/main/java/com/openminis/app/ui/settings/ModelEntryDetailScreen.kt` | 自定义/未知模型（UNKNOWN 5 档集，不含 ultra）通过参数页手动设 ceiling=ULTRA——用户自己的断言覆盖目录默认，wire 上 ULTRA→"max" 安全 |
+| `app/src/main/java/com/openminis/app/ui/settings/ModelEntryDetailScreen.kt` | 自定义/未知模型（UNKNOWN 5 档集，不含 ultra）通过参数页手动设 ceiling=ULTRA——用户自己的断言覆盖目录默认；[T-thinking-ultra-manual] 该断言同时打通 wire：折叠进 `LLMModel.maxThinkingLevel`，发送边界钳切与 `effortOrDeclaredUltra` 均感知，按字面发送 "ultra" |
 
 `UNKNOWN_REASONING_EFFORT` **故意不加** "ultra"：它是"目录没听说过这模型"的猜测标记，声称未知后端接受 ultra 字面量会 400。ULTRA 只来自两个明确断言：后端声明集含 ultra、用户手动设置。
 

@@ -1005,7 +1005,7 @@
     <string name="modeldetail_thinking_level_auto">Auto</string>
     <string name="modeldetail_thinking_level_effective_auto">Aktuell: %1$s (Katalog-Standard)</string>
     <string name="modeldetail_thinking_level_effective_override">Aktuell: %1$s (manuell)</string>
-    <string name="modeldetail_thinking_level_footer">Begrenzt die Denkstufen, die die Chat-Auswahl für dieses Modell anbietet. Auto folgt der Katalogdeklaration. Ultra wird nur als wörtliche Stufe gesendet, wenn der Anbieter sie deklariert; sonst wird sie auf max abgebildet.</string>
+    <string name="modeldetail_thinking_level_footer">Begrenzt die Denkstufen, die die Chat-Auswahl für dieses Modell anbietet. Auto folgt der Katalogdeklaration. Ultra wird als wörtliche Stufe gesendet, wenn der Anbieter sie deklariert oder du dieses Limit manuell auf Ultra setzt; sonst wird sie auf max abgebildet.</string>
     <string name="modeldetail_capabilities_footer">Kontextfenster und maximale Ausgabetokens (in Token). Leer lassen, um die Standardwerte des Anbieters zu verwenden. Aktiviere Denken für Modelle, die erweitertes Reasoning unterstützen.</string>
     <string name="modeldetail_provider_default">Anbieter-Standard</string>
     <string name="modeldetail_max_tokens_exceeds_warning">Überschreitet das vom Anbieter gemeldete Limit (%1$d). Der Wert wird gespeichert, kann aber Fehler verursachen.</string>
