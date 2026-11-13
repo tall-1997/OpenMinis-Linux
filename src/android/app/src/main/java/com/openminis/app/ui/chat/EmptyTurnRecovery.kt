@@ -34,8 +34,8 @@ internal object EmptyTurnRecovery {
     const val REMINDER: String =
         "\n\n<system-reminder>The previous response was empty. You MUST continue: " +
             "if the last message was a completed sub-agent result or a host notice, do NOT " +
-            "acknowledge or narrate about it — take the next step directly with a tool call, " +
-            "or give the user a final answer; if more work is needed, " +
+            "acknowledge or narrate about it — reason through what it changes, then take the " +
+            "next step with a tool call, or give the user a final answer; if more work is needed, " +
             "respond with the next tool call(s). Do not return an empty response.</system-reminder>"
 
     /**
