@@ -254,10 +254,14 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
             // [T-working-memory-ledger] The dropped rounds were never
             // summarized (compact did not fire — the trimmed request sits
             // under the threshold), so their knowledge lives only in the
-            // WorkingMemory ledger. Flag the hydration: the once-notice
-            // layer delivers the ledger's one-line records into the
-            // transcript (evict-then-deliver, same as the state snapshot).
-            stateHydrationPending = true
+            // WorkingMemory ledger. Flag the hydration ONLY when the ledger
+            // has undelivered lines: flagging unconditionally made every
+            // postAnchor drop fire a hydration, which committed a new USER
+            // note every turn — the model then narrated about each note
+            // instead of working (the prose-fragment loop on device).
+            if (WorkingMemoryStore.hasUndelivered(activeSessionId)) {
+                stateHydrationPending = true
+            }
             AppLogger.info(
                 ChatViewModel.TAG,
                 "[CompactDiag] eAH v2 postAnchor tail budget: kept=${postAnchor.size} " +
@@ -382,7 +386,15 @@ internal fun ChatViewModel.progressivelyTrimmed(list: List<LLMMessage>): List<LL
     if (trimmed !== list) {
         // [T-state-hydration] Reclaimed content may include the only copy of
         // the plan/report/lane state; the host restores it before the next request.
-        stateHydrationPending = true
+        // [T-working-memory-ledger] Gate on NEW handover content: this path
+        // runs EVERY turn (long sessions trim every request), and an
+        // unconditional flag made commitSessionNoticesOnce commit a fresh
+        // USER note every turn — the model narrated about each note instead
+        // of working (the prose-fragment loop on device). The snapshot path
+        // is sha-deduped; the ledger path has undelivered lines to give.
+        if (WorkingMemoryStore.hasUndelivered(activeSessionId)) {
+            stateHydrationPending = true
+        }
         AppLogger.info(
             ChatViewModel.TAG,
             "[ProgressiveTrim] level=$level window=$window untrimmedEst=$untrimmed " +
