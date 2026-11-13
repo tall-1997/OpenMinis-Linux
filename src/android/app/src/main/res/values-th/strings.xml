@@ -335,8 +335,6 @@
     <string name="token_usage_section_agent_loop">ลูปของ Agent</string>
     <string name="token_usage_total_loops">จำนวนลูปทั้งหมด</string>
     <!-- [#25] Context breakdown sheet -->
-    <string name="chat_menu_context_usage">รายละเอียดบริบท</string>
-    <string name="context_usage_sheet_title">รายละเอียดบริบท</string>
     <string name="context_block_system">พรอมป์ระบบและเครื่องมือ</string>
     <string name="context_block_skills_mcps">สกิลและ MCP</string>
     <string name="context_block_memory">การฉีดความจำ</string>

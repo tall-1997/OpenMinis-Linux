@@ -337,8 +337,6 @@
     <string name="token_usage_section_agent_loop">Цикл Агента</string>
     <string name="token_usage_total_loops">Всего циклов</string>
     <!-- [#25] Context breakdown sheet -->
-    <string name="chat_menu_context_usage">Разбивка контекста</string>
-    <string name="context_usage_sheet_title">Разбивка контекста</string>
     <string name="context_block_system">Системный промпт и инструменты</string>
     <string name="context_block_skills_mcps">Навыки и MCP</string>
     <string name="context_block_memory">Внедрение памяти</string>

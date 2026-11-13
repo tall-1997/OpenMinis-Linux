@@ -38,7 +38,7 @@ B3 打断不 kill 进程、B5 无完成验证）。全部差距已在**代码层
 | B3 | 打断 | `finishStoppedRun`（StopRunExt:43-110）把 RUNNING/STREAMING/PENDING 块即刻标 **CANCELLED** + partial text 抢救 + 持久化打断轮——UI 即时 ✓；**但全程无 JobRegistry.signal/进程 kill 调用**：沙盒里的进程（900s build）在标记 CANCELLED 后继续跑完 | ❌ 差距 |
 | B4 | 中途插话 | 排队 + 边界独立轮（QueueInterrupt→drainQueueIntoStandaloneTurn） | ✅ |
 | B5 | 完成交付 + 验证 | #328 修了 goal 完成后交付**时机**；**runtime 完成验证器：无**（grep verifier/isGoalComplete 全仓 0 命中）——模型自判 goal 完成，无 host 验证；turn 上限/异常退出为 inline error 而非进度交接 | ❌ 差距 |
-| B6 | compact 透明性 | **水位全程可见**（用户核对确认）：顶栏 ContextRing 常驻（ChatTopBarSection:587）+ 菜单 Token Usage（:578）+ Context Breakdown 面板（进度条 + Used/Window/Max Output + 分块占比）；compacting/compacted 以系统气泡呈现在聊天流；判据与预算在（#327 A1/A2 幸存）。仅剩 willRetriggerNextTurn 预测位等内部字段，零体感影响 | ✅ 已对齐 |
+| B6 | compact 透明性 | **水位全程可见**（用户核对确认）：顶栏 ContextRing 常驻（ChatTopBarSection）+ 菜单 Token Usage 单一入口（[#25] 融合：进度条 + Used/Window/Max Output + 分块占比同在一 sheet，原独立 Context Breakdown 面板已并入）；compacting/compacted 以系统气泡呈现在聊天流；判据与预算在（#327 A1/A2 幸存）。仅剩 willRetriggerNextTurn 预测位等内部字段，零体感影响 | ✅ 已对齐 |
 | B7 | goal 续跑合成轮 | goal/plan/recall 走 commit-once + NoticeLedger（#330）；**裸合成轮已废**——但 ZCode 式**带 source 标记的结构化合成轮**（goal-continuation）我们没有等价物；#328 的 goal 完成交复是时机修复，续跑驱动仍是注入式 | 🟡 需按 ZCode 形态补结构化标记 |
 
 ---
@@ -87,7 +87,7 @@ B4 插话排队边界轮；B6 的 A1 判据 + PostAnchorTail 预算；B7 的 com
 | 打断 | 流丢弃文案 + 工具 killed 态 | 块标 CANCELLED、进程不杀 | ❌ | 一 |
 | 完成验证 | runtime verifier + 提示词禁自判 | 无 verifier | ❌ | 一 |
 | goal 续跑 | `<system-reminder source="goal-continuation">` 结构化合成轮 | 注入式（无 source 标记） | 🟡 | 二 |
-| compact | threshold/truePostCompact/willRetrigger + 用户文案 | ContextRing + Token Usage + Breakdown 面板 + 系统气泡 ✓（仅缺内部预测字段） | ✅ | — |
+| compact | threshold/truePostCompact/willRetrigger + 用户文案 | ContextRing + Token Usage（含分块占比，[#25] 融合后单入口）+ 系统气泡 ✓（仅缺内部预测字段） | ✅ | — |
 | 重复调用 | 结果内 hint（ZCode 2-3 次） | ToolRepeatTracker 同型 ✓ | ✅ | — |
 | 执行账本 | 一次一结果 | ToolExecutionLedger ✓ | ✅ | — |
 | 通知一次性 | durable ledger | NoticeLedgerStore ✓ | ✅ | — |

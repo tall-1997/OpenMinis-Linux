@@ -17,7 +17,6 @@ import androidx.compose.material.icons.filled.Bolt
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Compress
-import androidx.compose.material.icons.filled.DataUsage
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Extension
@@ -575,7 +574,11 @@ internal fun ChatTopBarActions(
                             // 由当前会话的模型/提供方决定（showFastModeToggle、
                             // showEnhancedCacheToggle），设置页没有会话上下文。
                             MinisMenuSectionHeader(stringResource(R.string.chat_menu_section_settings))
-                            // Token Usage (iOS parity)
+                            // Token Usage (iOS parity). [#25] The context
+                            // breakdown (per-block composition of the next
+                            // request) now lives INSIDE this sheet's Context
+                            // section — one entry point, one sheet, no
+                            // duplicated header stats (see TokenUsageSheet).
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.settings_token_usage)) },
                                 onClick = {
@@ -585,23 +588,6 @@ internal fun ChatTopBarActions(
                                 leadingIcon = {
                                     val contextUsage by viewModel.contextUsage.collectAsStateWithLifecycle()
                                     ContextRing(usage = contextUsage)
-                                },
-                            )
-                            // [#25] Context breakdown — what the next request
-                            // is made of (prompt composition + per-block token
-                            // estimate). Placed right under Token Usage since
-                            // both answer "how full is my context"; follows the
-                            // same menu-row convention. Visibility rides the
-                            // process-level ContextUsageSheetState (see its
-                            // KDoc for why it is not a ViewModel flow).
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.chat_menu_context_usage)) },
-                                onClick = {
-                                    showChatMenu.value = false
-                                    ContextUsageSheetState.show()
-                                },
-                                leadingIcon = {
-                                    Icon(m3Icon(Icons.Default.DataUsage), contentDescription = null)
                                 },
                             )
                             // Enhanced Cache (iOS parity, commit 57aaf122):

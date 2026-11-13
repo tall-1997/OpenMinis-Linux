@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,7 +38,10 @@ import com.openminis.app.i18n.uppercaseForDisplay
  * every other "⋯" menu sheet.
  *
  * Sections (top to bottom):
- *   - Context: Context Used / Context Window / Max Output
+ *   - Context: progress bar + Context Used / Context Window / Max Output
+ *     + per-block breakdown (what the next request is made of, [#25] merged
+ *     here from the former standalone ContextUsageSheet — one entry point,
+ *     one sheet, no duplicated header stats)
  *   - Thinking (only when the model supports reasoning): On/Off / Level / Supported
  *   - Tokens (Session Total): Input (incl. cache) / Output
  *   - Cache (Session Total): Cache Read / Cache Write
@@ -46,6 +50,9 @@ import com.openminis.app.i18n.uppercaseForDisplay
  * Data loads asynchronously via [ChatViewModel.loadSessionTokenStats] when the
  * sheet appears; we intentionally don't hold a live subscription — token
  * counters change per API call, not per keystroke, so pull-on-open is enough.
+ * The context breakdown ([ChatViewModel.buildContextBreakdown]) is a suspend
+ * IO call, so it fills in after the first frame; the block list simply stays
+ * hidden until it lands rather than flashing zeros.
  */
 @Composable
 fun TokenUsageSheet(
@@ -61,6 +68,12 @@ fun TokenUsageSheet(
     val lastCacheHitRate by viewModel.lastCacheHitRate.collectAsStateWithLifecycle()
     // [T-tool-result-aging] Latest fold stats from the send path.
     val saver by ContextSaverRuntime.stats.collectAsStateWithLifecycle()
+    // [#25] Per-block context breakdown (merged from the former standalone
+    // ContextUsageSheet). Sheet-local state per the data-flow convention:
+    // filled once on open, no live subscription — the prompt composition only
+    // changes at request boundaries.
+    val breakdownState = remember { mutableStateOf<ContextBreakdown?>(null) }
+    val breakdown by breakdownState
 
     LaunchedEffect(Unit) {
         // Recompute the context rows on open: contextUsage is a snapshot that
@@ -68,6 +81,7 @@ fun TokenUsageSheet(
         // pre-compaction reading ([T-android-compact-stale-usage]).
         viewModel.refreshContextUsage()
         stats = viewModel.loadSessionTokenStats()
+        breakdownState.value = runCatching { viewModel.buildContextBreakdown() }.getOrNull()
     }
 
     StandardChatSheet(
@@ -93,6 +107,25 @@ fun TokenUsageSheet(
             val yesText = stringResource(R.string.common_yes)
             val noText = stringResource(R.string.common_no)
             StatSection(title = stringResource(R.string.token_usage_section_context)) {
+                // Water-level progress bar: the real reported ratio when the
+                // provider has answered at least once, else the block-sum
+                // estimate from the breakdown (same fallback ladder the
+                // former standalone sheet used).
+                val ratio = if (contextUsage.known) {
+                    contextUsage.ratio
+                } else {
+                    breakdown?.let { b ->
+                        if (b.windowTokens > 0) {
+                            (b.totalTokens.toFloat() / b.windowTokens).coerceIn(0f, 1f)
+                        } else {
+                            0f
+                        }
+                    } ?: 0f
+                }
+                LinearProgressIndicator(
+                    progress = { ratio },
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 StatRow(
                     stringResource(R.string.token_usage_context_used),
                     formatTokens(
@@ -107,6 +140,23 @@ fun TokenUsageSheet(
                     if (contextUsage.known) "${(contextUsage.ratio * 100).toInt()}%" else "?",
                 )
                 maxOutput?.let { StatRow(stringResource(R.string.token_usage_max_output), formatTokens(it)) }
+                // [#25] Per-block composition of the next request — the
+                // unique payload of the former ContextUsageSheet, largest
+                // block first so the dominant cost sits on top.
+                breakdown?.let { b ->
+                    if (b.blocks.isNotEmpty()) {
+                        HorizontalDivider(
+                            thickness = 0.5.dp,
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                        )
+                        ContextBlockList(b)
+                        Text(
+                            text = stringResource(R.string.context_usage_note_estimate),
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
             }
 
             thinking?.let { t ->
@@ -208,3 +258,58 @@ private fun formatTokens(n: Long): String =
     formatTokenCount(n, uppercaseSuffix = true)
 
 private fun formatTokens(n: Int): String = formatTokens(n.toLong())
+
+/**
+ * [#25] Per-block rows of the context breakdown (merged from the former
+ * standalone ContextUsageSheet). One row per semantic block, largest-first
+ * so the dominant cost is on top; share is vs the estimated block sum.
+ */
+@Composable
+private fun ContextBlockList(data: ContextBreakdown) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        data.blocks
+            .sortedByDescending { it.tokens }
+            .forEach { block ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(block.key.labelRes()),
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "${(block.share * 100).toInt()}%",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = formatTokens(block.tokens),
+                        fontSize = 14.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                HorizontalDivider(
+                    thickness = 0.5.dp,
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                )
+            }
+    }
+}
+
+/** Localized name per semantic block (UI mapping only — the core stays resource-free). */
+private fun ContextBlockKey.labelRes(): Int = when (this) {
+    ContextBlockKey.SYSTEM_TOOLS -> R.string.context_block_system
+    ContextBlockKey.SKILLS_MCPS -> R.string.context_block_skills_mcps
+    ContextBlockKey.MEMORY -> R.string.context_block_memory
+    ContextBlockKey.RUNTIME_TAIL -> R.string.context_block_runtime
+    ContextBlockKey.GOAL_PLAN -> R.string.context_block_goal_plan
+    ContextBlockKey.HISTORY -> R.string.context_block_history
+    ContextBlockKey.PENDING_ATTACHMENTS -> R.string.context_block_attachments
+}

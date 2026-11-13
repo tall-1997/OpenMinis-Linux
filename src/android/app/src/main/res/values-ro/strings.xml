@@ -336,8 +336,6 @@
     <string name="token_usage_section_agent_loop">Bucla Agentului</string>
     <string name="token_usage_total_loops">Total bucle</string>
     <!-- [#25] Context breakdown sheet -->
-    <string name="chat_menu_context_usage">Defalcarea contextului</string>
-    <string name="context_usage_sheet_title">Defalcarea contextului</string>
     <string name="context_block_system">Prompt de sistem și instrumente</string>
     <string name="context_block_skills_mcps">Abilități și MCP</string>
     <string name="context_block_memory">Injecție de memorie</string>
