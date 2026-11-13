@@ -178,8 +178,12 @@ class ThinkingLevelSelectionTest {
     // ── the invariants that must hold for every model ────────────────────────
 
     /**
-     * ULTRA serializes as `"max"` — same bytes as MAX — so offering it as a
-     * separate rung is exactly the lie this suite exists to prevent.
+     * ULTRA serializes as `"max"` for every model whose declared set stops at
+     * "max" — same bytes as MAX — so offering it as a separate rung is exactly
+     * the lie this suite exists to prevent.
+     *
+     * [T-thinking-ultra-declared] The declared set here is fullLadder()
+     * (low..max, no "ultra"), so the fold still applies to all of them.
      */
     @Test
     fun `ultra is never offered as a distinct rung`() {
@@ -195,6 +199,55 @@ class ThinkingLevelSelectionTest {
                 levels.contains(ThinkingLevel.ULTRA),
             )
         }
+    }
+
+    // ── [T-thinking-ultra-declared] the declared-ultra exception ─────────────
+
+    /**
+     * A backend that literally declares "ultra" in its effort set names the
+     * tier itself: ULTRA IS a distinct wire value there (clampEffort passes
+     * the literal through), so the rung must be offered and the ceiling must
+     * reach it — otherwise the declared top tier is dead.
+     */
+    @Test
+    fun `declared ultra tier is offered and lifts the ceiling to ULTRA`() {
+        val m = model("gpt-6-terra", tiers = listOf("low", "medium", "high", "xhigh", "max", "ultra"))
+        assertEquals(
+            "a declared ultra tier is a real wire value and must be offered",
+            listOf(
+                ThinkingLevel.LOW, ThinkingLevel.MEDIUM, ThinkingLevel.HIGH,
+                ThinkingLevel.XHIGH, ThinkingLevel.MAX, ThinkingLevel.ULTRA,
+            ),
+            m.selectableThinkingLevels,
+        )
+        assertEquals(
+            "the ceiling must reach the declared top tier",
+            ThinkingLevel.ULTRA,
+            m.catalogMaxThinkingLevel,
+        )
+    }
+
+    /**
+     * Case-insensitive match on the declared tier: a relay publishing "Ultra"
+     * (capitalized) still names the tier.
+     */
+    @Test
+    fun `declared ultra tier matches case-insensitively`() {
+        val m = model("gpt-6-sol", tiers = listOf("high", "Max", "Ultra"))
+        assertTrue(m.selectableThinkingLevels.contains(ThinkingLevel.ULTRA))
+        assertEquals(ThinkingLevel.ULTRA, m.catalogMaxThinkingLevel)
+    }
+
+    /**
+     * A sparse declared set containing only "ultra" above "high" keeps both
+     * rungs — they are distinct wire values, exactly like the sparse
+     * ["high","max"] shape pinned above.
+     */
+    @Test
+    fun `sparse high-ultra declaration keeps both rungs`() {
+        val m = model("future-relay-model", tiers = listOf("high", "ultra"))
+        assertEquals(listOf(ThinkingLevel.HIGH, ThinkingLevel.ULTRA), m.selectableThinkingLevels)
+        assertEquals(ThinkingLevel.ULTRA, m.catalogMaxThinkingLevel)
     }
 
     /**

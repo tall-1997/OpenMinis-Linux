@@ -12,8 +12,16 @@ package com.openminis.app.data.model
  * that wanted the enrich chain had to remember the order by hand.
  *
  * The enrich step is injected: the screen passes [com.openminis.app.provider
- * .ModelsDevApi]::enrichModel, while tests inject a plain passthrough. The
+ * .ModelsDevApi]::enrichModelNow, while tests inject a plain passthrough. The
  * enriched result — not the raw input — is what gets persisted.
+ *
+ * [T-custom-model-enrich-wiring] NO unknown-model stamp is persisted: the
+ * baseModel carries catalog truth (nulls included). The read path
+ * ([ModelEntry.model] → [applyUnrecognizedModelDefaults]) stamps at read time,
+ * so the picker/wire/UI still see completed params — but a persisted guess
+ * can no longer mask later catalog data (enrichWithDevData prefers a
+ * non-null model field over the dev row) or present itself as fact in the
+ * params page.
  */
 fun buildCustomModelEntry(
     modelId: String,
@@ -23,17 +31,11 @@ fun buildCustomModelEntry(
     enrich: (LLMModel) -> LLMModel,
 ): ModelEntry {
     val name = displayName.ifBlank { modelId }
-    // [T-custom-model-enrich-wiring] enrich first (catalog-exact ids win), then
-    // stamp the unknown-model defaults: the stamp only fills values the enrich
-    // chain left empty, so a models.dev hit keeps its catalog numbers while an
-    // unrecognized model keeps the historical 256k/128k unknown defaults.
-    val model = applyUnrecognizedModelDefaults(
-        enrich(
-            LLMModel(
-                id = modelId.trim(),
-                displayName = name.trim(),
-                provider = providerTypeDisplayName,
-            ),
+    val model = enrich(
+        LLMModel(
+            id = modelId.trim(),
+            displayName = name.trim(),
+            provider = providerTypeDisplayName,
         ),
     )
     return ModelEntry(

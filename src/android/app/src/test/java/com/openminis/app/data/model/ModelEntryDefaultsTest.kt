@@ -1,6 +1,7 @@
 package com.openminis.app.data.model
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class ModelEntryDefaultsTest {
@@ -11,6 +12,9 @@ class ModelEntryDefaultsTest {
             providerInstanceId = "p",
             baseModel = LLMModel("relay-foo-v2", "Foo V2", "Relay"),
         )
+        // [T-custom-model-enrich-wiring] entry.model is the READ path: it
+        // stamps unknown-model defaults at read time, so runtime behavior is
+        // unchanged even though the persisted baseModel carries nulls.
         val m = entry.model
         assertEquals(256_000, m.contextWindow)
         assertEquals(128_000, m.maxOutputTokens)
@@ -18,6 +22,21 @@ class ModelEntryDefaultsTest {
         assertEquals(listOf("low", "medium", "high", "xhigh", "max"), m.reasoningEffortValues)
         assertEquals(listOf("text"), m.inputModalities)
         assertEquals(listOf("text"), m.outputModalities)
+    }
+
+    @Test
+    fun `persisted baseModel carries catalog truth not the stamp`() {
+        // [T-custom-model-enrich-wiring] The PERSIST path must NOT stamp:
+        // a stamped baseModel masks later catalog refreshes (enrichWithDevData
+        // prefers a non-null model field over the dev row) and presents a
+        // guess as fact in the params page.
+        val entry = ModelEntry(
+            providerInstanceId = "p",
+            baseModel = LLMModel("relay-foo-v2", "Foo V2", "Relay"),
+        )
+        assertNull(entry.baseModel.contextWindow)
+        assertNull(entry.baseModel.maxOutputTokens)
+        assertNull(entry.baseModel.reasoningEffortValues)
     }
 
     @Test

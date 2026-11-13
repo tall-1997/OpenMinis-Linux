@@ -1002,6 +1002,12 @@
     <string name="modeldetail_section_capabilities">Możliwości</string>
     <string name="modeldetail_context_window">Okno kontekstu</string>
     <string name="modeldetail_thinking">Myślenie</string>
+    <!-- [T-thinking-ultra-manual] Manual thinking-level ceiling on the model params page. -->
+    <string name="modeldetail_thinking_level_ceiling">Limit poziomu myślenia</string>
+    <string name="modeldetail_thinking_level_auto">Auto</string>
+    <string name="modeldetail_thinking_level_effective_auto">Aktywne: %1$s (domyślne z katalogu)</string>
+    <string name="modeldetail_thinking_level_effective_override">Aktywne: %1$s (ręczne)</string>
+    <string name="modeldetail_thinking_level_footer">Ogranicza poziomy myślenia oferowane w selektorze czatu dla tego modelu. Auto podąża za deklaracją katalogu. Ultra jest wysyłane dosłownie tylko gdy dostawca je deklaruje; w przeciwnym razie mapuje się na max.</string>
     <string name="modeldetail_capabilities_footer">Okno kontekstu i maksymalna liczba tokenów wyjściowych (w tokenach). Pozostaw puste, aby użyć wartości domyślnych dostawcy. Włącz Myślenie dla modeli obsługujących rozszerzone rozumowanie.</string>
     <string name="modeldetail_provider_default">Wartość domyślna dostawcy</string>
     <string name="modeldetail_max_tokens_exceeds_warning">Przekracza limit zgłoszony przez dostawcę (%1$d). Wartość zostanie zapisana, ale może powodować błędy.</string>

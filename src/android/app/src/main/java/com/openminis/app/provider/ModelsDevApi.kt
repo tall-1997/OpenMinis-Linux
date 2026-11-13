@@ -98,24 +98,15 @@ object ModelsDevApi {
         return emptyList()
     }
 
-    // MARK: - Public: Enrich models with models.dev data
+    // MARK: - Public: Enrich models with models.dev data (impl in ModelsDevEnrich.kt)
 
-    fun enrichModel(model: LLMModel): LLMModel {
-        val fromDev = applyDevMatch(model)
-        // Cache only on this path: enrichModel is also called from Compose /
-        // the send path. A synchronous HTML scrape would ANR. Misses are
-        // filled in the background; the next enrich sees the overlay.
-        val supplemented = DataLearnerApi.supplement(fromDev, fetchIfMissing = false)
-        DataLearnerApi.scheduleSupplement(supplemented)
-        return applyUnrecognizedModelDefaults(supplemented)
-    }
+    fun enrichModel(model: LLMModel): LLMModel = modelsDevEnrichModel(model)
 
-    fun enrichModels(models: List<LLMModel>): List<LLMModel> {
-        val fromDev = models.map { applyDevMatch(it) }
-        return DataLearnerApi.supplementAll(fromDev).map { applyUnrecognizedModelDefaults(it) }
-    }
+    fun enrichModelNow(model: LLMModel): LLMModel = modelsDevEnrichModelNow(model)
 
-    private fun applyDevMatch(model: LLMModel): LLMModel {
+    fun enrichModels(models: List<LLMModel>): List<LLMModel> = modelsDevEnrichModels(models)
+
+    internal fun applyDevMatch(model: LLMModel): LLMModel {
         val registry = loadRegistry() ?: return model
         val match = resolveDevModel(model, registry) ?: return model
         return applyDevData(model, match.model)

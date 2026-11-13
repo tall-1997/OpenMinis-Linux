@@ -1060,6 +1060,12 @@
     <string name="modeldetail_section_capabilities">能力</string>
     <string name="modeldetail_context_window">上下文視窗</string>
     <string name="modeldetail_thinking">思考</string>
+    <!-- [T-thinking-ultra-manual] Manual thinking-level ceiling on the model params page. -->
+    <string name="modeldetail_thinking_level_ceiling">思考等級上限</string>
+    <string name="modeldetail_thinking_level_auto">自動</string>
+    <string name="modeldetail_thinking_level_effective_auto">目前生效：%1$s（目錄預設）</string>
+    <string name="modeldetail_thinking_level_effective_override">目前生效：%1$s（手動）</string>
+    <string name="modeldetail_thinking_level_footer">限制聊天頁為該模型提供的思考檔位。自動跟隨目錄聲明。僅當供應商聲明 ultra 時才按字面發送，否則映射為 max。</string>
     <string name="modeldetail_capabilities_footer">上下文視窗和最大輸出 Token 數（以 tokens 計）。留空使用供應商預設值。對支援擴展推理的模型啟用思考模式。</string>
     <string name="modeldetail_provider_default">供應商預設</string>
     <string name="modeldetail_max_tokens_exceeds_warning">超過供應商回報的上限（%1$d）。值已保存，但可能導致請求失敗。</string>

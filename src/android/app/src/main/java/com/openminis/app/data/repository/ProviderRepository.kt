@@ -10,7 +10,6 @@ import com.openminis.app.provider.thinking.ThinkingRule
 import com.openminis.app.provider.thinking.ThinkingRuleResolver
 import com.openminis.app.data.model.ImageEndpointMode
 import com.openminis.app.data.model.LLMModel
-import com.openminis.app.data.model.applyUnrecognizedModelDefaults
 import com.openminis.app.data.model.ModelDeletion
 import com.openminis.app.data.model.ModelEntry
 import com.openminis.app.data.model.ModelOverrides
@@ -732,7 +731,8 @@ class ProviderRepository(
             }
             ModelEntry(
                 providerInstanceId = instanceId,
-                baseModel = applyUnrecognizedModelDefaults(resolved),
+                // [T-custom-model-enrich-wiring] catalog truth; read path stamps.
+                baseModel = resolved,
                 overrides = prior?.overrides ?: ModelOverrides(),
                 isCustom = false,
                 isHidden = prior?.isHidden ?: false,

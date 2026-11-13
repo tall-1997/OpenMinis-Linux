@@ -1001,6 +1001,12 @@
     <string name="modeldetail_section_capabilities">Capacités</string>
     <string name="modeldetail_context_window">Fenêtre de contexte</string>
     <string name="modeldetail_thinking">Réflexion</string>
+    <!-- [T-thinking-ultra-manual] Manual thinking-level ceiling on the model params page. -->
+    <string name="modeldetail_thinking_level_ceiling">Plafond du niveau de réflexion</string>
+    <string name="modeldetail_thinking_level_auto">Auto</string>
+    <string name="modeldetail_thinking_level_effective_auto">Effectif : %1$s (valeur par défaut du catalogue)</string>
+    <string name="modeldetail_thinking_level_effective_override">Effectif : %1$s (manuel)</string>
+    <string name="modeldetail_thinking_level_footer">Plafonne les niveaux de réflexion proposés par le sélecteur de conversation pour ce modèle. Auto suit la déclaration du catalogue. Ultra n\'est envoyé tel quel que si le fournisseur le déclare ; sinon il est converti en max.</string>
     <string name="modeldetail_capabilities_footer">Fenêtre de contexte et nombre max de jetons de sortie (en jetons). Laisser vide pour utiliser les valeurs par défaut du fournisseur. Activez Réflexion pour les modèles qui prennent en charge le raisonnement étendu.</string>
     <string name="modeldetail_provider_default">Par défaut du fournisseur</string>
     <string name="modeldetail_max_tokens_exceeds_warning">Dépasse la limite signalée par le fournisseur (%1$d). La valeur est enregistrée mais peut provoquer des erreurs.</string>

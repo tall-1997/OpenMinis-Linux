@@ -1,6 +1,7 @@
 package com.openminis.app.data.model
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -76,10 +77,15 @@ class CustomModelEntryFactoryTest {
         assertEquals("glm-5.3-oc", seen?.id)
         assertEquals("glm-5.3-oc", seen?.displayName)
         assertEquals("天翼云", seen?.provider)
-        // The persisted model is the stamped form of what enrich saw, not
-        // the raw object itself: unknown-model defaults fill the fields the
-        // (passthrough) enrich left empty.
-        assertEquals(256_000, entry.baseModel.contextWindow)
-        assertEquals(128_000, entry.baseModel.maxOutputTokens)
+        // [T-custom-model-enrich-wiring] The persisted baseModel is exactly
+        // what enrich returned — NO unknown-model stamp on the persist path.
+        // The (passthrough) enrich left the fields null, and null is catalog
+        // truth: the READ path (entry.model) stamps at read time, so runtime
+        // params are unchanged while persisted data stays honest.
+        assertNull(entry.baseModel.contextWindow)
+        assertNull(entry.baseModel.maxOutputTokens)
+        // Read-path stamping still completes the params for runtime consumers.
+        assertEquals(256_000, entry.model.contextWindow)
+        assertEquals(128_000, entry.model.maxOutputTokens)
     }
 }

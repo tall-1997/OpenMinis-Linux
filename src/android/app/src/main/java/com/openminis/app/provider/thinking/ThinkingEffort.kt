@@ -15,9 +15,53 @@ internal object ThinkingEffort {
         ThinkingLevel.HIGH -> "high"
         ThinkingLevel.XHIGH -> "xhigh"
         // ULTRA is a client-side "Max + orchestration" concept and is NEVER a valid
-        // server effort string (iOS b38bf3d5).
+        // server effort string for a model whose set stops at "max" (iOS b38bf3d5).
+        // [T-thinking-ultra-declared] The declared-ultra exception is handled
+        // by the CALLER: ThinkingRuleResolver checks the model's declared set
+        // for "ultra" and emits the literal there; this default fold keeps
+        // every other backend from ever seeing the string.
         ThinkingLevel.MAX, ThinkingLevel.ULTRA -> "max"
     }
+
+    /**
+     * [T-thinking-ultra-declared] True when the model's declared effort set
+     * literally names "ultra" — the one case where ULTRA is a real wire tier
+     * rather than a client-side "max + orchestration" fold. Kept as one
+     * helper so the three emitter branches (nested / OpenAI-native /
+     * generic) cannot drift apart on the spelling or the case rule.
+     */
+    fun declaresUltraTier(declared: List<String>?): Boolean =
+        declared?.any { it.equals("ultra", ignoreCase = true) } == true
+
+    /**
+     * [T-thinking-ultra-declared] The wire effort for [ctx]'s level, with the
+     * declared-ultra exception folded in: wireEffort maps ULTRA→"max" for
+     * every model, but a backend that literally declares "ultra" names the
+     * tier itself and gets the literal — folding it to "max" would silently
+     * demote the declared top tier (and "max" is not even in that set, so
+     * clampEffort would then walk DOWN to "high", two rungs below the ask).
+     * One helper so the three emitter branches (nested / OpenAI-native /
+     * generic) cannot drift apart on the rule.
+     */
+    fun effortOrDeclaredUltra(ctx: ThinkingResolveContext): String =
+        if (ctx.level == ThinkingLevel.ULTRA && declaresUltraTier(ctx.declaredEffortValues)) {
+            "ultra"
+        } else {
+            wireEffort(ctx.level)
+        }
+
+    /**
+     * [T-thinking-ultra-declared] Case-insensitive "the declared set names this
+     * tier". `absent = true` inverts the null case: a NULL set (the catalog
+     * never heard of this model) reads as "not declaring against it", so the
+     * caller keeps sending the tier — the same permissive semantics the old
+     * `contains(...) != false` spelled.
+     */
+    fun declaresTier(declared: List<String>?, tier: String, absent: Boolean = false): Boolean =
+        when {
+            declared == null -> absent
+            else -> declared.any { it.equals(tier, ignoreCase = true) }
+        }
 
     /**
      * [OpenMinis#356] Legal effort set of DeepSeek V4, used for the
@@ -43,11 +87,15 @@ internal object ThinkingEffort {
     fun clampOffEffort(offEffort: String?, declared: List<String>?): String? {
         if (offEffort == null) return null
         if (declared.isNullOrEmpty()) return offEffort
-        if (declared.contains(offEffort)) return offEffort
+        // [T-thinking-ultra-declared] Same case-insensitive rule as
+        // clampEffort: a capitalized "None"/"Low" in the declared set is the
+        // same tier as its lowercase spelling.
+        declared.firstOrNull { it.equals(offEffort, ignoreCase = true) }
+            ?.let { return it.lowercase() }
         // [OpenMinis#377] Scoped to "none": see the doc above.
         if (offEffort != "none") return offEffort
         val ladder = listOf("none", "minimal", "low")
-        if (ladder.none { declared.contains(it) }) return null
+        if (ladder.none { l -> declared.any { d -> d.equals(l, ignoreCase = true) } }) return null
         return clampEffort(offEffort, declared)
     }
 
@@ -78,13 +126,27 @@ internal object ThinkingEffort {
     /** Snap a requested tier onto the model's declared set, walking DOWN then up. */
     fun clampEffort(effort: String, values: List<String>?): String {
         if (values.isNullOrEmpty()) return effort
-        if (values.contains(effort)) return effort
-        val ladder = listOf("none", "minimal", "low", "medium", "high", "xhigh", "max")
+        // [T-thinking-ultra-declared] Case-insensitive throughout: the catalog
+        // layer (selectableThinkingLevels) already lowercases the declared set,
+        // but a relay can publish "Max"/"Ultra" capitalized — a case-sensitive
+        // ladder lookup silently dropped them and clamped ULTRA down to "high"
+        // (CI: declared ultra tier matches case-insensitively on the wire).
+        // The emitted spelling is normalized to lowercase, the wire convention
+        // every real API uses.
+        values.firstOrNull { it.equals(effort, ignoreCase = true) }
+            ?.let { return it.lowercase() }
+        // [T-thinking-ultra-declared] "ultra" sits above "max" on the ladder
+        // so a declared ["high","max","ultra"] set clamps a ULTRA request to
+        // "ultra" (exact hit above) and an undeclared set still walks DOWN to
+        // "max". For every model whose set stops at "max", wireEffort has
+        // already folded ULTRA→"max" before this runs, so the extra rung
+        // changes nothing for them.
+        val ladder = listOf("none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra")
         val want = ladder.indexOf(effort)
         if (want < 0) return effort
         val declared = values.mapNotNull { v ->
-            val i = ladder.indexOf(v)
-            if (i >= 0) i to v else null
+            val i = ladder.indexOf(v.lowercase())
+            if (i >= 0) i to v.lowercase() else null
         }.sortedBy { it.first }
         if (declared.isEmpty()) return effort
         return declared.lastOrNull { it.first <= want }?.second ?: declared.first().second
