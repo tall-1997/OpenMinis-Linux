@@ -214,13 +214,6 @@ object ThinkingLevelCatalog {
  * the send-boundary clamp folded it back to MAX). KDoc's "no user override"
  * phrase above predates the fold; the override now lives ON the model.
  */
- *   1. supportsReasoning == false → OFF (checked BEFORE catalog rules so a
- *      broadened family rule can't lift a non-reasoning member's ceiling).
- *   2. ThinkingLevelCatalog rule.
- *   3. true/null → XHIGH (conservative default so a reasoning model isn't
- *      accidentally capped below the tiers every provider already accepted
- *      pre-GPT-5.6).
- */
 val LLMModel.catalogMaxThinkingLevel: ThinkingLevel
     get() {
         // A model that can't reason has max level OFF regardless of any
