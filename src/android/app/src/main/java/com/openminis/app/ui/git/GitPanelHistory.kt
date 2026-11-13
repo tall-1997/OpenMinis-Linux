@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -156,70 +157,83 @@ private fun ColumnScope.NoSearchMatch() {
 
 @Composable
 private fun CommitRow(row: CommitLaneRow, laneCount: Int, onClick: () -> Unit) {
-    Row(
+    Column(
         Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .heightIn(min = 52.dp)
-            .padding(end = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .clickable(onClick = onClick),
     ) {
-        LaneCanvas(row = row, laneCount = laneCount)
-        Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
-            if (row.commit.refs.isNotEmpty()) {
-                RefBadges(row.commit.refs)
-                Spacer(Modifier.size(3.dp))
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp)
+                .padding(end = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            LaneCanvas(row = row, laneCount = laneCount)
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+                // [T-git-panel-zcode-layout] Badges ride INLINE before the
+                // subject (ZCode's description column): one line per commit
+                // instead of a badge row eating its own line of height.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (row.commit.refs.isNotEmpty()) {
+                        RefBadges(row.commit.refs)
+                        Spacer(Modifier.width(6.dp))
+                    }
+                    Text(
+                        row.commit.subject,
+                        style = MaterialTheme.typography.bodyMedium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                }
+                Spacer(Modifier.size(2.dp))
+                Text(
+                    // ZCode column order: author · date · sha.
+                    "${row.commit.author} · ${relativeTime(row.commit.epochSeconds)} · ${row.commit.shortHash}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            Text(
-                row.commit.subject,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(Modifier.size(2.dp))
-            Text(
-                "${row.commit.shortHash} · ${row.commit.author} · " +
-                    relativeTime(row.commit.epochSeconds),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
         }
+        HorizontalDivider(
+            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f),
+            thickness = 0.5.dp,
+        )
     }
 }
 
 /**
- * `%D` decoration badges (ZCode description column): HEAD outlined and
- * first, local branches filled, remote refs muted.
+ * `%D` decoration badges (ZCode description column): outlined pill with the
+ * branch glyph, HEAD outlined-and-first, local branches tinted, remote refs
+ * muted. Capped at 3 so a heavily-decorated tip commit doesn't push the
+ * subject off the line.
  */
 @Composable
 private fun RefBadges(refs: List<String>) {
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        for (ref in refs.take(4)) {
+        for (ref in refs.take(3)) {
             val isHead = ref == "HEAD"
             val isRemote = ref.contains('/')
             Text(
                 ref,
                 fontSize = 10.sp,
                 fontWeight = if (isHead) FontWeight.SemiBold else FontWeight.Medium,
-                color = if (isRemote) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+                color = if (isRemote) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
                 modifier = Modifier
-                    .background(
-                        if (isHead) Color.Transparent else MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
-                        RoundedCornerShape(6.dp),
+                    .border(
+                        1.dp,
+                        if (isHead) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                        RoundedCornerShape(999.dp),
                     )
-                    .then(
-                        if (isHead) {
-                            Modifier.border(
-                                1.dp,
-                                MaterialTheme.colorScheme.primary,
-                                RoundedCornerShape(6.dp),
-                            )
-                        } else Modifier,
-                    )
-                    .padding(horizontal = 5.dp, vertical = 1.dp),
+                    .padding(horizontal = 6.dp, vertical = 1.dp),
                 maxLines = 1,
             )
         }

@@ -2115,6 +2115,9 @@
 
     <string name="git_panel_branch_search">Szukaj gałęzi</string>
 
+
+    <string name="git_panel_branches_section">Gałęzie</string>
+
     <string name="git_panel_uncommitted_count">Niezatwierdzone zmiany: %1$d plików</string>
 
     <string name="git_panel_detached_head">odłączony HEAD</string>

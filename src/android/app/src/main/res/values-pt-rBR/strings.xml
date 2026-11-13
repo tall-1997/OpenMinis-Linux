@@ -2108,6 +2108,9 @@
 
     <string name="git_panel_branch_search">Pesquisar branches</string>
 
+
+    <string name="git_panel_branches_section">Branches</string>
+
     <string name="git_panel_uncommitted_count">Alterações não commitadas: %1$d arquivos</string>
 
     <string name="git_panel_detached_head">HEAD desanexado</string>

@@ -2108,6 +2108,9 @@
 
     <string name="git_panel_branch_search">ค้นหา branch</string>
 
+
+    <string name="git_panel_branches_section">branch</string>
+
     <string name="git_panel_uncommitted_count">การเปลี่ยนแปลงที่ยังไม่คอมมิต: %1$d ไฟล์</string>
 
     <string name="git_panel_detached_head">HEAD แยกออก</string>

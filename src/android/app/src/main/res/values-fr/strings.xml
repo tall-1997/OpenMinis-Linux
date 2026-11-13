@@ -2108,6 +2108,9 @@
 
     <string name="git_panel_branch_search">Rechercher des branches</string>
 
+
+    <string name="git_panel_branches_section">Branches</string>
+
     <string name="git_panel_uncommitted_count">Modifications non validées : %1$d fichiers</string>
 
     <string name="git_panel_detached_head">HEAD détaché</string>

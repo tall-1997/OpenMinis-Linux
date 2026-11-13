@@ -2112,6 +2112,9 @@
 
     <string name="git_panel_branch_search">Caută ramuri</string>
 
+
+    <string name="git_panel_branches_section">Ramuri</string>
+
     <string name="git_panel_uncommitted_count">Modificări necomitate: %1$d fișiere</string>
 
     <string name="git_panel_detached_head">HEAD detașat</string>

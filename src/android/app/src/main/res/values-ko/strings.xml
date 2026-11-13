@@ -2105,6 +2105,9 @@
 
     <string name="git_panel_branch_search">브랜치 검색</string>
 
+
+    <string name="git_panel_branches_section">브랜치</string>
+
     <string name="git_panel_uncommitted_count">커밋되지 않은 변경 사항: 파일 %1$d개</string>
 
     <string name="git_panel_detached_head">분리된 HEAD</string>

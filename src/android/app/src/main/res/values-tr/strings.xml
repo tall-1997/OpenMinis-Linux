@@ -2108,6 +2108,9 @@
 
     <string name="git_panel_branch_search">Dalları ara</string>
 
+
+    <string name="git_panel_branches_section">Dallar</string>
+
     <string name="git_panel_uncommitted_count">Commitlanmamış değişiklikler: %1$d dosya</string>
 
     <string name="git_panel_detached_head">kopmuş HEAD</string>

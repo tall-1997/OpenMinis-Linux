@@ -2189,6 +2189,9 @@
 
     <string name="git_panel_branch_search">搜尋分支</string>
 
+
+    <string name="git_panel_branches_section">分支</string>
+
     <string name="git_panel_uncommitted_count">未提交的變更：%1$d 個檔案</string>
 
     <string name="git_panel_detached_head">游離 HEAD</string>
