@@ -1049,23 +1049,30 @@ class SessionListViewModel(
                 // session-list previews + search snippets so the inventory XML
                 // never surfaces as visible session content (iOS strips it the
                 // same way in ChatStore.toChatMessage).
-                if (value.contains("<user-attached-files>")) {
-                    val start = value.indexOf("<user-attached-files>")
-                    val endTag = "</user-attached-files>"
-                    val end = value.indexOf(endTag, start)
-                    val cleaned = if (end >= 0) {
-                        value.substring(0, start) + value.substring(end + endTag.length)
-                    } else {
-                        value.substring(0, start)
-                    }.trim()
-                    cleaned.ifEmpty { null }
-                } else {
-                    value
-                }
+                // [T-hidden-user-note] Host reminder blocks and the legacy
+                // #339 no-reply head go through the SAME stripping authority
+                // as the in-app display and exports (PreviewText), so a
+                // bookkeeping note never paints the preview/search line.
+                val noAttachments = stripAttachedFilesXmlValue(value)
+                com.openminis.app.data.repository.PreviewText
+                    .stripSystemReminders(noAttachments)
+                    .ifEmpty { null }
             }.joinToString("\n")
         } catch (_: Exception) {
             partsJson
         }
+    }
+
+    private fun stripAttachedFilesXmlValue(value: String): String {
+        if (!value.contains("<user-attached-files>")) return value
+        val start = value.indexOf("<user-attached-files>")
+        val endTag = "</user-attached-files>"
+        val end = value.indexOf(endTag, start)
+        return if (end >= 0) {
+            value.substring(0, start) + value.substring(end + endTag.length)
+        } else {
+            value.substring(0, start)
+        }.trim()
     }
 
     private fun parseTitleResponse(text: String): Pair<String, String?> {

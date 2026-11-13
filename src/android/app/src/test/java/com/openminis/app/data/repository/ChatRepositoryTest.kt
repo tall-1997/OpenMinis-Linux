@@ -14,6 +14,8 @@ class ChatRepositoryTest {
     @Test
     fun `stripSystemReminders removes inline reminder block`() {
         val raw = "Hello <system-reminder>do this thing</system-reminder> world"
+        // The regex removes ONLY the block — surrounding word spacing stays
+        // (a greedy \s* would glue "Hello" and "world" together).
         assertEquals("Hello  world", ChatRepository.stripSystemReminders(raw))
     }
 

@@ -78,10 +78,10 @@ internal object AssistantReplyText {
 
     fun visible(raw: String): String {
         var text = raw
-        if (text.contains("<system-reminder>")) text = reminderRegex.replace(text, "")
-        // Legacy #339 no-reply head, if a model echoed it into prose: the
-        // line is host bookkeeping and must never render as reply text.
-        if (text.contains(HOST_NOTE_NO_REPLY_HEAD)) text = text.replace(HOST_NOTE_NO_REPLY_HEAD, "")
+        // Single stripping authority (reminder blocks + legacy #339 no-reply
+        // head) — the display pipeline and this echo path must behave
+        // identically, so no local copy of the regex lives here.
+        text = com.openminis.app.data.repository.PreviewText.stripSystemReminders(text)
         val start = text.indexOf(ATTACHED_START)
         if (start >= 0) {
             val end = text.indexOf(ATTACHED_END, start)

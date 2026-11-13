@@ -178,11 +178,39 @@ internal object PreviewText {
     // they must not show up in the session-list "last message" preview.
     // DOTALL flag covers multi-line reminder bodies; reluctant
     // quantifier so back-to-back reminders don't merge into one match.
+    // Deliberately NO \s* swallowing around the block: a greedy prefix/suffix
+    // would eat the word spacing of an inline block ("Hello <block> world"
+    // → "Helloworld"). Surrounding whitespace stays; a frame-ONLY part
+    // collapses to "" via the isBlank tail below, which is what every
+    // consumer's blank-check needs.
     private val SYSTEM_REMINDER_RE =
         Regex("""<system-reminder>.*?</system-reminder>""", RegexOption.DOT_MATCHES_ALL)
 
-    fun stripSystemReminders(raw: String): String =
-        SYSTEM_REMINDER_RE.replace(raw, "").trim()
+    /**
+     * [T-hidden-user-note] No-reply head that #339 prepended OUTSIDE the
+     * `<system-reminder>` block to every committed note. Production was
+     * removed in #342 (the contract moved to the system prompt), but rows
+     * persisted while it was live still carry it — and because it sits
+     * outside the block, reminder-only stripping leaks it into previews,
+     * exports and session lists. This is the single stripping authority:
+     * every text-preview path goes through [stripSystemReminders], so the
+     * head is removed HERE once, not re-hand-rolled per consumer. Do not
+     * reuse the per-note-head pattern: frame text that is persisted into
+     * the transcript must live inside the existing strip coverage.
+     */
+    internal const val HOST_NOTE_NO_REPLY_HEAD =
+        "[HARNESS NOTE — host bookkeeping, not a user prompt. Do not reply to this note, " +
+            "do not summarize or acknowledge it; continue the work. The request itself carries the actual instruction.]"
+
+    fun stripSystemReminders(raw: String): String {
+        var out = SYSTEM_REMINDER_RE.replace(raw, "")
+        // Legacy #339 rows carry the head outside the reminder block.
+        if (out.contains(HOST_NOTE_NO_REPLY_HEAD)) out = out.replace(HOST_NOTE_NO_REPLY_HEAD, "")
+        // A part that was ONLY harness framing must collapse to empty (not to
+        // leftover newlines) so callers' blank checks skip it — while an
+        // inline block keeps its natural spacing.
+        return if (out.isBlank()) "" else out.trim()
+    }
 
     /**
      * [T-session-list-stub-preview] The preview text for the session list's

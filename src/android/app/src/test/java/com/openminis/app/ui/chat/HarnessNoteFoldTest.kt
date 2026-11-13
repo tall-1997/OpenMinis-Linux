@@ -157,12 +157,13 @@ class HarnessNoteFoldTest {
 
     @Test
     fun `no-reply head does not collide with markers`() {
-        // The head is prepended to every committed note; carrier/eviction
+        // Legacy #339 rows carry the head (the constant now lives in
+        // PreviewText, the single stripping authority); carrier/eviction
         // detection must keep working with it in place.
-        val content = "$HOST_NOTE_NO_REPLY_HEAD\n<system-reminder>\n${HarnessNoteMarkers.RECALL}\n</system-reminder>"
+        val content = "${com.openminis.app.data.repository.PreviewText.HOST_NOTE_NO_REPLY_HEAD}\n<system-reminder>\n${HarnessNoteMarkers.RECALL}\n</system-reminder>"
         assertTrue(HarnessNoteMarkers.isHarnessNote(content))
         val folded = foldHarnessNotes(listOf(user("task"), assistant("a"), user(content)))
         assertEquals(2, folded.size)
-        assertTrue(folded[0].content.contains(HOST_NOTE_NO_REPLY_HEAD))
+        assertTrue(folded[0].content.contains(com.openminis.app.data.repository.PreviewText.HOST_NOTE_NO_REPLY_HEAD))
     }
 }
