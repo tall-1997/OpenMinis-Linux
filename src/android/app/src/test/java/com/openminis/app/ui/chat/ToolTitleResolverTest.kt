@@ -4,23 +4,26 @@ import org.junit.Assert.*
 import org.junit.Test
 
 /**
- * [T-tool-title-single-source GH#344 / T-tool-card-detail-regression]
+ * [T-tool-title-single-source GH#344 / T-tool-card-detail-regression v337]
  *
- * Three successive invariants, each pinned by CI gate
- * scripts/ci/check_tool_title_and_budget_contract.py (section C):
+ * Successive invariants, each pinned by CI gate
+ * scripts/ci/check_tool_title_and_budget_contract.py (sections B/C/D):
  *  #331/#332  a bare snake_case name never reaches the card;
  *  #334       a STREAMING half-path ("Reading /var/min") must never be frozen
  *             into the persisted description;
- *  this fix   COMPLETE args are the single authoritative settlement point, so
- *             already-persisted half-path shadows self-heal on render.
+ *  #336       COMPLETE args are the single authoritative settlement point;
+ *  v337       the model's semantic `tool_title` and the argument summary are
+ *             SEPARATE fields. A path/pattern/command may never become the
+ *             headline — it is rendered as its own secondary line. This is
+ *             the regression the user reported after #336 shipped.
  *
- * 2.0.90 (68fab74a) had no resolver: the card showed the model's `tool_title`
- * verbatim, which worked only while the model reliably supplied it. #334 added
- * argument derivation over PARTIAL JSON and step 2 trusted that derived shadow
- * forever — every tool without a model title collapsed to a truncated path.
- * Only shell_execute (schema carries tool_title, model supplies it) and the
- * thinking card (not a tool block) survived; every other tool block routes
- * through this one resolver, so these tests cover the whole surface.
+ * 2.0.90 (68fab74a) showed the model's `tool_title` verbatim. #334 added
+ * argument derivation over PARTIAL JSON; #336 fixed half-path -> full-path but
+ * kept the collapsed field, so cards without a model title still showed only
+ * a path. Only shell_execute (schema carries tool_title, model supplies it)
+ * and the thinking card (not a tool block) survived. v337 routes every tool
+ * block through one [presentToolCard] settlement, with the companion
+ * [ToolCardPresentationTest] pinning the two-field contract.
  */
 class ToolTitleResolverTest {
 
@@ -38,8 +41,6 @@ class ToolTitleResolverTest {
     }
 
     @Test fun modelTitleOnCompleteArgsBeatsStalePrior() {
-        // A #334 half-path shadow can survive in a persisted block; the model's
-        // own title in the complete args must still win (step 1, no prior trust).
         assertEquals(
             "读技能避坑说明",
             resolveToolTitle("file_read", """{"tool_title":"读技能避坑说明","path":"/a"}""", "Reading /var/min"),
@@ -51,21 +52,23 @@ class ToolTitleResolverTest {
     }
 
     @Test fun bareNameAsToolTitleIsRejected() {
-        // Some tool schemas default tool_title to NAME — that is not a title.
         assertEquals(
-            "Reading /a/b.kt",
+            "Read File",
             resolveToolTitle("file_read", """{"tool_title":"file_read","path":"/a/b.kt"}"""),
         )
         assertEquals(
             "Read Image",
             resolveToolTitle("read_image", """{"tool_title":"read_image"}"""),
         )
+        assertEquals(
+            "Read File",
+            resolveToolTitle("file_read", """{"tool_title":"Read File","path":"/a"}"""),
+        )
     }
 
     // ── #334 regression: streaming partial JSON ──────────────────────────
 
     @Test fun streamingHalfPathNeverBecomesATitle() {
-        // The exact bug: `{"path": "/va` used to derive "Reading /va".
         assertEquals("Read File", resolveToolTitle("file_read", """{"path": "/va"""))
         assertEquals("Read File", resolveToolTitle("file_read", "{\"path\":\""))
         assertEquals("Glob", resolveToolTitle("glob", """{"pattern": "**/*.k"""))
@@ -73,115 +76,101 @@ class ToolTitleResolverTest {
     }
 
     @Test fun partialToolTitleIsPreviewOnly() {
-        // A streaming `tool_title` is the model's own words — a legitimate
-        // transient preview. Partial PATH args never fabricate a title; the
-        // friendly label is replaced by the full derivation once args complete.
         assertEquals(
             "读技能避坑说明",
             resolveToolTitle("file_read", """{"tool_title": "读技能避坑说明"""),
         )
         assertEquals("Read File", resolveToolTitle("file_read", """{"path": "/va"""))
-        assertEquals(
-            "Reading /var/minis/a.kt",
-            resolveToolTitle("file_read", """{"path":"/var/minis/a.kt"}""", "Read File"),
-        )
+        assertEquals("Read File", resolveToolTitle("file_read", """{"path":"/var/minis/a.kt"}""", "Read File"))
     }
 
     // ── Idempotent settlement / history self-heal ─────────────────────────
 
     @Test fun completeArgsOverwriteStaleHalfPath() {
         val full = "/var/minis/skills/superpowers/skills/systematic-debugging/SKILL.md"
-        assertEquals(
-            "Reading $full",
-            resolveToolTitle("file_read", """{"path":"$full"}""", "Reading /var/min"),
-        )
-        // Settlement is idempotent: shadow and full title converge to one value.
+        assertEquals("Read File", resolveToolTitle("file_read", """{"path":"$full"}""", "Reading /var/min"))
         assertEquals(
             resolveToolTitle("file_read", """{"path":"$full"}""", "Reading /var/min"),
             resolveToolTitle("file_read", """{"path":"$full"}""", "Reading $full"),
         )
+        assertEquals(full, presentToolCard("file_read", """{"path":"$full"}""", "Reading /var/min").detail)
     }
 
     @Test fun historyHalfPathShadowSelfHeals() {
-        // 2026-11-13 session DB: 12 cards with description="Reading /var/min…"
-        // but a FULL path still present in `input`. Rendering must recompute.
         assertEquals(
-            "Reading /old/session/path.kt",
+            "Read File",
             displayToolTitle("file_read", """{"path":"/old/session/path.kt"}""", "Reading /var/min"),
         )
         assertEquals(
-            "Viewing /old/image.png",
+            "Read Image",
             displayToolTitle("read_image", """{"path":"/old/image.png"}""", "Reading /var"),
         )
         assertEquals(
-            "Grep resolveToolTitle",
+            "Grep",
             displayToolTitle("grep", """{"pattern":"resolveToolTitle"}""", "Grep resolve"),
         )
     }
 
     @Test fun existingSpecificTitleIsKept() {
-        // A genuine semantic prior (no derived-label prefix) is preserved —
-        // e.g. an online tool that strips tool_title before persisting args.
         assertEquals(
             "读取停滞判定与终止策略现状",
             resolveToolTitle("file_read", """{"path":"/a"}""", "读取停滞判定与终止策略现状"),
         )
     }
 
-    // ── Derivation still works on COMPLETE args for every tool ────────────
+    // ── Argument detail is a SEPARATE line, never the headline ─────────────
 
-    @Test fun untitledFileReadShowsThePath() {
-        assertEquals(
-            "Reading /var/minis/workspace/OpenMinis-Linux/README.md",
-            resolveToolTitle("file_read", """{"path":"/var/minis/workspace/OpenMinis-Linux/README.md"}"""),
-        )
+    @Test fun untitledFileReadShowsThePathAsDetail() {
+        val p = presentToolCard("file_read", """{"path":"/var/minis/workspace/OpenMinis-Linux/README.md"}""")
+        assertEquals("Read File", p.title)
+        assertEquals("/var/minis/workspace/OpenMinis-Linux/README.md", p.detail)
     }
 
-    @Test fun untitledReadImageShowsThePath() {
-        assertEquals(
-            "Viewing /var/minis/attachments/chart.png",
-            resolveToolTitle("read_image", """{"path":"/var/minis/attachments/chart.png"}"""),
-        )
+    @Test fun untitledReadImageShowsThePathAsDetail() {
+        val p = presentToolCard("read_image", """{"path":"/var/minis/attachments/chart.png"}""")
+        assertEquals("Read Image", p.title)
+        assertEquals("/var/minis/attachments/chart.png", p.detail)
     }
 
     @Test fun readImageSupportsImagePathAlias() {
         assertEquals(
-            "Viewing /sdcard/a.png",
-            resolveToolTitle("read_image", """{"image_path":"/sdcard/a.png"}"""),
+            "/sdcard/a.png",
+            presentToolCard("read_image", """{"image_path":"/sdcard/a.png"}""").detail,
         )
     }
 
     @Test fun historyBareNameIsUpgradedFromArgs() {
-        // Restore persisted the bare name; rendering must reconstruct a real title.
         assertEquals(
-            "Reading /old/session/path.kt",
+            "Read File",
             displayToolTitle("file_read", """{"path":"/old/session/path.kt"}""", "file_read"),
         )
         assertEquals(
-            "Viewing /old/image.png",
+            "Read Image",
             displayToolTitle("read_image", """{"path":"/old/image.png"}""", "read_image"),
+        )
+        assertEquals(
+            "/old/session/path.kt",
+            presentToolCard("file_read", """{"path":"/old/session/path.kt"}""", "file_read").detail,
         )
     }
 
-    @Test fun genericFriendlyLabelIsUpgradedFromArgs() {
-        assertEquals(
-            "Reading /new/path.kt",
-            resolveToolTitle("file_read", """{"path":"/new/path.kt"}""", "Read File"),
-        )
+    @Test fun genericFriendlyLabelIsNeverUpgradedIntoAPath() {
+        assertEquals("Read File", resolveToolTitle("file_read", """{"path":"/new/path.kt"}""", "Read File"))
+        assertEquals("/new/path.kt", presentToolCard("file_read", """{"path":"/new/path.kt"}""", "Read File").detail)
     }
 
     @Test fun aliasesRouteThroughTheSingleCanonicalMap() {
-        assertEquals("Viewing /a", resolveToolTitle("describe_image", """{"path":"/a"}"""))
-        assertEquals("${'$'} ls -la", resolveToolTitle("shell", """{"command":"ls -la"}"""))
-        assertEquals("Listing /tmp", resolveToolTitle("ls", """{"path":"/tmp"}"""))
-        assertEquals("Glob *.kt", resolveToolTitle("find_files", """{"pattern":"*.kt"}"""))
+        assertEquals("/a", presentToolCard("describe_image", """{"path":"/a"}""").detail)
+        assertEquals("${'$'} ls -la", presentToolCard("shell", """{"command":"ls -la"}""").detail)
+        assertEquals("/tmp", presentToolCard("ls", """{"path":"/tmp"}""").detail)
+        assertEquals("*.kt", presentToolCard("find_files", """{"pattern":"*.kt"}""").detail)
     }
 
     @Test fun shellAndBrowserSummaries() {
-        assertEquals("${'$'} git status", resolveToolTitle("shell_execute", """{"command":"git status"}"""))
+        assertEquals("${'$'} git status", presentToolCard("shell_execute", """{"command":"git status"}""").detail)
         assertEquals(
             "navigate https://example.com",
-            resolveToolTitle("browser_use", """{"action":"navigate","url":"https://example.com"}"""),
+            presentToolCard("browser_use", """{"action":"navigate","url":"https://example.com"}""").detail,
         )
     }
 
@@ -192,11 +181,12 @@ class ToolTitleResolverTest {
         assertEquals("Grep", resolveToolTitle("grep", "{}", "Grep"))
     }
 
-    @Test fun longPathIsTruncatedWithEllipsis() {
+    @Test fun longDetailIsTruncatedWithEllipsisButTitleStaysClean() {
         val longPath = "/" + "a".repeat(200)
-        val title = resolveToolTitle("file_read", """{"path":"$longPath"}""")
-        assertTrue(title.startsWith("Reading /"))
-        assertTrue(title.endsWith("…"))
-        assertTrue(title.length <= 110)
+        val p = presentToolCard("file_read", """{"path":"$longPath"}""")
+        assertEquals("Read File", p.title)
+        assertTrue(p.detail.startsWith("/"))
+        assertTrue(p.detail.endsWith("…"))
+        assertTrue(p.detail.length <= 161)
     }
 }
