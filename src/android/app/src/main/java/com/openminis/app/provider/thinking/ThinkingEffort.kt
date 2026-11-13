@@ -34,6 +34,19 @@ internal object ThinkingEffort {
         declared?.any { it.equals("ultra", ignoreCase = true) } == true
 
     /**
+     * [T-thinking-ultra-declared] Case-insensitive "the declared set names this
+     * tier". `absent = true` inverts the null case: a NULL set (the catalog
+     * never heard of this model) reads as "not declaring against it", so the
+     * caller keeps sending the tier — the same permissive semantics the old
+     * `contains(...) != false` spelled.
+     */
+    fun declaresTier(declared: List<String>?, tier: String, absent: Boolean = false): Boolean =
+        when {
+            declared == null -> absent
+            else -> declared.any { it.equals(tier, ignoreCase = true) }
+        }
+
+    /**
      * [OpenMinis#356] Legal effort set of DeepSeek V4, used for the
      * `deepseek-flash` alias whose catalog row predates the model. Values
      * outside it are clamped down by [clampEffort] (xhigh → high).
@@ -57,11 +70,15 @@ internal object ThinkingEffort {
     fun clampOffEffort(offEffort: String?, declared: List<String>?): String? {
         if (offEffort == null) return null
         if (declared.isNullOrEmpty()) return offEffort
-        if (declared.contains(offEffort)) return offEffort
+        // [T-thinking-ultra-declared] Same case-insensitive rule as
+        // clampEffort: a capitalized "None"/"Low" in the declared set is the
+        // same tier as its lowercase spelling.
+        declared.firstOrNull { it.equals(offEffort, ignoreCase = true) }
+            ?.let { return it.lowercase() }
         // [OpenMinis#377] Scoped to "none": see the doc above.
         if (offEffort != "none") return offEffort
         val ladder = listOf("none", "minimal", "low")
-        if (ladder.none { declared.contains(it) }) return null
+        if (ladder.none { l -> declared.any { d -> d.equals(l, ignoreCase = true) } }) return null
         return clampEffort(offEffort, declared)
     }
 
@@ -92,7 +109,15 @@ internal object ThinkingEffort {
     /** Snap a requested tier onto the model's declared set, walking DOWN then up. */
     fun clampEffort(effort: String, values: List<String>?): String {
         if (values.isNullOrEmpty()) return effort
-        if (values.contains(effort)) return effort
+        // [T-thinking-ultra-declared] Case-insensitive throughout: the catalog
+        // layer (selectableThinkingLevels) already lowercases the declared set,
+        // but a relay can publish "Max"/"Ultra" capitalized — a case-sensitive
+        // ladder lookup silently dropped them and clamped ULTRA down to "high"
+        // (CI: declared ultra tier matches case-insensitively on the wire).
+        // The emitted spelling is normalized to lowercase, the wire convention
+        // every real API uses.
+        values.firstOrNull { it.equals(effort, ignoreCase = true) }
+            ?.let { return it.lowercase() }
         // [T-thinking-ultra-declared] "ultra" sits above "max" on the ladder
         // so a declared ["high","max","ultra"] set clamps a ULTRA request to
         // "ultra" (exact hit above) and an undeclared set still walks DOWN to
@@ -103,8 +128,8 @@ internal object ThinkingEffort {
         val want = ladder.indexOf(effort)
         if (want < 0) return effort
         val declared = values.mapNotNull { v ->
-            val i = ladder.indexOf(v)
-            if (i >= 0) i to v else null
+            val i = ladder.indexOf(v.lowercase())
+            if (i >= 0) i to v.lowercase() else null
         }.sortedBy { it.first }
         if (declared.isEmpty()) return effort
         return declared.lastOrNull { it.first <= want }?.second ?: declared.first().second

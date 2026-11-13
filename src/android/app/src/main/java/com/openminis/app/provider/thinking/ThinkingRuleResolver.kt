@@ -511,7 +511,7 @@ object ThinkingRuleResolver {
                         }
                         isSelfReasoningFamily -> {
                             if (ctx.usesUnifiedReasoningEffort ||
-                                ctx.declaredEffortValues?.contains(offEffort) == true
+                                ThinkingEffort.declaresTier(ctx.declaredEffortValues, offEffort)
                             ) {
                                 body.put("reasoning_effort", offEffort)
                                 return offEffort to offEffort
@@ -519,11 +519,11 @@ object ThinkingRuleResolver {
                             return null to null
                         }
                         ctx.supportsReasoning != false -> {
-                            if (ctx.declaredEffortValues?.contains(offEffort) != false) {
-                                body.put("reasoning_effort", offEffort)
-                                return offEffort to offEffort
+                            if (!ThinkingEffort.declaresTier(ctx.declaredEffortValues, offEffort, absent = true)) {
+                                return null to null
                             }
-                            return null to null
+                            body.put("reasoning_effort", offEffort)
+                            return offEffort to offEffort
                         }
                         else -> return null to null
                     }

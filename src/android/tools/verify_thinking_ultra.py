@@ -50,15 +50,19 @@ LADDER = ["none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"]
 def clamp_effort(effort, values):
     if not values:
         return effort
-    if effort in values:
+    # [T-thinking-ultra-declared] case-insensitive exact hit, normalized to
+    # the lowercase wire convention (a relay publishing "Max"/"Ultra" names
+    # the same tier as its lowercase spelling).
+    for v in values:
+        if v.lower() == effort.lower():
+            return v.lower()
+    if effort not in LADDER:
         return effort
-    want = LADDER.index(effort) if effort in LADDER else -1
-    if want < 0:
-        return effort
-    declared = sorted((LADDER.index(v), v) for v in values if v in LADDER)
+    want = LADDER.index(effort)
+    declared = sorted((LADDER.index(v.lower()), v.lower()) for v in values if v.lower() in LADDER)
     if not declared:
         return effort
-    below = [v for i, v in declared if i <= want]
+    below = [w for i, w in declared if i <= want]
     return below[-1] if below else declared[0][1]
 
 
@@ -137,6 +141,10 @@ ok &= check("ultra on high-only set snaps to high",
             clamp_effort("ultra", ["high"]), "high")
 ok &= check("max on high-ultra sparse set walks down to high",
             clamp_effort("max", ["high", "ultra"]), "high")
+ok &= check("caps exact hit Max→max (CI regression)",
+            clamp_effort("max", ["high", "Max", "Ultra"]), "max")
+ok &= check("caps exact hit Ultra→ultra (CI regression)",
+            clamp_effort("ultra", ["high", "Max", "Ultra"]), "ultra")
 
 # Chain 3: wire emission
 ok &= check("ULTRA folds to max when undeclared",
