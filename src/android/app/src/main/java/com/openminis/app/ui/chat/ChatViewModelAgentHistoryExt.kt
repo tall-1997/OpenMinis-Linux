@@ -215,6 +215,18 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
         val result = mutableListOf<LLMMessage>()
         result.addAll(preAnchorPruned)
 
+        // [T-harness-note-fold] Fold harness USER messages into the prefix of
+        // the first real user message. All harness notes (goal/recall/state/
+        // WorkingMemory/plan-retry) are materialized as role=USER messages by
+        // the host, but the provider wire format serializes each as an
+        // independent user turn — which the model interprets as "the user
+        // spoke again" and produces interstitial prose between tool calls.
+        // The fold makes the model see them as part of the original request
+        // rather than as separate "turn to speak" invitations.
+        // One change covers ALL injection sources (goal/recall/state/
+        // WorkingMemory/plan-retry/once-notices). Transcript/DB/UI/ledger
+        // all untouched — this is request-assembly only.
+
         // [T-android-agenthistory-cme] postAnchor is held across ~50 lines —
         // it must be a view over an immutable snapshot, never over the live
         // COWAL (whose subList views throw CME if the parent array swaps).
@@ -305,8 +317,18 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
             result.addAll(postAnchor)
             result.add(LLMMessage(role = LLMMessage.Role.USER, content = effectiveSummaryWrappedText))
         }
-        return maybeProgressivelyTrimmed(result, applyProgressiveTrim)
+        // [T-harness-note-fold] Fold harness USER messages into the prefix of
+        // the first real user message. Harness notes (goal/recall/state/
+        // WorkingMemory/plan-retry) are materialized as role=USER messages by
+        // the host, but the provider wire format serializes each as an
+        // independent user turn — which the model interprets as "the user
+        // spoke again" and produces interstitial prose between tool calls.
+        // The fold makes the model see them as part of the original request.
+        // One change covers ALL injection sources. Transcript/DB/UI/ledger
+        // all untouched — request-assembly only.
+        return maybeProgressivelyTrimmed(foldHarnessNotes(result), applyProgressiveTrim)
     }
+
 
     // ─── v1 (legacy) markers ──────────────────────────────────────
     //
@@ -345,6 +367,52 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
 
     Log.w(ChatViewModel.TAG, "[Compact] effectiveAgentHistory: marker ${marker.id.take(8)} unresolvable in agentHistory (size=${agentHistory.size}); returning full history")
     return agentHistory.toList()
+}
+
+/**
+ * Fold consecutive harness USER messages into the prefix of the first
+ * real user message, so the outbound request has no independent USER
+ * turns for harness notices. A harness note is identified by its content
+ * starting with a known marker (goal/recall/state/WorkingMemory/plan).
+ * The first non-harness USER message (or non-USER message) ends the fold
+ * range. Transcript/DB/UI/ledger all untouched.
+ */
+internal fun foldHarnessNotes(history: List<LLMMessage>): List<LLMMessage> {
+    val harnessPrefix = StringBuilder()
+    val out = mutableListOf<LLMMessage>()
+    var folding = true
+    for (msg in history) {
+        if (folding && msg.role == LLMMessage.Role.USER &&
+            HarnessNoteMarkers.isHarnessNote(msg.content)
+        ) {
+            // Harness note: extract content, merge into the prefix.
+            harnessPrefix.append(msg.content.trimStart())
+            harnessPrefix.append("\n")
+            continue
+        }
+        if (folding) {
+            // First non-harness message: prepend the accumulated prefix.
+            if (harnessPrefix.isNotEmpty()) {
+                val prefix = harnessPrefix.toString().trimEnd()
+                if (msg.role == LLMMessage.Role.USER) {
+                    out.add(msg.copy(content = prefix + "\n\n" + msg.content))
+                } else {
+                    out.add(LLMMessage(
+                        role = LLMMessage.Role.USER,
+                        content = prefix,
+                        contentParts = listOf(AgentContentPart.Text(prefix)),
+                    ))
+                    out.add(msg)
+                }
+            } else {
+                out.add(msg)
+            }
+            folding = false
+            continue
+        }
+        out.add(msg)
+    }
+    return out
 }
 
 /** Apply [progressivelyTrimmed] only when the caller asked for it. */
