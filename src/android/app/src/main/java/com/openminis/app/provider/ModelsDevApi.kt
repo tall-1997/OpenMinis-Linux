@@ -100,6 +100,12 @@ object ModelsDevApi {
 
     // MARK: - Public: Enrich models with models.dev data (impl in ModelsDevEnrich.kt)
 
+    fun enrichModel(model: LLMModel): LLMModel = modelsDevEnrichModel(model)
+
+    fun enrichModelNow(model: LLMModel): LLMModel = modelsDevEnrichModelNow(model)
+
+    fun enrichModels(models: List<LLMModel>): List<LLMModel> = modelsDevEnrichModels(models)
+
     internal fun applyDevMatch(model: LLMModel): LLMModel {
         val registry = loadRegistry() ?: return model
         val match = resolveDevModel(model, registry) ?: return model
