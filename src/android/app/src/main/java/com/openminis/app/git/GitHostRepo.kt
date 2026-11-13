@@ -1,5 +1,6 @@
 package com.openminis.app.git
 
+import android.util.Log
 import com.openminis.app.sandbox.SessionWorkspace
 import org.eclipse.jgit.api.Git
 import org.eclipse.jgit.diff.DiffAlgorithm
@@ -41,6 +42,9 @@ import java.io.FileInputStream
  * All methods are synchronous — callers wrap in coroutines.
  */
 object GitHostRepo {
+
+    /** logcat tag for every swallowed-ref failure in the git panel stack. */
+    private const val TAG = "GitPanel"
 
     /** Host directory of the session workspace (bind root of /var/minis/workspace). */
     fun workspaceDir(filesDir: File, sessionId: String): File =
@@ -201,7 +205,24 @@ object GitHostRepo {
             val repo = g.repository
             val locals = ArrayList<GitCli.GitBranchRef>()
             val remotes = ArrayList<GitCli.GitBranchRef>()
-            val branchList = g.branchList().call()
+            // [T-git-panel-refs-degrade] branchList().call() runs the full
+            // ListBranchCommand on top of RefDatabase enumeration; if THAT
+            // enumeration misbehaves at runtime (some ART environments return
+            // an empty listing where the JVM probe lists every ref), the
+            // whole function used to explode into the caller's
+            // runCatching→emptyList and the panel painted "no branches" over
+            // a healthy repo. Enumerate through the RefDatabase directly —
+            // same data, one layer less to fail — and keep the command as a
+            // fallback for THROWN failures only; an empty-but-clean result
+            // rides the ViewModel's sandbox degrade instead (the command
+            // layer would only return the same empty listing).
+            val branchList = runCatching {
+                repo.refDatabase.getRefsByPrefix("refs/heads/")
+            }.recoverCatching {
+                g.branchList().call().map { it }
+            }.onFailure {
+                Log.w(TAG, "branch enumeration failed: ${it.javaClass.simpleName}: ${it.message}")
+            }.getOrDefault(emptyList())
             val walk = RevWalk(repo)
             walk.isRetainBody = false
             try {
@@ -224,7 +245,11 @@ object GitHostRepo {
                 // Remote-tracking branches, newest commit first (the sandbox
                 // sorts by -committerdate desc; packed-refs order is arbitrary),
                 // capped to keep the switcher readable.
-                val remoteRefs = repo.refDatabase.getRefsByPrefix("refs/remotes/origin/")
+                val remoteRefs = runCatching {
+                    repo.refDatabase.getRefsByPrefix("refs/remotes/origin/")
+                }.onFailure {
+                    Log.w(TAG, "remote-ref enumeration failed: ${it.javaClass.simpleName}: ${it.message}")
+                }.getOrDefault(emptyList())
                 val byRecency = remoteRefs.sortedByDescending { ref ->
                     try {
                         walk.parseCommit(ref.objectId).commitTime
