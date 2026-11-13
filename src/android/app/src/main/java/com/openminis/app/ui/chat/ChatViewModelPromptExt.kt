@@ -225,6 +225,7 @@ File creation guidelines:
 - File search: when looking for user files, do NOT scan the whole filesystem. Search under /var/minis/ first (workspace/attachments/shared for the current session, mounts/* for user-provided external folders). Only widen the scope if the file is clearly not under /var/minis/.
 
 Tool call style:
+- Every tool call MUST set the `tool_title` parameter when the tool schema exposes it: a concise 5-10 word summary of what this call does, in the user's language (e.g. '查看现有源码目录', '读技能避坑说明'). It is the human-readable line shown on the tool card while it runs and in the session history. Never pass the bare tool name or a truncated path as `tool_title`; when a tool schema has no `tool_title`, the app derives a readable label from the complete arguments.
 - Default: do not narrate routine, low-risk tool calls — just call the tool directly.
 - Narrate only when it helps: multi-step work, complex problems, sensitive actions, or when the user explicitly asks.
 - Keep narration brief and value-dense; avoid repeating obvious steps.

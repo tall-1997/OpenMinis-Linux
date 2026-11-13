@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import re
 import sys
+import json as _json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -32,6 +33,7 @@ RESOLVER = CHAT / "ChatToolTitleResolver.kt"
 LOOP = CHAT / "ChatViewModelAgentLoopExt.kt"
 EXEC_TOOL = CHAT / "ChatViewModelExecuteToolExt.kt"
 TURN_EXEC = CHAT / "ChatViewModelToolTurnExec.kt"
+PROMPT = CHAT / "ChatViewModelPromptExt.kt"
 UI_FILES = [
     "ChatAssistantMessageUI.kt",
     "ChatComposerWidgets.kt",
@@ -167,6 +169,130 @@ for name in UI_FILES:
           f"{name}: renderer must use displayToolTitle, not toolTitle.ifEmpty {{ toolName }}")
     check("displayToolTitle(" in body,
           f"{name}: missing displayToolTitle() render fallback")
+
+# ---- C. tool-card detail regression (GH#334 → this fix) -------------------
+# #334 made deriveToolTitle consume STREAMING PARTIAL JSON via
+# extractPartialJsonString, so a half-arrived `{"path": "/va` produced
+# "Reading /va"; step 2 then trusted that derived shadow as an already
+# "specific" prior FOREVER, so the complete args at ToolCallComplete never
+# recomputed it and the half-path was persisted as `description`. The renderer
+# reused this same ladder, so already-persisted cards could not heal either.
+# (Evidence: 2.0.90 = 68fab74a has NO deriveToolTitle; `git log -S 'Reading $it'`
+# lands exactly on c56c2ccc; session DB 11-07 file_read 81/81 carry tool_title
+# vs 11-13 8/66 with 12 "Reading /var/min" shadows whose persisted `input`
+# is nevertheless the FULL path.)
+TEST = ROOT / "src/android/app/src/test/java/com/openminis/app/ui/chat/ToolTitleResolverTest.kt"
+test_src = read(TEST)
+check("extractPartialJsonString(" not in res,
+      "resolver: deriveToolTitle must NOT read streaming partial JSON — that produced the 'Reading /var/min' half-path #334 regression")
+check("JSONObject(argsJson)" in res,
+      "resolver: a complete JSONObject parse must be the single authoritative settlement point")
+check("startsWith(prior)" in res,
+      "resolver: a stale derived shadow (prefix of the fresh full derivation) must yield to the recomputed title — idempotent settle / history self-heal")
+check("fun deriveToolTitle(toolName: String, json: org.json.JSONObject)" in res,
+      "resolver: deriveToolTitle must consume a parsed JSONObject, not raw argsJson")
+for t in (
+    "streamingHalfPathNeverBecomesATitle",
+    "completeArgsOverwriteStaleHalfPath",
+    "historyHalfPathShadowSelfHeals",
+    "partialToolTitleIsPreviewOnly",
+    "modelTitleOnCompleteArgsBeatsStalePrior",
+):
+    check(f"fun {t}()" in test_src,
+          f"ToolTitleResolverTest: missing regression test {t}()")
+check('assertEquals("Reading /va",' not in test_src and
+      "fun streamingPartialArgsStillProduceATitle()" not in test_src,
+      "ToolTitleResolverTest: the old 'streaming partial args produce a half-path title' expectation must be gone")
+
+# Behavioural replica of the Kotlin ladder (file_read / grep / glob subset).
+# Python-only so the gate runs locally without the JVM; the Kotlin unit tests
+# are the authoritative mirror executed by CI.
+DERIVED_PREFIXES = (
+    "Reading ", "Writing ", "Editing ", "Viewing ", "Listing ", "Glob ", "Grep ",
+    "$ ", "Checkpoint ", "Multi-edit ", "Run ", "browser ", "Search ", "Fetch ",
+    "Memory ", "Sessions ", "Session ", "Agent ", "Plan ", "Ask ", "Schedule ", "Tap ",
+)
+
+def _is_bare(s: str) -> bool:
+    return ("_" in s and s == s.lower()
+            and all(c == "_" or c.isdigit() or (c.isalpha() and c.islower()) for c in s))
+
+def replica_resolve(tool: str, args: str, prior: str = "") -> str:
+    """Faithful Python mirror of ChatToolTitleResolver.resolveToolTitle (the
+    file_read / grep / glob subset). Kept in lockstep with the Kotlin ladder:
+    step1 model title -> step2 COMPLETE-args idempotent settlement ->
+    step3 streaming/dirty never derives. The JVM unit tests are authoritative;
+    this replica exists so the gate runs locally without a compile."""
+    friendly = {"file_read": "Read File", "grep": "Grep", "glob": "Glob"}.get(tool, "Tool")
+    complete = None
+    try:
+        parsed = _json.loads(args)
+        if isinstance(parsed, dict):
+            complete = parsed
+    except Exception:
+        pass
+    # step 1 — model's semantic tool_title wins (complete args or streaming preview)
+    model = ""
+    if complete is not None:
+        t = str(complete.get("tool_title", "")).strip()
+        if t and t != tool and t != friendly and not _is_bare(t):
+            model = t
+    if not model:
+        m = re.search(r'"tool_title"\s*:\s*"([^"]*)', args)
+        if m:
+            t = m.group(1).strip()
+            if t and t != tool and t != friendly and not _is_bare(t):
+                model = t
+    if model:
+        return model
+    p = prior.strip()
+    semantic = bool(p) and p != tool and p != friendly and not _is_bare(p)
+    if complete is None:
+        # step 3 — streaming/dirty JSON: NEVER derive; semantic prior or friendly
+        return p if semantic else friendly
+    # step 2 — COMPLETE args: the single authoritative, idempotent settlement
+    derived = None
+    if tool == "file_read" and str(complete.get("path", "")).strip():
+        derived = "Reading " + str(complete["path"])
+    elif tool in ("grep", "glob") and str(complete.get("pattern", "")).strip():
+        derived = ("Grep " if tool == "grep" else "Glob ") + str(complete["pattern"])
+    shadow = derived is not None and (
+        any(p.startswith(pre) for pre in DERIVED_PREFIXES) or derived.startswith(p)
+    )
+    if semantic and not shadow:
+        return p
+    return derived if derived is not None else friendly
+
+FULL = "/var/minis/skills/superpowers/skills/systematic-debugging/SKILL.md"
+check(replica_resolve("file_read", '{"path": "/va') == "Read File",
+      "replica: streaming half-JSON must NOT derive 'Reading /va' — friendly preview instead")
+check(replica_resolve("glob", '{"pattern": "**/*.k') == "Glob",
+      "replica: streaming glob args must not produce a half-pattern title")
+check(replica_resolve("file_read", '{"path":"%s"}' % FULL, "Reading /var/min") == "Reading " + FULL,
+      "replica: complete args overwrite the stale half-path shadow with the FULL path")
+check(replica_resolve("file_read", '{"path":"%s"}' % FULL, "Reading /var/min")
+      == replica_resolve("file_read", '{"path":"%s"}' % FULL, "Reading " + FULL),
+      "replica: settlement is idempotent — the shadow cannot survive a complete-args recompute")
+check(replica_resolve("file_read", '{"tool_title":"读技能避坑说明","path":"/a"}', "Reading /a") == "读技能避坑说明",
+      "replica: model tool_title beats a stale derived shadow")
+check(replica_resolve("file_read", '{"tool_title":"读 systematic-debugging","path":"/a"}') == "读 systematic-debugging",
+      "replica: Chinese semantic detail is preserved as the card title")
+check(replica_resolve("file_read", '{"path":"/a"}', "读取停滞判定与终止策略现状") == "读取停滞判定与终止策略现状",
+      "replica: a genuine semantic prior is kept (not mistaken for a derived shadow)")
+check(replica_resolve("grep", "{}", "Grep") == "Grep",
+      "replica: empty-args history card stays a friendly label, never a bare snake_case name")
+check(replica_resolve("grep", '{"pattern":"resolveToolTitle"}', "Grep resolve") == "Grep resolveToolTitle",
+      "replica: prefix-shadow self-heal holds for every derived tool, not just file_read")
+
+# The model-side half of the fix: a contract line in the system prompt keeps
+# `tool_title` flowing for tools whose schema exposes it (shell_execute always
+# had it — that is why it alone survived #334). App-side derivation is the
+# fallback; this line makes the semantic detail the common case again.
+prompt = read(PROMPT)
+check("Every tool call MUST set the `tool_title` parameter" in prompt,
+      "ChatViewModelPromptExt: the system-prompt tool_title contract is missing — semantic card details will keep depending on model whim")
+check("Never pass the bare tool name or a truncated path as `tool_title`" in prompt,
+      "ChatViewModelPromptExt: the contract must forbid bare names / truncated paths")
 
 # ---- verdict ---------------------------------------------------------------
 if errors:
