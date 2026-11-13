@@ -454,17 +454,15 @@ object ThinkingRuleResolver {
     ): Pair<String?, String?> {
         val lid = ctx.modelId.lowercase()
 
-        // [T-thinking-off-explicit] Strict-enum families never receive an off tier:
-        // sending "minimal" to MiMo/Agnes killed the whole request (iOS c5efeb1e).
+        // [T-thinking-off-explicit] Strict-enum families (MiMo/Agnes) never
+        // receive an off tier: "minimal" killed the whole request (iOS
+        // c5efeb1e). [OpenMinis#377] Every other OFF tier goes through the
+        // declared-set clamp — the allowlist value ("none" on official OpenAI,
+        // "minimal" on Ark) is only correct for models whose protocol documents
+        // it; the clamp snaps DOWN onto the lowest declared tier and omits the
+        // field when the model only declares high/max (forcing "high" would
+        // invert the user's OFF intent).
         val strictEffortEnum = lid.contains("mimo") || lid.contains("agnes")
-        // [OpenMinis#377] Every OFF tier goes through the declared-set clamp. The
-        // allowlist value ("none" on official OpenAI, "minimal" on Ark) is only
-        // correct for the models whose protocol documents it: a compaction /
-        // title / sub-agent request pinned to OFF used to send `reasoning_effort
-        // = "none"` to gpt-5 / o-series, which reject it (400) because their
-        // legal sets stop at low/minimal. The clamp snaps the value DOWN onto the
-        // lowest declared tier and omits the field entirely when the model only
-        // declares high/max (forcing "high" would invert the user's OFF intent).
         val offEffort = if (strictEffortEnum) {
             null
         } else {
@@ -476,12 +474,8 @@ object ThinkingRuleResolver {
 
             is ThinkingWireFormat.ReasoningEffortNested -> {
                 if (!ctx.level.isEnabled) return null to null
-                // [T-thinking-ultra-declared] Same literal-ultra exception as
-                // the ReasoningEffort generic path: a declared "ultra" tier is
-                // the backend's own vocabulary, not the client-side fold.
-                val effort = if (ctx.level == ThinkingLevel.ULTRA &&
-                    ThinkingEffort.declaresUltraTier(ctx.declaredEffortValues)
-                ) "ultra" else ThinkingEffort.wireEffort(ctx.level)
+                // [T-thinking-ultra-declared] declared "ultra" = literal tier.
+                val effort = ThinkingEffort.effortOrDeclaredUltra(ctx)
                 body.put("reasoning", JSONObject().put("effort", effort))
                 effort to effort
             }
@@ -489,27 +483,20 @@ object ThinkingRuleResolver {
             is ThinkingWireFormat.ReasoningEffort -> {
                 val isOpenAINative = lid.startsWith("o") || lid.startsWith("gpt-5")
                 if (!ctx.level.isEnabled) {
-                    // OFF is a separate dispatch on Android, reproduced verbatim from the
-                    // pre-refactor chain. Order matters: OpenAI-native ids send the tier
-                    // unconditionally; the self-reasoning families only do so when the
-                    // endpoint is a unified gateway OR the model declares that tier; and
-                    // everything else sends it unless the model declares a set without it.
-                    // [OpenMinis#377] `offEffort` has already been snapped onto the
-                    // model's declared set by clampOffEffort (and is null when no
-                    // legal off tier exists). It is NOT further clamped through
-                    // clampEffort: that walks UP when nothing at or below is
-                    // declared, so a ["high","max"] model would turn an OFF
-                    // request into "high", inverting the user's intent — which is
-                    // why clampOffEffort returns null instead.
+                    // OFF dispatch, verbatim from the pre-refactor chain: OpenAI-
+                    // native sends unconditionally; self-reasoning families only
+                    // via unified gateway or declared tier; everything else
+                    // unless the declared set lacks it. [OpenMinis#377]
+                    // `offEffort` is already snapped by clampOffEffort (null when
+                    // no legal off tier) and NOT re-clamped — clampEffort walks
+                    // UP, which would invert an OFF intent.
                     if (offEffort == null) return null to null
-                    val isSelfReasoningFamily = listOf("deepseek", "glm", "kimi", "minimax")
-                        .any { lid.contains(it) }
                     when {
                         isOpenAINative -> {
                             body.put("reasoning_effort", offEffort)
                             return offEffort to offEffort
                         }
-                        isSelfReasoningFamily -> {
+                        isSelfReasoningFamily(lid) -> {
                             if (ctx.usesUnifiedReasoningEffort ||
                                 ThinkingEffort.declaresTier(ctx.declaredEffortValues, offEffort)
                             ) {
@@ -529,12 +516,8 @@ object ThinkingRuleResolver {
                     }
                 }
                 if (isOpenAINative) {
-                    // [T-thinking-ultra-declared] OpenAI-native ids (o*/gpt-5*)
-                    // get the same declared-ultra exception before the fold.
                     val effort = ThinkingEffort.clampEffortForModel(
-                        if (ctx.level == ThinkingLevel.ULTRA &&
-                            ThinkingEffort.declaresUltraTier(ctx.declaredEffortValues)
-                        ) "ultra" else ThinkingEffort.wireEffort(ctx.level),
+                        ThinkingEffort.effortOrDeclaredUltra(ctx),
                         lid,
                     )
                     body.put("reasoning_effort", effort)
@@ -546,45 +529,29 @@ object ThinkingRuleResolver {
                 // thinking field at all.
                 val declaresEffort = !ctx.declaredEffortValues.isNullOrEmpty()
                 if (!ctx.usesUnifiedReasoningEffort && !declaresEffort &&
-                    listOf("deepseek", "glm", "kimi", "minimax").any { lid.contains(it) }
+                    isSelfReasoningFamily(lid)
                 ) {
                     return null to null
                 }
-                // [OpenMinis#163] xAI-scoped skip. grok-build-0.1 answers
-                // reasoning_effort with "HTTP 400: Model grok-build-0.1 does not
-                // support parameter reasoningEffort"; the catalog describes
-                // exactly that state as "reasoning": true with
-                // "reasoning_options": [] (also true of grok-4.20-0309-reasoning).
-                //
-                // DELIBERATELY NOT data-driven across all vendors. The same
-                // empty-tier shape appears on 2090 bundled catalog entries —
-                // relay-hosted Claude, GPT-5, Qwen, and grok behind poe /
-                // fastrouter / anyapi — and honouring it everywhere would change
-                // the wire format for all of them at once. Omitting the field is
-                // arguably more correct for some of those too (Anthropic uses
-                // thinking.budget_tokens, not effort), but none of those routes
-                // has been verified, so the skip stays at the vendor where the
-                // 400 was actually observed. Widening it later is a one-line
-                // change to this condition, backed by new evidence.
-                //
-                // Ordered AFTER the family list on purpose: that list keys on
-                // "declares nothing" and must keep firing for relay-hosted
-                // deepseek/glm/kimi/minimax ids the catalog is silent about.
-                // Unified-effort gateways stay exempt for the same reason as
-                // above — they normalize the field and own their model list.
+                // [OpenMinis#163] xAI-scoped skip: grok-build-0.1 400s on
+                // reasoning_effort; the catalog describes that state as
+                // "reasoning": true with "reasoning_options": [] (also
+                // grok-4.20-0309-reasoning). DELIBERATELY NOT data-driven across
+                // all vendors — the same empty-tier shape appears on 2090 bundled
+                // entries (relay-hosted Claude/GPT-5/Qwen/grok) and honouring it
+                // everywhere would change the wire format for all at once;
+                // none of those routes is verified. Ordered AFTER the family
+                // list, which keys on "declares nothing" and must keep firing
+                // for relay-hosted deepseek/glm/kimi/minimax ids; unified-effort
+                // gateways normalize the field and own their model list.
                 if (ctx.isXAI && !ctx.usesUnifiedReasoningEffort &&
                     ctx.declaresNoEffortTiers && !declaresEffort
                 ) {
                     return null to null
                 }
                 if (ctx.supportsReasoning == false) return null to null
-                // [T-thinking-ultra-declared] wireEffort folds ULTRA→"max" for
-                // every model; a backend that literally declares "ultra" gets
-                // the literal instead, so its named top tier is reachable.
                 val requested = ThinkingEffort.clampEffortForModel(
-                    if (ctx.level == ThinkingLevel.ULTRA &&
-                        ThinkingEffort.declaresUltraTier(ctx.declaredEffortValues)
-                    ) "ultra" else ThinkingEffort.wireEffort(ctx.level),
+                    ThinkingEffort.effortOrDeclaredUltra(ctx),
                     lid,
                 )
                 val clamped = ThinkingEffort.clampEffort(requested, ctx.declaredEffortValues)
@@ -816,4 +783,9 @@ object ThinkingRuleResolver {
         level: ThinkingLevel,
         maxTokens: Int,
     ): Map<String, Any> = ThinkingShapes.anthropicThinkingShape(modelId, supportsReasoning, level, maxTokens)
+
+    /** [T-thinking-ultra-declared] The self-reasoning family skip list, shared
+     *  by the OFF and generic ReasoningEffort branches (was two inline copies). */
+    private fun isSelfReasoningFamily(lid: String): Boolean =
+        listOf("deepseek", "glm", "kimi", "minimax").any { lid.contains(it) }
 }

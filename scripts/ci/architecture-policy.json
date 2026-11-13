@@ -124,7 +124,6 @@
     "src/android/app/src/main/java/com/openminis/app/data/repository/SkillRepository.kt": 2321,
     "src/android/app/src/main/java/com/openminis/app/debug/DebugMethodRegistry.kt": 878,
     "src/android/app/src/main/java/com/openminis/app/debug/DebugRPCHandler.kt": 1423,
-    "src/android/app/src/main/java/com/openminis/app/provider/ModelsDevApi.kt": 809,
     "src/android/app/src/main/java/com/openminis/app/provider/anthropic/AnthropicProvider.kt": 1267,
     "src/android/app/src/main/java/com/openminis/app/provider/openai/OpenAIProvider.kt": 1689,
     "src/android/app/src/main/java/com/openminis/app/provider/openai/OpenAIRawStream.kt": 1132,

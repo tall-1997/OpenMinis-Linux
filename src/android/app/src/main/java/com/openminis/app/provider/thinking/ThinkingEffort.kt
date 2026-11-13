@@ -34,6 +34,23 @@ internal object ThinkingEffort {
         declared?.any { it.equals("ultra", ignoreCase = true) } == true
 
     /**
+     * [T-thinking-ultra-declared] The wire effort for [ctx]'s level, with the
+     * declared-ultra exception folded in: wireEffort maps ULTRA→"max" for
+     * every model, but a backend that literally declares "ultra" names the
+     * tier itself and gets the literal — folding it to "max" would silently
+     * demote the declared top tier (and "max" is not even in that set, so
+     * clampEffort would then walk DOWN to "high", two rungs below the ask).
+     * One helper so the three emitter branches (nested / OpenAI-native /
+     * generic) cannot drift apart on the rule.
+     */
+    fun effortOrDeclaredUltra(ctx: ThinkingResolveContext): String =
+        if (ctx.level == ThinkingLevel.ULTRA && declaresUltraTier(ctx.declaredEffortValues)) {
+            "ultra"
+        } else {
+            wireEffort(ctx.level)
+        }
+
+    /**
      * [T-thinking-ultra-declared] Case-insensitive "the declared set names this
      * tier". `absent = true` inverts the null case: a NULL set (the catalog
      * never heard of this model) reads as "not declaring against it", so the

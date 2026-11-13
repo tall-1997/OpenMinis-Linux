@@ -2332,17 +2332,11 @@ class ChatViewModel(
 
     /**
      * [T-android-thinking-level-arch] The thinking ceiling the currently-bound
-     * model actually supports. Prefers the active ModelEntry's
-     * effectiveMaxThinkingLevel (so a user override on the entry is honored);
-     * falls back to the resolved model's catalog default when no entry is
-     * pinned (e.g. a group-resolved turn) or the model isn't known.
-     *
-     * [T-thinking-ultra-manual] The no-model fallback is ULTRA, matching the
-     * UNKNOWN_REASONING_EFFORT default set the repository stamps on unknown
-     * models (low..max) plus the ULTRA rung the session schema accepts. The
-     * wire layer still clamps onto whatever the model actually declares, so a
-     * generous ceiling here can only widen the picker, never the request.
-     */
+     * model actually supports: the active ModelEntry's effectiveMaxThinking-
+     * Level first (override honored), else the catalog default. The no-model
+     * fallback is ULTRA ([T-thinking-ultra-manual]): the wire layer clamps
+     * onto whatever the model declares, so a generous ceiling only widens
+     * the picker, never the request.     */
     private val currentModelMaxThinkingLevel: ThinkingLevel
         get() {
             val entry = _activeEntryId.value?.let { id ->

@@ -731,11 +731,7 @@ class ProviderRepository(
             }
             ModelEntry(
                 providerInstanceId = instanceId,
-                // [T-custom-model-enrich-wiring] Persist catalog truth, not the
-                // unknown-model stamp: the read path (ModelEntry.model) stamps
-                // at read time, and a stamped baseModel would mask later
-                // catalog refreshes (enrichWithDevData prefers a non-null
-                // model field over the dev row).
+                // [T-custom-model-enrich-wiring] catalog truth; read path stamps.
                 baseModel = resolved,
                 overrides = prior?.overrides ?: ModelOverrides(),
                 isCustom = false,
