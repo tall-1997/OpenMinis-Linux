@@ -337,8 +337,6 @@
     <string name="token_usage_section_agent_loop">Pętla Agenta</string>
     <string name="token_usage_total_loops">Łączna liczba pętli</string>
     <!-- [#25] Context breakdown sheet -->
-    <string name="chat_menu_context_usage">Podział kontekstu</string>
-    <string name="context_usage_sheet_title">Podział kontekstu</string>
     <string name="context_block_system">Prompt systemowy i narzędzia</string>
     <string name="context_block_skills_mcps">Umiejętności i MCP</string>
     <string name="context_block_memory">Wstrzyknięcie pamięci</string>

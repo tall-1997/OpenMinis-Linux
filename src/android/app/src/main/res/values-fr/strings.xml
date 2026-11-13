@@ -335,8 +335,6 @@
     <string name="token_usage_section_agent_loop">Boucle de Minis Ultra Agent</string>
     <string name="token_usage_total_loops">Boucles totales</string>
     <!-- [#25] Context breakdown sheet -->
-    <string name="chat_menu_context_usage">Décomposition du contexte</string>
-    <string name="context_usage_sheet_title">Décomposition du contexte</string>
     <string name="context_block_system">Prompt système et outils</string>
     <string name="context_block_skills_mcps">Skills et MCPs</string>
     <string name="context_block_memory">Injection de mémoire</string>

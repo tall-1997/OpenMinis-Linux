@@ -335,8 +335,6 @@
     <string name="token_usage_section_agent_loop">Agent 루프</string>
     <string name="token_usage_total_loops">총 루프 수</string>
     <!-- [#25] Context breakdown sheet -->
-    <string name="chat_menu_context_usage">컨텍스트 분석</string>
-    <string name="context_usage_sheet_title">컨텍스트 분석</string>
     <string name="context_block_system">시스템 프롬프트 및 도구</string>
     <string name="context_block_skills_mcps">스킬 및 MCP</string>
     <string name="context_block_memory">메모리 주입</string>

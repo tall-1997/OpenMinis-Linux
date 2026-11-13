@@ -6,9 +6,10 @@ import kotlinx.coroutines.withContext
 
 // [#25] Context-usage breakdown — "what is the next request made of".
 //
-// The sheet (ContextUsageSheet.kt) shows the current session's prompt
-// composition: per-block token estimates + the existing totals. This file
-// owns the data side only:
+// TokenUsageSheet's Context section shows the current session's prompt
+// composition (per-block token estimates + the existing totals) — the
+// breakdown was merged into that sheet from the former standalone
+// ContextUsageSheet. This file owns the data side only:
 //   - [ContextBreakdownMath] is a pure, JVM-testable core (estimation basis
 //     matches countPartTokens: BPETokenizer.countTokens for text);
 //   - [buildContextBreakdown] wires it to the ChatViewModel's existing

@@ -340,8 +340,6 @@
     <string name="token_usage_section_agent_loop">Loop Agen</string>
     <string name="token_usage_total_loops">Total Loop</string>
     <!-- [#25] Context breakdown sheet -->
-    <string name="chat_menu_context_usage">Rincian Konteks</string>
-    <string name="context_usage_sheet_title">Rincian Konteks</string>
     <string name="context_block_system">Prompt sistem &amp; alat</string>
     <string name="context_block_skills_mcps">Skill &amp; MCP</string>
     <string name="context_block_memory">Injeksi memori</string>

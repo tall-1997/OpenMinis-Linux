@@ -335,8 +335,6 @@
     <string name="token_usage_section_agent_loop">Agent ループ</string>
     <string name="token_usage_total_loops">合計ループ数</string>
     <!-- [#25] Context breakdown sheet -->
-    <string name="chat_menu_context_usage">コンテキスト内訳</string>
-    <string name="context_usage_sheet_title">コンテキスト内訳</string>
     <string name="context_block_system">システムプロンプトとツール</string>
     <string name="context_block_skills_mcps">スキルとMCP</string>
     <string name="context_block_memory">メモリ注入</string>

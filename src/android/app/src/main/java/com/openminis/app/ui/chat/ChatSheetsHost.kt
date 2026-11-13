@@ -252,29 +252,14 @@ internal fun ChatSheetsHost(
         )
     }
 
-    // Session Token Usage bottom sheet
+    // Session Token Usage bottom sheet. [#25] The context breakdown now
+    // renders inside this sheet's Context section (progress bar + per-block
+    // composition), so the former standalone ContextUsageSheet host block
+    // and its process-level ContextUsageSheetState are gone.
     if (showTokenUsageSheet.value) {
         TokenUsageSheet(
             viewModel = viewModel,
             onDismiss = { showTokenUsageSheet.value = false },
-        )
-    }
-
-    // [#25] Context breakdown sheet — prompt composition + per-block token
-    // estimate. Visibility rides the process-level [ContextUsageSheetState]
-    // because ChatScreen.kt / ChatViewModel.kt are pinned at their
-    // architecture-policy ceilings (see the object's KDoc).
-    val showContextUsageSheet by ContextUsageSheetState.visible.collectAsStateWithLifecycle()
-    if (showContextUsageSheet) {
-        DisposableEffect(Unit) {
-            // Leaving the chat screen while the sheet is open must not
-            // resurrect it for the next session — reset the process-level
-            // flag when this host block leaves composition.
-            onDispose { ContextUsageSheetState.hide() }
-        }
-        ContextUsageSheet(
-            viewModel = viewModel,
-            onDismiss = { ContextUsageSheetState.hide() },
         )
     }
 

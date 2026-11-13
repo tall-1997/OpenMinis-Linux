@@ -619,8 +619,6 @@
     <string name="token_usage_section_agent_loop">Agent Loop</string>
     <string name="token_usage_total_loops">Total Loops</string>
     <!-- [#25] Context breakdown sheet — prompt composition + per-block estimates -->
-    <string name="chat_menu_context_usage">Context Breakdown</string>
-    <string name="context_usage_sheet_title">Context Breakdown</string>
     <string name="context_block_system">System prompt &amp; tools</string>
     <string name="context_block_skills_mcps">Skills &amp; MCPs</string>
     <string name="context_block_memory">Memory injection</string>
