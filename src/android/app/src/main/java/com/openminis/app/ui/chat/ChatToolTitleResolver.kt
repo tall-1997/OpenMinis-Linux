@@ -1,28 +1,32 @@
 package com.openminis.app.ui.chat
 
 /**
- * [T-tool-title-single-source GH#344] SINGLE source for the human-readable
- * tool-card title.
+ * [T-tool-title-single-source GH#344 / T-tool-card-detail-regression] SINGLE
+ * source for the human-readable tool-card title used by the collapsed row
+ * (ChatProcessCards), the detail sheet header (ChatToolDetailUI), the status
+ * bar (ChatViewModelToolTurnExec) and persistence (buildTurnParts).
  *
- * #331/#332 regression: toolTitle was computed in three competing places —
- * block creation used friendlyToolTitle ("Read File"), executeTool fell back
- * to the bare canonical name when the model omitted `tool_title`, and
- * finalizePlannedCall overwrote the friendly label with that non-empty bare
- * name (`result.toolTitle.ifEmpty { old }`). The renderer had only
- * `ifEmpty { toolName }`, so every tool the model did not title collapsed to
- * raw snake_case (file_read / read_image / ...) and was persisted that way —
- * exactly what the 2026-11-12 screenshots showed next to a titled
- * shell_execute card.
+ * Design — separation of concerns + idempotent settlement:
+ *  - `tool_title` is the model's SEMANTIC summary and always wins.
+ *  - A derived summary ("Reading /full/path", "Grep <pattern>", "$ cmd") is a
+ *    pure function of COMPLETE args and is recomputed on every call. It is a
+ *    fallback for when the model omitted `tool_title`, never a fabricated
+ *    replacement for it.
+ *  - STREAMING / PARTIAL args NEVER yield a derived summary: #334 derived from
+ *    a half-arrived `{"path":"/va` and step 2 then trusted that "specific"
+ *    prior forever, so "Reading /va" was frozen into the persisted
+ *    `description` even after the full args arrived (2026-11-13 session DB:
+ *    12 such shadows, each with the FULL path still present in `input`). During
+ *    streaming we show only the model's `tool_title` preview or the Title-Case
+ *    friendly label — both are transient and are replaced at the complete-args
+ *    settlement.
+ *  - COMPLETE args are the one authoritative settlement point: a prior that is
+ *    itself a (possibly truncated) derived shadow yields to the fresh
+ *    recomputation, so already-persisted half-path cards self-heal on render.
+ *    A genuine semantic prior whose `tool_title` is absent from this args
+ *    snapshot (e.g. an online tool that strips it before persistence) is kept.
  *
- * This resolver is the ONE place that turns (toolName, argsJson, existing)
- * into a title that is NEVER a bare snake_case name:
- *   1. explicit `tool_title` from args (complete JSON or streaming partial);
- *   2. a previously resolved specific title (a Chinese summary, "Reading ...");
- *   3. a summary derived from the args (path / command / query / prompt ...);
- *   4. the Title-Case friendly label.
- * Bare names and the generic friendly label are discarded at step 2 so step 3
- * can upgrade them; this also rescues history blocks persisted as "file_read".
- *
+ * Bare snake_case names never reach the UI (#331/#332 invariant preserved).
  * Pure Kotlin + org.json — no Android/Context/Compose dependency — so the
  * whole ladder is JVM-unit-testable.
  */
@@ -31,38 +35,57 @@ internal fun resolveToolTitle(
     argsJson: String,
     existingTitle: String = "",
 ): String {
-    val friendly = friendlyToolTitle(com.openminis.app.security.ToolAliases.canonical(toolName))
+    val canonical = com.openminis.app.security.ToolAliases.canonical(toolName)
+    val friendly = friendlyToolTitle(canonical)
     val prior = existingTitle.trim()
 
-    // 1. The model's own title wins (complete JSON first, streaming partial next),
-    //    but a bare identifier ("read_image" — some tool schemas default
-    //    tool_title to NAME) is NOT a title; let the ladder derive a real one.
+    // Parse ONCE. A complete JSONObject is the ONLY authoritative settlement
+    // point; partial/streaming JSON is never used to fabricate a path title.
+    val complete: org.json.JSONObject? = try {
+        org.json.JSONObject(argsJson)
+    } catch (_: Exception) {
+        null
+    }
+
+    // 1. The model's own semantic title wins — from complete args or from a
+    //    streaming `tool_title` preview (the model's words, not a path). A bare
+    //    identifier ("file_read" — some schemas default tool_title to NAME) is
+    //    not a title.
     extractToolTitle(argsJson, fallback = null)
         ?.trim()?.takeIf {
-            it.isNotEmpty() && it != toolName && it != friendly && !looksLikeBareName(it)
+            it.isNotEmpty() && it != toolName && it != canonical && it != friendly &&
+                !looksLikeBareName(it)
         }
         ?.let { return it }
 
-    // 2. Keep an already-specific title; discard a bare snake_case name OR the
-    //    generic friendly label (both should be upgraded by step 3 when args
-    //    carry a path/command). This also rescues history blocks that were
-    //    persisted as "file_read" before the fix.
-    if (prior.isNotEmpty() && prior != toolName && prior != friendly && !looksLikeBareName(prior)) {
-        return prior
+    // 2. Complete args: authoritative, idempotent settlement. Recompute from
+    //    the full JSON every time so a stale streaming shadow can never be
+    //    frozen in.
+    if (complete != null) {
+        val fresh = deriveToolTitle(canonical, complete)
+        val semanticPrior = prior.takeIf {
+            it.isNotEmpty() && it != toolName && it != canonical && it != friendly &&
+                !looksLikeBareName(it) && !isDerivedShadow(it, fresh)
+        }
+        return semanticPrior ?: fresh ?: friendly
     }
 
-    // 3. Derive a concrete summary from the args.
-    deriveToolTitle(toolName, argsJson)?.let { return it }
-
-    // 4. Title-Case fallback — never snake_case.
-    return friendly
+    // 3. Streaming / dirty JSON: NEVER derive a title from partial args. Keep
+    //    a genuine semantic prior, else the Title-Case friendly label. This is
+    //    a transient preview, replaced by step 2 as soon as args complete.
+    val semanticPrior = prior.takeIf {
+        it.isNotEmpty() && it != toolName && it != canonical && it != friendly &&
+            !looksLikeBareName(it)
+    }
+    return semanticPrior ?: friendly
 }
 
 /**
  * [T-tool-title-single-source GH#344] Rendering helper for tool cards / detail
- * headers. History restore keeps the original toolTitle (possibly a bare name)
- * plus the full args JSON, so call this instead of `toolTitle.ifEmpty { name }`
- * to reconstruct a readable title for every already-persisted card too.
+ * headers. History restore keeps the original toolTitle (possibly a bare name
+ * or a #334 half-path shadow) plus the full args JSON, so call this instead of
+ * `toolTitle.ifEmpty { name }` to reconstruct a readable, self-healed title for
+ * every already-persisted card too.
  */
 internal fun displayToolTitle(toolName: String, toolArgs: String, toolTitle: String): String =
     resolveToolTitle(toolName, toolArgs, toolTitle)
@@ -72,24 +95,39 @@ private fun looksLikeBareName(s: String): Boolean =
     s.contains('_') && s == s.lowercase() &&
         s.all { it == '_' || it.isDigit() || (it.isLetter() && it.isLowerCase()) }
 
-/** Mirror of PreviewText.summarizeToolUse, but shared by every UI entry point. */
-private fun deriveToolTitle(toolName: String, argsJson: String): String? {
-    if (argsJson.isBlank()) return null
-    val json = try {
-        org.json.JSONObject(argsJson)
-    } catch (_: Exception) {
-        null
-    }
-    fun str(key: String): String? {
-        val complete = json?.optString(key, "")?.trim()?.takeIf { it.isNotEmpty() }
-        if (complete != null) return complete
-        return extractPartialJsonString(key, argsJson)?.trim()?.takeIf { it.isNotEmpty() }
-    }
+/**
+ * A prior produced by the old streaming derivation — a truncated half-path
+ * ("Reading /var/min"), a full derived label, or any prefix of the fresh
+ * derivation — must yield to the complete-args recompute so #334's frozen
+ * shadows self-heal on history restore. A genuine model title (a Chinese
+ * summary, a plain human phrase) carries none of these markers and is kept.
+ * When no fresh derivation exists there is nothing authoritative to replace
+ * the prior with, so it is preserved instead of being blindly discarded.
+ * Labels mirror deriveToolTitle's `when` branches; keep both in sync.
+ */
+private val DERIVED_LABEL_PREFIXES = listOf(
+    "Reading ", "Writing ", "Editing ", "Viewing ", "Listing ", "Glob ", "Grep ",
+    "${'$'} ", "Checkpoint ", "Multi-edit ", "Run ", "browser ", "Search ", "Fetch ",
+    "Memory ", "Sessions ", "Session ", "Agent ", "Plan ", "Ask ", "Schedule ", "Tap ",
+)
+
+private fun isDerivedShadow(prior: String, fresh: String?): Boolean =
+    fresh != null && (
+        DERIVED_LABEL_PREFIXES.any { prior.startsWith(it) } || fresh.startsWith(prior)
+    )
+
+/**
+ * Mirror of PreviewText.summarizeToolUse, shared by every UI entry point, but
+ * driven by an ALREADY-PARSED complete [org.json.JSONObject] so a half-arrived
+ * value can never leak into a title. Returns null when no concrete key exists.
+ */
+private fun deriveToolTitle(toolName: String, json: org.json.JSONObject): String? {
+    fun str(key: String): String? = json.optString(key, "").trim().takeIf { it.isNotEmpty() }
     fun cap(s: String, n: Int = 100): String = if (s.length > n) s.take(n) + "…" else s
-    // [T-tool-title-single-source GH#344] Canonicalize ONCE here via the
-    // registry's single alias map (shell_exec→shell_execute, ls→list_dir,
-    // describe_image→read_image, ...). Duplicating aliases in the when below
-    // would recreate the "three competing sources" root cause.
+    // Canonicalize ONCE here via the registry's single alias map
+    // (shell_exec → shell_execute, ls → list_dir, describe_image → read_image,
+    // find_files → glob, ...). Duplicating aliases in the `when` below would
+    // recreate the "three competing sources" root cause.
     val canonicalName = com.openminis.app.security.ToolAliases.canonical(toolName)
     return when (canonicalName) {
         "file_read" -> str("path")?.let { cap("Reading $it") }
