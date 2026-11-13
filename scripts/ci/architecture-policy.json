@@ -158,7 +158,7 @@
     "src/android/app/src/main/java/com/openminis/app/ui/sandbox/FilePreviewScreen.kt": 1250,
     "src/android/app/src/main/java/com/openminis/app/ui/sandbox/MirrorSettingsScreen.kt": 862,
     "src/android/app/src/main/java/com/openminis/app/ui/sessions/SessionListScreen.kt": 3223,
-    "src/android/app/src/main/java/com/openminis/app/ui/sessions/SessionListViewModel.kt": 1200,
+    "src/android/app/src/main/java/com/openminis/app/ui/sessions/SessionListViewModel.kt": 1168,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/AddProviderScreen.kt": 890,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/AppearanceScreen.kt": 834,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/MCPIntegrationsScreen.kt": 1093,

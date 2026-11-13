@@ -40,20 +40,14 @@ private const val LEGACY_CANCELLED_MARKER = "[cancelled by user]"
  * the raw text so the LLM continues to see the reminder on subsequent
  * turns (matches iOS, where system-reminder text is appended to
  * agentHistory/AgentMessage parts but never to the chat-list ChatMessage).
+ *
+ * Delegates to [PreviewText.stripSystemReminders] — the single stripping
+ * authority (session list, exports and backup all route through it), so
+ * reminder blocks AND the legacy #339 no-reply head are stripped identically
+ * everywhere instead of four hand-rolled copies drifting apart.
  */
-private val systemReminderRegex =
-    Regex("\\s*<system-reminder>.*?</system-reminder>\\s*", RegexOption.DOT_MATCHES_ALL)
-
-internal fun stripSystemReminders(text: String): String {
-    var out = text
-    if (out.contains("<system-reminder>")) out = systemReminderRegex.replace(out, "")
-    // Legacy #339 rows carry the no-reply head OUTSIDE the reminder block
-    // (the framing itself no longer produces it); strip it for display so the
-    // bookkeeping line never renders as user speech. agentHistory + DB keep
-    // the raw text — this is the UI-render transform only.
-    if (out.contains(HOST_NOTE_NO_REPLY_HEAD)) out = out.replace(HOST_NOTE_NO_REPLY_HEAD, "")
-    return out
-}
+internal fun stripSystemReminders(text: String): String =
+    com.openminis.app.data.repository.PreviewText.stripSystemReminders(text)
 
 /**
  * [T-android-retry-attachment-loss] Remove the `<user-attached-files>` XML

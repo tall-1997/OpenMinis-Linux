@@ -816,7 +816,7 @@ class SessionListViewModel(
                 val lastAssistants = chatRepository.loadMessageHeadsByRole(id, "assistant", 800, 2, newest = true)
                 if (firstUsers.isEmpty()) return false
                 fun head(row: com.openminis.app.data.db.MessageHeadRow): String =
-                    extractText(row.headText.orEmpty())
+                    SessionListExtractText.extract(row.headText.orEmpty())
                 val firstUser = firstUsers.firstOrNull { head(it).isNotBlank() } ?: return false
                 firstUserRaw = head(firstUser)
                 val userText = firstUserRaw?.take(200) ?: return false
@@ -1034,38 +1034,6 @@ class SessionListViewModel(
         val cleaned = text.replace(Regex("\\s+"), " ").trim()
         if (cleaned.isEmpty()) return null
         return if (cleaned.length > 30) cleaned.take(30).trimEnd() + "…" else cleaned
-    }
-
-    private fun extractText(partsJson: String): String {
-        return try {
-            val arr = org.json.JSONArray(partsJson)
-            (0 until arr.length()).mapNotNull { i ->
-                val obj = arr.getJSONObject(i)
-                if (obj.optString("type") != "text") return@mapNotNull null
-                val value = obj.optString("value")
-                // [T-android-retry-attachment-loss] The user-message
-                // <user-attached-files> XML is now persisted as a text part so
-                // the model keeps file paths across retry/reload. Drop it from
-                // session-list previews + search snippets so the inventory XML
-                // never surfaces as visible session content (iOS strips it the
-                // same way in ChatStore.toChatMessage).
-                if (value.contains("<user-attached-files>")) {
-                    val start = value.indexOf("<user-attached-files>")
-                    val endTag = "</user-attached-files>"
-                    val end = value.indexOf(endTag, start)
-                    val cleaned = if (end >= 0) {
-                        value.substring(0, start) + value.substring(end + endTag.length)
-                    } else {
-                        value.substring(0, start)
-                    }.trim()
-                    cleaned.ifEmpty { null }
-                } else {
-                    value
-                }
-            }.joinToString("\n")
-        } catch (_: Exception) {
-            partsJson
-        }
     }
 
     private fun parseTitleResponse(text: String): Pair<String, String?> {

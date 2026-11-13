@@ -542,7 +542,12 @@ private const val MAX_EXPORT_BODY_CHARS = 2000
                 // <user-attached-files> XML inventory from the human-readable
                 // text export — it's model-facing metadata, not chat content.
                 // (The JSON export above keeps full-fidelity parts_json.)
-                val value = stripAttachedFilesInventory(obj.optString("value"))
+                // [T-export-quiet-transcript] Host reminders + the legacy #339
+                // no-reply head ride the SAME stripping authority as the
+                // markdown branch and the in-app display (PreviewText), so a
+                // .txt transcript is exactly as quiet as a .md one.
+                val value = com.openminis.app.data.repository.PreviewText
+                    .stripSystemReminders(stripAttachedFilesInventory(obj.optString("value")))
                 if (value.isNotEmpty()) {
                     if (sb.isNotEmpty()) sb.append('\n')
                     sb.append(value)
@@ -658,13 +663,13 @@ private const val MAX_EXPORT_BODY_CHARS = 2000
      * control notices (stream-drop continuation, empty-turn nudges) from an
      * exported text part. The rows stay in the database — resume depends on
      * them — they just do not belong in a human-readable transcript.
+     *
+     * Delegates to [PreviewText.stripSystemReminders] — the single stripping
+     * authority — so reminder blocks AND the legacy #339 no-reply head are
+     * stripped identically to the in-app display and the session list.
      */
-    private fun stripSystemReminders(value: String): String {
-        if (!value.contains("<system-reminder")) return value
-        return value
-            .replace(Regex("<system-reminder>[\\s\\S]*?</system-reminder>"), "")
-            .trim()
-    }
+    private fun stripSystemReminders(value: String): String =
+        com.openminis.app.data.repository.PreviewText.stripSystemReminders(value)
 
     private fun stripAttachedFilesInventory(value: String): String {
         val start = value.indexOf("<user-attached-files>")

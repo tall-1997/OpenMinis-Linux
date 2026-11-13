@@ -159,14 +159,10 @@ internal suspend fun ChatViewModel.commitHiddenUserNote(text: String) {
     }
 }
 
-/**
- * [T-hidden-user-note] No-reply head that #339 prepended to every committed
- * note. No longer produced (see [commitHiddenUserNote]), but rows persisted
- * while it was live still carry it OUTSIDE the `<system-reminder>` block, so
- * the DISPLAY pipeline references this constant to strip it — the line is
- * bookkeeping and must never render as user speech. Do not reuse the
- * per-note-head pattern: the contract belongs to the system prompt.
- */
-internal const val HOST_NOTE_NO_REPLY_HEAD =
-    "[HARNESS NOTE — host bookkeeping, not a user prompt. Do not reply to this note, " +
-        "do not summarize or acknowledge it; continue the work. The request itself carries the actual instruction.]"
+// NOTE: the per-note no-reply head (HOST_NOTE_NO_REPLY_HEAD) that #339
+// prepended to every committed note was REMOVED in #342 — the contract
+// lives in the system prompt's action-discipline directive, and the frame
+// must stay strip-clean end to end. The constant now lives in
+// [PreviewText] (data.repository — headless layer), where the single
+// stripping authority uses it to clean rows persisted while #339 was live.
+// Do not reintroduce per-note frame text here.
