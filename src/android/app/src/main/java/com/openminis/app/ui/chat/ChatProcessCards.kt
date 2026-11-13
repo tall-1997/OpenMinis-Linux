@@ -257,13 +257,16 @@ private fun ProcessStepRow(step: ProcessStepRef, onOpen: () -> Unit) {
                     overflow = TextOverflow.Ellipsis,
                 )
             } else {
-                // [T-tool-card-semantic-detail v337] Two distinct meanings in
-                // two distinct typographic roles: semantic headline + full
-                // argument detail. A path must never replace the headline.
+                // [T-tool-card-row-single-line v338] The collapsed row shows
+                // the semantic headline only — the argument line moved to the
+                // detail sheet (user: the path under the headline hurt the
+                // list's visual rhythm). Single settlement point:
+                // collapsedRowLabel / showDetail=false.
                 ToolCardLabel(
                     presentation = presentToolCard(block.toolName, block.toolArgs, block.toolTitle),
                     modifier = Modifier.weight(1f),
                     failed = isFailed,
+                    showDetail = false,
                 )
             }
             if (isThinking) {
