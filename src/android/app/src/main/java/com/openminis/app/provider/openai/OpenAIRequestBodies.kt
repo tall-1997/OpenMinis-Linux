@@ -11,6 +11,7 @@ import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.SamplingIdentity
 import com.openminis.app.provider.SamplingPolicy
 import com.openminis.app.provider.applyUserAgentOverride
+import com.openminis.app.provider.thinking.ThinkingEffort
 import com.openminis.app.provider.thinking.ThinkingResolveContext
 import com.openminis.app.provider.thinking.ThinkingRuleResolver
 import okhttp3.MediaType.Companion.toMediaType
@@ -1315,10 +1316,9 @@ internal class OpenAIRequestBodies(
     }
 
     // [T-thinking-ultra-declared][T-thinking-ultra-manual] The former private
-    // mapThinkingLevelToResponsesEffort() (ULTRA folded to "max") retired
-    // into ThinkingEffort.effortOrDeclaredUltra — one shared mapping for the
-    // Responses site and the resolver branches, so a declared or manually-
-    // asserted "ultra" cannot reach one path and fold on the other.
+    // mapThinkingLevelToResponsesEffort() retired into
+    // ThinkingEffort.effortOrDeclaredUltra — one shared mapping, so a
+    // declared or manually-asserted "ultra" cannot fold on one path only.
 
     /**
      * Responses-API tool shape — flat {type, name, description, parameters},
