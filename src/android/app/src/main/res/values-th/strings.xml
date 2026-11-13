@@ -1001,6 +1001,12 @@
     <string name="modeldetail_section_capabilities">ความสามารถ</string>
     <string name="modeldetail_context_window">ขนาดบริบท</string>
     <string name="modeldetail_thinking">การคิด</string>
+    <!-- [T-thinking-ultra-manual] Manual thinking-level ceiling on the model params page. -->
+    <string name="modeldetail_thinking_level_ceiling">เพดานระดับการคิด</string>
+    <string name="modeldetail_thinking_level_auto">อัตโนมัติ</string>
+    <string name="modeldetail_thinking_level_effective_auto">ที่ใช้อยู่: %1$s (ค่าเริ่มต้นจากแคตตาล็อก)</string>
+    <string name="modeldetail_thinking_level_effective_override">ที่ใช้อยู่: %1$s (กำหนดเอง)</string>
+    <string name="modeldetail_thinking_level_footer">จำกัดระดับการคิดที่ตัวเลือกแชทเสนอให้โมเดลนี้ อัตโนมัติจะตามการประกาศของแคตตาล็อก Ultra จะถูกส่งตรงตามตัวอักษรเฉพาะเมื่อผู้ให้บริการประกาศ มิฉะนั้นจะแปลงเป็น max</string>
     <string name="modeldetail_capabilities_footer">ขนาดบริบทและโทเค็นเอาต์พุตสูงสุด (หน่วยเป็นโทเค็น) เว้นว่างไว้เพื่อใช้ค่าเริ่มต้นของผู้ให้บริการ เปิดใช้การคิดสำหรับโมเดลที่รองรับการให้เหตุผลเชิงลึก</string>
     <string name="modeldetail_provider_default">ค่าเริ่มต้นของผู้ให้บริการ</string>
     <string name="modeldetail_max_tokens_exceeds_warning">เกินขีดจำกัดที่ผู้ให้บริการรายงาน (%1$d) ระบบจะบันทึกค่าไว้ แต่อาจทำให้เกิดข้อผิดพลาด</string>

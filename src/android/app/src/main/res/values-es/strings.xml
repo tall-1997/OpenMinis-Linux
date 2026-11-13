@@ -1000,6 +1000,12 @@
     <string name="modeldetail_section_capabilities">Capacidades</string>
     <string name="modeldetail_context_window">Ventana de contexto</string>
     <string name="modeldetail_thinking">Razonamiento</string>
+    <!-- [T-thinking-ultra-manual] Manual thinking-level ceiling on the model params page. -->
+    <string name="modeldetail_thinking_level_ceiling">Límite de nivel de razonamiento</string>
+    <string name="modeldetail_thinking_level_auto">Auto</string>
+    <string name="modeldetail_thinking_level_effective_auto">Efectivo: %1$s (predeterminado del catálogo)</string>
+    <string name="modeldetail_thinking_level_effective_override">Efectivo: %1$s (manual)</string>
+    <string name="modeldetail_thinking_level_footer">Limita los niveles de razonamiento que ofrece el selector de chat para este modelo. Auto sigue la declaración del catálogo. Ultra se envía como nivel literal solo si el proveedor lo declara; de lo contrario se asigna a max.</string>
     <string name="modeldetail_capabilities_footer">Ventana de contexto y máximo de tokens de salida (en tokens). Déjalo vacío para usar los valores predeterminados del proveedor. Activa Razonamiento para los modelos que admiten razonamiento extendido.</string>
     <string name="modeldetail_provider_default">Predeterminado del proveedor</string>
     <string name="modeldetail_max_tokens_exceeds_warning">Supera el límite informado por el proveedor (%1$d). El valor se guarda, pero puede causar errores.</string>

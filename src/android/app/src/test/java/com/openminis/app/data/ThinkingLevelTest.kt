@@ -25,12 +25,14 @@ class ThinkingLevelTest {
     }
 
     @Test
-    fun decoded_unknownValueClampsToXHigh_neverThrows() {
+    fun decoded_unknownValueClampsToUltra_neverThrows() {
         // A completely unrecognized future value must clamp to the highest
-        // level THIS build knows, not throw.
-        assertEquals(ThinkingLevel.XHIGH, ThinkingLevel.decoded("SUPREME"))
-        assertEquals(ThinkingLevel.XHIGH, ThinkingLevel.decoded(""))
-        assertEquals(ThinkingLevel.XHIGH, ThinkingLevel.decoded("garbage-token"))
+        // level THIS build knows, not throw. [T-thinking-ultra-manual] that is
+        // ULTRA now; the wire layer clamps onto the model's declared set, so
+        // the generous fallback can only widen the picker, never the request.
+        assertEquals(ThinkingLevel.ULTRA, ThinkingLevel.decoded("SUPREME"))
+        assertEquals(ThinkingLevel.ULTRA, ThinkingLevel.decoded(""))
+        assertEquals(ThinkingLevel.ULTRA, ThinkingLevel.decoded("garbage-token"))
     }
 
     @Test

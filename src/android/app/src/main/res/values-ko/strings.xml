@@ -1001,6 +1001,12 @@
     <string name="modeldetail_section_capabilities">능력</string>
     <string name="modeldetail_context_window">컨텍스트 창</string>
     <string name="modeldetail_thinking">사고</string>
+    <!-- [T-thinking-ultra-manual] Manual thinking-level ceiling on the model params page. -->
+    <string name="modeldetail_thinking_level_ceiling">사고 레벨 상한</string>
+    <string name="modeldetail_thinking_level_auto">자동</string>
+    <string name="modeldetail_thinking_level_effective_auto">현재 적용: %1$s(카탈로그 기본값)</string>
+    <string name="modeldetail_thinking_level_effective_override">현재 적용: %1$s(수동)</string>
+    <string name="modeldetail_thinking_level_footer">이 모델의 채팅 선택기가 제공하는 사고 레벨의 상한을 설정합니다. 자동은 카탈로그 선언을 따릅니다. Ultra는 제공업체가 선언한 경우에만 그대로 전송되며, 그 외에는 max로 매핑됩니다.</string>
     <string name="modeldetail_capabilities_footer">컨텍스트 창과 최대 출력 토큰 수 (토큰 단위). 비워두면 제공업체 기본값을 사용합니다. 확장 추론을 지원하는 모델에서는 사고를 활성화하세요.</string>
     <string name="modeldetail_provider_default">제공업체 기본값</string>
     <string name="modeldetail_max_tokens_exceeds_warning">제공업체가 보고한 한도 (%1$d)를 초과합니다. 값은 저장되지만 오류가 발생할 수 있습니다.</string>

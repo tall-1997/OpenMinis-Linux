@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
@@ -23,6 +24,10 @@ import com.openminis.app.ui.components.RowLabel
 import com.openminis.app.ui.components.SectionTextField
 import com.openminis.app.R
 import com.openminis.app.ui.components.MinisButton
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 
 /**
  * Add Custom Model — adopts the SettingsScaffold/SettingsSection toolkit
@@ -45,6 +50,8 @@ fun AddCustomModelScreen(
 
     var modelId by remember { mutableStateOf("") }
     var displayName by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    var saving by remember { mutableStateOf(false) }
 
     SettingsScaffold(
         title = stringResource(R.string.provider_detail_add_custom_model),
@@ -76,17 +83,42 @@ fun AddCustomModelScreen(
         Spacer(Modifier.height(20.dp))
         MinisButton(
             onClick = {
-                val entry = buildCustomModelEntry(
-                    modelId = modelId,
-                    displayName = displayName,
-                    providerInstanceId = instanceId,
-                    providerTypeDisplayName = instance.providerType.displayName,
-                    enrich = ModelsDevApi::enrichModel,
-                )
-                providerRepository.addEntry(entry)
-                onBack()
+                if (saving) return@MinisButton
+                saving = true
+                // [T-custom-model-enrich-wiring] enrichModelNow scrapes
+                // DataLearner synchronously (cold cache on a first save), so
+                // the whole build runs off the main thread with a hard
+                // timeout — a hung scrape degrades to the un-supplemented
+                // entry instead of freezing the save button forever.
+                scope.launch {
+                    val entry = withContext(Dispatchers.IO) {
+                        runCatching {
+                            withTimeout(8_000L) {
+                                buildCustomModelEntry(
+                                    modelId = modelId,
+                                    displayName = displayName,
+                                    providerInstanceId = instanceId,
+                                    providerTypeDisplayName = instance.providerType.displayName,
+                                    enrich = ModelsDevApi::enrichModelNow,
+                                )
+                            }
+                        }.getOrElse {
+                            buildCustomModelEntry(
+                                modelId = modelId,
+                                displayName = displayName,
+                                providerInstanceId = instanceId,
+                                providerTypeDisplayName = instance.providerType.displayName,
+                                enrich = { m -> m },
+                            )
+                        }
+                    }
+                    // addEntry is a synchronized main-adjacent call (it also
+                    // touches Room) — land it back on the composition context.
+                    providerRepository.addEntry(entry)
+                    onBack()
+                }
             },
-            enabled = modelId.isNotBlank(),
+            enabled = modelId.isNotBlank() && !saving,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp),

@@ -1001,6 +1001,12 @@
     <string name="modeldetail_section_capabilities">Keupayaan</string>
     <string name="modeldetail_context_window">Tetingkap Konteks</string>
     <string name="modeldetail_thinking">Penaakulan</string>
+    <!-- [T-thinking-ultra-manual] Manual thinking-level ceiling on the model params page. -->
+    <string name="modeldetail_thinking_level_ceiling">Had tahap penaakulan</string>
+    <string name="modeldetail_thinking_level_auto">Auto</string>
+    <string name="modeldetail_thinking_level_effective_auto">Berkuat kuasa: %1$s (lalai katalog)</string>
+    <string name="modeldetail_thinking_level_effective_override">Berkuat kuasa: %1$s (manual)</string>
+    <string name="modeldetail_thinking_level_footer">Mengehadkan tahap penaakulan yang ditawarkan oleh pemilih sembang untuk model ini. Auto mengikut pengisytiharan katalog. Ultra hanya dihantar secara literal jika penyedia mengisytiharkannya; jika tidak, ia dipetakan ke max.</string>
     <string name="modeldetail_capabilities_footer">Tetingkap konteks dan token output maksimum (dalam token). Biarkan kosong untuk menggunakan nilai lalai pembekal. Dayakan Penaakulan bagi model yang menyokong penaakulan lanjutan.</string>
     <string name="modeldetail_provider_default">Lalai pembekal</string>
     <string name="modeldetail_max_tokens_exceeds_warning">Melebihi had yang dilaporkan pembekal (%1$d). Nilai tetap disimpan, tetapi mungkin menyebabkan ralat.</string>

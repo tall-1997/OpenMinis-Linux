@@ -382,6 +382,58 @@ class ThinkingRulesRegressionTest {
         )
     }
 
+    /**
+     * [T-thinking-ultra-declared] The ONE exception: a backend that literally
+     * declares "ultra" in its effort set names the tier itself, so the literal
+     * IS the request — folding it to "max" would silently demote the declared
+     * top tier (and "max" is not even in this set, so clampEffort would then
+     * walk DOWN to "high", two rungs below what the user asked for).
+     */
+    @Test
+    fun `declared ultra tier reaches the wire as the literal`() {
+        val body = capture(
+            model = model(
+                "gpt-6-terra",
+                reasoningEffortValues = listOf("low", "medium", "high", "xhigh", "max", "ultra"),
+            ),
+            level = ThinkingLevel.ULTRA,
+        )
+        assertEquals(
+            "a declared ultra tier is the backend's own vocabulary: $body",
+            "ultra",
+            body.optString("reasoning_effort"),
+        )
+    }
+
+    /**
+     * [T-thinking-ultra-declared] Case-insensitive declaration: a relay
+     * publishing "Ultra" (capitalized) still names the tier.
+     */
+    @Test
+    fun `declared ultra tier matches case-insensitively on the wire`() {
+        val body = capture(
+            model = model("gpt-6-sol", reasoningEffortValues = listOf("high", "Max", "Ultra")),
+            level = ThinkingLevel.ULTRA,
+        )
+        assertEquals("ultra", body.optString("reasoning_effort"))
+    }
+
+    /**
+     * [T-thinking-ultra-declared] MAX on a declared-ultra model still sends
+     * "max" — the exception widens ULTRA only, it does not disturb MAX.
+     */
+    @Test
+    fun `max on a declared-ultra model still sends max`() {
+        val body = capture(
+            model = model(
+                "gpt-6-terra",
+                reasoningEffortValues = listOf("low", "medium", "high", "xhigh", "max", "ultra"),
+            ),
+            level = ThinkingLevel.MAX,
+        )
+        assertEquals("max", body.optString("reasoning_effort"))
+    }
+
     // ============================================================ OFF semantics
 
     /**

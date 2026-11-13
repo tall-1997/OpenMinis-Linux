@@ -1003,6 +1003,12 @@
     <string name="modeldetail_section_capabilities">Возможности</string>
     <string name="modeldetail_context_window">Контекстное окно</string>
     <string name="modeldetail_thinking">Размышление</string>
+    <!-- [T-thinking-ultra-manual] Manual thinking-level ceiling on the model params page. -->
+    <string name="modeldetail_thinking_level_ceiling">Предел уровня размышления</string>
+    <string name="modeldetail_thinking_level_auto">Авто</string>
+    <string name="modeldetail_thinking_level_effective_auto">Действует: %1$s (по умолчанию каталога)</string>
+    <string name="modeldetail_thinking_level_effective_override">Действует: %1$s (вручную)</string>
+    <string name="modeldetail_thinking_level_footer">Ограничивает уровни размышления, которые предлагает выбор в чате для этой модели. «Авто» следует объявлению каталога. Ultra отправляется буквально только если провайдер его объявил; иначе он превращается в max.</string>
     <string name="modeldetail_capabilities_footer">Контекстное окно и макс. токенов вывода (в токенах). Оставьте пустым, чтобы использовать значения по умолчанию провайдера. Включите «Размышление» для моделей с поддержкой расширенного рассуждения.</string>
     <string name="modeldetail_provider_default">По умолчанию у провайдера</string>
     <string name="modeldetail_max_tokens_exceeds_warning">Превышает заявленный провайдером лимит (%1$d). Значение сохранено, но может вызвать ошибки.</string>

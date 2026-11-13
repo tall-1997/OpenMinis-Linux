@@ -1427,6 +1427,12 @@
     <string name="modeldetail_temperature_invalid">Enter a number from 0.0 to 2.0, or leave blank to omit.</string>
     <string name="modeldetail_context_window">Context Window</string>
     <string name="modeldetail_thinking">Thinking</string>
+    <!-- [T-thinking-ultra-manual] Manual thinking-level ceiling on the model params page. -->
+    <string name="modeldetail_thinking_level_ceiling">Thinking Level Ceiling</string>
+    <string name="modeldetail_thinking_level_auto">Auto</string>
+    <string name="modeldetail_thinking_level_effective_auto">Effective: %1$s (catalog default)</string>
+    <string name="modeldetail_thinking_level_effective_override">Effective: %1$s (manual)</string>
+    <string name="modeldetail_thinking_level_footer">Caps the thinking levels the chat picker offers for this model. Auto follows the catalog declaration. Ultra is sent as the literal tier only when the provider declares it; otherwise it maps to max.</string>
     <string name="modeldetail_capabilities_footer">Context window and max output tokens (in tokens). Leave empty to use provider defaults. Enable Thinking for models that support extended reasoning.</string>
     <string name="modeldetail_provider_default">Provider default</string>
     <string name="modeldetail_max_tokens_exceeds_warning">Exceeds provider-reported limit (%1$d). The value is saved but may cause errors.</string>

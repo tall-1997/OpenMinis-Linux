@@ -1001,6 +1001,12 @@
     <string name="modeldetail_section_capabilities">Mga Kakayahan</string>
     <string name="modeldetail_context_window">Bintana ng context</string>
     <string name="modeldetail_thinking">Pag-iisip</string>
+    <!-- [T-thinking-ultra-manual] Manual thinking-level ceiling on the model params page. -->
+    <string name="modeldetail_thinking_level_ceiling">Itaas na antas ng pag-iisip</string>
+    <string name="modeldetail_thinking_level_auto">Auto</string>
+    <string name="modeldetail_thinking_level_effective_auto">Kasalukuyan: %1$s (default ng katalogo)</string>
+    <string name="modeldetail_thinking_level_effective_override">Kasalukuyan: %1$s (mano-mano)</string>
+    <string name="modeldetail_thinking_level_footer">Inililimit ang mga antas ng pag-iisip na inaalok ng chat picker para sa model na ito. Sinusunod ng Auto ang deklarasyon ng katalogo. Ang Ultra ay ipapadala nang literal kung idedeklara ito ng provider; kung hindi, mamamapa ito sa max.</string>
     <string name="modeldetail_capabilities_footer">Context window at max na output token (sa token). Iwanang blangko para gamitin ang mga default ng provider. I-enable ang Pag-iisip para sa mga model na sumusuporta sa malalim na pangangatwiran.</string>
     <string name="modeldetail_provider_default">Default ng provider</string>
     <string name="modeldetail_max_tokens_exceeds_warning">Lumampas sa limitasyong iniulat ng provider (%1$d). Nase-save ang halaga pero maaaring magdulot ng error.</string>

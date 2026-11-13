@@ -15,9 +15,23 @@ internal object ThinkingEffort {
         ThinkingLevel.HIGH -> "high"
         ThinkingLevel.XHIGH -> "xhigh"
         // ULTRA is a client-side "Max + orchestration" concept and is NEVER a valid
-        // server effort string (iOS b38bf3d5).
+        // server effort string for a model whose set stops at "max" (iOS b38bf3d5).
+        // [T-thinking-ultra-declared] The declared-ultra exception is handled
+        // by the CALLER: ThinkingRuleResolver checks the model's declared set
+        // for "ultra" and emits the literal there; this default fold keeps
+        // every other backend from ever seeing the string.
         ThinkingLevel.MAX, ThinkingLevel.ULTRA -> "max"
     }
+
+    /**
+     * [T-thinking-ultra-declared] True when the model's declared effort set
+     * literally names "ultra" — the one case where ULTRA is a real wire tier
+     * rather than a client-side "max + orchestration" fold. Kept as one
+     * helper so the three emitter branches (nested / OpenAI-native /
+     * generic) cannot drift apart on the spelling or the case rule.
+     */
+    fun declaresUltraTier(declared: List<String>?): Boolean =
+        declared?.any { it.equals("ultra", ignoreCase = true) } == true
 
     /**
      * [OpenMinis#356] Legal effort set of DeepSeek V4, used for the
@@ -79,7 +93,13 @@ internal object ThinkingEffort {
     fun clampEffort(effort: String, values: List<String>?): String {
         if (values.isNullOrEmpty()) return effort
         if (values.contains(effort)) return effort
-        val ladder = listOf("none", "minimal", "low", "medium", "high", "xhigh", "max")
+        // [T-thinking-ultra-declared] "ultra" sits above "max" on the ladder
+        // so a declared ["high","max","ultra"] set clamps a ULTRA request to
+        // "ultra" (exact hit above) and an undeclared set still walks DOWN to
+        // "max". For every model whose set stops at "max", wireEffort has
+        // already folded ULTRA→"max" before this runs, so the extra rung
+        // changes nothing for them.
+        val ladder = listOf("none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra")
         val want = ladder.indexOf(effort)
         if (want < 0) return effort
         val declared = values.mapNotNull { v ->

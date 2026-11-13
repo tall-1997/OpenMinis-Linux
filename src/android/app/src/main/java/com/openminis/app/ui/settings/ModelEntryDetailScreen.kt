@@ -1,14 +1,22 @@
 package com.openminis.app.ui.settings
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -17,16 +25,20 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import com.openminis.app.data.model.ModelOverrides
+import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.data.model.applyUnrecognizedModelDefaults
 import com.openminis.app.data.model.normalizeModalityName
+import com.openminis.app.provider.catalogMaxThinkingLevel
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.ui.components.RowLabel
 import com.openminis.app.ui.components.SectionTextField
+import com.openminis.app.ui.chat.localizedName
 import com.openminis.app.R
 import com.openminis.app.ui.components.MinisButton
 import com.openminis.app.ui.components.MinisTextButton
@@ -71,6 +83,13 @@ fun ModelEntryDetailScreen(
     }
     var isHidden by remember { mutableStateOf(entry.isHidden) }
     var showQuickTest by remember { mutableStateOf(false) }
+
+    // [T-thinking-ultra-manual] Manual thinking-level ceiling. null = inherit
+    // the catalog default (effectiveMaxThinkingLevel resolves it); a concrete
+    // level is the operator's assertion that the picker should cap there.
+    // OFF is deliberately NOT offered as a chip — the Thinking switch above
+    // already carries "no reasoning" semantics (supportsReasoning=false).
+    var thinkingCeilingOverride by remember { mutableStateOf(overrides.maxThinkingLevel) }
 
     // Modality state — derive from override-or-base so the toggles reflect
     // what the model actually supports today, then let the user flip from
@@ -167,7 +186,7 @@ fun ModelEntryDetailScreen(
                         // tracks future provider updates to the base modalities.
                         inputModalities = if (newInputs.toSet() != baseInputs.toSet()) newInputs else null,
                         outputModalities = if (newOutputs.toSet() != baseOutputs.toSet()) newOutputs else null,
-                        maxThinkingLevel = overrides.maxThinkingLevel,
+                        maxThinkingLevel = thinkingCeilingOverride,
                         // Null is the persisted inherit marker. Never stamp the
                         // current global value into a model that follows it.
                         autoCompactEnabled = autoCompactOn.takeUnless { autoCompactInherited },
@@ -341,6 +360,16 @@ fun ModelEntryDetailScreen(
                 onCheckedChange = { thinkingEnabled = it },
                 showDivider = false,
             )
+            // [T-thinking-ultra-manual] Ceiling picker — shown only when the
+            // model reasons at all. OFF semantics live on the switch above;
+            // here the user picks the TOP rung the chat picker may offer.
+            if (thinkingEnabled) {
+                ThinkingCeilingPicker(
+                    override = thinkingCeilingOverride,
+                    catalogCeiling = defaulted.catalogMaxThinkingLevel,
+                    onOverrideChange = { thinkingCeilingOverride = it },
+                )
+            }
         }
 
         // ── Visibility ──────────────────────────────────────────────────
@@ -446,6 +475,84 @@ fun ModelEntryDetailScreen(
             entry = entry,
             providerRepository = providerRepository,
             onDismiss = { showQuickTest = false },
+        )
+    }
+}
+
+/**
+ * [T-thinking-ultra-manual] Single-choice ceiling picker for one model entry.
+ *
+ * Design notes (Apple-style per the project design language):
+ * - A leading "Auto" chip = inherit the catalog declaration (persisted as
+ *   null); the effective ceiling is captioned under the row so the user sees
+ *   what Auto currently resolves to without leaving the screen.
+ * - The remaining chips are the rungs LOW..ULTRA. OFF is not offered here —
+ *   the Thinking switch above already owns "no reasoning" semantics.
+ * - SegmentedButton (MD3) mirrors the iOS inset-grouped segmented control:
+ *   hairline dividers, one accent selection, no elevation — chrome recedes.
+ * - 7 chips overflow a narrow phone row, so the row scrolls horizontally
+ *   (same pattern as the chat composer's ThinkingLevelPicker).
+ */
+@Composable
+private fun ThinkingCeilingPicker(
+    override: ThinkingLevel?,
+    catalogCeiling: ThinkingLevel,
+    onOverrideChange: (ThinkingLevel?) -> Unit,
+) {
+    val scrollState = rememberScrollState()
+    val effective = override ?: catalogCeiling
+    // Localized rung labels via the shared chat-layer mapping (strings.xml
+    // thinking_level_*), threaded through LocalContext like the composer.
+    val context = LocalContext.current
+    val labelFor: (ThinkingLevel) -> String = { it.localizedName(context) }
+    val effectiveLabel = stringResource(
+        if (override == null) {
+            R.string.modeldetail_thinking_level_effective_auto
+        } else {
+            R.string.modeldetail_thinking_level_effective_override
+        },
+        labelFor(effective),
+    )
+    SettingsCardBlock {
+        RowLabel(text = stringResource(R.string.modeldetail_thinking_level_ceiling))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(scrollState),
+            horizontalArrangement = Arrangement.spacedBy(0.dp),
+        ) {
+            SingleChoiceSegmentedButtonRow {
+                SegmentedButton(
+                    selected = override == null,
+                    onClick = { onOverrideChange(null) },
+                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 7),
+                ) { Text(stringResource(R.string.modeldetail_thinking_level_auto)) }
+                listOf(
+                    ThinkingLevel.LOW,
+                    ThinkingLevel.MEDIUM,
+                    ThinkingLevel.HIGH,
+                    ThinkingLevel.XHIGH,
+                    ThinkingLevel.MAX,
+                    ThinkingLevel.ULTRA,
+                ).forEachIndexed { idx, level ->
+                    SegmentedButton(
+                        selected = override == level,
+                        onClick = { onOverrideChange(level) },
+                        shape = SegmentedButtonDefaults.itemShape(index = idx + 1, count = 7),
+                    ) { Text(labelFor(level)) }
+                }
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = effectiveLabel,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = stringResource(R.string.modeldetail_thinking_level_footer),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
         )
     }
 }

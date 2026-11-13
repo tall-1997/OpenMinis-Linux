@@ -476,7 +476,12 @@ object ThinkingRuleResolver {
 
             is ThinkingWireFormat.ReasoningEffortNested -> {
                 if (!ctx.level.isEnabled) return null to null
-                val effort = ThinkingEffort.wireEffort(ctx.level)
+                // [T-thinking-ultra-declared] Same literal-ultra exception as
+                // the ReasoningEffort generic path: a declared "ultra" tier is
+                // the backend's own vocabulary, not the client-side fold.
+                val effort = if (ctx.level == ThinkingLevel.ULTRA &&
+                    ThinkingEffort.declaresUltraTier(ctx.declaredEffortValues)
+                ) "ultra" else ThinkingEffort.wireEffort(ctx.level)
                 body.put("reasoning", JSONObject().put("effort", effort))
                 effort to effort
             }
@@ -524,7 +529,14 @@ object ThinkingRuleResolver {
                     }
                 }
                 if (isOpenAINative) {
-                    val effort = ThinkingEffort.clampEffortForModel(ThinkingEffort.wireEffort(ctx.level), lid)
+                    // [T-thinking-ultra-declared] OpenAI-native ids (o*/gpt-5*)
+                    // get the same declared-ultra exception before the fold.
+                    val effort = ThinkingEffort.clampEffortForModel(
+                        if (ctx.level == ThinkingLevel.ULTRA &&
+                            ThinkingEffort.declaresUltraTier(ctx.declaredEffortValues)
+                        ) "ultra" else ThinkingEffort.wireEffort(ctx.level),
+                        lid,
+                    )
                     body.put("reasoning_effort", effort)
                     return effort to effort
                 }
@@ -566,7 +578,15 @@ object ThinkingRuleResolver {
                     return null to null
                 }
                 if (ctx.supportsReasoning == false) return null to null
-                val requested = ThinkingEffort.clampEffortForModel(ThinkingEffort.wireEffort(ctx.level), lid)
+                // [T-thinking-ultra-declared] wireEffort folds ULTRA→"max" for
+                // every model; a backend that literally declares "ultra" gets
+                // the literal instead, so its named top tier is reachable.
+                val requested = ThinkingEffort.clampEffortForModel(
+                    if (ctx.level == ThinkingLevel.ULTRA &&
+                        ThinkingEffort.declaresUltraTier(ctx.declaredEffortValues)
+                    ) "ultra" else ThinkingEffort.wireEffort(ctx.level),
+                    lid,
+                )
                 val clamped = ThinkingEffort.clampEffort(requested, ctx.declaredEffortValues)
                 body.put("reasoning_effort", clamped)
                 requested to clamped

@@ -1002,6 +1002,12 @@
     <string name="modeldetail_section_capabilities">Capabilități</string>
     <string name="modeldetail_context_window">Fereastră de context</string>
     <string name="modeldetail_thinking">Gândire</string>
+    <!-- [T-thinking-ultra-manual] Manual thinking-level ceiling on the model params page. -->
+    <string name="modeldetail_thinking_level_ceiling">Limita nivelului de gândire</string>
+    <string name="modeldetail_thinking_level_auto">Auto</string>
+    <string name="modeldetail_thinking_level_effective_auto">Activ: %1$s (implicit din catalog)</string>
+    <string name="modeldetail_thinking_level_effective_override">Activ: %1$s (manual)</string>
+    <string name="modeldetail_thinking_level_footer">Limitează nivelurile de gândire oferite de selectorul de chat pentru acest model. Auto urmează declarația catalogului. Ultra este trimis literal doar dacă furnizorul îl declară; altfel este transformat în max.</string>
     <string name="modeldetail_capabilities_footer">Fereastra de context și numărul maxim de tokenuri de ieșire (în tokenuri). Lasă gol pentru valorile implicite ale furnizorului. Activează Gândirea pentru modelele care acceptă raționament extins.</string>
     <string name="modeldetail_provider_default">Valoarea implicită a furnizorului</string>
     <string name="modeldetail_max_tokens_exceeds_warning">Depășește limita raportată de furnizor (%1$d). Valoarea se salvează, dar poate provoca erori.</string>

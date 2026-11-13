@@ -107,12 +107,38 @@ object ModelsDevApi {
         // filled in the background; the next enrich sees the overlay.
         val supplemented = DataLearnerApi.supplement(fromDev, fetchIfMissing = false)
         DataLearnerApi.scheduleSupplement(supplemented)
-        return applyUnrecognizedModelDefaults(supplemented)
+        // [T-custom-model-enrich-wiring] NO unknown-model stamp here: the
+        // persisted baseModel must carry catalog TRUTH (nulls included), not
+        // the 256k/128k/5-tier guess — a stamped baseModel masks later catalog
+        // data (enrichWithDevData prefers a non-null model field over dev) and
+        // presents a guess as fact in the params page. The read path
+        // (ModelEntry.model → applyUnrecognizedModelDefaults) stamps at read
+        // time, so runtime behavior is unchanged while persisted data stays
+        // honest.
+        return supplemented
+    }
+
+    /**
+     * [T-custom-model-enrich-wiring] Save-path variant: fetch the DataLearner
+     * overlay SYNCHRONOUSLY (fetchIfMissing = true) so a first-time custom
+     * model — whose cache is necessarily cold, the background fill only
+     * starts after this call — persists the supplemented numbers instead of
+     * freezing the un-supplemented ones. Call on a background dispatcher only;
+     * the screen wraps it in withTimeout so a hung scrape cannot stall the
+     * save forever.
+     */
+    fun enrichModelNow(model: LLMModel): LLMModel {
+        val fromDev = applyDevMatch(model)
+        val supplemented = DataLearnerApi.supplement(fromDev, fetchIfMissing = true)
+        DataLearnerApi.scheduleSupplement(supplemented)
+        return supplemented
     }
 
     fun enrichModels(models: List<LLMModel>): List<LLMModel> {
         val fromDev = models.map { applyDevMatch(it) }
-        return DataLearnerApi.supplementAll(fromDev).map { applyUnrecognizedModelDefaults(it) }
+        // [T-custom-model-enrich-wiring] Same no-stamp rule as enrichModel:
+        // persisted baseModels carry catalog truth; the read path stamps.
+        return DataLearnerApi.supplementAll(fromDev)
     }
 
     private fun applyDevMatch(model: LLMModel): LLMModel {

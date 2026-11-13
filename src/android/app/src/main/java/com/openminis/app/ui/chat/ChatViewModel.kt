@@ -2336,6 +2336,12 @@ class ChatViewModel(
      * effectiveMaxThinkingLevel (so a user override on the entry is honored);
      * falls back to the resolved model's catalog default when no entry is
      * pinned (e.g. a group-resolved turn) or the model isn't known.
+     *
+     * [T-thinking-ultra-manual] The no-model fallback is ULTRA, matching the
+     * UNKNOWN_REASONING_EFFORT default set the repository stamps on unknown
+     * models (low..max) plus the ULTRA rung the session schema accepts. The
+     * wire layer still clamps onto whatever the model actually declares, so a
+     * generous ceiling here can only widen the picker, never the request.
      */
     private val currentModelMaxThinkingLevel: ThinkingLevel
         get() {
@@ -2345,7 +2351,7 @@ class ChatViewModel(
             if (entry != null) {
                 return forcedThinkingCeiling(entry) // [OpenMinis#311]
             }
-            val model = currentModel ?: return ThinkingLevel.XHIGH
+            val model = currentModel ?: return ThinkingLevel.ULTRA
             return model.catalogMaxThinkingLevel
         }
 
