@@ -1006,7 +1006,7 @@
     <string name="modeldetail_thinking_level_auto">Otomatik</string>
     <string name="modeldetail_thinking_level_effective_auto">Etkin: %1$s (katalog varsayılanı)</string>
     <string name="modeldetail_thinking_level_effective_override">Etkin: %1$s (elle)</string>
-    <string name="modeldetail_thinking_level_footer">Sohbet seçicisinin bu model için sunduğu düşünme seviyelerini sınırlar. Otomatik, katalog bildirimini izler. Ultra yalnızca sağlayıcı bildirdiğinde olduğu gibi gönderilir; aksi halde max'a eşlenir.</string>
+    <string name="modeldetail_thinking_level_footer">Sohbet seçicisinin bu model için sunduğu düşünme seviyelerini sınırlar. Otomatik, katalog bildirimini izler. Ultra yalnızca sağlayıcı bildirdiğinde olduğu gibi gönderilir; aksi halde max\'a eşlenir.</string>
     <string name="modeldetail_capabilities_footer">Bağlam penceresi ve en fazla çıkış token\'ı (token cinsinden). Sağlayıcı varsayılanlarını kullanmak için boş bırakın. Genişletilmiş akıl yürütmeyi destekleyen modeller için Düşünme\'yi etkinleştirin.</string>
     <string name="modeldetail_provider_default">Sağlayıcı varsayılanı</string>
     <string name="modeldetail_max_tokens_exceeds_warning">Sağlayıcının bildirdiği sınırı aşıyor (%1$d). Değer kaydedilir ancak hatalara yol açabilir.</string>
