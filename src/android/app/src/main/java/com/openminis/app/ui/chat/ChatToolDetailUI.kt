@@ -1052,26 +1052,15 @@ internal fun ToolDetailSheet(
 
                     Spacer(modifier = Modifier.width(8.dp))
 
-                    // Title + subtitle
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = toolTitleLabel(block.toolName),
-                            fontSize = 14.sp,
-                            lineHeight = 16.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = ChatColors.primaryText,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = displayToolTitle(block.toolName, block.toolArgs, block.toolTitle),
-                            fontSize = 12.sp,
-                            lineHeight = 14.sp,
-                            color = ChatColors.secondaryText,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+                    // [T-tool-card-semantic-detail v337] Apple three-tier
+                    // header: tool-type eyebrow / semantic headline / full
+                    // argument detail. Keeps the pre-#334 "Minis is reading"
+                    // affordance AND the user-visible Chinese detail line.
+                    ToolCardLabel(
+                        presentation = presentToolCard(block.toolName, block.toolArgs, block.toolTitle),
+                        modifier = Modifier.weight(1f),
+                        eyebrow = toolTitleLabel(block.toolName),
+                    )
 
                     // [T-step-timestamp v3-fix aa8b1128] Trailing column in
                     // the detail-view bottom bar: duration on top, the

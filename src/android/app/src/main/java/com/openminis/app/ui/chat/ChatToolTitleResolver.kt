@@ -1,94 +1,134 @@
 package com.openminis.app.ui.chat
 
 /**
- * [T-tool-title-single-source GH#344 / T-tool-card-detail-regression] SINGLE
- * source for the human-readable tool-card title used by the collapsed row
- * (ChatProcessCards), the detail sheet header (ChatToolDetailUI), the status
- * bar (ChatViewModelToolTurnExec) and persistence (buildTurnParts).
+ * [T-tool-title-single-source GH#344 / T-tool-card-detail-regression v337]
+ * SINGLE settlement point for the human-readable tool-card label, used by the
+ * collapsed row (ChatProcessCards), the detail sheet header (ChatToolDetailUI),
+ * the status bar (ChatViewModelToolTurnExec), the composer chip, flat items and
+ * persistence (buildTurnParts).
  *
- * Design — separation of concerns + idempotent settlement:
- *  - `tool_title` is the model's SEMANTIC summary and always wins.
- *  - A derived summary ("Reading /full/path", "Grep <pattern>", "$ cmd") is a
- *    pure function of COMPLETE args and is recomputed on every call. It is a
- *    fallback for when the model omitted `tool_title`, never a fabricated
- *    replacement for it.
- *  - STREAMING / PARTIAL args NEVER yield a derived summary: #334 derived from
- *    a half-arrived `{"path":"/va` and step 2 then trusted that "specific"
- *    prior forever, so "Reading /va" was frozen into the persisted
- *    `description` even after the full args arrived (2026-11-13 session DB:
- *    12 such shadows, each with the FULL path still present in `input`). During
- *    streaming we show only the model's `tool_title` preview or the Title-Case
- *    friendly label — both are transient and are replaced at the complete-args
- *    settlement.
- *  - COMPLETE args are the one authoritative settlement point: a prior that is
- *    itself a (possibly truncated) derived shadow yields to the fresh
- *    recomputation, so already-persisted half-path cards self-heal on render.
- *    A genuine semantic prior whose `tool_title` is absent from this args
- *    snapshot (e.g. an online tool that strips it before persistence) is kept.
+ * Root cause of the regression the user reported after #336 shipped
+ * ("read card only shows a path, not the detail; grep/glob too"): the old
+ * resolver collapsed THREE meanings into ONE persisted `toolTitle` string —
+ * the model's SEMANTIC `tool_title`, a streaming preview, and an
+ * argument-derived summary ("Reading /full/path"). Live device evidence
+ * (2026-11-13 session DB):
+ *   description="Reading /var/minis/workspace/facts.txt"   <- no tool_title
+ *   description="kan IAM shell page"                       <- tool_title present
+ * The card's "detail" therefore depended on model whim. #334/#336 only fixed
+ * "half path" -> "full path" and left the collapsed field untouched.
  *
- * Bare snake_case names never reach the UI (#331/#332 invariant preserved).
+ * v337 separates the meanings, once, for every tool:
+ *   [ToolCardPresentation.title]  = SEMANTIC label (model tool_title > a prior
+ *       genuine semantic title > the Title-Case friendly name). Never a path,
+ *       never a pattern, never a command — no argument value may become the
+ *       headline. History cards carrying a #334/#336 derived shadow self-heal.
+ *   [ToolCardPresentation.detail] = full argument summary (path / pattern /
+ *       command / query), rendered as a distinct secondary line. Computed only
+ *       from COMPLETE args; partial/streaming JSON never fabricates detail.
+ *
+ * Bare snake_case names still never reach the UI (#331/#332 invariant).
  * Pure Kotlin + org.json — no Android/Context/Compose dependency — so the
- * whole ladder is JVM-unit-testable.
+ * whole ladder is JVM-unit-testable and mirrored by the CI ratchet.
  */
+internal data class ToolCardPresentation(
+    val title: String,
+    val detail: String = "",
+)
+
+/** Semantic title only. Signature-compatible with all 16 existing callers. */
 internal fun resolveToolTitle(
     toolName: String,
     argsJson: String,
     existingTitle: String = "",
-): String {
+): String = presentToolCard(toolName, argsJson, existingTitle).title
+
+/** Rendering helper for history restore: same single settlement point. */
+internal fun displayToolTitle(toolName: String, toolArgs: String, toolTitle: String): String =
+    presentToolCard(toolName, toolArgs, toolTitle).title
+
+/** The ONE settlement point for both meanings of a tool card. */
+internal fun presentToolCard(
+    toolName: String,
+    argsJson: String,
+    existingTitle: String = "",
+): ToolCardPresentation {
     val canonical = com.openminis.app.security.ToolAliases.canonical(toolName)
     val friendly = friendlyToolTitle(canonical)
     val prior = existingTitle.trim()
 
-    // Parse ONCE. A complete JSONObject is the ONLY authoritative settlement
-    // point; partial/streaming JSON is never used to fabricate a path title.
+    // Parse ONCE. A complete JSONObject is the only authoritative settlement
+    // point; partial/streaming JSON is never used to fabricate a path detail.
     val complete: org.json.JSONObject? = try {
         org.json.JSONObject(argsJson)
     } catch (_: Exception) {
         null
     }
 
-    // 1. The model's own semantic title wins — from complete args or from a
-    //    streaming `tool_title` preview (the model's words, not a path). A bare
-    //    identifier ("file_read" — some schemas default tool_title to NAME) is
-    //    not a title.
-    extractToolTitle(argsJson, fallback = null)
-        ?.trim()?.takeIf {
-            it.isNotEmpty() && it != toolName && it != canonical && it != friendly &&
-                !looksLikeBareName(it)
-        }
-        ?.let { return it }
-
-    // 2. Complete args: authoritative, idempotent settlement. Recompute from
-    //    the full JSON every time so a stale streaming shadow can never be
-    //    frozen in.
-    if (complete != null) {
-        val fresh = deriveToolTitle(canonical, complete)
-        val semanticPrior = prior.takeIf {
-            it.isNotEmpty() && it != toolName && it != canonical && it != friendly &&
-                !looksLikeBareName(it) && !isDerivedShadow(it, fresh)
-        }
-        return semanticPrior ?: fresh ?: friendly
+    // 1. The model's own semantic title is authoritative: it comes straight
+    //    from the `tool_title` argument of THIS call, so it can never be a
+    //    persisted #334/#336 derived shadow. Only bare identifiers, the
+    //    friendly label itself, and raw paths/URLs are rejected here.
+    val modelTitle = extractToolTitle(argsJson, fallback = null)?.trim()?.takeIf {
+        isSemanticTitle(it, toolName, canonical, friendly)
     }
 
-    // 3. Streaming / dirty JSON: NEVER derive a title from partial args. Keep
-    //    a genuine semantic prior, else the Title-Case friendly label. This is
-    //    a transient preview, replaced by step 2 as soon as args complete.
+    // 2. A genuine semantic prior survives only when this args snapshot
+    //    stripped tool_title (e.g. an online tool) AND the prior is not a
+    //    collapsed-field-era derived shadow ("Reading /var/min"). History
+    //    cards with such a shadow self-heal into the friendly label while
+    //    their full args reappear in `detail` below.
     val semanticPrior = prior.takeIf {
-        it.isNotEmpty() && it != toolName && it != canonical && it != friendly &&
-            !looksLikeBareName(it)
+        isSemanticTitle(it, toolName, canonical, friendly) && !isDerivedShadow(it)
     }
-    return semanticPrior ?: friendly
+
+    val title = modelTitle ?: semanticPrior ?: friendly
+    // The argument detail is INDEPENDENT of the title. Even when the model
+    // supplies a semantic title the card still shows the full path/pattern in
+    // its own secondary line — that is the information the user asked for.
+    val detail = complete?.let { resolveToolDetail(canonical, it) }.orEmpty()
+    return ToolCardPresentation(title = title, detail = detail)
 }
 
-/**
- * [T-tool-title-single-source GH#344] Rendering helper for tool cards / detail
- * headers. History restore keeps the original toolTitle (possibly a bare name
- * or a #334 half-path shadow) plus the full args JSON, so call this instead of
- * `toolTitle.ifEmpty { name }` to reconstruct a readable, self-healed title for
- * every already-persisted card too.
- */
-internal fun displayToolTitle(toolName: String, toolArgs: String, toolTitle: String): String =
-    resolveToolTitle(toolName, toolArgs, toolTitle)
+/** Full argument summary; pure function of COMPLETE args, never a title. */
+internal fun resolveToolDetail(toolName: String, json: org.json.JSONObject): String {
+    fun str(key: String): String? = json.optString(key, "").trim().takeIf { it.isNotEmpty() }
+    fun cap(s: String, n: Int = 160): String = if (s.length > n) s.take(n) + "…" else s
+    val canonical = com.openminis.app.security.ToolAliases.canonical(toolName)
+    return when (canonical) {
+        "file_read", "file_write", "file_edit", "list_dir", "multi_edit" -> str("path") ?: ""
+        "read_image" -> (str("path") ?: str("image_path") ?: str("prompt")) ?: ""
+        "glob", "grep" -> str("pattern") ?: ""
+        "shell_execute", "env_exec", "su_exec", "ssh_exec" -> str("command")?.let { cap("${'$'} $it") } ?: ""
+        "execute_code" -> str("code")?.let { cap(it) } ?: ""
+        "browser_use" -> listOfNotNull(str("action"), str("url")).joinToString(" ")
+        "web_search" -> str("query") ?: ""
+        "web_fetch" -> str("url") ?: ""
+        "memory_write" -> str("content")?.let { cap(it) } ?: ""
+        "memory_get" -> str("keywords") ?: ""
+        "search_sessions" -> str("query") ?: ""
+        "read_session" -> str("session_id") ?: ""
+        "spawn_agent", "dispatch_agents", "wolfpack_run" -> str("task")?.let { cap(it) } ?: ""
+        "agent_plan" -> str("title") ?: ""
+        "ask_user_question" -> str("question")?.let { cap(it) } ?: ""
+        "cronjob" -> str("prompt")?.let { cap(it) } ?: ""
+        "ui_action" -> str("action") ?: ""
+        "file_checkpoint" -> str("op") ?: ""
+        else -> ""
+    }.let { cap(it) }
+}
+
+/** True only for a human/model semantic label, never an argument value. */
+private fun isSemanticTitle(
+    s: String, toolName: String, canonical: String, friendly: String,
+): Boolean =
+    s.isNotEmpty() && s != toolName && s != canonical && s != friendly &&
+        !looksLikeBareName(s) &&
+        // A model title may legitimately begin with a verb ("Plan the fix",
+        // "Search related docs"); derived-prefix self-heal belongs ONLY to
+        // the persisted prior, never to the model's own words. A whole
+        // path/URL as the headline is the #334 failure mode, though.
+        !s.startsWith("/") && !s.startsWith("http://") && !s.startsWith("https://")
 
 /** snake_case / lower-case identifier like `file_read`, not a readable label. */
 private fun looksLikeBareName(s: String): Boolean =
@@ -96,68 +136,38 @@ private fun looksLikeBareName(s: String): Boolean =
         s.all { it == '_' || it.isDigit() || (it.isLetter() && it.isLowerCase()) }
 
 /**
- * A prior produced by the old streaming derivation — a truncated half-path
- * ("Reading /var/min"), a full derived label, or any prefix of the fresh
- * derivation — must yield to the complete-args recompute so #334's frozen
- * shadows self-heal on history restore. A genuine model title (a Chinese
- * summary, a plain human phrase) carries none of these markers and is kept.
- * When no fresh derivation exists there is nothing authoritative to replace
- * the prior with, so it is preserved instead of being blindly discarded.
- * Labels mirror deriveToolTitle's `when` branches; keep both in sync.
+ * Prior produced by the old streaming derivation — a truncated half-path
+ * ("Reading /var/min"), a full derived label ("Grep resolve"), "$ ls", etc.
+ *
+ * Shape-based, NOT a prefix blacklist: the tail of a derived label is always
+ * a MACHINE VALUE (path, glob pattern, command, single token), while a
+ * model-written semantic title is natural language — a multi-word English
+ * phrase ("Plan the fix") or CJK text ("Search 相关文档"). A bare prefix
+ * match would silently discard those legitimate titles. History cards with
+ * a real shadow self-heal into the friendly label while their full args
+ * reappear in `detail`. Exported for the CI ratchet and JVM tests.
  */
-private val DERIVED_LABEL_PREFIXES = listOf(
+internal val DERIVED_LABEL_PREFIXES = listOf(
     "Reading ", "Writing ", "Editing ", "Viewing ", "Listing ", "Glob ", "Grep ",
     "${'$'} ", "Checkpoint ", "Multi-edit ", "Run ", "browser ", "Search ", "Fetch ",
     "Memory ", "Sessions ", "Session ", "Agent ", "Plan ", "Ask ", "Schedule ", "Tap ",
 )
 
-private fun isDerivedShadow(prior: String, fresh: String?): Boolean =
-    fresh != null && (
-        DERIVED_LABEL_PREFIXES.any { prior.startsWith(it) } || fresh.startsWith(prior)
-    )
-
-/**
- * Mirror of PreviewText.summarizeToolUse, shared by every UI entry point, but
- * driven by an ALREADY-PARSED complete [org.json.JSONObject] so a half-arrived
- * value can never leak into a title. Returns null when no concrete key exists.
- */
-private fun deriveToolTitle(toolName: String, json: org.json.JSONObject): String? {
-    fun str(key: String): String? = json.optString(key, "").trim().takeIf { it.isNotEmpty() }
-    fun cap(s: String, n: Int = 100): String = if (s.length > n) s.take(n) + "…" else s
-    // Canonicalize ONCE here via the registry's single alias map
-    // (shell_exec → shell_execute, ls → list_dir, describe_image → read_image,
-    // find_files → glob, ...). Duplicating aliases in the `when` below would
-    // recreate the "three competing sources" root cause.
-    val canonicalName = com.openminis.app.security.ToolAliases.canonical(toolName)
-    return when (canonicalName) {
-        "file_read" -> str("path")?.let { cap("Reading $it") }
-        "file_write" -> str("path")?.let { cap("Writing $it") }
-        "file_edit" -> str("path")?.let { cap("Editing $it") }
-        "read_image" -> (str("path") ?: str("image_path"))?.let { cap("Viewing $it") }
-            ?: str("prompt")?.let { cap("Viewing: $it") }
-        "list_dir" -> str("path")?.let { cap("Listing $it") }
-        "file_checkpoint" -> str("op")?.let { cap("Checkpoint $it") }
-        "multi_edit" -> str("path")?.let { cap("Multi-edit $it") }
-        "glob" -> str("pattern")?.let { cap("Glob $it") }
-        "grep" -> str("pattern")?.let { cap("Grep $it") }
-        "shell_execute", "env_exec", "su_exec", "ssh_exec" -> str("command")?.let { cap("${'$'} $it") }
-        "execute_code" -> str("code")?.let { cap("Run $it") }
-        "browser_use" -> {
-            val action = str("action") ?: return null
-            val url = str("url")
-            cap(if (url != null) "$action $url" else "browser $action")
-        }
-        "web_search" -> str("query")?.let { cap("Search $it") }
-        "web_fetch" -> str("url")?.let { cap("Fetch $it") }
-        "memory_write" -> str("content")?.let { cap("Memory $it") }
-        "memory_get" -> str("keywords")?.let { cap("Memory $it") }
-        "search_sessions" -> str("query")?.let { cap("Sessions $it") }
-        "read_session" -> str("session_id")?.let { cap("Session $it") }
-        "spawn_agent", "dispatch_agents", "wolfpack_run" -> str("task")?.let { cap("Agent $it") }
-        "agent_plan" -> str("title")?.let { cap("Plan $it") }
-        "ask_user_question" -> str("question")?.let { cap("Ask $it") }
-        "cronjob" -> str("prompt")?.let { cap("Schedule $it") }
-        "ui_action" -> str("action")?.let { cap("Tap $it") }
-        else -> null
-    }
+internal fun isDerivedShadow(prior: String): Boolean {
+    val head = DERIVED_LABEL_PREFIXES.firstOrNull { prior.startsWith(it) } ?: return false
+    val tail = prior.removePrefix(head)
+    if (tail.isEmpty()) return true
+    // CJK text in the tail is a human-written title, never a derived argument.
+    if (tail.any { it.code in 0x4E00..0x9FFF }) return false
+    // Path / glob / URL / shell metacharacters are machine values.
+    if (tail.startsWith("/") || tail.startsWith(".") || tail.startsWith("~") ||
+        tail.contains('*') || tail.contains("://") ||
+        tail.any { it == '|' || it == '>' || it == '&' || it == ';' }
+    ) return true
+    // A single ASCII token ("resolve", "v337") is an argument value or its
+    // streamed prefix; "$ <command ...>" is always the old command label.
+    val singleToken = !tail.contains(' ') && !tail.contains('\t')
+    if (singleToken || head == "${'$'} ") return true
+    // Multi-word natural-language phrase: a genuine semantic title.
+    return false
 }

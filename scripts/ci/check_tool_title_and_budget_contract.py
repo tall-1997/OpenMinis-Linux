@@ -163,40 +163,52 @@ check("displayToolTitle(prev.toolName" in turn,
 check("resolveToolTitle(call.name, call.argsStr)" in turn,
       "ToolTurnExec: status-bar dispatch must show the same concrete title as the card")
 
+# v337: the collapsed/detail renderers now use the ONE two-field settlement
+# (presentToolCard + ToolCardLabel). The old invariant — "every UI file must
+# call displayToolTitle()" — belonged to the collapsed-field era; accepting a
+# file that still emits a bare `toolTitle.ifEmpty { toolName }` would undo the
+# #331/#332 fix, so both forms are checked against the new contract.
 for name in UI_FILES:
     body = strip_comments(read(CHAT / name))
     check("toolTitle.ifEmpty" not in body,
-          f"{name}: renderer must use displayToolTitle, not toolTitle.ifEmpty {{ toolName }}")
-    check("displayToolTitle(" in body,
-          f"{name}: missing displayToolTitle() render fallback")
+          f"{name}: renderer must not fall back to a bare snake_case name")
+    check("displayToolTitle(" in body or "presentToolCard(" in body,
+          f"{name}: renderer must use the single settlement point, not raw toolTitle")
+    check("ToolCardLabel(" in body or "displayToolTitle(" in body,
+          f"{name}: renderer must show the semantic title (v337 two-line or legacy single-line)")
 
-# ---- C. tool-card detail regression (GH#334 → this fix) -------------------
+# ---- C. tool-card semantic/argument separation (GH#334 → #336 → v337) ------
 # #334 made deriveToolTitle consume STREAMING PARTIAL JSON via
 # extractPartialJsonString, so a half-arrived `{"path": "/va` produced
 # "Reading /va"; step 2 then trusted that derived shadow as an already
-# "specific" prior FOREVER, so the complete args at ToolCallComplete never
-# recomputed it and the half-path was persisted as `description`. The renderer
-# reused this same ladder, so already-persisted cards could not heal either.
+# "specific" prior FOREVER. #336 fixed that to a complete-args idempotent
+# settlement but kept the THREE meanings collapsed into ONE persisted
+# `toolTitle` string, so a card without a model `tool_title` still showed only
+# a path — the user reported the regression again after #336 shipped.
 # (Evidence: 2.0.90 = 68fab74a has NO deriveToolTitle; `git log -S 'Reading $it'`
-# lands exactly on c56c2ccc; session DB 11-07 file_read 81/81 carry tool_title
-# vs 11-13 8/66 with 12 "Reading /var/min" shadows whose persisted `input`
-# is nevertheless the FULL path.)
+# lands on c56c2ccc; 2026-11-13 device DB parts_json: file_read WITHOUT
+# tool_title -> description="Reading /var/minis/workspace/facts.txt", the same
+# tool WITH tool_title -> description="kan IAM shell page".)
 TEST = ROOT / "src/android/app/src/test/java/com/openminis/app/ui/chat/ToolTitleResolverTest.kt"
 test_src = read(TEST)
 check("extractPartialJsonString(" not in res,
-      "resolver: deriveToolTitle must NOT read streaming partial JSON — that produced the 'Reading /var/min' half-path #334 regression")
+      "resolver: partial JSON must never fabricate a title/detail (#334 half-path regression)")
 check("JSONObject(argsJson)" in res,
       "resolver: a complete JSONObject parse must be the single authoritative settlement point")
-check("startsWith(prior)" in res,
-      "resolver: a stale derived shadow (prefix of the fresh full derivation) must yield to the recomputed title — idempotent settle / history self-heal")
-check("fun deriveToolTitle(toolName: String, json: org.json.JSONObject)" in res,
-      "resolver: deriveToolTitle must consume a parsed JSONObject, not raw argsJson")
+check("fun presentToolCard(" in res,
+      "resolver: ONE settlement point must produce both title and detail")
+check("fun resolveToolDetail(" in res,
+      "resolver: argument detail must be an independent pure source, not a title")
+check("startsWith(it)" in res or "DERIVED_LABEL_PREFIXES.any" in res,
+      "resolver: a persisted derived shadow must self-heal into a semantic title")
 for t in (
     "streamingHalfPathNeverBecomesATitle",
     "completeArgsOverwriteStaleHalfPath",
     "historyHalfPathShadowSelfHeals",
     "partialToolTitleIsPreviewOnly",
     "modelTitleOnCompleteArgsBeatsStalePrior",
+    "untitledFileReadShowsThePathAsDetail",
+    "aliasesRouteThroughTheSingleCanonicalMap",
 ):
     check(f"fun {t}()" in test_src,
           f"ToolTitleResolverTest: missing regression test {t}()")
@@ -204,9 +216,9 @@ check('assertEquals("Reading /va",' not in test_src and
       "fun streamingPartialArgsStillProduceATitle()" not in test_src,
       "ToolTitleResolverTest: the old 'streaming partial args produce a half-path title' expectation must be gone")
 
-# Behavioural replica of the Kotlin ladder (file_read / grep / glob subset).
-# Python-only so the gate runs locally without the JVM; the Kotlin unit tests
-# are the authoritative mirror executed by CI.
+# Behavioural replica of the v337 Kotlin settlement (file_read / grep / glob /
+# shell). Python-only so the gate runs locally without the JVM; the Kotlin
+# unit tests are the authoritative mirror executed by CI.
 DERIVED_PREFIXES = (
     "Reading ", "Writing ", "Editing ", "Viewing ", "Listing ", "Glob ", "Grep ",
     "$ ", "Checkpoint ", "Multi-edit ", "Run ", "browser ", "Search ", "Fetch ",
@@ -217,13 +229,38 @@ def _is_bare(s: str) -> bool:
     return ("_" in s and s == s.lower()
             and all(c == "_" or c.isdigit() or (c.isalpha() and c.islower()) for c in s))
 
-def replica_resolve(tool: str, args: str, prior: str = "") -> str:
-    """Faithful Python mirror of ChatToolTitleResolver.resolveToolTitle (the
-    file_read / grep / glob subset). Kept in lockstep with the Kotlin ladder:
-    step1 model title -> step2 COMPLETE-args idempotent settlement ->
-    step3 streaming/dirty never derives. The JVM unit tests are authoritative;
-    this replica exists so the gate runs locally without a compile."""
-    friendly = {"file_read": "Read File", "grep": "Grep", "glob": "Glob"}.get(tool, "Tool")
+def _semantic(s: str, tool: str, friendly: str) -> bool:
+    # Model's own `tool_title` is authoritative: it may legitimately start with
+    # a verb ("Plan the fix", "Search related docs"). Derived-shadow self-heal
+    # belongs ONLY to a persisted prior, applied separately in replica_present.
+    return (bool(s) and s != tool and s != friendly and not _is_bare(s)
+            and not s.startswith(("/", "http://", "https://")))
+
+def _is_shadow(prior: str) -> bool:
+    """Shape-based mirror of Kotlin isDerivedShadow(): a derived label's tail
+    is a machine value (path/pattern/command/single token), a model title's
+    tail is natural language (multi-word phrase or CJK). Prefix alone never
+    condemns a legitimate 'Plan the fix' / 'Search related docs' title."""
+    p = prior.strip()
+    head = next((x for x in DERIVED_PREFIXES if p.startswith(x)), None)
+    if head is None:
+        return False
+    tail = p[len(head):]
+    if not tail:
+        return True
+    if any("\u4e00" <= ch <= "\u9fff" for ch in tail):
+        return False
+    if (tail.startswith(("/", ".", "~")) or "*" in tail or "://" in tail
+            or any(c in tail for c in "|>&;")):
+        return True
+    return " " not in tail and "\t" not in tail or head == "$ "
+
+def replica_present(tool: str, args: str, prior: str = "") -> tuple[str, str]:
+    """Faithful Python mirror of presentToolCard(): (semantic title, full
+    argument detail). Kept in lockstep with the Kotlin ladder. The JVM unit
+    tests are authoritative; this replica lets the gate run without a compile."""
+    friendly = {"file_read": "Read File", "grep": "Grep", "glob": "Glob",
+                "shell_execute": "Execute Shell"}.get(tool, "Tool")
     complete = None
     try:
         parsed = _json.loads(args)
@@ -231,68 +268,119 @@ def replica_resolve(tool: str, args: str, prior: str = "") -> str:
             complete = parsed
     except Exception:
         pass
-    # step 1 — model's semantic tool_title wins (complete args or streaming preview)
+    # 1. model's semantic tool_title wins (complete args or streaming preview)
     model = ""
     if complete is not None:
         t = str(complete.get("tool_title", "")).strip()
-        if t and t != tool and t != friendly and not _is_bare(t):
+        if _semantic(t, tool, friendly):
             model = t
     if not model:
         m = re.search(r'"tool_title"\s*:\s*"([^"]*)', args)
         if m:
             t = m.group(1).strip()
-            if t and t != tool and t != friendly and not _is_bare(t):
+            if _semantic(t, tool, friendly):
                 model = t
-    if model:
-        return model
+    # 2. a genuine semantic prior survives; derived shadows self-heal
     p = prior.strip()
-    semantic = bool(p) and p != tool and p != friendly and not _is_bare(p)
-    if complete is None:
-        # step 3 — streaming/dirty JSON: NEVER derive; semantic prior or friendly
-        return p if semantic else friendly
-    # step 2 — COMPLETE args: the single authoritative, idempotent settlement
-    derived = None
-    if tool == "file_read" and str(complete.get("path", "")).strip():
-        derived = "Reading " + str(complete["path"])
-    elif tool in ("grep", "glob") and str(complete.get("pattern", "")).strip():
-        derived = ("Grep " if tool == "grep" else "Glob ") + str(complete["pattern"])
-    shadow = derived is not None and (
-        any(p.startswith(pre) for pre in DERIVED_PREFIXES) or derived.startswith(p)
-    )
-    if semantic and not shadow:
-        return p
-    return derived if derived is not None else friendly
+    shadow = _is_shadow(p)
+    semantic_prior = p if _semantic(p, tool, friendly) and not shadow else ""
+    title = model or semantic_prior or friendly
+    # 3. detail is INDEPENDENT of the title, from COMPLETE args only
+    detail = ""
+    if complete is not None:
+        detail = str(complete.get("path") or complete.get("pattern") or
+                     complete.get("command") or "")
+        if tool == "shell_execute" and detail:
+            detail = "$ " + detail
+        if len(detail) > 160:
+            detail = detail[:160] + "…"
+    return title, detail
 
 FULL = "/var/minis/skills/superpowers/skills/systematic-debugging/SKILL.md"
-check(replica_resolve("file_read", '{"path": "/va') == "Read File",
-      "replica: streaming half-JSON must NOT derive 'Reading /va' — friendly preview instead")
-check(replica_resolve("glob", '{"pattern": "**/*.k') == "Glob",
-      "replica: streaming glob args must not produce a half-pattern title")
-check(replica_resolve("file_read", '{"path":"%s"}' % FULL, "Reading /var/min") == "Reading " + FULL,
-      "replica: complete args overwrite the stale half-path shadow with the FULL path")
-check(replica_resolve("file_read", '{"path":"%s"}' % FULL, "Reading /var/min")
-      == replica_resolve("file_read", '{"path":"%s"}' % FULL, "Reading " + FULL),
+check(replica_present("file_read", '{"path": "/va')[0] == "Read File",
+      "replica: streaming half-JSON never derives 'Reading /va'")
+check(replica_present("glob", '{"pattern": "**/*.k')[0] == "Glob",
+      "replica: streaming glob args never produce a half-pattern title")
+check(replica_present("file_read", '{"path":"%s"}' % FULL, "Reading /var/min")[0] == "Read File",
+      "replica: a persisted half-path shadow self-heals into the semantic label")
+check(replica_present("file_read", '{"path":"%s"}' % FULL, "Reading /var/min")
+      == replica_present("file_read", '{"path":"%s"}' % FULL, "Reading " + FULL),
       "replica: settlement is idempotent — the shadow cannot survive a complete-args recompute")
-check(replica_resolve("file_read", '{"tool_title":"读技能避坑说明","path":"/a"}', "Reading /a") == "读技能避坑说明",
+check(replica_present("file_read", '{"tool_title":"du ji neng bi keng shuo ming","path":"/a"}', "Reading /a")[0]
+      == "du ji neng bi keng shuo ming",
       "replica: model tool_title beats a stale derived shadow")
-check(replica_resolve("file_read", '{"tool_title":"读 systematic-debugging","path":"/a"}') == "读 systematic-debugging",
-      "replica: Chinese semantic detail is preserved as the card title")
-check(replica_resolve("file_read", '{"path":"/a"}', "读取停滞判定与终止策略现状") == "读取停滞判定与终止策略现状",
+check(replica_present("file_read", '{"path":"/a"}', "du qu ting zhi pan ding")[0]
+      == "du qu ting zhi pan ding",
       "replica: a genuine semantic prior is kept (not mistaken for a derived shadow)")
-check(replica_resolve("grep", "{}", "Grep") == "Grep",
+check(replica_present("grep", "{}", "Grep")[0] == "Grep",
       "replica: empty-args history card stays a friendly label, never a bare snake_case name")
-check(replica_resolve("grep", '{"pattern":"resolveToolTitle"}', "Grep resolve") == "Grep resolveToolTitle",
+check(replica_present("grep", '{"pattern":"resolveToolTitle"}', "Grep resolve")[0] == "Grep",
       "replica: prefix-shadow self-heal holds for every derived tool, not just file_read")
+# Shape-based detector: a model/semantic title colliding with a derived prefix
+# ("Plan the fix", "Search related docs") is NOT a shadow; a real derived
+# label with a machine-value tail IS. No prefix blacklist guesswork.
+check(replica_present("agent_plan", '{"tool_title":"Plan the fix","title":"v337"}')[0]
+      == "Plan the fix",
+      "replica: model title beginning with a derived verb stays authoritative")
+check(replica_present("file_read", '{"path":"/a"}', "Plan the fix")[0] == "Plan the fix",
+      "replica: multi-word semantic prior is kept despite a colliding prefix")
+check(replica_present("glob", '{"pattern":"**/*.kt"}', "Glob **/*.k")[0] == "Glob",
+      "replica: pattern-shaped derived shadow self-heals")
+# THE regression the user reported: no tool_title -> path was the whole line.
+check(replica_present("file_read", '{"path":"/var/minis/workspace/facts.txt"}')
+      == ("Read File", "/var/minis/workspace/facts.txt"),
+      "replica: untitled file_read has a semantic headline AND the full path as a separate detail line")
+check(replica_present("glob", '{"pattern":"**/*.kt"}')[1] == "**/*.kt",
+      "replica: untitled glob exposes its pattern as detail, never as the headline")
+check(replica_present("grep", '{"pattern":"resolveToolTitle"}')[1] == "resolveToolTitle",
+      "replica: untitled grep exposes its pattern as detail, never as the headline")
+check(replica_present("shell_execute", '{"tool_title":"cha kan yuan ma shu","command":"ls -la"}')
+      == ("cha kan yuan ma shu", "$ ls -la"),
+      "replica: shell keeps its model title AND shows the command as detail")
 
 # The model-side half of the fix: a contract line in the system prompt keeps
-# `tool_title` flowing for tools whose schema exposes it (shell_execute always
-# had it — that is why it alone survived #334). App-side derivation is the
-# fallback; this line makes the semantic detail the common case again.
+# `tool_title` flowing for tools whose schema exposes it. App-side separation
+# of title/detail is the fallback; this line keeps the semantic detail the
+# common case for models that read the prompt.
 prompt = read(PROMPT)
 check("Every tool call MUST set the `tool_title` parameter" in prompt,
-      "ChatViewModelPromptExt: the system-prompt tool_title contract is missing — semantic card details will keep depending on model whim")
+      "ChatViewModelPromptExt: the system-prompt tool_title contract is missing")
 check("Never pass the bare tool name or a truncated path as `tool_title`" in prompt,
       "ChatViewModelPromptExt: the contract must forbid bare names / truncated paths")
+
+# ---- D. semantic title / argument detail separation (v337) -----------------
+# ROOT CAUSE (2026-11-13, user: "read card only shows a path, not the detail
+# it used to show; grep/glob too"): resolveToolTitle collapsed THREE meanings
+# into ONE persisted title field -- the model's semantic `tool_title`, a
+# streaming preview, and an argument-derived summary ("Reading /full/path").
+# When the model omitted tool_title, the argument value became the whole card
+# line, so the card carried a path and NO semantic detail. #334/#336 only
+# changed half-path -> full-path; the collapsed field itself survived, so the
+# regression was reported again after #336 shipped.
+#
+# v337 separates the meanings at ONE settlement point:
+#   ToolCardPresentation.title  = semantic label (model title > friendly name)
+#   ToolCardPresentation.detail = full argument summary (path/pattern/command)
+# and the collapsed row renders both, Apple-style (primary + secondary line).
+# These structural checks are the local RED phase of the TDD cycle: the Kotlin
+# unit tests run in cloud CI, this gate is the runnable local proxy.
+pres = read(RESOLVER)
+check("data class ToolCardPresentation" in pres,
+      "v337: ToolCardPresentation(title, detail) missing -- the two meanings are still collapsed")
+check(re.search(r"fun presentToolCard\(", pres) is not None,
+      "v337: presentToolCard() single settlement point is missing")
+check(re.search(r"fun resolveToolDetail\(", pres) is not None,
+      "v337: argument detail has no independent pure source")
+check(re.search(r"fun isDerivedShadow\(", pres) is not None,
+      "v337: historical 'Reading /path' shadows must still self-heal")
+pc = read(CHAT / "ChatProcessCards.kt")
+check("ToolCardLabel(" in pc,
+      "v337: collapsed process row must render title + detail as two Apple-style lines")
+check((CHAT / "ToolCardLabel.kt").exists(),
+      "v337: ToolCardLabel composable file is missing")
+new_test = ROOT / "src/android/app/src/test/java/com/openminis/app/ui/chat/ToolCardPresentationTest.kt"
+check(new_test.exists(),
+      "v337: ToolCardPresentationTest.kt (TDD RED) is missing")
 
 # ---- verdict ---------------------------------------------------------------
 if errors:

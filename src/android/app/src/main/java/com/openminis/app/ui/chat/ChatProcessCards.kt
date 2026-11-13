@@ -246,16 +246,26 @@ private fun ProcessStepRow(step: ProcessStepRef, onOpen: () -> Unit) {
                 )
             }
             Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = if (isThinking) stringResource(R.string.chat_thinking_header)
-                    else displayToolTitle(block.toolName, block.toolArgs, block.toolTitle),
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                color = if (isFailed) ToolErrorColor else MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (isThinking) {
+                Text(
+                    text = stringResource(R.string.chat_thinking_header),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            } else {
+                // [T-tool-card-semantic-detail v337] Two distinct meanings in
+                // two distinct typographic roles: semantic headline + full
+                // argument detail. A path must never replace the headline.
+                ToolCardLabel(
+                    presentation = presentToolCard(block.toolName, block.toolArgs, block.toolTitle),
+                    modifier = Modifier.weight(1f),
+                    failed = isFailed,
+                )
+            }
             if (isThinking) {
                 val charCount = block.content.length
                 if (charCount > 0) {

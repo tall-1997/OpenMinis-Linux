@@ -109,3 +109,43 @@ Kotlin 静态自检：`()` 93/93、`{}` 37/37、`[]` 0/0 平衡；`deriveToolTit
 - `ChatViewModelAgentLoopExt.kt:872` ToolCallComplete：完整 args 走 step2 无条件重算覆盖 prior。
 - `ChatViewModelToolTurnExec.kt:396` finalizePlannedCall、`ChatViewModelExecuteToolExt.kt:110` executeTool、`:520` 状态栏、渲染 `displayToolTitle`：共用同一阶梯，持久化半截路径残影在渲染时自愈。
 - 11-13 会话库 12 条 `description='Reading /var/min…'` 样本的 `input` 均为完整路径，自愈路径有真实数据支撑。
+
+
+## 9. v337：#336 没修好的根因与彻底修复（2026-11-13 本轮）
+
+### 为什么 #336 之后爸爸仍然看到「只显示路径」
+
+#336 把「半截路径」修成「完整路径」，但**三个语义仍压在同一个持久化字段 `toolTitle`**：
+
+1. 模型权威 `tool_title`（中文语义详情，如「查看现有源码目录」）
+2. 流式临时预览
+3. 参数派生摘要（`Reading /var/minis/workspace/facts.txt`、`Grep <pattern>`、`Glob <pattern>`）
+
+真机证据（2.0.90 dex 含 #336 字面量；`minis.db` 的 `parts_json` 同屏两条 `file_read`）：
+- 未传 `tool_title`：`description="Reading /var/minis/workspace/facts.txt"` —— 卡片整行就是路径；
+- 传了 `tool_title`：`description="看IAM壳页完整内容"` —— 中文详情正常。
+
+`resolveToolTitle` 在模型漏传 `tool_title` 时用 `deriveToolTitle` 的**参数值**顶替主标题，于是「详情」是否存在取决于模型自觉。#336 只改了兜底文案的完整性，没拆字段，所以回归照旧。`shell_execute` 正常仅因模型稳定传 `tool_title`；思考卡片走独立渲染路径。
+
+上一轮把 `required = listOf("tool_title","path")` 与运行时 `tool_title?:` 的差异误判为「required 在导出链丢失」——已排除：`toResponsesAPIJson()` 里 `put("required", JSONArray(required))` 在位，紧凑工具清单的 `?:` 是另一套文本渲染，不是 function schema。误诊当场作废。
+
+### 修复：语义 / 参数单一结算、职责分离（普适，非补丁）
+
+- `ChatToolTitleResolver.kt`：`ToolCardPresentation(title, detail)` + `presentToolCard()` 成为唯一结算点。`title` 只可能是模型语义标题、真实语义 prior 或友好工具名（`Read File` / `Grep` / `Glob`），**参数值永不进入主标题**；`detail` 是独立且完整的参数摘要（path / pattern / command / query …），只从 COMPLETE `JSONObject` 结算，残缺流式 JSON 不伪造。`resolveToolTitle` / `displayToolTitle` 保持 16 个调用点签名兼容，统一委托到新结算点。
+- 历史残影自愈：`isDerivedShadow()` 按**数据形态**甄别（派生动词 + 机器值：路径 / glob / 命令 / 单 token），不靠前缀黑名单猜语义；模型自己写的「Plan the fix」「Search 相关文档」以及 CJK 标题保持权威，#334/#336 存下的 `Reading /var/min` 之类则退回友好标题、参数回到副行。
+- `ToolCardLabel.kt`（新）：Apple 风格两行（13sp Medium 语义主标题 / 11sp onSurfaceVariant 完整参数），可选 eyebrow 承载 `toolTitleLabel` 工具类型行；折叠行 `ChatProcessCards` 与详情面板 `ChatToolDetailUI` 共用同一组件，详情面板净减行、architecture ceiling 不升。紧凑单行（消息行 / 芯片 / flat items / 状态栏）保持纯语义标题，完整参数由展开卡片承载——合成行流回持久化会自我污染，故不采用。
+- 单测：`ToolCardPresentationTest.kt`（TDD RED 先行）覆盖三工具无 `tool_title`、模型标题、历史残影、流式残缺、别名、长参数截断；`ToolTitleResolverTest.kt` 全量改写旧断言（旧版把「路径当标题」这个病态行为钉成正确期望）。
+- 门禁：`check_tool_title_and_budget_contract.py` 新增 C 节 v337 契约（Python 行为镜像 + 结构 ratchet）与 D 节结构检查，B 节渲染契约同步到新单一结算；`architecture-policy.json` ceiling 只降不升。
+
+### 本地验证（不编译项目，编译交云端 CI）
+
+| 验证 | 结果 |
+|---|---|
+| TDD RED | 门禁 D 节 5 项全报缺失，exit=1，实现未写 |
+| 全量 8 个 CI 门禁（pr-check.yml 原样） | 8/8 OK，`TOTAL_FAIL=0` |
+| v337 行为对照器（Kotlin 阶梯的忠实 Python 复刻） | 52/52 断言通过 |
+| Kotlin 静态符号自检（剥注释后） | 零悬空符号，无 `deriveToolTitle` / `extractPartialJsonString` 残留 |
+| 真机历史库复核 | 0 条以派生前缀开头的 `description`，残影甄别无数据冲突 |
+| CJK ratchet / architecture ratchet | OK；`ChatToolDetailUI.kt` 1480 → 1469 行，ceiling 同步下调 |
+
+JVM 单测实际执行与 Kotlin 编译由云端 CI 验证；本地按项目约定只用 Python。
