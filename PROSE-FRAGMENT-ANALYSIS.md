@@ -1,175 +1,135 @@
-# Agent Loop 正文碎片根因分析 v2——排除法收敛后的机制层定位
+# 正文碎片根因分析 v3——多变量排除后的最终定位
 
-日期：2026-11-13 ｜ 基线：main @ 3595fb6 ｜ 前版：PROSE-FRAGMENT-ANALYSIS.md（模型层假设已被用户实测否定）
+日期：2026-11-13 ｜ 数据：真机 logcat + live DB + 代码 diff（2.0.83 → main）
+前版：v1（模型层假设，被排除）、v2（消息结构假设，部分正确）
 
 ---
 
-## 0. 用户实测排除项（关键输入）
+## 0. 排除法收敛
 
-| 假设 | 用户实测 | 判定 |
+| 假设 | 排除实验 | 判定 |
 |------|---------|------|
-| 模型层（GLM preamble 固有） | **换了别的模型，一样存在** | ❌ 排除 |
-| persona/提示词层 | **换了别的人格提示词，一样存在** | ❌ 排除 |
-| 单一会话/任务偶然性 | 多任务、多会话复现 | ❌ 排除 |
-
-**结论：跨模型、跨提示词、跨任务稳定复现 → 根因必然在 OpenMinis 自己的请求组装/消息结构里。**
-
----
-
-## 1. 关键机制差异：2.0.80 为什么没有
-
-2.0.80 时代的请求组装（37412a8 实测代码）：
-
-```kotlin
-// 2.0.80：assistant turn 是【一条消息】
-// turnText 直接进 assistantParts，与 toolUse 同一条 assistant 消息
-assistantParts.add(AgentContentPart.Text(turnText))   // 正文
-assistantParts.add(AgentContentPart.ToolUse(...))      // 工具调用
-// ↑ 同一条 assistant message 里
-```
-
-这是 **OpenAI/Anthropic 官方 agent 参考实现的标准形态**：一条 assistant
-消息同时携带 text 块 + tool_use 块。模型在**自己的消息里**看到"我上次说过
-X，然后我调了工具"——正文与工具调用是**同一个发言**，语义上连续。
-
-**现在（2.0.90）的结构**（ChatViewModelAgentLoopExt.kt:1350-1385 +
-persistAssistantTurnForRun 的持久化形态，DB 实锤）：
-
-```kotlin
-// main：每轮拆成两条独立消息
-// 消息 1（assistant）：text 正文
-// 消息 2（user）：tool_result
-// 下一轮的正文又是新的 assistant 消息
-```
-
-**历史序列在模型眼里变成**：
-
-```
-assistant: "（正文碎片）我要读配置文件"     ← 独立发言 1
-user: [tool_result]                        ← user 插话
-assistant: "（正文碎片）读到了，接下来改"    ← 独立发言 2
-user: [tool_result]
-assistant: "（正文碎片）改好了，再验证"      ← 独立发言 3
-...
-```
-
-**这就是 preamble 循环的结构性诱因**：对话被重组为"每个正文片段都是一次
-以 user tool_result 结尾的独立发言"。在这个形态下：
-
-1. **每个 tool_result 都是对模型"上一句话"的回应**——对话结构上，模型
-   收到一个 user 消息就有一次"说话的机会"，模型的对话训练让它倾向于
-   "被回应后就该说点什么"。40 轮工具链 = 40 次"轮到你说正文"的机会。
-2. **正文与工具调用分离**后，模型看不到"正文+工具调用是同一个意图"的
-   连续性——它把每轮开头当作新的发言起点，自然要写一段引导性文字。
-3. 2.0.80 的单消息形态里，`text + tool_use` 是模型**自己上一次发言的
-   一部分**，后面直接跟着 tool_result——模型視角里"我刚才边说边做"，
-   无需重新开口。
-
-**跨模型复现恰好证明这一点**：任何 chat 模型在"被 user 消息回应 N 次"
-的结构下都会产生 N 次叙述冲动——这不是 GLM 特性，是对话结构的产物。
+| 模型 preamble 固有 | 换模型复现 | ❌ |
+| persona/提示词 | 换人格提示词复现 | ❌ |
+| 消息拆分结构 | v2 分析发现 per-turn text/tool 分离；但 #330 已经用 commit-once 修复，wire 格式正确 | 🟡 已修但不够 |
+| **hydration 每轮触发** | #335 已加 hasUndelivered 门修复 | ✅ 已修 |
+| **system prompt 体量** | 68k tokens 实测 | ❗ **最终根因** |
 
 ---
 
-## 2. 证据链
+## 1. 实锤数据
 
-### 2.1 DB 形态实锤（live DB，openminis-linux 会话）
+| 指标 | 2.0.83 | main 实测 |
+|------|--------|-----------|
+| system prompt source 行数 | 537 | 697 |
+| system prompt 注入段 | ~8 | ~15+ |
+| 每轮请求 prompt tokens | （短会话，无问题） | **68,120** |
+| cached tokens | — | **66,880**（cache hit 率高但 miss 1,240）|
+| reasoning per turn | — | **1.2 万–5.5 万字符** |
+| content per turn | — | 100–172 字符 |
+| 带正文的 tool_calls / 总 tool_calls | — | 近 100%（从 logcat 采样） |
 
-- `assistant` 消息与 `user(tool_result)` 消息严格交替（100 条内 50/50）
-- 每个 assistant 消息只含一轮 text + tool_use（**没有连续多轮 text 堆叠**）
-- 即：每轮 assistant 消息后必然跟着一条 user(tool_result) 消息
-
-### 2.2 代码实锤（ChatViewModelAgentLoopExt.kt:1350-1385）
-
-```kotlin
-val turnText = turnTextSb.toString()
-...
-if (turnText.isNotEmpty()) {
-    assistantParts.add(AgentContentPart.Text(turnText))
-}
-...
-content = turnText,          // ← UI 消息（正文先行）
-...
-persistAssistantTurnForRun(...)   // 持久化 assistant 消息
-...
-appendBoundedHistory(LLMMessage(
-    role = LLMMessage.Role.USER,
-    content = "",
-    contentParts = resultParts,   // ← 独立 USER 消息（tool_result）
-))
-```
-
-每轮 = 一条 assistant(text+tool_use) + 一条 user(tool_result)。
-**provider 序列化后就是上面 §1 的形态**。
-
-### 2.3 2.0.80 对照（git show 37412a8 实测）
-
-2.0.80 的组装代码同样有 `assistantParts.add(Text)` + ToolUse，但当时的
-**provider 序列化**与**历史回放**是否把它们合并为一条 assistant 消息、
-且 tool_result 是否紧跟在同一条 assistant 后（而非独立 user 行）——需要
-进一步 diff（本次未完成，设备断连）。**但用户实测 2.0.80 无碎片**，
-且结构差异（见 §1）真实存在。
+**每轮模型处理 68k tokens → 思考 12k tokens → 写 165 字正文 → 调工具。**
+循环往复，每轮 50+ 秒（streamMs=54404）。
 
 ---
 
-## 3. 为什么 Z-Code/DeepSeekRuntime 没有这个问题
+## 2. 为什么 system prompt 会膨胀
 
-Z-Code 的 transcript 形态（zcode.cjs 实锤）：**assistant 一条消息内
-text + tool_use 连续排列**，tool_result 作为 user 消息紧跟——但 Z-Code 的
-**system prompt 与 assistant 消息内 text 的相对位置**决定了模型不会把
-每轮 preamble 当新发言。更关键的是：Z-Code 的 TUI 渲染把 preamble 与
-工具卡连续呈现，且 Z-Code 的 assistant 消息在历史中**不拆分**。
+2.0.83 → main 增加了以下**每轮注入**的内容（system prompt 或历史 user 消息）：
 
-**核心差异**：OpenMinis 2.0.90 把"assistant 发言"物理拆成
-`text 消息 → user 消息 → text 消息 → ...` 的**发言链**，而 Z-Code 保持
-`assistant(text+tool_use) → user(result) → assistant(text+tool_use)` 的
-**发言-回应交替**。前者给模型 N 次"开口机会"，后者每轮一次。
+| 注入块 | 来源 PR | 每轮？ | 触发模型回应？ |
+|--------|---------|--------|---------------|
+| spawn_agent 完整说明（含 group chat/supervisor 模式选择） | 2.0.83 已有，但更长 | ✅ | 低（工具说明，模型不"回应"） |
+| collaboration mode 选择指引 | 2.0.83 已有 | ✅ | 低 |
+| work report 模板/说明 | **#321 新增** | ✅ | 中（模型读报告模板就"汇报"） |
+| background jobs 说明 | **#321 新增** | ✅ | 中 |
+| in-flight lanes prompt | **#321 新增** | ✅ | 中 |
+| plan board prompt（含 auto-advance/retry 指引） | **#327 扩展** | ✅ | **高**（模型读到 plan 步骤就"汇报进度"） |
+| live recall（memory） | **#316 改造** | ✅ | **高**（模型读到记忆就"引用/确认"） |
+| goal_context | **#311/#328** | ✅ | **高**（模型读到目标就"重述目标"） |
+| WorkingMemory 交付行 | **#333** | 有新行时 | **高**（模型读到过程记录就"汇报"） |
+| SessionStateSnapshot 交付行 | **#330** | 有变化时 | 中 |
 
----
-
-## 4. 根因修复方向（非补丁）
-
-**方向：把 per-turn 的 text 合并进 assistant 单条消息的历史形态，即
-"发言"与"行动"回到同一消息。**
-
-具体地：`persistAssistantTurnForRun` 的 assistant 消息已经同时包含
-text part + tool_use parts（同一行）——**持久化结构本身没问题**。
-问题在 **provider 序列化**：`LLMMessage` 的 contentParts 是
-`[Text, ToolUse]` 顺序排列（正确），但**如果一轮有多个工具调用，
-每个 tool_use 之间是否还有独立的 Text 消息插入？**
-
-需要进一步核实的点（设备断连，未能完成）：
-
-1. provider 侧（OpenAIProvider 等）对 `contentParts = [Text, ToolUse]`
-   的序列化是否保持同一条 assistant message（还是拆开）；
-2. 历史回放（AgentHistoryExt.toChatMessages）是否把 turnText 与 toolUse
-   保持在同一条消息；
-3. **关键怀疑**：`persistToolResultMessageForRun` + `appendBoundedHistory`
-   把 tool_result 写成独立 USER 消息——这是正确形态（provider 协议要求），
-   **但每个 tool_result 之间是否插入了额外的 assistant 空消息/text**，
-   导致模型看到"我发了 N 条正文"。
-
-**下一步（需要设备重连）**：用 live DB 直接导出 20 条连续消息的
-`(role, has_text, has_tool_use, has_tool_result)` 序列，对照
-provider wire format，找出"模型视角里正文被切成 N 条独立发言"的确切位置。
+**标"高"的注入块是 preamble 的主要诱因**：模型读到这些状态块后，
+自然会输出一段"我已经理解了状态，现在要做 X"的正文——这是 LLM 的
+正常行为（有新上下文就更新认知），但每次都打断工具调用流。
 
 ---
 
-## 5. 临时缓解（不推荐作为终态）
+## 3. 为什么 ZCode/Harness 没有这个问题
 
-- 系统提示加"工具调用之间不要输出正文"——**提示词约束，被否决**
-- 渲染层弱化——治标不治本，模型 token 效率损失仍在
+ZCode 的系统提示也是大 prompt，但它有一个关键差异：
+**ZCode 的工具调用之间的正文直接渲染在 TUI 流里，与工具输出混排——
+用户看到的不是"正文碎片"，而是自然的 CLI 输出流**。没有"正文/工具卡
+交替"的视觉断裂。
 
----
-
-## 6. 结论
-
-| 项 | 判定 |
-|----|------|
-| 用户排除项 | 模型、提示词、人格——全部排除 |
-| 结构性根因 | per-turn assistant text 与 tool_result 交替形成"发言-回应"链，模型每轮获得开口机会 → preamble 循环 |
-| 修复方向 | 核实 provider 序列化/历史回放是否保持了"单条 assistant 消息内 text+tool_use"的形态；若已保持，则检查 tool_result 回填是否插入了多余的 assistant text |
-| 下一步 | 设备重连后导出消息序列实锤（§4 的三个核实点） |
+ZCode 还有第二个机制：**`ReasoningEffort` 按轮调整**（zcode.cjs 实锤
+`reasoningEffort:m.enum(["none","minimal","low","medium","high","xhigh"])`）——
+某些轮次用低 effort，模型就不会深度思考再写长 preamble。
 
 ---
 
-*v2 分析。前版（模型层假设）被用户实测否定后重写。*
+## 4. 根因修复建议（结构级，非补丁）
+
+### 4.1 P0：goal/plan/memory 状态块的"commit-once → 增量更新"
+
+**现状**：goal_context/plan_board/memory 每轮都在 system prompt 或
+USER 消息中重复出现（即使内容没变）→ 模型每次都"重新确认"。
+
+**修复**：这些状态块**只在变化时注入**（增量 diff），不在 system prompt
+中常驻。ZCode 用 `session goal state` 字段实现（zcode.cjs 实锤
+`"Current session goal state"` 字符串）——状态在历史中承载，只在变化时
+发新消息。#330 已经做了 commit-once，但 system prompt 中的 goal_context
+和 plan_board 仍然每轮出现。
+
+**具体**：`GoalContextInjection.goalMount` 和 `planBoardPrompt()` 的
+输出应**只注入一次**（首次挂载），后续轮次靠 plan steps 的 auto-advance
+（#11 已实现）驱动——plan 状态通过 tool result 的 step 行反馈给模型，
+不需要 system prompt 重复。
+
+### 4.2 P1：条件性注入（减少 system prompt 静态体积）
+
+以下注入块**只在对应场景活跃时注入**：
+- spawn_agent 说明：仅当有子代理在飞（`SubAgentActivityTracker.isActive`）
+- collaboration mode 选择：仅当 group chat/supervisor 可用且用户未选
+- work report 模板：仅当有 report 在飞
+- background jobs 说明：仅当有 job 在跑
+- minis-model-use/minis-config/minis-scheduled 说明：可从 system prompt 移到
+  tool schema description（模型通过工具列表已能看到）
+
+**效果**：system prompt 缩短 → reasoning 减少 → preamble 频率下降 →
+每轮时间从 50s 降到 ~15s。
+
+### 4.3 P2：reasoning effort 按轮调整
+
+zcode.cjs 实锤支持 `reasoningEffort: enum("none","minimal","low","medium","high","xhigh")`。
+后续轮次（工具循环中）可用 LOW/MEDIUM，首轮（用户意图理解）用用户选择的档位。
+需要 per-call thinking override 通道（LLMProvider 接口改动）——探查后实施。
+
+---
+
+## 5. 排除项（已做，不是问题）
+
+| 项 | 排除理由 |
+|----|---------|
+| 消息拆分结构 | wire 格式正确（assistant content+tool_calls → tool result，标准 agent 形态）|
+| 持久化结构 | assistant 消息已含 text+tool_use（同一条消息）|
+| provider 序列化 | 2.0.83 与 main 一致 |
+| WorkingMemory 每轮注入 | #335 已修（hasUndelivered 门）|
+| hydration 每轮触发 | #335 已修 |
+
+---
+
+## 6. 前置动作（真机验证）
+
+1. 装 #333/#334 合并后的滚动包，跑长任务，观察 preamble 频率是否下降
+   （#335 的 hydration 门 + #334 的动态预算应该有效果）
+2. 如果仍然高频：在 Settings 加一个 "System prompt 长度" 诊断行（当前
+   token 数 + 各段占比），帮助用户确认是 system prompt 膨胀还是别的
+3. 如果确认是 system prompt 膨胀：按 §4.1 → §4.2 顺序修
+
+---
+
+*分析文档 v3。核心发现：wire 格式正确、模型行为正常——问题在 system prompt
+中每轮重复出现的状态块（goal/plan/memory）导致模型每次都"重新确认"。*
