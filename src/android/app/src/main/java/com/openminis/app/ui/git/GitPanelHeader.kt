@@ -15,9 +15,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.CallMerge
+import androidx.compose.material.icons.filled.CallSplit
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.HorizontalDivider
@@ -269,6 +271,15 @@ internal fun BranchMenu(
             // Capped: an unconstrained LazyColumn here would expand to the whole
             // viewport and push the tab row and its content off-screen.
             LazyColumn(Modifier.heightIn(max = 280.dp)) {
+                // ZCode's "分支" section header.
+                item(key = "section") {
+                    Text(
+                        stringResource(R.string.git_panel_branches_section),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
+                }
                 items(visible, key = { it.name }) { branch ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -277,12 +288,27 @@ internal fun BranchMenu(
                             .clickable { onPick(branch.name) }
                             .padding(horizontal = 16.dp, vertical = 10.dp),
                     ) {
-                        if (branch.isCurrent) {
-                            Text("●", color = GitAddGreen, fontSize = 11.sp)
-                        } else if (branch.name.contains('/')) {
-                            Text("⇄", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
-                        } else {
-                            Text("○", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 11.sp)
+                        // ZCode's branch glyph per ref kind: filled for the
+                        // checked-out branch, muted fork for locals, ⇄ for
+                        // remote-tracking refs.
+                        when {
+                            branch.isCurrent -> Icon(
+                                Icons.Filled.CallMerge,
+                                contentDescription = null,
+                                tint = GitAddGreen,
+                                modifier = Modifier.size(14.dp),
+                            )
+                            branch.name.contains('/') -> Text(
+                                "⇄",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontSize = 13.sp,
+                            )
+                            else -> Icon(
+                                Icons.Filled.CallSplit,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(14.dp),
+                            )
                         }
                         Spacer(Modifier.width(8.dp))
                         Column(Modifier.weight(1f)) {
@@ -331,16 +357,27 @@ internal fun BranchMenu(
                     }
                 }
             }
-            // ZCode's "创建并检出新分支…" entry.
-            Text(
-                stringResource(R.string.git_panel_create_branch),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
+            // ZCode's "+ 创建并检出新分支…" entry: icon + text action row.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable { showCreate = true }
                     .padding(horizontal = 16.dp, vertical = 12.dp),
-            )
+            ) {
+                Icon(
+                    Icons.Filled.Add,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    stringResource(R.string.git_panel_create_branch),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
         }
     }
     if (showCreate) {

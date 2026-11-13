@@ -2105,6 +2105,9 @@
 
     <string name="git_panel_branch_search">ブランチを検索</string>
 
+
+    <string name="git_panel_branches_section">ブランチ</string>
+
     <string name="git_panel_uncommitted_count">未コミットの変更：%1$d ファイル</string>
 
     <string name="git_panel_detached_head">detached HEAD</string>

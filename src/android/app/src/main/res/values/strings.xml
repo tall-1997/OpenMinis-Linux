@@ -1706,6 +1706,9 @@
 
     <string name="git_panel_branch_search">Search branches</string>
 
+
+    <string name="git_panel_branches_section">Branches</string>
+
     <string name="git_panel_uncommitted_count">Uncommitted changes: %1$d files</string>
 
     <string name="git_panel_detached_head">detached HEAD</string>

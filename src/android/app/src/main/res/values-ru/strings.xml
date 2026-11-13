@@ -2116,6 +2116,9 @@
 
     <string name="git_panel_branch_search">Поиск веток</string>
 
+
+    <string name="git_panel_branches_section">Ветки</string>
+
     <string name="git_panel_uncommitted_count">Незакоммиченные изменения: %1$d файлов</string>
 
     <string name="git_panel_detached_head">отсоединённый HEAD</string>

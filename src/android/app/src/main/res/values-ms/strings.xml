@@ -2108,6 +2108,9 @@
 
     <string name="git_panel_branch_search">Cari cawangan</string>
 
+
+    <string name="git_panel_branches_section">Cawangan</string>
+
     <string name="git_panel_uncommitted_count">Perubahan belum dikomit: %1$d fail</string>
 
     <string name="git_panel_detached_head">HEAD tertanggal</string>

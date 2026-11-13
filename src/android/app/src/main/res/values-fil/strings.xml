@@ -2108,6 +2108,9 @@
 
     <string name="git_panel_branch_search">Maghanap ng branches</string>
 
+
+    <string name="git_panel_branches_section">Mga branch</string>
+
     <string name="git_panel_uncommitted_count">Hindi na-commit na mga pagbabago: %1$d file</string>
 
     <string name="git_panel_detached_head">detached HEAD</string>

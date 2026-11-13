@@ -2097,6 +2097,9 @@
 
     <string name="git_panel_branch_search">Buscar ramas</string>
 
+
+    <string name="git_panel_branches_section">Ramas</string>
+
     <string name="git_panel_uncommitted_count">Cambios sin confirmar: %1$d archivos</string>
 
     <string name="git_panel_detached_head">HEAD separado</string>

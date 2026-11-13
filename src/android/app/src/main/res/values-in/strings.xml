@@ -2113,6 +2113,9 @@
 
     <string name="git_panel_branch_search">Cari branch</string>
 
+
+    <string name="git_panel_branches_section">Branch</string>
+
     <string name="git_panel_uncommitted_count">Perubahan yang belum di-commit: %1$d file</string>
 
     <string name="git_panel_detached_head">HEAD terlepas</string>
