@@ -467,6 +467,14 @@ data class ModelEntry(
                 supportsReasoning = overrides.supportsReasoning ?: baseModel.supportsReasoning,
                 inputModalities = overrides.inputModalities ?: baseModel.inputModalities,
                 outputModalities = overrides.outputModalities ?: baseModel.outputModalities,
+                // [T-thinking-ultra-manual] Fold the ceiling override onto the
+                // resolved model so provider-side clamping (LLMProvider.
+                // clampThinkingLevel reads model.catalogMaxThinkingLevel) and
+                // the wire layer see the SAME ceiling the chat picker offered.
+                // Previously the override lived only on ModelOverrides, the
+                // provider clamp was blind to it, and a picker-selected ULTRA
+                // was silently clamped back to MAX at the send boundary.
+                maxThinkingLevel = overrides.maxThinkingLevel ?: baseModel.maxThinkingLevel,
             )
             // A user who explicitly saved output modalities wins over the
             // empty-catalog repair. Otherwise a persisted ["text"] stamp on

@@ -33,6 +33,7 @@ class ThinkingLevelSelectionTest {
         id: String,
         supportsReasoning: Boolean? = true,
         tiers: List<String>? = null,
+        maxThinkingLevel: ThinkingLevel? = null,
     ): LLMModel {
         val base = LLMModel(
             id = id,
@@ -45,7 +46,11 @@ class ThinkingLevelSelectionTest {
         // Mirror how the repository actually populates the tier list: a model
         // that declares nothing must stay `null`, because OpenAIRequestBodies
         // reads `declaresNoEffortTiers == true` as "omit the field entirely".
-        return if (tiers == null) base else base.copy(reasoningEffortValues = tiers)
+        // maxThinkingLevel mirrors the ModelEntry.model fold — the resolved
+        // model carries the operator's ceiling override.
+        val withTiers = if (tiers == null) base else base.copy(reasoningEffortValues = tiers)
+        return if (maxThinkingLevel == null) withTiers
+        else withTiers.copy(maxThinkingLevel = maxThinkingLevel)
     }
 
     // ── the shipped fix: sparse declared sets must stay reachable ─────────────
@@ -333,6 +338,37 @@ class ThinkingLevelSelectionTest {
             ThinkingLevelCatalog.declaredWireLadder("gemini-2.5-pro"),
         )
         assertEquals(null, ThinkingLevelCatalog.declaredWireLadder("gpt-5.6-sol"))
+    }
+
+    /**
+     * [T-thinking-ultra-manual] The folded operator override is the
+     * highest-priority ceiling source (after the capability guard): it beats
+     * the declared set AND the family rules. This is the fixture-side half of
+     * the UI/wire contract — LLMProvider.clampThinkingLevel reads
+     * catalogMaxThinkingLevel, so the override living here is what lets a
+     * picker-selected ULTRA survive the send boundary instead of being
+     * clamped back to the catalog MAX.
+     */
+    @Test
+    fun `folded override is the ceiling above any catalog opinion`() {
+        // Beats the five-tier declared set (whose own top is MAX).
+        assertEquals(
+            ThinkingLevel.ULTRA,
+            model("some-unknown-reasoner", tiers = fullLadder(), maxThinkingLevel = ThinkingLevel.ULTRA)
+                .catalogMaxThinkingLevel,
+        )
+        // Beats a family rule: mimo-v2.5 caps at HIGH by ladder, override lifts it.
+        assertEquals(
+            ThinkingLevel.MAX,
+            model("mimo-v2.5", maxThinkingLevel = ThinkingLevel.MAX).catalogMaxThinkingLevel,
+        )
+        // The capability guard still wins: an override cannot resurrect a
+        // model that cannot reason.
+        assertEquals(
+            ThinkingLevel.OFF,
+            model("mimo-v2.5-tts", supportsReasoning = false, maxThinkingLevel = ThinkingLevel.ULTRA)
+                .catalogMaxThinkingLevel,
+        )
     }
 
     private fun fullLadder() =

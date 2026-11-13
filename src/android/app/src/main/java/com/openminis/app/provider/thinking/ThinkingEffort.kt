@@ -16,10 +16,12 @@ internal object ThinkingEffort {
         ThinkingLevel.XHIGH -> "xhigh"
         // ULTRA is a client-side "Max + orchestration" concept and is NEVER a valid
         // server effort string for a model whose set stops at "max" (iOS b38bf3d5).
-        // [T-thinking-ultra-declared] The declared-ultra exception is handled
-        // by the CALLER: ThinkingRuleResolver checks the model's declared set
-        // for "ultra" and emits the literal there; this default fold keeps
-        // every other backend from ever seeing the string.
+        // [T-thinking-ultra-declared][T-thinking-ultra-manual] The two literal-
+        // ultra exceptions are handled by the CALLER via effortOrDeclaredUltra:
+        // (1) the model's declared set names "ultra", or (2) the operator set
+        // the manual ceiling (LLMModel.maxThinkingLevel) to ULTRA — the manual
+        // setting IS their vocabulary assertion. This default fold keeps every
+        // OTHER backend from ever seeing the string.
         ThinkingLevel.MAX, ThinkingLevel.ULTRA -> "max"
     }
 
@@ -34,20 +36,53 @@ internal object ThinkingEffort {
         declared?.any { it.equals("ultra", ignoreCase = true) } == true
 
     /**
-     * [T-thinking-ultra-declared] The wire effort for [ctx]'s level, with the
-     * declared-ultra exception folded in: wireEffort maps ULTRA→"max" for
-     * every model, but a backend that literally declares "ultra" names the
-     * tier itself and gets the literal — folding it to "max" would silently
-     * demote the declared top tier (and "max" is not even in that set, so
-     * clampEffort would then walk DOWN to "high", two rungs below the ask).
-     * One helper so the three emitter branches (nested / OpenAI-native /
-     * generic) cannot drift apart on the rule.
+     * [T-thinking-ultra-declared][T-thinking-ultra-manual] The wire effort for
+     * [level], with the declared-ultra exception folded in: wireEffort maps
+     * ULTRA→"max" for every model, but a backend that literally declares
+     * "ultra" names the tier itself and gets the literal — folding it to
+     * "max" would silently demote the declared top tier (and "max" is not
+     * even in that set, so clampEffort would then walk DOWN to "high", two
+     * rungs below the ask). [ceilingOverride] adds the manual path: when the
+     * operator set the ceiling to ULTRA on the params page, that manual
+     * setting IS their vocabulary assertion — emit the literal even if the
+     * declared set doesn't name it. One helper so the three emitter branches
+     * (nested / OpenAI-native / generic) and the Responses-API injection
+     * site cannot drift apart on the rule. iOS mirror:
+     * OpenAIAgentProvider.swift:531 reasoningEffort(for:level:).
      */
-    fun effortOrDeclaredUltra(ctx: ThinkingResolveContext): String =
-        if (ctx.level == ThinkingLevel.ULTRA && declaresUltraTier(ctx.declaredEffortValues)) {
+    fun effortOrDeclaredUltra(
+        level: ThinkingLevel,
+        declared: List<String>?,
+        ceilingOverride: ThinkingLevel? = null,
+    ): String =
+        if (level == ThinkingLevel.ULTRA &&
+            (declaresUltraTier(declared) || ceilingOverride == ThinkingLevel.ULTRA)
+        ) {
             "ultra"
         } else {
-            wireEffort(ctx.level)
+            wireEffort(level)
+        }
+
+    /** Context-object form for the resolver branches; see the string overload. */
+    fun effortOrDeclaredUltra(ctx: ThinkingResolveContext): String =
+        effortOrDeclaredUltra(ctx.level, ctx.declaredEffortValues, ctx.ceilingOverride)
+
+    /**
+     * [T-thinking-ultra-manual] Clamp with the operator-assertion escape
+     * hatch: an "ultra" that came from the manual ULTRA override bypasses
+     * the declared-set clamp — the override is the operator's vocabulary
+     * assertion, the same authority a CustomPath rule's own vocabulary has
+     * ("we never invent a tier it did not author" cuts both ways). Without
+     * the bypass, clampEffort would walk the asserted tier down to "max"
+     * and re-introduce the UI/wire mismatch this fix closes. The
+     * DeepSeekSibling branch deliberately does NOT use this — DeepSeek's
+     * API has no "ultra" tier at all, so the vendor-legal-set clamp stays.
+     */
+    fun clampRequested(effort: String, declared: List<String>?, ceilingOverride: ThinkingLevel?): String =
+        if (ceilingOverride == ThinkingLevel.ULTRA && effort == "ultra") {
+            effort
+        } else {
+            clampEffort(effort, declared)
         }
 
     /**

@@ -1432,7 +1432,7 @@
     <string name="modeldetail_thinking_level_auto">Auto</string>
     <string name="modeldetail_thinking_level_effective_auto">Effective: %1$s (catalog default)</string>
     <string name="modeldetail_thinking_level_effective_override">Effective: %1$s (manual)</string>
-    <string name="modeldetail_thinking_level_footer">Caps the thinking levels the chat picker offers for this model. Auto follows the catalog declaration. Ultra is sent as the literal tier only when the provider declares it; otherwise it maps to max.</string>
+    <string name="modeldetail_thinking_level_footer">Caps the thinking levels the chat picker offers for this model. Auto follows the catalog declaration. Ultra is sent as the literal tier when the provider declares it or when you manually set this ceiling to Ultra; otherwise it maps to max.</string>
     <string name="modeldetail_capabilities_footer">Context window and max output tokens (in tokens). Leave empty to use provider defaults. Enable Thinking for models that support extended reasoning.</string>
     <string name="modeldetail_provider_default">Provider default</string>
     <string name="modeldetail_max_tokens_exceeds_warning">Exceeds provider-reported limit (%1$d). The value is saved but may cause errors.</string>

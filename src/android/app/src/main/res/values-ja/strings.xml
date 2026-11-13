@@ -1006,7 +1006,7 @@
     <string name="modeldetail_thinking_level_auto">自動</string>
     <string name="modeldetail_thinking_level_effective_auto">現在の設定：%1$s（カタログ既定）</string>
     <string name="modeldetail_thinking_level_effective_override">現在の設定：%1$s（手動）</string>
-    <string name="modeldetail_thinking_level_footer">このモデルでチャットの選択肢に表示される思考レベルの上限を設定します。自動はカタログの宣言に従います。Ultra はプロバイダーが宣言している場合のみそのまま送信され、それ以外は max に変換されます。</string>
+    <string name="modeldetail_thinking_level_footer">このモデルでチャットの選択肢に表示される思考レベルの上限を設定します。自動はカタログの宣言に従います。Ultra はプロバイダーが宣言している場合、またはこの上限を手動で Ultra に設定した場合にそのまま送信され、それ以外は max に変換されます。</string>
     <string name="modeldetail_capabilities_footer">コンテキスト ウィンドウと最大出力トークン数（トークン単位）。空白の場合はプロバイダーのデフォルトを使用します。拡張推論をサポートするモデルでは思考を有効にしてください。</string>
     <string name="modeldetail_provider_default">プロバイダーのデフォルト</string>
     <string name="modeldetail_max_tokens_exceeds_warning">プロバイダーが報告した上限（%1$d）を超えています。値は保存されますが、エラーが発生する可能性があります。</string>

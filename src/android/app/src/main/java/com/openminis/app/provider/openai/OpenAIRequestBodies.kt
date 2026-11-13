@@ -11,6 +11,7 @@ import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.SamplingIdentity
 import com.openminis.app.provider.SamplingPolicy
 import com.openminis.app.provider.applyUserAgentOverride
+import com.openminis.app.provider.thinking.ThinkingEffort
 import com.openminis.app.provider.thinking.ThinkingResolveContext
 import com.openminis.app.provider.thinking.ThinkingRuleResolver
 import okhttp3.MediaType.Companion.toMediaType
@@ -704,6 +705,10 @@ internal class OpenAIRequestBodies(
             instanceId = host.thinkingRuleInstanceId,
             supportsReasoning = host.model.supportsReasoning,
             declaredEffortValues = host.model.reasoningEffortValues,
+            // [T-thinking-ultra-manual] Folded operator ceiling — a
+            // picker-selected ULTRA wires the literal tier: the manual
+            // override IS the operator's vocabulary assertion.
+            ceilingOverride = host.model.maxThinkingLevel,
             budgetTokensMin = host.model.budgetTokensMin,
             budgetTokensMax = host.model.budgetTokensMax,
             // [OpenMinis#163] null (catalog silent) must read as false here —
@@ -868,10 +873,18 @@ internal class OpenAIRequestBodies(
         // and would send xhigh too. MiMo-2.5/Agnes normally use Chat Completions
         // (the reported 400/422), but a user could flip useResponsesAPI on, so
         // guard it here as well — only xhigh for those two families is affected.
-        // [T-android-thinking-level-arch] `thinkingLevel` is already clamped by
-        // LLMProvider.streamMessage/sendMessage before reaching here.
+        // [T-android-thinking-level-arch] Pre-clamped by LLMProvider — that
+        // clamp is override-aware since the ULTRA-manual fix, so a manual-
+        // ULTRA ceiling arrives here as ULTRA. [T-thinking-ultra-declared]
+        // [T-thinking-ultra-manual] Second injection site outside the
+        // resolver: shared rule — declared OR manually-asserted "ultra" gets
+        // the literal; only vocabulary-less models fold to "max".
         val effort = if (thinkingLevel.isEnabled) {
-            mapThinkingLevelToResponsesEffort(thinkingLevel)?.let { clampEffortForModel(it) }
+            ThinkingEffort.effortOrDeclaredUltra(
+                thinkingLevel,
+                host.model.reasoningEffortValues,
+                host.model.maxThinkingLevel,
+            ).let { clampEffortForModel(it) }
         } else null
         when {
             // [T-android-mistral-reasoning-422] Mistral rejects the reasoning
@@ -1302,23 +1315,10 @@ internal class OpenAIRequestBodies(
         return "minis-${java.util.UUID.randomUUID().toString().lowercase()}"
     }
 
-    /**
-     * Map ThinkingLevel → Responses API `reasoning.effort` string. Mirrors
-     * iOS reasoningEffort(for:level:) (OpenAIAgentProvider.swift:531).
-     * Returns null when the level is OFF — caller decides whether to omit
-     * the `reasoning` field entirely or fall back to "low" (Codex requires it).
-     */
-    private fun mapThinkingLevelToResponsesEffort(level: ThinkingLevel): String? = when (level) {
-        ThinkingLevel.OFF -> null
-        ThinkingLevel.LOW -> "low"
-        ThinkingLevel.MEDIUM -> "medium"
-        ThinkingLevel.HIGH -> "high"
-        ThinkingLevel.XHIGH -> "xhigh"
-        // [T-android-thinking-level-arch] MAX → "max"; ULTRA also → "max" —
-        // the Responses/Codex endpoint rejects a literal "ultra"; ultra is a
-        // client-side "Max + orchestration" concept only (mirrors iOS).
-        ThinkingLevel.MAX, ThinkingLevel.ULTRA -> "max"
-    }
+    // [T-thinking-ultra-declared][T-thinking-ultra-manual] The former private
+    // mapThinkingLevelToResponsesEffort() retired into
+    // ThinkingEffort.effortOrDeclaredUltra — one shared mapping, so a
+    // declared or manually-asserted "ultra" cannot fold on one path only.
 
     /**
      * Responses-API tool shape — flat {type, name, description, parameters},

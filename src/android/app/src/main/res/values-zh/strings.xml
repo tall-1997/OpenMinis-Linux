@@ -1313,7 +1313,7 @@
     <string name="modeldetail_thinking_level_auto">自动</string>
     <string name="modeldetail_thinking_level_effective_auto">当前生效：%1$s（目录默认）</string>
     <string name="modeldetail_thinking_level_effective_override">当前生效：%1$s（手动）</string>
-    <string name="modeldetail_thinking_level_footer">限制聊天页为该模型提供的思考档位。自动跟随目录声明。仅当服务商声明 ultra 时才按字面发送，否则映射为 max。</string>
+    <string name="modeldetail_thinking_level_footer">限制聊天页为该模型提供的思考档位。自动跟随目录声明。服务商声明 ultra、或你手动把上限设为至高时按字面发送，否则映射为 max。</string>
     <string name="modeldetail_capabilities_footer">上下文窗口和最大输出 Token 数（以 tokens 计）。留空使用服务商默认值。对支持扩展推理的模型启用思考模式。</string>
     <string name="modeldetail_provider_default">服务商默认</string>
     <string name="modeldetail_max_tokens_exceeds_warning">超过服务商上报的上限（%1$d）。值已保存，但可能导致请求失败。</string>
