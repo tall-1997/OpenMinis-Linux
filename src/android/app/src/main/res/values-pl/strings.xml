@@ -2112,6 +2112,16 @@
     <string name="git_panel_no_branches">Brak gałęzi</string>
     <string name="git_panel_no_stashes">Brak skrytek</string>
     <string name="git_panel_switch_branch">Zmień gałąź</string>
+
+    <string name="git_panel_branch_search">Szukaj gałęzi</string>
+
+    <string name="git_panel_uncommitted_count">Niezatwierdzone zmiany: %1$d plików</string>
+
+    <string name="git_panel_detached_head">odłączony HEAD</string>
+
+    <string name="git_panel_create_branch">Utwórz i przełącz na nową gałąź…</string>
+
+    <string name="git_panel_branch_name_hint">Nazwa gałęzi</string>
     <string name="sessionlist_export_markdown">Markdown</string>
     <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
     <string name="check_update_notes_expand">Pokaż całość</string>

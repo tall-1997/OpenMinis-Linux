@@ -386,4 +386,121 @@ class GitHostRepoTest {
         assertTrue(diff.contains("+++ b/a.txt"))
         assertTrue(diff.contains("+line1"))
     }
+
+    // ── zcode graph contract ──────────────────────────────────────────────
+
+    @Test
+    fun `logPage multi-ref walk includes side branches exactly once`() {
+        val (dir, git) = initRepo()
+        git.branchCreate().setName("side").call()
+        File(dir, "b.txt").writeText("side work\n")
+        git.add().addFilepattern("b.txt").call()
+        git.commit().setMessage("side commit").setAuthor("T", "t@x").call()
+        val page = GitHostRepo.logPage(dir, offset = 0, limit = 10)
+        assertTrue("side commit visible", page.any { it.subject == "side commit" })
+        val hashes = page.map { it.hash }
+        assertEquals("each commit exactly once (multi-anchor dedup)", hashes.size, hashes.toSet().size)
+        git.close()
+    }
+
+    @Test
+    fun `logPage decorates HEAD, branch and annotated tag`() {
+        val (dir, git) = initRepo()
+        git.tag().setName("v1").setAnnotated(true).call()
+        File(dir, "b.txt").writeText("more\n")
+        git.add().addFilepattern("b.txt").call()
+        git.commit().setMessage("second").setAuthor("T", "t@x").call()
+        val page = GitHostRepo.logPage(dir, offset = 0, limit = 5)
+        // The tag decorates the FIRST commit — the badge shows on that row,
+        // not on HEAD's.
+        val initial = page.first { it.subject == "initial commit" }
+        assertTrue("annotated tag peeled onto its commit", initial.refs.contains("v1"))
+        val head = page.first()
+        // HEAD badge present exactly once on the checked-out branch's tip.
+        assertEquals(1, head.refs.count { it == "HEAD" })
+        assertTrue(head.refs.any { it != "HEAD" && !it.contains('/') })
+        git.close()
+    }
+
+    @Test
+    fun `checkout of a remote ref creates the tracking branch, never detached HEAD`() {
+        val (dir, git) = initRepo()
+        File(dir, "b.txt").writeText("remote work\n")
+        git.add().addFilepattern("b.txt").call()
+        val remoteCommit = git.commit().setMessage("remote commit").setAuthor("T", "t@x").call()
+        // Simulate the remote-tracking ref a fetch would create.
+        val ru = git.repository.updateRef("refs/remotes/origin/feature")
+        ru.setNewObjectId(remoteCommit.id)
+        ru.forceUpdate()
+        val err = GitHostRepoGraph.checkout(dir, "origin/feature")
+        assertNull(err)
+        // Read through Git.open(dir) — a FileRepositoryBuilder with only
+        // setWorkTree + findGitDir searches from the JVM's CWD and would land
+        // on the OUTER OpenMinis checkout instead of this temp repo.
+        Git.open(dir).use { g ->
+            // NOT detached: HEAD stays symbolic to a local branch.
+            assertEquals("refs/heads/feature", g.repository.fullBranch)
+            assertEquals("feature", g.repository.branch)
+        }
+        git.close()
+    }
+
+    @Test
+    fun `checkout of a local slashed branch never creates a phantom branch`() {
+        val (dir, git) = initRepo()
+        git.branchCreate().setName("feature/x").call()
+        val err = GitHostRepoGraph.checkout(dir, "feature/x")
+        assertNull(err)
+        Git.open(dir).use { g ->
+            assertEquals("feature/x", g.repository.branch)
+            // The old backwards route created refs/heads/x from feature/x.
+            assertNull(g.repository.exactRef("refs/heads/x"))
+        }
+        git.close()
+    }
+
+    @Test
+    fun `checkout refuses while an operation is in progress`() {
+        val (dir, git) = initRepo()
+        git.branchCreate().setName("other").call()
+        // A MERGE_HEAD file puts JGit into MERGING state (git's own guard).
+        File(File(dir, ".git"), "MERGE_HEAD").writeText("0123456789abcdef0123456789abcdef01234567\n")
+        val err = GitHostRepoGraph.checkout(dir, "other")
+        assertTrue(err?.contains("in progress") == true)
+        git.close()
+    }
+
+    @Test
+    fun `status survives a shallow clone without ahead-behind`() {
+        val (dir, git) = initRepo()
+        git.branchCreate().setName("tracked").call()
+        // branch.<n>.remote/merge + an ACTUAL upstream ref + a shallow
+        // marker: without a resolvable upstream the aheadBehind walk never
+        // starts, which would make this test pass vacuously. With it, the
+        // pre-guard's shallow check is what prevents the MissingObjectException.
+        val tip = git.log().call().first().name
+        val ru = git.repository.updateRef("refs/remotes/origin/tracked")
+        ru.setNewObjectId(org.eclipse.jgit.lib.ObjectId.fromString(tip))
+        ru.forceUpdate()
+        val cfg = git.repository.config
+        cfg.setString("branch", "master", "remote", "origin")
+        cfg.setString("branch", "master", "merge", "refs/heads/tracked")
+        cfg.save()
+        File(File(dir, ".git"), "shallow").writeText("$tip\n")
+        val status = GitHostRepo.status(dir)
+        assertNull(status.error)
+        assertEquals(0, status.ahead)
+        assertEquals(0, status.behind)
+        git.close()
+    }
+
+    @Test
+    fun `locate finds a repo four levels deep`() {
+        val ws = tmp.newFolder("deep")
+        val nested = File(ws, "a/b/c/d").apply { mkdirs() }
+        Git.init().setDirectory(nested).call().close()
+        val (dir, rel) = GitHostRepo.locate(ws)!!
+        assertEquals(nested, dir)
+        assertEquals("a/b/c/d", rel)
+    }
 }

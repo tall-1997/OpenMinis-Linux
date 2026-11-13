@@ -2109,6 +2109,16 @@
     <string name="git_panel_no_branches">Fără branch-uri</string>
     <string name="git_panel_no_stashes">Fără stash-uri</string>
     <string name="git_panel_switch_branch">Schimbă branch-ul</string>
+
+    <string name="git_panel_branch_search">Caută ramuri</string>
+
+    <string name="git_panel_uncommitted_count">Modificări necomitate: %1$d fișiere</string>
+
+    <string name="git_panel_detached_head">HEAD detașat</string>
+
+    <string name="git_panel_create_branch">Creează și fă checkout pe un ramură nouă…</string>
+
+    <string name="git_panel_branch_name_hint">Numele ramurii</string>
     <string name="sessionlist_export_markdown">Markdown</string>
     <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
     <string name="check_update_notes_expand">Afișează tot</string>

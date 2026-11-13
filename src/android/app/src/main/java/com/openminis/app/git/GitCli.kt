@@ -87,6 +87,12 @@ object GitCli {
         val subject: String,
         /** Parent hashes in order (`%P`); empty when the caller didn't ask for them. */
         val parents: List<String> = emptyList(),
+        /**
+         * [T-git-panel-zcode-graph] `%D` decorations: `HEAD`, local branch
+         * short names, `origin/<name>`, tag short names — the badges the
+         * graph description column renders (ZCode parity).
+         */
+        val refs: List<String> = emptyList(),
     )
 
     /**
@@ -99,6 +105,8 @@ object GitCli {
         val name: String,
         val isCurrent: Boolean,
         val lastSubject: String,
+        /** Tracking branch short name (`origin/main`); null when untracked. */
+        val upstream: String? = null,
     )
 
     /** One stash entry: `stash@{n}` + subject. */
@@ -242,6 +250,9 @@ object GitCli {
                 name = name,
                 isCurrent = name == current,
                 lastSubject = parts.getOrNull(2).orEmpty(),
+                // %(upstream:short) column (ZCode for-each-ref contract);
+                // blank for untracked branches and remote refs alike.
+                upstream = parts.getOrNull(4)?.takeIf { it.isNotBlank() },
             )
         }.distinctBy { it.name }
 
@@ -283,6 +294,36 @@ object GitCli {
             epochSeconds = f[4].toLongOrNull() ?: 0L,
             subject = f.drop(5).joinToString("\u001f"),
             parents = f[1].split(' ').filter { it.isNotBlank() },
+        )
+    }
+
+    /**
+     * Graph record WITH the `%D` decoration column (ZCode contract): the
+     * refs column is field 6 (the format pins one record per line, so the
+     * subject cannot bleed into it). `HEAD -> main` expands to the HEAD and
+     * main badges; `tag: v1` strips the prefix; blank → no badges.
+     */
+    fun parseGraphLogWithRefs(output: String): List<GitCommit> = output.lines().mapNotNull { raw ->
+        val line = raw.trimEnd('\r')
+        if (line.isBlank()) return@mapNotNull null
+        val f = line.split('\u001f')
+        if (f.size < 7) return@mapNotNull null
+        val refs = f[6].split(',').flatMap { token ->
+            val t = token.trim()
+            when {
+                t.isBlank() -> emptyList()
+                t.startsWith("HEAD ->") -> listOf("HEAD", t.substringAfter("->").trim())
+                else -> listOf(t.removePrefix("tag: "))
+            }
+        }.distinct()
+        GitCommit(
+            hash = f[0],
+            shortHash = f[2],
+            author = f[3],
+            epochSeconds = f[4].toLongOrNull() ?: 0L,
+            subject = f[5],
+            parents = f[1].split(' ').filter { it.isNotBlank() },
+            refs = refs,
         )
     }
 
@@ -442,10 +483,34 @@ object GitCli {
     ): ExecutionCoordinator.CommandResult =
         ExecutionCoordinator.execute(sessionId, cmd, timeout = timeoutMs)
 
+    /**
+     * [T-git-panel-cancel-propagation] `runCatching { run(...) }` inside the
+     * sandbox reads would swallow CancellationException (the execution chain
+     * is real suspend code: mutex, PRoot boot, command await) and convert a
+     * cancelled refresh into a bogus `isRepo=false` / empty result — the
+     * caller's rethrow never fired and a stale panel painted "not a
+     * repository". Every call routes through this guard: cancellation
+     * propagates, any other failure degrades to a SENTINEL result
+     * (exitCode = -1, error text as output) that each caller's existing
+     * `exitCode != 0` branch handles exactly like a failed command.
+     */
+    private suspend fun gitCall(block: suspend () -> ExecutionCoordinator.CommandResult): ExecutionCoordinator.CommandResult = try {
+        block()
+    } catch (ce: kotlinx.coroutines.CancellationException) {
+        throw ce
+    } catch (e: Exception) {
+        ExecutionCoordinator.CommandResult(
+            output = e.message ?: "shell unavailable",
+            exitCode = -1,
+            durationMs = 0,
+        )
+    }
+
     suspend fun probe(sessionId: String): GitRepoInfo {
-        val r = runCatching { run(sessionId, GitCliCmd.probeCmd(), timeoutMs = 30_000L) }.getOrElse {
-            return GitRepoInfo(isRepo = false, error = it.message ?: "shell unavailable")
-        }
+        // Fallback is a SENTINEL result (exit -1, error text as output): the
+        // parseProbe path then reports "not a repo" with the shell error —
+        // the same shape a normal non-repo probe produces.
+        val r = gitCall { run(sessionId, GitCliCmd.probeCmd(), timeoutMs = 30_000L) }
         val direct = parseProbe(r.output, r.exitCode)
         if (direct.isRepo) return direct
         // cwd itself is not a repo. Fresh shells boot at /root and the agent
@@ -461,34 +526,44 @@ object GitCli {
     }
 
     suspend fun status(sessionId: String, root: String? = null): GitStatus {
-        val r = runCatching { run(sessionId, GitCliCmd.statusCmd(root)) }.getOrElse {
-            return GitStatus(error = it.message ?: "shell unavailable")
-        }
+        val r = gitCall { run(sessionId, GitCliCmd.statusCmd(root)) }
         if (r.exitCode != 0) return GitStatus(error = r.output.take(500))
         return parseStatus(r.output)
     }
 
     suspend fun log(sessionId: String, limit: Int = 50, root: String? = null): List<GitCommit> {
-        val r = runCatching { run(sessionId, GitCliCmd.logCmd(limit, root)) }.getOrElse { return emptyList() }
+        val r = gitCall { run(sessionId, GitCliCmd.logCmd(limit, root)) }
         // exit 128 = no commits yet; that is an empty history, not an error.
         return if (r.exitCode == 0) parseLog(r.output) else emptyList()
     }
 
-    /** History page (parents included), paged: [offset] skips, [limit] caps. */
+    /** History page (parents + decorations included), paged: [offset] skips, [limit] caps. */
     suspend fun logPage(
         sessionId: String,
         offset: Int,
         limit: Int = 50,
         root: String? = null,
     ): List<GitCommit> {
-        val r = runCatching { run(sessionId, GitCliCmd.graphLogCmd(offset, limit, root)) }
-            .getOrElse { return emptyList() }
-        if (r.exitCode == 0) return parseGraphLog(r.output)
+        val r = gitCall { run(sessionId, GitCliCmd.graphLogCmd(offset, limit, root)) }
+        if (r.exitCode == 0) return parseGraphLogWithRefs(r.output)
+        // An unborn repo is an EMPTY history, not a failure. exit 128 is
+        // git's "unresolvable revision" code: route it to empty ONLY when the
+        // unborn signature confirms it — a CORRUPT HEAD also exits 128 and
+        // must still reach the per-ref fallback below.
+        if (r.exitCode == 128 && emptyRepoNoise(r.output)) return emptyList()
         // HEAD unresolvable (bad/missing object): `git log` and `--all` both
         // fail — walk every ref's concrete sha instead, HEAD parsing bypassed.
-        val all = runCatching { run(sessionId, GitCliCmd.graphLogCmdFallback(offset, limit, root)) }
-            .getOrElse { return emptyList() }
-        return if (all.exitCode == 0) parseGraphLog(all.output) else emptyList()
+        val all = gitCall { run(sessionId, GitCliCmd.graphLogCmdFallback(offset, limit, root)) }
+        return if (all.exitCode == 0) parseGraphLogWithRefs(all.output) else emptyList()
+    }
+
+    /** git's unborn-branch stderr signature — an empty history, not an error. */
+    internal fun emptyRepoNoise(output: String): Boolean {
+        val lower = output.lowercase()
+        return lower.contains("does not have any commits yet") ||
+            lower.contains("your current branch") ||
+            lower.contains("bad default revision") ||
+            lower.contains("ambiguous argument 'head'")
     }
 
     suspend fun numstat(
@@ -496,14 +571,13 @@ object GitCli {
         staged: Boolean,
         root: String? = null,
     ): Map<String, NumStat> {
-        val r = runCatching { run(sessionId, GitCliCmd.numstatCmd(staged, root)) }
-            .getOrElse { return emptyMap() }
+        val r = gitCall { run(sessionId, GitCliCmd.numstatCmd(staged, root)) }
         return if (r.exitCode == 0) parseNumstat(r.output) else emptyMap()
     }
 
     /** Branches for the switcher; empty (with no error) outside a repo. */
     suspend fun branches(sessionId: String, root: String?): List<GitBranchRef> {
-        val r = runCatching { run(sessionId, GitCliCmd.branchesCmd(root)) }.getOrElse { return emptyList() }
+        val r = gitCall { run(sessionId, GitCliCmd.branchesCmd(root)) }
         if (r.exitCode != 0) return emptyList()
         val current = currentBranch(sessionId, root)
         return parseBranches(r.output, current)
@@ -516,7 +590,7 @@ object GitCli {
 
     /** Stash list for the Changes tab; empty (with no error) outside a repo. */
     suspend fun stashes(sessionId: String, root: String?): List<GitStashEntry> {
-        val r = runCatching { run(sessionId, GitCliCmd.stashCmd(root)) }.getOrElse { return emptyList() }
+        val r = gitCall { run(sessionId, GitCliCmd.stashCmd(root)) }
         if (r.exitCode != 0) return emptyList()
         return parseStashes(r.output)
     }
@@ -553,7 +627,7 @@ object GitCli {
 
     /** Push URL of the first remote, or null when the repo has none. */
     suspend fun remote(sessionId: String, root: String? = null): String? {
-        val r = runCatching { run(sessionId, GitCliCmd.remoteCmd(root)) }.getOrElse { return null }
+        val r = gitCall { run(sessionId, GitCliCmd.remoteCmd(root)) }
         return if (r.exitCode == 0) parseRemote(r.output) else null
     }
 

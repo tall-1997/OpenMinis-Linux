@@ -2102,6 +2102,16 @@
     <string name="git_panel_no_branches">브랜치 없음</string>
     <string name="git_panel_no_stashes">스태시 없음</string>
     <string name="git_panel_switch_branch">브랜치 전환</string>
+
+    <string name="git_panel_branch_search">브랜치 검색</string>
+
+    <string name="git_panel_uncommitted_count">커밋되지 않은 변경 사항: 파일 %1$d개</string>
+
+    <string name="git_panel_detached_head">분리된 HEAD</string>
+
+    <string name="git_panel_create_branch">새 브랜치 생성 후 체크아웃…</string>
+
+    <string name="git_panel_branch_name_hint">브랜치 이름</string>
     <string name="sessionlist_export_markdown">Markdown</string>
     <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
     <string name="check_update_notes_expand">전체 표시</string>
