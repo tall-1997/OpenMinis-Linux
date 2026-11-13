@@ -44,9 +44,16 @@ private const val LEGACY_CANCELLED_MARKER = "[cancelled by user]"
 private val systemReminderRegex =
     Regex("\\s*<system-reminder>.*?</system-reminder>\\s*", RegexOption.DOT_MATCHES_ALL)
 
-internal fun stripSystemReminders(text: String): String =
-    if (!text.contains("<system-reminder>")) text
-    else systemReminderRegex.replace(text, "")
+internal fun stripSystemReminders(text: String): String {
+    var out = text
+    if (out.contains("<system-reminder>")) out = systemReminderRegex.replace(out, "")
+    // Legacy #339 rows carry the no-reply head OUTSIDE the reminder block
+    // (the framing itself no longer produces it); strip it for display so the
+    // bookkeeping line never renders as user speech. agentHistory + DB keep
+    // the raw text — this is the UI-render transform only.
+    if (out.contains(HOST_NOTE_NO_REPLY_HEAD)) out = out.replace(HOST_NOTE_NO_REPLY_HEAD, "")
+    return out
+}
 
 /**
  * [T-android-retry-attachment-loss] Remove the `<user-attached-files>` XML

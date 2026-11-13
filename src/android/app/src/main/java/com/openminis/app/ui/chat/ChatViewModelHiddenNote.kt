@@ -133,24 +133,24 @@ internal suspend fun ChatViewModel.commitHiddenUserNote(text: String) {
     if (text.isBlank()) return
     // [T-hidden-user-note] Harness framing, not user speech: Z-Code delivers
     // recalled memory / objective as a `<system-reminder>` notice so the model
-    // does not treat it as a request to answer. The NO_REPLY head is the
-    // model-facing counterpart of the fold: even when a note does reach the
-    // wire as its own user turn (steering rounds, post-fold additions), the
-    // head tells the model this is host bookkeeping — not a prompt to
-    // acknowledge, summarize, or narrate about.
+    // does not treat it as a request to answer. The no-reply contract lives in
+    // the system prompt's action-discipline directive — one place, covering
+    // every note. A per-note head was tried (#339) and removed: it sat
+    // OUTSIDE the reminder block, so the display pipeline (which strips only
+    // `<system-reminder>` blocks) leaked the bookkeeping line into user
+    // bubbles, and echo-prone models repeated it. The framing must stay
+    // strip-clean end to end.
     val framed = "<system-reminder>\n$text\n</system-reminder>"
-    val head = HOST_NOTE_NO_REPLY_HEAD
-    val full = "$head\n$framed"
     appendBoundedHistory(
         LLMMessage(
             role = LLMMessage.Role.USER,
-            content = full,
-            contentParts = listOf(AgentContentPart.Text(full)),
+            content = framed,
+            contentParts = listOf(AgentContentPart.Text(framed)),
         ),
     )
     // Read the session id up front: the IO hop can outlive a session switch.
     val sid = activeSessionId
-    val partsJson = """[{"type":"text","value":${escapeJson(full)}}]"""
+    val partsJson = """[{"type":"text","value":${escapeJson(framed)}}]"""
     val persisted = withContext(Dispatchers.IO) {
         runCatching { chatRepository.appendMessage(sid, "user", partsJson) }.getOrNull()
     } ?: return
@@ -160,12 +160,12 @@ internal suspend fun ChatViewModel.commitHiddenUserNote(text: String) {
 }
 
 /**
- * [T-hidden-user-note] One-line head prepended to every committed host note.
- * The carrier-detection in [ChatViewModelHiddenNote.ensureSessionScopedNotices]
- * and the eviction checks match on the INNER markers, so this head must not
- * contain any of them — it does not ("HARNESS NOTE" collides with nothing).
- * It also must not start with any HarnessNoteMarkers entry, or the no-reply
- * head itself would be folded as a note body; it doesn't.
+ * [T-hidden-user-note] No-reply head that #339 prepended to every committed
+ * note. No longer produced (see [commitHiddenUserNote]), but rows persisted
+ * while it was live still carry it OUTSIDE the `<system-reminder>` block, so
+ * the DISPLAY pipeline references this constant to strip it — the line is
+ * bookkeeping and must never render as user speech. Do not reuse the
+ * per-note-head pattern: the contract belongs to the system prompt.
  */
 internal const val HOST_NOTE_NO_REPLY_HEAD =
     "[HARNESS NOTE — host bookkeeping, not a user prompt. Do not reply to this note, " +
