@@ -382,9 +382,13 @@ class GitCliParseTest {
     @Test
     fun `graph log command pins hash delimiters and skip paging`() {
         val cmd = GitCliCmd.graphLogCmd(offset = 50, limit = 50)
-        assertTrue(cmd.contains("log"))
-        assertTrue(cmd.contains("-n 50 --skip 50"))
+        // [T-git-panel-zcode-graph] ZCode getCommitGraph contract: all-ref
+        // traversal + deterministic ordering + the %D decoration column.
+        assertTrue(cmd.contains("log HEAD --branches --tags --remotes"))
+        assertTrue(cmd.contains("--date-order --topo-order"))
+        assertTrue(cmd.contains("--skip 50 --max-count 50"))
         assertTrue(cmd.contains("%x1f%P%x1f%h"))
+        assertTrue(cmd.endsWith("%x1f%D"))
         assertTrue(cmd.contains("--date=unix"))
     }
 
@@ -540,5 +544,53 @@ class GitCliParseTest {
         val list = GitCli.parseStashes(out)
         assertEquals(1, list.size)
         assertEquals("WIP\u001fsplit", list[0].subject)
+    }
+
+    // ------------------------------------------------------- zcode graph
+
+    @Test
+    fun `graph log with refs parses decorations into badges`() {
+        val us = '\u001f'
+        val out = listOf(
+            "aaa111${us}bbb222${us}aaa1111${us}Alice${us}1700000000${us}merge feature${us}HEAD -> main, main, origin/main",
+            "ccc333${us}${us}ccc3333${us}Bob${us}1700000100${us}init${us}tag: v1",
+            "ddd444${us}aaa111${us}ddd4444${us}Carol${us}1700000200${us}side${us}",
+        ).joinToString("\n")
+        val commits = GitCli.parseGraphLogWithRefs(out)
+        assertEquals(3, commits.size)
+        // HEAD -> main expands to BOTH badges; duplicates collapse.
+        assertEquals(listOf("HEAD", "main", "origin/main"), commits[0].refs)
+        // tag: prefix strips.
+        assertEquals(listOf("v1"), commits[1].refs)
+        // No decorations → empty list.
+        assertEquals(emptyList<String>(), commits[2].refs)
+        // Parents and subject stay intact.
+        assertEquals(listOf("aaa111"), commits[2].parents)
+        assertEquals("side", commits[2].subject)
+    }
+
+    @Test
+    fun `branches parse the upstream column`() {
+        val us = '\u001f'
+        val out = "a1b2${us}main${us}subject${us}${us}origin/main\n" +
+            "c3d4${us}feature${us}subject${us}${us}\n"
+        val list = GitCli.parseBranches(out, current = "main")
+        assertEquals(2, list.size)
+        assertEquals("origin/main", list[0].upstream)
+        assertNull(list[1].upstream)
+    }
+
+    @Test
+    fun `unborn repo signatures read as empty history not failure`() {
+        // [T-git-panel-unborn] Direct contract of GitCli.emptyRepoNoise: every
+        // signature ZCode treats as an empty repo routes logPage to the empty
+        // result instead of the per-ref fallback.
+        val signatures = listOf(
+            "fatal: your current branch 'main' does not have any commits yet",
+            "fatal: bad default revision 'HEAD'",
+            "fatal: ambiguous argument 'HEAD'",
+        )
+        for (s in signatures) assertTrue(GitCli.emptyRepoNoise(s))
+        assertFalse(GitCli.emptyRepoNoise("fatal: not a git repository"))
     }
 }

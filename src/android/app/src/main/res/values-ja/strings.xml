@@ -2102,6 +2102,16 @@
     <string name="git_panel_no_branches">ブランチなし</string>
     <string name="git_panel_no_stashes">スタッシュなし</string>
     <string name="git_panel_switch_branch">ブランチを切り替え</string>
+
+    <string name="git_panel_branch_search">ブランチを検索</string>
+
+    <string name="git_panel_uncommitted_count">未コミットの変更：%1$d ファイル</string>
+
+    <string name="git_panel_detached_head">detached HEAD</string>
+
+    <string name="git_panel_create_branch">新しいブランチを作成してチェックアウト…</string>
+
+    <string name="git_panel_branch_name_hint">ブランチ名</string>
     <string name="sessionlist_export_markdown">Markdown</string>
     <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
     <string name="check_update_notes_expand">すべて表示</string>

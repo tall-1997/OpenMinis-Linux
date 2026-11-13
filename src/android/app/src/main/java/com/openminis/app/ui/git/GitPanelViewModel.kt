@@ -10,6 +10,7 @@ import com.openminis.app.git.GitHostRepoTransfer
 import com.openminis.app.git.GitCli.GitCommit
 import com.openminis.app.git.GitCli.GitFileEntry
 import com.openminis.app.git.GitCommitMessageGenerator
+import com.openminis.app.git.GitHostRepoGraph
 import com.openminis.app.git.GitCli.GitRepoInfo
 import com.openminis.app.git.GitCli.GitStatus
 import com.openminis.app.git.GitHostRepo
@@ -47,6 +48,14 @@ class GitPanelViewModel(
 
     private var fileWatchJob: Job? = null
     private var lastAutoRefreshMs = 0L
+
+    /**
+     * [T-git-panel-single-flight] One refresh at a time: init, the FileChangeHub
+     * watcher and manual taps can all fire concurrently, and two interleaved
+     * refreshes race their final `_state.update` — the older full-state write
+     * lands last and wipes fresher data. A new refresh cancels the previous one.
+     */
+    private var refreshJob: Job? = null
 
     /** Native repo root on the host filesystem; null = sandbox path only. */
     private var hostDir: File? = null
@@ -108,41 +117,63 @@ class GitPanelViewModel(
      * overlay unusable) — the update below never touches `diff`.
      */
     fun refresh() {
-        viewModelScope.launch {
+        // A mutation's reload is part of the same single-flight chain: while
+        // a mutation is settling, an auto-refresh (FileChangeHub) or a tap on
+        // the refresh button could start its probes BEFORE the mutation's
+        // writes land and finish AFTER the reload's update — freezing the
+        // panel on pre-mutation state with busy already cleared.
+        if (_state.value.busy) return
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
             val keepDiff = _state.value.diff
             _state.update { it.copy(loading = true, notice = null) }
-            val native = runCatching { nativeRepo() }.getOrNull()
+            // runCatching must NOT swallow CancellationException: a cancelled
+            // refresh would fall into the sandbox fallback below, clobber
+            // hostDir/guestRoot, and overwrite the newer refresh's paint with
+            // a bogus "not a repository" screen. Re-throw instead.
+            val native = try {
+                nativeRepo()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
             if (native != null) {
                 val (dir, info) = native
                 hostDir = dir
                 guestRoot = info.root
-                var resolved = info
-                if (resolved.userName.isNullOrBlank() || resolved.userEmail.isNullOrBlank()) {
-                    // The host probe reads repo-local config only; the
-                    // documented chain is repo config -> sandbox config ->
-                    // default, so fill the gap with the sandbox-resolved
-                    // identity instead of showing a false "missing identity"
-                    // warning the sandbox path would never show.
-                    val sandbox = runCatching { GitCli.probe(sessionId) }.getOrNull()
-                    resolved = resolved.copy(
-                        userName = resolved.userName ?: sandbox?.userName,
-                        userEmail = resolved.userEmail ?: sandbox?.userEmail,
-                    )
+                // [T-git-panel-io-dispatch] Every JGit read rides Dispatchers.IO:
+                // the multi-ref walk parses all reachable commit headers — on the
+                // Main dispatcher a large repo would freeze the UI for seconds per
+                // refresh (FileChangeHub re-runs this every 2s).
+                val status = withContext(Dispatchers.IO) { runCatching { GitHostRepo.status(dir) }.getOrNull() }
+                val staged = withContext(Dispatchers.IO) {
+                    runCatching { GitHostRepo.numstatStaged(dir) }.getOrDefault(emptyMap())
                 }
-                val status = runCatching { GitHostRepo.status(dir) }.getOrNull()
-                val staged = runCatching { GitHostRepo.numstatStaged(dir) }
-                    .getOrDefault(emptyMap())
-                val unstaged = runCatching { GitHostRepo.numstatUnstaged(dir) }
-                    .getOrDefault(emptyMap())
-                val remote = runCatching { GitHostRepo.remote(dir) }.getOrNull()
-                val log = runCatching { GitHostRepo.logPage(dir, offset = 0, limit = HISTORY_PAGE_SIZE) }
-                    .getOrDefault(emptyList())
-                val branches = runCatching { GitHostRepo.branches(dir) }.getOrDefault(emptyList())
-                val stashes = runCatching { GitHostRepo.stashes(dir) }.getOrDefault(emptyList())
+                val unstaged = withContext(Dispatchers.IO) {
+                    runCatching { GitHostRepo.numstatUnstaged(dir) }.getOrDefault(emptyMap())
+                }
+                val remote = withContext(Dispatchers.IO) { runCatching { GitHostRepo.remote(dir) }.getOrNull() }
+                val log = withContext(Dispatchers.IO) {
+                    runCatching { GitHostRepo.logPage(dir, offset = 0, limit = HISTORY_PAGE_SIZE) }
+                        .getOrDefault(emptyList())
+                }
+                val branches = withContext(Dispatchers.IO) {
+                    runCatching { GitHostRepo.branches(dir) }.getOrDefault(emptyList())
+                }
+                val stashes = withContext(Dispatchers.IO) {
+                    runCatching { GitHostRepo.stashes(dir) }.getOrDefault(emptyList())
+                }
                 _state.update {
                     it.copy(
+                        // [T-git-panel-instant-entry] The host probe already
+                        // answered — paint IMMEDIATELY. Identity reconciliation
+                        // used to sit BEFORE this point, and its sandbox
+                        // round-trip (PRoot boot + 3 commands) held the full-
+                        // screen spinner for seconds on EVERY entry, because
+                        // repo-local user.name/email is missing in most clones.
                         loading = false,
-                        repo = resolved,
+                        repo = info,
                         status = status,
                         stagedNumstat = staged,
                         unstagedNumstat = unstaged,
@@ -160,11 +191,35 @@ class GitPanelViewModel(
                         notice = status?.error ?: if (status == null) "git status failed" else null,
                     )
                 }
+                // Identity reconciliation rides AFTER first paint: the
+                // documented chain is repo config -> sandbox config ->
+                // default, so fill the gap with the sandbox-resolved
+                // identity instead of showing a false "missing identity"
+                // warning the sandbox path would never show.
+                if (info.userName.isNullOrBlank() || info.userEmail.isNullOrBlank()) {
+                    val sandbox = runCatching { GitCli.probe(sessionId) }.getOrNull()
+                    val name = info.userName ?: sandbox?.userName
+                    val email = info.userEmail ?: sandbox?.userEmail
+                    if (name != null || email != null) {
+                        _state.update { s ->
+                            // Session may have switched while the probe ran.
+                            if (s.repo?.root == info.root) {
+                                s.copy(repo = s.repo?.copy(userName = s.repo.userName ?: name, userEmail = s.repo.userEmail ?: email))
+                            } else s
+                        }
+                    }
+                }
                 return@launch
             }
             hostDir = null
             guestRoot = null
-            val repo = GitCli.probe(sessionId)
+            val repo = try {
+                GitCli.probe(sessionId)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                GitCli.GitRepoInfo(isRepo = false, error = "shell unavailable")
+            }
             if (!repo.isRepo) {
                 _state.update {
                     it.copy(
@@ -261,8 +316,20 @@ class GitPanelViewModel(
         }
     }
 
+    /**
+     * [T-git-panel-mutation-gate] Atomic mutation gate: the busy CHECK and
+     * the busy SET used to live on different threads (caller vs launch body),
+     * so a fast double-tap ran two mutations concurrently (two checkouts
+     * racing, double commit). compareAndSet closes the TOCTOU window; the
+     * flag clears when the post-mutation reload finishes — the same place
+     * `busy` clears, so the gate and the UI state can never drift apart.
+     */
+    private val mutationGate = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    private fun tryBeginMutation(): Boolean = mutationGate.compareAndSet(false, true)
+
     private fun mutate(op: suspend () -> String?) {
-        if (_state.value.busy) return
+        if (!tryBeginMutation()) return
         viewModelScope.launch {
             _state.update { it.copy(busy = true) }
             val error = runCatching { op() }.getOrElse { it.message ?: "failed" }
@@ -303,86 +370,130 @@ class GitPanelViewModel(
     }
 
     /**
-     * Check out [name]: a local branch directly, a remote branch by creating
-     * the local tracking branch named after its short name (`origin/main` →
-     * `main`). Creating a local branch literally named "origin/main" would
-     * collide with the remote-tracking namespace, so the short name is the
-     * only legal target; when it already exists we check it out directly.
-     * Checkout stays on the sandbox path — after it lands, the host-side
-     * JGit reads the same .git and the reload reflects the new branch.
+     * Check out [name] with ZCode's pre-validation, host-first:
+     * JGit performs the checkout against the workspace's own `.git` (no
+     * PRoot round-trip — the old sandbox-only path reported "shell
+     * unavailable" whenever the sandbox wasn't booted, leaving the panel
+     * "visible but inert"); the sandbox path remains the fallback. A
+     * remote ref creates the local tracking branch named after its short
+     * name (`origin/main` → `main`). Creating a local branch literally
+     * named "origin/main" would collide with the remote-tracking
+     * namespace, so the short name is the only legal target.
      */
     fun switchBranch(name: String) {
         mutate {
+            val dir = hostDir
+            if (dir != null) {
+                val hostError = withContext(Dispatchers.IO) { GitHostRepoGraph.checkout(dir, name) }
+                if (hostError == null) return@mutate null
+                // Host refused (in-progress operation / conflicts) is a real
+                // refusal, not a transport failure — surface it verbatim.
+                if (!hostError.contains("not a git repository")) return@mutate hostError
+            }
             if (!name.contains('/')) {
-                GitCli.execSimple(sessionId, "checkout", name, root = guestRoot) ?: "checked out $name"
+                GitCli.execSimple(sessionId, "checkout", name, root = guestRoot)
             } else {
                 val local = name.substringAfter('/')
                 val localExists = _state.value.branches.any { it.name == local && !it.name.contains('/') }
                 if (localExists) {
                     GitCli.execSimple(sessionId, "checkout", local, root = guestRoot)
-                        ?: "checked out $local"
                 } else {
                     GitCli.execSimple(sessionId, "checkout", "-b", local, "--track", name, root = guestRoot)
-                        ?: "created $local from $name"
                 }
             }
         }
     }
 
-    /** Re-read status + numstats + history window and fold in the error. */
-    private suspend fun reloadAfterMutation(error: String?) {
-        val dir = hostDir
-        val status: GitStatus?
-        val staged: Map<String, com.openminis.app.git.GitCli.NumStat>
-        val unstaged: Map<String, com.openminis.app.git.GitCli.NumStat>
-        val log: List<GitCommit>
-        val branches: List<com.openminis.app.git.GitCli.GitBranchRef>
-        if (dir != null) {
-            status = withContext(Dispatchers.IO) {
-                runCatching { GitHostRepo.status(dir) }.getOrNull()
+    /**
+     * Create a new branch at HEAD and check it out (ZCode's
+     * `createBranchAndSwitch`). Empty/whitespace names are refused; an
+     * existing branch name checks out in place instead of failing.
+     */
+    fun createBranchAndCheckout(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty() || _state.value.busy) return
+        mutate {
+            val dir = hostDir
+            if (dir != null) {
+                val exists = withContext(Dispatchers.IO) {
+                    runCatching { GitHostRepo.branches(dir).any { it.name == trimmed && !it.name.contains('/') } }
+                        .getOrDefault(false)
+                }
+                val err = withContext(Dispatchers.IO) { GitHostRepoGraph.checkout(dir, trimmed, create = !exists) }
+                if (err == null) return@mutate null
             }
-            staged = withContext(Dispatchers.IO) {
-                runCatching { GitHostRepo.numstatStaged(dir) }.getOrDefault(emptyMap())
-            }
-            unstaged = withContext(Dispatchers.IO) {
-                runCatching { GitHostRepo.numstatUnstaged(dir) }.getOrDefault(emptyMap())
-            }
-            log = withContext(Dispatchers.IO) {
-                runCatching { GitHostRepo.logPage(dir, offset = 0, limit = HISTORY_PAGE_SIZE) }
-                    .getOrDefault(emptyList())
-            }
-            branches = withContext(Dispatchers.IO) {
-                runCatching { GitHostRepo.branches(dir) }.getOrDefault(emptyList())
-            }
-        } else {
-            status = runCatching { GitCli.status(sessionId, guestRoot) }.getOrNull()
-            staged = runCatching { GitCli.numstat(sessionId, staged = true, root = guestRoot) }
-                .getOrDefault(emptyMap())
-            unstaged = runCatching { GitCli.numstat(sessionId, staged = false, root = guestRoot) }
-                .getOrDefault(emptyMap())
-            log = runCatching { GitCli.logPage(sessionId, offset = 0, root = guestRoot) }
-                .getOrDefault(emptyList())
-            branches = runCatching { GitCli.branches(sessionId, guestRoot) }.getOrDefault(emptyList())
+            GitCli.execSimple(sessionId, "checkout", "-b", trimmed, root = guestRoot)
         }
-        _state.update {
-            it.copy(
-                busy = false,
-                status = status,
-                stagedNumstat = staged,
-                unstagedNumstat = unstaged,
-                log = log,
-                logHasMore = log.size == HISTORY_PAGE_SIZE,
-                lastCommit = log.firstOrNull(),
-                branches = branches,
-                notice = error,
-            )
+    }
+
+    /**
+     * Re-read status + numstats + history window and fold in the error.
+     * Runs INSIDE the single-flight chain: a mutation's reload replaces any
+     * in-flight refresh (its probes must read post-mutation state), and a
+     * refresh started later cancels it in turn.
+     */
+    private fun reloadAfterMutation(error: String?) {
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
+            val dir = hostDir
+            val status: GitStatus?
+            val staged: Map<String, com.openminis.app.git.GitCli.NumStat>
+            val unstaged: Map<String, com.openminis.app.git.GitCli.NumStat>
+            val log: List<GitCommit>
+            val branches: List<com.openminis.app.git.GitCli.GitBranchRef>
+            if (dir != null) {
+                status = withContext(Dispatchers.IO) {
+                    runCatching { GitHostRepo.status(dir) }.getOrNull()
+                }
+                staged = withContext(Dispatchers.IO) {
+                    runCatching { GitHostRepo.numstatStaged(dir) }.getOrDefault(emptyMap())
+                }
+                unstaged = withContext(Dispatchers.IO) {
+                    runCatching { GitHostRepo.numstatUnstaged(dir) }.getOrDefault(emptyMap())
+                }
+                log = withContext(Dispatchers.IO) {
+                    runCatching { GitHostRepo.logPage(dir, offset = 0, limit = HISTORY_PAGE_SIZE) }
+                        .getOrDefault(emptyList())
+                }
+                branches = withContext(Dispatchers.IO) {
+                    runCatching { GitHostRepo.branches(dir) }.getOrDefault(emptyList())
+                }
+            } else {
+                status = runCatching { GitCli.status(sessionId, guestRoot) }.getOrNull()
+                staged = runCatching { GitCli.numstat(sessionId, staged = true, root = guestRoot) }
+                    .getOrDefault(emptyMap())
+                unstaged = runCatching { GitCli.numstat(sessionId, staged = false, root = guestRoot) }
+                    .getOrDefault(emptyMap())
+                log = runCatching { GitCli.logPage(sessionId, offset = 0, root = guestRoot) }
+                    .getOrDefault(emptyList())
+                branches = runCatching { GitCli.branches(sessionId, guestRoot) }.getOrDefault(emptyList())
+            }
+            _state.update {
+                it.copy(
+                    busy = false,
+                    status = status,
+                    stagedNumstat = staged,
+                    unstagedNumstat = unstaged,
+                    log = log,
+                    logHasMore = log.size == HISTORY_PAGE_SIZE,
+                    lastCommit = log.firstOrNull(),
+                    branches = branches,
+                    notice = error,
+                )
+            }
+            // Gate and `busy` clear together — one release point, no drift.
+            mutationGate.set(false)
         }
     }
 
     /** Append the next history page when one exists and none is in flight. */
     fun loadMoreLogs() {
         val s = _state.value
-        if (s.logLoadingMore || !s.logHasMore || s.repo == null) return
+        // A refresh in flight is about to replace the window (log + logHasMore
+        // reset) — paginating against the STALE snapshot would append an old
+        // offset page on top of the new first page. The footer re-fires once
+        // the refresh lands and pagination is wanted again.
+        if (s.logLoadingMore || !s.logHasMore || s.repo == null || refreshJob?.isActive == true) return
         val dir = hostDir
         viewModelScope.launch {
             _state.update { it.copy(logLoadingMore = true) }
@@ -396,10 +507,17 @@ class GitPanelViewModel(
                 }.getOrDefault(emptyList())
             }
             val known = s.log.mapTo(HashSet()) { it.hash }
+            val fresh = page.filter { known.add(it.hash) }
             _state.update {
                 it.copy(
-                    log = it.log + page.filter { c -> known.add(c.hash) },
-                    logHasMore = page.size == HISTORY_PAGE_SIZE,
+                    log = it.log + fresh,
+                    // [T-git-panel-load-more] Two conditions must hold for
+                    // another page: a FULL page came back AND it contributed
+                    // rows the window has not seen (the multi-ref walk can
+                    // interleave the same commits into two pages after a
+                    // refresh moved the window — a bare size==50 check looped
+                    // forever when a page fully deduped away).
+                    logHasMore = page.size == HISTORY_PAGE_SIZE && fresh.isNotEmpty(),
                     logLoadingMore = false,
                 )
             }
@@ -412,6 +530,11 @@ class GitPanelViewModel(
 
     fun setSearchQuery(query: String) {
         _state.update { it.copy(searchQuery = query) }
+    }
+
+    /** Branch switcher filter (ZCode's "搜索分支" box). */
+    fun setBranchSearch(query: String) {
+        _state.update { it.copy(branchSearch = query) }
     }
 
     /** Open the commit-detail sheet and fill it from the native/sandbox path. */
@@ -501,7 +624,10 @@ class GitPanelViewModel(
 
     fun commit() {
         val message = _state.value.draftMessage.trim()
-        if (message.isEmpty() || _state.value.busy) return
+        // Same atomic gate as [mutate] — a double-tapped commit button used
+        // to run two commits concurrently (busy checked on the caller thread,
+        // set inside the launch).
+        if (message.isEmpty() || !tryBeginMutation()) return
         val dir = hostDir
         viewModelScope.launch {
             _state.update { it.copy(busy = true, notice = null) }

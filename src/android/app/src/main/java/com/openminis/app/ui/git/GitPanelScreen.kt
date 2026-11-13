@@ -73,7 +73,13 @@ fun GitPanelScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { viewModel.refresh() }) {
+                    // Disabled while a mutation settles — the old always-on
+                    // button fired refresh() which silently returned (busy
+                    // gate), leaving a tap with zero feedback.
+                    IconButton(
+                        onClick = { viewModel.refresh() },
+                        enabled = !state.busy,
+                    ) {
                         Icon(
                             Icons.Filled.Refresh,
                             contentDescription = stringResource(R.string.git_panel_refresh),
@@ -98,13 +104,23 @@ fun GitPanelScreen(
                         GitPanelHeader(
                             state = state,
                             viewModel = viewModel,
-                            onBranchClick = { showBranchMenu = !showBranchMenu },
+                            onBranchClick = {
+                    showBranchMenu = !showBranchMenu
+                    // A closed switcher resets its filter — reopening with a
+                    // stale search box would look like branches vanished.
+                    if (!showBranchMenu) viewModel.setBranchSearch("")
+                },
                         )
                         if (showBranchMenu) {
                             BranchMenu(
-                                branches = state.branches,
+                                state = state,
                                 onPick = { name ->
                                     viewModel.switchBranch(name)
+                                    showBranchMenu = false
+                                },
+                                onSearch = viewModel::setBranchSearch,
+                                onCreate = { name ->
+                                    viewModel.createBranchAndCheckout(name)
                                     showBranchMenu = false
                                 },
                             )

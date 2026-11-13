@@ -1703,6 +1703,16 @@
     <string name="git_panel_no_branches">No branches</string>
     <string name="git_panel_no_stashes">No stashes</string>
     <string name="git_panel_switch_branch">Switch branch</string>
+
+    <string name="git_panel_branch_search">Search branches</string>
+
+    <string name="git_panel_uncommitted_count">Uncommitted changes: %1$d files</string>
+
+    <string name="git_panel_detached_head">detached HEAD</string>
+
+    <string name="git_panel_create_branch">Create and check out new branch…</string>
+
+    <string name="git_panel_branch_name_hint">Branch name</string>
     <string name="chat_menu_open_browser">Open Browser</string>
     <string name="chat_menu_browse_chat_files">Browse Chat Files</string>
     <string name="chat_menu_enhanced_cache">Enhanced Cache</string>

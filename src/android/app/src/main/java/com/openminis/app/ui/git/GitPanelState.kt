@@ -42,6 +42,8 @@ data class GitPanelState(
     val diff: GitDiffView? = null,
     /** History tab: local filter over the loaded window. */
     val searchQuery: String = "",
+    /** Branch switcher: local filter over the branch list (ZCode parity). */
+    val branchSearch: String = "",
     /** Commit-detail bottom sheet; null when closed. */
     val commitSheet: GitCommitSheet? = null,
 )

@@ -48,11 +48,14 @@ object GitCliCmd {
      * full-tree walk (a per-repo full-tree `find` made the panel hang on
      * real devices, where every stat crosses PRoot at 10-50x cost). Ties
      * break by path so a same-second clone batch resolves deterministically.
-     * mindepth 2 skips the workspace's own (absent) `.git`; maxdepth 4
-     * covers both `<workspace>/<repo>` and `<workspace>/<group>/<repo>`.
+     * [T-git-panel-zcode-discovery] mindepth 1: the workspace ITSELF is a
+     * legal repo root (the host walk covers it, and the old mindepth-2 skip
+     * made the sandbox fallback blind to it). maxdepth 5 matches the host
+     * walk's four levels BELOW the workspace — find counts the workspace
+     * itself as depth 0, so an N-level-deep repo's `.git` sits at depth N+1.
      */
     const val DISCOVER_CMD =
-        "find /var/minis/workspace -maxdepth 4 -mindepth 2 -type d -name .git 2>/dev/null | " +
+        "find /var/minis/workspace -maxdepth 5 -mindepth 1 -type d -name .git 2>/dev/null | " +
             "while IFS= read -r d; do " +
             "root=\${d%/.git}; " +
             "committed=\$(git -C \"\$root\" log -1 --format=%ct 2>/dev/null); " +
@@ -75,11 +78,12 @@ object GitCliCmd {
      * (`%1f` = 0x1f; the pretty-only `%xNN` stays literal here). The extra
      * `%(symref)` column is non-empty only for symbolic refs like
      * origin/HEAD, which [GitCli.parseBranches] drops — they are aliases, not
-     * switchable branches.
+     * switchable branches. `%(upstream:short)` feeds the tracking label
+     * (ZCode's for-each-ref contract column).
      */
     fun branchesCmd(root: String? = null) =
         "${gitPrefix(root)} for-each-ref --sort=-committerdate refs/heads refs/remotes " +
-            "--format='%(objectname:short)%1f%(refname:short)%1f%(contents:subject)%1f%(symref)' | head -40"
+            "--format='%(objectname:short)%1f%(refname:short)%1f%(contents:subject)%1f%(symref)%1f%(upstream:short)' | head -40"
 
     /** Stash list: `stash@{n}<x1f>subject`, newest first. */
     fun stashCmd(root: String? = null) =
@@ -103,26 +107,33 @@ object GitCliCmd {
     fun remoteCmd(root: String? = null) = "${gitPrefix(root)} remote -v"
 
     /**
-     * History page: same record as [logCmd] plus `%P` (parents) so the
-     * commit-graph lanes can be laid out; `--skip` pages older commits.
+     * History page, ZCode `getCommitGraph` contract:
+     * `git log HEAD --branches --tags --remotes --date-order --topo-order
+     * --skip N --max-count M --format=%H %P %h %an %ad %s %D`.
+     *
+     * The old command was HEAD-only — side branches never appeared in the
+     * History tab, and there was no `%D` column, so the graph UI could not
+     * render HEAD/main/origin/main badges. `%D` (decorations) is the last
+     * field; [GitCli.parseGraphLogWithRefs] maps it to commit refs.
      */
     fun graphLogCmd(offset: Int, limit: Int, root: String? = null) =
-        "${gitPrefix(root)} -c core.quotepath=false log -n $limit --skip $offset " +
-            "--date=unix --pretty=format:%H%x1f%P%x1f%h%x1f%an%x1f%ad%x1f%s"
+        "${gitPrefix(root)} -c core.quotepath=false log HEAD --branches --tags --remotes " +
+            "--date-order --topo-order --skip $offset --max-count $limit " +
+            "--date=unix --pretty=format:%H%x1f%P%x1f%h%x1f%an%x1f%ad%x1f%s%x1f%D"
 
     /**
      * History fallback for repos whose HEAD cannot be resolved (`git log`
      * fails with bad/missing HEAD, and `--all` fails too because git still
      * parses HEAD first). Walking the concrete shas of every local+remote
      * ref sidesteps HEAD entirely — verified live in gitpanel_verify.py.
-     * Same record shape as [graphLogCmd] so [GitCli.parseGraphLog] is shared.
+     * Same record shape as [graphLogCmd] so [GitCli.parseGraphLogWithRefs] is shared.
      */
     fun graphLogCmdFallback(offset: Int, limit: Int, root: String? = null): String {
         val p = gitPrefix(root)
         return "$p -c core.quotepath=false log \$($p for-each-ref " +
             "--format='%(objectname)' refs/heads refs/remotes | sort -u) " +
-            "-n $limit --skip $offset --date=unix " +
-            "--pretty=format:%H%x1f%P%x1f%h%x1f%an%x1f%ad%x1f%s"
+            "--date-order --topo-order -n $limit --skip $offset --date=unix " +
+            "--pretty=format:%H%x1f%P%x1f%h%x1f%an%x1f%ad%x1f%s%x1f%D"
     }
 
     /**

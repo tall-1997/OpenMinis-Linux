@@ -2105,6 +2105,16 @@
     <string name="git_panel_no_branches">Tiada cawangan</string>
     <string name="git_panel_no_stashes">Tiada stash</string>
     <string name="git_panel_switch_branch">Tukar cawangan</string>
+
+    <string name="git_panel_branch_search">Cari cawangan</string>
+
+    <string name="git_panel_uncommitted_count">Perubahan belum dikomit: %1$d fail</string>
+
+    <string name="git_panel_detached_head">HEAD tertanggal</string>
+
+    <string name="git_panel_create_branch">Cipta dan checkout cawangan baharu…</string>
+
+    <string name="git_panel_branch_name_hint">Nama cawangan</string>
     <string name="sessionlist_export_markdown">Markdown</string>
     <!-- [#38] Update dialog: release-notes expand/collapse toggle -->
     <string name="check_update_notes_expand">Tunjukkan semua</string>

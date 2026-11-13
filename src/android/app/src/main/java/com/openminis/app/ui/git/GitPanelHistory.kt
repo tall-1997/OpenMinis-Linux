@@ -2,7 +2,9 @@ package com.openminis.app.ui.git
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -27,6 +29,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -34,10 +37,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.openminis.app.R
-import com.openminis.app.git.GitCli.GitCommit
 
 /**
  * History tab: local search, self-drawn commit graph (lanes from
@@ -46,7 +50,16 @@ import com.openminis.app.git.GitCli.GitCommit
  */
 @Composable
 internal fun GitPanelHistory(state: GitPanelState, viewModel: GitPanelViewModel) {
-    val rows = graphLayout(filterHistory(state.log, state.searchQuery))
+    // O(n²) layout over ≤100 rows recomputed on EVERY keystroke otherwise —
+    // remember across the search-filter recompositions.
+    val rows = remember(state.log, state.searchQuery) {
+        graphLayout(filterHistory(state.log, state.searchQuery))
+    }
+    // [T-git-panel-zcode-graph] Pass the REAL lane count: [LaneCanvas] caps
+    // the strip's WIDTH itself and rescales the pitch, so lanes beyond the
+    // cap still render (the old caller-side coerceAtMost made LaneCanvas
+    // see 8 while rows carried lane≥8 — rails painted off-canvas, nodes
+    // invisible).
     val laneCount = (rows.maxOfOrNull { r -> r.activeLanes.maxOrNull() ?: r.lane } ?: 0) + 1
     Column(Modifier.fillMaxSize()) {
         SearchField(state.searchQuery, viewModel::setSearchQuery)
@@ -75,6 +88,16 @@ internal fun GitPanelHistory(state: GitPanelState, viewModel: GitPanelViewModel)
         }
     }
 }
+
+/** ZCode graph colours, cycled per lane (Tan[4] in the desktop client). */
+private val laneColors = listOf(
+    Color(0xFF007AFF), // blue
+    Color(0xFFFF9500), // orange
+    Color(0xFF34C759), // green
+    Color(0xFFAF52DE), // purple
+)
+
+internal fun laneColor(lane: Int): Color = laneColors[Math.floorMod(lane, laneColors.size)]
 
 @Composable
 private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
@@ -144,6 +167,10 @@ private fun CommitRow(row: CommitLaneRow, laneCount: Int, onClick: () -> Unit) {
         LaneCanvas(row = row, laneCount = laneCount)
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+            if (row.commit.refs.isNotEmpty()) {
+                RefBadges(row.commit.refs)
+                Spacer(Modifier.size(3.dp))
+            }
             Text(
                 row.commit.subject,
                 style = MaterialTheme.typography.bodyMedium,
@@ -164,42 +191,88 @@ private fun CommitRow(row: CommitLaneRow, laneCount: Int, onClick: () -> Unit) {
 }
 
 /**
- * Graph strip for one row: rails for every active lane, then the node —
- * merge double-ring, fork diamond, otherwise a plain dot. Rails are drawn
- * full-height so adjacent rows connect seamlessly.
+ * `%D` decoration badges (ZCode description column): HEAD outlined and
+ * first, local branches filled, remote refs muted.
+ */
+@Composable
+private fun RefBadges(refs: List<String>) {
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        for (ref in refs.take(4)) {
+            val isHead = ref == "HEAD"
+            val isRemote = ref.contains('/')
+            Text(
+                ref,
+                fontSize = 10.sp,
+                fontWeight = if (isHead) FontWeight.SemiBold else FontWeight.Medium,
+                color = if (isRemote) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .background(
+                        if (isHead) Color.Transparent else MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                        RoundedCornerShape(6.dp),
+                    )
+                    .then(
+                        if (isHead) {
+                            Modifier.border(
+                                1.dp,
+                                MaterialTheme.colorScheme.primary,
+                                RoundedCornerShape(6.dp),
+                            )
+                        } else Modifier,
+                    )
+                    .padding(horizontal = 5.dp, vertical = 1.dp),
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+/** Mobile width guard: the graph strip never grows past this many lanes. */
+private const val MAX_DRAWN_LANES = 8
+
+/**
+ * Graph strip for one row: rails for every active lane (each rail in its
+ * lane colour, ZCode Tan[4] cycle), then the node — merge double-ring, fork
+ * diamond, otherwise a plain dot. Rails are drawn full-height so adjacent
+ * rows connect seamlessly.
+ *
+ * [T-git-panel-lane-overflow] The canvas width is CAPPED but every lane is
+ * still drawn: lanes beyond the cap compress the pitch (laneX divides by the
+ * REAL lane count, not the cap). Capping only the width without rescaling
+ * painted lane≥cap rails OFF the canvas — broken rails and, worse, invisible
+ * nodes.
  */
 @Composable
 private fun LaneCanvas(row: CommitLaneRow, laneCount: Int) {
     val lanes = laneCount.coerceAtLeast(1)
+    val columnCount = lanes.coerceAtMost(MAX_DRAWN_LANES)
     Canvas(
         Modifier
-            .width((lanes * 14).dp)
+            .width((columnCount * 14).dp)
             .fillMaxHeight()
             .background(MaterialTheme.colorScheme.surface),
     ) {
-        val laneW = size.width / lanes
         val cy = size.height / 2f
-        fun laneX(lane: Int) = laneW * lane + laneW / 2f
+        fun laneX(lane: Int) = size.width * (lane + 0.5f) / lanes
         for (lane in row.activeLanes) {
-            val x = laneX(lane)
             drawLine(
-                color = Color(0xFFC7C7CC),
-                start = Offset(x, 0f),
-                end = Offset(x, size.height),
+                color = laneColor(lane).copy(alpha = 0.35f),
+                start = Offset(laneX(lane), 0f),
+                end = Offset(laneX(lane), size.height),
                 strokeWidth = 1.5.dp.toPx(),
             )
         }
+        val nodeColor = laneColor(row.lane)
         val nx = laneX(row.lane)
         when {
             row.isMerge -> {
                 drawCircle(
-                    color = GitHunkBlue,
+                    color = nodeColor,
                     radius = 6.5.dp.toPx(),
                     center = Offset(nx, cy),
                     style = Stroke(width = 2.dp.toPx()),
                 )
                 drawCircle(
-                    color = GitHunkBlue,
+                    color = nodeColor,
                     radius = 3.dp.toPx(),
                     center = Offset(nx, cy),
                 )
@@ -216,7 +289,7 @@ private fun LaneCanvas(row: CommitLaneRow, laneCount: Int) {
                 drawPath(path, Color(0xFFFF9500))
             }
             else -> drawCircle(
-                color = GitHunkBlue,
+                color = nodeColor,
                 radius = 4.5.dp.toPx(),
                 center = Offset(nx, cy),
             )
