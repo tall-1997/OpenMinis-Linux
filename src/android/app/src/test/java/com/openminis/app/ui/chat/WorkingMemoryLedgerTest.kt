@@ -65,8 +65,15 @@ class WorkingMemoryLedgerTest {
         }
         // Entries beyond the ring fold into a marker line; the original
         // per-round lines of the folded range are gone (fold keeps the count).
-        val note = l.renderUndelivered()!!
-        assertTrue(note.contains("earlier tool rounds folded"))
-        assertFalse(note.contains("tool_1(")) // original line folded away
+        // Delivery is capped per call — drain until exhausted.
+        var sawFold = false
+        var sawOldest = false
+        while (true) {
+            val note = l.renderUndelivered() ?: break
+            if (note.contains("earlier tool rounds folded")) sawFold = true
+            if (note.contains("tool_1(")) sawOldest = true
+        }
+        assertTrue("folded marker must appear in some delivery", sawFold)
+        assertFalse("original folded line must not survive", sawOldest)
     }
 }

@@ -51,7 +51,13 @@ internal class WorkingMemoryLedger {
             )
             entries.subList(0, drop).clear()
             entries.add(0, foldLine)
-            delivered = maxOf(0, delivered - drop + 1)
+            // The fold line REPLACES the dropped range at the head. The fold
+            // line itself is UNDELIVERED (its count must reach the
+            // transcript). If the delivered cursor sat inside the dropped
+            // range, the pointer moves to 0 (fold line); if it sat past the
+            // range, the surviving entries shifted left by [drop] and the
+            // fold line adds +1.
+            delivered = if (delivered < drop) 0 else delivered - drop + 1
         }
     }
 
@@ -65,15 +71,21 @@ internal class WorkingMemoryLedger {
         if (delivered >= entries.size) return null
         val pending = entries.subList(delivered, entries.size)
         if (pending.isEmpty()) return null
-        val lines = ArrayList<String>(pending.size)
+        // Cap the handover: a 400-line wall invites the model to narrate about
+        // it instead of working. Deliver from the HEAD of the undelivered
+        // range (chronological order — the fold marker and earliest context
+        // go first); the remainder stays undelivered for the next eviction.
+        val take = minOf(MAX_DELIVERY_LINES, pending.size)
+        val delivering = pending.subList(0, take)
+        val lines = ArrayList<String>(delivering.size)
         var i = 0
-        while (i < pending.size) {
-            val e = pending[i]
+        while (i < delivering.size) {
+            val e = delivering[i]
             var run = 1
-            while (i + run < pending.size &&
-                pending[i + run].tool == e.tool &&
-                pending[i + run].argsDigest == e.argsDigest &&
-                pending[i + run].resultHead == e.resultHead
+            while (i + run < delivering.size &&
+                delivering[i + run].tool == e.tool &&
+                delivering[i + run].argsDigest == e.argsDigest &&
+                delivering[i + run].resultHead == e.resultHead
             ) run++
             lines += if (run == 1) {
                 "turn ${e.turn}: ${e.tool}(${e.argsDigest}) → ${e.resultHead}"
@@ -82,18 +94,29 @@ internal class WorkingMemoryLedger {
             }
             i += run
         }
-        delivered = entries.size
+        // Advance by what was ACTUALLY delivered (capped), not by everything
+        // pending — the rest rides the next eviction.
+        delivered += delivering.size
         val body = lines.joinToString("\n")
-        return "[working memory — one-line record of tool rounds no longer in context]\n$body"
+        val omitted = pending.size - delivering.size
+        val head = if (omitted > 0) "($omitted more tool rounds pending — delivered on later evictions)\n" else ""
+        return "[working memory — one-line record of tool rounds no longer in context]\n$head$body"
     }
 
     @Synchronized
     fun size(): Int = entries.size
 
+    /** True when undelivered entries exist (delivered < entries.size). */
+    @Synchronized
+    fun hasUndelivered(): Boolean = delivered < entries.size
+
     internal companion object {
         internal const val RESULT_HEAD_CHARS = 120
         internal const val MAX_ENTRIES = 600
         internal const val FOLD_TOOL = "earlier-rounds"
+
+        /** Per-delivery cap: a wall of records invites narration. */
+        internal const val MAX_DELIVERY_LINES = 40
     }
 }
 
@@ -117,6 +140,10 @@ internal object WorkingMemoryStore {
 
     fun renderUndelivered(sessionId: String): String? =
         ledgerFor(sessionId).renderUndelivered()
+
+    /** True when the ledger has lines not yet delivered to the transcript. */
+    fun hasUndelivered(sessionId: String): Boolean =
+        ledgerFor(sessionId).hasUndelivered()
 
     /** Test / session-swap seam. */
     fun reset(sessionId: String? = null) {
