@@ -22,12 +22,9 @@ data class ThinkingResolveContext(
     val declaredEffortValues: List<String>?,
     /**
      * [T-thinking-ultra-manual] The folded operator ceiling override
-     * ([LLMModel.maxThinkingLevel], folded from ModelOverrides). When it is
-     * ULTRA, the wire layer treats the manual setting as the operator's
-     * vocabulary assertion: a picker-selected ULTRA emits the literal "ultra"
-     * tier and the generic declared-set clamp does not second-guess it (same
-     * authority contract as a CustomPath rule's own vocabulary). Defaults
-     * null so every existing construction site keeps its behaviour.
+     * ([LLMModel.maxThinkingLevel]): ULTRA = the operator's vocabulary
+     * assertion — picker-selected ULTRA emits the literal tier, and the
+     * generic clamp does not second-guess it. Defaults null.
      */
     val ceilingOverride: ThinkingLevel? = null,
     /** Numeric `budget_tokens` bounds from models.dev, when the catalog has them. */
@@ -306,14 +303,11 @@ object ThinkingRuleResolver {
         )
 
         // Unified gateways (Volcengine Ark / Azure / Venice) — iOS ba055121 + 84f5c9e1.
-        // These re-host third-party families behind one OpenAI surface where thinking is
-        // controlled ONLY by root `reasoning_effort`; the vendor-native `thinking:{}`
-        // object is not honoured, and on Venice an unknown root key is a hard 400.
-        // Registered as ONE concept rather than three flags so they cannot drift apart.
-        //
-        // Placed AFTER the OpenAI-native and qwen patterns so it claims exactly what the
-        // old chain's `usesUnifiedReasoningEffort` checks claimed — the deepseek-v4
-        // branch and the self-reasoning families below — and nothing more.
+        // Third-party families behind one OpenAI surface: thinking controlled ONLY by
+        // root `reasoning_effort`; the vendor-native `thinking:{}` is not honoured, and
+        // on Venice an unknown root key is a hard 400. ONE concept, not three flags, so
+        // they cannot drift apart. Placed AFTER the OpenAI-native and qwen patterns so
+        // it claims exactly what the old `usesUnifiedReasoningEffort` checks claimed.
         if (ctx.usesUnifiedReasoningEffort) {
             add(
                 ThinkingRule(
@@ -549,11 +543,9 @@ object ThinkingRuleResolver {
                 // grok-4.20-0309-reasoning). DELIBERATELY NOT data-driven across
                 // all vendors — the same empty-tier shape appears on 2090 bundled
                 // entries (relay-hosted Claude/GPT-5/Qwen/grok) and honouring it
-                // everywhere would change the wire format for all at once;
-                // none of those routes is verified. Ordered AFTER the family
-                // list, which keys on "declares nothing" and must keep firing
-                // for relay-hosted deepseek/glm/kimi/minimax ids; unified-effort
-                // gateways normalize the field and own their model list.
+                // everywhere would change the wire format unverified; the family
+                // list below keys on "declares nothing" and must keep firing for
+                // relay ids; unified-effort gateways own their model list.
                 if (ctx.isXAI && !ctx.usesUnifiedReasoningEffort &&
                     ctx.declaresNoEffortTiers && !declaresEffort
                 ) {
@@ -565,9 +557,8 @@ object ThinkingRuleResolver {
                     lid,
                 )
                 // [T-thinking-ultra-manual] clampRequested keeps the manual
-                // override's "ultra" from being walked back down to "max" by
-                // the declared set — the override is the operator's vocabulary
-                // assertion, not a client guess to second-guess.
+                // override's "ultra" from being walked down to "max" — the
+                // override is the operator's vocabulary assertion.
                 val clamped = ThinkingEffort.clampRequested(
                     requested,
                     ctx.declaredEffortValues,
