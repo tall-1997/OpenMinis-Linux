@@ -110,7 +110,7 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
                 )
             }
             return maybeProgressivelyTrimmed(
-                detachedCompactHistory(effectiveSummaryWrappedText),
+                foldHarnessNotes(detachedCompactHistory(effectiveSummaryWrappedText)),
                 applyProgressiveTrim,
             )
         }
@@ -317,15 +317,16 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
             result.addAll(postAnchor)
             result.add(LLMMessage(role = LLMMessage.Role.USER, content = effectiveSummaryWrappedText))
         }
-        // [T-harness-note-fold] Fold harness USER messages into the prefix of
-        // the first real user message. Harness notes (goal/recall/state/
-        // WorkingMemory/plan-retry) are materialized as role=USER messages by
-        // the host, but the provider wire format serializes each as an
-        // independent user turn — which the model interprets as "the user
-        // spoke again" and produces interstitial prose between tool calls.
-        // The fold makes the model see them as part of the original request.
-        // One change covers ALL injection sources. Transcript/DB/UI/ledger
-        // all untouched — request-assembly only.
+        // [T-harness-note-fold] Fold harness USER messages into the nearest
+        // preceding real user turn, across the whole sequence. Harness notes
+        // (goal/recall/state/WorkingMemory/plan-retry/dropped-rounds) are
+        // materialized as role=USER messages at the history TAIL by the
+        // host before each loop request, but the provider wire format
+        // serializes each as an independent user turn — which the model
+        // interprets as "the user spoke again" and produces interstitial
+        // prose between tool calls. The fold makes the model see them as
+        // part of the original request. Transcript/DB/UI/ledger all
+        // untouched — request-assembly only.
         return maybeProgressivelyTrimmed(foldHarnessNotes(result), applyProgressiveTrim)
     }
 
@@ -370,47 +371,85 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
 }
 
 /**
- * Fold consecutive harness USER messages into the prefix of the first
- * real user message, so the outbound request has no independent USER
- * turns for harness notices. A harness note is identified by its content
- * starting with a known marker (goal/recall/state/WorkingMemory/plan).
- * The first non-harness USER message (or non-USER message) ends the fold
- * range. Transcript/DB/UI/ledger all untouched.
+ * [T-harness-note-fold] Fold harness USER messages into the nearest PRECEDING
+ * real user turn, across the whole sequence — not just the head.
+ *
+ * Why whole-sequence: every committed note lands at the TAIL of agentHistory
+ * (ChatViewModelAgentLoopExt commits notices before each loop request), so in
+ * any live session the note's predecessors include real user turns and
+ * assistant/tool rounds — a head-only fold (the original implementation)
+ * closed its fold window on the very first message and folded nothing. On
+ * device that made the fix a no-op: every recall/goal/state/WorkingMemory
+ * note still went out as an independent "the user spoke again" user turn,
+ * and the model answered each with interstitial prose between tool calls.
+ *
+ * Destination: the note's text is appended onto the nearest preceding USER
+ * message that is NOT itself a harness note — a real user turn or the
+ * tool-result carrier of the current round. This is exactly the shape
+ * Z-Code produces by merging reminders into the tool result, and the same
+ * shape ToolIdNormalization.mergeConsecutiveUserTurns already tolerates
+ * (text-only follower rides the carrier message). When no preceding user
+ * turn exists (notes before the first user message), the notes collapse
+ * into the first following real user turn's prefix — the original head
+ * behavior.
+ *
+ * Ordering guarantee: relative order among folded notes is preserved
+ * (append-only onto one target), so the model still reads them
+ * chronologically inside the merged turn.
+ *
+ * Transcript/DB/UI/ledger all untouched — request-assembly only.
  */
 internal fun foldHarnessNotes(history: List<LLMMessage>): List<LLMMessage> {
-    val harnessPrefix = StringBuilder()
-    val out = mutableListOf<LLMMessage>()
-    var folding = true
+    // Fast path: no harness notes anywhere → return the input untouched
+    // (byte-identical to the pre-fold behavior; sessions without notices
+    // never pay a copy).
+    if (history.none { HarnessNoteMarkers.isUserHarnessNote(it) }) {
+        return history
+    }
+    val out = ArrayList<LLMMessage>(history.size)
+    // Pending notes with no preceding real user turn yet: carried until the
+    // first real user message appears, then prepended to it.
+    val leadingNotes = StringBuilder()
+    // Index of the last out-entry that can absorb a note: a USER message
+    // that is not itself a harness note (real user turn or tool-result
+    // carrier). -1 = none yet.
+    var lastUserTarget = -1
     for (msg in history) {
-        if (folding && msg.role == LLMMessage.Role.USER &&
-            HarnessNoteMarkers.isHarnessNote(msg.content)
-        ) {
-            // Harness note: extract content, merge into the prefix.
-            harnessPrefix.append(msg.content.trimStart())
-            harnessPrefix.append("\n")
+        if (HarnessNoteMarkers.isUserHarnessNote(msg)) {
+            if (lastUserTarget >= 0) {
+                // Fold forward onto the nearest preceding user turn.
+                val target = out[lastUserTarget]
+                out[lastUserTarget] = target.copy(
+                    content = target.content + "\n\n" + msg.content.trimStart(),
+                )
+            } else {
+                leadingNotes.append(msg.content.trimStart()).append("\n")
+            }
             continue
         }
-        if (folding) {
-            // First non-harness message: prepend the accumulated prefix.
-            if (harnessPrefix.isNotEmpty()) {
-                val prefix = harnessPrefix.toString().trimEnd()
-                if (msg.role == LLMMessage.Role.USER) {
-                    out.add(msg.copy(content = prefix + "\n\n" + msg.content))
-                } else {
-                    out.add(LLMMessage(
-                        role = LLMMessage.Role.USER,
-                        content = prefix,
-                        contentParts = listOf(AgentContentPart.Text(prefix)),
-                    ))
-                    out.add(msg)
-                }
+        if (msg.role == LLMMessage.Role.USER) {
+            // A real user turn: first flush any leading notes into its prefix.
+            val flushed = leadingNotes.isNotEmpty()
+            if (flushed) {
+                val prefix = leadingNotes.toString().trimEnd()
+                leadingNotes.clear()
+                out.add(msg.copy(content = prefix + "\n\n" + msg.content))
             } else {
                 out.add(msg)
             }
-            folding = false
+            lastUserTarget = out.lastIndex
             continue
         }
         out.add(msg)
+    }
+    // History ends with notes and no following user turn: flush the leading
+    // remainder as a standalone user turn (matches the old tail fallback).
+    if (leadingNotes.isNotEmpty()) {
+        out.add(LLMMessage(
+            role = LLMMessage.Role.USER,
+            content = leadingNotes.toString().trimEnd(),
+            contentParts = listOf(AgentContentPart.Text(leadingNotes.toString().trimEnd())),
+        ))
     }
     return out
 }

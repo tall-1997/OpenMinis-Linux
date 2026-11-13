@@ -131,20 +131,26 @@ internal suspend fun ChatViewModel.commitSessionNoticesOnce(
 
 internal suspend fun ChatViewModel.commitHiddenUserNote(text: String) {
     if (text.isBlank()) return
-    // [T-hidden-user-note] Harness framing, not user speech: ZCode delivers
+    // [T-hidden-user-note] Harness framing, not user speech: Z-Code delivers
     // recalled memory / objective as a `<system-reminder>` notice so the model
-    // does not treat it as a request to answer.
+    // does not treat it as a request to answer. The NO_REPLY head is the
+    // model-facing counterpart of the fold: even when a note does reach the
+    // wire as its own user turn (steering rounds, post-fold additions), the
+    // head tells the model this is host bookkeeping — not a prompt to
+    // acknowledge, summarize, or narrate about.
     val framed = "<system-reminder>\n$text\n</system-reminder>"
+    val head = HOST_NOTE_NO_REPLY_HEAD
+    val full = "$head\n$framed"
     appendBoundedHistory(
         LLMMessage(
             role = LLMMessage.Role.USER,
-            content = framed,
-            contentParts = listOf(AgentContentPart.Text(framed)),
+            content = full,
+            contentParts = listOf(AgentContentPart.Text(full)),
         ),
     )
     // Read the session id up front: the IO hop can outlive a session switch.
     val sid = activeSessionId
-    val partsJson = """[{"type":"text","value":${escapeJson(framed)}}]"""
+    val partsJson = """[{"type":"text","value":${escapeJson(full)}}]"""
     val persisted = withContext(Dispatchers.IO) {
         runCatching { chatRepository.appendMessage(sid, "user", partsJson) }.getOrNull()
     } ?: return
@@ -152,3 +158,15 @@ internal suspend fun ChatViewModel.commitHiddenUserNote(text: String) {
         notePersistedUiRow(null, persisted.id)
     }
 }
+
+/**
+ * [T-hidden-user-note] One-line head prepended to every committed host note.
+ * The carrier-detection in [ChatViewModelHiddenNote.ensureSessionScopedNotices]
+ * and the eviction checks match on the INNER markers, so this head must not
+ * contain any of them — it does not ("HARNESS NOTE" collides with nothing).
+ * It also must not start with any HarnessNoteMarkers entry, or the no-reply
+ * head itself would be folded as a note body; it doesn't.
+ */
+internal const val HOST_NOTE_NO_REPLY_HEAD =
+    "[HARNESS NOTE — host bookkeeping, not a user prompt. Do not reply to this note, " +
+        "do not summarize or acknowledge it; continue the work. The request itself carries the actual instruction.]"
