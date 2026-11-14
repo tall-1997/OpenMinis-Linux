@@ -11,7 +11,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import kotlin.coroutines.coroutineContext
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.conflate
@@ -49,7 +48,7 @@ internal fun StreamingMarkdownTextBody(
     val mdColors = currentMdColors()
     var blocks by remember { mutableStateOf<List<MdBlock>>(emptyList()) }
     LaunchedEffect(displayContent) {
-        val computed = withContext(Dispatchers.Default) {
+        val computed = withContext(MarkdownParseDispatcher.forViewport) {
             parseMarkdownBlocks(displayContent).also {
                 MarkdownParseCaches.prewarm(it, mdColors)
             }

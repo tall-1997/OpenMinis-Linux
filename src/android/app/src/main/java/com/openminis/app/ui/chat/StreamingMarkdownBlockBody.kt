@@ -13,7 +13,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.openminis.app.R
 import kotlin.coroutines.coroutineContext
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.withContext
@@ -64,7 +63,7 @@ internal fun MarkdownBlockBody(
         var parsed by remember(rawText) { mutableStateOf<List<MdBlock>?>(null) }
         LaunchedEffect(rawText) {
             val tStartNs = System.nanoTime()
-            val computed = withContext(Dispatchers.Default) {
+            val computed = withContext(MarkdownParseDispatcher.forViewport) {
                 MarkdownParseCaches.blocks(rawText).also {
                     MarkdownParseCaches.prewarm(it, mdColors)
                 }
@@ -153,7 +152,7 @@ internal fun MarkdownBlockBody(
         // incremental optimization shrinks.
         val parseStartNs = System.nanoTime()
         val previous = parseSnapshot
-        val computed = withContext(Dispatchers.Default) {
+        val computed = withContext(MarkdownParseDispatcher.forViewport) {
             // Block-level incremental parse: reuse every frozen block and
             // re-parse only the growing tail. Before this the live fragment
             // ran the full block classifier (ICU regex per line) every tick.
