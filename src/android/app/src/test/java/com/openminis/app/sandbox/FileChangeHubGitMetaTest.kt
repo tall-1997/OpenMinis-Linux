@@ -50,7 +50,9 @@ class FileChangeHubGitMetaTest {
     @Test
     fun `walk is depth-capped`() {
         val git = tmp.newFolder(".git")
-        File(git, "refs/remotes/origin/pr/42").mkdirs()
+        // 4 dir levels below refs/ are watched (remotes → origin → pr → 42);
+        // a 5th-level namespace falls back to packed-refs / CREATE expansion.
+        File(git, "refs/remotes/origin/pr/42/sub").mkdirs()
 
         val dirs = FileChangeHub.gitMetaDirs(git)
 
@@ -58,10 +60,11 @@ class FileChangeHubGitMetaTest {
             listOf(
                 git, File(git, "refs"), File(git, "refs/remotes"),
                 File(git, "refs/remotes/origin"), File(git, "refs/remotes/origin/pr"),
+                File(git, "refs/remotes/origin/pr/42"),
             ),
             dirs,
         )
-        assertTrue(dirs.none { it.name == "42" })
+        assertTrue(dirs.none { it.name == "sub" })
     }
 
     @Test

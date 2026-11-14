@@ -309,7 +309,7 @@ object FileChangeHub {
         return dirs
     }
 
-    /** Loose refs live ≤3 dir levels under refs/ (refs/remotes/origin/pr/42); 4 gives headroom. */
+    /** Watches dir levels 1..4 below refs/ — covers gerrit-style refs/changes/34/1234/2 and refs/remotes/origin/pr/42; deeper namespaces fall back to packed-refs and the CREATE-dir expansion. */
     private const val REFS_WALK_DEPTH = 4
 
     private fun refsSubDirs(dir: File, depth: Int, out: MutableList<File>) {
