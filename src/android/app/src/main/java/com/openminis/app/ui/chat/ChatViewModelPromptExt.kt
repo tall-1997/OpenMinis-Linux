@@ -449,6 +449,12 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         runtimeContext = renderRuntimeContext(dateStr, tzId, lang, modelUseCount),
         personalityReminder = null,
         taskAnchor = taskAnchorFragment(),
+        // [T-daily-memory-window] The transient block (recent daily logs + TOC
+        // + budget note) is COMPUTED above (memoryBlocks.transient) but the
+        // call stopped passing it (#325 introduced the split; the parameter
+        // was never wired) — every prompt assembled since shipped without the
+        // daily memory window.
+        dailyMemoryFragment = dailyMemoryFragment,
     )
     var stablePrefixLen = -1
     val prompt = buildString {
