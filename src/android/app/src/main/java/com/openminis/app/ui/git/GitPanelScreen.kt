@@ -77,7 +77,7 @@ fun GitPanelScreen(
                     // button fired refresh() which silently returned (busy
                     // gate), leaving a tap with zero feedback.
                     IconButton(
-                        onClick = { viewModel.refresh() },
+                        onClick = { viewModel.refresh(force = true) },
                         enabled = !state.busy,
                     ) {
                         Icon(
