@@ -43,6 +43,21 @@ object GitHostRepoGraph {
         val git = GitHostRepo.openForGraph(dir) ?: return emptyList()
         git.use { g ->
             val repo = g.repository
+            // [T-git-panel-shallow-guard] JGit's RevWalk does not read
+            // `.git/shallow`: iterating past a shallow boundary commit
+            // expands a parent that is physically absent and throws
+            // MissingObjectException mid-walk (git CLI graft-skips it, so
+            // the sandbox source stays healthy). Return an empty page — the
+            // ViewModel's refs-degrade chain routes history to the sandbox
+            // source, which is exactly the clone that fetched this shallow.
+            if (runCatching {
+                    java.io.File(repo.directory, "shallow").isFile ||
+                        java.io.File(repo.commonDirectory, "shallow").isFile
+                }.getOrDefault(false)
+            ) {
+                Log.w(TAG, "logPage: shallow clone (${dir.name}) — JGit cannot traverse graft boundaries, routing to sandbox")
+                return emptyList()
+            }
             val decorations = decorationMap(repo)
             val walk = RevWalk(repo)
             // Bodies are needed ONLY for the ≤limit commits actually returned:

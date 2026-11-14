@@ -44,11 +44,18 @@ object GitPanelProbes {
         // hiccups are intermittent on-device); the sandbox fallback then
         // had to rescue it and a sandbox failure painted "not a
         // repository". Retry once after a short backoff before ceding.
-        val info = runCatching { GitHostRepo.probe(dir) }.getOrNull()
+        val info = runCatching { GitHostRepo.probe(dir) }
+            .onFailure {
+                Log.w(TAG, "nativeRepo: probe threw (repo=${dir.name}): ${it.javaClass.simpleName}: ${it.message?.take(200)}")
+            }
+            .getOrNull()
             ?: run {
-                Log.w(TAG, "nativeRepo: probe threw, retrying once (repo=${dir.name})")
                 kotlinx.coroutines.delay(120)
-                runCatching { GitHostRepo.probe(dir) }.getOrNull()
+                runCatching { GitHostRepo.probe(dir) }
+                    .onFailure {
+                        Log.w(TAG, "nativeRepo: probe threw on retry (repo=${dir.name}): ${it.javaClass.simpleName}: ${it.message?.take(200)}")
+                    }
+                    .getOrNull()
             }
         if (info?.isRepo != true) {
             Log.i(TAG, "nativeRepo: probe not a repo (repo=${dir.name}, info=${info != null})")

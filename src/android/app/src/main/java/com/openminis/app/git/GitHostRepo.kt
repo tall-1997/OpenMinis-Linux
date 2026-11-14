@@ -88,12 +88,17 @@ object GitHostRepo {
             val repo = g.repository
             val branch = runCatching { repo.branch }.getOrDefault("")
             val cfg = repo.config
+            val shallow = runCatching {
+                java.io.File(repo.directory, "shallow").isFile ||
+                    java.io.File(repo.commonDirectory, "shallow").isFile
+            }.getOrDefault(false)
             return GitCli.GitRepoInfo(
                 isRepo = true,
                 root = dir.absolutePath,
                 branch = branch,
                 userName = cfg.getString("user", null, "name"),
                 userEmail = cfg.getString("user", null, "email"),
+                shallow = shallow,
             )
         }
     }

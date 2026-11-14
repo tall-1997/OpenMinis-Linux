@@ -80,6 +80,33 @@ class GitHostRepoTest {
         assertFalse(GitHostRepo.probe(tmp.newFolder("plain")).isRepo)
     }
 
+    // ── shallow guard ──────────────────────────────────────────────────────
+
+    /**
+     * A shallow clone carries `.git/shallow`: its graft commit references a
+     * parent that is physically absent. git CLI graft-skips it, but JGit's
+     * RevWalk throws MissingObjectException walking past the boundary — so
+     * the host source must detect and flag it (and the graph must refuse
+     * to walk it) instead of blanking the History tab with an exception.
+     */
+    @Test
+    fun `probe flags a shallow clone`() {
+        val (dir, git) = initRepo()
+        git.close()
+        assertFalse(GitHostRepo.probe(dir).shallow)
+        File(File(dir, ".git"), "shallow").writeText("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\n")
+        assertTrue(GitHostRepo.probe(dir).shallow)
+    }
+
+    @Test
+    fun `logPage refuses to walk a shallow clone`() {
+        val (dir, git) = initRepo()
+        git.close()
+        assertEquals(1, GitHostRepoGraph.logPage(dir, 0, 50).size)
+        File(File(dir, ".git"), "shallow").writeText("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef\n")
+        assertEquals(emptyList<GitCli.GitCommit>(), GitHostRepoGraph.logPage(dir, 0, 50))
+    }
+
     @Test
     fun `status shows the clean tree then an unstaged edit`() {
         val (dir, git) = initRepo()

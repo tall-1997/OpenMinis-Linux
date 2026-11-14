@@ -59,6 +59,14 @@ object GitCli {
          * discovery; empty when cwd itself was the repo.
          */
         val relativeRoot: String = "",
+        /**
+         * Shallow clone (`.git/shallow` present). git CLI handles graft
+         * boundaries itself; JGit's RevWalk does not — walking past a
+         * shallow commit raises MissingObjectException on the missing
+         * parent. The host source checks this flag to route history and
+         * ahead/behind reads to the sandbox source instead of failing.
+         */
+        val shallow: Boolean = false,
     )
 
     data class GitFileEntry(
@@ -502,6 +510,10 @@ object GitCli {
     } catch (ce: kotlinx.coroutines.CancellationException) {
         throw ce
     } catch (e: Exception) {
+        // A swallowed shell-level failure used to surface downstream as a
+        // generic "not a repo"/empty page with zero diagnostics (the history
+        // panel once showed "no commits" for hours this way). Record it.
+        android.util.Log.w(TAG, "git shell threw: ${e.javaClass.simpleName}: ${e.message?.take(200)}")
         ExecutionCoordinator.CommandResult(
             output = e.message ?: "shell unavailable",
             exitCode = -1,
@@ -590,9 +602,13 @@ object GitCli {
         // unborn signature confirms it — a CORRUPT HEAD also exits 128 and
         // must still reach the per-ref fallback below.
         if (r.exitCode == 128 && emptyRepoNoise(r.output)) return emptyList()
+        android.util.Log.w(TAG, "git log page failed (exit=${r.exitCode}): ${r.output.take(200)}")
         // HEAD unresolvable (bad/missing object): `git log` and `--all` both
         // fail — walk every ref's concrete sha instead, HEAD parsing bypassed.
         val all = gitCall { run(sessionId, GitCliCmd.graphLogCmdFallback(offset, limit, root)) }
+        if (all.exitCode != 0) {
+            android.util.Log.w(TAG, "git log per-ref fallback failed (exit=${all.exitCode}): ${all.output.take(200)}")
+        }
         return if (all.exitCode == 0) parseGraphLogWithRefs(all.output) else emptyList()
     }
 
