@@ -499,13 +499,30 @@ lang: "auto"
     fun load(context: Context): SoulFile? {
         val file = fileLocation(context)
         if (!file.exists()) return null
-        return try {
-            val raw = AtomicFileWrite.read(file) ?: return null
-            SoulMDParser.parse(raw)
-        } catch (t: Throwable) {
-            AppLogger.warning(TAG, "SOUL.md load failed: ${t.message}")
-            null
+        // [T-persona-load-retry] Two retries, matching the persona library's
+        // readTextResilient: a transient IO error (concurrent write window,
+        // memory pressure) used to blank the BUILTIN persona for a whole
+        // turn — the "persona silently vanished" reports.
+        repeat(2) { attempt ->
+            // A null read counts as a failed attempt too: AtomicFileWrite.read
+            // catches IOException internally and returns null, so the transient
+            // IO errors this retry exists for arrive as null, not as throws.
+            val raw = try {
+                AtomicFileWrite.read(file)
+            } catch (t: Throwable) {
+                AppLogger.warning(TAG, "SOUL.md load failed (attempt ${attempt + 1}): ${t.message}")
+                null
+            } ?: run {
+                if (attempt == 1) return null
+                return@repeat
+            }
+            try {
+                SoulMDParser.parse(raw)?.let { return it }
+            } catch (t: Throwable) {
+                AppLogger.warning(TAG, "SOUL.md parse failed (attempt ${attempt + 1}): ${t.message}")
+            }
         }
+        return null
     }
 
     /**
@@ -662,10 +679,17 @@ object SystemPromptBuilder {
      * turn; both only change on explicit edits, so cache on a cheap
      * (mtime,size)-based fingerprint.
      */
+    /**
+     * [T-persona-cache-atomic] ONE atomic slot instead of two volatiles:
+     * the old pair could be read BETWEEN the key and value writes during a
+     * concurrent rebuild (returning the PREVIOUS provider's persona), and
+     * the double-read `if (key == k) return v` could mix a fresh key with a
+     * stale value under two concurrent builders (main send + context sheet).
+     */
+    private class IdentityCacheSlot(val key: String, val value: String)
+
     @Volatile
-    private var identityCacheKey: String? = null
-    @Volatile
-    private var identityCacheValue: String? = null
+    private var identityCache: IdentityCacheSlot? = null
 
     fun identitySection(context: Context, providerInstanceId: String? = null, sessionId: String? = null): String {
         // Cheap dirty-check before the two file reads below.
@@ -673,7 +697,7 @@ object SystemPromptBuilder {
         val soulFp = if (soulFile.exists()) "${soulFile.lastModified()}|${soulFile.length()}" else "missing"
         val promptFileFp = PersonaPromptLibrary.resolvedFileFingerprint(context, providerInstanceId, sessionId)
         val key = "$soulFp|$promptFileFp|$providerInstanceId|$sessionId"
-        if (key == identityCacheKey) return identityCacheValue ?: ""
+        identityCache?.takeIf { it.key == key }?.let { return it.value }
 
         val file = SoulStore.load(context)
         val name = (file?.metadata?.name ?: SoulMetadata.DEFAULT.name)
@@ -716,8 +740,7 @@ object SystemPromptBuilder {
         val trimmed = resolved.body.trim()
         if (trimmed.isEmpty()) {
             val result = identityTrimmed + styleBlock(style) + "\n\n" + soulEditHint + "\n\n"
-            identityCacheKey = key
-            identityCacheValue = result
+            identityCache = IdentityCacheSlot(key, result)
             return result
         }
 
@@ -742,8 +765,7 @@ object SystemPromptBuilder {
             "\n\n" +
             soulEditHint +
             "\n\n"
-        identityCacheKey = key
-        identityCacheValue = result
+        identityCache = IdentityCacheSlot(key, result)
         return result
     }
 

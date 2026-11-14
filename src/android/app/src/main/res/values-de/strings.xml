@@ -1843,6 +1843,8 @@
     <string name="ma_add_role_sub">Eigener Name/Beschreibung/Prompt/Werkzeug-Freigabeliste; eine eingebaute Rolle mit demselben Namen wird überschrieben</string>
     <string name="ma_team_lead_suffix"> · Teamleitung</string>
     <string name="ma_thinking_depth">Denktiefe für diesen Lauf</string>
+
+    <string name="ma_thinking_follows_main">Folgt der Hauptsitzung</string>
     <string name="ma_role_dialog_title_builtin">Eingebaute Rolle (wird als eigene Kopie gespeichert)</string>
     <string name="ma_role_dialog_title_new">Neue Kollaborationsrolle</string>
     <string name="ma_role_dialog_title_edit">Rolle bearbeiten</string>

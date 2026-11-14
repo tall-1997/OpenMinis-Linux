@@ -14,6 +14,7 @@ import com.openminis.app.browser.BrowserTabPool
 import com.openminis.app.data.db.MessageEntity
 import com.openminis.app.data.BPETokenizer
 import com.openminis.app.data.ToolLimitPrefs
+import com.openminis.app.ui.chat.localizedName
 import com.openminis.app.ui.chat.retention.HotWindow
 import com.openminis.app.ui.chat.retention.ResidentWindow
 import com.openminis.app.logging.AppLogger
@@ -2494,10 +2495,9 @@ class ChatViewModel(
             return
         }
         val newLevel = if (_thinkingLevel.value.isEnabled) ThinkingLevel.OFF else ThinkingLevel.MEDIUM
-        _thinkingLevel.value = newLevel
-        persistThinkingOverride(newLevel)
+        _thinkingLevel.value = newLevel; persistThinkingOverride(newLevel)
         appendSystemInfo(
-            text = context.getString(R.string.vm_thinking_set_to, newLevel.displayName.lowercase()),
+            text = context.getString(R.string.vm_thinking_set_to, newLevel.localizedName(context)),
             iconKind = "thinking",
         )
     }

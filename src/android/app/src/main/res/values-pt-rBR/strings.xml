@@ -1844,6 +1844,8 @@
     <string name="ma_add_role_sub">Nome/descrição/prompt/lista de ferramentas personalizados; uma função integrada com o mesmo nome é sobrescrita</string>
     <string name="ma_team_lead_suffix"> · líder da equipe</string>
     <string name="ma_thinking_depth">Profundidade de raciocínio desta execução</string>
+
+    <string name="ma_thinking_follows_main">Segue a sessão principal</string>
     <string name="ma_role_dialog_title_builtin">Função integrada (salva como cópia personalizada)</string>
     <string name="ma_role_dialog_title_new">Nova função de colaboração</string>
     <string name="ma_role_dialog_title_edit">Editar função</string>

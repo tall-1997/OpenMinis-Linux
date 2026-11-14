@@ -48,10 +48,15 @@ object ProjectInstructionStore {
 
     // Fingerprint memo: prompt assembly runs per turn, and re-reading a file that
     // did not change is pure waste. Key = path + mtime + length.
-    @Volatile private var cacheKey: String? = null
-    @Volatile private var cacheValue: Resolved? = null
-    /** Path the cached value came from — last-good is only ever served for the same file. */
-    @Volatile private var cachePath: String? = null
+    //
+    // [T-project-rules-cache-atomic] ONE atomic slot instead of three
+    // volatiles: the old triple could be read between writes during a
+    // concurrent rebuild (two ChatViewModels, context sheet) and serve a
+    // MIX of one project's key with another's value — the "rules silently
+    // vanished / swapped" reports.
+    private class CacheSlot(val key: String, val path: String, val value: Resolved?)
+
+    @Volatile private var cache: CacheSlot? = null
 
     /** Resolve the project rules for [sessionId], or null when the session is unfiled / has none. */
     fun resolve(
@@ -71,7 +76,7 @@ object ProjectInstructionStore {
             else -> return forget()
         }
         val key = "${chosen.absolutePath}:${chosen.lastModified()}:${chosen.length()}"
-        if (key == cacheKey) return cacheValue
+        cache?.takeIf { it.key == key }?.let { return it.value }
 
         val text = runCatching { read(chosen) }
         if (text.isFailure) {
@@ -80,14 +85,12 @@ object ProjectInstructionStore {
             // rules because one read failed would silently change what the model is
             // told to do; a stale render is the safer failure. Same file only — a
             // previously resolved project's rules must never stand in for this one.
-            return if (cachePath == chosen.absolutePath) cacheValue else null
+            return cache?.takeIf { it.path == chosen.absolutePath }?.value
         }
         val resolved = text.getOrNull()
             ?.takeIf { it.isNotBlank() }
             ?.let { Resolved(chosen, it.take(MAX_CHARS), chosen.name) }
-        cacheKey = key
-        cachePath = chosen.absolutePath
-        cacheValue = resolved
+        cache = CacheSlot(key, chosen.absolutePath, resolved)
         return resolved
     }
 
@@ -112,16 +115,12 @@ object ProjectInstructionStore {
 
     /** Test seam: drop the fingerprint memo. */
     internal fun clearCacheForTest() {
-        cacheKey = null
-        cacheValue = null
-        cachePath = null
+        cache = null
     }
 
     /** Legitimate absence (unfiled session, deleted file) clears the memo. */
     private fun forget(): Resolved? {
-        cacheKey = null
-        cacheValue = null
-        cachePath = null
+        cache = null
         return null
     }
 }

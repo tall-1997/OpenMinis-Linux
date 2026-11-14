@@ -10,6 +10,7 @@ import com.openminis.app.tools.AtomicFileWrite
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -492,39 +493,11 @@ object PersonaPromptLibrary {
             SESSION_PERSONA_FILE,
         )
 
-    fun readSessionOverride(context: Context, sessionId: String?): String? {
-        if (sessionId.isNullOrBlank()) return null
-        val file = sessionPersonaFile(context, sessionId)
-        if (!file.isFile) return null
-        val text = runCatching { file.readText() }.getOrNull() ?: return null
-        return text.takeIf { it.isNotBlank() }
-    }
-
-    /**
-     * Write — or clear, when [body] is blank — the session override. Atomic
-     * like every other prompt-source write: a torn read here would drop the
-     * persona for exactly one turn, the failure mode this whole chain exists
-     * to avoid.
-     */
-    fun writeSessionOverride(context: Context, sessionId: String, body: String) {
-        val file = sessionPersonaFile(context, sessionId)
-        if (body.isBlank()) {
-            file.delete()
-            return
-        }
-        // AtomicFileWrite adds a per-path lock, short-write detection and post-write
-        // verify; copy-over covers the old direct-writeText fallback, null throws the
-        // same IOException.
-        if (AtomicFileWrite.write(file, body, temp = File(file.parentFile, "${file.name}.tmp")) == null) {
-            throw IOException("session override write failed for ${file.name}")
-        }
-    }
-
     fun resolve(context: Context, providerInstanceId: String?, sessionId: String? = null): ResolvedPersonaPrompt {
         // The session override sits above every shared level: a persona edited
         // from the session menu must win for this chat without modifying the
         // provider selection or the global persona.
-        readSessionOverride(context, sessionId)?.let { body ->
+        PersonaSessionOverride.read(context, sessionId)?.let { body ->
             return ResolvedPersonaPrompt(
                 id = SESSION_OVERRIDE_ID,
                 fileName = SESSION_PERSONA_FILE,
@@ -786,8 +759,11 @@ object PersonaPromptLibrary {
         bumpLocked()
     }
 
-    private fun bumpLocked() {
-        _revision.value = _revision.value + 1
+    internal fun bumpLocked() {
+        // Atomic update: writeSessionOverride calls this outside the persist
+        // lock — two concurrent session-override writes must not lose a bump
+        // (a lost bump = the fingerprint stays stale for one generation).
+        _revision.update { it + 1 }
     }
 
     private fun readBodyLocked(context: Context, promptId: String): String {

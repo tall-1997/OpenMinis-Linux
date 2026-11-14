@@ -1844,6 +1844,8 @@
     <string name="ma_add_role_sub">Custom na pangalan/paglalarawan/prompt/listahan ng tool; na-o-override ang built-in na role na may parehong pangalan</string>
     <string name="ma_team_lead_suffix"> · pinuno ng koponan</string>
     <string name="ma_thinking_depth">Lalim ng pag-iisip para sa run na ito</string>
+
+    <string name="ma_thinking_follows_main">Sumusunod sa pangunahing session</string>
     <string name="ma_role_dialog_title_builtin">Built-in na role (ma-save bilang custom na kopya)</string>
     <string name="ma_role_dialog_title_new">Bagong collaboration role</string>
     <string name="ma_role_dialog_title_edit">I-edit ang role</string>

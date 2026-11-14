@@ -1841,6 +1841,8 @@
     <string name="ma_add_role_sub">사용자 지정 이름/설명/프롬프트/도구 허용 목록, 같은 이름의 내장 역할은 덮어씁니다</string>
     <string name="ma_team_lead_suffix"> · 팀장</string>
     <string name="ma_thinking_depth">이번 실행의 사고 깊이</string>
+
+    <string name="ma_thinking_follows_main">메인 세션 따름</string>
     <string name="ma_role_dialog_title_builtin">내장 역할(사용자 지정 사본으로 저장)</string>
     <string name="ma_role_dialog_title_new">새 협업 역할</string>
     <string name="ma_role_dialog_title_edit">역할 편집</string>

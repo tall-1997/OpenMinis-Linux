@@ -2703,6 +2703,8 @@
     <string name="ma_add_role_sub">Custom name/description/prompt/tool allowlist; a built-in role with the same name is overridden</string>
     <string name="ma_team_lead_suffix"> · team lead</string>
     <string name="ma_thinking_depth">Thinking depth for this run</string>
+
+    <string name="ma_thinking_follows_main">Follows main session</string>
     <string name="ma_role_dialog_title_builtin">Built-in role (saves as a custom copy)</string>
     <string name="ma_role_dialog_title_new">New collaboration role</string>
     <string name="ma_role_dialog_title_edit">Edit role</string>

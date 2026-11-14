@@ -124,7 +124,7 @@ class PersonaProviderSwitchIntegrationTest {
         val context = context()
         seed(context)
         val session = "s-switch-4"
-        PersonaPromptLibrary.writeSessionOverride(context, session, "SESSION-ONLY-MARKER")
+        PersonaSessionOverride.write(context, session, "SESSION-ONLY-MARKER")
 
         val asA = SystemPromptBuilder.identitySection(context, "provA", session)
         val asB = SystemPromptBuilder.identitySection(context, "provB", session)
@@ -136,7 +136,7 @@ class PersonaProviderSwitchIntegrationTest {
         // Clearing the override restores provider-faithful injection — the
         // "stuck on the old persona" report is only explained by an override
         // file that still exists, so prove the unstick path works too.
-        PersonaPromptLibrary.writeSessionOverride(context, session, "")
+        PersonaSessionOverride.write(context, session, "")
         val restored = SystemPromptBuilder.identitySection(context, "provB", session)
         assertTrue(restored.contains(markerY))
         assertFalse(restored.contains("SESSION-ONLY-MARKER"))

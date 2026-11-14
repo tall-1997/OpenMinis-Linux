@@ -1849,6 +1849,8 @@
     <string name="ma_add_role_sub">Nama/deskripsi/prompt/daftar alat kustom; peran bawaan dengan nama yang sama akan ditimpa</string>
     <string name="ma_team_lead_suffix"> · pemimpin tim</string>
     <string name="ma_thinking_depth">Kedalaman berpikir untuk eksekusi ini</string>
+
+    <string name="ma_thinking_follows_main">Mengikuti sesi utama</string>
     <string name="ma_role_dialog_title_builtin">Peran bawaan (disimpan sebagai salinan kustom)</string>
     <string name="ma_role_dialog_title_new">Peran kolaborasi baru</string>
     <string name="ma_role_dialog_title_edit">Edit peran</string>

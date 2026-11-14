@@ -130,10 +130,37 @@ internal suspend fun ChatViewModel.runOneSubAgentInner(
             "No model available for sub-agent. Select models under Settings → Multi-agent, or keep the main session model selected.",
             false,
         )
-        val requestedThinking = spawn.thinkingLevel ?: parseThinkingLevel(
-            multiAgentSettings.slotThinkingLevel((index - 1).coerceAtLeast(0)),
-            baseEntry.effectiveMaxThinkingLevel,
-        )
+        // [T-android-subagent-thinking-parity] Resolution order, aligned with
+        // what the UI promises:
+        //   1. spawn tool argument (the coordinator's explicit choice) —
+        //      honoured verbatim;
+        //   2. per-slot depth from the multi-agent settings page;
+        //   3. slot UNSET (the common case — including "picked the main
+        //      session model") → REUSE THE MAIN SESSION'S LIVE LEVEL
+        //      (`_thinkingLevel`), clamped to the lane model's ceiling. The
+        //      old chain fell straight to `effectiveMaxThinkingLevel`
+        //      (ceiling), which #345's supportsReasoning guard turns into
+        //      OFF — the reported "sub-agent on the main model never thinks".
+        // The force-thinking lift (OpenMinis#311) applies here too: a forced
+        // Anthropic instance gets the same XHIGH ceiling the main composer
+        // offers, so the main session can think while its sub-agents do not.
+        val laneCeiling = run {
+            val base = baseEntry.effectiveMaxThinkingLevel
+            if (activeInstanceForcesThinking() && base.rank < ThinkingLevel.XHIGH.rank) {
+                ThinkingLevel.XHIGH
+            } else {
+                base
+            }
+        }
+        val requestedThinking = spawn.thinkingLevel ?: run {
+            val slot = multiAgentSettings.slotThinkingLevel((index - 1).coerceAtLeast(0))
+            if (slot.isNullOrBlank()) {
+                val sessionLevel = _thinkingLevel.value
+                if (sessionLevel.rank > laneCeiling.rank) laneCeiling else sessionLevel
+            } else {
+                parseThinkingLevel(slot, laneCeiling)
+            }
+        }
         // [T-android-subagent-depth-leak] Claim the depth slot inside a
         // try/finally that covers EVERYTHING after the claim. The lane body has
         // its own try/finally, but between this claim and entering that block
