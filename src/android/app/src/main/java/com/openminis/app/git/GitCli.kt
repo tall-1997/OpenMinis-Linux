@@ -488,7 +488,7 @@ object GitCli {
             // delimiter) — log it instead of painting a misleading
             // "no commits" empty state.
             if (parsed.isEmpty() && r.output.isNotBlank()) {
-                Log.w(TAG, "graph log parse produced 0 commits from ${r.output.length} chars (exit=0)")
+                android.util.Log.w(TAG, "graph log parse produced 0 commits from ${r.output.length} chars (exit=0)")
             }
             return parsed
         }
