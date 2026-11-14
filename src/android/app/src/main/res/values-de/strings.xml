@@ -2267,4 +2267,5 @@
     <string name="web_search_tool_section_footer">Das Ausschalten des Tools löscht nicht die Engine-Konfiguration unten; wieder einschalten, um dasselbe Verhalten wiederherzustellen.</string>
 <string name="git_panel_history_read_failed">Commit-Verlauf konnte nicht gelesen werden – Details in den Logs (Tag GitPanel)</string>
 
+    <string name="git_panel_status_read_failed">Arbeitsverzeichnis-Status konnte nicht gelesen werden – Details im Log (Tag GitPanel)</string>
 </resources>

@@ -2281,4 +2281,5 @@
     <string name="chat_move_to_capsule">Mover para…</string>
 <string name="git_panel_history_read_failed">Falha ao ler o histórico de commits — detalhes nos logs (tag GitPanel)</string>
 
+    <string name="git_panel_status_read_failed">Falha ao ler o status da árvore de trabalho — detalhes nos logs (tag GitPanel)</string>
 </resources>

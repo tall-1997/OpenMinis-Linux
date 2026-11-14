@@ -1679,6 +1679,7 @@
     <string name="git_panel_commit">Commit</string>
     <string name="git_panel_no_commits">No commits yet</string>
     <string name="git_panel_history_read_failed">Failed to read commit history — details in logs (GitPanel tag)</string>
+    <string name="git_panel_status_read_failed">Failed to read working-tree status — details in logs (GitPanel tag)</string>
     <string name="git_panel_title">Git</string>
     <string name="git_panel_back">Back</string>
     <string name="git_panel_refresh">Refresh</string>

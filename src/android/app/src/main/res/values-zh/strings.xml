@@ -1533,6 +1533,7 @@
     <string name="git_panel_commit">提交</string>
     <string name="git_panel_no_commits">还没有提交</string>
     <string name="git_panel_history_read_failed">提交历史读取失败——详情见日志（GitPanel 标签）</string>
+    <string name="git_panel_status_read_failed">工作区状态读取失败——详情见日志（GitPanel 标签）</string>
     <string name="git_panel_title">Git</string>
     <string name="git_panel_back">返回</string>
     <string name="git_panel_refresh">刷新</string>

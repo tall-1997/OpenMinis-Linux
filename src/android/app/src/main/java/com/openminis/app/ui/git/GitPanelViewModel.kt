@@ -158,12 +158,12 @@ class GitPanelViewModel(
                 // the multi-ref walk parses all reachable commit headers — on the
                 // Main dispatcher a large repo would freeze the UI for seconds per
                 // refresh (FileChangeHub re-runs this every 2s).
-                val status = withContext(Dispatchers.IO) { runCatching { GitHostRepo.status(dir) }.getOrNull() }
-                val staged = withContext(Dispatchers.IO) {
-                    runCatching { GitHostRepoDiff.numstatStaged(dir) }.getOrDefault(emptyMap())
+                val nativeStatus = withContext(Dispatchers.IO) { runCatching { GitHostRepo.status(dir) }.getOrNull() }
+                val stagedNative = withContext(Dispatchers.IO) {
+                    runCatching { GitHostRepoDiff.numstatStaged(dir) }
                 }
-                val unstaged = withContext(Dispatchers.IO) {
-                    runCatching { GitHostRepoDiff.numstatUnstaged(dir) }.getOrDefault(emptyMap())
+                val unstagedNative = withContext(Dispatchers.IO) {
+                    runCatching { GitHostRepoDiff.numstatUnstaged(dir) }
                 }
                 val remote = withContext(Dispatchers.IO) { runCatching { GitHostRepo.remote(dir) }.getOrNull() }
                 // [T-git-panel-refs-degrade] Refs (log + branches) ride native
@@ -205,6 +205,16 @@ class GitPanelViewModel(
                 val stashes = withContext(Dispatchers.IO) {
                     runCatching { GitHostRepo.stashes(dir) }.getOrDefault(emptyList())
                 }
+                // [T-git-panel-per-source-degrade] status + both numstat
+                // maps degrade per-source (extracted to GitStatusDegrader.kt);
+                // the refs block above covers log/branches the same way.
+                val degraded = degradeGitStatusPerSource(
+                    nativeStatus, stagedNative, unstagedNative, sessionId, info.root,
+                )
+                val status = degraded.status
+                val staged = degraded.staged
+                val unstaged = degraded.unstaged
+                val statusReadFailed = degraded.statusReadFailed
                 _state.update {
                     it.copy(
                         // [T-git-panel-instant-entry] The host probe already
@@ -237,7 +247,7 @@ class GitPanelViewModel(
                             sandboxRefsTried && log.isEmpty() && branches.isEmpty() &&
                                 !info.branch.isNullOrBlank() ->
                                 app.getString(R.string.git_panel_history_read_failed)
-                            status == null -> "git status failed"
+                            statusReadFailed -> app.getString(R.string.git_panel_status_read_failed)
                             else -> null
                         },
                     )

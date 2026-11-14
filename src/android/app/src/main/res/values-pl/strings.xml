@@ -2288,4 +2288,5 @@
     <string name="chat_move_to_capsule">Przenieś do…</string>
 <string name="git_panel_history_read_failed">Nie udało się odczytać historii commitów — szczegóły w logach (tag GitPanel)</string>
 
+    <string name="git_panel_status_read_failed">Nie udało się odczytać stanu drzewa roboczego — szczegóły w logach (tag GitPanel)</string>
 </resources>

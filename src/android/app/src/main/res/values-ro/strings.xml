@@ -2285,4 +2285,5 @@
     <string name="chat_move_to_capsule">Mută în…</string>
 <string name="git_panel_history_read_failed">Citirea istoricului de commit-uri a eșuat — detalii în loguri (eticheta GitPanel)</string>
 
+    <string name="git_panel_status_read_failed">Nu s-a putut citi starea arborelui de lucru — detalii în jurnal (eticheta GitPanel)</string>
 </resources>

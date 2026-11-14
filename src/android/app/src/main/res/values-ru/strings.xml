@@ -2289,4 +2289,5 @@
     <string name="chat_move_to_capsule">Переместить в…</string>
 <string name="git_panel_history_read_failed">Не удалось прочитать историю коммитов — подробности в журнале (тег GitPanel)</string>
 
+    <string name="git_panel_status_read_failed">Не удалось прочитать состояние рабочего дерева — подробности в журнале (тег GitPanel)</string>
 </resources>

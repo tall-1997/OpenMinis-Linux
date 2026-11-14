@@ -2281,4 +2281,5 @@
     <string name="chat_move_to_capsule">ย้ายไป…</string>
 <string name="git_panel_history_read_failed">อ่านประวัติคอมมิตไม่สำเร็จ — ดูรายละเอียดใน log (แท็ก GitPanel)</string>
 
+    <string name="git_panel_status_read_failed">อ่านสถานะ working tree ไม่สำเร็จ — ดูรายละเอียดใน log (แท็ก GitPanel)</string>
 </resources>

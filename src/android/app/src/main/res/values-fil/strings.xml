@@ -2281,4 +2281,5 @@
     <string name="chat_move_to_capsule">Ilipat sa…</string>
 <string name="git_panel_history_read_failed">Nabigo basahin ang kasaysayan ng mga commit — tingnan ang logs (GitPanel tag)</string>
 
+    <string name="git_panel_status_read_failed">Hindi mabasa ang status ng working tree — detalye sa logs (GitPanel tag)</string>
 </resources>
