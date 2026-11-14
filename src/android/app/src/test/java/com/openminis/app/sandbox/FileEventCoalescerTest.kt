@@ -101,10 +101,22 @@ class FileEventCoalescerTest {
     @Test
     fun noiseNamesNeverEnterPending() {
         val c = coalescer()
-        for (p in listOf("x.minis-tmp", "y.tmp-replace", "z.lock", "w.swp", ".git/index", "/var/minis/workspace/.git/HEAD", "sub/.git/objects/pack")) {
+        for (p in listOf("x.minis-tmp", "y.tmp-replace", "z.lock", "w.swp")) {
             c.offer(p, MODIFY, false)
         }
         assertEquals(0, c.pendingCount())
+    }
+
+    @Test
+    fun gitMetaPathsEnterPending() {
+        val c = coalescer()
+        for (p in listOf(
+            ".git/HEAD", ".git/index", ".git/packed-refs",
+            ".git/refs/heads/main", "repo/.git/refs/remotes/origin/main",
+        )) {
+            c.offer(p, MODIFY, false)
+        }
+        assertEquals(5, c.pendingCount())
     }
 
     @Test
@@ -113,11 +125,17 @@ class FileEventCoalescerTest {
         assertTrue(FileEventCoalescer.isIgnored("a.tmp-replace"))
         assertTrue(FileEventCoalescer.isIgnored("a.lock"))
         assertTrue(FileEventCoalescer.isIgnored("a.swp"))
-        assertTrue(FileEventCoalescer.isIgnored(".git"))
-        assertTrue(FileEventCoalescer.isIgnored(".git/index"))
-        assertTrue(FileEventCoalescer.isIgnored("/x/.git/y"))
         assertFalse(FileEventCoalescer.isIgnored("src/main.py"))
         assertFalse(FileEventCoalescer.isIgnored("gitnotes.txt"))
+        // .git metadata flows through — out-of-panel git ops must refresh
+        // the panel (the hub only watches the metadata dirs, so churn
+        // subtrees like objects/ never reach this function anyway).
+        assertFalse(FileEventCoalescer.isIgnored(".git"))
+        assertFalse(FileEventCoalescer.isIgnored(".git/index"))
+        assertFalse(FileEventCoalescer.isIgnored("/x/.git/refs/heads/main"))
+        // git write temps are lock-suffixed and stay filtered
+        assertTrue(FileEventCoalescer.isIgnored(".git/index.lock"))
+        assertTrue(FileEventCoalescer.isIgnored(".git/refs/heads/main.lock"))
     }
 
     @Test

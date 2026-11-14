@@ -96,19 +96,28 @@ class FileEventCoalescer(
          * Noise filter:
          * - AtomicFileWrite artifacts (*.minis-tmp, *.tmp-replace) — the
          *   rename onto the final name is the real signal (MOVED_TO);
-         * - editor/lock droppings (*.lock, *.swp);
-         * - anything under .git — every git command rewrites .git/index,
-         *   which would turn a status-refresh consumer into a feedback
-         *   loop. Mutating git calls in-app already reload their own UI,
-         *   and FileChangeHub additionally skips descending into .git dirs.
+         * - editor/lock droppings (*.lock, *.swp) — every git ref/index
+         *   write creates its .lock sibling first, so commits and fetches
+         *   do not surface as lock churn.
+         *
+         * `.git` metadata paths are deliberately NOT ignored: the Git panel
+         * must react to git operations made outside the panel (sandbox CLI
+         * commit / push / pull). FileChangeHub shallow-watches only the
+         * .git metadata dirs (HEAD / index / packed-refs / refs), so churn
+         * subtrees like objects/ and logs/ never reach offer() at all. The
+         * blanket .git drop this filter used to carry — a guard against a
+         * status-refresh feedback loop — cannot loop in practice: the
+         * inotify MASK carries no ACCESS/OPEN (reads never fire), JGit's
+         * status never writes the index, and the one C-git stat-cache
+         * index rewrite is a self-healing one-shot. Dropping .git paths
+         * here made out-of-panel git ops invisible end to end.
+         *
          * Works for both relative and absolute guest paths.
          */
         fun isIgnored(relPath: String): Boolean {
             val name = relPath.substringAfterLast('/')
-            if (name.endsWith(".minis-tmp") || name.endsWith(".tmp-replace") ||
+            return name.endsWith(".minis-tmp") || name.endsWith(".tmp-replace") ||
                 name.endsWith(".lock") || name.endsWith(".swp")
-            ) return true
-            return relPath == ".git" || relPath.startsWith(".git/") || relPath.contains("/.git/")
         }
 
         /**
