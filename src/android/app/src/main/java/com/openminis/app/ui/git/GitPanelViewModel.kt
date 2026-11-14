@@ -115,35 +115,7 @@ class GitPanelViewModel(
      * sandbox fallback commands and the header stay consistent.
      */
     private suspend fun nativeRepo(): Pair<File, GitRepoInfo>? = withContext(Dispatchers.IO) {
-        val ws = GitHostRepo.workspaceDir(app.filesDir, sessionId)
-        val located = GitHostRepo.locate(ws)
-        if (located == null) {
-            // Field reports: the panel flips between found/missing across
-            // 2s auto-refreshes. Log WHICH workspace was searched so a
-            // "not a repository" paint is diagnosable from logcat alone —
-            // a session bound to a repo-less project folder is legitimate,
-            // a workspace that transiently fails to list is not.
-            Log.i(TAG, "nativeRepo: no repo under ws=${ws.path} (session=${sessionId.take(8)})")
-            return@withContext null
-        }
-        val (dir, relative) = located
-        // [T-git-panel-probe-retry] A single JGit probe exception used to
-        // silently kill the native source for that refresh (RefDatabase
-        // hiccups are intermittent on-device); the sandbox fallback then
-        // had to rescue it and a sandbox failure painted "not a
-        // repository". Retry once after a short backoff before ceding.
-        val info = runCatching { GitHostRepo.probe(dir) }.getOrNull()
-            ?: run {
-                Log.w(TAG, "nativeRepo: probe threw, retrying once (repo=${dir.name})")
-                kotlinx.coroutines.delay(120)
-                runCatching { GitHostRepo.probe(dir) }.getOrNull()
-            }
-        if (info?.isRepo != true) {
-            Log.i(TAG, "nativeRepo: probe not a repo (repo=${dir.name}, info=${info != null})")
-            return@withContext null
-        }
-        val adopted = relative.substringAfterLast('/')
-        dir to info.copy(root = GitHostRepo.guestPath(relative), relativeRoot = adopted)
+        GitPanelProbes.nativeRepo(app, sessionId)
     }
 
     /**
