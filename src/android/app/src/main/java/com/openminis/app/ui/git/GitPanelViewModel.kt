@@ -315,10 +315,15 @@ class GitPanelViewModel(
             val unstaged = runCatching { GitCli.numstat(sessionId, staged = false, root = root) }
                 .getOrDefault(emptyMap())
             val remote = runCatching { GitCli.remote(sessionId, root) }.getOrNull()
+            // The whole sandbox chain is runCatching-guarded against a PRoot
+            // hiccup, but a silent getOrDefault(empty) hides the cause behind
+            // a "no commits" empty state. Log each miss via [warnSandboxMiss].
             val log = runCatching { GitCli.logPage(sessionId, offset = 0, root = root) }
-                .getOrDefault(emptyList())
-            val branches = runCatching { GitCli.branches(sessionId, root) }.getOrDefault(emptyList())
-            val stashes = runCatching { GitCli.stashes(sessionId, root) }.getOrDefault(emptyList())
+                .onFailure { warnSandboxMiss("logPage", it) }.getOrDefault(emptyList())
+            val branches = runCatching { GitCli.branches(sessionId, root) }
+                .onFailure { warnSandboxMiss("branches", it) }.getOrDefault(emptyList())
+            val stashes = runCatching { GitCli.stashes(sessionId, root) }
+                .onFailure { warnSandboxMiss("stashes", it) }.getOrDefault(emptyList())
             _state.update {
                 it.copy(
                     loading = false,
@@ -784,5 +789,10 @@ class GitPanelViewModel(
         private const val TAG = "GitPanel"
         private const val AUTO_REFRESH_FLOOR_MS = 2_000L
         const val HISTORY_PAGE_SIZE = 50
+
+        /** One line per swallowed sandbox read failure — keeps empty states diagnosable. */
+        private fun warnSandboxMiss(what: String, e: Throwable) {
+            Log.w(TAG, "sandbox $what threw: ${e.javaClass.simpleName}: ${e.message?.take(200)}")
+        }
     }
 }
