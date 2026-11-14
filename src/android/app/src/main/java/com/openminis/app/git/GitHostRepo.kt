@@ -45,8 +45,17 @@ object GitHostRepo {
      * the error. Closed on failure so open cannot leak a Repository.
      */
     internal fun open(dir: File): Git? = try {
-        val g = Git.open(dir)
-        runCatching { g.repository.repositoryState }.fold(
+        // [T-git-hostrepo-fresh-open] Git.open() parks the Repository in
+        // JGit's RepositoryCache; the sandbox shell (pull/commit via the git
+        // CLI) mutates refs behind that cache's back and the cached
+        // RefDatabase kept serving a stale packed-refs upstream — the
+        // divergence badge reported ahead=1 on a fully-synced repo. Build a
+        // fresh FileRepository per call (no cache): probe IO stays tens of
+        // ms and every read sees exactly what the CLI just wrote.
+        val repo = org.eclipse.jgit.storage.file.FileRepositoryBuilder()
+            .setWorkTree(dir).setMustExist(true).build()
+        val g = Git(repo)
+        runCatching { repo.repositoryState }.fold(
             onSuccess = { g },
             onFailure = { runCatching { g.close() }; null },
         )
