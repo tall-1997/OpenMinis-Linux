@@ -205,41 +205,16 @@ class GitPanelViewModel(
                 val stashes = withContext(Dispatchers.IO) {
                     runCatching { GitHostRepo.stashes(dir) }.getOrDefault(emptyList())
                 }
-                // [T-git-panel-per-source-degrade] Every data source degrades
-                // INDEPENDENTLY: a JGit status/numstat failure on the device
-                // must not paint "git status failed" (or worse, a fake clean
-                // tree) while the sandbox CLI answers fine seconds later. The
-                // refs block above covers log/branches; this block covers
-                // status + both numstat maps. A broken native status tries
-                // sandbox once per refresh; a sandbox failure surfaces as the
-                // read-failed notice instead of a lying empty Changes tab.
-                var status = nativeStatus
-                var staged = stagedNative.getOrDefault(emptyMap())
-                var unstaged = unstagedNative.getOrDefault(emptyMap())
-                var statusReadFailed = false
-                run {
-                    val nativeStatusBroken = status == null || !status.error.isNullOrBlank()
-                    val numstatBroken = stagedNative.isFailure || unstagedNative.isFailure
-                    if (!nativeStatusBroken && !numstatBroken) return@run
-                    val sandbox = withContext(Dispatchers.IO) {
-                        runCatching {
-                            GitCli.status(sessionId, info.root) to (
-                                GitCli.numstat(sessionId, staged = true, root = info.root) to
-                                    GitCli.numstat(sessionId, staged = false, root = info.root)
-                                )
-                        }.onFailure {
-                            Log.w(TAG, "sandbox status fallback failed: ${it.javaClass.simpleName}: ${it.message?.take(160)}")
-                        }.getOrNull()
-                    }
-                    if (sandbox != null && sandbox.first.error.isNullOrBlank()) {
-                        if (nativeStatusBroken) status = sandbox.first
-                        if (stagedNative.isFailure) staged = sandbox.second.first
-                        if (unstagedNative.isFailure) unstaged = sandbox.second.second
-                        Log.i(TAG, "status/numstat degraded to sandbox source")
-                    } else if (nativeStatusBroken) {
-                        statusReadFailed = true
-                    }
-                }
+                // [T-git-panel-per-source-degrade] status + both numstat
+                // maps degrade per-source (extracted to GitStatusDegrader.kt);
+                // the refs block above covers log/branches the same way.
+                val degraded = degradeGitStatusPerSource(
+                    nativeStatus, stagedNative, unstagedNative, sessionId, info.root,
+                )
+                val status = degraded.status
+                val staged = degraded.staged
+                val unstaged = degraded.unstaged
+                val statusReadFailed = degraded.statusReadFailed
                 _state.update {
                     it.copy(
                         // [T-git-panel-instant-entry] The host probe already
