@@ -127,7 +127,7 @@ class GitHostRepoTest {
         File(dir, "a.txt").writeText("line1\nline2 changed\nline3\n")
         git.add().addFilepattern("a.txt").call()
         git.close()
-        val stats = GitHostRepo.numstatStaged(dir)
+        val stats = GitHostRepoDiff.numstatStaged(dir)
         val stat = stats["a.txt"]
         assertNotNull("staged edit must appear in numstat", stat)
         assertEquals(2, stat!!.added)
@@ -140,7 +140,7 @@ class GitHostRepoTest {
         val (dir, git) = initRepo()
         git.close()
         File(dir, "a.txt").writeText("line1\nline2 changed\nline3\n")
-        val stats = GitHostRepo.numstatUnstaged(dir)
+        val stats = GitHostRepoDiff.numstatUnstaged(dir)
         val stat = stats["a.txt"]
         assertNotNull("worktree edit must appear in numstat", stat)
         assertEquals(2, stat!!.added)
@@ -153,7 +153,7 @@ class GitHostRepoTest {
         File(dir, "a.txt").writeText("line1\nline2 changed\n")
         git.add().addFilepattern("a.txt").call()
         git.close()
-        val diff = GitHostRepo.stagedDiff(dir)
+        val diff = GitHostRepoDiff.stagedDiff(dir)
         assertTrue(diff.contains("a.txt"))
         assertTrue(diff.contains("+line2 changed"))
     }
@@ -233,7 +233,7 @@ class GitHostRepoTest {
         git.close()
         fun looseCount() = File(dir, ".git/objects").walkBottomUp().count { it.isFile }
         val before = looseCount()
-        GitHostRepo.numstatStaged(dir)
+        GitHostRepoDiff.numstatStaged(dir)
         assertEquals(before, looseCount())
     }
 
@@ -243,7 +243,7 @@ class GitHostRepoTest {
         git.close()
         File(dir, "a.txt").writeText("line1\nline2 changed\nline3\n")
         File(dir, "u.txt").writeText("untracked\n")
-        val stats = GitHostRepo.numstatUnstaged(dir)
+        val stats = GitHostRepoDiff.numstatUnstaged(dir)
         assertNotNull(stats["a.txt"])
         assertNull("untracked files must not appear in the unstaged numstat", stats["u.txt"])
     }
@@ -255,7 +255,7 @@ class GitHostRepoTest {
         File(dir, "a.txt").writeText("line1\n")
         git.add().addFilepattern("a.txt").call()
         git.close()
-        val diff = GitHostRepo.stagedDiff(dir)
+        val diff = GitHostRepoDiff.stagedDiff(dir)
         assertTrue(diff.contains("a.txt"))
         assertTrue(diff.contains("+line1"))
     }
@@ -271,7 +271,7 @@ class GitHostRepoTest {
         git2.commit().setMessage("two files").setAuthor("T", "t@x").call()
         git2.close()
         val hash = GitHostRepo.logPage(dir, offset = 0, limit = 1)[0].hash
-        val diff = GitHostRepo.commitFileDiff(dir, hash, "a.txt")
+        val diff = GitHostRepoDiff.commitFileDiff(dir, hash, "a.txt")
         assertTrue(diff.contains("+line3"))
         assertFalse("b.txt must not leak into a.txt's section", diff.contains("b.txt"))
     }
@@ -283,7 +283,7 @@ class GitHostRepoTest {
             "--- a/a b/c.txt\n" +
             "+++ b/a b/c.txt\n" +
             "Binary files differ\n"
-        val stats = GitHostRepo.parseNumstatText(text)
+        val stats = GitHostRepoDiff.parseNumstatText(text)
         val stat = stats["a b/c.txt"]
         assertNotNull(stat)
         assertTrue(stat!!.binary)
@@ -297,10 +297,10 @@ class GitHostRepoTest {
         File(dir, "a.txt").writeText("line1\nline2 staged\n")
         GitHostRepo.setStaged(dir, "a.txt", staged = true)
         File(dir, "a.txt").writeText("line1\nline2 staged then edited\n")
-        val staged = GitHostRepo.fileDiff(dir, "a.txt", staged = true, untracked = false)
+        val staged = GitHostRepoDiff.fileDiff(dir, "a.txt", staged = true, untracked = false)
         assertTrue(staged.contains("+line2 staged"))
         assertFalse("worktree-only edit must not leak into the staged diff", staged.contains("edited"))
-        val unstaged = GitHostRepo.fileDiff(dir, "a.txt", staged = false, untracked = false)
+        val unstaged = GitHostRepoDiff.fileDiff(dir, "a.txt", staged = false, untracked = false)
         assertTrue(unstaged.contains("+line2 staged then edited"))
     }
 
@@ -358,7 +358,7 @@ class GitHostRepoTest {
         val (dir, git) = initRepo()
         git.close()
         val hash = GitHostRepo.logPage(dir, offset = 0, limit = 1)[0].hash
-        val detail = GitHostRepo.commitDetail(dir, hash)!!
+        val detail = GitHostRepoDiff.commitDetail(dir, hash)!!
         assertEquals("initial commit", detail.subject)
         assertEquals("T", detail.author)
         assertEquals("t@x", detail.authorEmail)
@@ -370,10 +370,10 @@ class GitHostRepoTest {
         val (dir, git) = initRepo()
         git.close()
         val hash = GitHostRepo.logPage(dir, offset = 0, limit = 1)[0].hash
-        val files = GitHostRepo.commitNumstat(dir, hash)
+        val files = GitHostRepoDiff.commitNumstat(dir, hash)
         assertEquals(listOf("a.txt"), files.map { it.path })
         assertEquals(2, files[0].added)
-        val diff = GitHostRepo.commitFileDiff(dir, hash, "a.txt")
+        val diff = GitHostRepoDiff.commitFileDiff(dir, hash, "a.txt")
         assertTrue(diff.contains("+line1"))
     }
 
@@ -382,7 +382,7 @@ class GitHostRepoTest {
         val (dir, git) = initRepo()
         git.close()
         val hash = GitHostRepo.logPage(dir, offset = 0, limit = 1)[0].hash
-        val diff = GitHostRepo.commitDiff(dir, hash)
+        val diff = GitHostRepoDiff.commitDiff(dir, hash)
         assertTrue(diff.contains("+++ b/a.txt"))
         assertTrue(diff.contains("+line1"))
     }
