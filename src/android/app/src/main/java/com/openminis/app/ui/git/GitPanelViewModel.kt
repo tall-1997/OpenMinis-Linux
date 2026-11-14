@@ -12,6 +12,7 @@ import com.openminis.app.git.GitHostRepoTransfer
 import com.openminis.app.git.GitCli.GitCommit
 import com.openminis.app.git.GitCli.GitFileEntry
 import com.openminis.app.git.GitCommitMessageGenerator
+import com.openminis.app.git.GitHostRepoDiff
 import com.openminis.app.git.GitHostRepoGraph
 import com.openminis.app.git.GitCli.GitRepoInfo
 import com.openminis.app.git.GitCli.GitStatus
