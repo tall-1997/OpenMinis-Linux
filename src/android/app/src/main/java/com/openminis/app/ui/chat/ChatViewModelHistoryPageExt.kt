@@ -3,6 +3,7 @@ package com.openminis.app.ui.chat
 import androidx.lifecycle.viewModelScope
 import com.openminis.app.logging.AppLogger
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.withLock
@@ -297,5 +298,14 @@ private suspend fun ChatViewModel.drainMissingTail() {
             timeline.noteBounds(rows)
         }
         chunks++
+        // [T-android-entry-frame-parse-isolation] Publish at most one chunk
+        // per frame. Back-to-back `_messages` mutations made every frame
+        // re-run the whole-transcript rebuild while the frame's own row
+        // parses starved on the shared pool — the 2320-message session sat
+        // blank ~46s (coldPrewarm.done elapsedMs=45081). One 16ms yield per
+        // chunk keeps the drain running (50 rows/frame still finishes 2k+
+        // rows in well under a second of wall time) while giving composition
+        // a real frame to paint each slice.
+        delay(16)
     }
 }

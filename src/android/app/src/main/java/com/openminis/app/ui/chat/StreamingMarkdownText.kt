@@ -41,7 +41,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.sandbox.PRootKernel
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
@@ -299,7 +298,7 @@ fun MarkdownDocument(
     val mdColors = currentMdColors()
     var blocks by remember(content) { mutableStateOf<List<MdBlock>>(emptyList()) }
     LaunchedEffect(content) {
-        val computed = withContext(Dispatchers.Default) {
+        val computed = withContext(MarkdownParseDispatcher.forViewport) {
             parseMarkdownBlocks(content).also {
                 MarkdownParseCaches.prewarm(it, mdColors)
             }
