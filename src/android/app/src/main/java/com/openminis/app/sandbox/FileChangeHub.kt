@@ -87,10 +87,12 @@ object FileChangeHub {
 
     /**
      * Churn-heavy generated trees — watching them burns the observer cap for
-     * nothing. `.git` is skipped deliberately: consumers run git commands
-     * (status/commit rewrite index+refs constantly), so watching it would
-     * feed the panel's own probes back in as change events. Working-tree
-     * edits — the signal that actually matters — still fire.
+     * nothing. `.git` is skipped from RECURSIVE expansion (`.git/objects`
+     * alone would exhaust the budget on any real repo); [addGitMetaTree]
+     * still shallow-watches the repo metadata so state changes made outside
+     * the panel — sandbox git CLI commits/pushes, terminal pulls — reach
+     * consumers (see [T-file-hub-git-meta]). Working-tree edits — the signal
+     * that actually matters — still fire.
      */
     private val SKIP_DIR_NAMES = setOf("node_modules", ".gradle", ".cxx", ".git")
 
@@ -245,9 +247,78 @@ object FileChangeHub {
         attachObserver(reg, root, dir)
         val children = runCatching { dir.listFiles() }.getOrNull() ?: return
         for (c in children) {
-            if (!c.isDirectory || shouldSkipDir(c)) continue
+            if (!c.isDirectory) continue
+            if (shouldSkipDir(c)) {
+                // [T-file-hub-git-meta] .git is deliberately not recursed
+                // (.git/objects alone would burn the observer cap on any real
+                // repo), but repo-metadata changes made OUTSIDE the panel —
+                // the sandbox git CLI committing/pushing, a terminal pull —
+                // used to be invisible to every consumer: refs and HEAD live
+                // under .git, so the panel's history tab only moved when a
+                // mutation ran inside the panel itself. The coalescer dropped
+                // .git paths too (FileEventCoalescer.isIgnored carried a
+                // blanket .git drop) — BOTH layers must allow them for these
+                // events to land. Watch the metadata directories (refs-tree
+                // walk, no objects/ churn): loose ref writes land in the
+                // refs subtree (namespaced branches, remotes), HEAD / index
+                // / packed-refs land in the .git root — every state-changing
+                // git operation touches at least one of them.
+                if (c.name == ".git") addGitMetaTree(reg, root, c)
+                continue
+            }
             if (reg.observers.size >= MAX_OBSERVERS) return
             addTree(reg, root, c, depth + 1)
+        }
+    }
+
+    /**
+     * Watch of a repository's metadata: [gitDir] itself plus the refs
+     * sub-tree (see [gitMetaDirs] for why refs subdirs must be walked).
+     * Never descends into churn subtrees like objects/ or logs/ —
+     * [MAX_OBSERVERS] is a shared budget across all sessions. A
+     * worktree-style `.git` file never reaches here ([addTree] only
+     * dispatches directories).
+     */
+    private fun addGitMetaTree(reg: Registration, root: WatchRoot, gitDir: File) {
+        for (d in gitMetaDirs(gitDir)) attachObserver(reg, root, d)
+    }
+
+    /**
+     * Directories whose file events cover every state-changing git
+     * operation: [gitDir] itself (HEAD / index / packed-refs rewrites) plus
+     * the whole refs sub-tree, existing directories only, depth-capped at
+     * [REFS_WALK_DEPTH]. The caller attaches [FileObserver]s — this stays a
+     * pure, testable selection.
+     *
+     * inotify is per-directory and non-recursive, and refs subdirectories
+     * are load-bearing: slashed branch names (`fix/foo`) put loose refs in
+     * `refs/heads/fix/`, remote-tracking refs in `refs/remotes/<remote>/` —
+     * watching only refs/heads|refs/remotes flat would miss exactly those.
+     * The refs tree is small (dirs ≈ namespaces + remotes); [attachObserver]
+     * keeps [MAX_OBSERVERS] as the hard shared cap, and runtime-created
+     * dirs (new namespace, new remote) are covered by the CREATE-dir
+     * expansion in [handleEvent].
+     */
+    internal fun gitMetaDirs(gitDir: File): List<File> {
+        val dirs = mutableListOf(gitDir)
+        val refs = File(gitDir, "refs")
+        if (refs.isDirectory) {
+            dirs.add(refs)
+            refsSubDirs(refs, REFS_WALK_DEPTH, dirs)
+        }
+        return dirs
+    }
+
+    /** Loose refs live ≤3 dir levels under refs/ (refs/remotes/origin/pr/42); 4 gives headroom. */
+    private const val REFS_WALK_DEPTH = 4
+
+    private fun refsSubDirs(dir: File, depth: Int, out: MutableList<File>) {
+        if (depth == 0) return
+        // Sorted for a deterministic selection — tests pin exact lists.
+        for (c in dir.listFiles().orEmpty().sortedBy { it.name }) {
+            if (!c.isDirectory) continue
+            out.add(c)
+            refsSubDirs(c, depth - 1, out)
         }
     }
 
