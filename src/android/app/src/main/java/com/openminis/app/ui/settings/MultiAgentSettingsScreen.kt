@@ -37,6 +37,7 @@ import com.openminis.app.data.model.ProviderInstance
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.data.repository.MultiAgentSettings
 import com.openminis.app.provider.effectiveMaxThinkingLevel
+import com.openminis.app.ui.chat.localizedName
 
 @Composable
 fun MultiAgentSettingsScreen(
@@ -548,12 +549,21 @@ private fun SubAgentSlotRow(
 ) {
     var expanded by remember { mutableStateOf(false) }
     val selectedEntry = candidates.find { it.id == selectedId }
+    val followsMain = selectedEntry == null
     val value = selectedEntry?.let { slotModelLabel(it, instancesById) }
         ?: stringResource(R.string.settings_multi_agent_slot_main)
-    val maxThinking = selectedEntry?.effectiveMaxThinkingLevel ?: ThinkingLevel.OFF
+    // [T-android-subagent-thinking-parity] The main-session slot used to
+    // hard-code OFF here — the reported "picked the main model, depth is
+    // Off". Runtime (ChatViewModelSubAgentRun) REUSES the main session's
+    // live level when the slot is unset; the picker's range is therefore the
+    // widest ceiling in the candidate pool, and the unset display says
+    // "follows main session" instead of a misleading Off.
+    val maxThinking = selectedEntry?.effectiveMaxThinkingLevel
+        ?: candidates.maxOfOrNull { it.effectiveMaxThinkingLevel } ?: ThinkingLevel.OFF
     val selectedThinking = thinkingLevel?.let {
         runCatching { ThinkingLevel.valueOf(it.uppercase()) }.getOrNull()
-    }?.let { if (it.rank <= maxThinking.rank) it else maxThinking } ?: maxThinking
+    }?.let { if (it.rank <= maxThinking.rank) it else maxThinking }
+        ?: if (followsMain) null else maxThinking
     var thinkingExpanded by remember { mutableStateOf(false) }
     Box(modifier = Modifier.fillMaxWidth()) {
         Column {
@@ -565,7 +575,12 @@ private fun SubAgentSlotRow(
             )
             SettingsValueRow(
                 title = stringResource(R.string.ma_thinking_depth),
-                value = selectedThinking.displayName,
+                value = selectedThinking?.localizedName(LocalContext.current)
+                    ?: if (followsMain) {
+                        stringResource(R.string.ma_thinking_follows_main)
+                    } else {
+                        ThinkingLevel.OFF.localizedName(LocalContext.current)
+                    },
                 onClick = if (enabled && maxThinking != ThinkingLevel.OFF) ({ thinkingExpanded = true }) else null,
                 showDivider = showDivider,
             )
@@ -599,7 +614,7 @@ private fun SubAgentSlotRow(
                 .filter { it != ThinkingLevel.OFF && it.rank <= maxThinking.rank }
                 .forEach { level ->
                     DropdownMenuItem(
-                        text = { Text(level.displayName) },
+                        text = { Text(level.localizedName(LocalContext.current)) },
                         onClick = {
                             onSelectThinking(level)
                             thinkingExpanded = false

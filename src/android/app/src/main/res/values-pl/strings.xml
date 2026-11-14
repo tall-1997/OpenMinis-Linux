@@ -1851,6 +1851,8 @@
     <string name="ma_add_role_sub">Własna nazwa/opis/prompt/lista dozwolonych narzędzi; wbudowana rola o tej samej nazwie zostanie nadpisana</string>
     <string name="ma_team_lead_suffix"> · lider zespołu</string>
     <string name="ma_thinking_depth">Głębokość myślenia dla tego przebiegu</string>
+
+    <string name="ma_thinking_follows_main">Zgodnie z sesją główną</string>
     <string name="ma_role_dialog_title_builtin">Rola wbudowana (zapisywana jako własna kopia)</string>
     <string name="ma_role_dialog_title_new">Nowa rola współpracy</string>
     <string name="ma_role_dialog_title_edit">Edytuj rolę</string>

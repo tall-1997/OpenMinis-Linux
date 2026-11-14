@@ -4,6 +4,7 @@ import com.openminis.app.data.BPETokenizer
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.provider.LLMProvider
+import com.openminis.app.ui.chat.localizedName
 
 // [T-android-split-chat-tokenext] Token estimation / context-usage accounting
 // extracted verbatim from ChatViewModel.kt (mechanical split, zero behavior
@@ -121,7 +122,10 @@ fun ChatViewModel.thinkingInfo(): ChatViewModel.ThinkingInfo? {
     val supported = model.supportsReasoning == true
     val level = _thinkingLevel.value
     val enabled = supported && level.isEnabled
-    val levelText = if (enabled) level.displayName else "—"
+    // [T-thinking-level-i18n] localizedName, not the data-layer English.
+    val levelText = if (enabled) {
+        level.localizedName(context)
+    } else "—"
     return ChatViewModel.ThinkingInfo(supported, enabled, levelText)
 }
 

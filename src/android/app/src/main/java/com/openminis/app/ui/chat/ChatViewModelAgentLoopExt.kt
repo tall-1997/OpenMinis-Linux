@@ -41,7 +41,7 @@ import org.json.JSONObject
 
 internal suspend fun ChatViewModel.runAgentLoopBody(
     provider: LLMProvider,
-    systemPrompt: String?,
+    systemPrompt: String?,  // send-time snapshot; REBUILT on mid-run adoption below
     fallbackProviders: List<ChatViewModel.FallbackCandidate> = emptyList(),
     fallbackStrategy: com.openminis.app.data.model.FallbackStrategy = com.openminis.app.data.model.FallbackStrategy.default,
     goalExecutionRun: Boolean = false,
@@ -257,6 +257,10 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         toolCallRawArgs.clear()
         _canResume.value = false
     }
+    // [T-android-persona-switch-rebuild] RUN-scoped: mid-run model adoption
+    // rebuilds it (persona keys on providerInstanceId). A per-turn var would
+    // reset to the send-time snapshot every turn.
+    var activeSystemPrompt = systemPrompt
     agentTurns@ for (turn in 0 until maxTurns) {
         currentCoroutineContext().ensureActive()
         // Sanitize history before each API call (mirrors iOS pre-API validation)
@@ -472,8 +476,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         // catch below; read after the stream loop to inject as a new turn.
         var queuedPromptInterrupted = false
         // [T-android-queued-message-interrupt-thinking] iOS d14174d3 parity:
-        // a prompt queued while the model is still reasoning must not wait
-        // out the stream — cut it (both branches below call this).
+        // A queued prompt must not wait out the stream — cut (both branches call this).
         fun cutForQueuedPrompt(phase: String) {
             AppLogger.info(ChatViewModel.TAG_STREAM, "📨[QueueInterrupt] turn=$turn $phase cut — answering queued prompt directly")
             throw QueuedPromptInterrupt()
@@ -487,21 +490,19 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 loopModelEpoch = adopted.epoch
                 // A new model starts a new failure streak.
                 emptyStreakEntryIds.clear()
+                // [T-android-persona-switch-rebuild] Persona keys on providerInstanceId.
+                rebuildSystemPromptForAdoptedEntry()?.let { activeSystemPrompt = it }
             }
             // [GH#521] Per-attempt phase clocks (see [StreamPhaseReport]).
             val streamPhase = StreamPhaseReport()
             try {
-                // [T-android-enhanced-cache] Stamp the per-turn Enhanced
-                // Cache flag onto the active provider here — the single
-                // choke point every turn passes through, regardless of how
-                // currentProvider was (re)assigned by the fallback loop.
-                // Non-Anthropic providers ignore it (cast fails silently).
+                // [T-android-enhanced-cache] Per-turn stamp at the single
+                // choke point every request passes through; non-Anthropic
+                // providers ignore the cast.
                 (currentProvider as? com.openminis.app.provider.anthropic.AnthropicProvider)
                     ?.enhancedCache = _enhancedCacheEnabled.value
-                // Route through effectiveAgentHistory() so a populated
-                // [_compactSummary] is prepended as a `<context-summary>`
-                // user message. Falls through to the raw agentHistory when
-                // no compact has happened, so the common path stays zero-copy.
+                // effectiveAgentHistory() prepends `<context-summary>` when
+                // a compact exists; raw agentHistory (zero-copy) otherwise.
                 // A Goal belongs to the session, not only to an explicit /goal
                 // resume run — read it every request so ordinary turns carry it.
                 val requestGoalState = withContext(Dispatchers.IO) {
@@ -520,8 +521,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     loopExitedNormally = true
                     break@agentTurns
                 }
-                // [T-once-notices] Recall, plan retry and the goal are committed
-                // into the transcript once — never rebuilt per request.
+                // [T-once-notices] committed into the transcript once — never rebuilt.
                 commitSessionNoticesOnce(
                     goalObjective = requestGoalState?.objective.orEmpty(),
                     goalPrompt = goalMount.prompt,
@@ -543,7 +543,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 val requestHeaders = requestExtraHeaders()
                 // [GH#563][T-no-repeated-injection] Date only; state lives in history.
                 val turnSystemPrompt = refreshRuntimeContextDate(
-                    systemPrompt,
+                    activeSystemPrompt,
                     java.time.LocalDate.now().toString(),
                 )
                 streamPhase.startAttempt()

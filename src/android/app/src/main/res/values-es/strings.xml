@@ -1843,6 +1843,8 @@
     <string name="ma_add_role_sub">Nombre/descripción/prompt/lista de herramientas personalizados; un rol integrado con el mismo nombre se sobrescribe</string>
     <string name="ma_team_lead_suffix"> · líder de equipo</string>
     <string name="ma_thinking_depth">Profundidad de razonamiento para esta ejecución</string>
+
+    <string name="ma_thinking_follows_main">Sigue la sesión principal</string>
     <string name="ma_role_dialog_title_builtin">Rol integrado (se guarda como copia personalizada)</string>
     <string name="ma_role_dialog_title_new">Nuevo rol de colaboración</string>
     <string name="ma_role_dialog_title_edit">Editar rol</string>

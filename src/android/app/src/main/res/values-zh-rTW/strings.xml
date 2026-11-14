@@ -1925,6 +1925,8 @@
     <string name="ma_add_role_sub">自訂名字/描述/提示詞/工具白名單, 同名覆蓋內建</string>
     <string name="ma_team_lead_suffix"> · 組長</string>
     <string name="ma_thinking_depth">本次思考深度</string>
+
+    <string name="ma_thinking_follows_main">跟隨主會話</string>
     <string name="ma_role_dialog_title_builtin">內建角色 (儲存為自訂副本)</string>
     <string name="ma_role_dialog_title_new">新增協作角色</string>
     <string name="ma_role_dialog_title_edit">編輯角色</string>

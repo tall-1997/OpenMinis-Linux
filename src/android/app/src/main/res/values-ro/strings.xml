@@ -1848,6 +1848,8 @@
     <string name="ma_add_role_sub">Nume/descriere/prompt/listă de instrumente personalizate; un rol integrat cu același nume este suprascris</string>
     <string name="ma_team_lead_suffix"> · lider de echipă</string>
     <string name="ma_thinking_depth">Adâncimea de gândire pentru această rulare</string>
+
+    <string name="ma_thinking_follows_main">Urmărește sesiunea principală</string>
     <string name="ma_role_dialog_title_builtin">Rol integrat (salvat ca copie personalizată)</string>
     <string name="ma_role_dialog_title_new">Rol de colaborare nou</string>
     <string name="ma_role_dialog_title_edit">Editează rolul</string>

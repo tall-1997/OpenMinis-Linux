@@ -1844,6 +1844,8 @@
     <string name="ma_add_role_sub">Nama/penerangan/prom/senarai benar alat tersuai; peranan terbina dalam dengan nama yang sama akan ditimpa</string>
     <string name="ma_team_lead_suffix"> · ketua pasukan</string>
     <string name="ma_thinking_depth">Kedalaman pemikiran untuk jalanan ini</string>
+
+    <string name="ma_thinking_follows_main">Ikut sesi utama</string>
     <string name="ma_role_dialog_title_builtin">Peranan terbina dalam (disimpan sebagai salinan tersuai)</string>
     <string name="ma_role_dialog_title_new">Peranan kolaborasi baharu</string>
     <string name="ma_role_dialog_title_edit">Edit peranan</string>

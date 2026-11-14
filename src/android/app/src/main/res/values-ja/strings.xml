@@ -1841,6 +1841,8 @@
     <string name="ma_add_role_sub">カスタムの名前/説明/プロンプト/ツール許可リスト。同名の内蔵ロールは上書きされます</string>
     <string name="ma_team_lead_suffix"> ・チームリーダー</string>
     <string name="ma_thinking_depth">今回の思考深度</string>
+
+    <string name="ma_thinking_follows_main">メインセッションに従う</string>
     <string name="ma_role_dialog_title_builtin">内蔵ロール（カスタムコピーとして保存）</string>
     <string name="ma_role_dialog_title_new">新しい協業ロール</string>
     <string name="ma_role_dialog_title_edit">ロールを編集</string>

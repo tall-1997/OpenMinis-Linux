@@ -139,6 +139,12 @@ jobs:
       - name: No new hardcoded CJK in UI
         run: python3 scripts/ci/check_cjk_literals.py
 
+      # [T-thinking-level-i18n] UI must not consume ThinkingLevel.displayName
+      # (hard-coded English — it shipped an English-only picker inside a
+      # Chinese UI); use ThinkingLevel.localizedName(context). Ratchet.
+      - name: ThinkingLevel displayName UI ratchet
+        run: python3 scripts/ci/check_thinking_displayname_ui.py
+
       # [T-arch-ratchet] UI review report P2-2: oversized files are on a
       # one-way diet. Baseline ceilings never rise; new files cap at 800
       # lines. Runs on every event (tree state, not diff state).

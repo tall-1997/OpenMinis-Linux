@@ -58,3 +58,16 @@ internal fun ChatViewModel.resolveModelSwitch(
         epoch = snapshotModelSelectionEpoch(),
     )
 }
+
+
+/**
+ * [T-android-persona-switch-rebuild] Rebuild the system prompt for the
+ * ADOPTED entry: the persona keys on providerInstanceId, so the send-time
+ * prompt still speaks in the previous provider's voice — every remaining
+ * request of the run would otherwise carry the old persona (the reported
+ * "switched provider but the old persona still applies"). A failed rebuild
+ * returns null and the caller keeps the old prompt rather than blanking
+ * the run.
+ */
+internal fun ChatViewModel.rebuildSystemPromptForAdoptedEntry(): String? =
+    runCatching { buildSystemPrompt() }.getOrNull()

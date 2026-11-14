@@ -694,7 +694,7 @@ private fun buildAutoInjectedItems(
                 null
             } else {
                 { text ->
-                    com.openminis.app.agent.PersonaPromptLibrary.writeSessionOverride(
+                    com.openminis.app.agent.PersonaSessionOverride.write(
                         context,
                         personaSessionId,
                         text,
