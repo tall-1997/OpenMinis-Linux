@@ -248,14 +248,11 @@ class BrowserUseManager(
      */
     private val myScreenshotFiles = java.util.concurrent.ConcurrentLinkedQueue<File>()
 
-    /**
-     * [T-browser-js-seq] Slot keyed by a monotonic call seq: a timed-out
-     * script keeps running and can call the bridge LATE — unkeyed slots let
-     * the stale result complete the NEXT call (silent wrong-answer).
+    /** [T-browser-js-seq] Slot keyed by a monotonic call seq: a timed-out
+     *  script's LATE bridge call must not complete the NEXT call.
      */
     private val jsCallSeq = java.util.concurrent.atomic.AtomicLong(0)
     private var asyncJsDeferred: Pair<Long, CompletableDeferred<String>>? = null
-
     /** JavaScript interface for async script result callbacks. */
     private val jsBridge = object {
         @JavascriptInterface
@@ -762,7 +759,7 @@ class BrowserUseManager(
                 _isLoading.value = false
                 deferred.complete(Unit)
             }
-            // Dropping the slot abandons late bridge callbacks (old seq).
+            // Dropping the slot abandons late bridge callbacks.
             asyncJsDeferred = null
             webView.stopLoading()
             webView.evaluateJavascript("window.stop();", null)
@@ -1553,8 +1550,11 @@ class BrowserUseManager(
                 val eq = it.indexOf('=')
                 if (eq <= 0) null else it.substring(0, eq).trim() to it.substring(eq + 1).trim()
             }
+        // [T-cookie-fuzzy-default] Schema says "ALL keywords must appear" —
+        // align the quantifier (was ANY, which over-matched multi-keyword
+        // filters) and the default (true, matching the schema contract).
         val filtered = if (keywords.isNullOrEmpty()) pairs else pairs.filter { (name, _) ->
-            keywords.any { kw ->
+            keywords.all { kw ->
                 if (fuzzy) name.contains(kw, ignoreCase = true)
                 else name.equals(kw, ignoreCase = true)
             }

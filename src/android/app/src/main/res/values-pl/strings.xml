@@ -22,6 +22,8 @@
     <string name="memory_revoke_result_not_found">Nie znaleziono wpisu w ostatnich dziennikach dziennych.</string>
     <string name="memory_revoke_result_io_error">Nie udało się zapisać pliku: %1$s</string>
     <string name="memory_save_toast">Zapisano</string>
+
+    <string name="memory_save_failed_toast">Nie udało się zapisać — sprawdź pamięć i spróbuj ponownie</string>
     <string name="memory_global_footer">Trwałe instrukcje i preferencje widoczne dla Agenta w każdej sesji. Agent nie może zmieniać tego pliku.</string>
     <string name="check_update_section_header">Aktualizacja aplikacji</string>
     <string name="check_update_current_version">Bieżąca wersja: %1$s</string>

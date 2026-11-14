@@ -310,8 +310,10 @@ class GitCliParseTest {
         assertTrue(GitCliCmd.probeCmd("r").contains("git -C 'r' rev-parse --is-inside-work-tree"))
         // cfg lookup must resolve against the same repo, not the shell cwd
         assertTrue(GitCliCmd.probeCmd("r").contains("\$(git -C 'r' config user.name"))
+        // [T-git-refresh-loop] --no-optional-locks suppresses the index
+        // stat-cache write that formed the 2s degraded-refresh loop.
         assertEquals(
-            "git -C 'r' -c core.quotepath=false status --porcelain -b -uall",
+            "git -C 'r' --no-optional-locks -c core.quotepath=false status --porcelain -b -uall",
             GitCliCmd.statusCmd("r"),
         )
         assertTrue(GitCliCmd.logCmd(5, "r").startsWith("git -C 'r' -c core.quotepath=false log -n 5"))

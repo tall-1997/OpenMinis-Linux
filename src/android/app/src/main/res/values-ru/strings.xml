@@ -22,6 +22,8 @@
     <string name="memory_revoke_result_not_found">Запись не найдена в недавних ежедневных журналах.</string>
     <string name="memory_revoke_result_io_error">Ошибка записи файла: %1$s</string>
     <string name="memory_save_toast">Сохранено</string>
+
+    <string name="memory_save_failed_toast">Не удалось сохранить — проверьте хранилище и повторите</string>
     <string name="memory_global_footer">Постоянные инструкции и предпочтения, видимые Minis Ultra Agent в каждой сессии. Agent не может изменять этот файл.</string>
     <string name="check_update_section_header">Обновление приложения</string>
     <string name="check_update_current_version">Текущая версия: %1$s</string>

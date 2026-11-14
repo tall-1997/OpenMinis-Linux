@@ -22,6 +22,8 @@
     <string name="memory_revoke_result_not_found">Entrée introuvable dans les journaux récents.</string>
     <string name="memory_revoke_result_io_error">Erreur d\'écriture du fichier : %1$s</string>
     <string name="memory_save_toast">Enregistré</string>
+
+    <string name="memory_save_failed_toast">Échec de la sauvegarde — vérifiez le stockage puis réessayez</string>
     <string name="memory_global_footer">Instructions et préférences persistantes visibles par Minis Ultra Agent dans chaque session. L\'Agent ne peut pas modifier ce fichier.</string>
     <string name="check_update_section_header">Mise à jour de l\'application</string>
     <string name="check_update_current_version">Version actuelle : %1$s</string>

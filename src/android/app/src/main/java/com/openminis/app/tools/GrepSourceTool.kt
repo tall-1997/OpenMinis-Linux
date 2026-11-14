@@ -26,6 +26,7 @@ object GrepSourceTool {
     private const val MAX_MATCHES_CAP = 500
     private const val MAX_FILE_BYTES = 512 * 1024
     private const val OUTPUT_HARD_CAP = 40_000
+    private const val SCAN_DEADLINE_MS = 45_000L
 
     /**
      * [T-grep-source-coverage] Directories that carry no source the model can
@@ -70,9 +71,12 @@ object GrepSourceTool {
             val isRegex = args.optBoolean("is_regex", false)
             val maxMatches = args.optInt("max_matches", MAX_MATCHES).coerceIn(1, MAX_MATCHES_CAP)
 
+            // [T-grep-source-regex-case] is_regex=true honours the pattern's
+            // case (schema contract: "case-insensitive when is_regex=false")
+            // — the old ALWAYS-IGNORE_CASE silently widened matches.
             val matcher: (String) -> Boolean = if (isRegex) {
                 val re = try {
-                    Regex(pattern, setOf(RegexOption.IGNORE_CASE))
+                    Regex(pattern)
                 } catch (e: Exception) {
                     return ToolExecutionResult("Error: invalid regex: ${e.message}", false, toolTitle = toolTitle)
                 }
@@ -88,13 +92,25 @@ object GrepSourceTool {
                 return ToolExecutionResult("Error: Path not found: $rawPath", false, toolTitle = toolTitle)
             }
 
-            // [T-grep-source-coverage] Walk the FULL tree (noise dirs pruned)
-            // — coverage is bounded by max_matches/output caps, not by a file
-            // count that silently truncates the search domain.
-            val files = ArrayList<java.io.File>()
+            // [T-grep-source-coverage] STREAMING scan of the FULL tree (noise
+            // dirs pruned, walk never materialized): coverage is bounded by
+            // max_matches/output caps, not by a file count that silently
+            // truncates the search domain. The intermediate version collected
+            // every file into an ArrayList first — an OOM face on huge mounts.
+            // [T-grep-source-deadline] Wall-clock deadline: a pathological
+            // tree (symlink loops FileTreeWalk cannot detect, tens of
+            // thousands of files) returns PARTIAL results instead of hanging
+            // the lane for minutes.
+            val startedAt = System.currentTimeMillis()
+            val out = StringBuilder()
+            var totalMatches = 0
+            var hitFiles = 0
+            var scanned = 0
             var skippedLarge = 0
-            when {
-                root.isFile -> if (root.length() <= MAX_FILE_BYTES.toLong()) files.add(root) else skippedLarge++
+            var skippedIO = 0
+            var timedOut = false
+            val fileSeq: Sequence<java.io.File> = when {
+                root.isFile -> sequenceOf(root)
                 root.isDirectory -> root.walkTopDown()
                     // [T-grep-source-coverage] onEnter applies to the START
                     // directory too: a repo literally named build/dist would
@@ -102,27 +118,29 @@ object GrepSourceTool {
                     // empty search.
                     .onEnter { dir -> dir == root || dir.name !in PRUNED_DIR_NAMES }
                     .filter { it.isFile }
-                    .forEach { f ->
-                        if (f.length() in 1..MAX_FILE_BYTES.toLong()) files.add(f) else skippedLarge++
-                    }
-                else -> Unit
+                else -> emptySequence()
             }
-            if (files.isEmpty()) {
-                val why = if (skippedLarge > 0) " ($skippedLarge file(s) skipped — larger than ${MAX_FILE_BYTES / 1024} KB)" else ""
-                return ToolExecutionResult("No searchable files under: $rawPath$why", false, toolTitle = toolTitle)
-            }
-
-            val out = StringBuilder()
-            var totalMatches = 0
-            var hitFiles = 0
-            var scanned = 0
-            for (f in files) {
-                if (totalMatches >= maxMatches) break
+            for (f in fileSeq) {
+                if (totalMatches >= maxMatches || out.length > OUTPUT_HARD_CAP) break
+                if (System.currentTimeMillis() - startedAt > SCAN_DEADLINE_MS) {
+                    timedOut = true
+                    break
+                }
+                val size = try {
+                    f.length()
+                } catch (_: Exception) {
+                    skippedIO++; continue
+                }
+                // [T-grep-source-blindspot] 0-byte files are NOTHING to match,
+                // not a "skip" — counting them as blind spots lied about
+                // coverage; >cap files ARE a blind spot and are counted.
+                if (size == 0L) continue
+                if (size > MAX_FILE_BYTES.toLong()) { skippedLarge++; continue }
                 scanned++
                 val lines = try {
                     f.bufferedReader().useLines { it.toList() }
                 } catch (_: Exception) {
-                    continue // binary or unreadable — skip
+                    skippedIO++; continue // binary or unreadable — count the blind spot
                 }
                 val hitIdx = lines.indices.filter { matcher(lines[it]) }
                 if (hitIdx.isEmpty()) continue
@@ -148,8 +166,13 @@ object GrepSourceTool {
             }
 
             if (totalMatches == 0) {
+                val why = buildString {
+                    if (skippedLarge > 0) append(" ($skippedLarge skipped >${MAX_FILE_BYTES / 1024} KB)")
+                    if (skippedIO > 0) append(" ($skippedIO unreadable)")
+                    if (timedOut) append(" (scan deadline hit)")
+                }
                 return ToolExecutionResult(
-                    "No matches for \"$pattern\" in $rawPath (scanned $scanned file(s))",
+                    "No matches for \"$pattern\" in $rawPath (scanned $scanned file(s))$why",
                     true, toolTitle = toolTitle,
                 )
             }
@@ -165,6 +188,15 @@ object GrepSourceTool {
                 append(totalMatches).append(" match(es) across ").append(hitFiles)
                 append(" file(s), scanned ").append(scanned).append("]")
                 if (totalMatches >= maxMatches) append(" (match cap reached)")
+                // [T-grep-source-blindspot] Quantified blind spots: skipped
+                // large/unreadable files are counted, not silent.
+                if (skippedLarge > 0 || skippedIO > 0) {
+                    append(" [skipped: ")
+                    if (skippedLarge > 0) append("$skippedLarge >512KB, ")
+                    if (skippedIO > 0) append("$skippedIO unreadable")
+                    append("]")
+                }
+                if (timedOut) append(" [scan deadline hit — partial coverage]")
             }
             ToolExecutionResult(header + "\n\n" + body + note, true, toolTitle = toolTitle)
         } catch (e: Exception) {

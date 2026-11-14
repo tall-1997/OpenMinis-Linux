@@ -49,6 +49,8 @@
     <string name="memory_revoke_result_not_found">Entry not found in recent daily logs.</string>
     <string name="memory_revoke_result_io_error">Error writing file: %1$s</string>
     <string name="memory_save_toast">Saved</string>
+
+    <string name="memory_save_failed_toast">Save failed — check storage and try again</string>
     <string name="memory_global_footer">Persistent instructions and preferences visible to the Agent in every session. The Agent cannot modify this file.</string>
 
     <!-- Check Update -->

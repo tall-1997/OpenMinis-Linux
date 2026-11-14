@@ -434,7 +434,15 @@ internal fun ChatViewModel.sendMessage(
         val systemPrompt = if ((provider as? com.openminis.app.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
             val prefix = com.openminis.app.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
             if (baseSystemPrompt?.startsWith(prefix) == true) baseSystemPrompt
-            else "$prefix\n\n${baseSystemPrompt ?: ""}"
+            else {
+                // [T-oauth-prefix-offset] The stable-prefix boundary was computed
+                // on the UN-prefixed base — shifting the published offset by the
+                // exact bytes the wrapper adds keeps the Anthropic cache_control
+                // breakpoint on the true stable/dynamic edge instead of a few
+                // bytes into it.
+                systemPromptStablePrefixLen += prefix.length + 2
+                "$prefix\n\n${baseSystemPrompt ?: ""}"
+            }
         } else baseSystemPrompt
 
         // Start agent loop with fallback. _isStreaming was set synchronously at top.

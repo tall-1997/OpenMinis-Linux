@@ -279,6 +279,18 @@ internal suspend fun ChatViewModel.runOneSubAgentInner(
                         )
                     }
                 }
+                // [T-android-subagent-thinking-parity] Re-clamp the thinking
+                // level to the ACTUAL entry on retry rotations — the old code
+                // kept the baseEntry-derived value, which over-shot (higher
+                // ceiling) or under-shot (lower ceiling) after rotation.
+                val laneThinkingLevel = if (entry != baseEntry) {
+                    clampThinkingToCeiling(
+                        requestedThinking,
+                        forcedThinkingCeilingFor(entry),
+                    )
+                } else {
+                    requestedThinking
+                }
                 val provider = providerForModelEntry(entry)
                 if (provider == null) {
                     if (attempt >= maxAttempts) {
@@ -407,7 +419,7 @@ internal suspend fun ChatViewModel.runOneSubAgentInner(
                     writePaths = writePaths,
                     maxTurns = maxTurns,
                     tokenBudget = tokenBudget,
-                    thinkingLevel = requestedThinking,
+                    thinkingLevel = laneThinkingLevel,
                     steers = steerChannel,
                     // [GH#221] 子代理 provider 来自 entry，不是当前主模型，因此
                     // 按 entry 的实例解析 OpenCode 会话头 / 用户 KV。

@@ -369,7 +369,12 @@ private suspend fun ChatViewModel.runSupervisorSession(
                 user = user,
                 tools = SupervisorSeats.supervisorTools(supervisorBaseTools(supervisorEntry)),
                 toolGate = null,
-                thinkingLevel = supervisorEntry.effectiveMaxThinkingLevel,
+                // [T-thinking-three-faces-unified] Session level clamped to
+                // the supervisor model's ceiling — same as spawn lanes.
+                thinkingLevel = clampThinkingToCeiling(
+                    _thinkingLevel.value,
+                    forcedThinkingCeilingFor(supervisorEntry),
+                ),
                 stopWhenClosing = false,
                 // [GH#221] Same per-instance header channel as the main loop.
                 extraHeaders = providerExtraHeaders(supervisorEntry.providerInstanceId),
@@ -420,7 +425,12 @@ private suspend fun ChatViewModel.runSupervisorSession(
                 kind = SubAgentKind.WORKER,
                 writePaths = writePaths,
                 maxTurns = multiAgentSettings.subagentMaxTurns.value,
-                thinkingLevel = workerEntry.effectiveMaxThinkingLevel,
+                // [T-thinking-three-faces-unified] Session level clamped to
+                // the worker model's ceiling — same as spawn lanes.
+                thinkingLevel = clampThinkingToCeiling(
+                    _thinkingLevel.value,
+                    forcedThinkingCeilingFor(workerEntry),
+                ),
                 // [GH#221] Worker seat speaks through its own provider instance.
                 extraHeaders = providerExtraHeaders(workerEntry.providerInstanceId),
                 firstEventTimeoutMs = workerFirstEventMs,

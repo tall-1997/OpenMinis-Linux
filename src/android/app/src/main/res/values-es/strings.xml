@@ -22,6 +22,8 @@
     <string name="memory_revoke_result_not_found">Entrada no encontrada en los registros diarios recientes.</string>
     <string name="memory_revoke_result_io_error">Error al escribir el archivo: %1$s</string>
     <string name="memory_save_toast">Guardado</string>
+
+    <string name="memory_save_failed_toast">Error al guardar: revise el almacenamiento e inténtelo de nuevo</string>
     <string name="memory_global_footer">Instrucciones y preferencias persistentes visibles para Minis Ultra Agent en cada sesión. El Agent no puede modificar este archivo.</string>
     <string name="check_update_section_header">Actualización de la app</string>
     <string name="check_update_current_version">Versión actual: %1$s</string>

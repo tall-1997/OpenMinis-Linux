@@ -28,7 +28,8 @@ data class BrowserActionInput(
     /** Cookie-name / scroll_and_collect keyword filter. */
     val keywords: List<String>? = null,
     /** Fuzzy-match cookie names for get_cookies. */
-    val fuzzy: Boolean = false,
+    // [T-cookie-fuzzy-default] Schema says "fuzzy=true by default" — align.
+    val fuzzy: Boolean = true,
     /** Item selector for scroll_and_collect (each matching element is captured). */
     val itemSelector: String? = null,
     /** Scroll iterations for scroll_and_collect. */

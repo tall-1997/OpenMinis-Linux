@@ -39,19 +39,19 @@ import java.io.File
  */
 class GitPanelViewModel(
     application: Application,
-    private val sessionId: String,
+    internal val sessionId: String,
     providerRepository: ProviderRepository,
 ) : AndroidViewModel(application) {
 
-    private val _state = MutableStateFlow(GitPanelState())
+    internal val _state = MutableStateFlow(GitPanelState())
     val state: StateFlow<GitPanelState> = _state.asStateFlow()
 
     private val app = application
 
     private val messageGenerator = GitCommitMessageGenerator(app, providerRepository)
 
-    private var fileWatchJob: Job? = null
-    private var lastAutoRefreshMs = 0L
+    internal var fileWatchJob: Job? = null
+    internal var lastAutoRefreshMs = 0L
 
     /**
      * [T-git-panel-refs-degrade] Sticky degrade flag: when the native (JGit)
@@ -74,6 +74,10 @@ class GitPanelViewModel(
      */
     private var refreshJob: Job? = null
 
+    /** [T-git-refresh-dirty] Set when a relevant change lands during a busy
+     *  stretch; drained by the tail of the NEXT refresh. */
+    @Volatile internal var pendingAutoRefresh = false
+
     /** Native repo root on the host filesystem; null = sandbox path only. */
     private var hostDir: File? = null
 
@@ -82,40 +86,11 @@ class GitPanelViewModel(
 
     init {
         refresh()
-        observeWorkspaceChanges()
+        observeWorkspaceChangesFromExt()
     }
 
-    /**
-     * [T-file-hub] Live refresh: FileChangeHub watches the session workspace
-     * on the HOST side of the PRoot bind (guest writes land on the same
-     * inodes, so agent edits fire inotify), and the panel re-probes git
-     * status when working-tree files change. The coalescer already merges
-     * inotify bursts and filters .git internals; the timestamp floor caps
-     * auto-refresh at one per 2s and a running mutation (busy) skips the
-     * slot — GitCli reloads the panel after its own mutations anyway.
-     */
-    private fun observeWorkspaceChanges() {
-        val app = getApplication<Application>()
-        if (!FileChangeHub.watch(sessionId, app)) return
-        fileWatchJob = viewModelScope.launch {
-            FileChangeHub.eventsFor(sessionId).collect {
-                val now = System.currentTimeMillis()
-                if (now - lastAutoRefreshMs < AUTO_REFRESH_FLOOR_MS) return@collect
-                if (_state.value.busy) return@collect
-                lastAutoRefreshMs = now
-                refresh()
-            }
-        }
-    }
-
-    /**
-     * Resolve the native repo: the session workspace itself or a repo nested
-     * below it. Returns the host root plus a [GitRepoInfo] whose `root` is
-     * the GUEST path, so sandbox fallback commands and the header match.
-     */
-    private suspend fun nativeRepo(): Pair<File, GitRepoInfo>? = withContext(Dispatchers.IO) {
-        GitPanelProbes.nativeRepo(app, sessionId)
-    }
+    private suspend fun nativeRepo(): Pair<File, GitRepoInfo>? =
+        withContext(Dispatchers.IO) { GitPanelProbes.nativeRepo(app, sessionId) }
 
     /**
      * Full re-probe: repo, status, both numstat maps, branches, stashes,
@@ -127,16 +102,9 @@ class GitPanelViewModel(
      * overlay unusable) — the update below never touches `diff`.
      */
     fun refresh(force: Boolean = false) {
-        // Single-flight chain: an auto-refresh (FileChangeHub) or the refresh
-        // button could start probes BEFORE a mutation's writes land — freezing
-        // the panel on pre-mutation state with busy already cleared.
-        if (_state.value.busy) return
-        // [T-git-panel-refresh-inflight] The 2s tick used to cancel+restart
-        // the refresh every beat; slow sandbox probes (graphLog walks 2-4s)
-        // never finished — each beat killed them mid-flight with
-        // CancellationException and the History tab painted empty forever
-        // while fast probes (status) masked the storm. Skip when running;
-        // mutations and the refresh button keep cancel-restart semantics.
+        // Single-flight; dirty changes re-arm.
+        // [T-git-panel-refresh-inflight] Skip when running (old 2s tick killed
+        // slow probes mid-flight);        // mutations and the refresh button keep cancel-restart semantics.
         if (!force && refreshJob?.isActive == true) return
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
@@ -261,7 +229,26 @@ class GitPanelViewModel(
                 // identity instead of showing a false "missing identity"
                 // warning the sandbox path would never show.
                 if (info.userName.isNullOrBlank() || info.userEmail.isNullOrBlank()) {
+                    // [T-git-identity-cache] A repo without user.name/email (new
+                    // clone — the norm) re-ran the FULL sandbox probe chain
+                    // (PRoot boot + discover, minutes worst case) on EVERY
+                    // refresh for an identity that almost never changes. Cache
+                    // per session+root; invalidated when the sandbox is
+                    // actually reachable and a config write lands.
+                    identityProbeCache[sessionId to info.root]?.let { cached ->
+                        _state.update { s ->
+                            if (s.repo?.root == info.root) {
+                                s.copy(repo = s.repo?.copy(userName = s.repo.userName ?: cached.first, userEmail = s.repo.userEmail ?: cached.second))
+                            } else s
+                        }
+                    } ?: run { /* fall through to the probe below */ }
+                    if (identityProbeCache.containsKey(sessionId to info.root)) return@launch
                     val sandbox = runCatching { GitCli.probe(sessionId) }.getOrNull()
+                    val cachedName = sandbox?.userName
+                    val cachedEmail = sandbox?.userEmail
+                    if (cachedName != null) {
+                        identityProbeCache[sessionId to info.root] = cachedName to cachedEmail
+                    }
                     val name = info.userName ?: sandbox?.userName
                     val email = info.userEmail ?: sandbox?.userEmail
                     if (name != null || email != null) {
@@ -406,6 +393,11 @@ class GitPanelViewModel(
      */
     private val mutationGate = java.util.concurrent.atomic.AtomicBoolean(false)
 
+    /** [T-git-identity-cache] (sessionId, repoRoot) → (name, email) from the
+     *  last successful sandbox probe. The probe chain costs a PRoot boot +
+     *  discover walk; the identity is effectively immutable per repo. */
+    private val identityProbeCache = java.util.concurrent.ConcurrentHashMap<Pair<String, String>, Pair<String, String?>>()
+
     private fun tryBeginMutation(): Boolean = mutationGate.compareAndSet(false, true)
 
     private fun mutate(op: suspend () -> String?) {
@@ -470,16 +462,17 @@ class GitPanelViewModel(
                 // refusal, not a transport failure — surface it verbatim.
                 if (!hostError.contains("not a git repository")) return@mutate hostError
             }
-            if (!name.contains('/')) {
+            // [T-git-sandbox-checkout-route] Mirror the JGit route: check the
+            // LOCAL branch list (any branch the panel knows, slashed or not)
+            // before treating a slashed name as a remote-tracking ref. The old
+            // !contains('/') test misrouted a LOCAL feature/x into
+            // checkout -b feature/x → git refuses "already exists".
+            val localExists = _state.value.branches.any { it.name == name }
+            if (localExists || !name.contains('/')) {
                 GitCli.execSimple(sessionId, "checkout", name, root = guestRoot)
             } else {
                 val local = name.substringAfter('/')
-                val localExists = _state.value.branches.any { it.name == local && !it.name.contains('/') }
-                if (localExists) {
-                    GitCli.execSimple(sessionId, "checkout", local, root = guestRoot)
-                } else {
-                    GitCli.execSimple(sessionId, "checkout", "-b", local, "--track", name, root = guestRoot)
-                }
+                GitCli.execSimple(sessionId, "checkout", "-b", local, "--track", name, root = guestRoot)
             }
         }
     }
@@ -563,6 +556,11 @@ class GitPanelViewModel(
             }
             // Gate and `busy` clear together — one release point, no drift.
             mutationGate.set(false)
+            // [T-git-refresh-dirty] Drain a change that landed mid-mutation.
+            if (pendingAutoRefresh) {
+                pendingAutoRefresh = false
+                refresh()
+            }
         }
     }
 
@@ -789,7 +787,7 @@ class GitPanelViewModel(
     companion object {
         /** logcat tag — same as [GitHostRepo]/[GitHostRepoGraph] (one log stream). */
         private const val TAG = "GitPanel"
-        private const val AUTO_REFRESH_FLOOR_MS = 2_000L
+        internal const val AUTO_REFRESH_FLOOR_MS = 2_000L
         const val HISTORY_PAGE_SIZE = 50
 
         /** One line per swallowed sandbox read failure — keeps empty states diagnosable. */

@@ -1,6 +1,7 @@
 package com.openminis.app.ui.chat
 
 import android.util.Log
+import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.LLMProvider
 
 /**
@@ -70,4 +71,11 @@ internal fun ChatViewModel.resolveModelSwitch(
  * the run.
  */
 internal fun ChatViewModel.rebuildSystemPromptForAdoptedEntry(): String? =
-    runCatching { buildSystemPrompt() }.getOrNull()
+    runCatching { buildSystemPrompt() }
+        .onFailure {
+            // [T-persona-switch-rebuild] A silent failure would leave the rest
+            // of this run on the OLD provider's persona — exactly the symptom
+            // #353 set out to fix. Surface it.
+            AppLogger.warning(ChatViewModel.TAG, "[ModelSwitch] prompt rebuild failed: ${it.message}")
+        }
+        .getOrNull()

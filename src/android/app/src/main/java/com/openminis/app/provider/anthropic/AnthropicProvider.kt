@@ -921,7 +921,8 @@ class AnthropicProvider(
         ): List<SystemBlock> {
             val split = stablePrefixLen in 1 until userPrompt.length
             val stable = if (split) userPrompt.substring(0, stablePrefixLen) else userPrompt
-            val dynamic = if (split) userPrompt.substring(stablePrefixLen).trimStart('\n') else ""
+                val dynamic = if (split) userPrompt.substring(stablePrefixLen) else ""
+            val hasDynamicContent = dynamic.isNotBlank()
             val blocks = mutableListOf<SystemBlock>()
             if (isOAuth) {
                 // The OAuth gate compares this prefix verbatim: first block, and
@@ -929,7 +930,7 @@ class AnthropicProvider(
                 blocks += SystemBlock(claudeCodePrefix, cached = false)
                 val rest =
                     if (stable.startsWith(claudeCodePrefix)) {
-                        stable.removePrefix(claudeCodePrefix).trimStart('\n')
+                        stable.removePrefix(claudeCodePrefix)
                     } else {
                         stable
                     }
@@ -937,7 +938,7 @@ class AnthropicProvider(
             } else if (stable.isNotEmpty()) {
                 blocks += SystemBlock(stable, cached = true)
             }
-            if (dynamic.isNotEmpty()) blocks += SystemBlock(dynamic, cached = false)
+            if (hasDynamicContent) blocks += SystemBlock(dynamic, cached = false)
             return blocks
         }
         /**
@@ -1206,7 +1207,6 @@ class AnthropicProvider(
         val usage = json.optJSONObject("usage")?.let { parseAnthropicUsage(it) }
         return LLMResponse(text, stopReason, usage)
     }
-
 
     /**
      * [T-anthropic-sse-error-event] Turn an SSE `error` event into the same

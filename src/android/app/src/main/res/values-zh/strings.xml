@@ -43,6 +43,8 @@
     <string name="memory_revoke_result_not_found">在最近的日志中未找到该条目。</string>
     <string name="memory_revoke_result_io_error">写入文件出错：%1$s</string>
     <string name="memory_save_toast">已保存</string>
+
+    <string name="memory_save_failed_toast">保存失败——请检查存储后重试</string>
     <string name="memory_global_footer">每个会话中对 Agent 可见的持久指令和偏好。Agent 无法修改此文件。</string>
     <string name="check_update_section_header">应用更新</string>
     <string name="check_update_current_version">当前版本：%1$s</string>

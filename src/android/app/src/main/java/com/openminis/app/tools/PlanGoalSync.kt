@@ -91,7 +91,20 @@ internal object PlanGoalSync {
                 .getOrNull()
         }
         manager.get(sessionId)?.let { return it }
+        // [T-goal-mint-guard] The first objective-less board write on an empty
+        // seat must NOT mint a Goal from a step title ("read the config file"
+        // as a session objective can never complete). Minting from the
+        // fallback chain requires the board to look like a real plan
+        // (≥2 items) — a single-item board write is progress logging, not
+        // goal-setting. Explicit objectives bypass this guard entirely.
+        val board = runCatching { JSONArray(args.optString("plans")) }.getOrNull()
+            ?: JSONArray().put(JSONObject().put("title", args.optString("title")))
+        val mintable = board.length() >= 2
         val objective = objectiveFrom(args) ?: return null
+        if (!mintable) {
+            AppLogger.info("PlanGoalSync", "objective-less single-item board write — no Goal minted")
+            return null
+        }
         return runCatching { manager.createByModel(sessionId, objective) }
             .onFailure { AppLogger.warning("PlanGoalSync", "could not record the goal: ${it.message}") }
             .getOrNull()

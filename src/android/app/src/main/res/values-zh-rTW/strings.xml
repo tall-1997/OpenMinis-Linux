@@ -22,6 +22,8 @@
     <string name="memory_revoke_result_not_found">在近期的每日記錄中找不到這則項目。</string>
     <string name="memory_revoke_result_io_error">寫入檔案時發生錯誤：%1$s</string>
     <string name="memory_save_toast">已儲存</string>
+
+    <string name="memory_save_failed_toast">儲存失敗——請檢查儲存空間後重試</string>
     <string name="memory_global_footer">每個工作階段中 Agent 都看得到的持續性指示與偏好設定。Agent 無法修改這個檔案。</string>
     <string name="check_update_section_header">應用程式更新</string>
     <string name="check_update_current_version">目前版本：%1$s</string>

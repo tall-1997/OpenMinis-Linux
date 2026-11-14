@@ -22,6 +22,8 @@
     <string name="memory_revoke_result_not_found">Eintrag in den jüngsten Logs nicht gefunden.</string>
     <string name="memory_revoke_result_io_error">Fehler beim Schreiben der Datei: %1$s</string>
     <string name="memory_save_toast">Gesichert</string>
+
+    <string name="memory_save_failed_toast">Speichern fehlgeschlagen – Speicher prüfen und erneut versuchen</string>
     <string name="memory_global_footer">Dauerhafte Anweisungen und Einstellungen, die dem Agent in jeder Sitzung angezeigt werden. Der Agent kann diese Datei nicht ändern.</string>
     <string name="check_update_section_header">App-Update</string>
     <string name="check_update_current_version">Aktuelle Version: %1$s</string>
