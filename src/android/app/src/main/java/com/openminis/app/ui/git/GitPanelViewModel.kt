@@ -1,8 +1,10 @@
 package com.openminis.app.ui.git
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.openminis.app.R
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.git.GitCli
 import com.openminis.app.git.GitCli.CommitOutcome
@@ -10,6 +12,7 @@ import com.openminis.app.git.GitHostRepoTransfer
 import com.openminis.app.git.GitCli.GitCommit
 import com.openminis.app.git.GitCli.GitFileEntry
 import com.openminis.app.git.GitCommitMessageGenerator
+import com.openminis.app.git.GitHostRepoDiff
 import com.openminis.app.git.GitHostRepoGraph
 import com.openminis.app.git.GitCli.GitRepoInfo
 import com.openminis.app.git.GitCli.GitStatus
@@ -48,6 +51,19 @@ class GitPanelViewModel(
 
     private var fileWatchJob: Job? = null
     private var lastAutoRefreshMs = 0L
+
+    /**
+     * [T-git-panel-refs-degrade] Sticky degrade flag: when the native (JGit)
+     * ref reads return EMPTY on a repo whose HEAD resolves (the probe
+     * reported a branch name), the native source is treating a readable repo
+     * as an empty one — and every 2s auto-refresh would repeat the same
+     * failure. Once the sandbox CLI has proven it CAN read the refs, stay on
+     * the sandbox for log/branches until the panel is re-entered (a new
+     * ViewModel resets the flag and retries native). Status/numstat/remote
+     * keep riding native: they demonstrably succeed where ref enumeration
+     * fails.
+     */
+    private var preferSandboxRefs = false
 
     /**
      * [T-git-panel-single-flight] One refresh at a time: init, the FileChangeHub
@@ -148,18 +164,47 @@ class GitPanelViewModel(
                 // refresh (FileChangeHub re-runs this every 2s).
                 val status = withContext(Dispatchers.IO) { runCatching { GitHostRepo.status(dir) }.getOrNull() }
                 val staged = withContext(Dispatchers.IO) {
-                    runCatching { GitHostRepo.numstatStaged(dir) }.getOrDefault(emptyMap())
+                    runCatching { GitHostRepoDiff.numstatStaged(dir) }.getOrDefault(emptyMap())
                 }
                 val unstaged = withContext(Dispatchers.IO) {
-                    runCatching { GitHostRepo.numstatUnstaged(dir) }.getOrDefault(emptyMap())
+                    runCatching { GitHostRepoDiff.numstatUnstaged(dir) }.getOrDefault(emptyMap())
                 }
                 val remote = withContext(Dispatchers.IO) { runCatching { GitHostRepo.remote(dir) }.getOrNull() }
-                val log = withContext(Dispatchers.IO) {
+                // [T-git-panel-refs-degrade] Refs (log + branches) ride native
+                // first, but an EMPTY native result on a HEAD-resolvable repo
+                // is a failure signal, not an unborn-HEAD answer: an unborn
+                // HEAD has NO branch name (probe reports ""), so a non-blank
+                // branch + empty refs means the RefDatabase enumeration
+                // failed. Degrade to the sandbox CLI (verified healthy in the
+                // same sandbox) instead of painting "No commits yet" over a
+                // repo with hundreds of commits.
+                var log = withContext(Dispatchers.IO) {
                     runCatching { GitHostRepo.logPage(dir, offset = 0, limit = HISTORY_PAGE_SIZE) }
+                        .onFailure { Log.w(TAG, "native logPage failed: ${it.javaClass.simpleName}: ${it.message}") }
                         .getOrDefault(emptyList())
                 }
-                val branches = withContext(Dispatchers.IO) {
-                    runCatching { GitHostRepo.branches(dir) }.getOrDefault(emptyList())
+                var branches = withContext(Dispatchers.IO) {
+                    runCatching { GitHostRepo.branches(dir) }
+                        .onFailure { Log.w(TAG, "native branches failed: ${it.javaClass.simpleName}: ${it.message}") }
+                        .getOrDefault(emptyList())
+                }
+                val nativeRefsEmpty = log.isEmpty() && branches.isEmpty()
+                var sandboxRefsTried = false
+                if (preferSandboxRefs || (nativeRefsEmpty && !info.branch.isNullOrBlank())) {
+                    sandboxRefsTried = true
+                    val sandboxRefs = withContext(Dispatchers.IO) {
+                        runCatching {
+                            GitCli.logPage(sessionId, offset = 0, root = info.root) to
+                                GitCli.branches(sessionId, info.root)
+                        }.onFailure {
+                            Log.w(TAG, "sandbox refs fallback failed: ${it.javaClass.simpleName}: ${it.message}")
+                        }.getOrNull()
+                    }
+                    if (sandboxRefs != null && (sandboxRefs.first.isNotEmpty() || sandboxRefs.second.isNotEmpty())) {
+                        preferSandboxRefs = true
+                        log = sandboxRefs.first
+                        branches = sandboxRefs.second
+                    }
                 }
                 val stashes = withContext(Dispatchers.IO) {
                     runCatching { GitHostRepo.stashes(dir) }.getOrDefault(emptyList())
@@ -187,8 +232,18 @@ class GitPanelViewModel(
                         diff = keepDiff,
                         // A failed status probe is worth surfacing — a
                         // silently empty Changes tab reads as "clean tree",
-                        // which would be a lie.
-                        notice = status?.error ?: if (status == null) "git status failed" else null,
+                        // which would be a lie. Same honesty for refs: an
+                        // empty History on a HEAD-resolvable repo after BOTH
+                        // sources failed is a READ FAILURE, not "no commits
+                        // yet" (unborn HEAD ⇒ probe branch is blank ⇒ the
+                        // sandbox never even tries, so this stays quiet).
+                        notice = status?.error ?: when {
+                            sandboxRefsTried && log.isEmpty() && branches.isEmpty() &&
+                                !info.branch.isNullOrBlank() ->
+                                app.getString(R.string.git_panel_history_read_failed)
+                            status == null -> "git status failed"
+                            else -> null
+                        },
                     )
                 }
                 // Identity reconciliation rides AFTER first paint: the
@@ -446,10 +501,10 @@ class GitPanelViewModel(
                     runCatching { GitHostRepo.status(dir) }.getOrNull()
                 }
                 staged = withContext(Dispatchers.IO) {
-                    runCatching { GitHostRepo.numstatStaged(dir) }.getOrDefault(emptyMap())
+                    runCatching { GitHostRepoDiff.numstatStaged(dir) }.getOrDefault(emptyMap())
                 }
                 unstaged = withContext(Dispatchers.IO) {
-                    runCatching { GitHostRepo.numstatUnstaged(dir) }.getOrDefault(emptyMap())
+                    runCatching { GitHostRepoDiff.numstatUnstaged(dir) }.getOrDefault(emptyMap())
                 }
                 log = withContext(Dispatchers.IO) {
                     runCatching { GitHostRepo.logPage(dir, offset = 0, limit = HISTORY_PAGE_SIZE) }
@@ -545,13 +600,13 @@ class GitPanelViewModel(
             _state.update { it.copy(commitSheet = GitCommitSheet(hash)) }
             val detail = withContext(Dispatchers.IO) {
                 runCatching {
-                    if (dir != null) GitHostRepo.commitDetail(dir, hash)
+                    if (dir != null) GitHostRepoDiff.commitDetail(dir, hash)
                     else GitCli.commitDetail(sessionId, hash, guestRoot)
                 }.getOrNull()
             }
             val files = withContext(Dispatchers.IO) {
                 runCatching {
-                    if (dir != null) GitHostRepo.commitNumstat(dir, hash)
+                    if (dir != null) GitHostRepoDiff.commitNumstat(dir, hash)
                     else GitCli.commitNumstat(sessionId, hash, guestRoot)
                 }.getOrDefault(emptyList())
             }
@@ -584,7 +639,7 @@ class GitPanelViewModel(
             }
             val content = withContext(Dispatchers.IO) {
                 runCatching {
-                    if (dir != null) GitHostRepo.commitFileDiff(dir, hash, path)
+                    if (dir != null) GitHostRepoDiff.commitFileDiff(dir, hash, path)
                     else GitCli.commitFileDiff(sessionId, hash, path, guestRoot)
                 }.getOrDefault("(diff unavailable)")
             }
@@ -601,7 +656,7 @@ class GitPanelViewModel(
             _state.update { it.copy(generating = true, notice = null) }
             val staged = withContext(Dispatchers.IO) {
                 runCatching {
-                    if (dir != null) GitHostRepo.stagedDiff(dir)
+                    if (dir != null) GitHostRepoDiff.stagedDiff(dir)
                     else GitCli.stagedDiff(sessionId, guestRoot)
                 }.getOrDefault("")
             }
@@ -660,7 +715,7 @@ class GitPanelViewModel(
             }
             val content = withContext(Dispatchers.IO) {
                 runCatching {
-                    if (dir != null) GitHostRepo.fileDiff(dir, entry.path, entry.staged, entry.untracked)
+                    if (dir != null) GitHostRepoDiff.fileDiff(dir, entry.path, entry.staged, entry.untracked)
                     else GitCli.fileDiff(sessionId, entry, guestRoot)
                 }.getOrDefault("(diff unavailable)")
             }
@@ -680,7 +735,7 @@ class GitPanelViewModel(
             }
             val content = withContext(Dispatchers.IO) {
                 runCatching {
-                    if (dir != null) GitHostRepo.commitDiff(dir, commit.hash)
+                    if (dir != null) GitHostRepoDiff.commitDiff(dir, commit.hash)
                     else GitCli.commitDiff(sessionId, commit.hash, guestRoot)
                 }.getOrDefault("(diff unavailable)")
             }
@@ -707,6 +762,8 @@ class GitPanelViewModel(
     }
 
     companion object {
+        /** logcat tag — same as [GitHostRepo]/[GitHostRepoGraph] (one log stream). */
+        private const val TAG = "GitPanel"
         private const val AUTO_REFRESH_FLOOR_MS = 2_000L
         const val HISTORY_PAGE_SIZE = 50
     }

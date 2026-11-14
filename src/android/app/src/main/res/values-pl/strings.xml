@@ -2284,4 +2284,6 @@
     <string name="tool_label_short_app_name">Minis Ultra</string>
     <string name="attachment_no_app_toast">Brak aplikacji do otwarcia tego załącznika.</string>
     <string name="chat_move_to_capsule">Przenieś do…</string>
+<string name="git_panel_history_read_failed">Nie udało się odczytać historii commitów — szczegóły w logach (tag GitPanel)</string>
+
 </resources>

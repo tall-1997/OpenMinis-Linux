@@ -1,5 +1,6 @@
 package com.openminis.app.git
 
+import android.util.Log
 import org.eclipse.jgit.lib.Constants
 import org.eclipse.jgit.lib.ObjectId
 import org.eclipse.jgit.lib.Repository
@@ -30,6 +31,9 @@ import org.eclipse.jgit.revwalk.RevWalk
  */
 object GitHostRepoGraph {
 
+    /** logcat tag — same tag as [GitHostRepo] so the panel reads as one log stream. */
+    private const val TAG = "GitPanel"
+
     /**
      * One history page over all visible refs, newest first, with parent
      * hashes AND ref decorations for the graph UI. Mapped onto
@@ -56,30 +60,50 @@ object GitHostRepoGraph {
             walk.sort(RevSort.COMMIT_TIME_DESC, true)
             try {
                 var marked = 0
+                var anchorableRefs = 0
+                var failedRefs = 0
                 runCatching {
                     val head = repo.resolve(Constants.HEAD)
                     if (head != null) {
                         walk.markStart(walk.parseCommit(head))
                         marked++
                     }
+                }.onFailure {
+                    // A HEAD whose object cannot be parsed poisons nothing
+                    // here (the per-ref marks below still anchor the walk),
+                    // but a silent swallow would hide a corrupt repository
+                    // behind an empty History tab — record it.
+                    Log.w(TAG, "HEAD anchor failed: ${it.javaClass.simpleName}: ${it.message}")
                 }
                 for (ref in repo.refDatabase.getRefs()) {
-                    // The sandbox contract is `HEAD --branches --tags
-                    // --remotes`: getRefs() also returns refs/stash,
-                    // refs/notes, refs/original — walking those painted
-                    // stash commits (and their exclusive ancestors) into the
-                    // History tab and diverged the two sources.
+                    // The sandbox contract is `HEAD --branches --tags --remotes`:
+                    // getRefs() also returns refs/stash, refs/notes,
+                    // refs/original — walking those painted stash commits (and
+                    // their exclusive ancestors) into the History tab and
+                    // diverged the two sources.
                     val name = ref.name
                     val anchorable = name.startsWith("refs/heads/") ||
                         name.startsWith("refs/remotes/") ||
                         name.startsWith("refs/tags/")
                     if (!anchorable) continue
+                    anchorableRefs++
                     val id = ref.objectId ?: continue
                     if (id == org.eclipse.jgit.lib.ObjectId.zeroId()) continue
                     runCatching {
                         walk.markStart(walk.parseCommit(id))
                         marked++
-                    }
+                    }.onFailure { failedRefs++ }
+                }
+                // [T-git-panel-refs-degrade] A healthy repo ALWAYS reaches
+                // this loop with marked ≥ 1 (HEAD resolves first). marked==0
+                // with HEAD present means the RefDatabase enumeration (or its
+                // object resolution) misbehaved at runtime — log the shape so
+                // a swallowed-to-empty history is diagnosable from logcat.
+                if (marked == 0 && failedRefs + anchorableRefs > 0) {
+                    Log.w(
+                        TAG,
+                        "log walk anchored nowhere: refs=$anchorableRefs parseFailures=$failedRefs",
+                    )
                 }
                 if (marked == 0) return emptyList()
                 val commits = ArrayList<GitCli.GitCommit>(limit)

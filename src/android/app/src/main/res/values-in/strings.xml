@@ -2282,4 +2282,6 @@
     <string name="tool_label_short_app_name">Minis Ultra</string>
     <string name="attachment_no_app_toast">Tidak ada aplikasi untuk membuka lampiran ini.</string>
     <string name="chat_move_to_capsule">Pindahkan ke…</string>
+<string name="git_panel_history_read_failed">Gagal membaca riwayat commit — detailnya di log (tag GitPanel)</string>
+
 </resources>

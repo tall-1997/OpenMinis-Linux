@@ -2281,4 +2281,6 @@
     <string name="tool_label_short_app_name">Minis Ultra</string>
     <string name="attachment_no_app_toast">Nicio aplicație disponibilă pentru a deschide acest atașament.</string>
     <string name="chat_move_to_capsule">Mută în…</string>
+<string name="git_panel_history_read_failed">Citirea istoricului de commit-uri a eșuat — detalii în loguri (eticheta GitPanel)</string>
+
 </resources>
