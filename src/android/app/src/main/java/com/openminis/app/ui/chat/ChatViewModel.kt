@@ -1804,11 +1804,9 @@ class ChatViewModel(
 
     // ── Slash commands (mirrors iOS AIChatViewModel) ────────────────────
 
-    // [T-memory-global-toggle-settings-ui-android] Seed from the global
-    // pref so a fresh draft VM honors the user's "memory off by default"
-    // choice from Settings. For loaded sessions, `loadSession()` later
-    // overwrites this with the per-session DB value, which takes
-    // precedence — the global pref only applies to drafts.
+    // [T-memory-global-toggle-settings-ui-android] Seed from the global pref
+    // (fresh drafts honor "memory off by default"); loadSession() later
+    // overwrites with the per-session DB value, which takes precedence.
     internal val _memoryEnabled =
         MutableStateFlow(com.openminis.app.data.MemoryGlobalPrefs.isGlobalEnabled(context))
     val memoryEnabled: StateFlow<Boolean> = _memoryEnabled.asStateFlow()
@@ -1816,40 +1814,11 @@ class ChatViewModel(
     internal val _thinkingLevel = MutableStateFlow(ThinkingLevel.OFF)
     override val thinkingLevel: StateFlow<ThinkingLevel> = _thinkingLevel.asStateFlow()
 
-    /**
-     * [T-thinking-ceiling-sync] Invariant: the session level never exceeds
-     * the ACTIVE model's ceiling. The model-parameter page writes
-     * `overrides.maxThinkingLevel` / `supportsReasoning` (the ceiling), the
-     * session stores its own level (`sessions.thinking_override`) — two
-     * stores, no sync, and a ceiling lowered (or the model's Thinking switch
-     * turned off) left the session at a level the next request silently
-     * clamped anyway. The provider clamp now honours overrides (#348), so
-     * this flow makes the SESSION state honour them too: re-clamp on every
-     * active-entry / config change, force-thinking lift included.
-     */
-    internal val thinkingCeilingSync: StateFlow<Unit> = combine(
-        _activeEntryId,
-        providerRepository.config,
-    ) { entryId, config ->
-        val entry = entryId?.let { id -> config.modelEntries.find { it.id == id } }
-        if (entry != null) {
-            val ceiling = forcedThinkingCeiling(entry)
-            val clamped = clampThinkingToCeiling(_thinkingLevel.value, ceiling)
-            if (clamped != _thinkingLevel.value) {
-                _thinkingLevel.value = clamped
-                persistThinkingOverride(clamped)
-            }
-        }
-    }.stateIn(
-        viewModelScope,
-        kotlinx.coroutines.flow.SharingStarted.Eagerly,
-        Unit,
-    )
+    // [T-thinking-ceiling-sync] session level ≤ ACTIVE ceiling — impl in ChatViewModelThinkingSync.kt, eager.
+    private val ceilingSyncJob = launchThinkingCeilingSync()
 
-    // [T-supervisor-slash-entry] Armed by the slash panel; the next send
-    // becomes the objective of a supervisor-worker session (see
-    // ChatViewModelSupervisorExt + ChatViewModelSendExt routing). Per-VM,
-    // not persisted — arming is a transient intent, never a sticky mode.
+    // [T-supervisor-slash-entry] Next send becomes a supervisor objective
+    // (see ChatViewModelSupervisorExt/SendExt routing). Per-VM, transient.
     internal val _supervisorArmed = MutableStateFlow(false)
     val supervisorArmed: StateFlow<Boolean> = _supervisorArmed.asStateFlow()
 
@@ -2561,7 +2530,7 @@ class ChatViewModel(
      * materialises the row, mirroring how toggleMemoryEnabled lands its
      * preference on the persisted id rather than the `__new__…` draft key.
      */
-    private fun persistThinkingOverride(level: ThinkingLevel) {
+    internal fun persistThinkingOverride(level: ThinkingLevel) {
         viewModelScope.launch {
             val sid = ensureSession()
             chatRepository.dao.updateThinkingOverride(sid, level.name)
