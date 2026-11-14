@@ -84,6 +84,20 @@
 -dontwarn java.lang.management.**
 -dontwarn javax.management.**
 
+# [T-git-panel-r8-jgit] release minify broke the panel's native chain with
+# NoClassDefFoundError: r8.A — R8's horizontal class merging synthesized r8.*
+# holder classes while surviving references still pointed at the pre-merge
+# names, so every JGit entry point (probe/status/logPage) died at class-load.
+# JGit is reflection-heavy by design (config parsing, SystemReader, transport
+# SPI, annotation reads); partial keeps cannot be audited, so the whole tree
+# is kept — same failure class as the Rhino/JSch keeps above. Verified against
+# assembleRelease: probe/logPage/status must answer without NoClassDefFound.
+-keep class org.eclipse.jgit.** { *; }
+-dontwarn org.eclipse.jgit.**
+# JGit 7.x logs via slf4j-api; providers are ServiceLoader-resolved at
+# runtime and absent ones are harmless (silenced logging).
+-dontwarn org.slf4j.**
+
 # Verified against JGit 7.8.1 bytecode: GC$PidLock.getPID() returns 0 when
 # SystemReader.isAndroid() is true, before calling ProcessHandle.current().pid().
 # HTTP scanResponse() can prefer Negotiate over Basic/Digest; Negotiate's static

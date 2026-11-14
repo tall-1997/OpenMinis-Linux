@@ -90,8 +90,7 @@ class GitPanelViewModel(
      * on the HOST side of the PRoot bind (guest writes land on the same
      * inodes, so agent edits fire inotify), and the panel re-probes git
      * status when working-tree files change. The coalescer already merges
-     * inotify bursts (400ms quiet window) and filters .git internals, so
-     * the panel's own git probes cannot loop back; the timestamp floor caps
+     * inotify bursts and filters .git internals; the timestamp floor caps
      * auto-refresh at one per 2s and a running mutation (busy) skips the
      * slot — GitCli reloads the panel after its own mutations anyway.
      */
@@ -111,9 +110,8 @@ class GitPanelViewModel(
 
     /**
      * Resolve the native repo: the session workspace itself or a repo nested
-     * below it (host-side counterpart of the sandbox DISCOVER_CMD). Returns
-     * the host root plus a [GitRepoInfo] whose `root` is the GUEST path, so
-     * sandbox fallback commands and the header stay consistent.
+     * below it. Returns the host root plus a [GitRepoInfo] whose `root` is
+     * the GUEST path, so sandbox fallback commands and the header match.
      */
     private suspend fun nativeRepo(): Pair<File, GitRepoInfo>? = withContext(Dispatchers.IO) {
         GitPanelProbes.nativeRepo(app, sessionId)
@@ -128,13 +126,18 @@ class GitPanelViewModel(
      * every agent edit; closing what the user is reading would make the
      * overlay unusable) — the update below never touches `diff`.
      */
-    fun refresh() {
-        // A mutation's reload is part of the same single-flight chain: while
-        // a mutation is settling, an auto-refresh (FileChangeHub) or a tap on
-        // the refresh button could start its probes BEFORE the mutation's
-        // writes land and finish AFTER the reload's update — freezing the
-        // panel on pre-mutation state with busy already cleared.
+    fun refresh(force: Boolean = false) {
+        // Single-flight chain: an auto-refresh (FileChangeHub) or the refresh
+        // button could start probes BEFORE a mutation's writes land — freezing
+        // the panel on pre-mutation state with busy already cleared.
         if (_state.value.busy) return
+        // [T-git-panel-refresh-inflight] The 2s tick used to cancel+restart
+        // the refresh every beat; slow sandbox probes (graphLog walks 2-4s)
+        // never finished — each beat killed them mid-flight with
+        // CancellationException and the History tab painted empty forever
+        // while fast probes (status) masked the storm. Skip when running;
+        // mutations and the refresh button keep cancel-restart semantics.
+        if (!force && refreshJob?.isActive == true) return
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
             val keepDiff = _state.value.diff
@@ -193,7 +196,7 @@ class GitPanelViewModel(
                             GitCli.logPage(sessionId, offset = 0, root = info.root) to
                                 GitCli.branches(sessionId, info.root)
                         }.onFailure {
-                            Log.w(TAG, "sandbox refs fallback failed: ${it.javaClass.simpleName}: ${it.message}")
+                            if (it is kotlinx.coroutines.CancellationException) throw it; Log.w(TAG, "sandbox refs fallback failed: ${it.javaClass.simpleName}: ${it.message}")
                         }.getOrNull()
                     }
                     if (sandboxRefs != null && (sandboxRefs.first.isNotEmpty() || sandboxRefs.second.isNotEmpty())) {
@@ -315,15 +318,16 @@ class GitPanelViewModel(
             val unstaged = runCatching { GitCli.numstat(sessionId, staged = false, root = root) }
                 .getOrDefault(emptyMap())
             val remote = runCatching { GitCli.remote(sessionId, root) }.getOrNull()
-            // The whole sandbox chain is runCatching-guarded against a PRoot
-            // hiccup, but a silent getOrDefault(empty) hides the cause behind
-            // a "no commits" empty state. Log each miss via [warnSandboxMiss].
+            // Each sandbox read is guarded against a PRoot hiccup, but a
+            // silent getOrDefault(empty) hides the cause AND used to swallow
+            // the CancellationException of a cancelled refresh (fake "w0 was
+            // cancelled" storm + bogus empty paint). Re-throw that one.
             val log = runCatching { GitCli.logPage(sessionId, offset = 0, root = root) }
-                .onFailure { warnSandboxMiss("logPage", it) }.getOrDefault(emptyList())
+                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; warnSandboxMiss("logPage", it) }.getOrDefault(emptyList())
             val branches = runCatching { GitCli.branches(sessionId, root) }
-                .onFailure { warnSandboxMiss("branches", it) }.getOrDefault(emptyList())
+                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; warnSandboxMiss("branches", it) }.getOrDefault(emptyList())
             val stashes = runCatching { GitCli.stashes(sessionId, root) }
-                .onFailure { warnSandboxMiss("stashes", it) }.getOrDefault(emptyList())
+                .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; warnSandboxMiss("stashes", it) }.getOrDefault(emptyList())
             _state.update {
                 it.copy(
                     loading = false,
@@ -396,11 +400,9 @@ class GitPanelViewModel(
 
     /**
      * [T-git-panel-mutation-gate] Atomic mutation gate: the busy CHECK and
-     * the busy SET used to live on different threads (caller vs launch body),
-     * so a fast double-tap ran two mutations concurrently (two checkouts
-     * racing, double commit). compareAndSet closes the TOCTOU window; the
-     * flag clears when the post-mutation reload finishes — the same place
-     * `busy` clears, so the gate and the UI state can never drift apart.
+     * SET used to live on different threads, so a fast double-tap ran two
+     * mutations concurrently. compareAndSet closes the TOCTOU window; the
+     * flag clears with the post-mutation reload, where `busy` clears too.
      */
     private val mutationGate = java.util.concurrent.atomic.AtomicBoolean(false)
 
