@@ -58,6 +58,13 @@ internal fun backoffSeconds(attempt: Int, retryAfterSeconds: Int): Int {
     return maxOf(ladder, retryAfterSeconds).coerceAtMost(MAX_BACKOFF_S)
 }
 
+/**
+ * [T-thinking-ceiling-sync] Session level must never exceed the model
+ * ceiling — pure core of the ChatViewModel ceiling-sync flow.
+ */
+internal fun clampThinkingToCeiling(level: ThinkingLevel, ceiling: ThinkingLevel): ThinkingLevel =
+    if (level.rank > ceiling.rank) ceiling else level
+
 internal fun parseThinkingLevel(raw: String?, max: ThinkingLevel): ThinkingLevel {
     val requested = raw?.trim()?.takeIf { it.isNotEmpty() }
         ?.let { runCatching { ThinkingLevel.valueOf(it.uppercase()) }.getOrNull() }

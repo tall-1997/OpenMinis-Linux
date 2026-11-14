@@ -1816,6 +1816,36 @@ class ChatViewModel(
     internal val _thinkingLevel = MutableStateFlow(ThinkingLevel.OFF)
     override val thinkingLevel: StateFlow<ThinkingLevel> = _thinkingLevel.asStateFlow()
 
+    /**
+     * [T-thinking-ceiling-sync] Invariant: the session level never exceeds
+     * the ACTIVE model's ceiling. The model-parameter page writes
+     * `overrides.maxThinkingLevel` / `supportsReasoning` (the ceiling), the
+     * session stores its own level (`sessions.thinking_override`) — two
+     * stores, no sync, and a ceiling lowered (or the model's Thinking switch
+     * turned off) left the session at a level the next request silently
+     * clamped anyway. The provider clamp now honours overrides (#348), so
+     * this flow makes the SESSION state honour them too: re-clamp on every
+     * active-entry / config change, force-thinking lift included.
+     */
+    internal val thinkingCeilingSync: StateFlow<Unit> = combine(
+        _activeEntryId,
+        providerRepository.config,
+    ) { entryId, config ->
+        val entry = entryId?.let { id -> config.modelEntries.find { it.id == id } }
+        if (entry != null) {
+            val ceiling = forcedThinkingCeiling(entry)
+            val clamped = clampThinkingToCeiling(_thinkingLevel.value, ceiling)
+            if (clamped != _thinkingLevel.value) {
+                _thinkingLevel.value = clamped
+                persistThinkingOverride(clamped)
+            }
+        }
+    }.stateIn(
+        viewModelScope,
+        kotlinx.coroutines.flow.SharingStarted.Eagerly,
+        Unit,
+    )
+
     // [T-supervisor-slash-entry] Armed by the slash panel; the next send
     // becomes the objective of a supervisor-worker session (see
     // ChatViewModelSupervisorExt + ChatViewModelSendExt routing). Per-VM,
