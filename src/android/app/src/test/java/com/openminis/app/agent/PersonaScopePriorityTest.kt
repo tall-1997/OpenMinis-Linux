@@ -65,7 +65,14 @@ class PersonaScopePriorityTest {
         val session = repo.loadGlobalMemoryFragment(sessionScoped = true)!!
         assertTrue(session.contains("Session-scoped standing rules"))
         assertTrue(session.contains("THESE win"))
-        assertFalse(app.contains("Session-scoped standing rules"))
+        // [T-standing-contract-recency] GLOBAL.md is user-maintained (the agent
+        // has no write path), so BOTH scopes carry standing-instruction
+        // authority; the app-wide header states session precedence instead of
+        // licensing ignore.
+        assertTrue(app.contains("Global standing rules"))
+        assertTrue(app.contains("binding standing instructions"))
+        assertTrue(app.contains("THOSE win"))
+        assertFalse(app.contains("background context"))
         assertTrue(app.endsWith("rule A\n"))
         assertTrue(session.endsWith("rule A\n"))
     }

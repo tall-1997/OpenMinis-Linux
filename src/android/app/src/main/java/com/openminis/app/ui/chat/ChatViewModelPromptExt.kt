@@ -99,8 +99,14 @@ internal fun ChatViewModel.buildSystemPromptWithSections(): Pair<String, List<Pa
     )
     // [T-persona-stack-once] Personality lives only in the identity section.
     // Rewriting the latest user turn (personaHistorySteering) put a second
-    // BINDING order on top of the user's task; ZCode stacks persona once and
-    // leaves the conversation untouched.
+    // BINDING order on top of the user's task; that stays forbidden. The
+    // dynamic tail is a different surface — a per-request system-prompt
+    // suffix, rebuilt every request, never touching user content — and the
+    // identity section alone is not enough in long sessions: measured on
+    // 2026-11-14 (context-assembly snapshot of a 17k-record chat), the
+    // persona sits at char 0 of an ~87k prompt with the whole transcript
+    // after it, and adherence decays exactly there. The tail slot
+    // re-asserts the contract without stacking anything on user turns.
     // [T-memory-toggle-gates-injection-and-tools-android] Mirror the iOS
     // gate: when memory is disabled for this session, replace the
     // "memory_write / memory_get" tool bullets and the "Memory system:"
@@ -447,7 +453,9 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         learnedPrefsFragment = learnedPrefsFragment,
         recalledMemoryFragment = recalledMemoryFragment,
         runtimeContext = renderRuntimeContext(dateStr, tzId, lang, modelUseCount),
-        personalityReminder = null,
+        personalityReminder = StandingContract.block(
+            com.openminis.app.agent.SoulStore.cachedMetadata.value.name,
+        ),
         taskAnchor = taskAnchorFragment(),
         // [T-daily-memory-window] The transient block (recent daily logs + TOC
         // + budget note) is COMPUTED above (memoryBlocks.transient) but the
@@ -568,6 +576,51 @@ internal object TaskAnchor {
             anchor
         }
         return HEADER + "\n" + clipped
+    }
+}
+
+/**
+ * [T-standing-contract-recency] Per-turn re-assertion of the standing
+ * contract (persona + standing-rules authority) in the dynamic tail.
+ * Measured on 2026-11-14 via the context-assembly snapshot of a 17k-record
+ * session: the persona sits at char 0 of an ~87k-char system prompt and the
+ * standing-rules block ~180 lines above the conversation start — after
+ * folding, the effective distance from both to the action point is the
+ * whole transcript. The head envelope already says STANDING; nothing at
+ * recency position re-asserted it, which is exactly the drift window.
+ * TaskAnchor proves tail re-assertion works for the task; this gives the
+ * persona and the standing rules the same treatment.
+ *
+ * [T-persona-stack-once] update: the once-only rule governs conversation
+ * TURNS (personaHistorySteering stays dead); the dynamic tail is the
+ * per-request system-prompt suffix — user content untouched, cache safe.
+ *
+ * Pure string logic, no Android imports — must stay testable on the pure
+ * JVM (same constraint as TaskAnchor).
+ */
+internal object StandingContract {
+    const val MAX_CHARS = 700
+
+    const val RULES_LINE =
+        "Standing-rules reminder: the Session-scoped standing rules and the Global " +
+            "standing rules (GLOBAL.md) blocks in this prompt are BINDING instructions — " +
+            "re-read them before starting any multi-step or destructive action; " +
+            "the user's latest message still wins any conflict."
+
+    fun personalityLine(soulName: String?): String {
+        val who = soulName?.trim()?.takeUnless { it.isEmpty() }
+        val subject = if (who != null) "the configured persona '$who'" else "the configured persona"
+        return "Persona reminder (SOUL.md): stay in $subject for every " +
+            "reply this session — its voice, greeting ritual, address style, and stance — " +
+            "even after long compactions, topic changes, or tool-heavy stretches. " +
+            "This reminder never expires mid-session."
+    }
+
+    fun block(soulName: String?, maxChars: Int = MAX_CHARS): String {
+        val block = listOf(personalityLine(soulName), RULES_LINE)
+            .joinToString("\n\n")
+        if (block.length <= maxChars) return block
+        return block.take(maxChars).trimEnd() + "…"
     }
 }
 
