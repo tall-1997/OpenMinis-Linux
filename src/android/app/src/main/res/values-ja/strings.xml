@@ -22,6 +22,8 @@
     <string name="memory_revoke_result_not_found">最近のログにエントリが見つかりません。</string>
     <string name="memory_revoke_result_io_error">ファイル書き込みエラー: %1$s</string>
     <string name="memory_save_toast">保存済み</string>
+
+    <string name="memory_save_failed_toast">保存に失敗しました——ストレージを確認して再試行してください</string>
     <string name="memory_global_footer">すべてのセッションで Agent に表示される永続的な指示と設定です。Agent はこのファイルを変更できません。</string>
     <string name="check_update_section_header">アプリ更新</string>
     <string name="check_update_current_version">現在のバージョン: %1$s</string>

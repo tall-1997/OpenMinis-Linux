@@ -107,7 +107,9 @@ enum class ThinkingLevel {
     // [T-android-thinking-level-arch] New cases MUST be appended at the end.
     // Kotlinx Serialization encodes enums by NAME string ("OFF"/"LOW"/...),
     // not declaration-order ordinal, so appending does not corrupt already-
-    // persisted data. GPT-5.6 sol/terra reach ULTRA, luna reaches MAX.
+    // persisted data. Max reachable level per model: the ThinkingLevelCatalog
+    // caps sol/terra/luna at MAX — ULTRA is ONLY reachable when a model's
+    // reasoningEffortValues explicitly declares "ultra".
     OFF, LOW, MEDIUM, HIGH, XHIGH, MAX, ULTRA;
 
     val isEnabled: Boolean get() = this != OFF

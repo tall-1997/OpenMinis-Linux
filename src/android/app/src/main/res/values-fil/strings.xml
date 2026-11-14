@@ -22,6 +22,8 @@
     <string name="memory_revoke_result_not_found">Hindi natagpuan ang entry sa mga kamakailang daily log.</string>
     <string name="memory_revoke_result_io_error">Nabigong isulat ang file: %1$s</string>
     <string name="memory_save_toast">Na-save</string>
+
+    <string name="memory_save_failed_toast">Hindi na-save — suriin ang storage at subukang muli</string>
     <string name="memory_global_footer">Mga permanenteng tagubilin at kagustuhan na nakikita ng Agent sa bawat session. Hindi ito mababago ng Agent.</string>
     <string name="check_update_section_header">Update ng App</string>
     <string name="check_update_current_version">Kasalukuyang bersyon: %1$s</string>

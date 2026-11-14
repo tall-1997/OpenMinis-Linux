@@ -323,7 +323,7 @@ internal fun ChatSheetsHost(
         val currentThinkingLevel by viewModel.thinkingLevel.collectAsStateWithLifecycle()
         ThinkingLevelSheet(
             currentLevel = currentThinkingLevel,
-            availableLevels = viewModel.availableThinkingLevels,
+            availableLevels = viewModel.availableThinkingLevels.collectAsStateWithLifecycle().value,
             onSelect = { level ->
                 viewModel.setThinkingLevel(level)
                 showThinkingLevelSheet.value = false

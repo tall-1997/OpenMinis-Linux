@@ -27,6 +27,8 @@
     <string name="memory_revoke_result_not_found">Entri tidak ditemukan di log harian terbaru.</string>
     <string name="memory_revoke_result_io_error">Gagal menulis berkas: %1$s</string>
     <string name="memory_save_toast">Tersimpan</string>
+
+    <string name="memory_save_failed_toast">Gagal menyimpan — periksa penyimpanan lalu coba lagi</string>
     <string name="memory_global_footer">Instruksi dan preferensi permanen yang terlihat oleh Agen di setiap sesi. Agen tidak dapat mengubah berkas ini.</string>
     <string name="check_update_section_header">Pembaruan Aplikasi</string>
     <string name="check_update_current_version">Versi saat ini: %1$s</string>

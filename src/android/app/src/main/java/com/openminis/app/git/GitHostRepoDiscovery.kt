@@ -59,6 +59,15 @@ object GitHostRepoDiscovery {
         }
     }
 
+    // [T-git-discovery-prune] Same noise-dir pruning as GrepSourceTool: a
+    // workspace with node_modules walked tens of thousands of directories
+    // per refresh. NOT applied at depth 0 — a workspace literally named
+    // build/ is the user's own mount and must still be searched.
+    private val PRUNED_DIR_NAMES = setOf(
+        "node_modules", "build", ".gradle", "dist", "target",
+        ".venv", "venv", "__pycache__", ".cache",
+    )
+
     private fun walk(dir: File, depth: Int, relative: String, visit: (File, String) -> Unit) {
         if (depth >= MAX_DEPTH) return
         val children = dir.listFiles(File::isDirectory)
@@ -72,6 +81,7 @@ object GitHostRepoDiscovery {
         if (retry == null) return
         for (child in retry) {
             if (child.name == ".git") continue
+            if (depth > 0 && child.name in PRUNED_DIR_NAMES) continue
             val rel = if (relative.isEmpty()) child.name else "$relative/${child.name}"
             visit(child, rel)
             walk(child, depth + 1, rel, visit)

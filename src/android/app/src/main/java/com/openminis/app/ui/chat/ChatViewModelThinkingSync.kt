@@ -19,6 +19,11 @@ import kotlinx.coroutines.launch
  * force-thinking lift included. Lives in its own file because the VM sits at
  * its architecture ceiling — this is the one feature that pays for itself.
  */
+/** [T-thinking-dormant-restore] User's explicit level parked while the
+ *  active model's ceiling was too low; restored (once) when the ceiling
+ *  widens past it. Session-lifetime only — a process death clears it. */
+private var dormantThinkingLevel: ThinkingLevel? = null
+
 internal fun ChatViewModel.launchThinkingCeilingSync(): kotlinx.coroutines.Job =
     viewModelScope.launch {
         combine(
@@ -38,9 +43,21 @@ internal fun ChatViewModel.launchThinkingCeilingSync(): kotlinx.coroutines.Job =
             if (entry != null) {
                 val ceiling = forcedThinkingCeiling(entry)
                 val clamped = clampThinkingToCeiling(_thinkingLevel.value, ceiling)
+                val dormant = dormantThinkingLevel
                 if (clamped != _thinkingLevel.value) {
+                    // [T-thinking-dormant-restore] The user's explicit level is
+                    // DEMOTED to a dormant slot, not destroyed: when the ceiling
+                    // widens again (Thinking switch re-enabled / override
+                    // raised / better model selected) the original choice is
+                    // restored — the old one-way demotion permanently erased it.
+                    dormantThinkingLevel = _thinkingLevel.value.takeIf { it != ThinkingLevel.OFF }
                     _thinkingLevel.value = clamped
                     persistThinkingOverride(clamped)
+                } else if (dormant != null && dormant.rank <= ceiling.rank) {
+                    // Ceiling widened past the dormant level: restore it.
+                    _thinkingLevel.value = dormant
+                    persistThinkingOverride(dormant)
+                    dormantThinkingLevel = null
                 }
             }
         }.collect()
@@ -64,3 +81,23 @@ internal fun ChatViewModel.persistThinkingOverride(level: ThinkingLevel) {
         }
     }
 }
+
+    internal fun ChatViewModel.applyGroupSessionDefaults(groupId: String) {
+        val group = providerRepository.group(groupId) ?: return
+        val level = group.defaultThinkingLevel ?: return
+        if (_thinkingLevel.value == level) return
+        // [T-thinking-three-faces-unified] Clamp to the group model's ceiling
+        // (force lift included).
+        val activeEntry = _activeEntryId.value?.let { id ->
+            providerRepository.config.value.modelEntries.find { it.id == id }
+        } ?: return
+        val clampedLevel = clampThinkingToCeiling(
+            level,
+            forcedThinkingCeiling(activeEntry),
+        )
+        _thinkingLevel.value = clampedLevel
+        viewModelScope.launch {
+            val sid = ensureSession()
+            chatRepository.dao.updateThinkingOverride(sid, clampedLevel.name)
+        }
+    }

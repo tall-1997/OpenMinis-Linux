@@ -22,6 +22,8 @@
     <string name="memory_revoke_result_not_found">ไม่พบรายการในบันทึกประจำวันล่าสุด</string>
     <string name="memory_revoke_result_io_error">เขียนไฟล์ไม่สำเร็จ: %1$s</string>
     <string name="memory_save_toast">บันทึกแล้ว</string>
+
+    <string name="memory_save_failed_toast">บันทึกไม่สำเร็จ — ตรวจสอบพื้นที่จัดเก็บแล้วลองใหม่</string>
     <string name="memory_global_footer">คำสั่งและการตั้งค่าถาวรที่ Agent มองเห็นในทุกเซสชัน Agent ไม่สามารถแก้ไขไฟล์นี้ได้</string>
     <string name="check_update_section_header">อัปเดตแอป</string>
     <string name="check_update_current_version">เวอร์ชันปัจจุบัน: %1$s</string>

@@ -22,6 +22,8 @@
     <string name="memory_revoke_result_not_found">Kayıt, son günlük kayıtlarda bulunamadı.</string>
     <string name="memory_revoke_result_io_error">Dosya yazılamadı: %1$s</string>
     <string name="memory_save_toast">Kaydedildi</string>
+
+    <string name="memory_save_failed_toast">Kaydetme başarısız — depolamayı kontrol edip tekrar deneyin</string>
     <string name="memory_global_footer">Agent\'ın her oturumda gördüğü kalıcı talimatlar ve tercihler. Agent bu dosyayı değiştiremez.</string>
     <string name="check_update_section_header">Uygulama Güncellemesi</string>
     <string name="check_update_current_version">Geçerli sürüm: %1$s</string>

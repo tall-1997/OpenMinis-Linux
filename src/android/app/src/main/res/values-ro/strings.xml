@@ -22,6 +22,8 @@
     <string name="memory_revoke_result_not_found">Intrarea nu a fost găsită în jurnalele zilnice recente.</string>
     <string name="memory_revoke_result_io_error">Scrierea fișierului a eșuat: %1$s</string>
     <string name="memory_save_toast">Salvat</string>
+
+    <string name="memory_save_failed_toast">Salvare eșuată — verificați stocarea și reîncercați</string>
     <string name="memory_global_footer">Instrucțiuni și preferințe permanente, vizibile pentru Agent în fiecare sesiune. Agentul nu poate modifica acest fișier.</string>
     <string name="check_update_section_header">Actualizarea aplicației</string>
     <string name="check_update_current_version">Versiunea curentă: %1$s</string>

@@ -15,9 +15,10 @@ class StandingContractTest {
 
     @Test
     fun `block names the configured persona and re-asserts rules`() {
-        val block = StandingContract.block("富江")
+        val block = StandingContract.block("富江", hasSessionRules = true, hasGlobalRules = true)
         assertTrue(block.contains("Persona reminder (SOUL.md): stay in the configured persona '富江'"))
-        assertTrue(block.contains(StandingContract.RULES_LINE))
+        assertTrue(block.contains("Session-scoped standing rules"))
+        assertTrue(block.contains("Global standing rules (GLOBAL.md)"))
         assertTrue(block.contains("BINDING instructions"))
         assertTrue(block.contains("latest message still wins"))
     }
@@ -25,9 +26,9 @@ class StandingContractTest {
     @Test
     fun `block falls back to generic persona wording on blank names`() {
         for (name in listOf(null, "", "   ")) {
-            val block = StandingContract.block(name)
+            val block = StandingContract.block(name, hasSessionRules = true)
             assertTrue(block.contains("stay in the configured persona for every"))
-            assertTrue(block.contains(StandingContract.RULES_LINE))
+            assertTrue(block.contains("Session-scoped standing rules"))
         }
     }
 

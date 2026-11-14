@@ -56,11 +56,12 @@ internal fun ChatViewModel.buildSystemPromptWithSections(
     // follow-up could land on a different minute and pay full ingestion.
     //
     // The prompt therefore has exactly one stable/dynamic boundary: everything
-    // up to and including the daily-memory fragment is byte-stable for a
-    // session within a day; everything after it (WorldBook keyword hits,
-    // scene-classified learned prefs, FTS recall keyed on the latest user
-    // message, runtime context) varies per turn or per day. The boundary offset
-    // is published as [ChatViewModel.systemPromptStablePrefixLen] so
+    // up to and including the STANDING rules (project AGENTS.md / session
+    // GLOBAL.md / app-global) is byte-stable for a session within a day;
+    // everything after it (daily memory window, WorldBook keyword hits,
+    // scene-classified learned prefs, StandingContract tail re-assertion,
+    // runtime context) varies per turn or per day. The boundary offset is
+    // published as [ChatViewModel.systemPromptStablePrefixLen] so
     // AnthropicProvider can put its system cache_control breakpoint exactly
     // there instead of at the end of a tail that changes every turn.
     val today = java.time.LocalDate.now()
@@ -466,6 +467,12 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         runtimeContext = renderRuntimeContext(dateStr, tzId, lang, modelUseCount),
         personalityReminder = StandingContract.block(
             com.openminis.app.agent.SoulStore.cachedMetadata.value.name,
+            // [T-standing-contract-rules-line] Assert binding-ness ONLY for the
+            // rule blocks this build actually injected (dedupe may have kept
+            // just the narrowest scope; a disabled memory gate injects none).
+            hasSessionRules = "session-global" in keptInstructionKeys,
+            hasGlobalRules = "app-global" in keptInstructionKeys,
+            hasProjectRules = "project-rules" in keptInstructionKeys,
         ),
         taskAnchor = taskAnchorFragment(),
         // [T-daily-memory-window] The transient block (recent daily logs + TOC
@@ -490,8 +497,7 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
             append("\n\n")
             append(globalMemoryFragment)
         }
-        // ---- stable / dynamic boundary: see the header comment ----
-        stablePrefixLen = length
+            stablePrefixLen = length
         append(dynamicTail)
     }
     if (publishStablePrefix) {
@@ -529,8 +535,9 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
 /**
  * The per-turn-varying tail of the system prompt, as a pure function so the
  * ordering contract is testable without a ViewModel: WorldBook first among the
- * dynamic fragments (it is lore the model should read as context), runtime
- * context last, absent fragments leaving no separator behind.
+ * dynamic fragments (it is lore the model should read as context), then the
+ * StandingContract re-assertion last (persona + standing rules recency —
+ * see [StandingContract]), absent fragments leaving no separator behind.
  *
  * [worldBookFragment] already carries its own leading blank line when
  * non-empty — that is WorldBook.injection's contract — so it is appended
@@ -614,11 +621,25 @@ internal object TaskAnchor {
 internal object StandingContract {
     const val MAX_CHARS = 700
 
-    const val RULES_LINE =
-        "Standing-rules reminder: the Session-scoped standing rules and the Global " +
-            "standing rules (GLOBAL.md) blocks in this prompt are BINDING instructions — " +
+    /**
+     * [T-standing-contract-rules-line] Lists ONLY the rule blocks actually
+     * present in this build (project AGENTS.md / session GLOBAL.md /
+     * app-global GLOBAL.md) — asserting binding-ness for blocks that were
+     * never injected is noise the model reads as pointing at nothing. Null
+     * when none exist: the caller then skips the rules line entirely.
+     */
+    fun rulesLine(hasSession: Boolean, hasGlobal: Boolean, hasProject: Boolean): String? {
+        val blocks = buildList {
+            if (hasSession) add("Session-scoped standing rules")
+            if (hasGlobal) add("Global standing rules (GLOBAL.md)")
+            if (hasProject) add("Project rules (AGENTS.md)")
+        }
+        if (blocks.isEmpty()) return null
+        val listed = blocks.joinToString(", the ", prefix = "the ", postfix = " blocks in this prompt")
+        return "Standing-rules reminder: $listed are BINDING instructions — " +
             "re-read them before starting any multi-step or destructive action; " +
             "the user's latest message still wins any conflict."
+    }
 
     fun personalityLine(soulName: String?): String {
         val who = soulName?.trim()?.takeUnless { it.isEmpty() }
@@ -629,9 +650,18 @@ internal object StandingContract {
             "This reminder never expires mid-session."
     }
 
-    fun block(soulName: String?, maxChars: Int = MAX_CHARS): String {
-        val block = listOf(personalityLine(soulName), RULES_LINE)
-            .joinToString("\n\n")
+    fun block(
+        soulName: String?,
+        hasSessionRules: Boolean = false,
+        hasGlobalRules: Boolean = false,
+        hasProjectRules: Boolean = false,
+        maxChars: Int = MAX_CHARS,
+    ): String {
+        val lines = buildList {
+            add(personalityLine(soulName))
+            rulesLine(hasSessionRules, hasGlobalRules, hasProjectRules)?.let { add(it) }
+        }
+        val block = lines.joinToString("\n\n")
         if (block.length <= maxChars) return block
         return block.take(maxChars).trimEnd() + "…"
     }
@@ -703,11 +733,10 @@ internal fun assembleDynamicTail(
  * blank/None prompt is returned unchanged, and only the runtime-context date
  * is rewritten.
  *
- * [GH#563] The marker is searched with `lastIndexOf`, not `indexOf`. The
- * runtime context is appended LAST (memory recall / task anchor come before
- * it), so the last occurrence is the real one; an earlier occurrence can come
- * from recalled memory, a task anchor or the SOUL body — the first-match
- * version rewrote THAT date and left the actual runtime line stale.
+ * [GH#563] The marker is searched with `lastIndexOf`, not `indexOf`: an
+ * earlier occurrence can come from recalled memory, a task anchor or the
+ * SOUL body — and the StandingContract re-assertion appended after the
+ * runtime context contains no date line, so the last match is the real one.
  */
 internal fun refreshRuntimeContextDate(prompt: String?, dateStr: String): String? {
     val base = prompt ?: return null

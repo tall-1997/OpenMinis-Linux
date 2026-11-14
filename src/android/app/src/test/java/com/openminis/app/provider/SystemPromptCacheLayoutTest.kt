@@ -76,6 +76,9 @@ class SystemPromptCacheLayoutTest {
 
     @Test
     fun blankDynamicYieldsNoThirdBlock() {
+        // [T-cache-block-bytes] trimStart removal: a whitespace-only dynamic
+        // suffix still yields ONE block (Anthropic joins system blocks with a
+        // separator on its side, so the whitespace is harmless).
         val blocks =
             AnthropicProvider.systemCacheBlocks(stable + "\n\n", stable.length, isOAuth = false, claudeCodePrefix = "")
         assertEquals(1, blocks.size)

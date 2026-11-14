@@ -79,18 +79,16 @@ fun SessionMemorySheet(
     var isEditing by remember(mode) { mutableStateOf(false) }
     var editedContent by remember(mode) { mutableStateOf("") }
     var savedToastVisible by remember { mutableStateOf(false) }
+    // [T-persona-save-feedback] Surface save failures to the user.
+    var saveFailedToastVisible by remember { mutableStateOf(false) }
 
     // Per-mode dialog state for revoke flow.
     var showRevokeConfirm by remember { mutableStateOf(false) }
     var mutationResult by remember { mutableStateOf<MemoryRepository.EntryMutationResult?>(null) }
 
-    // Auto-dismiss the "Saved" pill after 1.5s (matches iOS).
-    LaunchedEffect(savedToastVisible) {
-        if (savedToastVisible) {
-            delay(1500)
-            savedToastVisible = false
-        }
-    }
+    // Auto-dismiss toasts (matches iOS 1.5s saved, 2.5s failure).
+    LaunchedEffect(savedToastVisible) { if (savedToastVisible) { delay(1500); savedToastVisible = false } }
+    LaunchedEffect(saveFailedToastVisible) { if (saveFailedToastVisible) { delay(2500); saveFailedToastVisible = false } }
 
     // Reset editing buffer when entering a new detail view.
     LaunchedEffect(mode, isEditing) {
@@ -162,18 +160,17 @@ fun SessionMemorySheet(
                             } else {
                                 memoryRepository.saveFile(m.fileName, editedContent)
                             }
-                            // SOUL.md drives [SoulStore.cachedMetadata] which
-                            // backs the chat-bubble header name. The raw
-                            // saveFile() path here bypasses SoulStore.save(),
-                            // so refresh the cache manually to keep readers
-                            // in sync after an in-sheet edit.
+                            // SOUL.md drives [SoulStore.cachedMetadata] —
+                            // refresh the cache after an in-sheet edit.
                             if (m.fileName == "SOUL.md") {
                                 com.openminis.app.agent.SoulStore.refreshCache(context)
                             }
                             mode = MemorySheetMode.AutoFile(m.name, m.fileName, editedContent, m.editable, m.saver)
                             isEditing = false
                             savedToastVisible = true
-                        } catch (_: Exception) { /* fall through; UI toast omitted on failure */ }
+                        } catch (e: Exception) {
+                                                    saveFailedToastVisible = true
+                        }
                     },
                     onRevoke = {},
                 )
@@ -183,6 +180,7 @@ fun SessionMemorySheet(
                     editedContent = editedContent,
                     onEditedContentChange = { editedContent = it },
                     showSavedToast = savedToastVisible,
+                    saveFailedToastVisible = saveFailedToastVisible,
                 )
             }
 
@@ -199,8 +197,8 @@ fun SessionMemorySheet(
                     onSave = {
                         val result = onSaveRecord(m.record, editedContent)
                         if (result is MemoryRepository.EntryMutationResult.Success) {
-                            // Update the displayed record in-place so a follow-up
-                            // revoke targets the new body.
+                            // Update the record in-place so a follow-up revoke
+                            // targets the new body.
                             mode = MemorySheetMode.Write(
                                 m.record.copy(writtenContent = editedContent)
                             )

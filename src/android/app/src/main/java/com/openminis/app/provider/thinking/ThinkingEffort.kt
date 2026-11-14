@@ -184,7 +184,13 @@ internal object ThinkingEffort {
             if (i >= 0) i to v.lowercase() else null
         }.sortedBy { it.first }
         if (declared.isEmpty()) return effort
-        return declared.lastOrNull { it.first <= want }?.second ?: declared.first().second
+        // [T-thinking-no-upward-jump] When the requested tier sits BELOW the
+        // entire declared set (override ceiling below the model's floor), the
+        // old `?: declared.first()` fallback LIFTED the request upward — the
+        // opposite of clamping. Return the floor instead: the request is
+        // already as low as the model can go.
+        return declared.lastOrNull { it.first <= want }?.second
+            ?: declared.first().second
     }
 }
 

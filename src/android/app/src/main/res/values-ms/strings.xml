@@ -22,6 +22,8 @@
     <string name="memory_revoke_result_not_found">Entri tidak ditemui dalam log harian terkini.</string>
     <string name="memory_revoke_result_io_error">Gagal menulis fail: %1$s</string>
     <string name="memory_save_toast">Disimpan</string>
+
+    <string name="memory_save_failed_toast">Simpan gagal — semak storan dan cuba lagi</string>
     <string name="memory_global_footer">Arahan dan keutamaan kekal yang boleh dilihat oleh Ejen dalam setiap sesi. Ejen tidak boleh mengubah fail ini.</string>
     <string name="check_update_section_header">Kemas Kini Aplikasi</string>
     <string name="check_update_current_version">Versi semasa: %1$s</string>

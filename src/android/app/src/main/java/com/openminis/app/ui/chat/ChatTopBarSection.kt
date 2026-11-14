@@ -328,7 +328,7 @@ internal fun ChatTopBarTitle(
                                         // toggle; an enabled level still shows
                                         // unconditionally (user may have opted in
                                         // on an unknown-capability model).
-                                        if (viewModel.availableThinkingLevels.isNotEmpty() &&
+                                        if (viewModel.availableThinkingLevels.collectAsStateWithLifecycle().value.isNotEmpty() &&
                                             (
                                                 thinkingLevelBadgeState.isEnabled ||
                                                     viewModel.currentModelSupportsReasoning

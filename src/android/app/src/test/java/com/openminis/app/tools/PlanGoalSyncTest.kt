@@ -102,10 +102,27 @@ class PlanGoalSyncTest {
     }
 
     @Test
-    fun `an empty seat is filled from the first board item`() = runTest {
+    fun `an objective-less single-item board write no longer mints a Goal`() = runTest {
+        // [T-goal-mint-guard] A single-item write is progress logging, not
+        // goal-setting — minting from a step title created objectives that
+        // could never complete.
         val manager = GoalManager(FakePersistence())
         val minted = PlanGoalSync.ensureGoal(
             """{"op":"add","tool_title":"Release work","title":"build"}""",
+            "s1",
+            manager,
+        )
+        assertNull(minted)
+        assertNull(manager.get("s1"))
+    }
+
+    @Test
+    fun `an objective-less multi-item board still fills an empty seat`() = runTest {
+        // [T-goal-mint-guard] A board that LOOKS like a plan (≥2 items) keeps
+        // the fill-from-first-title fallback.
+        val manager = GoalManager(FakePersistence())
+        val minted = PlanGoalSync.ensureGoal(
+            """{"op":"add","tool_title":"Release work","plans":[{"title":"build"},{"title":"test"}]}""",
             "s1",
             manager,
         )

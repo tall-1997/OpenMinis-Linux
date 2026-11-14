@@ -62,6 +62,7 @@ fun MemoryFileViewerBody(
     editedContent: String,
     onEditedContentChange: (String) -> Unit,
     showSavedToast: Boolean,
+    saveFailedToastVisible: Boolean = false,
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         if (isEditing) {
@@ -95,12 +96,17 @@ fun MemoryFileViewerBody(
             }
         }
 
-        if (showSavedToast) SavedToast(modifier = Modifier.align(Alignment.BottomCenter))
+        if (saveFailedToastVisible) {
+            SavedToast(
+                modifier = Modifier.align(Alignment.BottomCenter),
+                text = R.string.memory_save_failed_toast,
+            )
+        } else if (showSavedToast) SavedToast(modifier = Modifier.align(Alignment.BottomCenter))
     }
 }
 
 @Composable
-private fun SavedToast(modifier: Modifier = Modifier) {
+private fun SavedToast(modifier: Modifier = Modifier, text: Int = R.string.memory_save_toast) {
     Box(
         modifier = modifier
             .padding(bottom = 12.dp)
@@ -111,7 +117,7 @@ private fun SavedToast(modifier: Modifier = Modifier) {
             .padding(horizontal = 14.dp, vertical = 6.dp),
     ) {
         Text(
-            text = stringResource(R.string.memory_save_toast),
+            text = stringResource(text),
             color = MaterialTheme.colorScheme.inverseOnSurface,
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
@@ -133,6 +139,7 @@ fun MemoryWriteDetailBody(
     editedContent: String,
     onEditedContentChange: (String) -> Unit,
     showSavedToast: Boolean,
+    saveFailedToastVisible: Boolean = false,
 ) {
     val written = record.writtenContent ?: ""
 
@@ -185,7 +192,12 @@ fun MemoryWriteDetailBody(
             }
         }
 
-        if (showSavedToast) SavedToast(modifier = Modifier.align(Alignment.BottomCenter))
+        if (saveFailedToastVisible) {
+            SavedToast(
+                modifier = Modifier.align(Alignment.BottomCenter),
+                text = R.string.memory_save_failed_toast,
+            )
+        } else if (showSavedToast) SavedToast(modifier = Modifier.align(Alignment.BottomCenter))
     }
 }
 

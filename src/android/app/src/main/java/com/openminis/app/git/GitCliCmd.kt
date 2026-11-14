@@ -68,8 +68,14 @@ object GitCliCmd {
 
     // `-uall` lists untracked files individually so the Changes tab granularity
     // matches the host JGit status (porcelain v1 collapses untracked dirs by default).
+    // [T-git-refresh-loop] --no-optional-locks: a plain read-only `status`
+    // still REFRESHES .git/index's stat cache and writes it back — on devices
+    // where native status fails and the panel degrades to this sandbox path,
+    // each write re-invalidated the cache the next agent edit had just
+    // invalidated again: a 2s-throttled refresh loop. The lock suppression
+    // makes the degraded read truly side-effect-free.
     fun statusCmd(root: String? = null) =
-        "${gitPrefix(root)} -c core.quotepath=false status --porcelain -b -uall"
+        "${gitPrefix(root)} --no-optional-locks -c core.quotepath=false status --porcelain -b -uall"
 
     /**
      * Local + remote refs for the branch switcher, newest commits first.

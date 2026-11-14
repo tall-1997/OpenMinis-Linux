@@ -68,8 +68,16 @@ internal suspend fun ChatViewModel.runGroupChat(provider: LLMProvider, closing: 
         snapshot = hostSnapshot,
         maxTokens = (mainEntry?.model?.maxOutputTokens ?: 4096).coerceIn(1024, 16384),
         temperature = mainEntry?.overrides?.temperature,
-        thinkingLevel = mainEntry?.effectiveMaxThinkingLevel
-            ?: com.openminis.app.data.model.ThinkingLevel.OFF,
+        // [T-thinking-three-faces-unified] Same semantics as spawn lanes: the
+        // session's live thinking level, clamped to THIS model's ceiling. The
+        // old "raw effectiveMaxThinkingLevel" made the host out-think (or
+        // under-think) the session's chosen depth.
+        thinkingLevel = mainEntry?.let { entry ->
+            clampThinkingToCeiling(
+                _thinkingLevel.value,
+                forcedThinkingCeilingFor(entry),
+            )
+        } ?: com.openminis.app.data.model.ThinkingLevel.OFF,
     )
     // The main session only opens and closes. Selected teammates are the speakers.
     val speakers = slotMembers
@@ -329,7 +337,12 @@ private fun ChatViewModel.groupMembers(
             snapshot = snapshotFor(entry),
             maxTokens = (entry.model.maxOutputTokens ?: 4096).coerceIn(1024, 16384),
             temperature = entry.overrides.temperature,
-            thinkingLevel = entry.effectiveMaxThinkingLevel,
+            // [T-thinking-three-faces-unified] Session level clamped to this
+            // member's ceiling — same contract as spawn lanes.
+            thinkingLevel = clampThinkingToCeiling(
+                _thinkingLevel.value,
+                forcedThinkingCeilingFor(entry),
+            ),
             instanceId = entry.providerInstanceId,
         )
     }

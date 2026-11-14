@@ -344,7 +344,6 @@ class ChatViewModel(
             return messages.takeLast((messages.size * 3 / 5).coerceAtLeast(8))
         }
 
-
         /** Floor for the dynamic wall-clock timeout. */
         internal const val COMPACT_TIMEOUT_BASE_MS = 90_000L
 
@@ -1814,7 +1813,7 @@ class ChatViewModel(
     internal val _thinkingLevel = MutableStateFlow(ThinkingLevel.OFF)
     override val thinkingLevel: StateFlow<ThinkingLevel> = _thinkingLevel.asStateFlow()
 
-    // [T-thinking-ceiling-sync] session level ≤ ACTIVE ceiling — impl in ChatViewModelThinkingSync.kt, eager.
+    // [T-thinking-ceiling-sync] Eager — starts in constructor.
     private val ceilingSyncJob = launchThinkingCeilingSync()
 
     // [T-supervisor-slash-entry] Next send becomes a supervisor objective
@@ -2357,11 +2356,23 @@ class ChatViewModel(
      * toggles thinking off (see ThinkingLevelPicker). setThinkingLevel
      * additionally clamps as a belt-and-suspenders defense.
      */
-    val availableThinkingLevels: List<ThinkingLevel>
-        get() {
-            val ceiling = currentModelMaxThinkingLevel
-            return ThinkingLevel.entries.filter { it != ThinkingLevel.OFF && it.rank <= ceiling.rank }
-        }
+    // [T-thinking-three-faces-unified] Derived StateFlow: observes config so
+    // a ceiling change in the model-parameter page updates the composer /
+    // topbar IMMEDIATELY (the old getter read config.value without
+    // observing — "a beat slow" in the review).
+    val availableThinkingLevels: StateFlow<List<ThinkingLevel>> = combine(
+        _activeEntryId,
+        providerRepository.config,
+    ) { entryId, config ->
+        val entry = entryId?.let { id -> config.modelEntries.find { it.id == id } }
+        val ceiling = entry?.let { forcedThinkingCeilingFor(it) }
+            ?: currentModelMaxThinkingLevel
+        ThinkingLevel.entries.filter { it != ThinkingLevel.OFF && it.rank <= ceiling.rank }
+    }.stateIn(
+        viewModelScope,
+        kotlinx.coroutines.flow.SharingStarted.Eagerly,
+        emptyList(),
+    )
 
     // [T-anthropic-context-window] Token Usage sheet's context-window row.
     // Route through contextWindowTokens (heuristic-backed) so models without an
@@ -2530,7 +2541,6 @@ class ChatViewModel(
      * materialises the row, mirroring how toggleMemoryEnabled lands its
      * preference on the persisted id rather than the `__new__…` draft key.
      */
-
 
     /**
      * If `text` is a slash command literal (e.g. "/compact"), run it and
@@ -3492,16 +3502,6 @@ class ChatViewModel(
      * pre-bound chat aren't clobbered by a later group re-select that
      * happens to land on the same default state.
      */
-    private fun applyGroupSessionDefaults(groupId: String) {
-        val group = providerRepository.group(groupId) ?: return
-        val level = group.defaultThinkingLevel ?: return
-        if (_thinkingLevel.value == level) return
-        _thinkingLevel.value = level
-        viewModelScope.launch {
-            val sid = ensureSession()
-            chatRepository.dao.updateThinkingOverride(sid, level.name)
-        }
-    }
 
     /**
      * [T-newchat-default-model-fallback-android] Resolve and apply the default

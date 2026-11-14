@@ -410,7 +410,7 @@ object GitCli {
         // Fallback is a SENTINEL result (exit -1, error text as output): the
         // parseProbe path then reports "not a repo" with the shell error —
         // the same shape a normal non-repo probe produces.
-        val r = gitCall { run(sessionId, GitCliCmd.probeCmd(), timeoutMs = 30_000L) }
+        val r = gitCall { run(sessionId, GitCliCmd.probeCmd(), timeoutMs = 15_000L) }
         val direct = parseProbe(r.output, r.exitCode)
         if (direct.isRepo) return direct
         // cwd itself is not a repo. Fresh shells boot at /root and the agent

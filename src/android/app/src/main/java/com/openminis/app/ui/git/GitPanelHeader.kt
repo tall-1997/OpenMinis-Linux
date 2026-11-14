@@ -281,11 +281,15 @@ internal fun BranchMenu(
                     )
                 }
                 items(visible, key = { it.name }) { branch ->
+                    // [T-git-menu-busy-feedback] Busy state disables the rows —
+                    // the old always-clickable rows closed the menu and silently
+                    // did nothing when the mutation gate was held.
+                    val rowEnabled = !state.busy
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onPick(branch.name) }
+                            .clickable(enabled = rowEnabled) { onPick(branch.name) }
                             .padding(horizontal = 16.dp, vertical = 10.dp),
                     ) {
                         // ZCode's branch glyph per ref kind: filled for the

@@ -119,10 +119,13 @@ fun ChatViewModel.refreshContextUsage() {
 /** Read-only view of the current thinking configuration for the model. */
 fun ChatViewModel.thinkingInfo(): ChatViewModel.ThinkingInfo? {
     val model = currentModel ?: return null
-    val supported = model.supportsReasoning == true
+    // [T-thinking-three-faces-unified] Use the SAME supported/enabled logic
+    // as the main loop (ChatViewModel.kt currentModelSupportsReasoning):
+    // force-thinking instances report supported even when the catalog says
+    // otherwise — the old null-is-unsupported read contradicted it.
+    val supported = currentModelSupportsReasoning
     val level = _thinkingLevel.value
     val enabled = supported && level.isEnabled
-    // [T-thinking-level-i18n] localizedName, not the data-layer English.
     val levelText = if (enabled) {
         level.localizedName(context)
     } else "—"

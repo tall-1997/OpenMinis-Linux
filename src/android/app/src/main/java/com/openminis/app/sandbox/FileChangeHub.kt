@@ -356,6 +356,12 @@ object FileChangeHub {
         }
         if (kind == FileEventCoalescer.Kind.CREATE && isDirEvent && !shouldSkipDir(child)) {
             scope.launch { addTree(reg, root, child, depthOf(root, child)) }
+        } else if (kind == FileEventCoalescer.Kind.CREATE && isDirEvent && child.name == ".git") {
+            // [T-git-refresh-newclone] A repo cloned WHILE the panel is open
+            // would never get metadata watchers (the skip list exists for the
+            // noise-skip contract, but .git refs/HEAD changes are exactly what
+            // the panel needs) — attach the meta tree for this new repo.
+            scope.launch { addGitMetaTree(reg, root, child) }
         }
         if (kind == FileEventCoalescer.Kind.DELETE && isDirEvent) {
             reg.observers.remove(child)?.let { runCatching { it.stopWatching() } }

@@ -341,7 +341,7 @@ internal fun ChatComposerSlashAndMentionPopups(
                                             current = thinkingLevelState,
                                             // [T-android-thinking-level-arch] Only
                                             // offer tiers the bound model supports.
-                                            availableLevels = viewModel.availableThinkingLevels,
+                                            availableLevels = viewModel.availableThinkingLevels.collectAsStateWithLifecycle().value,
                                             onSelect = { level -> viewModel.setThinkingLevel(level) },
                                         )
                                     }
