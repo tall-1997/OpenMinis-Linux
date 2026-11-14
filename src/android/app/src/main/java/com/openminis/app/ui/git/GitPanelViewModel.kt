@@ -46,11 +46,6 @@ class GitPanelViewModel(
 
     private val app = application
 
-    /** logcat tag — same tag as [GitHostRepo]/[GitHostRepoGraph] (one log stream). */
-    private companion object {
-        const val TAG = "GitPanel"
-    }
-
     private val messageGenerator = GitCommitMessageGenerator(app, providerRepository)
 
     private var fileWatchJob: Job? = null
@@ -766,6 +761,8 @@ class GitPanelViewModel(
     }
 
     companion object {
+        /** logcat tag — same as [GitHostRepo]/[GitHostRepoGraph] (one log stream). */
+        private const val TAG = "GitPanel"
         private const val AUTO_REFRESH_FLOOR_MS = 2_000L
         const val HISTORY_PAGE_SIZE = 50
     }
