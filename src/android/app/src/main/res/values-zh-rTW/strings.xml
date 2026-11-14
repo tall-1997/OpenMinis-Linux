@@ -2356,4 +2356,6 @@
     <string name="web_search_tool_section">Tool</string>
     <string name="web_search_tool_section_footer">關閉該工具不會刪除下方的引擎設定；重新開啟即可恢復原行為。</string>
     <string name="tool_label_short_app_name">Minis</string>
+<string name="git_panel_history_read_failed">提交歷史讀取失敗——詳情見日誌（GitPanel 標籤）</string>
+
 </resources>

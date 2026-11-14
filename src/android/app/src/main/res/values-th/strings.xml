@@ -2277,4 +2277,6 @@
     <string name="tool_label_short_app_name">Minis Ultra</string>
     <string name="attachment_no_app_toast">ไม่มีแอปเปิดไฟล์แนบนี้ได้</string>
     <string name="chat_move_to_capsule">ย้ายไป…</string>
+<string name="git_panel_history_read_failed">อ่านประวัติคอมมิตไม่สำเร็จ — ดูรายละเอียดใน log (แท็ก GitPanel)</string>
+
 </resources>

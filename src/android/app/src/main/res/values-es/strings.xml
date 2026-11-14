@@ -2263,4 +2263,6 @@
     <string name="web_search_tool_enabled_sub">Permite al agente buscar en la web desde el chat. Off → la herramienta no se ofrece en absoluto.</string>
     <string name="web_search_tool_section">Tool</string>
     <string name="web_search_tool_section_footer">Apagar la herramienta no borra la configuración del motor de abajo; vuelve a activarla para recuperar el mismo comportamiento.</string>
+<string name="git_panel_history_read_failed">No se pudo leer el historial de commits: detalles en los registros (etiqueta GitPanel)</string>
+
 </resources>

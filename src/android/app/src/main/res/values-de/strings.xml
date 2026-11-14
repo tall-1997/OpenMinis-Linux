@@ -2263,4 +2263,6 @@
     <string name="web_search_tool_enabled_sub">Erlaubt dem Agent, im Chat im Web zu suchen. Aus → das Tool wird gar nicht angeboten.</string>
     <string name="web_search_tool_section">Tool</string>
     <string name="web_search_tool_section_footer">Das Ausschalten des Tools löscht nicht die Engine-Konfiguration unten; wieder einschalten, um dasselbe Verhalten wiederherzustellen.</string>
+<string name="git_panel_history_read_failed">Commit-Verlauf konnte nicht gelesen werden – Details in den Logs (Tag GitPanel)</string>
+
 </resources>

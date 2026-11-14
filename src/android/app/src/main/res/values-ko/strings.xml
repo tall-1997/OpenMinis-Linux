@@ -2272,4 +2272,6 @@
     <string name="web_search_tool_section">Tool</string>
     <string name="web_search_tool_section_footer">도구를 꺼도 아래 엔진 구성은 삭제되지 않습니다. 다시 켜면 같은 동작이 복원됩니다.</string>
     <string name="tool_label_short_app_name">Minis Ultra</string>
+<string name="git_panel_history_read_failed">커밋 기록을 읽지 못했습니다 — 자세한 내용은 로그(GitPanel 태그)를 확인하세요</string>
+
 </resources>
