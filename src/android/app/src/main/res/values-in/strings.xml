@@ -2286,4 +2286,5 @@
     <string name="chat_move_to_capsule">Pindahkan ke…</string>
 <string name="git_panel_history_read_failed">Gagal membaca riwayat commit — detailnya di log (tag GitPanel)</string>
 
+    <string name="git_panel_status_read_failed">Gagal membaca status working tree — detail di log (tag GitPanel)</string>
 </resources>

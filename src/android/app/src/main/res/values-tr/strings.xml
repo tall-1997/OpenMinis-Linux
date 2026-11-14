@@ -2281,4 +2281,5 @@
     <string name="chat_move_to_capsule">Şuraya taşı…</string>
 <string name="git_panel_history_read_failed">Commit geçmişi okunamadı — ayrıntılar günlüklerde (GitPanel etiketi)</string>
 
+    <string name="git_panel_status_read_failed">Çalışma ağacı durumu okunamadı — ayrıntılar günlükte (GitPanel etiketi)</string>
 </resources>

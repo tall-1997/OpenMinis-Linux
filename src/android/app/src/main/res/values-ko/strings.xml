@@ -2276,4 +2276,5 @@
     <string name="tool_label_short_app_name">Minis Ultra</string>
 <string name="git_panel_history_read_failed">커밋 기록을 읽지 못했습니다 — 자세한 내용은 로그(GitPanel 태그)를 확인하세요</string>
 
+    <string name="git_panel_status_read_failed">작업 트리 상태를 읽지 못했습니다 — 자세한 내용은 로그 확인(GitPanel 태그)</string>
 </resources>

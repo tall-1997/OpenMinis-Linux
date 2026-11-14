@@ -2276,4 +2276,5 @@
     <string name="tool_label_short_app_name">Minis Ultra</string>
 <string name="git_panel_history_read_failed">コミット履歴の読み取りに失敗しました——詳細はログ（GitPanel タグ）を参照</string>
 
+    <string name="git_panel_status_read_failed">ワークツリーの状態を読み取れませんでした — 詳細はログへ（GitPanel タグ）</string>
 </resources>

@@ -2281,4 +2281,5 @@
     <string name="chat_move_to_capsule">Pindahkan ke…</string>
 <string name="git_panel_history_read_failed">Gagal membaca sejarah komit — butiran dalam log (tag GitPanel)</string>
 
+    <string name="git_panel_status_read_failed">Gagal membaca status pokok kerja — butiran dalam log (tag GitPanel)</string>
 </resources>

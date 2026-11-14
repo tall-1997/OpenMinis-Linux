@@ -2267,4 +2267,5 @@
     <string name="web_search_tool_section_footer">Apagar la herramienta no borra la configuración del motor de abajo; vuelve a activarla para recuperar el mismo comportamiento.</string>
 <string name="git_panel_history_read_failed">No se pudo leer el historial de commits: detalles en los registros (etiqueta GitPanel)</string>
 
+    <string name="git_panel_status_read_failed">No se pudo leer el estado del árbol de trabajo — detalles en el registro (etiqueta GitPanel)</string>
 </resources>
