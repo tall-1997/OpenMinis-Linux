@@ -96,7 +96,11 @@ object GrepSourceTool {
             when {
                 root.isFile -> if (root.length() <= MAX_FILE_BYTES.toLong()) files.add(root) else skippedLarge++
                 root.isDirectory -> root.walkTopDown()
-                    .onEnter { dir -> dir.name !in PRUNED_DIR_NAMES }
+                    // [T-grep-source-coverage] onEnter applies to the START
+                    // directory too: a repo literally named build/dist would
+                    // otherwise be pruned to zero files and reported as an
+                    // empty search.
+                    .onEnter { dir -> dir == root || dir.name !in PRUNED_DIR_NAMES }
                     .filter { it.isFile }
                     .forEach { f ->
                         if (f.length() in 1..MAX_FILE_BYTES.toLong()) files.add(f) else skippedLarge++

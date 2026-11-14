@@ -1,6 +1,7 @@
 package com.openminis.app.ui.chat
 
 import androidx.lifecycle.viewModelScope
+import com.openminis.app.logging.AppLogger
 import com.openminis.app.data.model.ThinkingLevel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
@@ -23,7 +24,16 @@ internal fun ChatViewModel.launchThinkingCeilingSync(): kotlinx.coroutines.Job =
         combine(
             _activeEntryId,
             providerRepository.config,
-        ) { entryId, config ->
+            sessionLoaded,
+        ) { entryId: String?, config: com.openminis.app.data.model.ProviderConfig, loaded: Boolean ->
+            // [T-thinking-ceiling-sync-gate] Wait for the session row (and its
+            // persisted thinking_override) to be restored before clamping —
+            // otherwise the first config emission during loadSession would
+            // clamp the not-yet-restored (OFF) value. Not harmful today only
+            // because OFF is the rank floor; the gate removes the ordering
+            // coincidence the T306 collector had to document around.
+            if (!loaded) return@combine
+
             val entry = entryId?.let { id -> config.modelEntries.find { it.id == id } }
             if (entry != null) {
                 val ceiling = forcedThinkingCeiling(entry)
@@ -35,3 +45,22 @@ internal fun ChatViewModel.launchThinkingCeilingSync(): kotlinx.coroutines.Job =
             }
         }.collect()
     }
+
+
+/**
+ * [T-thinking-ceiling-sync] Persist the (possibly clamped) level to the
+ * session row. Ceiling-sync triggers this on every config emission — an
+ * unguarded DB failure (disk full) would crash the process from an
+ * automatic path; the in-memory level is already applied and persistence
+ * self-heals on the next emission.
+ */
+internal fun ChatViewModel.persistThinkingOverride(level: ThinkingLevel) {
+    viewModelScope.launch {
+        runCatching {
+            val sid = ensureSession()
+            chatRepository.dao.updateThinkingOverride(sid, level.name)
+        }.onFailure { e ->
+            AppLogger.warning(ChatViewModel.TAG, "thinking override persist failed: ${e.message}")
+        }
+    }
+}

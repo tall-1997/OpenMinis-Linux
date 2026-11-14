@@ -2530,12 +2530,7 @@ class ChatViewModel(
      * materialises the row, mirroring how toggleMemoryEnabled lands its
      * preference on the persisted id rather than the `__new__…` draft key.
      */
-    internal fun persistThinkingOverride(level: ThinkingLevel) {
-        viewModelScope.launch {
-            val sid = ensureSession()
-            chatRepository.dao.updateThinkingOverride(sid, level.name)
-        }
-    }
+
 
     /**
      * If `text` is a slash command literal (e.g. "/compact"), run it and

@@ -151,7 +151,9 @@ internal object ContextBreakdownMath {
 internal suspend fun ChatViewModel.buildContextBreakdown(): ContextBreakdown = withContext(Dispatchers.IO) {
     // One assembly pass; its sections ARE this breakdown's system blocks —
     // no shared registry between build and read.
-    val systemSections = buildSystemPromptWithSections().second
+    // Measurement only — must NOT republish the stable-prefix boundary:
+    // the in-flight run loop still consumes the value from ITS build.
+    val systemSections = buildSystemPromptWithSections(publishStablePrefix = false).second
 
     // [T-no-repeated-injection] Nothing is appended per request any more:
     // goal/recall/plan notices are committed once into HISTORY, and the plan

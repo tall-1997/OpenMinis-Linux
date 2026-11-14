@@ -312,20 +312,54 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
         if (spawns.size == 1) {
             val total = waveSize.coerceAtLeast(1)
             val index = if (total > 1) waveIndex + 1 else 1
-            return try {
-                supervisorScope {
+            // [T-android-slot-pairing] Slot depths persist across dispatches —
+            // the settings page renders them as durable per-slot preferences
+            // (depth pairs with the slot's model), so dispatches no longer
+            // clear them; switching a slot's model resets its own depth.
+            return supervisorScope {
+                try {
+                    sem.withPermit {
+                        runOneSubAgent(
+                            spawn = spawns[0],
+                            toolId = toolId,
+                            toolBlocks = toolBlocks,
+                            assistantId = assistantId,
+                            currentText = currentText,
+                            parallelWriters = writerTotal,
+                            index = index,
+                            total = total,
+                            cardIndex = null,
+                            tokenBudget = sharedBudget,
+                            batchId = batch.id,
+                            batchSession = ownerSession,
+                        )
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (t: Throwable) {
+                    ToolExecutionResult(
+                        "Sub-agent failed: ${t.javaClass.simpleName}: ${t.message}",
+                        false,
+                    )
+                }
+            }
+        }
+        // [T-android-slot-pairing] Depths persist — see the single-spawn note.
+        val results = supervisorScope {
+            spawns.mapIndexed { i, spawn ->
+                async {
                     try {
                         sem.withPermit {
                             runOneSubAgent(
-                                spawn = spawns[0],
+                                spawn = spawn,
                                 toolId = toolId,
                                 toolBlocks = toolBlocks,
                                 assistantId = assistantId,
                                 currentText = currentText,
                                 parallelWriters = writerTotal,
-                                index = index,
-                                total = total,
-                                cardIndex = null,
+                                index = i + 1,
+                                total = spawns.size,
+                                cardIndex = i + 1,
                                 tokenBudget = sharedBudget,
                                 batchId = batch.id,
                                 batchSession = ownerSession,
@@ -335,49 +369,12 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
                         throw e
                     } catch (t: Throwable) {
                         ToolExecutionResult(
-                            "Sub-agent failed: ${t.javaClass.simpleName}: ${t.message}",
+                            "Sub-agent ${i + 1} failed: ${t.javaClass.simpleName}: ${t.message}",
                             false,
                         )
                     }
                 }
-            } finally {
-                multiAgentSettings.clearSlotThinkingLevels()
-            }
-        }
-        val results = try {
-            supervisorScope {
-                spawns.mapIndexed { i, spawn ->
-                    async {
-                        try {
-                            sem.withPermit {
-                                runOneSubAgent(
-                                    spawn = spawn,
-                                    toolId = toolId,
-                                    toolBlocks = toolBlocks,
-                                    assistantId = assistantId,
-                                    currentText = currentText,
-                                    parallelWriters = writerTotal,
-                                    index = i + 1,
-                                    total = spawns.size,
-                                    cardIndex = i + 1,
-                                    tokenBudget = sharedBudget,
-                                    batchId = batch.id,
-                                    batchSession = ownerSession,
-                                )
-                            }
-                        } catch (e: CancellationException) {
-                            throw e
-                        } catch (t: Throwable) {
-                            ToolExecutionResult(
-                                "Sub-agent ${i + 1} failed: ${t.javaClass.simpleName}: ${t.message}",
-                                false,
-                            )
-                        }
-                    }
-                }.awaitAll()
-            }
-        } finally {
-            multiAgentSettings.clearSlotThinkingLevels()
+            }.awaitAll()
         }
         val ok = results.count { it.success }
         val body = buildString {
@@ -454,8 +451,6 @@ private fun ChatViewModel.launchDetachedSubAgentBatch(
                 }
             } catch (e: CancellationException) {
                 Log.i(ChatViewModel.TAG, "background dispatch ${batch.id.take(8)} cancelled")
-            } finally {
-                multiAgentSettings.clearSlotThinkingLevels()
             }
         }
         val summary = spawns.mapIndexed { i, s ->
