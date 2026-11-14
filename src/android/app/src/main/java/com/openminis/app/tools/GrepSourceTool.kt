@@ -23,20 +23,35 @@ object GrepSourceTool {
     private const val DEFAULT_CONTEXT = 2
     private const val MAX_CONTEXT = 6
     private const val MAX_MATCHES = 50
-    private const val MAX_FILES = 200
+    private const val MAX_MATCHES_CAP = 500
     private const val MAX_FILE_BYTES = 512 * 1024
     private const val OUTPUT_HARD_CAP = 40_000
 
+    /**
+     * [T-grep-source-coverage] Directories that carry no source the model can
+     * act on but dominate walk cost in a real repo (OpenMinis itself has
+     * ~190k files under .git/node_modules/build). Pruning them keeps the
+     * full-source scan affordable WITHOUT capping coverage: the old
+     * `.take(MAX_FILES)` walked the FIRST 200 files in directory order and
+     * never looked further — a target past the cap produced a confident
+     * "No matches" and the model concluded the symbol didn't exist.
+     */
+    private val PRUNED_DIR_NAMES = setOf(
+        ".git", ".gradle", ".idea", ".svn", ".hg",
+        "node_modules", "build", "dist", "target", "out",
+        "__MACOSX", ".venv", "venv", "__pycache__",
+    )
+
     fun definition(): AgentToolDefinition = AgentToolDefinition(
         name = NAME,
-        description = "Search file(s) for a pattern and return matching lines with ±context in ONE call. Prefer this over paging file_read through a big file or running shell grep — it saves turns. Sub-agents only.",
+        description = "Search ALL files under a path for a pattern and return matching lines with ±context in ONE call (noise dirs like .git/node_modules/build are pruned; files >512 KB are skipped and counted). Prefer this over paging file_read or running shell grep — it saves turns. Sub-agents only.",
         parameters = mapOf(
             "tool_title" to AgentToolParam("string", "A concise 5-10 word summary of what this search does, shown to the user."),
             "pattern" to AgentToolParam("string", "Text or regex to match (case-insensitive when is_regex=false)."),
             "path" to AgentToolParam("string", "Absolute file or directory path to search (default /var/minis/workspace)."),
             "context" to AgentToolParam("integer", "Lines of context around each match (0-6, default 2)."),
             "is_regex" to AgentToolParam("boolean", "Treat pattern as a regex (default false = literal substring)."),
-            "max_matches" to AgentToolParam("integer", "Cap on matches returned (default 50)."),
+            "max_matches" to AgentToolParam("integer", "Cap on matches returned (default 50, max 500)."),
         ),
         required = listOf("tool_title", "pattern"),
         propertyOrdering = listOf("tool_title", "pattern", "path", "context", "is_regex", "max_matches"),
@@ -53,7 +68,7 @@ object GrepSourceTool {
             val rawPath = args.optString("path", "/var/minis/workspace").ifBlank { "/var/minis/workspace" }
             val ctx = args.optInt("context", DEFAULT_CONTEXT).coerceIn(0, MAX_CONTEXT)
             val isRegex = args.optBoolean("is_regex", false)
-            val maxMatches = args.optInt("max_matches", MAX_MATCHES).coerceIn(1, 200)
+            val maxMatches = args.optInt("max_matches", MAX_MATCHES).coerceIn(1, MAX_MATCHES_CAP)
 
             val matcher: (String) -> Boolean = if (isRegex) {
                 val re = try {
@@ -73,16 +88,24 @@ object GrepSourceTool {
                 return ToolExecutionResult("Error: Path not found: $rawPath", false, toolTitle = toolTitle)
             }
 
-            val files: List<java.io.File> = when {
-                root.isFile -> listOf(root)
+            // [T-grep-source-coverage] Walk the FULL tree (noise dirs pruned)
+            // — coverage is bounded by max_matches/output caps, not by a file
+            // count that silently truncates the search domain.
+            val files = ArrayList<java.io.File>()
+            var skippedLarge = 0
+            when {
+                root.isFile -> if (root.length() <= MAX_FILE_BYTES.toLong()) files.add(root) else skippedLarge++
                 root.isDirectory -> root.walkTopDown()
-                    .filter { it.isFile && it.length() in 1..MAX_FILE_BYTES.toLong() }
-                    .take(MAX_FILES)
-                    .toList()
-                else -> emptyList()
+                    .onEnter { dir -> dir.name !in PRUNED_DIR_NAMES }
+                    .filter { it.isFile }
+                    .forEach { f ->
+                        if (f.length() in 1..MAX_FILE_BYTES.toLong()) files.add(f) else skippedLarge++
+                    }
+                else -> Unit
             }
             if (files.isEmpty()) {
-                return ToolExecutionResult("No searchable files under: $rawPath", false, toolTitle = toolTitle)
+                val why = if (skippedLarge > 0) " ($skippedLarge file(s) skipped — larger than ${MAX_FILE_BYTES / 1024} KB)" else ""
+                return ToolExecutionResult("No searchable files under: $rawPath$why", false, toolTitle = toolTitle)
             }
 
             val out = StringBuilder()
