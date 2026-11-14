@@ -8,6 +8,7 @@ import com.openminis.app.R
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.git.GitCli
 import com.openminis.app.git.GitCli.CommitOutcome
+import com.openminis.app.git.GitPanelProbes
 import com.openminis.app.git.GitHostRepoTransfer
 import com.openminis.app.git.GitCli.GitCommit
 import com.openminis.app.git.GitCli.GitFileEntry

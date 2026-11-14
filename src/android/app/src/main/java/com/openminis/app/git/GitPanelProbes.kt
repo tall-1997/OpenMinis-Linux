@@ -26,7 +26,7 @@ object GitPanelProbes {
      * throws twice in a row (transient JGit/VFS hiccups are retried once
      * before ceding — the sandbox fallback takes over from there).
      */
-    suspend fun nativeRepo(context: Context, sessionId: String): Pair<File, GitRepoInfo>? = withContext(Dispatchers.IO) {
+    suspend fun nativeRepo(context: Context, sessionId: String): Pair<File, GitCli.GitRepoInfo>? = withContext(Dispatchers.IO) {
         val ws = GitHostRepo.workspaceDir(context.filesDir, sessionId)
         val located = GitHostRepo.locate(ws)
         if (located == null) {
