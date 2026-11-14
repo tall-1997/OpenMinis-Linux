@@ -23,9 +23,6 @@ object GitCli {
     /** Log tag shared by the panel's probe chain (ViewModel uses it too). */
     private const val TAG = "GitPanel"
 
-    /** Diff cap keeps a huge `git show` from blowing the Compose text node. */
-    private const val DIFF_MAX_CHARS = 200_000
-
     /** A repo found by [GitCliCmd.DISCOVER_CMD]: absolute root path + display name. */
     data class DiscoveredRepo(
         /** Absolute guest path of the repo root (the directory containing `.git`). */
@@ -168,7 +165,8 @@ object GitCli {
      * job lines onto stderr, and the probe's own `cfg` printf runs even when
      * cwd is not a repo.
      */
-    private val NOISE_LINE = Regex(
+    /** Shared with [GitCliParse.parseCommitDetail] (extraction partner). */
+    internal val NOISE_LINE = Regex(
         "(?i)\\bkilled\\b|/bin/bash: line \\d+|^\\(\\s*sleep|sleep \\d+; kill|^cfg\\t",
     )
 
@@ -278,35 +276,10 @@ object GitCli {
             GitStashEntry(index, parts[1])
         }
 
-    fun parseLog(output: String): List<GitCommit> = output.lines().mapNotNull { raw ->
-        val line = raw.trimEnd('\r')
-        if (line.isBlank()) return@mapNotNull null
-        val f = line.split('\u001f')
-        if (f.size < 5) return@mapNotNull null
-        GitCommit(
-            hash = f[0],
-            shortHash = f[1],
-            author = f[2],
-            epochSeconds = f[3].toLongOrNull() ?: 0L,
-            subject = f.drop(4).joinToString("\u001f"),
-        )
-    }
+    fun parseLog(output: String): List<GitCommit> = GitCliParse.parseLog(output)
 
     /** Same records as [parseLog] with `%P` parents inserted as field 2. */
-    fun parseGraphLog(output: String): List<GitCommit> = output.lines().mapNotNull { raw ->
-        val line = raw.trimEnd('\r')
-        if (line.isBlank()) return@mapNotNull null
-        val f = line.split('\u001f')
-        if (f.size < 6) return@mapNotNull null
-        GitCommit(
-            hash = f[0],
-            shortHash = f[2],
-            author = f[3],
-            epochSeconds = f[4].toLongOrNull() ?: 0L,
-            subject = f.drop(5).joinToString("\u001f"),
-            parents = f[1].split(' ').filter { it.isNotBlank() },
-        )
-    }
+    fun parseGraphLog(output: String): List<GitCommit> = GitCliParse.parseGraphLog(output)
 
     /**
      * Graph record WITH the `%D` decoration column (ZCode contract): the
@@ -314,29 +287,7 @@ object GitCli {
      * subject cannot bleed into it). `HEAD -> main` expands to the HEAD and
      * main badges; `tag: v1` strips the prefix; blank → no badges.
      */
-    fun parseGraphLogWithRefs(output: String): List<GitCommit> = output.lines().mapNotNull { raw ->
-        val line = raw.trimEnd('\r')
-        if (line.isBlank()) return@mapNotNull null
-        val f = line.split('\u001f')
-        if (f.size < 7) return@mapNotNull null
-        val refs = f[6].split(',').flatMap { token ->
-            val t = token.trim()
-            when {
-                t.isBlank() -> emptyList()
-                t.startsWith("HEAD ->") -> listOf("HEAD", t.substringAfter("->").trim())
-                else -> listOf(t.removePrefix("tag: "))
-            }
-        }.distinct()
-        GitCommit(
-            hash = f[0],
-            shortHash = f[2],
-            author = f[3],
-            epochSeconds = f[4].toLongOrNull() ?: 0L,
-            subject = f[5],
-            parents = f[1].split(' ').filter { it.isNotBlank() },
-            refs = refs,
-        )
-    }
+    fun parseGraphLogWithRefs(output: String): List<GitCommit> = GitCliParse.parseGraphLogWithRefs(output)
 
     /**
      * `added\tdeleted\tpath` rows, plus typed markers:
@@ -404,82 +355,16 @@ object GitCli {
         return fallback
     }
 
-    /**
-     * Record line = 9 `\x1f` fields ending with subject+body; the body's own
-     * newlines spill into trailing lines and are reassembled verbatim.
-     * Shell noise is skipped before the record and inside the body.
-     */
-    fun parseCommitDetail(output: String): GitCommitDetail? {
-        val lines = output.lines()
-        val start = lines.indexOfFirst { l ->
-            !NOISE_LINE.containsMatchIn(l) &&
-                l.substringBefore('\u001f').length == 40 &&
-                l.split('\u001f').size >= 9
-        }
-        if (start < 0) return null
-        val f = lines[start].split('\u001f')
-        val bodyParts = mutableListOf<String>()
-        f.drop(8).joinToString("\u001f").trim().takeIf { it.isNotEmpty() }?.let { bodyParts += it }
-        for (l in lines.drop(start + 1)) {
-            val line = l.trimEnd('\r')
-            if (NOISE_LINE.containsMatchIn(line)) continue
-            if (line.isBlank()) break
-            bodyParts += line
-        }
-        return GitCommitDetail(
-            hash = f[0],
-            author = f[1],
-            authorEmail = f[2],
-            authorEpoch = f[3].toLongOrNull() ?: 0L,
-            committer = f[4],
-            committerEmail = f[5],
-            committerEpoch = f[6].toLongOrNull() ?: 0L,
-            subject = f[7],
-            body = bodyParts.joinToString("\n").trim(),
-        )
-    }
+    fun parseCommitDetail(output: String): GitCommitDetail? = GitCliParse.parseCommitDetail(output)
 
     /**
      * Per-file stats of one commit. `-\t-` rows are binary files or pure
      * renames; rename rows resolve via [splitRename] into renameFrom/new
      * path (both the `old => new` and `prefix/{old => new}` spellings).
      */
-    fun parseCommitNumstat(output: String): List<CommitFileStat> {
-        val out = mutableListOf<CommitFileStat>()
-        for (raw in output.lines()) {
-            val line = raw.trimEnd('\r')
-            if (line.isBlank()) continue
-            val f = line.split('\t')
-            if (f.size < 3) continue
-            val path = f.drop(2).joinToString("\t")
-            if (f[0] == "-" && f[1] == "-") {
-                val rename = splitRename(path)
-                out += if (rename != null) {
-                    CommitFileStat(
-                        path = rename.second,
-                        added = 0,
-                        deleted = 0,
-                        binary = true,
-                        renameFrom = rename.first,
-                    )
-                } else {
-                    CommitFileStat(path, 0, 0, binary = true)
-                }
-                continue
-            }
-            out += CommitFileStat(
-                path = path,
-                added = f[0].toIntOrNull() ?: 0,
-                deleted = f[1].toIntOrNull() ?: 0,
-                binary = false,
-            )
-        }
-        return out
-    }
+    fun parseCommitNumstat(output: String): List<CommitFileStat> = GitCliParse.parseCommitNumstat(output)
 
-    private fun truncateDiff(s: String): String =
-        if (s.length <= DIFF_MAX_CHARS) s
-        else s.take(DIFF_MAX_CHARS) + "\n… [diff truncated at ${DIFF_MAX_CHARS / 1000}K chars]"
+    private fun truncateDiff(s: String): String = GitCliParse.truncateDiff(s)
 
     // -------------------------------------------------------------- commands
 
@@ -596,7 +481,17 @@ object GitCli {
         root: String? = null,
     ): List<GitCommit> {
         val r = gitCall { run(sessionId, GitCliCmd.graphLogCmd(offset, limit, root)) }
-        if (r.exitCode == 0) return parseGraphLogWithRefs(r.output)
+        if (r.exitCode == 0) {
+            val parsed = parseGraphLogWithRefs(r.output)
+            // exit 0 but zero rows from a non-empty output means the record
+            // shape died in transit (e.g. a sanitizer eating the %x1f
+            // delimiter) — log it instead of painting a misleading
+            // "no commits" empty state.
+            if (parsed.isEmpty() && r.output.isNotBlank()) {
+                android.util.Log.w(TAG, "graph log parse produced 0 commits from ${r.output.length} chars (exit=0)")
+            }
+            return parsed
+        }
         // An unborn repo is an EMPTY history, not a failure. exit 128 is
         // git's "unresolvable revision" code: route it to empty ONLY when the
         // unborn signature confirms it — a CORRUPT HEAD also exits 128 and
