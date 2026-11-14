@@ -163,10 +163,10 @@ class GitPanelViewModel(
                 // refresh (FileChangeHub re-runs this every 2s).
                 val status = withContext(Dispatchers.IO) { runCatching { GitHostRepo.status(dir) }.getOrNull() }
                 val staged = withContext(Dispatchers.IO) {
-                    runCatching { GitHostRepo.numstatStaged(dir) }.getOrDefault(emptyMap())
+                    runCatching { GitHostRepoDiff.numstatStaged(dir) }.getOrDefault(emptyMap())
                 }
                 val unstaged = withContext(Dispatchers.IO) {
-                    runCatching { GitHostRepo.numstatUnstaged(dir) }.getOrDefault(emptyMap())
+                    runCatching { GitHostRepoDiff.numstatUnstaged(dir) }.getOrDefault(emptyMap())
                 }
                 val remote = withContext(Dispatchers.IO) { runCatching { GitHostRepo.remote(dir) }.getOrNull() }
                 // [T-git-panel-refs-degrade] Refs (log + branches) ride native
@@ -500,10 +500,10 @@ class GitPanelViewModel(
                     runCatching { GitHostRepo.status(dir) }.getOrNull()
                 }
                 staged = withContext(Dispatchers.IO) {
-                    runCatching { GitHostRepo.numstatStaged(dir) }.getOrDefault(emptyMap())
+                    runCatching { GitHostRepoDiff.numstatStaged(dir) }.getOrDefault(emptyMap())
                 }
                 unstaged = withContext(Dispatchers.IO) {
-                    runCatching { GitHostRepo.numstatUnstaged(dir) }.getOrDefault(emptyMap())
+                    runCatching { GitHostRepoDiff.numstatUnstaged(dir) }.getOrDefault(emptyMap())
                 }
                 log = withContext(Dispatchers.IO) {
                     runCatching { GitHostRepo.logPage(dir, offset = 0, limit = HISTORY_PAGE_SIZE) }
@@ -599,13 +599,13 @@ class GitPanelViewModel(
             _state.update { it.copy(commitSheet = GitCommitSheet(hash)) }
             val detail = withContext(Dispatchers.IO) {
                 runCatching {
-                    if (dir != null) GitHostRepo.commitDetail(dir, hash)
+                    if (dir != null) GitHostRepoDiff.commitDetail(dir, hash)
                     else GitCli.commitDetail(sessionId, hash, guestRoot)
                 }.getOrNull()
             }
             val files = withContext(Dispatchers.IO) {
                 runCatching {
-                    if (dir != null) GitHostRepo.commitNumstat(dir, hash)
+                    if (dir != null) GitHostRepoDiff.commitNumstat(dir, hash)
                     else GitCli.commitNumstat(sessionId, hash, guestRoot)
                 }.getOrDefault(emptyList())
             }
@@ -638,7 +638,7 @@ class GitPanelViewModel(
             }
             val content = withContext(Dispatchers.IO) {
                 runCatching {
-                    if (dir != null) GitHostRepo.commitFileDiff(dir, hash, path)
+                    if (dir != null) GitHostRepoDiff.commitFileDiff(dir, hash, path)
                     else GitCli.commitFileDiff(sessionId, hash, path, guestRoot)
                 }.getOrDefault("(diff unavailable)")
             }
@@ -655,7 +655,7 @@ class GitPanelViewModel(
             _state.update { it.copy(generating = true, notice = null) }
             val staged = withContext(Dispatchers.IO) {
                 runCatching {
-                    if (dir != null) GitHostRepo.stagedDiff(dir)
+                    if (dir != null) GitHostRepoDiff.stagedDiff(dir)
                     else GitCli.stagedDiff(sessionId, guestRoot)
                 }.getOrDefault("")
             }
@@ -714,7 +714,7 @@ class GitPanelViewModel(
             }
             val content = withContext(Dispatchers.IO) {
                 runCatching {
-                    if (dir != null) GitHostRepo.fileDiff(dir, entry.path, entry.staged, entry.untracked)
+                    if (dir != null) GitHostRepoDiff.fileDiff(dir, entry.path, entry.staged, entry.untracked)
                     else GitCli.fileDiff(sessionId, entry, guestRoot)
                 }.getOrDefault("(diff unavailable)")
             }
@@ -734,7 +734,7 @@ class GitPanelViewModel(
             }
             val content = withContext(Dispatchers.IO) {
                 runCatching {
-                    if (dir != null) GitHostRepo.commitDiff(dir, commit.hash)
+                    if (dir != null) GitHostRepoDiff.commitDiff(dir, commit.hash)
                     else GitCli.commitDiff(sessionId, commit.hash, guestRoot)
                 }.getOrDefault("(diff unavailable)")
             }
