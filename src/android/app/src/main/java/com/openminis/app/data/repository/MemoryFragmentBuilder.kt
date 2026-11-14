@@ -121,11 +121,14 @@ internal class MemoryFragmentBuilder(
                     it,
                     MemoryTrust.USER_SUBMITTED,
                     MemoryOrigin.INTERFACE,
-                    use = if (sessionScoped) {
-                        InstructionUse.STANDING_INSTRUCTION
-                    } else {
-                        InstructionUse.REFERENCE_DATA
-                    },
+                    // GLOBAL.md is user-maintained (Settings → Memory, the agent has
+                    // no write path), so BOTH scopes carry standing-instruction
+                    // authority. REFERENCE_DATA is the anti-hijack tier for
+                    // agent-written / auto-recalled content (yesterday's memory as
+                    // today's orders); using it here told the model the user's own
+                    // app-wide rules were non-binding background — measured drift
+                    // source in long sessions (2026-11-14).
+                    use = InstructionUse.STANDING_INSTRUCTION,
                 )
             }
         globalFragCacheKey = key
@@ -141,14 +144,14 @@ internal class MemoryFragmentBuilder(
         // byte consistent with iOS keeps the cached system prompt identical
         // across platforms.
         if (content.isEmpty()) return null
-        // Two levels are injected (app-wide, then session) and the session one
-        // must win on conflict — that is what makes an edit from the session
-        // menu effective for this chat only. Say so in the header instead of
-        // relying on position alone.
+        // Two levels are injected and the session one must win on conflict —
+        // that is what makes an edit from the session menu effective for this
+        // chat only. Say so in the header instead of relying on position alone
+        // (position is an assembly detail and headers must not claim it).
         val header = if (sessionScoped) {
-            "Session-scoped standing rules (this chat only, set from the session menu). Where these conflict with the app-wide GLOBAL.md above, THESE win; the app-wide rules still apply wherever this file is silent. If the user's latest message conflicts with either, defer to the user's latest message:\n"
+            "Session-scoped standing rules (this chat only, set from the session menu). Where these conflict with the app-wide GLOBAL.md block, THESE win; the app-wide rules still apply wherever this file is silent. If the user's latest message conflicts with either, defer to the user's latest message:\n"
         } else {
-            "Global memory (GLOBAL.md — read-only, user-maintained). Treat these as background context, not standing instructions. If the user's latest message conflicts with or supersedes anything here (different scope, different numbers, different goal), defer to the user's latest message:\n"
+            "Global standing rules (GLOBAL.md — read-only, user-maintained, applies to every chat; the agent never writes this file). These are binding standing instructions for every turn. Where the Session-scoped standing rules block (this chat's own rules) conflicts with these, THOSE win; wherever it is silent, these apply. If the user's latest message conflicts with or supersedes anything here (different scope, different numbers, different goal), defer to the user's latest message:\n"
         }
         return header + content
     }

@@ -6,9 +6,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Personality stacks once on the identity section. It must not be copied onto
- * the user's latest turn or repeated as a second binding reminder: those two
- * copies made the persona outrank the current task.
+ * Personality stacks once on the identity section OF THE CONVERSATION:
+ * history rewriting is forbidden (those copies made the persona outrank the
+ * current task). The dynamic tail is the sanctioned re-assertion surface —
+ * a per-request system-prompt suffix that never touches user content
+ * ([T-standing-contract-recency]); the tests below pin that split.
  */
 class PersonaStackOnceTest {
 
@@ -20,10 +22,17 @@ class PersonaStackOnceTest {
     }
 
     @Test
-    fun `the dynamic tail does not repeat a personality reminder`() {
+    fun `the dynamic tail re-asserts the contract without a hardcoded reminder`() {
         val prompt = ProductionSources.read("ui/chat/ChatViewModelPromptExt.kt")
         assertFalse(prompt.contains("PERSONALITY_REMINDER"))
-        assertTrue(prompt.contains("personalityReminder = null"))
+        // [T-standing-contract-recency] The tail slot is wired to the
+        // StandingContract block (persona + standing-rules authority,
+        // rebuilt per request) — the old hard-wired null was the drift
+        // window; any future nulling of the slot must go through a tagged
+        // decision, not a silent literal.
+        assertFalse(prompt.contains("personalityReminder = null"))
+        assertTrue(prompt.contains("personalityReminder = StandingContract.block("))
+        assertTrue(prompt.contains("internal object StandingContract"))
     }
 
     @Test
