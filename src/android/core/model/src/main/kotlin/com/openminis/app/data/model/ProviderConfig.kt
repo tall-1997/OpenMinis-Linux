@@ -112,6 +112,18 @@ enum class ThinkingLevel {
 
     val isEnabled: Boolean get() = this != OFF
 
+    /**
+     * HARD-CODED ENGLISH label — serialisation/debug surface ONLY.
+     *
+     * [T-thinking-level-i18n] UI layers MUST NOT consume this: it is not
+     * localized, and it caused four shipped UI bugs (multi-agent picker,
+     * token-usage sheet, system-info toast). Android UI uses
+     * `ThinkingLevel.localizedName(context)` (app module,
+     * ThinkingLevelLocalized.kt); minis-config bridging uses
+     * `ConfigBuiltins.thinkingLevelToToken`. Copy-pasting this property into
+     * new UI is how the multi-agent settings page shipped an English-only
+     * picker inside a Chinese UI.
+     */
     val displayName: String
         get() = when (this) {
             OFF -> "Off"
