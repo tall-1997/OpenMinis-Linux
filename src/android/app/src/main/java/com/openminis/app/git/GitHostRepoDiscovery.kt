@@ -23,6 +23,9 @@ object GitHostRepoDiscovery {
     /** Max repo depth below the workspace (ZCode rev-parse resolves any depth). */
     private const val MAX_DEPTH = 4
 
+    /** Backoff before a discovery retry (transient VFS hiccup rescue). */
+    private const val DISCOVERY_RETRY_BACKOFF_MS = 120L
+
     /** True when [dir] contains a `.git` entry (dir or gitfile for worktrees). */
     private fun isRepo(dir: File): Boolean = File(dir, ".git").exists()
 
@@ -38,6 +41,18 @@ object GitHostRepoDiscovery {
         walk(workspaceDir, depth = 0, relative = "") { dir, relative ->
             if (isRepo(dir)) candidates += dir to relative
         }
+        // [T-git-panel-discovery-retry] One clean pass is not enough on a
+        // phone: a transient VFS hiccup (listFiles returning null mid-walk,
+        // a .git probe flipping false) silently shrinks the candidate set
+        // and the panel flips between "found" and "not a repository" across
+        // 2s auto-refreshes. A second pass after a short backoff costs
+        // nothing when the first was complete and rescues the flaky case.
+        if (candidates.isEmpty()) {
+            Thread.sleep(DISCOVERY_RETRY_BACKOFF_MS)
+            walk(workspaceDir, depth = 0, relative = "") { dir, relative ->
+                if (isRepo(dir)) candidates += dir to relative
+            }
+        }
         if (candidates.isEmpty()) return null
         return candidates.maxByOrNull { (dir, _) ->
             File(dir, ".git/HEAD").takeIf { it.isFile }?.lastModified() ?: 0L
@@ -46,8 +61,16 @@ object GitHostRepoDiscovery {
 
     private fun walk(dir: File, depth: Int, relative: String, visit: (File, String) -> Unit) {
         if (depth >= MAX_DEPTH) return
-        val children = dir.listFiles(File::isDirectory) ?: return
-        for (child in children) {
+        val children = dir.listFiles(File::isDirectory)
+        // A null listing (transient I/O error) must not cut the walk short:
+        // retry once before giving up on this subtree.
+        var retry = children
+        if (retry == null) {
+            Thread.sleep(DISCOVERY_RETRY_BACKOFF_MS)
+            retry = dir.listFiles(File::isDirectory)
+        }
+        if (retry == null) return
+        for (child in retry) {
             if (child.name == ".git") continue
             val rel = if (relative.isEmpty()) child.name else "$relative/${child.name}"
             visit(child, rel)

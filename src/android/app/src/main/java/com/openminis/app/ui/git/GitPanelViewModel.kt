@@ -116,9 +116,32 @@ class GitPanelViewModel(
      */
     private suspend fun nativeRepo(): Pair<File, GitRepoInfo>? = withContext(Dispatchers.IO) {
         val ws = GitHostRepo.workspaceDir(app.filesDir, sessionId)
-        val (dir, relative) = GitHostRepo.locate(ws) ?: return@withContext null
+        val located = GitHostRepo.locate(ws)
+        if (located == null) {
+            // Field reports: the panel flips between found/missing across
+            // 2s auto-refreshes. Log WHICH workspace was searched so a
+            // "not a repository" paint is diagnosable from logcat alone —
+            // a session bound to a repo-less project folder is legitimate,
+            // a workspace that transiently fails to list is not.
+            Log.i(TAG, "nativeRepo: no repo under ws=${ws.path} (session=${sessionId.take(8)})")
+            return@withContext null
+        }
+        val (dir, relative) = located
+        // [T-git-panel-probe-retry] A single JGit probe exception used to
+        // silently kill the native source for that refresh (RefDatabase
+        // hiccups are intermittent on-device); the sandbox fallback then
+        // had to rescue it and a sandbox failure painted "not a
+        // repository". Retry once after a short backoff before ceding.
         val info = runCatching { GitHostRepo.probe(dir) }.getOrNull()
-        if (info?.isRepo != true) return@withContext null
+            ?: run {
+                Log.w(TAG, "nativeRepo: probe threw, retrying once (repo=${dir.name})")
+                kotlinx.coroutines.delay(120)
+                runCatching { GitHostRepo.probe(dir) }.getOrNull()
+            }
+        if (info?.isRepo != true) {
+            Log.i(TAG, "nativeRepo: probe not a repo (repo=${dir.name}, info=${info != null})")
+            return@withContext null
+        }
         val adopted = relative.substringAfterLast('/')
         dir to info.copy(root = GitHostRepo.guestPath(relative), relativeRoot = adopted)
     }
@@ -276,10 +299,22 @@ class GitPanelViewModel(
                 GitCli.GitRepoInfo(isRepo = false, error = "shell unavailable")
             }
             if (!repo.isRepo) {
+                // Diagnostic suffix on the painted error line: which project
+                // workspace the panel searched. A panel opened in a chat bound
+                // to a repo-less workspace (e.g. a fresh chat while the clone
+                // lives in default-workspace) then reads as a workspace
+                // mismatch, not a panel bug — field reports showed users
+                // hitting "not a repository" while the clone was one session
+                // over, with no on-screen way to tell which ws was searched.
+                val wsDir = GitHostRepo.workspaceDir(app.filesDir, sessionId)
+                val wsName = wsDir.parentFile?.name?.takeIf { it != "workspace" } ?: wsDir.name
+                val enriched = if (repo.error.isNullOrBlank()) repo else {
+                    repo.copy(error = "${repo.error} · ws=$wsName")
+                }
                 _state.update {
                     it.copy(
                         loading = false,
-                        repo = repo,
+                        repo = enriched,
                         status = null,
                         log = emptyList(),
                         stagedNumstat = emptyMap(),
