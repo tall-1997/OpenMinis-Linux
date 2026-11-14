@@ -35,7 +35,18 @@ internal fun ChatViewModel.buildSystemPrompt(): String? = buildSystemPromptWithS
  * steering, assembly snapshot) are unchanged — [buildSystemPrompt] callers see
  * byte-identical behaviour.
  */
-internal fun ChatViewModel.buildSystemPromptWithSections(): Pair<String, List<Pair<ContextBlockKey, String>>> {
+internal fun ChatViewModel.buildSystemPromptWithSections(
+    /**
+     * [#25-publish-gate] Side-effect gate for the VM-level
+     * `systemPromptStablePrefixLen`. The Token Usage sheet measures with the
+     * SAME builder — without this gate its build (possibly against NEWER
+     * skill/memory state than the in-flight run's) overwrites the boundary
+     * the run loop still consumes, pointing the Anthropic cache_control
+     * breakpoint into per-turn content: full-prompt cache miss every turn
+     * for the rest of the run.
+     */
+    publishStablePrefix: Boolean = true,
+): Pair<String, List<Pair<ContextBlockKey, String>>> {
     // Cache-friendly layout: keep `base` byte-stable by stripping out anything
     // that varies per request, then append the per-turn / per-day fragments at
     // the very end. OpenAI / DeepSeek prompt caching is prefix-based, so the
@@ -483,7 +494,9 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         stablePrefixLen = length
         append(dynamicTail)
     }
-    systemPromptStablePrefixLen = stablePrefixLen
+    if (publishStablePrefix) {
+        systemPromptStablePrefixLen = stablePrefixLen
+    }
     // [#25][T-context-breakdown-race] The per-block sections of THIS build are
     // returned WITH the prompt instead of being published into a global
     // registry. Same strings, same order as the appends above — a size mirror

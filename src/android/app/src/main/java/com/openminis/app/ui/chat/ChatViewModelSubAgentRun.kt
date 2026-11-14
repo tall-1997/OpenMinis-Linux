@@ -121,8 +121,19 @@ internal suspend fun ChatViewModel.runOneSubAgentInner(
                     nameOf = { it.model.displayName },
                 )
         }
+        // [T-android-slot-pairing] ONE slot index for BOTH the model pick and
+        // the depth read: the settings page pairs "slot N = model N + depth N",
+        // but the old chain picked the model by a LIFETIME round-robin counter
+        // while reading the depth by lane order — from the second dispatch on,
+        // a depth configured for slot N's model landed on a different lane.
+        // requested-entry lanes use the entry's own pool position; round-robin
+        // lanes consume the counter exactly once, here.
+        val poolSlotIdx = requestedEntry?.id?.let { rid -> pool.indexOfFirst { it.equals(rid, true) } }?.takeIf { it >= 0 }
+            ?: subAgentRoundRobin.getAndIncrement().let {
+                Math.floorMod(it, pool.size.coerceAtLeast(1))
+            }
         val pickedId = requestedEntry?.id
-            ?: MultiAgentSettings.pickModelId(pool, requested, subAgentRoundRobin.getAndIncrement())
+            ?: MultiAgentSettings.pickModelId(pool, requested, poolSlotIdx)
         val baseEntry = requestedEntry ?: pickedId?.let { id ->
             config.modelEntries.find { it.id == id }
         } ?: _activeEntryId.value?.let { id -> config.modelEntries.find { it.id == id } }
@@ -144,16 +155,9 @@ internal suspend fun ChatViewModel.runOneSubAgentInner(
         // The force-thinking lift (OpenMinis#311) applies here too: a forced
         // Anthropic instance gets the same XHIGH ceiling the main composer
         // offers, so the main session can think while its sub-agents do not.
-        val laneCeiling = run {
-            val base = baseEntry.effectiveMaxThinkingLevel
-            if (activeInstanceForcesThinking() && base.rank < ThinkingLevel.XHIGH.rank) {
-                ThinkingLevel.XHIGH
-            } else {
-                base
-            }
-        }
+        val laneCeiling = forcedThinkingCeilingFor(baseEntry)
         val requestedThinking = spawn.thinkingLevel ?: run {
-            val slot = multiAgentSettings.slotThinkingLevel((index - 1).coerceAtLeast(0))
+            val slot = multiAgentSettings.slotThinkingLevel(poolSlotIdx)
             if (slot.isNullOrBlank()) {
                 val sessionLevel = _thinkingLevel.value
                 if (sessionLevel.rank > laneCeiling.rank) laneCeiling else sessionLevel

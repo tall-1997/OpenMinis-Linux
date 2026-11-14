@@ -161,7 +161,6 @@ class BrowserUseManager(
         isDisposed = true
         navigationDeferred?.cancel()
         navigationDeferred = null
-        asyncJsDeferred?.cancel()
         asyncJsDeferred = null
         onNewWindow = null
         onCloseWindow = null
@@ -249,19 +248,34 @@ class BrowserUseManager(
      */
     private val myScreenshotFiles = java.util.concurrent.ConcurrentLinkedQueue<File>()
 
-    /** Deferred used by executeJS to receive results from async scripts via JS bridge. */
-    private var asyncJsDeferred: CompletableDeferred<String>? = null
+    /**
+     * [T-browser-js-seq] Slot keyed by a monotonic call seq: a timed-out
+     * script keeps running and can call the bridge LATE — unkeyed slots let
+     * the stale result complete the NEXT call (silent wrong-answer).
+     */
+    private val jsCallSeq = java.util.concurrent.atomic.AtomicLong(0)
+    private var asyncJsDeferred: Pair<Long, CompletableDeferred<String>>? = null
 
     /** JavaScript interface for async script result callbacks. */
     private val jsBridge = object {
         @JavascriptInterface
         fun resolve(result: String) {
-            asyncJsDeferred?.complete(result)
+            resolveSeq(jsCallSeq.get(), result)
         }
 
         @JavascriptInterface
         fun reject(error: String) {
-            asyncJsDeferred?.complete("{\"error\":${JSONObject.quote(error)}}")
+            rejectSeq(jsCallSeq.get(), error)
+        }
+
+        @JavascriptInterface
+        fun resolveSeq(seq: Long, result: String) {
+            asyncJsDeferred?.takeIf { it.first == seq }?.second?.complete(result)
+        }
+
+        @JavascriptInterface
+        fun rejectSeq(seq: Long, error: String) {
+            asyncJsDeferred?.takeIf { it.first == seq }?.second?.complete("{\"error\":${JSONObject.quote(error)}}")
         }
 
         /**
@@ -748,10 +762,8 @@ class BrowserUseManager(
                 _isLoading.value = false
                 deferred.complete(Unit)
             }
-            asyncJsDeferred?.let { deferred ->
-                asyncJsDeferred = null
-                deferred.complete("{\"error\":\"Browser action stopped by user\"}")
-            }
+            // Dropping the slot abandons late bridge callbacks (old seq).
+            asyncJsDeferred = null
             webView.stopLoading()
             webView.evaluateJavascript("window.stop();", null)
         }
@@ -1183,26 +1195,27 @@ class BrowserUseManager(
 
     private suspend fun executeJS(script: String?): BrowserActionResult {
         if (script.isNullOrEmpty()) return BrowserActionResult.error("execute_js requires 'script'")
-        // Wrap in an async IIFE so `await` works in user scripts.
-        // Android WebView doesn't resolve Promises from evaluateJavascript,
-        // so we use a JS bridge callback (__minis__.resolve / __minis__.reject).
+        // Async IIFE so `await` works; WebView doesn't resolve Promises from
+        // evaluateJavascript — results come via the seq-keyed bridge.
         return try {
+            val seq = jsCallSeq.incrementAndGet()
             val deferred = CompletableDeferred<String>()
-            asyncJsDeferred = deferred
+            asyncJsDeferred = seq to deferred
             val wrapped = """
                 (async function(){
+                    var __seq__ = $seq;
                     try {
                         var __r__ = (async function(){ $script })();
                         var __v__ = await __r__;
                         if (__v__ === undefined || __v__ === null) {
-                            __minis__.resolve(String(__v__));
+                            __minis__.resolveSeq(__seq__, String(__v__));
                         } else if (typeof __v__ === 'object') {
-                            __minis__.resolve(JSON.stringify(__v__));
+                            __minis__.resolveSeq(__seq__, JSON.stringify(__v__));
                         } else {
-                            __minis__.resolve(String(__v__));
+                            __minis__.resolveSeq(__seq__, String(__v__));
                         }
                     } catch(e) {
-                        __minis__.reject(e.message || String(e));
+                        __minis__.rejectSeq(__seq__, e.message || String(e));
                     }
                 })();
             """.trimIndent()
@@ -1265,79 +1278,29 @@ class BrowserUseManager(
 
     // -- Fetch --
 
-    private suspend fun fetch(urlString: String?): BrowserActionResult {
-        if (urlString.isNullOrEmpty()) return BrowserActionResult.error("fetch requires 'url' parameter")
-
-        // The fetch JS runs `await fetch(...)` inside an async IIFE, which
-        // resolves to a Promise. Android's `WebView.evaluateJavascript` does
-        // NOT await Promises, so calling `evaluateJavascript(js)` returns the
-        // Promise's `{}` string representation and the caller sees a
-        // "No value for base64" parse error. Route through the __minis__
-        // bridge so we actually wait for the Promise to resolve.
-        val raw = awaitPromiseJs(BrowserUseJS.fetch(urlString))
-            ?: return BrowserActionResult.error("fetch timed out")
-        return try {
-            val json = JSONObject(raw)
-            if (json.has("error")) {
-                return BrowserActionResult.error("Fetch failed: ${json.getString("error")}")
-            }
-            val contentType = json.optString("contentType", "")
-            val status = json.optInt("status", 0)
-            val finalURL = json.optString("url", urlString)
-
-            // `base64` is optional — only present when the JS captured bytes.
-            // If missing, fall back to `text` (JSON / plain text) so callers
-            // can fetch human-readable payloads without forcing a byte roundtrip.
-            val data: ByteArray? = json.optString("base64").takeIf { it.isNotEmpty() }?.let {
-                try { Base64.decode(it, Base64.DEFAULT) } catch (_: Exception) { null }
-            } ?: json.optString("text").takeIf { it.isNotEmpty() }?.toByteArray(Charsets.UTF_8)
-
-            if (data == null) {
-                return BrowserActionResult.error("Fetch returned no body (status=$status)")
-            }
-            val size = json.optInt("size", data.size)
-            val filename = "fetch_${System.currentTimeMillis()}.${extensionForMimeType(contentType)}"
-
-            val text = buildString {
-                appendLine("Fetched $finalURL")
-                appendLine("  Status: $status")
-                appendLine("  Content-Type: $contentType")
-                appendLine("  Size: ${Format.formatBytes(size.toLong())}")
-                append("  Filename: $filename")
-            }
-
-            BrowserActionResult(
-                text = text,
-                fetchedFileData = data,
-                fetchedFileName = filename,
-            )
-        } catch (e: Exception) {
-            BrowserActionResult.error("Fetch parse error: ${e.message}")
-        }
-    }
-
     /**
      * Evaluate an `(async function(){...})()` expression and wait for the
-     * returned Promise to resolve via the `__minis__` bridge. Returns the
-     * resolved string (JSON or plain) or null on timeout. Mirrors the same
-     * pattern used by [executeJS].
+     * returned Promise via the seq-keyed `__minis__` bridge (mirrors
+     * [executeJS]); null on timeout.
      */
-    private suspend fun awaitPromiseJs(js: String): String? {
+    internal suspend fun awaitPromiseJs(js: String): String? {
+        val seq = jsCallSeq.incrementAndGet()
         val deferred = CompletableDeferred<String>()
-        asyncJsDeferred = deferred
+        asyncJsDeferred = seq to deferred
         val wrapped = """
             (async function(){
+                var __seq__ = $seq;
                 try {
                     var __v__ = await ($js);
                     if (__v__ === undefined || __v__ === null) {
-                        __minis__.resolve('null');
+                        __minis__.resolveSeq(__seq__, 'null');
                     } else if (typeof __v__ === 'object') {
-                        __minis__.resolve(JSON.stringify(__v__));
+                        __minis__.resolveSeq(__seq__, JSON.stringify(__v__));
                     } else {
-                        __minis__.resolve(String(__v__));
+                        __minis__.resolveSeq(__seq__, String(__v__));
                     }
                 } catch(e) {
-                    __minis__.reject(e && e.message ? e.message : String(e));
+                    __minis__.rejectSeq(__seq__, e && e.message ? e.message : String(e));
                 }
             })();
         """.trimIndent()
@@ -1345,7 +1308,7 @@ class BrowserUseManager(
             webView.evaluateJavascript(wrapped, null)
         }
         val raw = withTimeoutOrNull(60_000L) { deferred.await() }
-        asyncJsDeferred = null
+        if (asyncJsDeferred?.first == seq) asyncJsDeferred = null
         return raw
     }
 

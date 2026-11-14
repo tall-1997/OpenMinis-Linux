@@ -558,8 +558,18 @@ private fun SubAgentSlotRow(
     // live level when the slot is unset; the picker's range is therefore the
     // widest ceiling in the candidate pool, and the unset display says
     // "follows main session" instead of a misleading Off.
-    val maxThinking = selectedEntry?.effectiveMaxThinkingLevel
-        ?: candidates.maxOfOrNull { it.effectiveMaxThinkingLevel } ?: ThinkingLevel.OFF
+    // [T-thinking-force-per-entry] Same lift the composer offers: a lane on
+    // a force-thinking relay instance must be configurable even when its
+    // entry's raw ceiling is OFF (the old hard-OFF bricked the whole row).
+    fun ceilingOf(entry: ModelEntry): ThinkingLevel {
+        val instance = instancesById[entry.providerInstanceId]
+        val forced = instance != null && instance.forceThinkingEnabled &&
+            instance.providerType == com.openminis.app.data.model.ProviderType.anthropic
+        val base = entry.effectiveMaxThinkingLevel
+        return if (forced && base.rank < ThinkingLevel.XHIGH.rank) ThinkingLevel.XHIGH else base
+    }
+    val maxThinking = selectedEntry?.let { ceilingOf(it) }
+        ?: candidates.maxOfOrNull { ceilingOf(it) } ?: ThinkingLevel.OFF
     val selectedThinking = thinkingLevel?.let {
         runCatching { ThinkingLevel.valueOf(it.uppercase()) }.getOrNull()
     }?.let { if (it.rank <= maxThinking.rank) it else maxThinking }

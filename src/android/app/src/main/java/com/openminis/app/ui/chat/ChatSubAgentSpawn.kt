@@ -17,8 +17,8 @@ internal data class ChatSubAgentSpawn(
     val writePaths: List<String>,
     val maxTurns: Int,
     val tokenBudget: Long? = null,
-    // Null means no per-task override; dispatch resolves the selected model's
-    // effective maximum for this one task.
+    // Null means follow the MAIN SESSION's live thinking level (clamped to
+    // the lane model's ceiling) — or the slot depth when one is configured.
     val thinkingLevel: ThinkingLevel? = null,
 )
 

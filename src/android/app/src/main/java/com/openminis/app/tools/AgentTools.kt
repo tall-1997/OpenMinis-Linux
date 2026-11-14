@@ -277,7 +277,7 @@ object AgentTools {
                 ),
                 "thinking_level" to AgentToolParam(
                     "string",
-                    "Per-dispatch reasoning depth. Defaults to ULTRA; the provider clamps it to the selected model ceiling.",
+                    "Per-dispatch reasoning depth. Omit to follow the main session's live thinking level (may be Off) — set it explicitly when a lane must think deeper. The provider clamps it to the selected model ceiling.",
                     enumValues = listOf("OFF", "LOW", "MEDIUM", "HIGH", "XHIGH", "MAX", "ULTRA"),
                 ),
                 "role" to AgentToolParam("string", "Catalog role (秘书助理, 产品经理, 架构师, 工程师, 前端设计师, 测试工程师, 侦察兵, 拆解工, 分析员) injects focus / do-not / when-silent / who-to-ask and a tool whitelist. Sub-agent presets (代码审计/方案规划/调研/复现/提炼, plus 探索者/审查员/编码员/研究员) are read-only by default and enforce their own tool scope. Other strings are labels only."),
@@ -316,7 +316,7 @@ background=true detaches the wave: this call returns a dispatch_id at once inste
                 ),
                 "write_paths" to AgentToolParam("string", "Comma-separated Linux path prefixes this worker may modify, or none. Required for parallel workers."),
                 "max_turns" to AgentToolParam("integer", "Omit to auto-size: simple ≈ 10, medium ≈ 30, complex 40–60."),
-                "thinking_level" to AgentToolParam("string", "Default ULTRA; clamped to model ceiling.", enumValues = listOf("OFF", "LOW", "MEDIUM", "HIGH", "XHIGH", "MAX", "ULTRA")),
+                "thinking_level" to AgentToolParam("string", "Omit to follow the main session's live level; clamped to model ceiling.", enumValues = listOf("OFF", "LOW", "MEDIUM", "HIGH", "XHIGH", "MAX", "ULTRA")),
                 "background" to AgentToolParam(
                     "boolean",
                     "true = return a dispatch_id immediately and let the lanes run detached; collect " +
@@ -364,7 +364,7 @@ background=true detaches the wave: this call returns a dispatch_id at once inste
             "fetch to download files/resources using the page's session (returns metadata and a minis:// URL), " +
             "new_tab to open an additional tab, close_tab to close a tab, and list_tabs to see all open tabs. " +
             "Use set_viewport with viewport_width + viewport_height to override the viewport for the current session (e.g. before screenshotting a 1920×1080 HTML composition that would otherwise be cropped to the phone viewport); pass reset=true to drop the session override and fall back to the global browser setting. " +
-            "Use get_cookies to retrieve cookies for the current page URL / current site root domain only (including HttpOnly cookies). get_cookies supports optional 'keywords' (filter by cookie name) and 'fuzzy' (true=contains match, false=exact match, default true). It returns only a summary and an offload env file path — raw cookie values are NOT included in the tool response. To reuse cookies in shell commands: `. /var/minis/offloads/env_cookies_xxx.sh && command`. You may define alias variables when needed. " +
+            "Use get_cookies to retrieve cookies for the current page URL / current site root domain only (including HttpOnly cookies). get_cookies supports optional 'keywords' (filter by cookie name; ANY keyword contains-matches) and 'fuzzy' (true=contains match, false=exact match; default false). It returns a summary with TRUNCATED values (~80 chars) — raw full cookie values are NOT included in the tool response; cookies are already live in the browser session for fetch/navigation, and shell-side reuse via cookie file is not available on this platform. " +
             "Use set_cookies to write cookies into the current page's cookie store via the native cookie store (so even HttpOnly cookies, which JS cannot set, land). Pass a 'cookies' array of objects, each with name + value (required) and optional domain (defaults to the current page host), path (defaults to '/'), secure, http_only, and expires (Unix timestamp in seconds; omit for a session cookie). " +
             "Use wait_for_dom_stable to wait until the page DOM stops changing (useful after navigation or interactions that trigger async data loading — polls every 0.5s, resolves when mutation rate gradient is stable for 3+ intervals, default timeout 10s). " +
             "Use tab_id to target a specific tab (defaults to the most recently used tab).",

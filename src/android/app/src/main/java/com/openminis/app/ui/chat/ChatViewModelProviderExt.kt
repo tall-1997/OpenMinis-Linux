@@ -48,3 +48,22 @@ internal fun ChatViewModel.forcedThinkingCeiling(entry: ModelEntry): ThinkingLev
     }
     return ceiling
 }
+
+/**
+ * [T-thinking-force-per-entry] Per-entry variant for lanes whose model may
+ * live on a DIFFERENT provider instance than the main session: the
+ * force-thinking switch is per-instance, so judging a lane by the main
+ * session's active instance was exactly backwards (main not forced + lane
+ * on a forced relay → the lane silently never thought). Same XHIGH lift.
+ */
+internal fun ChatViewModel.forcedThinkingCeilingFor(entry: ModelEntry): ThinkingLevel {
+    val ceiling = entry.effectiveMaxThinkingLevel
+    val instance = providerRepository.instance(entry.providerInstanceId)
+    val forced = instance != null &&
+        instance.forceThinkingEnabled &&
+        instance.providerType == com.openminis.app.data.model.ProviderType.anthropic
+    if (forced && ceiling.rank < ThinkingLevel.XHIGH.rank) {
+        return ThinkingLevel.XHIGH
+    }
+    return ceiling
+}
