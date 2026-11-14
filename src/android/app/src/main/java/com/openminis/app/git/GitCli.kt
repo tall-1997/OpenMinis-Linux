@@ -20,6 +20,9 @@ import com.openminis.app.sandbox.ExecutionCoordinator
  */
 object GitCli {
 
+    /** Log tag shared by the panel's probe chain (ViewModel uses it too). */
+    private const val TAG = "GitPanel"
+
     /** Diff cap keeps a huge `git show` from blowing the Compose text node. */
     private const val DIFF_MAX_CHARS = 200_000
 
@@ -518,11 +521,47 @@ object GitCli {
         // discover from the session workspace with ABSOLUTE paths (most
         // recently active first) and probe the winner by absolute path, so
         // a cd landing between the two commands cannot skew the adoption.
-        val d = runCatching { run(sessionId, GitCliCmd.DISCOVER_CMD, timeoutMs = 30_000L) }.getOrNull() ?: return direct
-        val repo = parseDiscover(d.output).firstOrNull() ?: return direct
-        val r2 = runCatching { run(sessionId, GitCliCmd.probeCmd(repo.path), timeoutMs = 30_000L) }.getOrElse { return direct }
+        // [T-git-panel-probe-retry] Each hop below used to bail straight to
+        // `direct` on a single throw — a sandbox still booting, a mutex
+        // timeout, a transient PRoot hiccup — and the panel then painted
+        // "not a repository" for a workspace that HAS repos (field report:
+        // it flips between found/missing across refreshes). Every hop now
+        // retries once after a short backoff; the retry is free when the
+        // sandbox is healthy and rescues the flaky boot window.
+        val d = runDisco(sessionId, GitCliCmd.DISCOVER_CMD, "discover") ?: return direct
+        val repos = parseDiscover(d.output)
+        if (repos.isEmpty()) {
+            android.util.Log.i(TAG, "[git-probe] discover exit=${d.exitCode} found no repos (out=${d.output.take(100)})")
+            return direct
+        }
+        val repo = repos.first()
+        val r2 = runDisco(sessionId, GitCliCmd.probeCmd(repo.path), "probe:${repo.name}") ?: return direct
         val nested = parseProbe(r2.output, r2.exitCode)
         return if (nested.isRepo) nested.copy(relativeRoot = repo.name) else direct
+    }
+
+    /**
+     * One sandbox read of the discovery chain, retried once. Cancellation
+     * propagates (same contract as [gitCall]); any other throw logs and
+     * retries, returning null only after the second failure.
+     */
+    private suspend fun runDisco(
+        sessionId: String,
+        cmd: String,
+        tag: String,
+    ): ExecutionCoordinator.CommandResult? = try {
+        run(sessionId, cmd, timeoutMs = 30_000L)
+    } catch (ce: kotlinx.coroutines.CancellationException) {
+        throw ce
+    } catch (e: Exception) {
+        android.util.Log.w(TAG, "[git-probe] $tag attempt 1 threw: ${e.message?.take(120)}; retrying")
+        kotlinx.coroutines.delay(150)
+        try {
+            run(sessionId, cmd, timeoutMs = 30_000L)
+        } catch (e2: Exception) {
+            android.util.Log.w(TAG, "[git-probe] $tag attempt 2 threw: ${e2.message?.take(120)}")
+            null
+        }
     }
 
     suspend fun status(sessionId: String, root: String? = null): GitStatus {
