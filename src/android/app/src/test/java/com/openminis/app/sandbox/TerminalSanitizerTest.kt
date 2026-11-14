@@ -24,6 +24,32 @@ class TerminalSanitizerTest {
         assertEquals(input, TerminalSanitizer.sanitize(input))
     }
 
+    // ==================== sanitize: structured record separators ====================
+
+    @Test
+    fun `sanitize preserves the unit separator used by git pretty format`() {
+        // git `--pretty=format:%x1f` (ZCode getCommitGraph shape) emits U+001F
+        // as the column delimiter of structured output; stripping it glued
+        // every column into one and the panel parser dropped all rows
+        // (history painted "no commits" whenever the sandbox source filled in).
+        val record = "abc123" + '\u001f' + "abc12" + '\u001f' + "author" + '\u001f' + "1700000000" + '\u001f' + "subject"
+        assertEquals(record, TerminalSanitizer.sanitize(record))
+        assertEquals(5, TerminalSanitizer.sanitize(record).split('\u001f').size)
+    }
+
+    @Test
+    fun `sanitize preserves the record separator`() {
+        val input = "a" + '\u001e' + "b"
+        assertEquals(input, TerminalSanitizer.sanitize(input))
+    }
+
+    @Test
+    fun `sanitize still strips other control characters`() {
+        // NUL and BEL must still go; \u001f next to them must survive.
+        val input = "a\u0000\u0007b" + '\u001f' + "c"
+        assertEquals("ab" + '\u001f' + "c", TerminalSanitizer.sanitize(input))
+    }
+
     // ==================== sanitize: ANSI color codes ====================
 
     @Test

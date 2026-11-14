@@ -87,7 +87,16 @@ object GitHostRepo {
         git.use { g ->
             val repo = g.repository
             val branch = runCatching { repo.branch }.getOrDefault("")
-            val cfg = repo.config
+            // [T-git-panel-probe-config] repo.config lazy-loads the stored
+            // config (+ the user config chain); a parse hiccup here used to
+            // escape as a raw exception and killed the whole native source
+            // for that refresh — the only unguarded call in this block. Fold
+            // it like the rest so a config problem degrades to missing
+            // identity fields instead of a probe crash.
+            val (userName, userEmail) = runCatching {
+                val cfg = repo.config
+                Pair(cfg.getString("user", null, "name"), cfg.getString("user", null, "email"))
+            }.getOrDefault(Pair(null, null))
             val shallow = runCatching {
                 java.io.File(repo.directory, "shallow").isFile ||
                     java.io.File(repo.commonDirectory, "shallow").isFile
@@ -96,8 +105,8 @@ object GitHostRepo {
                 isRepo = true,
                 root = dir.absolutePath,
                 branch = branch,
-                userName = cfg.getString("user", null, "name"),
-                userEmail = cfg.getString("user", null, "email"),
+                userName = userName,
+                userEmail = userEmail,
                 shallow = shallow,
             )
         }

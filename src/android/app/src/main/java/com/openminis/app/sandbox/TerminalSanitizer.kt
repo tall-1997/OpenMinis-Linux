@@ -45,8 +45,18 @@ object TerminalSanitizer {
         // Pass 2: Strip ANSI sequences
         val stripped = ANSI_REGEX.replace(crFolded, "")
 
-        // Pass 3: Remove null bytes and non-printable control chars (except \n \t)
-        val cleaned = stripped.filter { it == '\n' || it == '\t' || it.code >= 0x20 }
+        // Pass 3: Remove null bytes and non-printable control chars (except
+        // \n \t and the record/unit separators \u001e \u001f). \u001f is the
+        // column delimiter of structured shell output contracts — git's
+        // `--pretty=format:%x1f` (ZCode getCommitGraph shape, the git panel's
+        // history command) and similar machine-read pipelines route through
+        // this sanitizer; stripping it glued every column into one and the
+        // panel's parser dropped all rows as malformed (History tab showed
+        // "no commits" whenever the sandbox source filled in). NUL/BEL/other
+        // terminal hazards still go away.
+        val cleaned = stripped.filter {
+            it == '\n' || it == '\t' || it == '\u001f' || it == '\u001e' || it.code >= 0x20
+        }
 
         // Pass 4: Remove "null" artifacts from PRoot/pipe issues
         // - Lines that are entirely "null"
