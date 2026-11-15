@@ -2,55 +2,71 @@
 
 # Minis Ultra
 
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-[![Platforms](https://img.shields.io/badge/Platforms-Android%20arm64-lightgrey.svg)](#download)
-[![Release](https://img.shields.io/github/v/release/tall-1997/OpenMinis-Linux?include_prereleases)](https://github.com/tall-1997/OpenMinis-Linux/releases)
+<p>
+  <a href="https://github.com/tall-1997/OpenMinis-Linux/releases"><img alt="Release" src="https://img.shields.io/github/v/release/tall-1997/OpenMinis-Linux?include_prereleases"></a>
+  <a href="LICENSE"><img alt="License: GPL v3" src="https://img.shields.io/badge/License-GPLv3-blue.svg"></a>
+  <img alt="Platform" src="https://img.shields.io/badge/Android-arm64-3ddc84">
+  <img alt="Guest" src="https://img.shields.io/badge/Guest-Ubuntu%2024.04-E95420">
+</p>
 
-Minis Ultra is a private AI agent for Android arm64. It combines two execution environments in one application:
+**One phone, one AI that can actually do things.**
 
-- a **Linux sandbox** — an Ubuntu 24.04 (noble) arm64 guest running under PRoot in user space, with its own package manager, shell, and file system; and
-- a **device automation layer** — 30 structured tools that read the screen, operate apps, and change system settings, with a dedicated virtual display so the agent works on its own screen.
+Minis Ultra is a local, private AI assistant running on Android arm64. It doesn't just chat — your phone carries a complete Ubuntu 24.04 Linux sandbox plus a device-automation layer, so the model can install software, write code, run scripts, operate apps, and change system settings, all on your own device.
 
-The agent connects to any OpenAI-compatible endpoint. Multi-agent dispatch, scheduled and condition-triggered automation, an embedded browser, MCP client/server, and a bundled Agent2API gateway run locally on the device.
+> No root required. Nothing is uploaded to any third-party server — except the model endpoint you configure yourself.
 
-Package id `com.openminis.linux`, launcher name **Minis Ultra**. It installs alongside upstream [OpenMinis](https://github.com/OpenMinis/OpenMinis) (GPL-3.0); update checks point only at this repository.
+## Three execution environments, one session
 
-## License
+The model moves freely between three ways of "doing things" inside a single session:
 
-This repository is published under the [GNU GPL v3.0](LICENSE). It contains and modifies GPL-3 programs, so derivative works must ship corresponding source under GPL-3. The sandbox links [PRoot](https://github.com/proot-me/PRoot/) (GPL-2.0); the combined work is distributed under GPL-3. See [Third-party components](#third-party-components) below and [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) for the complete, authoritative list.
+```
+┌─────────────────────────────────────────────────┐
+│                Minis Ultra session               │
+├────────────────┬────────────────┬───────────────┤
+│  Linux sandbox │ Device automation │ Embedded browser │
+│  Ubuntu 24.04  │  30 structured   │  Desktop and    │
+│  user-space    │  tools driving   │  mobile profiles│
+│  apt / shell / │  the phone       │  with per-      │
+│  file system   │  (Shizuku-       │  session cache  │
+│                │  enhanced)       │                 │
+└────────────────┴────────────────┴───────────────┘
+```
+
+- **Linux sandbox** — an Ubuntu 24.04 arm64 guest running under PRoot in user space, with its own package manager, shell, and file system (details in [LINUX.md](LINUX.md)). Sessions in a project share the workspace; sessions without one get their own. Session diaries are always private.
+- **Device automation** — 30 structured tools: system settings (Wi-Fi, Bluetooth, volume, brightness, Do Not Disturb, flashlight, alarms), app launch and deep links, notification read / reply / dismiss, contacts / SMS / call log / calendar, media control, clipboard, and location. Capabilities are automatically enhanced when [Shizuku](https://github.com/RikkaApps/Shizuku) is present; every tool has a documented fallback without it.
+- **Dedicated virtual display** — the agent operates apps on its own screen. Login, captcha, and payment pages are handed back to you automatically, then resumed afterwards.
+
+## What that looks like
+
+- 🛠️ "Install Node and get this repo running" → apt + git + npm, end to end, inside the sandbox
+- 📱 "Read the verification code from WeChat and type it into the browser" → notification reading plus automated on-screen operation
+- ⏰ "Every morning at 8, turn yesterday's calendar into a checklist and send it to me" → scheduled automation rules running unattended
+- 🔌 "Hook up my local database tool" → the MCP client connects to any tool server
+
+## Multi-agent and automation
+
+- The **main session dispatches sub-agents**, background jobs, and interactive PTY terminals in parallel.
+- **Automation rules**: time schedules plus Wi-Fi / Bluetooth connection, charging, battery level, screen state, notification, and app-foreground triggers — running unattended under a per-rule tool whitelist.
+- **Guardrails**: repeated identical actions, ineffective actions, and failure streaks are warned and then stopped; outward-facing actions (sending, submitting) are automatically paced.
+- **Result cards**: tool results users consume render as typed cards, and state changes carry a one-tap undo that re-executes the original tool with the previous value.
+- **App knowledge**: bundled operating guides for 16 common applications, with on-device experience notes the agent maintains per app.
+
+## Connectivity and local services
+
+- Any **OpenAI-compatible endpoint**; models missing published limits are completed from the models catalog (context window, output cap, reasoning effort).
+- **MCP client and server**, global skills, and per-session memory diaries under `/var/minis/memory`.
+- **Quick invocation**: a floating ball, a quick-settings tile, the system share sheet, and a home-screen widget all open a half-screen command panel.
 
 ## Download
 
-Current builds are published on [Releases](https://github.com/tall-1997/OpenMinis-Linux/releases) as `minis-ultra-com.openminis.linux.apk`:
+[Releases](https://github.com/tall-1997/OpenMinis-Linux/releases) publish `minis-ultra-com.openminis.linux.apk`:
 
-- versioned tags (for example `2.0.82-linux`);
+- **versioned tags** (for example `2.0.90-linux`);
 - a rolling build, [android-latest](https://github.com/tall-1997/OpenMinis-Linux/releases/tag/android-latest), replaced on each successful `main` build.
 
 Allow unknown-app installs before sideloading. A debug-signed build cannot replace an installation signed with a different certificate; signing notes are in [BUILDING.md](BUILDING.md).
 
-## Features
-
-**Linux sandbox** (details in [LINUX.md](LINUX.md))
-
-- Ubuntu 24.04 arm64 guest under PRoot in user space; no root required.
-- Sessions without a project get their own workspace; sessions in a project share the workspace, attachments, and browser cache. Session diaries are always private.
-- Model endpoints are OpenAI-compatible; models missing published limits are completed from the models catalog (context window, output cap, reasoning effort).
-- The main session dispatches sub-agents, background jobs, and interactive PTY terminals.
-
-**Device automation**
-
-- 30 device tools: system settings (Wi-Fi, Bluetooth, volume, brightness, Do Not Disturb, flashlight, alarms), app launch and deep links, notification read / reply / dismiss, contacts / SMS / call log / calendar, media control, clipboard, and location. Several are enhanced by [Shizuku](https://github.com/RikkaApps/Shizuku) when present; every tool has a documented fallback without it.
-- Virtual display: the agent operates apps on its own screen. When a login, captcha, or payment page appears, the screen is handed to the user and returned afterwards.
-- Automation rules: time schedules plus Wi-Fi / Bluetooth connection, charging, battery level, screen state, notification, and app-foreground triggers, run unattended under a per-rule tool whitelist.
-- Guardrails: repeated identical actions, ineffective actions, and failure streaks are warned and then stopped; outward-facing actions (sending, submitting) are automatically paced.
-
-**Assistant layer**
-
-- Result cards: tool results that users consume (status, lists, media, files, events, state changes, links) render as typed cards; state changes carry a one-tap undo that re-executes the original tool with the previous value.
-- App knowledge: bundled operating guides for 16 common applications are injected on first entry, and the agent maintains on-device experience notes per app.
-- Agent2API gateway: the upstream [Agent2API](https://github.com/aimod-cc/Agent2API) engine (pinned `v3.0.8`) runs in an app-hosted process, aggregating provider accounts behind an OpenAI-compatible API with the full management panel on-device.
-- Quick invocation: a floating ball, a quick-settings tile, the system share sheet, and a home-screen widget all open a half-screen command panel.
-- Embedded browser (desktop and mobile profiles), MCP client and server, global skills, and per-session memory diaries under `/var/minis/memory`.
+Package id `com.openminis.linux`, launcher name **Minis Ultra**. It installs alongside upstream [OpenMinis](https://github.com/OpenMinis/OpenMinis) (GPL-3.0); update checks point only at this repository.
 
 ## Build from source
 
@@ -81,9 +97,11 @@ release-notes/  Per-version release notes
 scripts/        Rootfs and development scripts
 ```
 
-## Third-party components
+## License
 
-The authoritative list, including versions and licenses, is [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md). Summary:
+This repository is published under the [GNU GPL v3.0](LICENSE). It contains and modifies GPL-3 programs, so derivative works must ship corresponding source under GPL-3. The sandbox links [PRoot](https://github.com/proot-me/PRoot/) (GPL-2.0); the combined work is distributed under GPL-3.
+
+The authoritative component list, including versions and licenses, is [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md). Summary:
 
 **Native (`deps/`)**
 
@@ -95,21 +113,9 @@ The authoritative list, including versions and licenses, is [THIRD_PARTY_LICENSE
 | Ubuntu 24.04 (noble) arm64 rootfs | Canonical / Ubuntu package licenses | PRoot guest, downloaded at build time |
 | [android-sdk-tools](https://github.com/lzhiyong/android-sdk-tools) (aarch64) and Android SDK command-line tools | Apache-2.0 (AOSP) | aapt2 / zipalign / adb / sdkmanager inside the guest |
 
-**Android (Gradle)**
+**Android (Gradle)**: AndroidX / Jetpack, OkHttp, kotlinx-coroutines, kotlinx-serialization-json, Coil, markdown-renderer, Reorderable, ACRA (Apache-2.0); [Shizuku](https://github.com/RikkaApps/Shizuku) (MIT); Mozilla Rhino (MPL-2.0)
 
-| Component | License |
-|---|---|
-| AndroidX / Jetpack (Compose, Room, Navigation, DataStore, security-crypto, webkit, and related) | Apache-2.0 |
-| OkHttp + okhttp-sse, kotlinx-coroutines, kotlinx-serialization-json, Coil, mikepenz multiplatform-markdown-renderer, Reorderable, ACRA | Apache-2.0 |
-| [Shizuku](https://github.com/RikkaApps/Shizuku) API + provider | MIT |
-| Mozilla Rhino | MPL-2.0 |
-
-**Bundled**
-
-| Component | License |
-|---|---|
-| [Agent2API](https://github.com/aimod-cc/Agent2API) gateway and web UI (pinned `v3.0.8`, CI-built) | MIT |
-| KaTeX, jieba dictionaries | MIT |
+**Bundled**: KaTeX and jieba dictionaries (MIT)
 
 **Adapted source**: selected Android agent components adapted from [XINCODE-Public](https://github.com/kusesad-1122/XINCODE-Public) (GPL-3.0-or-later) — see THIRD_PARTY_LICENSES.md for the component list.
 
