@@ -5341,13 +5341,12 @@ fun ChatScreen(
                                 }
                             }
                             // [T-android-read-replies-pill-metrics] Balancing
-                            // spacer. There is a weight(1f) spacer BEFORE the
-                            // pill but the trailing side only had a fixed 8dp,
-                            // so all the row's slack collected on the left and
-                            // pushed the pill right of the bar's centre (measured
-                            // +59px on a 1080px screen). Matching weights on both
-                            // sides centre it between the leading (+, /) and
-                            // trailing (keyboard, mic/send) button groups.
+                            // spacer. A weight(1f) spacer sits BEFORE the pill but
+                            // the trailing side only had a fixed 8dp, so all the
+                            // row's slack collected left and pushed the pill right
+                            // of centre (+59px measured on a 1080px screen). Matching
+                            // weights on both sides centre it between the leading
+                            // (+, /) and trailing (keyboard, mic/send) groups.
                             Spacer(modifier = Modifier.weight(1f))
                         }
 
@@ -5389,11 +5388,12 @@ fun ChatScreen(
                         Spacer(modifier = Modifier.width(8.dp))
 
                         // Right: 3-state Send / Enqueue / Stop button (mirrors iOS sendButton).
-                        //   • streaming + hasText  → SEND (routes through viewModel.sendMessage,
-                        //     which dispatches to enqueuePrompt since _isStreaming is true).
-                        //     Visual feedback for the queued prompt comes from the dashed
-                        //     bubble that ChatViewModel.enqueuePrompt appends to the message
-                        //     list — no extra button badge needed (matches iOS).
+                        //   • streaming + hasText  → SEND (routes through viewModel.sendMessage:
+                        //     steering-first — the text is offered to steerPrompt while
+                        //     _isStreaming; enqueuePrompt is only the attachments path and
+                        //     the end-of-stream race fallback. Feedback: steering surfaces
+                        //     the ephemeral system-info row, enqueue the dashed bubble —
+                        //     no extra button badge needed for either).
                         //   • streaming + !hasText → STOP (cancel current run).
                         //   • !streaming           → SEND (full color when hasText, dimmed
                         //     when empty; same as before).

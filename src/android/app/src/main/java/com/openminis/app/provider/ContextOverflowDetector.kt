@@ -41,6 +41,20 @@ object ContextOverflowDetector {
     private val BRACKETED_STATUS_PREFIX = Regex("""^\[(\d{3})\]""")
 
     /**
+     * The second deterministic status shape the SAME shared error mapper
+     * ([com.openminis.app.provider.LLMProvider].mapHttpErrorShared) emits when
+     * the provider body is NOT parseable JSON (or is empty):
+     * `"HTTP <code>: <masked body excerpt>"`. Same trust level as the bracket
+     * form — it is the mapper's own assembly of the proven status, not
+     * provider-controlled text. Only the colon-carrying form is recognized:
+     * the mapper's other shapes ("HTTP 401 — …", "HTTP 403 forbidden — …")
+     * have no colon after the status, are 401/403 auth errors by construction,
+     * and never need overflow recovery. Line-anchored like the bracket form:
+     * a status mentioned mid-body is NOT taken as the response status.
+     */
+    private val HTTP_STATUS_PREFIX = Regex("""^HTTP (\d{3}):""")
+
+    /**
      * Regex patterns to detect context overflow errors from different providers.
      *
      * These patterns match error messages returned when the input exceeds
@@ -218,14 +232,25 @@ object ContextOverflowDetector {
      * detail routes through [detectFromError]. Call ONLY for a failed turn.
      *
      * Status recovery: [com.openminis.app.provider.LLMProvider]'s shared HTTP error mapper
-     * (mapHttpErrorShared) formats provider details as "[CODE] body" — e.g. a 413 arrives
-     * as "[413] ...". The status-prefix regex below recovers that status so [detectFromError]'s
-     * status-driven fallbacks work again (a bodyless or unrecognized-body HTTP 413 must still
-     * be Overflow, otherwise the 413 family is a dead path on every LLMError-carried error).
+     * (mapHttpErrorShared) formats provider details in TWO deterministic shapes, and both
+     * carry the proven status where [detectFromError]'s status-driven fallbacks can recover
+     * it (a bodyless or unrecognized-body HTTP 413 must still be Overflow, otherwise the
+     * 413 family is a dead path on every LLMError-carried error):
+     *  - `"[CODE] body"` — the JSON-body path (default `messageLabel`), e.g. a 413 arrives
+     *    as `"[413] ..."`; recovered by [BRACKETED_STATUS_PREFIX].
+     *  - `"HTTP CODE: body"` — the non-JSON / empty-body path of the same mapper, e.g.
+     *    `"HTTP 413: <masked body>"`; recovered by [HTTP_STATUS_PREFIX]. Without this
+     *    second shape every non-JSON 413 stayed a dead path (status null, body text
+     *    matched nothing).
+     * Custom `messageLabel` forms (e.g. Anthropic's `"[request_too_large]"`) do NOT match
+     * either numeric regex — the status stays null and the body text still routes through
+     * the [OVERFLOW_PATTERNS] table (request_too_large is already an entry there), exactly
+     * the pre-recovery behavior for label-shaped prefixes.
+     *
      * The status is trusted over the body: the string PASSED to [detectFromError] is the
      * suffix after the proven prefix, so the prefix can never double as the line-anchored
-     * "413..." table entry under a different real status. No bracket prefix -> null status,
-     * exactly the pre-recovery behavior.
+     * "413..." table entry under a different real status. No matching prefix -> null
+     * status, exactly the pre-recovery behavior.
      */
     fun detectFromLlmError(error: com.openminis.app.data.model.LLMError): OverflowVerdict {
         if (error is com.openminis.app.data.model.LLMError.ContextLengthExceeded) {
@@ -238,6 +263,7 @@ object ContextOverflowDetector {
             else -> error.message
         } ?: ""
         val statusMatch = BRACKETED_STATUS_PREFIX.find(body)
+            ?: HTTP_STATUS_PREFIX.find(body)
         return if (statusMatch != null) {
             detectFromError(
                 statusCode = statusMatch.groupValues[1].toInt(),

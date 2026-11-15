@@ -70,6 +70,40 @@ class RequestDeduper(
         }
     }
 
+    /**
+     * Check-only probe: true when [content] was already admitted within
+     * [windowMs]. Records NOTHING — the caller decides when (and whether) the
+     * fingerprint is committed via [record]. The split exists for the steering
+     * offer path: there the record point is acceptance (not arrival), so a
+     * check that ends in a failed offer must leave the fingerprint unrecorded
+     * or the enqueue fallback would misjudge the very next submission.
+     */
+    fun seenRecently(sessionId: String, content: String, nowMs: Long): Boolean {
+        val fingerprint = fingerprint(content)
+        val ring = sessions[sessionId] ?: return false
+        synchronized(ring) {
+            val cutoff = nowMs - windowMs
+            while (ring.isNotEmpty() && ring.first().admittedAtMs < cutoff) ring.removeFirst()
+            return ring.any { it.fingerprint == fingerprint }
+        }
+    }
+
+    /**
+     * Record [content] as admitted at [nowMs] without a reject check — the
+     * commit half of the [seenRecently]/[record] pair (steering-accept
+     * bookkeeping). Same prune/eviction discipline as [check].
+     */
+    fun record(sessionId: String, content: String, nowMs: Long) {
+        val fingerprint = fingerprint(content)
+        val ring = sessions.computeIfAbsent(sessionId) { ArrayDeque() }
+        synchronized(ring) {
+            val cutoff = nowMs - windowMs
+            while (ring.isNotEmpty() && ring.first().admittedAtMs < cutoff) ring.removeFirst()
+            ring.addLast(Entry(fingerprint, nowMs))
+            while (ring.size > maxEntriesPerSession) ring.removeFirst()
+        }
+    }
+
     /** Drop all bookkeeping for one session (session deleted / forked). */
     fun clear(sessionId: String) {
         sessions.remove(sessionId)

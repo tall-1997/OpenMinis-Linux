@@ -1293,17 +1293,16 @@ class ChatViewModel(
     /**
      * Prompts enqueued while the agent loop is running; drained after it finishes.
      *
-     * [T-android-queue-atomic-mutation] Written from TWO threads — enqueuePrompt /
-     * the withdraw + remove helpers on Main, drain + mid-loop inject from the agent
-     * loop on Dispatchers.IO — so every mutation goes through `update { }` (CAS
-     * loop) and every claim through `compareAndSet` (atomic snapshot, or retry on
-     * the value that won the race).
+     * [T-android-queue-atomic-mutation] Written from TWO threads — enqueuePrompt and
+     * the withdraw/remove helpers on Main, drain + mid-loop inject on Dispatchers.IO —
+     * so mutations go through `update { }` (CAS loop) and claims through `compareAndSet`.
      */
     internal val _promptQueue = MutableStateFlow<List<QueuedPrompt>>(emptyList())
     val promptQueue: StateFlow<List<QueuedPrompt>> = _promptQueue.asStateFlow()
 
-    // [T-pi-idempotent-submit] Enqueue-only duplicate-submission gate (see ChatRequestDedupeExt).
-    private val requestDeduper = RequestDedupeGate()
+    // [T-pi-idempotent-submit] Duplicate-submission gate for the enqueue path AND the
+    // steering offer (see ChatRequestDedupeExt; internal so the ext file can wire it).
+    internal val requestDeduper = RequestDedupeGate()
 
     /** [T-plan-step-retry] One-shot retry steering, consumed by [commitSessionNoticesOnce]. */
     internal val _planStepRetry = MutableStateFlow<PlanStepRetryRequest?>(null)
@@ -4235,9 +4234,8 @@ class ChatViewModel(
         index: Int,
         target: ChatMessage,
     ): Int {
-        // [T-delete-anchor-by-id] Resolve the anchor row id first: the target
-        // itself for a user message, the preceding visible user message for
-        // an assistant target (its whole turn goes).
+        // [T-delete-anchor-by-id] Resolve the anchor row id first: the target itself
+        // for a user message, the preceding visible user turn for an assistant one.
         val anchorMessage: ChatMessage? = if (target.role == "user") {
             target
         } else {
@@ -4281,10 +4279,9 @@ class ChatViewModel(
             // editMessage restored, mirroring how the caller clears the text.
             //
             // Symmetry with editMessage is the whole point: it REPLACES the
-            // composer's attachments with the edited message's, so leaving
-            // them behind on cancel would strand files the user never picked
-            // in a composer they thought they had backed out of — and the next
-            // ordinary send would silently attach them.
+            // composer's attachments with the edited message's, so leaving them
+            // behind on cancel would strand files the user never picked — and the
+            // next ordinary send would silently attach them.
             //
             // Guarded by the same non-null check as the log so a stray call
             // outside edit mode cannot wipe a draft's real attachments.
@@ -4296,14 +4293,16 @@ class ChatViewModel(
     /**
      * Enqueue a prompt into the running loop; shows immediately with isQueued=true, consumed
      * by drainQueuedPrompts() when the loop finishes. Mirrors iOS AIChatViewModel.enqueuePrompt().
+     * [skipDedupe] bypasses the text-only dedupe gate for steering re-routed at the loop's
+     * natural exit (their fingerprint was recorded at offer acceptance — ChatRequestDedupeExt).
      */
-    fun enqueuePrompt(text: String) {
+    fun enqueuePrompt(text: String, skipDedupe: Boolean = false) {
         val trimmed = text.trim()
         val pendingAttachments = _attachments.value
         if ((trimmed.isBlank() && pendingAttachments.isEmpty()) || !_isStreaming.value) return
-        // [T-pi-idempotent-submit] A same-text re-enqueue inside the 800 ms dedupe window drops with
-        // a system-info notice (a debounce, not an error; text-only; log+notice pair in ChatRequestDedupeExt).
-        if (pendingAttachments.isEmpty() && requestDeduper.rejects(activeSessionId, trimmed)) {
+        // [T-pi-idempotent-submit] A same-text re-enqueue inside the 800 ms window drops with a
+        // system-info notice (a debounce, not an error; log+notice pair in ChatRequestDedupeExt).
+        if (!skipDedupe && pendingAttachments.isEmpty() && requestDeduper.rejects(activeSessionId, trimmed)) {
             notifyDuplicateSendDropped()
             return
         }

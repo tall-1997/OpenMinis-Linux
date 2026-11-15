@@ -6,7 +6,7 @@
      keys in one place. -->
 <resources>
     <string name="vm_steering_queued">Steering поставлен в очередь — будет передан на следующем шаге агента, не прерывая текущий ответ.</string>
-    <string name="vm_send_deduped">Дублирующий отправку проигнорирован (тот же текст только что был отправлен).</string>
+    <string name="vm_send_deduped">Дублирующая отправка проигнорирована (тот же текст только что был отправлен).</string>
     <string name="vm_thinking_clamped_to">Thinking временно понижен до %1$s для соответствия лимиту модели.</string>
     <string name="vm_thinking_ceiling_restored">Лимит модели восстановлен — thinking снова %1$s.</string>
 </resources>

@@ -2,6 +2,7 @@ package com.openminis.app.data
 
 import com.openminis.app.data.RequestDeduper.Decision
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.CountDownLatch
@@ -154,5 +155,47 @@ class RequestDeduperTest {
         assertTrue(d.check("s1", "again", nowMs = 1_500) is Decision.Reject)
         // Just past the window: a deliberate re-send is admitted again.
         assertEquals(Decision.Accept, d.check("s1", "again", nowMs = 1_801))
+    }
+
+    // -- [T-agent-steering-dedupe] seenRecently/record: the check-only /
+    //    record split behind the steering offer path (RequestDedupeGate wires
+    //    these; the data component owns the window semantics).
+
+    @Test
+    fun `seenRecently probes without recording`() {
+        val d = deduper()
+        d.check("s1", "probe", nowMs = 1_000)
+        // Probe sees the admitted entry…
+        assertTrue(d.seenRecently("s1", "probe", nowMs = 1_100))
+        // …but records nothing: after the window a fresh offer is admitted
+        // again even though the probe kept hitting inside it.
+        assertTrue(d.seenRecently("s1", "probe", nowMs = 1_700))
+        assertFalse(d.seenRecently("s1", "probe", nowMs = 1_801))
+    }
+
+    @Test
+    fun `probe on an unknown session is false`() {
+        val d = deduper()
+        assertFalse(d.seenRecently("no-session", "anything", nowMs = 1_000))
+    }
+
+    @Test
+    fun `record commits without a check and the next probe hits`() {
+        val d = deduper()
+        d.record("s1", "steered", nowMs = 1_000)
+        assertTrue(d.seenRecently("s1", "steered", nowMs = 1_100))
+        // The committed entry dedupes like any admitted fingerprint.
+        assertTrue(d.check("s1", "steered", nowMs = 1_200) is Decision.Reject)
+    }
+
+    @Test
+    fun `record and check share one ring per session`() {
+        // The steering commit and the enqueue check must see ONE window: a
+        // text steered (recorded) blocks the enqueue check inside the window,
+        // and the check's prune expires the steering entry too.
+        val d = deduper()
+        d.record("s1", "cross channel", nowMs = 1_000)
+        assertTrue(d.check("s1", "cross channel", nowMs = 1_500) is Decision.Reject)
+        assertFalse(d.seenRecently("s1", "cross channel", nowMs = 1_801))
     }
 }

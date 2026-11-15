@@ -112,7 +112,13 @@ class CodemodeSandbox(
 
     /** Which budget cut a script short. */
     enum class InterruptReason {
-        /** Wall-clock deadline or instruction budget (a TIME trip). */
+        /**
+         * Wall-clock deadline or instruction budget (a TIME trip). Both trip
+         * kinds report timedOut=true — a deliberately MERGED accounting: the
+         * instruction budget bounds compute-only loops that would otherwise
+         * burn the wall clock anyway, and the UI renders the timeout clock
+         * from [RunResult.timedOut], not from which limit actually fired.
+         */
         TIME_BUDGET,
         /** [Limits.maxToolCalls] exceeded (a BUDGET trip, not the clock). */
         TOOL_CALL_CAP,

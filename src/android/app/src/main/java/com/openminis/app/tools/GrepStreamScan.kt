@@ -237,13 +237,22 @@ internal object GrepStreamScan {
                 return
             }
             // (P2-9) The deadline must bound the MATCH LOOP, not only the walk
-            // between files: a catastrophic-regex line (Regex.containsMatchIn
-            // backtracking) can burn minutes inside ONE line, so the previous
-            // file-level checks never ran. One clock comparison per line keeps
-            // the per-line cost negligible while making the deadline
-            // authoritative inside the loop; tripping drops the rest of THIS
-            // file (it stays a partial file under the existing truncated
-            // report) and the next child/directory check stops the walk.
+            // between files: a line pattern that is SLOW BUT RETURNS can burn
+            // seconds per line, so the previous file-level checks never ran.
+            // One clock comparison per line keeps the per-line cost negligible
+            // while making the deadline authoritative ACROSS lines. Known
+            // boundary, recorded honestly rather than overstated: this check
+            // constrains only matchers that RETURN. Catastrophic backtracking
+            // INSIDE one matcher invocation (one line whose matcher call never
+            // returns) is still unbounded — the JVM regex engine has no
+            // in-match interruption, so this check cannot run until the
+            // matcher returns; the wall-clock deadline bounds everything else.
+            // Tripping mid-file abandons the WHOLE file, not just the rest of
+            // it: the early return below also discards the hits already
+            // collected in hitIdx, so the file contributes nothing to the
+            // output (it stays in the scanned count, and the report's
+            // "scan deadline hit — partial coverage" bracket is the only
+            // signal), and the next child/directory check stops the walk.
             val hitIdx = ArrayList<Int>()
             for (i in lines.indices) {
                 if (timedOut()) return

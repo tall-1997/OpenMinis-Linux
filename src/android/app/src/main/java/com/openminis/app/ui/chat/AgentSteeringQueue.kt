@@ -21,9 +21,11 @@ import kotlinx.coroutines.withContext
  * bubble and the steering text rides the next request as plain user speech.
  *
  * Thread model: offers arrive on Main (composer), drains happen on the agent
- * loop dispatcher — every operation is guarded by one lock, matching the
- * `_promptQueue` CAS discipline without the StateFlow (the queue has no UI
- * representation of its own; a drained message surfaces as a normal user row).
+ * loop dispatcher — headless entry points may call from a non-Main thread, so
+ * EVERY operation (queue ops and [SteeringSessionStore.stateFor] alike) is
+ * guarded by one lock, matching the `_promptQueue` CAS discipline without the
+ * StateFlow (the queue has no UI representation of its own; a drained message
+ * surfaces as a normal user row).
  *
  * Lifecycle: a message offered with no run active stays queued and is picked
  * up by the next run's first turn boundary (pi line 184-185: "Check for
@@ -80,6 +82,21 @@ internal class AgentSteeringQueue(startMode: QueueMode = QueueMode.ONE_AT_A_TIME
         QueueMode.ONE_AT_A_TIME -> listOfNotNull(drainOne())
     }
 
+    /**
+     * [T-agent-steering-exit-fallback] Mode-independent fallback flush: hand
+     * EVERY currently queued entry to [sink] and clear the queue. True when at
+     * least one entry moved. Unlike [drainPerMode] this ignores the mode — a
+     * fallback flush must not strand entries behind a ONE_AT_A_TIME boundary
+     * the ending run will never reach. The sink indirection keeps the routing
+     * policy (VM-side: enqueuePrompt) out of the pure queue component, so the
+     * fallback is JVM-testable with a counting fake channel.
+     */
+    fun drainToFallback(sink: (String) -> Unit): Boolean {
+        val texts = drainAll()
+        texts.forEach(sink)
+        return texts.isNotEmpty()
+    }
+
     val isEmpty: Boolean get() = synchronized(lock) { items.isEmpty() }
 
     val size: Int get() = synchronized(lock) { items.size }
@@ -105,6 +122,13 @@ internal class SteerState(val queue: AgentSteeringQueue) {
  * JVM-testable without a ChatViewModel instance. [vmSteerState] is the
  * process-wide singleton; a NEW conversation never shares an owner, so
  * cross-session isolation is structural.
+ *
+ * Thread model: [stateFor] is reachable from Main (composer offers, UI
+ * drains) AND from headless entry points on background dispatchers, so the
+ * get-or-create is one critical section under `synchronized(states)` — a
+ * hand-rolled get + put-if-null, NOT [MutableMap.getOrPut], whose compound
+ * get-then-put is only atomic when every reader provably holds the same
+ * monitor as the wrapper's own methods.
  */
 internal class SteeringSessionStore {
     private val states =
@@ -117,7 +141,11 @@ internal class SteeringSessionStore {
      * [steeringState] below).
      */
     internal fun stateFor(owner: Any, sessionId: String): SteerState = synchronized(states) {
-        val state = states.getOrPut(owner) { SteerState(AgentSteeringQueue()) }
+        var state = states[owner]
+        if (state == null) {
+            state = SteerState(AgentSteeringQueue())
+            states[owner] = state
+        }
         state.sessionId = sessionId
         state
     }
@@ -196,6 +224,38 @@ internal suspend fun ChatViewModel.drainSteeringIntoRun(): Boolean {
         commitSteeringUserMessage(text)
     }
     return texts.isNotEmpty()
+}
+
+/**
+ * [T-agent-steering-exit-fallback] (P2-3) Post-run safety net, called ONCE at
+ * runAgentLoop's natural exit (keep-alive declined, before the break):
+ * steering accepted during the final turn we are NOT continuing would strand
+ * in the queue until some future run happened to touch steeringState() again.
+ * Re-route every entry onto the existing post-run prompt dispatch —
+ * enqueuePrompt → _promptQueue → the launching wrapper's drainQueuedPrompts —
+ * and clear the queue.
+ *
+ * skipDedupe=true is load-bearing: the offer path already recorded the
+ * fingerprint at acceptance (see the sendMessage steering branch), so the
+ * atomic check-and-record gate would reject the entry as a duplicate of
+ * itself. The queued system-info hint is NOT re-emitted either — the offer
+ * path already surfaced it, and the queued bubble enqueuePrompt appends is
+ * the post-offer representation. Error/cancel paths keep the "next run's
+ * turn-0 drain" semantics (drainSteeringIntoRun at the top of the loop);
+ * only the natural exit calls this.
+ *
+ * Main-confined: enqueuePrompt writes `_messages`/`_attachments` outside the
+ * CAS discipline, while the agent loop runs on Dispatchers.IO — the hop keeps
+ * the funnel's thread contract. The gate check happens before the hop so a
+ * stream that already wound down keeps its entries queued for the next run's
+ * turn-0 drain instead of dropping them into a closed door. Returns true when
+ * at least one entry was re-routed.
+ */
+internal suspend fun ChatViewModel.drainToPromptQueueFallback(): Boolean {
+    if (!_isStreaming.value) return false
+    return withContext(Dispatchers.Main) {
+        steeringState().queue.drainToFallback { enqueuePrompt(it, skipDedupe = true) }
+    }
 }
 
 /**

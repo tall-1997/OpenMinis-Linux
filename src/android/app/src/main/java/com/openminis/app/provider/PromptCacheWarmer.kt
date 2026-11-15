@@ -324,6 +324,17 @@ class PromptCacheTtlLedger {
         return entry.lastRequestAtMs + delay
     }
 
+    /**
+     * The TTL the pair's last request was recorded with, or null when the pair
+     * was never recorded or its family has no known lifetime. Read together
+     * with [nextWarmDueAtMs]: a non-null TTL with a null due point means the
+     * TTL is KNOWN but at or below [PromptCacheWarmer.MIN_WARMABLE_TTL_MS] —
+     * the "ttl-too-short" case the planner reports separately from
+     * "ttl-unknown".
+     */
+    fun recordedTtlMs(providerInstanceId: String?, modelId: String): Long? =
+        entries[key(providerInstanceId, modelId)]?.ttlMs
+
     /** Drop one pair (provider instance deleted / model switched away). */
     fun clear(providerInstanceId: String?, modelId: String) {
         entries.remove(key(providerInstanceId, modelId))

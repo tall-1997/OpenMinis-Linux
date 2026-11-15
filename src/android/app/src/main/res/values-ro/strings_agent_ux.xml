@@ -7,6 +7,6 @@
 <resources>
     <string name="vm_steering_queued">Steering în coadă — va fi transmis la următorul pas al agentului fără a interrompe răspunsul curent.</string>
     <string name="vm_send_deduped">Transmisiune dublă ignorată (acum a fost trimis același text).</string>
-    <string name="vm_thinking_clamped_to">Thinking temporaru redus la %1$s pentru a respecta limitul modelului.</string>
-    <string name="vm_thinking_ceiling_restored">Limitul modelului a fost restaurat — thinking revi la %1$s.</string>
+    <string name="vm_thinking_clamped_to">Thinking temporar redus la %1$s pentru a respecta limitul modelului.</string>
+    <string name="vm_thinking_ceiling_restored">Limitul modelului a fost restaurat — thinking revine la %1$s.</string>
 </resources>

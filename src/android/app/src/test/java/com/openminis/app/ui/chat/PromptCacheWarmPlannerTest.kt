@@ -38,6 +38,7 @@ class PromptCacheWarmPlannerTest {
         thinkingEnabled: Boolean = false,
         ttlRemainingPct: Double? = 0.05,
         lastRequestAtMs: Long = t0,
+        recordedTtlMs: Long? = 300_000L,
         dueAtMs: Long? = t0 + 270_000L,
         nowMs: Long = t0 + 280_000L,
         promptTokens: Int = 1_000_000,
@@ -52,6 +53,7 @@ class PromptCacheWarmPlannerTest {
         promptTokens = promptTokens,
         ttlRemainingPct = ttlRemainingPct,
         lastRequestAtMs = lastRequestAtMs,
+        recordedTtlMs = recordedTtlMs,
         dueAtMs = dueAtMs,
         nowMs = nowMs,
     )
@@ -99,9 +101,26 @@ class PromptCacheWarmPlannerTest {
 
     @Test
     fun `unknown TTL family never triggers`() {
-        val decision = happy(ttlRemainingPct = null, dueAtMs = null)
+        // Null due point AND null recorded TTL: the ledger never learned a
+        // lifetime for this pair (unknown family or never recorded).
+        val decision = happy(ttlRemainingPct = null, recordedTtlMs = null, dueAtMs = null)
         assertTrue(decision is WarmDecision.Stop)
         assertEquals("ttl-unknown", (decision as WarmDecision.Stop).reason)
+    }
+
+    @Test
+    fun `a known but non-warmable TTL reports ttl-too-short not ttl-unknown`() {
+        // The ledger DID record a TTL, but getCacheWarmingDelayMs refuses it:
+        // anything at or below MIN_WARMABLE_TTL_MS (10s) has no warm schedule.
+        // That is a value problem, not a lookup gap — it must not be tagged
+        // as the unknown-family case (review P3: diagnostic quality).
+        val belowFloor = happy(ttlRemainingPct = null, recordedTtlMs = 5_000L, dueAtMs = null)
+        assertTrue(belowFloor is WarmDecision.Stop)
+        assertEquals("ttl-too-short", (belowFloor as WarmDecision.Stop).reason)
+
+        // Exactly at the floor is also refused (`<=` in getCacheWarmingDelayMs).
+        val atFloor = happy(ttlRemainingPct = null, recordedTtlMs = PromptCacheWarmer.MIN_WARMABLE_TTL_MS, dueAtMs = null)
+        assertEquals("ttl-too-short", (atFloor as WarmDecision.Stop).reason)
     }
 
     @Test
@@ -177,6 +196,21 @@ class PromptCacheWarmPlannerTest {
         assertEquals(t0 + 60_000L + 270_000L, ledger.nextWarmDueAtMs("inst-1", "claude-x"))
         // Remaining fraction decays from the LATEST request, not the first.
         assertEquals(1.0, ledger.ttlRemainingPct("inst-1", "claude-x", t0 + 60_000L)!!, 1e-9)
+    }
+
+    @Test
+    fun `recordedTtlMs separates unknown-family pairs from too-short pairs`() {
+        val ledger = PromptCacheTtlLedger()
+        // Unknown family (ttl null) and never-recorded pairs both read null —
+        // the planner's "ttl-unknown" evidence.
+        ledger.recordRequest("inst-1", "relay-model", null, t0)
+        assertNull(ledger.recordedTtlMs("inst-1", "relay-model"))
+        assertNull(ledger.recordedTtlMs("inst-1", "never-seen"))
+        // A tiny KNOWN ttl reads back non-null while its due point is null —
+        // exactly the planner's "ttl-too-short" evidence.
+        ledger.recordRequest("inst-1", "tiny", 5_000L, t0)
+        assertEquals(5_000L, ledger.recordedTtlMs("inst-1", "tiny"))
+        assertNull(ledger.nextWarmDueAtMs("inst-1", "tiny"))
     }
 
     @Test

@@ -95,6 +95,8 @@ object PromptCacheWarmPlanner {
         /** Ledger-reported remaining fraction (0..1); null = pair never recorded / TTL unknown. */
         ttlRemainingPct: Double?,
         lastRequestAtMs: Long,
+        /** Ledger-recorded prompt-cache TTL for the pair; null = never recorded / TTL unknown. */
+        recordedTtlMs: Long?,
         /** Next refresh due point from the ledger; null = TTL unknown or too short to warm. */
         dueAtMs: Long?,
         nowMs: Long,
@@ -109,7 +111,17 @@ object PromptCacheWarmPlanner {
                 if (forceThinking) "budget-thinking-replay-ban" else "thinking-replay-ban",
             )
         }
-        if (dueAtMs == null) return WarmDecision.Stop("ttl-unknown")
+        if (dueAtMs == null) {
+            // One null, two different realities — kept as two diagnostic tags.
+            // [recordedTtlMs] null: the ledger never learned a TTL (pair never
+            // recorded, or the family has no known lifetime). [recordedTtlMs]
+            // known with a null due point: [PromptCacheWarmer
+            // .getCacheWarmingDelayMs] refused the KNOWN TTL — it sits at or
+            // below [PromptCacheWarmer.MIN_WARMABLE_TTL_MS]. Collapsing both
+            // into "ttl-unknown" misdiagnosed the too-short case as a lookup
+            // gap and sent debugging toward the TTL table, not the value.
+            return WarmDecision.Stop(if (recordedTtlMs == null) "ttl-unknown" else "ttl-too-short")
+        }
         // Idle horizon (pi MAX_IDLE_AGE): past it, continuation estimates are
         // meaningless and the entry is effectively lost anyway.
         if (PromptCacheWarmer.isWarmingTooOld(lastRequestAtMs, nowMs, WarmingPhase.IDLE)) {
@@ -316,6 +328,7 @@ object PromptCacheWarmCoordinator {
             promptTokens = snapshot.promptTokens,
             ttlRemainingPct = ledger.ttlRemainingPct(instanceId, modelId, nowMs),
             lastRequestAtMs = snapshot.requestedAtMs,
+            recordedTtlMs = ledger.recordedTtlMs(instanceId, modelId),
             dueAtMs = ledger.nextWarmDueAtMs(instanceId, modelId),
             nowMs = nowMs,
         )

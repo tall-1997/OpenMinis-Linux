@@ -114,6 +114,24 @@ internal fun ChatViewModel.buildTurnParts(
     allToolBlocks: List<AssistantBlock>,
     turnStartBlockIndex: Int,
     toolCallInputs: Map<String, String>,
+): List<AgentContentPart> = turnPartsFromBlocks(allToolBlocks, turnStartBlockIndex, toolCallInputs)
+
+/**
+ * Pure slice builder behind [buildTurnParts]. Extracted so the slice contract
+ * is JVM-testable — the extension needs a ChatViewModel receiver, which no JVM
+ * test can construct.
+ *
+ * [T-compact-retry-rebase] The compact-and-retry seal+swap clears allToolBlocks
+ * and rebases the loop's lower bound to 0; this function is where a STALE bound
+ * fails. `turnStartBlockIndex >= allToolBlocks.size` (the stale pre-clear size
+ * against the rewound list) returns an EMPTY list — the guard is silent by
+ * design for the genuine empty-turn case, which is exactly why a stale bound
+ * used to drop the whole retried turn at persist with no error anywhere.
+ */
+internal fun turnPartsFromBlocks(
+    allToolBlocks: List<AssistantBlock>,
+    turnStartBlockIndex: Int,
+    toolCallInputs: Map<String, String>,
 ): List<AgentContentPart> {
     if (turnStartBlockIndex >= allToolBlocks.size) return emptyList()
     val out = mutableListOf<AgentContentPart>()

@@ -72,4 +72,47 @@ class SshExecutionEnvironmentTest {
     fun `empty env yields no prefix`() {
         assertEquals("", prefix(emptyMap()))
     }
+
+    // ── drop-log sanitization (review P3: log-injection surface) ──
+
+    private fun sanitized(key: String): String =
+        SshExecutionEnvironment(untouchedBackend, "host-ref").sanitizeEnvKeyForLog(key)
+
+    @Test
+    fun `sanitized keys keep their printable bytes`() {
+        // Rejected shapes the log will actually render (leading digit, hyphen,
+        // space) must stay verbatim: stripping only removes control characters.
+        assertEquals("1BAD", sanitized("1BAD"))
+        assertEquals("A-B", sanitized("A-B"))
+        assertEquals(" spaced ", sanitized(" spaced "))
+    }
+
+    @Test
+    fun `control characters are stripped from logged keys`() {
+        // A newline would forge an extra log line; CR could rewrite one.
+        assertEquals("BADKEYX", sanitized("BAD\nKEY\rX"))
+        // DEL (0x7F) is stripped too; everything below 0x20 (tab, ESC, NUL…).
+        assertEquals("AB", sanitized("A\u007FB"))
+        assertEquals("TABESC", sanitized("TA\tB\u001bESC"))
+        // Printable non-ASCII is caller context, not injection surface: kept.
+        assertEquals("caf\u00e9", sanitized("caf\u00e9"))
+    }
+
+    @Test
+    fun `logged keys are capped at 64 characters`() {
+        val longKey = "k".repeat(200)
+        assertEquals(64, sanitized(longKey).length)
+        assertEquals("k".repeat(64), sanitized(longKey))
+        // Control characters are stripped BEFORE the cap: a 70-char key with
+        // 10 control chars fits inside the cap afterwards.
+        assertEquals("x".repeat(60), sanitized("x".repeat(60) + "\n".repeat(10)))
+    }
+
+    @Test
+    fun `newline keys are still dropped from the prefix unchanged`() {
+        // The sanitization is a LOG-ONLY transform: the drop decision itself
+        // keeps matching the raw key, and the export prefix stays empty.
+        assertEquals("", prefix(mapOf("A\nB" to "x")))
+        assertEquals("export A='1'; ", prefix(mapOf("A" to "1", "A\nB" to "x")))
+    }
 }

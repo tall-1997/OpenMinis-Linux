@@ -194,7 +194,22 @@ object CodemodeTool {
         }
 
         fun exit() {
-            depth.set(depth.get() - 1)
+            val next = depth.get() - 1
+            if (next <= 0) {
+                // Frame stack empty again: drop the ThreadLocal mapping instead
+                // of parking a boxed 0/underflow value in it (P3 hygiene). The
+                // guard runs on Dispatchers.IO worker threads, which the pool
+                // recycles for the app's lifetime — without remove() every
+                // thread that ever ran a codemode script carries the entry
+                // forever. Correctness is unchanged: get() after remove()
+                // re-initializes to 0 via withInitial, and the next enter()
+                // counts from 0 again. An unbalanced exit (caller bug) also
+                // lands here and resets to the clean baseline instead of
+                // leaving a negative depth that would swallow a later enter.
+                depth.remove()
+            } else {
+                depth.set(next)
+            }
         }
 
         /** True while this thread executes inside a codemode sandbox frame. */

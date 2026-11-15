@@ -244,6 +244,42 @@ class CodemodeToolTest {
         }
     }
 
+    @Test
+    fun guardDepthRestartsFromZeroAfterTheThreadLocalIsRemoved() {
+        // Balanced pair: exit() drops the ThreadLocal mapping (P3 hygiene for
+        // pooled Dispatchers.IO threads — no boxed depth parked forever) once
+        // the frame stack is empty. Counting must restart from the 0 baseline
+        // afterwards: the next enter on this thread is depth 1 again.
+        CodemodeTool.NestingGuard.enter()
+        CodemodeTool.NestingGuard.exit()
+        CodemodeTool.NestingGuard.enter()
+        try {
+            assertTrue(CodemodeTool.NestingGuard.insideScript())
+        } finally {
+            CodemodeTool.NestingGuard.exit()
+        }
+        assertFalse(CodemodeTool.NestingGuard.insideScript())
+    }
+
+    @Test
+    fun innerExitKeepsTheOuterFramesMappingAlive() {
+        // remove() fires only when the depth lands back at 0: leaving an INNER
+        // frame must not drop the OUTER frame's mapping (a naive unconditional
+        // remove would make this assertion fail).
+        CodemodeTool.NestingGuard.enter()
+        CodemodeTool.NestingGuard.enter()
+        CodemodeTool.NestingGuard.exit()
+        try {
+            assertTrue(
+                "outer frame must still count as inside a script",
+                CodemodeTool.NestingGuard.insideScript(),
+            )
+        } finally {
+            CodemodeTool.NestingGuard.exit()
+        }
+        assertFalse(CodemodeTool.NestingGuard.insideScript())
+    }
+
     // ── budget trips vs clock trips (review P2-13) ──
 
     @Test

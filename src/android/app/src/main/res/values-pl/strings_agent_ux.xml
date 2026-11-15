@@ -6,7 +6,7 @@
      keys in one place. -->
 <resources>
     <string name="vm_steering_queued">Steering w kolejce — zostanie przekazany w następnym kroku agenta, nie przerywając bieżącej odpowiedzi.</string>
-    <string name="vm_send_deduped">Duplikacja wysłki odrzucona (ten sam tekst wysłano właśnie).</string>
+    <string name="vm_send_deduped">Duplikacja wysyłki odrzucona (ten sam tekst wysłano właśnie).</string>
     <string name="vm_thinking_clamped_to">Thinking tymczasowo obniżony do %1$s — zgodnie z limitem modelu.</string>
     <string name="vm_thinking_ceiling_restored">Limit modelu przywrócony — thinking znowu na %1$s.</string>
 </resources>

@@ -315,6 +315,88 @@ class ContextOverflowDetectorTest {
         assertFalse(vetoed.isOverflow)
     }
 
+    // ── detectFromLlmError: "HTTP CODE: body" prefix recovery ───────────────
+    //
+    // mapHttpErrorShared's NON-JSON / empty-body path formats the SAME mapper's
+    // message as "HTTP <code>: <masked body>" — the bracket regex cannot see
+    // that status, so without the second shape every non-JSON 413 stayed a
+    // dead path (status null, body matched nothing).
+
+    @Test
+    fun `llm error with an HTTP-form 413 prefix is request-size overflow`() {
+        // The exact mapper assembly for a non-JSON 413 body.
+        val verdict = ContextOverflowDetector.detectFromLlmError(
+            LLMError.ProviderError("HTTP 413: payload too large"),
+        )
+        assertTrue("$verdict", verdict.isOverflow)
+        val overflow = verdict as OverflowVerdict.Overflow
+        assertEquals(ContextOverflowDetector.Source.HTTP_413, overflow.source)
+        assertNull(overflow.matchedPattern)
+
+        // Empty-body variant (mask of an empty excerpt leaves just the prefix).
+        val bodyless = ContextOverflowDetector.detectFromLlmError(
+            LLMError.ProviderError("HTTP 413: "),
+        )
+        assertTrue("$bodyless", bodyless.isOverflow)
+        assertEquals(ContextOverflowDetector.Source.HTTP_413, (bodyless as OverflowVerdict.Overflow).source)
+    }
+
+    @Test
+    fun `llm error with an HTTP-form non-413 status and no signal is no match`() {
+        assertEquals(
+            OverflowVerdict.NoMatch,
+            ContextOverflowDetector.detectFromLlmError(LLMError.ProviderError("HTTP 400: unknown")),
+        )
+        // The transient side stamps 5xx details with the same shape.
+        assertEquals(
+            OverflowVerdict.NoMatch,
+            ContextOverflowDetector.detectFromLlmError(
+                LLMError.TransientError("HTTP 503: backend temporarily unavailable"),
+            ),
+        )
+    }
+
+    @Test
+    fun `HTTP-form prefix body still routes through the overflow tables`() {
+        // A recognized wording outranks the recovered status (pi order).
+        val worded = ContextOverflowDetector.detectFromLlmError(
+            LLMError.ProviderError("HTTP 413: prompt is too long: 213462 tokens > 200000 maximum"),
+        )
+        val overflow = worded as OverflowVerdict.Overflow
+        assertEquals(ContextOverflowDetector.Source.ERROR_PATTERN, overflow.source)
+        assertEquals("prompt (?:is )?too long", overflow.matchedPattern)
+
+        // The exclusion table vetoes on this shape too.
+        val vetoed = ContextOverflowDetector.detectFromLlmError(
+            LLMError.ProviderError("HTTP 413: Too many requests, please slow down"),
+        )
+        assertTrue(vetoed is OverflowVerdict.Excluded)
+        assertFalse(vetoed.isOverflow)
+    }
+
+    @Test
+    fun `label-shaped prefixes keep the status-null behavior`() {
+        // A custom messageLabel (Anthropic's error type) matches neither numeric
+        // regex, so the status stays null — and the body text alone decides.
+        // request_too_large is an OVERFLOW_PATTERNS entry, so this 413-class
+        // answer is still caught, via the body table rather than the status.
+        val labeled = ContextOverflowDetector.detectFromLlmError(
+            LLMError.ProviderError("[request_too_large] Request exceeds the maximum size"),
+        )
+        val overflow = labeled as OverflowVerdict.Overflow
+        assertEquals(ContextOverflowDetector.Source.ERROR_PATTERN, overflow.source)
+        assertEquals("request_too_large", overflow.matchedPattern)
+
+        // A label whose body carries no overflow wording still ends in NoMatch
+        // (no accidental status recovery from the bracket shape).
+        assertEquals(
+            OverflowVerdict.NoMatch,
+            ContextOverflowDetector.detectFromLlmError(
+                LLMError.ProviderError("[invalid_request_error] something unrelated"),
+            ),
+        )
+    }
+
     // ── Cerebras bodyless gate ──────────────────────────────────────────────
 
     @Test

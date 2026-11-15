@@ -60,7 +60,26 @@ internal fun ChatViewModel.sendMessage(
     // (composer, overlay bus, voice, headless), so no caller keeps its own
     // streaming-dispatch branch.
     if (_isStreaming.value) {
-        if (_attachments.value.isEmpty() && steerPrompt(text)) return
+        if (_attachments.value.isEmpty()) {
+            // [T-agent-steering-dedupe] Gate the offer with the SAME text
+            // fingerprint the enqueue path uses — the offer used to bypass the
+            // gate entirely, so a streaming double-tap delivered the text twice.
+            // Check-only first (no record): the fingerprint is committed only
+            // when the offer is ACCEPTED, so if steerPrompt loses the
+            // end-of-stream race below, the enqueue fallback still meets an
+            // unrecorded fingerprint and its own atomic gate stays the sole
+            // record point on that path (no mis-reject of a legitimate send).
+            if (requestDedupeSeen(activeSessionId, trimmed)) {
+                notifyDuplicateSendDropped()
+                return
+            }
+            if (steerPrompt(text)) {
+                requestDedupeRecord(activeSessionId, trimmed)
+                return
+            }
+            // steerPrompt returned false: the stream ended between the funnel's
+            // check and the offer's own guard — fall through to enqueuePrompt.
+        }
         enqueuePrompt(text)
         return
     }

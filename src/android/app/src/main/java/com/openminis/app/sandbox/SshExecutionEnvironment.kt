@@ -32,8 +32,10 @@ import kotlinx.coroutines.withContext
  *   the first simple command. Keys that are not valid POSIX shell names are
  *   dropped (with a log line, never silent): a poisoned key would make the
  *   whole prefix a syntax error and break the ENTIRE command line, not just
- *   one variable (review P2-15). The caller is environment negotiation, so
- *   this is a skip, not an exception.
+ *   one variable (review P2-15). The drop-log renders the key through
+ *   [sanitizeEnvKeyForLog] — control characters stripped, 64-char cap — so
+ *   caller-controlled bytes can never forge or bloat log lines (P3 review).
+ *   The caller is environment negotiation, so this is a skip, not an exception.
  * - [ExecOptions.stdin] is unsupported (the backend's exec channel exposes no
  *   stdin input); declared honestly in [environmentInfo].
  * - [com.openminis.app.ssh.SshFailure] propagates from [exec]: "the command
@@ -82,6 +84,28 @@ class SshExecutionEnvironment(
     /** POSIX shell export-name rule (review P2-15): [A-Za-z_][A-Za-z0-9_]*. */
     private val SHELL_ENV_KEY = Regex("[A-Za-z_][A-Za-z0-9_]*")
 
+    /** Cap on the logged length of a rejected env key (see [sanitizeEnvKeyForLog]). */
+    private val MAX_LOGGED_ENV_KEY_CHARS = 64
+
+    /**
+     * Log-safe rendering of a REJECTED env key (P3 review). The key is caller
+     * data (environment negotiation), so before it reaches the log:
+     *  - every control character (< 0x20 and 0x7F) is stripped — a `\n` in the
+     *    key would forge extra log lines and a `\r` could rewrite them (log
+     *    injection);
+     *  - the remainder is truncated to [MAX_LOGGED_ENV_KEY_CHARS] chars so a
+     *    giant key cannot bloat the log file.
+     * Valid shell names never reach this path (the name rule accepts none of
+     * the stripped characters and nothing near 64 chars matters diagnostically),
+     * so the transformation can only ever make a diagnostic less verbatim.
+     * Pure function, internal for tests — AppLogger has no injectable appender
+     * to assert against.
+     */
+    internal fun sanitizeEnvKeyForLog(key: String): String {
+        val printable = key.filter { it.code >= 0x20 && it.code != 0x7F }
+        return printable.take(MAX_LOGGED_ENV_KEY_CHARS)
+    }
+
     /** POSIX single-quote escaping: `it's` -> `'it'\''s'`. Visible for tests. */
     internal fun shellExportPrefix(env: Map<String, String>): String {
         if (env.isEmpty()) return ""
@@ -90,11 +114,15 @@ class SshExecutionEnvironment(
         // error — that breaks the ENTIRE command, not one variable. Drop such
         // keys with a log line: the caller is environment negotiation, so a
         // malformed key is caller data, not an exception worth failing the
-        // exec over (review P2-15).
+        // exec over (review P2-15). The key is sanitized before logging —
+        // raw caller bytes never reach the log (P3 review).
         val assignments = StringBuilder()
         for ((k, v) in env) {
             if (!SHELL_ENV_KEY.matches(k)) {
-                AppLogger.warning(tag, "shellExportPrefix: dropping env var with invalid shell name: $k")
+                AppLogger.warning(
+                    tag,
+                    "shellExportPrefix: dropping env var with invalid shell name: ${sanitizeEnvKeyForLog(k)}",
+                )
                 continue
             }
             if (assignments.isNotEmpty()) assignments.append(' ')

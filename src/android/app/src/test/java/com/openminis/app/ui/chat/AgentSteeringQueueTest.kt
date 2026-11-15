@@ -149,4 +149,71 @@ class AgentSteeringQueueTest {
         val other = store.stateFor(Any(), "s1")
         assertEquals(0, other.queue.size)
     }
+
+    // -- [T-agent-steering-exit-fallback] (P2-3) the natural-exit re-route --
+
+    @Test
+    fun `fallback flush hands every entry to the sink and clears the queue`() {
+        // The VM-side extension routes the sink through enqueuePrompt
+        // (skipDedupe=true) with a fake channel counting exactly what a real
+        // post-run dispatch would receive.
+        val queue = AgentSteeringQueue()
+        queue.offer("a")
+        queue.offer("b")
+        queue.offer("c")
+        val routed = mutableListOf<String>()
+        assertTrue(queue.drainToFallback { routed += it })
+        assertEquals(listOf("a", "b", "c"), routed)
+        assertTrue(queue.isEmpty)
+        // Empty queue: nothing moved, nothing routed.
+        assertFalse(queue.drainToFallback { routed += it })
+    }
+
+    @Test
+    fun `fallback flush ignores the mode and is offer-ordered`() {
+        // ONE_AT_A_TIME still drains EVERYTHING at the exit: the ending run will
+        // never reach another boundary, so per-mode draining would strand the
+        // rest behind a boundary that never comes.
+        val queue = AgentSteeringQueue(QueueMode.ONE_AT_A_TIME)
+        queue.offer("x")
+        queue.offer("y")
+        queue.mode = QueueMode.ALL
+        queue.offer("z")
+        val routed = mutableListOf<String>()
+        assertTrue(queue.drainToFallback { routed += it })
+        assertEquals(listOf("x", "y", "z"), routed)
+        assertTrue(queue.isEmpty)
+    }
+
+    // -- [T-agent-steering-store-atomic] (P2-5) stateFor first-access race --
+
+    @Test
+    fun `concurrent first accesses produce exactly one SteerState`() {
+        // headless entries may call stateFor off-Main; the store must resolve a
+        // racing first access to ONE state (hand-rolled get/put-if-null under
+        // the lock, NOT getOrPut).
+        val store = SteeringSessionStore()
+        val owner = Any()
+        val threads = 8
+        val start = CountDownLatch(1)
+        val done = CountDownLatch(threads)
+        val pool = Executors.newFixedThreadPool(threads)
+        val seen = java.util.concurrent.ConcurrentLinkedQueue<SteerState>()
+        repeat(threads) {
+            pool.execute {
+                start.await()
+                seen.add(store.stateFor(owner, "s"))
+                done.countDown()
+            }
+        }
+        start.countDown()
+        assertTrue("workers finished in time", done.await(10, TimeUnit.SECONDS))
+        pool.shutdownNow()
+        assertEquals(threads, seen.size)
+        assertEquals(1, seen.map { System.identityHashCode(it) }.distinct().count())
+        // The single state carries the queue and the re-stamped session id.
+        val state = seen.first()
+        assertEquals("s", state.sessionId)
+        assertTrue(state.queue.isEmpty)
+    }
 }
