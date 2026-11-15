@@ -414,11 +414,10 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             AppLogger.info(ChatViewModel.TAG_STREAM, "📨[QueueInterrupt] turn=$turn $phase cut — answering queued prompt directly")
             throw QueuedPromptInterrupt()
         }
-        // [T-compact-on-context-overflow][T-context-overflow-usage] Shared
-        // compact-and-retry for BOTH overflow families (error path + success
-        // gate). true = caller must `continue` to re-dispatch; false (cap
-        // spent / compaction failed) falls through to retry/fallback.
-        suspend fun compactAndRetryForOverflow(details: String): Boolean {
+        // [T-compact-on-context-overflow][T-context-overflow-usage] Cap-guarded
+        // compaction shared by all overflow gates (error path + success gate).
+        // true = the history was compacted once under this run's cap.
+        suspend fun runOverflowCompaction(details: String): Boolean {
             if (contextOverflowCompactions >= 1) return false
             contextOverflowCompactions += 1
             Log.w(ChatViewModel.TAG, "📦 Context overflow — compacting once and retrying (attempt $contextOverflowCompactions): $details")
@@ -433,7 +432,14 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             }
             val compacted = awaitCompaction()
             withContext(Dispatchers.Main) { clearInlineError() }
-            if (!compacted) return false
+            return compacted
+        }
+
+        // Error-path / truncation-path recovery: compact AND re-dispatch.
+        // true = caller must `continue` to re-send with the compacted history;
+        // false (cap spent / compaction failed) falls through to retry/fallback.
+        suspend fun compactAndRetryForOverflow(details: String): Boolean {
+            if (!runOverflowCompaction(details)) return false
             // Drop the overflowing attempt's usage: the collector max-merges per
             // field, so a stale report would stick to the compacted retry.
             lastUsage = null
@@ -461,6 +467,13 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             stallResumeContext = null
             return true
         }
+
+        // pi case ② (natural stop + over-window usage): compact ONLY — the
+        // answer already streamed and must complete normally. No retry, no
+        // turn-state reset, no usage drop (the turn's own usage still gets
+        // persisted by the turn-end path).
+        suspend fun compactForSilentOverflow(details: String): Boolean =
+            runOverflowCompaction(details)
         while (!collectDone) {
             // [T-android-model-switch-midrun-adopt] See resolveModelSwitch.
             resolveModelSwitch(loopModelEpoch, currentProvider)?.let { adopted ->
@@ -989,20 +1002,40 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     lastUsage, isBusy = { _isStreaming.value },
                 )
                 // [T-context-overflow-usage] Success-path overflow gate (pi
-                // isContextOverflow cases 2+3): a "successful" response whose
-                // own report proves the window was exceeded (z.ai silent
-                // overflow, or a zero-output length stop on a full window —
-                // Xiaomi MiMo). Same compact-and-retry branch as the error
-                // path; the shared cap prevents re-entry.
+                // isContextOverflow cases 2+3). The two families take DIFFERENT
+                // recovery paths, matching pi exactly:
+                //  - TRUNCATED (length stop + zero output on a full window,
+                //    Xiaomi MiMo): the turn produced no answer — compact once
+                //    and re-dispatch (pi case ① recovery).
+                //  - SILENT (natural stop + prompt side over the window, z.ai):
+                //    the answer DID stream — pi case ② compacts and NEVER
+                //    retries ("overflow is never retried"). Compact only and
+                //    let the turn end normally with its streamed content;
+                //    touching the turn state here would drop the user's answer.
                 val win = effectiveContextWindowTokens() ?: 0
-                val successOverflow = com.openminis.app.provider.ContextOverflowDetector.isSuccessfulOverflow(
+                val successOverflowKind = com.openminis.app.provider.ContextOverflowDetector.successfulOverflowKind(
                     finishReason = turnFinishReason,
                     outputTokens = (lastUsage?.outputTokens ?: 0).toLong(),
                     inputTokens = ((lastUsage?.inputTokens ?: 0) + (lastUsage?.cacheReadInputTokens ?: 0)).toLong(),
                     contextWindow = win,
                 )
-                if (successOverflow && compactAndRetryForOverflow("silent/truncation on ${currentProvider.model.displayName} (usage=${lastUsage?.latestContextTokens ?: 0}, window=$win)")) {
-                    continue  // re-dispatch with compacted history
+                when (successOverflowKind) {
+                    com.openminis.app.provider.ContextOverflowDetector.SuccessfulOverflowKind.TRUNCATED -> {
+                        if (compactAndRetryForOverflow("truncation overflow on ${currentProvider.model.displayName} (usage=${lastUsage?.latestContextTokens ?: 0}, window=$win)")) {
+                            // [P0-fix] collectDone was already set above, so a
+                            // bare `continue` fell out of the exited while and
+                            // the re-dispatch never happened (two independent
+                            // reviews). Re-arm the loop for the real retry.
+                            collectDone = false
+                            continue
+                        }
+                    }
+                    com.openminis.app.provider.ContextOverflowDetector.SuccessfulOverflowKind.SILENT -> {
+                        compactForSilentOverflow(
+                            "silent overflow on ${currentProvider.model.displayName} (usage=${lastUsage?.latestContextTokens ?: 0}, window=$win)",
+                        )
+                    }
+                    null -> {}
                 }
                 // [T-stall-resume] The stream attempt succeeded — no resume
                 // context should leak into a later turn.

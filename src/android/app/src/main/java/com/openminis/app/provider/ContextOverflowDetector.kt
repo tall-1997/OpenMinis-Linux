@@ -270,23 +270,56 @@ object ContextOverflowDetector {
     /**
      * Success-path overflow gate (pi's isContextOverflow cases 2+3 combined
      * for callers holding one SUCCESSFUL response — failed turns use
-     * [detectFromError] / [detectFromLlmError]). True when the response
+     * [detectFromError] / [detectFromLlmError]). Non-null when the response
      * answered "successfully" but its own report proves the window was
-     * exceeded: the prompt side already exceeds the window ([detectFromUsage],
-     * z.ai silent overflow) or the input silently clipped to fill the window
-     * with nothing generated ([detectTruncationOverflow], Xiaomi MiMo).
+     * exceeded, with the family that fired:
+     *
+     *  - [SuccessfulOverflowKind.TRUNCATED] — the input silently clipped to
+     *    fill the window with nothing generated ([detectTruncationOverflow],
+     *    Xiaomi MiMo). The turn produced no answer; pi case ① recovers with
+     *    ONE bounded compact-and-retry.
+     *  - [SuccessfulOverflowKind.SILENT] — the prompt side already exceeds the
+     *    window ([detectFromUsage], z.ai style). GATED on a natural-stop
+     *    finish reason exactly like pi (`stopReason === "stop"`): a response
+     *    that ended any other way is not trusted as a clean "answered
+     *    successfully" report. The answer DID stream; pi case ② compacts and
+     *    never retries ("overflow is never retried").
      *
      * @param inputTokens the FULL prompt side of the response: usage.input +
      *   usage.cacheRead (the caller combines them — that sum is what fills the
      *   window, same convention as [detectTruncationOverflow])
      */
+    enum class SuccessfulOverflowKind { SILENT, TRUNCATED }
+
+    fun successfulOverflowKind(
+        finishReason: String?,
+        outputTokens: Long,
+        inputTokens: Long,
+        contextWindow: Int,
+    ): SuccessfulOverflowKind? = when {
+        detectTruncationOverflow(finishReason, outputTokens, inputTokens, contextWindow) ->
+            SuccessfulOverflowKind.TRUNCATED
+        isStopFinish(finishReason) && detectFromUsage(inputTokens, 0L, contextWindow) ->
+            SuccessfulOverflowKind.SILENT
+        else -> null
+    }
+
+    /** Boolean convenience over [successfulOverflowKind] (pi's boolean shape). */
     fun isSuccessfulOverflow(
         finishReason: String?,
         outputTokens: Long,
         inputTokens: Long,
         contextWindow: Int,
-    ): Boolean = detectFromUsage(inputTokens, 0L, contextWindow) ||
-        detectTruncationOverflow(finishReason, outputTokens, inputTokens, contextWindow)
+    ): Boolean = successfulOverflowKind(finishReason, outputTokens, inputTokens, contextWindow) != null
+
+    /** Natural-completion spellings across the supported provider families. */
+    private fun isStopFinish(finishReason: String?): Boolean {
+        if (finishReason.isNullOrEmpty()) return false
+        val reason = finishReason.trim()
+        return reason.equals("stop", ignoreCase = true) ||
+            reason.equals("end_turn", ignoreCase = true) ||
+            reason.equals("stop_sequence", ignoreCase = true)
+    }
 
     /**
      * Recoverable length stop (pi's isRecoverableLength): the response ended on

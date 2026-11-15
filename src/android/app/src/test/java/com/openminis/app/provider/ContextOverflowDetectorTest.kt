@@ -462,4 +462,47 @@ class ContextOverflowDetectorTest {
             ),
         )
     }
+
+    // ── success-path kind split (P0 fix: SILENT never retries) ──────────────
+
+    @Test
+    fun `kind splits silent from truncation families`() {
+        // z.ai style: natural stop + over-window prompt side → SILENT.
+        assertEquals(
+            ContextOverflowDetector.SuccessfulOverflowKind.SILENT,
+            ContextOverflowDetector.successfulOverflowKind("stop", 512, 213_000L, 200_000),
+        )
+        // Anthropic/Gemini natural-stop spellings count for the silent family.
+        assertEquals(
+            ContextOverflowDetector.SuccessfulOverflowKind.SILENT,
+            ContextOverflowDetector.successfulOverflowKind("end_turn", 512, 213_000L, 200_000),
+        )
+        // Xiaomi MiMo style: length + zero output on a full window → TRUNCATED
+        // (even though the prompt side alone is over the window too).
+        assertEquals(
+            ContextOverflowDetector.SuccessfulOverflowKind.TRUNCATED,
+            ContextOverflowDetector.successfulOverflowKind("length", 0, 213_000L, 200_000),
+        )
+    }
+
+    @Test
+    fun `silent family is gated on natural stop finishes like pi`() {
+        // pi: `stopReason === "stop"` — a response that ended any other way is
+        // not trusted as a clean "answered successfully" report.
+        assertNull(
+            ContextOverflowDetector.successfulOverflowKind("tool_calls", 512, 213_000L, 200_000),
+        )
+        assertNull(
+            ContextOverflowDetector.successfulOverflowKind("tool_use", 512, 213_000L, 200_000),
+        )
+        assertNull(
+            ContextOverflowDetector.successfulOverflowKind(null, 512, 213_000L, 200_000),
+        )
+        // BUT the truncation family does not need the stop gate: length +
+        // zero output stays TRUNCATED regardless of the spelling family.
+        assertEquals(
+            ContextOverflowDetector.SuccessfulOverflowKind.TRUNCATED,
+            ContextOverflowDetector.successfulOverflowKind("max_tokens", 0, 213_000L, 200_000),
+        )
+    }
 }
