@@ -261,46 +261,13 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
 
                 // [T-android-inloop-compact-divider-order / GH#235] Seal the
                 // bubble this run has been writing into and continue in a
-                // FRESH one below the divider.
-                val sealedId = assistantId
+                // FRESH one below the divider — shared implementation with
+                // the overflow compact-and-retry body (ChatCompactSealSwap.kt).
+                // Same loop-scope reset as the queued-prompt swap, so the new
+                // bubble starts empty and buildTurnParts slices only the new
+                // turn's blocks.
                 val freshAssistantId = "assistant_${System.currentTimeMillis()}_${turn}"
-                withContext(Dispatchers.Main) {
-                    // Flush whatever the sealed bubble accumulated and stop
-                    // it streaming, so it renders as finished history.
-                    updateAssistantMessage(
-                        sealedId,
-                        accumulatedText,
-                        false,
-                        allToolBlocks,
-                        isAwaitingModelResponse = false,
-                    )
-                    // If compaction fired before the bubble produced
-                    // anything, it would render as an empty row stranded
-                    // above the divider — drop it. Mirrors the iOS branch.
-                    val sealed = _messages.value.firstOrNull { it.id == sealedId }
-                    if (sealed != null &&
-                        sealed.content.isEmpty() &&
-                        sealed.toolBlocks.isEmpty()
-                    ) {
-                        _messages.value = _messages.value.filterNot { it.id == sealedId }
-                        AppLogger.info(
-                            ChatViewModel.TAG,
-                            "[Compact] in-loop: dropped empty sealed bubble $sealedId",
-                        )
-                    }
-                    _messages.value = trimLoadedWindow(_messages.value + ChatMessage(
-                        id = freshAssistantId,
-                        role = "assistant",
-                        content = "",
-                        isStreaming = true,
-                        isAwaitingModelResponse = true,
-                        thinkingLevel = turnThinkingLevel,
-                    ))
-                }
-                dropStreamingEntry(sealedId)
-                // Same loop-scope reset the queued-prompt swap performs, so
-                // the new bubble starts empty and buildTurnParts slices only
-                // the new turn's blocks.
+                sealCompactedBubbleAndSwap(assistantId, accumulatedText, allToolBlocks, freshAssistantId, turnThinkingLevel)
                 assistantId = freshAssistantId
                 accumulatedText = ""
                 allToolBlocks.clear()
@@ -309,7 +276,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 toolCallRawArgs.clear()
                 AppLogger.info(
                     ChatViewModel.TAG,
-                    "[Compact] in-loop: sealed $sealedId, continuing in $freshAssistantId below the divider",
+                    "[Compact] in-loop: sealed and swapped, continuing below the divider",
                 )
                 continue
             }
@@ -446,6 +413,53 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         fun cutForQueuedPrompt(phase: String) {
             AppLogger.info(ChatViewModel.TAG_STREAM, "📨[QueueInterrupt] turn=$turn $phase cut — answering queued prompt directly")
             throw QueuedPromptInterrupt()
+        }
+        // [T-compact-on-context-overflow][T-context-overflow-usage] Shared
+        // compact-and-retry for BOTH overflow families (error path + success
+        // gate). true = caller must `continue` to re-dispatch; false (cap
+        // spent / compaction failed) falls through to retry/fallback.
+        suspend fun compactAndRetryForOverflow(details: String): Boolean {
+            if (contextOverflowCompactions >= 1) return false
+            contextOverflowCompactions += 1
+            Log.w(ChatViewModel.TAG, "📦 Context overflow — compacting once and retrying (attempt $contextOverflowCompactions): $details")
+            withContext(Dispatchers.Main) {
+                setTransientInlineError(
+                    context.getString(
+                        com.openminis.app.R.string.vm_context_filling_compacting,
+                        contextTokensForPolicy(),
+                        effectiveContextWindowTokens() ?: 0,
+                    ),
+                )
+            }
+            val compacted = awaitCompaction()
+            withContext(Dispatchers.Main) { clearInlineError() }
+            if (!compacted) return false
+            // Drop the overflowing attempt's usage: the collector max-merges per
+            // field, so a stale report would stick to the compacted retry.
+            lastUsage = null
+            lastContextTokens = 0
+            // Same seal+swap contract as the in-loop COMPACTED branch (GH#235);
+            val freshAssistantId = "assistant_${System.currentTimeMillis()}_$turn"
+            sealCompactedBubbleAndSwap(assistantId, messageTextSnapshot(), allToolBlocks, freshAssistantId, turnThinkingLevel)
+            assistantId = freshAssistantId
+            accumulatedText = ""
+            allToolBlocks.clear()
+            allToolInputs.clear()
+            toolInputChunkRings.clear()
+            toolCallRawArgs.clear()
+            turnTextSb.setLength(0)
+            currentTextBlockSb = null
+            turnTextBlockIdx = -1
+            turnThinking.clear()
+            toolCalls.clear()
+            toolCallSignatures.clear()
+            toolReplayGuard.reset()
+            replayRenamedIds.clear()
+            pendingChunkSb.setLength(0)
+            lastUiUpdateMs = 0L
+            lastFlushedLen = 0
+            stallResumeContext = null
+            return true
         }
         while (!collectDone) {
             // [T-android-model-switch-midrun-adopt] See resolveModelSwitch.
@@ -966,6 +980,30 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 collectDone = true
                 streamPhase.logSuccess(turn, activeSessionId, currentProvider.model.id)
                 com.openminis.app.agent.GenerationRunLifecycle.succeeded(context, generationRunId)
+                // [T-prompt-cache-warming] TTL bookkeeping for the warming hook
+                // (planner gates any actual warm; default OFF); captures the
+                // exact request shape so the warm replay hits the same entry.
+                PromptCacheWarmCoordinator.onStreamTurnSucceeded(
+                    currentProvider, requestHistory, turnSystemPrompt, agentTools,
+                    if (currentModelSupportsReasoning) _thinkingLevel.value else ThinkingLevel.OFF,
+                    lastUsage, isBusy = { _isStreaming.value },
+                )
+                // [T-context-overflow-usage] Success-path overflow gate (pi
+                // isContextOverflow cases 2+3): a "successful" response whose
+                // own report proves the window was exceeded (z.ai silent
+                // overflow, or a zero-output length stop on a full window —
+                // Xiaomi MiMo). Same compact-and-retry branch as the error
+                // path; the shared cap prevents re-entry.
+                val win = effectiveContextWindowTokens() ?: 0
+                val successOverflow = com.openminis.app.provider.ContextOverflowDetector.isSuccessfulOverflow(
+                    finishReason = turnFinishReason,
+                    outputTokens = (lastUsage?.outputTokens ?: 0).toLong(),
+                    inputTokens = ((lastUsage?.inputTokens ?: 0) + (lastUsage?.cacheReadInputTokens ?: 0)).toLong(),
+                    contextWindow = win,
+                )
+                if (successOverflow && compactAndRetryForOverflow("silent/truncation on ${currentProvider.model.displayName} (usage=${lastUsage?.latestContextTokens ?: 0}, window=$win)")) {
+                    continue  // re-dispatch with compacted history
+                }
                 // [T-stall-resume] The stream attempt succeeded — no resume
                 // context should leak into a later turn.
                 stallResumeContext = null
@@ -1007,90 +1045,12 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 // rate-limit text. See agent/LoopErrorGate.
                 val isTransient = com.openminis.app.agent.LoopErrorGate.isTransient(actual, is5xx, isPermanentCapacity)
                 val isContextOverflow = com.openminis.app.agent.LoopErrorGate.isContextOverflow(actual)
-                // [T-compact-on-context-overflow] Upstream 1.14 compaction
-                // robustness: compaction is triggered by the provider's
-                if (isContextOverflow && contextOverflowCompactions < 1) {
-                    contextOverflowCompactions += 1
-                    Log.w(
-                        ChatViewModel.TAG,
-                        "📦 Context overflow on ${currentProvider.model.displayName} — " +
-                            "compacting once and retrying (attempt $contextOverflowCompactions)",
-                    )
-                    withContext(Dispatchers.Main) {
-                        setTransientInlineError(
-                            context.getString(
-                                com.openminis.app.R.string.vm_context_filling_compacting,
-                                contextTokensForPolicy(),
-                                effectiveContextWindowTokens() ?: 0,
-                            ),
-                        )
-                    }
-                    val compacted = awaitCompaction()
-                    withContext(Dispatchers.Main) { clearInlineError() }
-                    if (compacted) {
-                        // [T-android-inloop-compact-divider-order / GH#235]
-                        // Same seal+swap contract as the in-loop COMPACTED
-                        // branch: compactAll() tail-appends the "N messages
-                        // compacted" divider AFTER the still-streaming
-                        // bubble, so continuing to write into that bubble
-                        // renders fresh output ABOVE the divider. Seal it,
-                        // drop it when empty, and continue in a FRESH
-                        // placeholder below the divider.
-                        val sealedId = assistantId
-                        val freshAssistantId = "assistant_${System.currentTimeMillis()}_${turn}"
-                        withContext(Dispatchers.Main) {
-                            updateAssistantMessage(
-                                sealedId,
-                                messageTextSnapshot(),
-                                false,
-                                allToolBlocks,
-                                isAwaitingModelResponse = false,
-                            )
-                            val sealed = _messages.value.firstOrNull { it.id == sealedId }
-                            if (sealed != null &&
-                                sealed.content.isEmpty() &&
-                                sealed.toolBlocks.isEmpty()
-                            ) {
-                                _messages.value = _messages.value.filterNot { it.id == sealedId }
-                                AppLogger.info(
-                                    ChatViewModel.TAG,
-                                    "[Compact] overflow: dropped empty sealed bubble $sealedId",
-                                )
-                            }
-                            _messages.value = trimLoadedWindow(_messages.value + ChatMessage(
-                                id = freshAssistantId,
-                                role = "assistant",
-                                content = "",
-                                isStreaming = true,
-                                isAwaitingModelResponse = true,
-                                thinkingLevel = turnThinkingLevel,
-                            ))
-                        }
-                        dropStreamingEntry(sealedId)
-                        assistantId = freshAssistantId
-                        accumulatedText = ""
-                        allToolBlocks.clear()
-                        allToolInputs.clear()
-                        toolInputChunkRings.clear()
-                        toolCallRawArgs.clear()
-                        // Per-attempt state reset — same list as the
-                        // transient-retry path above.
-                        turnTextSb.setLength(0)
-                        currentTextBlockSb = null
-                        turnTextBlockIdx = -1
-                        turnThinking.clear()
-                        toolCalls.clear()
-                        toolCallSignatures.clear()
-                        toolReplayGuard.reset()
-                        replayRenamedIds.clear()
-                        pendingChunkSb.setLength(0)
-                        lastUiUpdateMs = 0L
-                        lastFlushedLen = 0
-                        stallResumeContext = null
-                        continue  // retry on same provider with compacted history
-                    }
-                    // Compaction failed — fall through to fallback / throw.
+                // [T-compact-on-context-overflow] Compaction triggered by the
+                // provider's own context verdict (shared with the success gate).
+                if (isContextOverflow && compactAndRetryForOverflow("${currentProvider.model.displayName}: ${actual.message?.take(160) ?: actual.javaClass.simpleName}")) {
+                    continue  // retry on same provider with compacted history
                 }
+                // Compaction failed or cap spent — fall through to fallback/throw.
                 // [T-android-model-switch-midrun-adopt] No abandon here: the
                 // adoption at the top of the loop already moved onto the
                 // user's pick, so this retry goes out on it.

@@ -468,6 +468,16 @@ data class ModelEntry(
      *  `ModelEntry.userModifiedAt` is a `Date?` decoded with `.iso8601`. */
     @Serializable(with = Iso8601MillisNullableSerializer::class)
     val userModifiedAt: Long? = null,
+    // [T-compat-flags-persist] Serialized [CompatFlags] overlay for this model
+    // (pi models.json `compat` equivalent), stored verbatim as JSON so the
+    // core:model layer stays provider-module-free. Deserialized and fed to
+    // CompatResolver.override at repository load; write side (UI editor /
+    // models.json import) is future work — the field round-trips so any future
+    // writer survives every save. Null = no overlay, family defaults apply.
+    // Additive with a default: older persisted JSON lacking the key decodes
+    // cleanly (kotlinx.serialization), and older builds ignore the key
+    // (ignoreUnknownKeys).
+    val compatJson: String? = null,
 ) {
     val id: String get() = uuid
 

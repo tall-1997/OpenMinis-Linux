@@ -215,6 +215,10 @@ class MinisApp : Application(), ImageLoaderFactory {
         com.openminis.app.data.PlanDiscussionPrefs.prime(this)
         com.openminis.app.data.ToolLimitPrefs.prime(this)
         com.openminis.app.data.ContextSaverPrefs.prime(this) // [T-tool-result-aging] send path reads it per request
+        // [T-prompt-cache-warming] Settings toggle + warming rates resolver
+        // (models.dev registry side-car); both read per idle-opportunity check.
+        com.openminis.app.data.CacheWarmingPrefs.prime(this)
+        com.openminis.app.provider.PromptCacheWarmRates.prime(this)
         com.openminis.app.security.SecurityGateHolder.load(this)
 
         // T283: NDK signal handler for native crashes; writes a report then re-raises so the system tombstone is also generated.

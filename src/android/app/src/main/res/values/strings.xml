@@ -2900,6 +2900,9 @@
     <string name="mcp_approval_restart_notice">Restart cleared %1$d pending approval(s)</string>
     <string name="context_saver_title">Context Saver</string>
     <string name="context_saver_footer">Folds tool output older than the last few results into one-line placeholders once a request gets large. Nothing is deleted - a folded result keeps its spill file path or says to re-run the tool.</string>
+    <!-- [T-prompt-cache-warming] Settings toggle for the idle-time prompt cache warming hook. -->
+    <string name="cache_warming_title">Prompt Cache Warming</string>
+    <string name="cache_warming_footer">When enabled, after an idle gap the app may replay the last successful request with a one-token output cap to refresh the provider&#8217;s prompt cache before it expires. Sends extra billable requests; off by default.</string>
     <string name="context_saver_off">Off</string>
     <string name="context_saver_balanced">Balanced</string>
     <string name="context_saver_aggressive">Aggressive</string>

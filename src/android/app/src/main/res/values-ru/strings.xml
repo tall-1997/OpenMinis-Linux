@@ -2048,6 +2048,9 @@
     <string name="mcp_approval_restart_notice">Перезапуск отменил %1$d ожидающих подтверждений</string>
     <string name="context_saver_title">Экономия контекста</string>
     <string name="context_saver_footer">Сворачивает старый вывод инструментов, кроме последних результатов, в однострочные заглушки, когда запрос разрастается. Ничего не удаляется: свёрнутый результат сохраняет путь к файлу или предлагает повторный запуск инструмента.</string>
+    <!-- [T-prompt-cache-warming] Settings toggle for the idle-time prompt cache warming hook. -->
+    <string name="cache_warming_title">Прогрев кэша промптов</string>
+    <string name="cache_warming_footer">Если включено, после простоя приложение может повторить последний успешный запрос с лимитом вывода в один токен, чтобы обновить кэш промптов провайдера до истечения срока. Отправляет дополнительные платные запросы; по умолчанию выключено.</string>
     <string name="context_saver_off">Выкл.</string>
     <string name="context_saver_balanced">Сбалансированно</string>
     <string name="context_saver_aggressive">Агрессивно</string>

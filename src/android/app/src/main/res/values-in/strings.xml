@@ -2045,6 +2045,9 @@
     <string name="mcp_approval_restart_notice">Restart membatalkan %1$d persetujuan tertunda</string>
     <string name="context_saver_title">Hemat konteks</string>
     <string name="context_saver_footer">Melipat keluaran alat lama di luar beberapa hasil terakhir menjadi placeholder satu baris saat permintaan membesar. Tidak ada yang dihapus - hasil terlipat menyimpan jalur berkasnya atau menyarankan menjalankan ulang alat.</string>
+    <!-- [T-prompt-cache-warming] Settings toggle for the idle-time prompt cache warming hook. -->
+    <string name="cache_warming_title">Pemanasan cache prompt</string>
+    <string name="cache_warming_footer">Saat diaktifkan, setelah jeda menganggur aplikasi dapat memutar ulang permintaan berhasil terakhir dengan batas keluaran satu token untuk menyegarkan cache prompt penyedia sebelum kedaluwarsa. Mengirim permintaan berbayar tambahan; nonaktif secara bawaan.</string>
     <string name="context_saver_off">Mati</string>
     <string name="context_saver_balanced">Seimbang</string>
     <string name="context_saver_aggressive">Agresif</string>

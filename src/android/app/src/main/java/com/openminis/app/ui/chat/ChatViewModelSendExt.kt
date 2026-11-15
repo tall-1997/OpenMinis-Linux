@@ -49,8 +49,18 @@ internal fun ChatViewModel.sendMessage(
     // here — clearing at this point would strip the content out from under
     // a send that then bails on the context-check paths below.
     val trimmed = text.trim()
-    // While streaming, enqueue instead of silently dropping (iOS: send vs enqueuePrompt).
+    // [T-agent-steering] While streaming, offer the text to the pi steering queue
+    // FIRST: it lands as a real user message at the NEXT turn boundary and never
+    // cuts the current turn (drainSteeringIntoRun consumes it inside the live
+    // run). enqueuePrompt — the iOS-parity INTERRUPT queue — is only the
+    // fallback for the tiny race where the stream ended between the caller's
+    // check and steerPrompt's own guard, and the only path for attachment
+    // sends: steering carries text only, and an image the user just picked
+    // must not be silently dropped. Every user-text entry funnels here
+    // (composer, overlay bus, voice, headless), so no caller keeps its own
+    // streaming-dispatch branch.
     if (_isStreaming.value) {
+        if (_attachments.value.isEmpty() && steerPrompt(text)) return
         enqueuePrompt(text)
         return
     }

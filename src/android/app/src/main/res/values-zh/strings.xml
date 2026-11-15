@@ -2630,6 +2630,9 @@
     <string name="mcp_approval_restart_notice">重启后有 %1$d 项待批准已失效</string>
     <string name="context_saver_title">上下文节约</string>
     <string name="context_saver_footer">请求变大后，把最近几条之外的旧工具输出折叠成一行占位，节省上下文。不删除任何内容——折叠结果保留落盘路径，或提示重新调用工具。</string>
+    <!-- [T-prompt-cache-warming] Settings toggle for the idle-time prompt cache warming hook. -->
+    <string name="cache_warming_title">提示词缓存预热</string>
+    <string name="cache_warming_footer">开启后，闲时应用可能以单 token 输出上限重放最近一次成功请求，在缓存条目过期前刷新供应商的提示词缓存。会产生额外的计费请求，默认关闭。</string>
     <string name="context_saver_off">关闭</string>
     <string name="context_saver_balanced">均衡</string>
     <string name="context_saver_aggressive">激进</string>

@@ -24,6 +24,18 @@ import java.io.File
  *
  * The streaming content itself is checkpointed by the existing per-turn
  * append pipeline; this ledger is the recovery index over it.
+ *
+ * Durability note (pi-port wiring review, do not "optimize" this away): the
+ * ledger writes SYNCHRONOUSLY on purpose. Per run there are exactly two
+ * writes — `start` stamps RUNNING once, the terminal verdict rewrites the row
+ * once — so there is no high-frequency small-write hotspot to fold, and the
+ * durability IS the feature: the RUNNING row is the crash marker and must be
+ * on disk before the first streamed byte, while a buffered terminal verdict
+ * would let a crash inside the buffer deadline leave a run marked RUNNING
+ * that the launch scan then misreports as ABANDONED (a false "broken
+ * generation" hint). Routing this path through data/DeferredCommitBuffer
+ * would widen the crash-loss window from zero to the buffer deadline and
+ * defeat the ledger's sole purpose.
  */
 object GenerationRunStore {
     private const val TAG = "GenerationRun"

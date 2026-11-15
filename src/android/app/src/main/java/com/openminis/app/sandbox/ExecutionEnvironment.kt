@@ -112,10 +112,15 @@ interface ExecutionEnvironment {
 /**
  * Process-wide per-session environment override registry — the seam that lets
  * a session route its shell-class tools somewhere other than the default PRoot
- * pipeline. Nothing registers an override in this batch (an SSH-bound session
- * still resolves through SshWorkspaceOps ahead of the dispatcher); the
- * registry exists so the ChatViewModel dispatcher has ONE lookup point and
- * tests can pin the contract with a fake environment.
+ * pipeline. The production registrant is the SSH workspace interceptor
+ * (com.openminis.app.ssh.SshWorkspaceOps.intercept): while a session is bound
+ * to an SSH host, its [SshExecutionEnvironment] is registered under the owner
+ * session id and unregistered on every teardown path (unbind, host removal,
+ * binding gone at call time). That intercept still resolves ahead of the
+ * dispatcher, so remote shell calls keep their SshTool result shape — the
+ * registry makes the session's environment LOOKABLE by the dispatcher's one
+ * lookup point ([ChatViewModelExecuteToolExt.executeTool]'s shell branch)
+ * without changing which code runs today.
  */
 object ExecutionEnvironments {
 

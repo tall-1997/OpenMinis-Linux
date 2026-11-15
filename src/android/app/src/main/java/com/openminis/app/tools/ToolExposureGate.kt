@@ -14,8 +14,8 @@ import com.openminis.app.data.model.AgentToolDefinition
  *   interchangeable, so the field is a pure addition and behaviour is
  *   unchanged for tools that do not opt in.
  * - [MODEL_ONLY]: declared in the schema (pi: "declared to the model while
- *   active, never callable" — here: declared; callability enforcement is the
- *   dispatcher's business and is not wired in this batch).
+ *   active, never callable" — here: declared; the callability half is
+ *   enforced by the dispatch entry via [levelForName] + [modelOnlyRefusal]).
  * - [DEFERRED]: NOT in the schema. The existing alwaysOn / find_tools
  *   mechanism IS this level's implementation: find_tools discovers and
  *   enables the tool for subsequent turns, and the enabled name then rides
@@ -46,7 +46,11 @@ object ToolExposureGate {
     /** Declared in the schema and callable. Also the default for null. */
     const val DIRECT = "direct"
 
-    /** Declared in the schema; callability is the dispatcher's decision. */
+    /**
+     * Declared in the schema; the dispatch entry refuses direct calls via
+     * [levelForName] / [modelOnlyRefusal] (pi: "declared to the model while
+     * active, never callable").
+     */
     const val MODEL_ONLY = "model_only"
 
     /** Never declared; callable from a codemode script via the tool host. */
@@ -93,6 +97,57 @@ object ToolExposureGate {
         CODEMODE, HIDDEN -> false
         else -> true // unreachable: levelOf normalizes to the known levels
     }
+
+    // ── dispatch-side callability enforcement (MODEL_ONLY) ──
+
+    /**
+     * Canonical tool name -> normalized exposure, built ONCE from the full
+     * registry with every gate flag on: the flags decide schema inclusion per
+     * request, while the exposure a definition DECLARES is flag-independent,
+     * so the union build is the complete lookup. Lazy so the registry is only
+     * assembled when a dispatch entry actually asks.
+     */
+    private val levelByName: Map<String, String> by lazy {
+        AgentTools.makeAgentTools(
+            supportsImageInput = true,
+            visionGroupConfigured = true,
+            memoryEnabled = true,
+            subAgentEnabled = true,
+            codeGraphEnabled = true,
+            mcpNativeEnabled = true,
+            hasSpeechModel = true,
+            includeLongTail = true,
+        ).associate { it.name to levelOf(it) }
+    }
+
+    /**
+     * The exposure level for a CANONICAL tool name — the dispatch-entry
+     * lookup behind the MODEL_ONLY refusal in
+     * ChatViewModelExecuteToolExt.executeTool. A pure in-memory map read (no
+     * I/O, no registry rebuild), so the dispatcher can afford it before any
+     * SecurityGate / failure-memory work. Names absent from the registry
+     * (aliases already canonicalized upstream, user-defined local tools,
+     * future dynamic tools) fail open as [DIRECT] — same policy as
+     * [levelOf] for unknown exposure strings.
+     */
+    fun levelForName(canonicalName: String): String = levelByName[canonicalName] ?: DIRECT
+
+    /**
+     * The unified-shape refusal the dispatch entry returns for a model_only
+     * call. Kept beside [levelForName] so text, error code and hint stay
+     * pinned by the same tests that pin the lookup; the shape matches every
+     * other early refusal (ToolFailureMemory / SecurityGate / ActionGuard):
+     * success=false, a typed [ToolErrorCode], a model-actionable recovery
+     * hint, and the resolved tool title.
+     */
+    fun modelOnlyRefusal(canonicalName: String, toolTitle: String): ToolExecutionResult =
+        ToolExecutionResult(
+            "Tool '$canonicalName' is not callable in this context (exposure=model_only).",
+            false,
+            errorCode = ToolErrorCode.PERMISSION_DENIED,
+            recoveryHint = "This tool is declared for schema presence only; do not call it directly.",
+            toolTitle = toolTitle,
+        )
 
     /**
      * The tools a codemode script may call through its injected tool host —

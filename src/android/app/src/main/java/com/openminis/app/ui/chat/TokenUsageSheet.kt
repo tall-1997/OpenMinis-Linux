@@ -47,6 +47,9 @@ import com.openminis.app.i18n.uppercaseForDisplay
  *   - Tokens (Session Total): Input (incl. cache) / Output
  *   - Cache (Session Total): Cache Read / Cache Write
  *   - Agent Loop: Total Loops
+ *   - Tool calls (only when the loaded window carries tool_use blocks):
+ *     one "name × N" row per tool, busiest first, top 5 + folded remainder
+ *     (the UsageLedger tools bucket, [T-pi-tools-bucket])
  *
  * Data loads asynchronously via [ChatViewModel.loadSessionTokenStats] when the
  * sheet appears; we intentionally don't hold a live subscription — token
@@ -216,6 +219,30 @@ fun TokenUsageSheet(
             StatSection(title = stringResource(R.string.token_usage_section_agent_loop)) {
                 StatRow(stringResource(R.string.token_usage_total_loops), (s?.loopCount ?: 0).toString())
             }
+            // [T-pi-tools-bucket] UsageLedger tools bucket: one row per tool the loaded
+            // window carries, busiest first ("name × N"). Bounded — top rows plus a folded
+            // remainder row for MCP-heavy sessions. Hidden while the map is empty: empty
+            // means "no tool_use in memory", never a fabricated zero.
+            val toolCounts = s?.toolCallCounts.orEmpty()
+            if (toolCounts.isNotEmpty()) {
+                StatSection(title = stringResource(R.string.token_usage_section_tool_calls)) {
+                    val rows = toolCounts.entries.toList()
+                        .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+                    rows.take(TOOL_ROWS_SHOWN).forEach { (name, calls) ->
+                        StatRow(name, "× $calls")
+                    }
+                    if (rows.size > TOOL_ROWS_SHOWN) {
+                        val remaining = rows.drop(TOOL_ROWS_SHOWN)
+                        StatRow(
+                            stringResource(
+                                R.string.token_usage_tools_more,
+                                remaining.size,
+                            ),
+                            "× ${remaining.sumOf { it.value }}",
+                        )
+                    }
+                }
+            }
             // [T-tool-result-aging] What the history-side saver actually did on
             // the most recent request. Zero rows read "—" instead of 0 so an
             // untouched short session looks untouched rather than broken.
@@ -337,3 +364,6 @@ private fun ContextBlockKey.labelRes(): Int = when (this) {
     ContextBlockKey.HISTORY -> R.string.context_block_history
     ContextBlockKey.PENDING_ATTACHMENTS -> R.string.context_block_attachments
 }
+
+/** Per-tool rows shown before the calls fold into the "more kinds" remainder row. */
+private const val TOOL_ROWS_SHOWN = 5

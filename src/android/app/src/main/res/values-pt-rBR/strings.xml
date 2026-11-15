@@ -2040,6 +2040,9 @@
     <string name="mcp_approval_restart_notice">A reinicialização descartou %1$d aprovação(ões) pendente(s)</string>
     <string name="context_saver_title">Economia de contexto</string>
     <string name="context_saver_footer">Dobra saídas antigas de ferramentas além dos últimos resultados em marcadores de uma linha quando a solicitação cresce. Nada é excluído - o resultado dobrado mantém o caminho do arquivo ou indica executar a ferramenta novamente.</string>
+    <!-- [T-prompt-cache-warming] Settings toggle for the idle-time prompt cache warming hook. -->
+    <string name="cache_warming_title">Pré-aquecimento do cache de prompts</string>
+    <string name="cache_warming_footer">Quando ativado, após uma ociosidade o app pode repetir a última solicitação bem-sucedida com um limite de saída de um token para renovar o cache de prompts do provedor antes que expire. Envia solicitações faturáveis adicionais; desativado por padrão.</string>
     <string name="context_saver_off">Desligado</string>
     <string name="context_saver_balanced">Equilibrado</string>
     <string name="context_saver_aggressive">Agressivo</string>

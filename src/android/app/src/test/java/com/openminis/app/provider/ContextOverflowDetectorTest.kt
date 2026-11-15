@@ -383,4 +383,83 @@ class ContextOverflowDetectorTest {
         assertFalse(ContextOverflowDetector.isRecoverableLength("stop", 16, 128_000))
         assertFalse(ContextOverflowDetector.isRecoverableLength(null, 16, 128_000))
     }
+
+    // ── success-path combined gate (T-context-overflow-usage wiring) ────────
+
+    @Test
+    fun `combined gate flags silent usage overflow`() {
+        // z.ai style: "successful" reply whose reported prompt side is over
+        // the window. Stop reason is irrelevant for this family.
+        assertTrue(
+            ContextOverflowDetector.isSuccessfulOverflow(
+                finishReason = "stop",
+                outputTokens = 512,
+                inputTokens = 213_000L,
+                contextWindow = 200_000,
+            ),
+        )
+    }
+
+    @Test
+    fun `combined gate flags truncation overflow`() {
+        // Xiaomi MiMo style: length stop, zero output, input fills the window.
+        assertTrue(
+            ContextOverflowDetector.isSuccessfulOverflow(
+                finishReason = "length",
+                outputTokens = 0,
+                inputTokens = 200_000L,
+                contextWindow = 200_000,
+            ),
+        )
+        // Anthropic/Gemini spelling of the same stop.
+        assertTrue(
+            ContextOverflowDetector.isSuccessfulOverflow(
+                finishReason = "max_tokens",
+                outputTokens = 0,
+                inputTokens = 198_500L,
+                contextWindow = 200_000,
+            ),
+        )
+    }
+
+    @Test
+    fun `combined gate passes healthy successful responses through`() {
+        // Normal reply well inside the window.
+        assertFalse(
+            ContextOverflowDetector.isSuccessfulOverflow(
+                finishReason = "stop",
+                outputTokens = 512,
+                inputTokens = 90_000L,
+                contextWindow = 200_000,
+            ),
+        )
+        // A genuine output-budget length stop (output > 0) is NOT overflow —
+        // the truncation family requires zero output.
+        assertFalse(
+            ContextOverflowDetector.isSuccessfulOverflow(
+                finishReason = "length",
+                outputTokens = 4_096,
+                inputTokens = 199_000L,
+                contextWindow = 200_000,
+            ),
+        )
+        // Truncation-shaped reply but the window was not full.
+        assertFalse(
+            ContextOverflowDetector.isSuccessfulOverflow(
+                finishReason = "length",
+                outputTokens = 0,
+                inputTokens = 120_000L,
+                contextWindow = 200_000,
+            ),
+        )
+        // Unknown window disables the whole gate.
+        assertFalse(
+            ContextOverflowDetector.isSuccessfulOverflow(
+                finishReason = "length",
+                outputTokens = 0,
+                inputTokens = 999_999L,
+                contextWindow = 0,
+            ),
+        )
+    }
 }

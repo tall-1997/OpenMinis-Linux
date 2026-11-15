@@ -1,6 +1,8 @@
 package com.openminis.app.ui.chat
 
 import com.openminis.app.data.BPETokenizer
+import com.openminis.app.data.UsageState
+import com.openminis.app.data.foldToolUse
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.provider.LLMProvider
@@ -179,7 +181,40 @@ suspend fun ChatViewModel.loadSessionTokenStats(): ChatViewModel.SessionTokenSta
     val toolCalls = snapshot.filter { it.role == "assistant" }
         .sumOf { msg -> msg.toolBlocks.count { it.kind != "text" && it.kind != "info" } }
     val loops = maxOf(toolCalls, assistantCount)
-    return ChatViewModel.SessionTokenStats(input, output, cacheRead, cacheWrite, context, loops, lastRequested, lastEffective)
+    return ChatViewModel.SessionTokenStats(
+        input, output, cacheRead, cacheWrite, context, loops, lastRequested, lastEffective,
+        toolCallCounts = sessionToolCallCounts(snapshot),
+    )
+}
+
+/**
+ * [T-pi-tools-bucket] UsageLedger tools bucket for one session: per-tool call
+ * counts folded from the LOADED message window's `tool_use` blocks through
+ * [foldToolUse] — the exact in-memory path the ledger's KDoc prescribes
+ * ("fold from blocks ALREADY in memory"); a parts_json rebuild would pull
+ * every stored message body (MBs, partially offloaded) just to count calls.
+ *
+ * Counts `tool_use` blocks with a real name ONLY: info/thinking blocks reuse
+ * [AssistantBlock.toolName] for icons and markers, and toolResult blocks
+ * mirror the same call set (would double-count). Scope note: the models
+ * bucket aggregates ALL persisted usage rows (the token sums in
+ * [loadSessionTokenStats]); the tools bucket covers the loaded window — the
+ * same window loopCount already reports, so the two agent-activity figures
+ * always agree on what a "session" is.
+ *
+ * Pure — JVM-tested.
+ */
+internal fun sessionToolCallCounts(messages: List<ChatMessage>): Map<String, Int> {
+    val ledger = UsageState()
+    for (message in messages) {
+        if (message.role != "assistant") continue
+        for (block in message.toolBlocks) {
+            if (block.kind == "tool_use" && block.toolName.isNotBlank()) {
+                foldToolUse(ledger, block.toolName)
+            }
+        }
+    }
+    return ledger.tools.mapValues { (_, usage) -> usage.calls.toInt() }
 }
 
 /**

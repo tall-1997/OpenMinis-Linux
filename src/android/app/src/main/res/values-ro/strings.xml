@@ -2044,6 +2044,9 @@
     <string name="mcp_approval_restart_notice">Repornirea a anulat %1$d aprobări în așteptare</string>
     <string name="context_saver_title">Economie de context</string>
     <string name="context_saver_footer">Pliază ieșirile vechi ale uneltelor dincolo de ultimele rezultate în substituenți de o linie când cererea crește. Nimic nu este șters - rezultatul pliat păstrează calea fișierului sau indică rerularea uneltei.</string>
+    <!-- [T-prompt-cache-warming] Settings toggle for the idle-time prompt cache warming hook. -->
+    <string name="cache_warming_title">Încălzirea cache-ului de prompturi</string>
+    <string name="cache_warming_footer">Când este activat, după o pauză de inactivitate aplicația poate reda ultima cerere reușită cu o limită de ieșire de un token, pentru a reîmprospăta cache-ul de prompturi al furnizorului înainte de expirare. Trimite cereri suplimentare facturabile; dezactivat implicit.</string>
     <string name="context_saver_off">Oprit</string>
     <string name="context_saver_balanced">Echilibrat</string>
     <string name="context_saver_aggressive">Agresiv</string>

@@ -2047,6 +2047,9 @@
     <string name="mcp_approval_restart_notice">Restart unieważnił %1$d oczekujących zgód</string>
     <string name="context_saver_title">Oszczędzanie kontekstu</string>
     <string name="context_saver_footer">Zwija stare wyjścia narzędzi poza ostatnimi wynikami w jednoliniowe placeholdery, gdy żądanie rośnie. Nic nie jest usuwane - zwinięty wynik zachowuje ścieżkę pliku lub wskazuje ponowne uruchomienie narzędzia.</string>
+    <!-- [T-prompt-cache-warming] Settings toggle for the idle-time prompt cache warming hook. -->
+    <string name="cache_warming_title">Podgrzewanie cache promptów</string>
+    <string name="cache_warming_footer">Po włączeniu, po bezczynności aplikacja może powtórzyć ostatnie udane zapytanie z limitem wyjścia jednego tokena, aby odświeżyć cache promptów dostawcy przed wygaśnięciem. Wysyła dodatkowe płatne zapytania; domyślnie wyłączone.</string>
     <string name="context_saver_off">Wyłączone</string>
     <string name="context_saver_balanced">Zrównoważone</string>
     <string name="context_saver_aggressive">Agresywne</string>

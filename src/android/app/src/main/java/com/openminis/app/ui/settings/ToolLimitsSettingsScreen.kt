@@ -16,6 +16,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openminis.app.R
+import com.openminis.app.data.CacheWarmingPrefs
 import com.openminis.app.data.ContextSaverPrefs
 import com.openminis.app.data.ToolLimitPrefs
 
@@ -39,6 +40,11 @@ fun ToolLimitsSettingsScreen(onBack: () -> Unit) {
     // revision counter rather than piggy-backing on the tool-limit one.
     val saverRevision by ContextSaverPrefs.revision.collectAsStateWithLifecycle()
     val saverMode = remember(saverRevision) { ContextSaverPrefs.mode() }
+    // [T-prompt-cache-warming] Independent prefs object too (CacheWarmingPrefs):
+    // warming sends extra billable requests, so the switch ships OFF and lives
+    // next to the other context/cost-management toggles on this page.
+    val warmingRevision by CacheWarmingPrefs.revision.collectAsStateWithLifecycle()
+    val warmingEnabled = remember(warmingRevision) { CacheWarmingPrefs.enabled() }
 
     // Nested under multi-agent (and the tool-limits deep link), not a
     // first-level settings page. 1.36.16 keeps the back arrow here; 1.36.37
@@ -150,6 +156,20 @@ fun ToolLimitsSettingsScreen(onBack: () -> Unit) {
                     }
                 }
             }
+        }
+        // [T-prompt-cache-warming] Idle-time prompt cache warming. One switch
+        // next to the Context Saver: both are context/cost-management toggles.
+        // OFF by default — a warm request is a real billable request (pi ships
+        // the same feature dark until the host opts in).
+        SettingsSection(
+            header = stringResource(R.string.cache_warming_title),
+            footer = stringResource(R.string.cache_warming_footer),
+        ) {
+            SettingsSwitchRow(
+                title = stringResource(R.string.cache_warming_title),
+                checked = warmingEnabled,
+                onCheckedChange = CacheWarmingPrefs::setEnabled,
+            )
         }
     }
 }

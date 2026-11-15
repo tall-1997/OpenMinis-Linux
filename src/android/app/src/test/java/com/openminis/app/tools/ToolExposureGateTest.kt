@@ -169,4 +169,95 @@ class ToolExposureGateTest {
         val registry = AgentTools.makeAgentTools(includeLongTail = true)
         assertTrue(CodemodeTool.NAME in ToolExposureGate.callableNamesForCodemode(registry))
     }
+
+    // ── dispatch-side MODEL_ONLY enforcement (levelForName + refusal) ──
+
+    @Test
+    fun levelForNameResolvesDeferredRegistryNames() {
+        // The dispatch lookup must agree with levelOf on the one level the
+        // registry actually stamps today: the deferred long-tail set.
+        expectedDeferred.forEach { name ->
+            assertEquals(ToolExposureGate.DEFERRED, ToolExposureGate.levelForName(name))
+        }
+        // Core direct tools resolve to DIRECT through the same lookup.
+        assertEquals(ToolExposureGate.DIRECT, ToolExposureGate.levelForName("shell_execute"))
+        assertEquals(ToolExposureGate.DIRECT, ToolExposureGate.levelForName("file_read"))
+    }
+
+    @Test
+    fun levelForNameFailsOpenAsDirectForUnknownNames() {
+        // User-defined local tools and dynamic names are not registry rows;
+        // the lookup must never refuse them (same fail-open policy as levelOf).
+        assertEquals(ToolExposureGate.DIRECT, ToolExposureGate.levelForName("definitely_not_a_tool"))
+        assertEquals(ToolExposureGate.DIRECT, ToolExposureGate.levelForName(""))
+    }
+
+    @Test
+    fun levelForNameCoversEveryRegistryName() {
+        // The lazy map is built from the full-flag registry: every name the
+        // registry can produce must be resolvable (no flag-conditioned gaps).
+        val registry = AgentTools.makeAgentTools(
+            supportsImageInput = true,
+            visionGroupConfigured = true,
+            memoryEnabled = true,
+            subAgentEnabled = true,
+            codeGraphEnabled = true,
+            mcpNativeEnabled = true,
+            hasSpeechModel = true,
+            includeLongTail = true,
+        )
+        registry.forEach { def ->
+            assertEquals(
+                "levelForName(${def.name}) must match levelOf",
+                ToolExposureGate.levelOf(def),
+                ToolExposureGate.levelForName(def.name),
+            )
+        }
+    }
+
+    @Test
+    fun noRegistryToolIsModelOnlyToday() {
+        // Zero-change pin: until a definition opts in, the refusal branch is
+        // unreachable for every real tool — wiring the gate must not alter
+        // any existing dispatch path.
+        val registry = AgentTools.makeAgentTools(includeLongTail = true)
+        registry.forEach { def ->
+            assertTrue(
+                "tool ${def.name} unexpectedly became model_only",
+                ToolExposureGate.levelForName(def.name) != ToolExposureGate.MODEL_ONLY,
+            )
+        }
+    }
+
+    @Test
+    fun modelOnlyRefusalCarriesTheUnifiedEarlyRefusalShape() {
+        val r = ToolExposureGate.modelOnlyRefusal("t_model_only", "Fancy Title")
+        assertFalse(r.success)
+        assertTrue(r.output.contains("t_model_only"))
+        assertTrue(r.output.contains("not callable in this context"))
+        assertTrue(r.output.contains("model_only"))
+        assertEquals(ToolErrorCode.PERMISSION_DENIED, r.errorCode)
+        assertTrue("recovery hint must be present", r.recoveryHint?.isNotBlank() == true)
+        assertEquals("Fancy Title", r.toolTitle)
+    }
+
+    @Test
+    fun syntheticModelOnlyDefinitionIsRefusedByTheLookup() {
+        // The enforcement contract end to end (synthetic, since no production
+        // tool opts in yet): a model_only definition WOULD be caught by the
+        // dispatch predicate — while direct / deferred stay callable. A
+        // find_tools-enabled deferred tool called straight afterwards is the
+        // NORMAL path, so deferred must never trip the refusal predicate.
+        val modelOnly = def("wired_model_only", ToolExposureGate.MODEL_ONLY)
+        val direct = def("wired_direct", null)
+        val deferred = def("wired_deferred", ToolExposureGate.DEFERRED)
+        assertEquals(ToolExposureGate.MODEL_ONLY, ToolExposureGate.levelOf(modelOnly))
+        assertTrue(ToolExposureGate.levelOf(direct) != ToolExposureGate.MODEL_ONLY)
+        assertTrue(ToolExposureGate.levelOf(deferred) != ToolExposureGate.MODEL_ONLY)
+        assertTrue(
+            ToolExposureGate.includesInSchema(
+                ToolExposureGate.levelOf(deferred), deferred.name, activeSet = setOf("wired_deferred"),
+            ),
+        )
+    }
 }

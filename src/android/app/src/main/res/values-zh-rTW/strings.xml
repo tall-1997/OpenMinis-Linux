@@ -2121,6 +2121,9 @@
     <string name="mcp_approval_restart_notice">重新啟動後有 %1$d 項待批准已失效</string>
     <string name="context_saver_title">上下文節約</string>
     <string name="context_saver_footer">請求變大後，把最近幾筆之外的舊工具輸出折疊成一行佔位，節省上下文。不刪除任何內容——折疊結果保留落盤路徑，或提示重新呼叫工具。</string>
+    <!-- [T-prompt-cache-warming] Settings toggle for the idle-time prompt cache warming hook. -->
+    <string name="cache_warming_title">提示詞快取預熱</string>
+    <string name="cache_warming_footer">開啟後，閒置時應用程式可能以單一 token 輸出上限重放最近一次成功請求，在快取條目過期前重新整理供應商的提示詞快取。會產生額外的計費請求，預設關閉。</string>
     <string name="context_saver_off">關閉</string>
     <string name="context_saver_balanced">均衡</string>
     <string name="context_saver_aggressive">積極</string>

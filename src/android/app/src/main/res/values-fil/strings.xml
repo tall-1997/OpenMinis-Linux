@@ -2040,6 +2040,9 @@
     <string name="mcp_approval_restart_notice">Naalis ng restart ang %1$d nakabinbing approval</string>
     <string name="context_saver_title">Tipid sa konteksto</string>
     <string name="context_saver_footer">Pinipiga ang lumang output ng tool na lampas sa huling mga resulta sa isang linyang placeholder kapag lumaki ang kahilingan. Walang binubura - pinapanatili ng nakatuping resulta ang path ng file o nagtuturo na patakbuhin muli ang tool.</string>
+    <!-- [T-prompt-cache-warming] Settings toggle for the idle-time prompt cache warming hook. -->
+    <string name="cache_warming_title">Pag-init ng prompt cache</string>
+    <string name="cache_warming_footer">Kapag naka-on, maaaring i replay ng app ang huling matagumpay na request na may one-token output cap pagkatapos ng idle upang ma-refresh ang prompt cache ng provider bago ito mag-expire. Nagpapadala ng mga dagdag na billable request; naka-off bilang default.</string>
     <string name="context_saver_off">Naka-off</string>
     <string name="context_saver_balanced">Balanseng</string>
     <string name="context_saver_aggressive">Agresibo</string>

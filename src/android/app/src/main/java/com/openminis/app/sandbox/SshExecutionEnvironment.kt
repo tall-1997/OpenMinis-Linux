@@ -12,10 +12,17 @@ import kotlinx.coroutines.withContext
  * credential path, or host-key store is created here.
  *
  * This is a feasibility proof, not a full remote-workspace port: an SSH-bound
- * session still resolves through SshWorkspaceOps ahead of the tool dispatcher
+ * session still resolves through SshWorkspaceOps ahead of the dispatcher
  * (that path keeps its own file-surface semantics). What this class buys is
- * the seam — once a session can carry an [ExecutionEnvironment] override,
- * remote execution becomes a registry entry instead of an intercept branch.
+ * the seam: while a session is SSH-bound, SshWorkspaceOps registers an
+ * instance of it into [ExecutionEnvironments] under the owner session id —
+ * with registration/unregistration aligned to the binding lifecycle — so
+ * remote execution IS a registry entry, even though the intercept branch
+ * still produces the model-visible result today.
+ *
+ * Instances are cheap, stateless views over the shared backend (backend ref +
+ * host id + optional cwd), which is what lets the registry keep one entry per
+ * bound session without owning transport state.
  *
  * Known limitations (deliberate, documented):
  * - exec-channel only: no SFTP surface, no PTY, no interactive sessions.

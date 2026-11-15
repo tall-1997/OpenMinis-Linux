@@ -74,6 +74,11 @@ internal suspend fun ProviderRepository.loadConfigSuspending(): ProviderConfig {
                 val storedHash = snapshot.meta.firstOrNull {
                     it.key == ProviderConfigMetaKeys.JSON_SYNC_HASH
                 }?.value
+                // [T-compat-flags-persist] Feed the persisted per-model compat
+                // overlay (compat_json column) into CompatResolver so the next
+                // request honors it. Also covers the mirror-repair re-persist
+                // below, which writes the same in-memory config back.
+                CompatOverrideLoader.applyCompatOverrides(json, cfg.modelEntries)
                 cfg to storedHash
             } catch (e: Exception) {
                 // A non-zero count proves this is an existing DB-backed store.
@@ -151,6 +156,10 @@ internal suspend fun ProviderRepository.loadConfigSuspending(): ProviderConfig {
                     "[ProviderStore] migrated/synced ${mirrored.instances.size} instances " +
                         "${mirrored.modelEntries.size} entries from JSON → Room",
                 )
+                // [T-compat-flags-persist] The legacy-mirror path carries the
+                // overlay too (ModelEntry.compatJson round-trips the mirror);
+                // sync the resolver before the config goes live.
+                CompatOverrideLoader.applyCompatOverrides(json, mirrored.modelEntries)
                 return mirrored
             }
         }

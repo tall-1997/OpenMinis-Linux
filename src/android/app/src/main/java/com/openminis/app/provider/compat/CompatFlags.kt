@@ -1,5 +1,6 @@
 package com.openminis.app.provider.compat
 
+import kotlinx.serialization.Serializable
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -39,7 +40,15 @@ import java.util.concurrent.ConcurrentHashMap
  *     there is no per-host branch to express.
  *   - supportsFinishReason -> OpenAIRawStream repairs a missing finish_reason
  *     unconditionally (safe superset of the flag).
+ *
+ * [T-compat-flags-persist] @Serializable: the persisted per-model overlay
+ * (`compat_json` on provider_model_entries, the pi models.json `compat`
+ * equivalent) round-trips through the same kotlinx Json instance the provider
+ * store uses. Every property carries a default, so an older blob missing a key
+ * (or a newer one carrying an unknown key, via ignoreUnknownKeys) decodes to
+ * the family-default table instead of failing the whole model load.
  */
+@Serializable
 data class CompatFlags(
     /**
      * pi `compat-schema.ts:225-229` maxTokensField. Which request-body key
@@ -92,19 +101,19 @@ enum class CacheControlFormat {
     ANTHROPIC_EPHEMERAL,
 }
 
-/**
- * Per-provider-family default tables + per-model runtime overlay. This is the
- * single lookup the wired branches consult; keeping resolution HERE (and only
- * here) means the family predicates are spelled once and the golden test can
- * pin resolver-equals-legacy-predicate behaviour.
- *
- * The overlay is in-memory by design: the model table (LLMModel / Room entities)
- * has no compat column today, and pi stores per-model compat in models.json.
- * Evolution path (same shape as the ThinkingRule user-rules migration): add a
- * nullable `compatJson: String?` column to the provider-instance / model-entry
- * entity, deserialize into [CompatFlags] at repository load, and feed it through
- * [override] at provider construction — the resolver API is already the seam.
- */
+    /**
+     * Per-provider-family default tables + per-model runtime overlay. This is the
+     * single lookup the wired branches consult; keeping resolution HERE (and only
+     * here) means the family predicates are spelled once and the golden test can
+     * pin resolver-equals-legacy-predicate behaviour.
+     *
+     * The overlay is persisted: `compat_json` on provider_model_entries (pi
+     * stores per-model compat in models.json) is deserialized into [CompatFlags]
+     * at repository load and fed through [override] — see
+     * `CompatOverrideLoader.applyCompatOverrides` in data/repository. There is
+     * no UI editor yet (write-side evolution); the read side is live so a
+     * future editor / models.json import lands on a working seam.
+     */
 object CompatResolver {
 
     /** Endpoint families with a non-default table. Detection = the exact URL
@@ -181,6 +190,17 @@ object CompatResolver {
      */
     fun override(modelId: String, flags: CompatFlags) {
         overrides[modelId] = flags
+    }
+
+    /**
+     * [T-compat-flags-persist] Atomically replace the whole overlay from the
+     * freshly loaded provider store (repository load-path sync): model ids
+     * absent from [map] drop their override so a deleted entry / cleared blob
+     * falls back to the family default instead of surviving as stale state.
+     */
+    fun replaceAllOverrides(map: Map<String, CompatFlags>) {
+        overrides.keys.removeAll { it !in map }
+        overrides.putAll(map)
     }
 
     /** Drop one per-model override (family default applies again). */

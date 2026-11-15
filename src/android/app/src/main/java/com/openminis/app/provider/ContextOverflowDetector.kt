@@ -268,6 +268,27 @@ object ContextOverflowDetector {
     }
 
     /**
+     * Success-path overflow gate (pi's isContextOverflow cases 2+3 combined
+     * for callers holding one SUCCESSFUL response — failed turns use
+     * [detectFromError] / [detectFromLlmError]). True when the response
+     * answered "successfully" but its own report proves the window was
+     * exceeded: the prompt side already exceeds the window ([detectFromUsage],
+     * z.ai silent overflow) or the input silently clipped to fill the window
+     * with nothing generated ([detectTruncationOverflow], Xiaomi MiMo).
+     *
+     * @param inputTokens the FULL prompt side of the response: usage.input +
+     *   usage.cacheRead (the caller combines them — that sum is what fills the
+     *   window, same convention as [detectTruncationOverflow])
+     */
+    fun isSuccessfulOverflow(
+        finishReason: String?,
+        outputTokens: Long,
+        inputTokens: Long,
+        contextWindow: Int,
+    ): Boolean = detectFromUsage(inputTokens, 0L, contextWindow) ||
+        detectTruncationOverflow(finishReason, outputTokens, inputTokens, contextWindow)
+
+    /**
      * Recoverable length stop (pi's isRecoverableLength): the response ended on
      * a length stop BELOW the caller or model's intended output limit, so it
      * may be context pressure or provider-side truncation and one bounded

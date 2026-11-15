@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- [T-pi-tools-bucket] UsageLedger tools-bucket rows for the session Token Usage
+     sheet (TokenUsageSheet). Kept in a standalone split file so the main strings.xml
+     stays untouched; every shipped locale carries both keys. -->
+<resources>
+    <string name="token_usage_section_tool_calls">Panggilan Alat</string>
+    <string name="token_usage_tools_more">%1$d jenis lagi</string>
+</resources>

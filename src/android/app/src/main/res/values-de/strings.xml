@@ -2039,6 +2039,9 @@
     <string name="mcp_approval_restart_notice">Neustart hat %1$d ausstehende Genehmigung(en) verworfen</string>
     <string name="context_saver_title">Kontext-Sparmodus</string>
     <string name="context_saver_footer">Faltet alte Tool-Ausgaben jenseits der letzten Ergebnisse zu einzeiligen Platzhaltern, sobald eine Anfrage groß wird. Nichts wird gelöscht - ein gefaltetes Ergebnis behält seinen Dateipfad oder verweist auf einen erneuten Tool-Aufruf.</string>
+    <!-- [T-prompt-cache-warming] Settings toggle for the idle-time prompt cache warming hook. -->
+    <string name="cache_warming_title">Prompt-Cache-Warmung</string>
+    <string name="cache_warming_footer">Wenn aktiviert, wiederholt die App nach einer Leerlaufpause die letzte erfolgreiche Anfrage mit einer Ein-Token-Ausgabegrenze, um den Prompt-Cache des Anbieters vor dem Ablauf aufzufrischen. Sendet zusätzliche kostenpflichtige Anfragen; standardmäßig aus.</string>
     <string name="context_saver_off">Aus</string>
     <string name="context_saver_balanced">Ausgeglichen</string>
     <string name="context_saver_aggressive">Aggressiv</string>
