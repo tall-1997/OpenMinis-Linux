@@ -44,6 +44,17 @@ data class ChatSessionEntity(
     // choice that survives cold-start.
     @ColumnInfo(name = "thinking_override") val thinkingOverride: String? = null,
     /**
+     * [T-thinking-dormant-restore] (P2 1-8) The level PARKED by ceiling-sync
+     * while this session's active model ceiling was too low. Demotion used to
+     * rewrite `thinking_override` to the clamped value and lose the original
+     * forever; the parked choice survives here and is restored (once) when
+     * the ceiling widens past it. Null = no park. Same discipline as
+     * [thinkingOverride]: a ThinkingLevel enum NAME written only through
+     * ThinkingDormancy.encode (which never parks OFF); unknown names decode
+     * to "no park" rather than throwing.
+     */
+    @ColumnInfo(name = "dormant_thinking_override") val dormantThinkingOverride: String? = null,
+    /**
      * [T-android-session-grouping] Group membership. NULL = ungrouped.
      *
      * Deliberately NOT a declared @ForeignKey. A folder_id pointing at a group

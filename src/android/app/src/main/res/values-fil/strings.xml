@@ -327,6 +327,8 @@
     <string name="token_usage_section_thinking">Pag-iisip</string>
     <string name="token_usage_thinking_label">Pag-iisip</string>
     <string name="token_usage_thinking_level">Antas</string>
+    <string name="token_usage_thinking_requested">Hiniling</string>
+    <string name="token_usage_thinking_effective">Epektibo</string>
     <string name="token_usage_thinking_supported">Suportado</string>
     <string name="token_usage_section_tokens">Mga Token (Kabuuan ng Session)</string>
     <string name="token_usage_input_with_cache">Input (kasama ang cache)</string>

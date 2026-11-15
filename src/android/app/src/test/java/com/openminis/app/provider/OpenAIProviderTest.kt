@@ -464,15 +464,21 @@ class OpenAIProviderTest {
 
     @Test
     fun `clampEffort snaps onto declared tiers`() {
-        // Down to the nearest declared tier at or below the request.
-        assertEquals("high", provider.clampEffort("xhigh", listOf("high", "max")))
-        assertEquals("high", provider.clampEffort("xhigh", listOf("low", "medium", "high")))
-        // Exact matches pass through.
-        assertEquals("xhigh", provider.clampEffort("xhigh", listOf("high", "xhigh")))
-        // Nothing at-or-below: step up to the lowest declared tier.
-        assertEquals("high", provider.clampEffort("low", listOf("high", "max")))
-        // No declaration: untouched (pre-existing behavior).
-        assertEquals("xhigh", provider.clampEffort("xhigh", null))
-        assertEquals("xhigh", provider.clampEffort("xhigh", emptyList()))
+        // The provider-level duplicate member was removed (P2 3-9 cleanup):
+        // it had zero production callers and drifted from the live clamp, so
+        // the contract is pinned against the one true source instead.
+        with(com.openminis.app.provider.thinking.ThinkingEffort) {
+            // Down to the nearest declared tier at or below the request.
+            assertEquals("high", clampEffort("xhigh", listOf("high", "max")))
+            assertEquals("high", clampEffort("xhigh", listOf("low", "medium", "high")))
+            // Exact matches pass through.
+            assertEquals("xhigh", clampEffort("xhigh", listOf("high", "xhigh")))
+            // [T-thinking-no-upward-jump] Nothing at-or-below: NULL, never the
+            // declared floor — a "low" ask must not become "high" on the wire.
+            assertEquals(null, clampEffort("low", listOf("high", "max")))
+            // No declaration: untouched (pre-existing behavior).
+            assertEquals("xhigh", clampEffort("xhigh", null))
+            assertEquals("xhigh", clampEffort("xhigh", emptyList()))
+        }
     }
 }

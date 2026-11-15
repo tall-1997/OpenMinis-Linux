@@ -77,8 +77,11 @@ internal object ThinkingEffort {
      * and re-introduce the UI/wire mismatch this fix closes. The
      * DeepSeekSibling branch deliberately does NOT use this — DeepSeek's
      * API has no "ultra" tier at all, so the vendor-legal-set clamp stays.
+     *
+     * Null result = "no legal tier at or below the request" — the caller
+     * must OMIT the thinking field (see [clampEffort]).
      */
-    fun clampRequested(effort: String, declared: List<String>?, ceilingOverride: ThinkingLevel?): String =
+    fun clampRequested(effort: String, declared: List<String>?, ceilingOverride: ThinkingLevel?): String? =
         if (ceilingOverride == ThinkingLevel.ULTRA && effort == "ultra") {
             effort
         } else {
@@ -113,11 +116,20 @@ internal object ThinkingEffort {
      * to clamp against — preserves the existing allowlist behaviour) or when
      * the value is not "none". "minimal" is Volcano Ark's documented off tier
      * and survives a declared set that lists only higher reasoning tiers.
-     * For "none": the value itself when declared, else the lowest DECLARED tier
-     * at or below "low". When the model only declares high/max (nothing at or
-     * below low) the field is omitted: sending "high" on an OFF request would
-     * be the opposite of what the caller asked for, and no legal off tier
-     * exists.
+     * For "none": the value itself when declared, else the lowest DECLARED
+     * OFF-family tier (none < minimal < low). When the model only declares
+     * high/max (nothing at or below low) the field is omitted: sending "high"
+     * on an OFF request would be the opposite of what the caller asked for,
+     * and no legal off tier exists.
+     *
+     * The final snap is deliberately NOT routed through [clampEffort]: the
+     * generic clamp returns null below the requested rank (it never walks
+     * UP), while an OFF request has a different contract — "none" unreadable
+     * by the endpoint must degrade to the lowest legal OFF-family tier, not
+     * to nothing, because the alternative (field omitted) leaves a
+     * thinks-by-default model running at its vendor default. The snap is
+     * confined to the off ladder, so it can never lift an OFF request onto a
+     * reasoning tier.
      */
     fun clampOffEffort(offEffort: String?, declared: List<String>?): String? {
         if (offEffort == null) return null
@@ -129,9 +141,11 @@ internal object ThinkingEffort {
             ?.let { return it.lowercase() }
         // [OpenMinis#377] Scoped to "none": see the doc above.
         if (offEffort != "none") return offEffort
-        val ladder = listOf("none", "minimal", "low")
-        if (ladder.none { l -> declared.any { d -> d.equals(l, ignoreCase = true) } }) return null
-        return clampEffort(offEffort, declared)
+        val offLadder = listOf("none", "minimal", "low")
+        if (offLadder.none { l -> declared.any { d -> d.equals(l, ignoreCase = true) } }) return null
+        return offLadder.firstNotNullOfOrNull { l ->
+            declared.firstOrNull { d -> d.equals(l, ignoreCase = true) }?.lowercase()
+        }
     }
 
     /**
@@ -158,8 +172,24 @@ internal object ThinkingEffort {
     fun clampEffortForModel(effort: String, lid: String): String =
         if (effort == "xhigh" && (lid.contains("mimo") || lid.contains("agnes"))) "high" else effort
 
-    /** Snap a requested tier onto the model's declared set, walking DOWN then up. */
-    fun clampEffort(effort: String, values: List<String>?): String {
+    /**
+     * Snap a requested tier onto the model's declared set, walking DOWN only.
+     *
+     * Null result = the entire declared set sits ABOVE the request — there is
+     * no legal tier at or below what the caller asked for. [P2 3-9] The old
+     * `?: declared.first().second` fallback LIFTED the request onto the
+     * declared floor (a "low" ask became "high" on a [high,max] model) — the
+     * opposite of clamping, and invisible to the user because the UI had
+     * already shown LOW as selected. Callers must OMIT the thinking field on
+     * null instead: the provider then applies its own default, and the request
+     * never carries a tier stronger than the one the user picked. The OFF
+     * branch already shipped this omit-on-no-legal-value policy (see
+     * [clampOffEffort]); this closes the enabled-level twin.
+     *
+     * Exact hits and down-walks keep the pre-existing behaviour byte-identical,
+     * including the case-insensitive tier match and lowercase normalization.
+     */
+    fun clampEffort(effort: String, values: List<String>?): String? {
         if (values.isNullOrEmpty()) return effort
         // [T-thinking-ultra-declared] Case-insensitive throughout: the catalog
         // layer (selectableThinkingLevels) already lowercases the declared set,
@@ -184,13 +214,10 @@ internal object ThinkingEffort {
             if (i >= 0) i to v.lowercase() else null
         }.sortedBy { it.first }
         if (declared.isEmpty()) return effort
-        // [T-thinking-no-upward-jump] When the requested tier sits BELOW the
-        // entire declared set (override ceiling below the model's floor), the
-        // old `?: declared.first()` fallback LIFTED the request upward — the
-        // opposite of clamping. Return the floor instead: the request is
-        // already as low as the model can go.
+        // [T-thinking-no-upward-jump] Nothing at or below the requested rank:
+        // null, never the declared floor. Every caller treats null as "omit
+        // the field" — the request must never carry a tier above the ask.
         return declared.lastOrNull { it.first <= want }?.second
-            ?: declared.first().second
     }
 }
 

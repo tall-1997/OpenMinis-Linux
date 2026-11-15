@@ -329,6 +329,8 @@
     <string name="token_usage_section_thinking">Myślenie</string>
     <string name="token_usage_thinking_label">Myślenie</string>
     <string name="token_usage_thinking_level">Poziom</string>
+    <string name="token_usage_thinking_requested">Żądany</string>
+    <string name="token_usage_thinking_effective">Skuteczny</string>
     <string name="token_usage_thinking_supported">Obsługiwane</string>
     <string name="token_usage_section_tokens">Tokeny (suma sesji)</string>
     <string name="token_usage_input_with_cache">Wejście (z pamięcią podręczną)</string>

@@ -610,6 +610,8 @@
     <string name="token_usage_section_thinking">Thinking</string>
     <string name="token_usage_thinking_label">Thinking</string>
     <string name="token_usage_thinking_level">Level</string>
+    <string name="token_usage_thinking_requested">Requested</string>
+    <string name="token_usage_thinking_effective">Effective</string>
     <string name="token_usage_thinking_supported">Supported</string>
     <string name="token_usage_section_tokens">Tokens (Session Total)</string>
     <string name="token_usage_input_with_cache">Input (incl. cache)</string>

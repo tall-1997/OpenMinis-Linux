@@ -154,6 +154,10 @@ suspend fun ChatViewModel.loadSessionTokenStats(): ChatViewModel.SessionTokenSta
     var cacheRead = 0L
     var cacheWrite = 0L
     var context = 0
+    // [T-thinking-dual-ledger] The MOST RECENT turn's ledger — the query is
+    // sort_order ASC, so the last row carrying a requested level wins.
+    var lastRequested: String? = null
+    var lastEffective: String? = null
     for (json in usages) {
         try {
             val obj = org.json.JSONObject(json)
@@ -163,6 +167,11 @@ suspend fun ChatViewModel.loadSessionTokenStats(): ChatViewModel.SessionTokenSta
             cacheWrite += obj.optLong("cacheCreationTokens", 0L)
             val ctx = obj.optInt("latestContextTokens", 0)
             if (ctx > 0) context = ctx
+            val requested = obj.optString("thinkingLevelRequested", "")
+            if (requested.isNotEmpty()) {
+                lastRequested = requested
+                lastEffective = obj.optString("thinkingLevelEffective", "").ifEmpty { null }
+            }
         } catch (_: Exception) { /* skip malformed row */ }
     }
     val snapshot = _messages.value
@@ -170,7 +179,7 @@ suspend fun ChatViewModel.loadSessionTokenStats(): ChatViewModel.SessionTokenSta
     val toolCalls = snapshot.filter { it.role == "assistant" }
         .sumOf { msg -> msg.toolBlocks.count { it.kind != "text" && it.kind != "info" } }
     val loops = maxOf(toolCalls, assistantCount)
-    return ChatViewModel.SessionTokenStats(input, output, cacheRead, cacheWrite, context, loops)
+    return ChatViewModel.SessionTokenStats(input, output, cacheRead, cacheWrite, context, loops, lastRequested, lastEffective)
 }
 
 /**

@@ -327,6 +327,8 @@
     <string name="token_usage_section_thinking">Düşünme</string>
     <string name="token_usage_thinking_label">Düşünme</string>
     <string name="token_usage_thinking_level">Düzey</string>
+    <string name="token_usage_thinking_requested">İstenen</string>
+    <string name="token_usage_thinking_effective">Etkin</string>
     <string name="token_usage_thinking_supported">Destekleniyor</string>
     <string name="token_usage_section_tokens">Token (Oturum Toplamı)</string>
     <string name="token_usage_input_with_cache">Giriş (önbellek dahil)</string>

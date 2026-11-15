@@ -328,6 +328,8 @@
     <string name="token_usage_section_thinking">Gândire</string>
     <string name="token_usage_thinking_label">Gândire</string>
     <string name="token_usage_thinking_level">Nivel</string>
+    <string name="token_usage_thinking_requested">Cerut</string>
+    <string name="token_usage_thinking_effective">Efectiv</string>
     <string name="token_usage_thinking_supported">Acceptat</string>
     <string name="token_usage_section_tokens">Tokenuri (total pe sesiune)</string>
     <string name="token_usage_input_with_cache">Intrare (inclusiv cache)</string>

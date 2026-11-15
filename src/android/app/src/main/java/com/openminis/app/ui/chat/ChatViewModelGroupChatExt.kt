@@ -69,11 +69,12 @@ internal suspend fun ChatViewModel.runGroupChat(provider: LLMProvider, closing: 
         maxTokens = (mainEntry?.model?.maxOutputTokens ?: 4096).coerceIn(1024, 16384),
         temperature = mainEntry?.overrides?.temperature,
         // [T-thinking-three-faces-unified] Same semantics as spawn lanes: the
-        // session's live thinking level, clamped to THIS model's ceiling. The
-        // old "raw effectiveMaxThinkingLevel" made the host out-think (or
-        // under-think) the session's chosen depth.
+        // session's live thinking level, clamped to THIS model's ceiling (the
+        // shared laneSessionThinkingLevel policy). The old "raw
+        // effectiveMaxThinkingLevel" made the host out-think (or under-think)
+        // the session's chosen depth.
         thinkingLevel = mainEntry?.let { entry ->
-            clampThinkingToCeiling(
+            laneSessionThinkingLevel(
                 _thinkingLevel.value,
                 forcedThinkingCeilingFor(entry),
             )
@@ -338,8 +339,9 @@ private fun ChatViewModel.groupMembers(
             maxTokens = (entry.model.maxOutputTokens ?: 4096).coerceIn(1024, 16384),
             temperature = entry.overrides.temperature,
             // [T-thinking-three-faces-unified] Session level clamped to this
-            // member's ceiling — same contract as spawn lanes.
-            thinkingLevel = clampThinkingToCeiling(
+            // member's ceiling — the shared laneSessionThinkingLevel policy,
+            // same contract as spawn lanes.
+            thinkingLevel = laneSessionThinkingLevel(
                 _thinkingLevel.value,
                 forcedThinkingCeilingFor(entry),
             ),

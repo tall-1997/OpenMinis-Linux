@@ -327,6 +327,8 @@
     <string name="token_usage_section_thinking">사고</string>
     <string name="token_usage_thinking_label">사고</string>
     <string name="token_usage_thinking_level">수준</string>
+    <string name="token_usage_thinking_requested">요청 레벨</string>
+    <string name="token_usage_thinking_effective">실제 레벨</string>
     <string name="token_usage_thinking_supported">지원됨</string>
     <string name="token_usage_section_tokens">토큰 (세션 합계)</string>
     <string name="token_usage_input_with_cache">입력 (캐시 포함)</string>

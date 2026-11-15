@@ -327,6 +327,8 @@
     <string name="token_usage_section_thinking">Razonamiento</string>
     <string name="token_usage_thinking_label">Razonamiento</string>
     <string name="token_usage_thinking_level">Nivel</string>
+    <string name="token_usage_thinking_requested">Solicitado</string>
+    <string name="token_usage_thinking_effective">Efectivo</string>
     <string name="token_usage_thinking_supported">Compatible</string>
     <string name="token_usage_section_tokens">Tokens (total de la sesión)</string>
     <string name="token_usage_input_with_cache">Entrada (incl. caché)</string>

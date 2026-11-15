@@ -327,6 +327,8 @@
     <string name="token_usage_section_thinking">การคิด</string>
     <string name="token_usage_thinking_label">การคิด</string>
     <string name="token_usage_thinking_level">ระดับ</string>
+    <string name="token_usage_thinking_requested">ระดับที่ขอ</string>
+    <string name="token_usage_thinking_effective">ระดับที่ใช้จริง</string>
     <string name="token_usage_thinking_supported">รองรับ</string>
     <string name="token_usage_section_tokens">โทเค็น (รวมทั้งเซสชัน)</string>
     <string name="token_usage_input_with_cache">อินพุต (รวมแคช)</string>

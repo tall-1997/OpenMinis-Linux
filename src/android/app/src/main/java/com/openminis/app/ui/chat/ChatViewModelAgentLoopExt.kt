@@ -75,45 +75,11 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         context, activeSessionId, provider.model.displayName, runAnchor,
     )
     // [T-android-mem-probe-trust] Log the send-path context shape once per run.
-    runCatching {
-        var chars = 0L
-        var maxOne = 0
-        var toolResults = 0
-        var images = 0
-        var imageBytes = 0L
-        var audioChars = 0L
-        var biggestRole = ""
-        for (m in agentHistory) {
-            var perMsg = m.content.length
-            for (p in m.contentParts) {
-                when (p) {
-                    is AgentContentPart.ToolResult -> {
-                        perMsg += p.content.length
-                        toolResults++
-                        // Inline image bytes never reach the char count, so
-                        // track them separately — an image-heavy request is
-                        // a different failure shape from a text-heavy one.
-                        p.imageData?.let { images++; imageBytes += it.size }
-                    }
-                    is AgentContentPart.Text -> perMsg += p.text.length
-                    is AgentContentPart.ImageData -> { images++; imageBytes += p.data.size }
-                    else -> {}
-                }
-            }
-            for (a in m.audioParts) audioChars += a.base64Data.length
-            images += m.imageParts.size
-            chars += perMsg
-            if (perMsg > maxOne) { maxOne = perMsg; biggestRole = m.role.name }
-        }
-        AppLogger.info(
-            ChatViewModel.TAG_STREAM,
-            "[CtxShape] historySize=${agentHistory.size} totalChars=$chars " +
-                "maxMsgChars=$maxOne maxMsgRole=$biggestRole toolResultParts=$toolResults " +
-                "imageParts=$images imageBytes=$imageBytes audioB64Chars=$audioChars " +
-                "approxTokens=${chars / 4} " +
-                "${com.openminis.app.diagnostics.MemorySnapshot.capture().toLogString()}",
-        )
-    }
+    // Extracted to ChatViewModelCtxShape.kt (architecture ceiling; the counting
+    // pass is pure and JVM-tested there). [T-thinking-dual-ledger] The line
+    // carries the requested thinking tier; the response side lands in each
+    // turn's token_usage JSON via [TurnThinkingUsage].
+    logContextShape(agentHistory, _thinkingLevel.value)
     // [T-android-queued-message-interrupt-on-toolclose] `assistantId` is
     // normally a single message id for the whole agent loop (iOS-parity:
     var assistantId = overrideAssistantId ?: "assistant_${System.currentTimeMillis()}"
@@ -1462,6 +1428,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 val blockMeta = allToolBlocks.filter { it.kind == "tool_use" }.associateBy { it.id }
                 val persistedId = persistAssistantTurnForRun(
                     checkNotNull(activeRun) { "Agent loop has no persistence owner" }, turnParts, lastUsage, turnReasoningContent, blockMeta, accumulatedText,
+                    requestedLevel = turnThinkingLevel,
                 )
                 if (activeRun?.isStopped == true) { loopExitedNormally = true; break }
                 val steering = com.openminis.app.goal.GoalContinuation.note(goal)
@@ -1529,6 +1496,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 val blockMeta = allToolBlocks.filter { it.kind == "tool_use" }.associateBy { it.id }
                 persistAssistantTurnForRun(
                     checkNotNull(activeRun) { "Agent loop has no persistence owner" }, turnParts, lastUsage, turnReasoningContent, blockMeta, accumulatedText,
+                    requestedLevel = turnThinkingLevel,
                 )
                 if (activeRun?.isStopped == true) { loopExitedNormally = true; break }
                 appendBoundedHistory(
@@ -1558,6 +1526,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             val blockMeta = allToolBlocks.filter { it.kind == "tool_use" }.associateBy { it.id }
             val persistedId = persistAssistantTurnForRun(
                 checkNotNull(activeRun) { "Agent loop has no persistence owner" }, turnParts, lastUsage, turnReasoningContent, blockMeta, accumulatedText,
+                requestedLevel = turnThinkingLevel,
             )
             if (activeRun?.isStopped == true) { loopExitedNormally = true; break }
             // [T-error-persist-android] Empty-response hint: the model ended a
@@ -1838,6 +1807,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         val blockMeta = allToolBlocks.filter { it.kind == "tool_use" }.associateBy { it.id }
         val assistantDbId = persistAssistantTurnForRunAndBackfill(
             activeRun, turnParts, blockMeta, lastUsage, turnReasoningContent, accumulatedText, agentHistory,
+            requestedLevel = turnThinkingLevel,
         )
         if (activeRun?.isStopped == true) { loopExitedNormally = true; break }
 

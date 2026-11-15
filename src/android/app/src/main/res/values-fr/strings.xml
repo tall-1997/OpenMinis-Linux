@@ -327,6 +327,8 @@
     <string name="token_usage_section_thinking">Réflexion</string>
     <string name="token_usage_thinking_label">Réflexion</string>
     <string name="token_usage_thinking_level">Niveau</string>
+    <string name="token_usage_thinking_requested">Demandé</string>
+    <string name="token_usage_thinking_effective">Effectif</string>
     <string name="token_usage_thinking_supported">Pris en charge</string>
     <string name="token_usage_section_tokens">Tokens (total de session)</string>
     <string name="token_usage_input_with_cache">Entrée (cache incluse)</string>

@@ -19,10 +19,13 @@ internal suspend fun ChatViewModel.persistAssistantTurnForRunAndBackfill(
     turnReasoningContent: String?,
     accumulatedText: String,
     agentHistory: MutableList<LLMMessage>,
+    // [T-thinking-dual-ledger] passthrough — see persistAssistantTurnForRun.
+    requestedLevel: com.openminis.app.data.model.ThinkingLevel? = null,
 ): String? {
     val assistantDbId = persistAssistantTurnForRun(
         checkNotNull(run) { "Agent loop has no persistence owner" },
         turnParts, lastUsage, turnReasoningContent, blockMeta, accumulatedText,
+        requestedLevel = requestedLevel,
     )
     if (assistantDbId != null) {
         val lastIdx = agentHistory.indexOfLast { it.role == LLMMessage.Role.ASSISTANT && it.dbMessageId == null }

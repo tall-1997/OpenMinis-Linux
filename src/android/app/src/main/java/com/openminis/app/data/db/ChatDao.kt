@@ -452,7 +452,13 @@ interface ChatDao : MessageHeadDao, ChatTruncationDao, SessionBindingDao, UsageS
     @Query("DELETE FROM messages WHERE session_id = :sessionId")
     suspend fun deleteMessages(sessionId: String)
 
-    @Query("SELECT token_usage FROM messages WHERE session_id = :sessionId AND token_usage IS NOT NULL")
+    // [T-thinking-dual-ledger] ORDER BY sort_order pins the row order the two
+    // callers both ASSUMED (oldest-first): the load-path context probe scans
+    // .asReversed() for the newest non-zero context, and the token sheet reads
+    // the LAST row as the session's most recent turn (thinkingLevelRequested/
+    // Effective). An unordered SELECT made "last" unspecified; the projection
+    // query below already canonicalized sort_order ASC, so mirror it.
+    @Query("SELECT token_usage FROM messages WHERE session_id = :sessionId AND token_usage IS NOT NULL ORDER BY sort_order ASC")
     suspend fun tokenUsages(sessionId: String): List<String>
 
     @Query("""
@@ -522,6 +528,15 @@ interface ChatDao : MessageHeadDao, ChatTruncationDao, SessionBindingDao, UsageS
     // ThinkingLevel.name string ("OFF"/"LOW"/"MEDIUM"/"HIGH"/"XHIGH").
     @Query("UPDATE sessions SET thinking_override = :value, updated_at = :updatedAt WHERE id = :id")
     suspend fun updateThinkingOverride(id: String, value: String?, updatedAt: Long = System.currentTimeMillis())
+
+    // Session: dormant_thinking_override ([T-thinking-dormant-restore], P2 1-8)
+    // — the level PARKED while the active model's ceiling was too low, restored
+    // when the ceiling widens. null clears the park. Deliberately NO updated_at
+    // bump: parking/clearing is bookkeeping piggybacked on persistThinkingOverride
+    // (which already stamps updated_at via updateThinkingOverride), and a standalone
+    // bookkeeping write must not reorder the session list.
+    @Query("UPDATE sessions SET dormant_thinking_override = :value WHERE id = :id")
+    suspend fun updateDormantThinkingOverride(id: String, value: String?)
 
     @Query("UPDATE sessions SET permission_mode = :value, updated_at = :updatedAt WHERE id = :id")
     suspend fun updatePermissionMode(id: String, value: String, updatedAt: Long = System.currentTimeMillis())

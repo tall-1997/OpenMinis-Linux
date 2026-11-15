@@ -130,6 +130,13 @@ class SessionForkManager(
         source.thinkingOverride?.let { override ->
             chatRepository.dao.updateThinkingOverride(new.id, override)
         }
+        // [T-thinking-dormant-restore] (P2 1-8) The park travels with the
+        // level: a fork of a session whose choice is ceiling-parked must
+        // behave like the original when the ceiling widens, so the copy is
+        // not left thinking at the clamped value forever.
+        source.dormantThinkingOverride?.let { parked ->
+            chatRepository.dao.updateDormantThinkingOverride(new.id, parked)
+        }
         // [#31] The token was already written canonically at createSession
         // (single write, no crash window). fromStored/toStoredToken below is
         // no longer needed as a second write — the rows agree by construction.

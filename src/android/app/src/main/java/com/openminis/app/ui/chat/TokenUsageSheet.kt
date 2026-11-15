@@ -23,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -163,6 +164,22 @@ fun TokenUsageSheet(
                 StatSection(title = stringResource(R.string.token_usage_section_thinking)) {
                     StatRow(stringResource(R.string.token_usage_thinking_label), if (t.enabled) onText else offText)
                     if (t.enabled) StatRow(stringResource(R.string.token_usage_thinking_level), t.level)
+                    // [T-thinking-dual-ledger] The session's most recent turn:
+                    // what the user requested vs what the response evidenced.
+                    // "—" = unknown (pre-ledger rows, no thinking streamed, or
+                    // the wire tier could not be named honestly).
+                    val lastRequested = s?.thinkingLevelRequested
+                    if (s != null && lastRequested != null) {
+                        val requestedLevel = com.openminis.app.data.model.ThinkingLevel.decoded(lastRequested)
+                        StatRow(
+                            stringResource(R.string.token_usage_thinking_requested),
+                            requestedLevel.localizedName(LocalContext.current),
+                        )
+                        StatRow(
+                            stringResource(R.string.token_usage_thinking_effective),
+                            s.thinkingLevelEffective ?: "—",
+                        )
+                    }
                     StatRow(stringResource(R.string.token_usage_thinking_supported), if (t.supported) yesText else noText)
                 }
             }

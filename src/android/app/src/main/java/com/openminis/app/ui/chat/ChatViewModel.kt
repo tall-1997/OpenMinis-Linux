@@ -2346,7 +2346,10 @@ class ChatViewModel(
      * fallback is ULTRA ([T-thinking-ultra-manual]): the wire layer clamps
      * onto whatever the model declares, so a generous ceiling only widens
      * the picker, never the request.     */
-    private val currentModelMaxThinkingLevel: ThinkingLevel
+    // internal (was private): setThinkingLevelInternal lives in
+    // ChatViewModelThinkingSync.kt as an extension and reads the ceiling
+    // there — same promotion #372 applied when toggleThinking moved out.
+    internal val currentModelMaxThinkingLevel: ThinkingLevel
         get() {
             val entry = _activeEntryId.value?.let { id ->
                 providerRepository.config.value.modelEntries.find { it.id == id }
@@ -2448,6 +2451,12 @@ class ChatViewModel(
         val cacheWrite: Long,
         val context: Int,
         val loopCount: Int,
+        // [T-thinking-dual-ledger] The session's MOST RECENT turn's thinking
+        // ledger (see TurnThinkingUsage): requested is always recorded by the
+        // persist path, effective only when the response evidenced it — null
+        // = unknown (pre-ledger rows, no thinking streamed, undeclared set).
+        val thinkingLevelRequested: String? = null,
+        val thinkingLevelEffective: String? = null,
     )
 
     data class ThinkingInfo(
@@ -2506,37 +2515,12 @@ class ChatViewModel(
     }
 
     /**
-     * Set thinking level explicitly. Used by the inline level picker in the
-     * `/thinking` slash row. Mirrors iOS `setThinkingLevel(_:)` — silently
-     * ignored when the current model doesn't support reasoning.
+     * Set thinking level explicitly. Body lives in ChatViewModelThinkingSync.kt
+     * (architecture ceiling — same split #372 applied to toggleThinking); the
+     * member stays because the [com.openminis.app.session.ChatSessionPort]
+     * override must.
      */
-    override fun setThinkingLevel(level: ThinkingLevel) {
-        if (!currentModelSupportsReasoning) return
-        // [T-android-thinking-level-arch] Double-safety clamp: the composer UI
-        // already filters to availableThinkingLevels, but never fully trust the
-        // caller — cap to the current model's ceiling so a stale/over-range
-        // request can't persist a level the model can't reach.
-        val ceiling = currentModelMaxThinkingLevel
-        val clamped = if (level.rank > ceiling.rank) ceiling else level
-        // An explicit pick (even re-picking the same level) drops any level
-        // parked by ceiling-sync — see [dormantThinkingLevel].
-        dormantThinkingLevel = null
-        if (_thinkingLevel.value == clamped) return
-        _thinkingLevel.value = clamped
-        persistThinkingOverride(clamped)
-    }
-
-    /**
-     * T239: write the user's explicit thinking-level choice back to the
-     * sessions row so it survives cold-start. Stored as enum name; null
-     * means "no override" (legacy behaviour). We always store a non-null
-     * value here — including OFF — because the user's explicit "turn it
-     * off for this session" must persist as distinct from "never set".
-     *
-     * Uses [ensureSession] so toggling on a draft (no DB row yet) first
-     * materialises the row, mirroring how toggleMemoryEnabled lands its
-     * preference on the persisted id rather than the `__new__…` draft key.
-     */
+    override fun setThinkingLevel(level: ThinkingLevel) = setThinkingLevelInternal(level)
 
     /**
      * If `text` is a slash command literal (e.g. "/compact"), run it and

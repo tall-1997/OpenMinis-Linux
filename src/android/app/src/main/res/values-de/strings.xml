@@ -327,6 +327,8 @@
     <string name="token_usage_section_thinking">Denken</string>
     <string name="token_usage_thinking_label">Denken</string>
     <string name="token_usage_thinking_level">Stufe</string>
+    <string name="token_usage_thinking_requested">Angefordert</string>
+    <string name="token_usage_thinking_effective">Effektiv</string>
     <string name="token_usage_thinking_supported">Unterstützt</string>
     <string name="token_usage_section_tokens">Tokens (Sitzung gesamt)</string>
     <string name="token_usage_input_with_cache">Eingabe (inkl. Cache)</string>

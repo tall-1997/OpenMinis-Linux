@@ -327,6 +327,8 @@
     <string name="token_usage_section_thinking">思考</string>
     <string name="token_usage_thinking_label">思考</string>
     <string name="token_usage_thinking_level">レベル</string>
+    <string name="token_usage_thinking_requested">要求レベル</string>
+    <string name="token_usage_thinking_effective">実効レベル</string>
     <string name="token_usage_thinking_supported">サポート済み</string>
     <string name="token_usage_section_tokens">トークン（セッション合計）</string>
     <string name="token_usage_input_with_cache">入力（キャッシュ含む）</string>

@@ -329,6 +329,8 @@
     <string name="token_usage_section_thinking">Размышление</string>
     <string name="token_usage_thinking_label">Размышление</string>
     <string name="token_usage_thinking_level">Уровень</string>
+    <string name="token_usage_thinking_requested">Запрошенный</string>
+    <string name="token_usage_thinking_effective">Фактический</string>
     <string name="token_usage_thinking_supported">Поддерживается</string>
     <string name="token_usage_section_tokens">Токены (всего за Сессию)</string>
     <string name="token_usage_input_with_cache">Ввод (вкл. кэш)</string>

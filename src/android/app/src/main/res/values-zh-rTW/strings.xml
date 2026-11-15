@@ -375,6 +375,8 @@
     <string name="token_usage_section_thinking">思考</string>
     <string name="token_usage_thinking_label">思考</string>
     <string name="token_usage_thinking_level">級別</string>
+    <string name="token_usage_thinking_requested">請求檔位</string>
+    <string name="token_usage_thinking_effective">實際檔位</string>
     <string name="token_usage_thinking_supported">已支援</string>
     <string name="token_usage_section_tokens">Token（會話總計）</string>
     <string name="token_usage_input_with_cache">輸入（含緩存）</string>
