@@ -488,11 +488,11 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     break@agentTurns
                 }
                 // [T-once-notices] committed into the transcript once — never rebuilt.
-                commitSessionNoticesOnce(
-                    goalObjective = requestGoalState?.objective.orEmpty(),
-                    goalPrompt = goalMount.prompt,
-                    goalCanContinue = goalMount.canContinue,
-                )
+                // [T-agent-steering + T-toolset-delta] pi turn-boundary injections, before history build.
+                commitSessionNoticesOnce(goalObjective = requestGoalState?.objective.orEmpty(),
+                    goalPrompt = goalMount.prompt, goalCanContinue = goalMount.canContinue)
+                drainSteeringIntoRun()
+                declareToolSetDeltaIfChanged(agentTools)
                 val requestHistory = ToolIdNormalization.normalizeMessages(
                     effectiveAgentHistory().let { history ->
                         // [T-stall-resume] One-shot continuation note only.

@@ -300,8 +300,15 @@ internal suspend fun ChatViewModel.executeTool(
         // [P1-19] The when dispatches on the ToolAliases.canonical() name, so
         // the historical alias labels "shell_exec" (→ shell_execute) can never
         // match here; env_exec is its own registered tool and stays.
+        // [pi-port §2.6] Session ExecutionEnvironment: no override (the default)
+        // = the legacy PRoot pipeline below, byte-for-byte; an override runs there.
         "shell_execute", "env_exec" -> {
-            executeShellCommand(argsJson, toolId, toolBlocks, assistantId, currentText)
+            val envOverride = com.openminis.app.sandbox.ExecutionEnvironments.overrideFor(activeSessionId)
+            if (envOverride == null) {
+                executeShellCommand(argsJson, toolId, toolBlocks, assistantId, currentText)
+            } else {
+                com.openminis.app.sandbox.ExecutionEnvironments.executeShell(envOverride, argsJson)
+            }
         }
         "su_exec" -> {
             // [T-android-sueexec-tool-home] Command rewriting (android-su -c
@@ -403,6 +410,12 @@ internal suspend fun ChatViewModel.executeTool(
             com.openminis.app.tools.ExecuteCodeTool.execute(argsJson) { n, a ->
                 executeTool(n, a, toolId, toolBlocks, assistantId, currentText)
             }
+        // [pi-port §2.7] Nested calls take the SAME executeTool path (SecurityGate
+        // + guards); only the script's return value becomes this toolResult.
+        com.openminis.app.tools.CodemodeTool.NAME ->
+            com.openminis.app.tools.CodemodeTool.execute(argsJson, invoke = { n, a ->
+                executeTool(n, a, toolId, toolBlocks, assistantId, currentText)
+            })
         com.openminis.app.tools.ProductMediaTools.DESCRIBE_IMAGE -> executeReadImageTool(argsJson)
         com.openminis.app.tools.ProductMediaTools.GENERATE_IMAGE ->
             executeGenerateImageTool(argsJson, currentProvider, activeSessionId)

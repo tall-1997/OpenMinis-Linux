@@ -1557,10 +1557,10 @@ class OpenAIProvider private constructor(
         override val chatExtraHeaders get() = this@OpenAIProvider.chatExtraHeaders
         override val absoluteEndpointOverride get() = this@OpenAIProvider.absoluteEndpointOverride
         override val isOpenRouter get() = this@OpenAIProvider.isOpenRouter
-        override val needsOpenRouterAnthropicCacheControl get() =
-            this@OpenAIProvider.needsOpenRouterAnthropicCacheControl
+        override val needsOpenRouterAnthropicCacheControl get() = this@OpenAIProvider.needsOpenRouterAnthropicCacheControl
         override val isMistral get() = this@OpenAIProvider.isMistral
         override val isDashScope get() = this@OpenAIProvider.isDashScope
+        override val compatFlags get() = com.openminis.app.provider.compat.CompatResolver.forBasePath(basePath, model.id)
         override val isXAI get() = this@OpenAIProvider.isXAI
         override val usesUnifiedReasoningEffort get() = this@OpenAIProvider.usesUnifiedReasoningEffort
         override val thinkingRuleInstanceId get() = this@OpenAIProvider.thinkingRuleInstanceId
