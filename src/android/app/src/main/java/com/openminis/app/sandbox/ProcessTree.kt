@@ -57,6 +57,21 @@ internal object ProcessTree {
         return out
     }
 
+    /**
+     * [T-job-tree-spare] Subtract every background-job tree from a victim
+     * set. [jobRoots] are the RUNNING jobs' setsid leaders (see
+     * JobRegistry.activeJobPids); the job plus whatever it forked is spared,
+     * because those processes were started on purpose and are tracked in
+     * the job registry. Returns a new set; [victims] is untouched.
+     */
+    fun exceptTrees(victims: Set<Int>, jobRoots: Set<Int>, links: List<ProcLink>): Set<Int> {
+        if (jobRoots.isEmpty() || victims.isEmpty()) return victims
+        val spared = LinkedHashSet<Int>()
+        for (root in jobRoots) if (root > 0) spared.addAll(collect(root, links))
+        if (spared.isEmpty()) return victims
+        return victims.filterTo(LinkedHashSet()) { it !in spared }
+    }
+
     /** Processes that share [rootPid]'s process group, including the root. */
     fun sameGroup(rootPid: Int, pgrpByPid: Map<Int, Int>): Set<Int> {
         val group = pgrpByPid[rootPid] ?: return if (rootPid > 0) setOf(rootPid) else emptySet()
