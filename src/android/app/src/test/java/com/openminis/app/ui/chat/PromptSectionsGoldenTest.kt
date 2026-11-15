@@ -1,6 +1,7 @@
 package com.openminis.app.ui.chat
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -240,6 +241,32 @@ class PromptSectionsGoldenTest {
         assertNull(PromptSections.publishAndDiff("sess-c", sections()))
         // Blank session id never publishes.
         assertNull(PromptSections.publishAndDiff("", sections()))
+    }
+
+    @Test
+    fun `hash-resident snapshot keeps the diff behaviour identical`() {
+        // P2-5: the per-session snapshot now stores per-section content hashes
+        // instead of the whole section text. The observable contract (which
+        // stable sections changed / were removed) must not move — pinned here
+        // against the same scenarios the full-content implementation handled.
+        PromptSections.clearPublished()
+        assertNull(PromptSections.publishAndDiff("sess-h", sections()))
+        // Tail-only churn: silent (stable hashes unchanged).
+        assertNull(PromptSections.publishAndDiff("sess-h", sections(tail = TAIL + " drift")))
+        // Section content change: named.
+        val changed = PromptSections.publishAndDiff("sess-h", sections(skill = "## Skills v2"))
+        assertTrue(changed!!.contains(PromptSections.SKILLS))
+        assertFalse(changed.contains("removed"))
+        // Section removal: reported with the removal marker.
+        val removed = PromptSections.publishAndDiff("sess-h", sections(skill = "## Skills v2", memory = null))
+        assertTrue(removed!!.contains("removed"))
+        assertTrue(removed.contains(PromptSections.MEMORY_STANDING))
+        // Re-adding the section: named again (the hash map tracks absence).
+        val reAdded = PromptSections.publishAndDiff("sess-h", sections(skill = "## Skills v2"))
+        assertTrue(reAdded!!.contains(PromptSections.MEMORY_STANDING))
+        assertFalse(reAdded.contains("removed"))
+        // Same state again: silent.
+        assertNull(PromptSections.publishAndDiff("sess-h", sections(skill = "## Skills v2")))
     }
 
     @Test

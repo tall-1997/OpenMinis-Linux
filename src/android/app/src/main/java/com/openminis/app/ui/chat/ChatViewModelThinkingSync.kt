@@ -108,11 +108,42 @@ internal fun ChatViewModel.launchThinkingCeilingSync(): kotlinx.coroutines.Job =
                     dormantThinkingLevel = decision.dormant
                     _thinkingLevel.value = decision.level
                     persistThinkingOverride(decision.level)
+                    // [T-thinking-sync-notice] (P2-8) A silent clamp/restore looked
+                    // like the user's pick had vanished. Surface both directions
+                    // like [toggleThinking] does: demotion says the ceiling forced
+                    // it (and the choice is parked), restore says it came back.
+                    // appendSystemInfo only mutates the messages StateFlow (no
+                    // view dependency), so the flow is safe to fire before any
+                    // UI is mounted.
+                    appendSystemInfo(
+                        text = context.getString(
+                            if (thinkingSyncNotice(decision) == ThinkingSyncNotice.CLAMPED) {
+                                com.openminis.app.R.string.vm_thinking_clamped_to
+                            } else {
+                                com.openminis.app.R.string.vm_thinking_ceiling_restored
+                            },
+                            decision.level.localizedName(context),
+                        ),
+                        iconKind = "thinking",
+                    )
                 }
             }
         }.collect()
     }
 
+
+/**
+ * [T-thinking-sync-notice] (P2-8) Which ceiling-sync move a
+ * [ThinkingDormancy.sync] result is, for the collector's localized notice.
+ * Pure and extracted so both branches are JVM-asserted (see
+ * [ThinkingSyncNoticeTest]); the two only appear inside a `changed`
+ * decision: demote parks the old choice (dormant != null), restore clears
+ * the park (dormant == null).
+ */
+internal enum class ThinkingSyncNotice { CLAMPED, RESTORED }
+
+internal fun thinkingSyncNotice(result: ThinkingDormancy.SyncResult): ThinkingSyncNotice =
+    if (result.dormant != null) ThinkingSyncNotice.CLAMPED else ThinkingSyncNotice.RESTORED
 
 /**
  * [T-thinking-ceiling-sync] Persist the (possibly clamped) level to the

@@ -2,6 +2,7 @@ package com.openminis.app.data.repository
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -105,6 +106,62 @@ class SkillManifestTest {
         ) ?: throw AssertionError("manifest must build when a visible skill exists")
         assertTrue(manifest.contains("<name>visible</name>"))
         assertFalse(manifest.contains("secret"))
+    }
+
+    @Test
+    fun `disclosableSkills drops hidden skills`() {
+        val input = listOf(skill("visible"), skill("secret", hidden = true))
+        assertEquals(listOf("visible"), SkillManifest.disclosableSkills(input).map { it.id })
+        // Idempotent / already-filtered input is a no-op.
+        assertEquals(input.size - 1, SkillManifest.disclosableSkills(SkillManifest.disclosableSkills(input)).size)
+    }
+
+    @Test
+    fun `hidden skills over the cap consume no slot and never reach the disclosure tail`() {
+        // P2-6: with 121 disclosable skills, a hidden skill used to reach
+        // selectForPrompt, burn one of the 120 cap slots, and the hidden skill
+        // squeezed out resurfaced in disclosureNote's "N more skills ...:
+        // <names>" — the model was told a hidden skill's name and read path.
+        // The repository contract (filter first, then select) keeps it out of
+        // BOTH the selected list and the omitted list.
+        val now = 1_700_000_000_000L
+        val visible = (1..120).map { skill("v$it", useCount = it.toDouble()) }
+        val hiddenHeavy = skill("secret", hidden = true, useCount = 999.0, updatedAt = now)
+        val disclosable = SkillManifest.disclosableSkills(visible + hiddenHeavy)
+        assertEquals(120, disclosable.size)
+        assertFalse("secret" in disclosable.map { it.id })
+
+        val selection = SkillManifest.selectForPrompt(disclosable, nowMs = now)
+        assertEquals(120, selection.selected.size)
+        assertTrue(selection.omitted.isEmpty())
+        assertFalse("secret" in selection.selected.map { it.id })
+        assertFalse("secret" in selection.omitted.map { it.id })
+
+        val manifest = SkillManifest.buildSkillManifest(selection.selected)
+        assertNotNull(manifest)
+        assertFalse(manifest!!.contains("secret"))
+        assertNull(SkillManifest.disclosureNote(selection.selected, selection.omitted))
+    }
+
+    @Test
+    fun `a squeezed-out visible skill still reaches the disclosure tail`() {
+        // The cap exclusion must stay selective: VISIBLE skills squeezed out
+        // by the cap keep the disclosure tail (they are model-discoverable by
+        // design) — only hidden skills are dropped from it.
+        val now = 1_700_000_000_000L
+        val visible = (1..121).map { skill("v$it", useCount = it.toDouble()) }
+        val hidden = skill("secret", hidden = true, useCount = 999.0, updatedAt = now)
+        val disclosable = SkillManifest.disclosableSkills(visible + hidden)
+        val selection = SkillManifest.selectForPrompt(disclosable, nowMs = now)
+        assertEquals(120, selection.selected.size)
+        assertEquals(1, selection.omitted.size)
+        assertFalse("secret" in selection.omitted.map { it.id })
+        // 121 visible-capable skills; one (the lowest-useCount) is omitted
+        // and names itself in the tail; the hidden one stays absent.
+        val note = SkillManifest.disclosureNote(selection.selected, selection.omitted)
+        assertNotNull(note)
+        assertTrue(note!!.contains(selection.omitted.first().name))
+        assertFalse(note.contains("secret"))
     }
 
     @Test

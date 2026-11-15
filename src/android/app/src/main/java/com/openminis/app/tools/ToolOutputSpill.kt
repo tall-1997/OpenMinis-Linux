@@ -300,8 +300,16 @@ object ToolOutputSpill {
      * the original size as a token estimate (bytes/4) and the total line count
      * (pi `mcp/src/output-limit.ts` warning line). The head/tail slices are
      * taken through [ToolOutputTruncator.sliceHead]/[sliceTail] — the shared
-     * surrogate-safe slicer — instead of ToolOutputPolicy.safeSubstring, with
-     * byte-identical behavior (same clamp, same surrogate guards).
+     * surrogate-safe slicers — instead of ToolOutputPolicy.safeSubstring.
+     * Not byte-identical to the old safeSubstring previews (review P2-11):
+     * same clamping, and identical at the head edge, but sliceTail drops an
+     * orphaned LEADING low surrogate whole while safeSubstring EXTENDED the
+     * window one code unit backwards to keep the pair — so a tail window that
+     * starts mid-pair keeps one code unit FEWER here. That one-unit
+     * difference is deliberate and pinned: spill output keeps its shipped
+     * shape (a placeholder-parsing consumer may rely on it), so the KDoc
+     * documents the edge instead of changing either slicer. Boundary
+     * behaviour is pinned by ToolOutputSpillPreviewBoundaryTest.
      */
     fun formatPreview(toolName: String, guestPath: String?, output: String): String {
         val head = ToolOutputTruncator.sliceHead(output, HEAD)

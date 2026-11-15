@@ -13,16 +13,21 @@ import org.json.JSONObject
  * inside ONE JavaScript (ES5) program and return only its final value.
  *
  * Context economy is the point: nested `tools.<name>(...)` results come back
- * into the script as strings and NEVER enter the conversation. What the model
- * sees is this tool's own toolResult — the serialized script return value,
+ * into the script as strings and NEVER enter the conversation. What the
+ * model sees is this tool's own toolResult — the serialized script return value,
  * truncated through [ToolOutputTruncator] like every other tool output. A
  * multi-step aggregation (read 10 files, keep 3 lines) costs one result slot
  * instead of ten.
  *
  * Exposure: [ToolExposureGate.DIRECT] — declared in the schema like any other
- * tool (this is pi's model-visible codemode entry). [ToolExposureGate]
- * additionally counts it in the codemode-callable set, so a codemode script
- * can bootstrap another aggregation — the pi "codemode tools list it" rule.
+ * tool (this is pi's model-visible codemode entry). Deliberately NOT in the
+ * codemode-callable set: a script re-entering this tool parks one
+ * Dispatchers.IO thread per nesting level in the bridge's runBlocking and
+ * ~64 levels deadlock the IO pool, and Stop cannot reach the parked threads.
+ * [ToolExposureGate.callableForCodemode] excludes the name (first line of
+ * defense) and [NestingGuard] refuses any re-entry that reaches the bridge
+ * anyway (defense in depth) with the honest self-rescue error, so the model
+ * can correct itself by inlining the logic.
  *
  * Permission pipeline: every nested call goes through the [invoke] function
  * the dispatcher injects — the SAME ChatViewModel.executeTool path a model
@@ -30,9 +35,9 @@ import org.json.JSONObject
  * policy). The sandbox never executes a tool by itself.
  *
  * Callability: the script may call every tool the Gate marks callable
- * (registered, minus model_only/hidden). The nested executor remains the
- * real boundary: a gated-off tool (memory disabled, unknown name, permission
- * refused) answers with its own honest error inside the script.
+ * (registered, minus model_only/hidden minus this entry). The nested executor
+ * remains the real boundary: a gated-off tool (memory disabled, unknown name,
+ * permission refused) answers with its own honest error inside the script.
  */
 object CodemodeTool {
 
@@ -53,7 +58,9 @@ object CodemodeTool {
             "(tools.file_read({\"path\": \"/var/minis/workspace/a.txt\"})); a failed call answers \"ERROR: ...\" and " +
             "the script decides what to do. The script MUST `return` its final value (top-level return works); " +
             "JSON.parse/JSON.stringify and standard globals are available. No print/console — there is no output " +
-            "channel besides the return value. JavaScript only; for shell work use shell_execute.",
+            "channel besides the return value. Compared to execute_code: that sibling streams print() output into " +
+            "the conversation for quick scratch work over a fixed read-only function set; use THIS tool when the " +
+            "intermediates must stay out of the conversation. JavaScript only; for shell work use shell_execute.",
         parameters = mapOf(
             "tool_title" to AgentToolParam("string", "A concise 5-10 word summary shown to the user."),
             "code" to AgentToolParam(
@@ -96,68 +103,136 @@ object CodemodeTool {
             limits = CodemodeSandbox.Limits(timeoutMs = timeoutSeconds * 1000),
         )
         return withContext(Dispatchers.IO) {
-            val run = sandbox.run(code)
-            // Local copies so the when-chain smart-casts are unconditional.
-            val error = run.error
-            val valueJson = run.valueJson
-            when {
-                error != null -> ToolExecutionResult(
-                    error,
-                    false,
-                    errorCode = if (run.timedOut) ToolErrorCode.TIMEOUT else ToolErrorCode.EXECUTION_FAILED,
-                    recoveryHint = if (run.timedOut) {
-                        "Return partial results instead of looping; split the work across several calls."
-                    } else null,
-                    toolTitle = toolTitle,
-                    // TIMEOUT must ride with timedOut=true (SshTool convention):
-                    // the UI renders the TIMEOUT status from this flag
-                    // (ChatViewModelToolTurnExec result.timedOut), not from the code.
-                    timedOut = run.timedOut,
-                )
-                valueJson == null -> ToolExecutionResult(
-                    "(no return value after ${run.toolCalls} tool calls) — a codemode script must `return` its result.",
-                    true,
-                    toolTitle = toolTitle,
-                )
-                else -> ToolExecutionResult(
-                    ToolOutputTruncator.truncateHead(valueJson).content,
-                    true,
-                    toolTitle = toolTitle,
-                )
+            // The sandbox runs synchronously on THIS IO thread, so marking it
+            // here is what lets the bridge below recognize a script thread.
+            NestingGuard.enter()
+            try {
+                val run = sandbox.run(code)
+                // Local copies so the when-chain smart-casts are unconditional.
+                val error = run.error
+                val valueJson = run.valueJson
+                when {
+                    error != null -> ToolExecutionResult(
+                        error,
+                        false,
+                        errorCode = when {
+                            // The tool-call cap is a BUDGET trip, not a clock
+                            // trip: a plain failure (no UI timeout clock, no
+                            // "return partial results" timeout hint).
+                            run.limitExceeded -> ToolErrorCode.CODEMODE_LIMIT
+                            run.timedOut -> ToolErrorCode.TIMEOUT
+                            else -> ToolErrorCode.EXECUTION_FAILED
+                        },
+                        recoveryHint = if (run.timedOut) {
+                            "Return partial results instead of looping; split the work across several calls."
+                        } else null,
+                        toolTitle = toolTitle,
+                        // TIMEOUT must ride with timedOut=true (SshTool convention):
+                        // the UI renders the TIMEOUT status from this flag
+                        // (ChatViewModelToolTurnExec result.timedOut), not from the code.
+                        timedOut = run.timedOut,
+                    )
+                    valueJson == null -> ToolExecutionResult(
+                        "(no return value after ${run.toolCalls} tool calls) — a codemode script must `return` its result.",
+                        true,
+                        toolTitle = toolTitle,
+                    )
+                    else -> ToolExecutionResult(
+                        ToolOutputTruncator.truncateHead(valueJson).content,
+                        true,
+                        toolTitle = toolTitle,
+                    )
+                }
+            } finally {
+                NestingGuard.exit()
             }
         }
     }
 
     /**
      * The Gate's codemode-callable set over the full registry (pi: callable =
-     * registered minus model_only/hidden, regardless of activation). The
-     * nested executor stays the real boundary — a session-gated tool answers
-     * its own refusal inside the script.
+     * registered minus model_only/hidden, regardless of activation — and the
+     * Gate also drops this entry tool itself, see its KDoc). Built with the
+     * SAME flags as [ToolExposureGate.levelByName]: callability is a
+     * registry-wide contract and must not depend on which device features
+     * happen to be configured — the previous default (vision/speech flags
+     * off) silently dropped read_image / transcribe_audio from the bridge, so
+     * a script saw a JS TypeError instead of the executor's honest refusal.
+     * The nested executor stays the real boundary — a session-gated tool
+     * answers its own refusal inside the script.
      */
     private fun defaultCallableNames(): Set<String> = ToolExposureGate.callableNamesForCodemode(
         AgentTools.makeAgentTools(
-            includeLongTail = true,
+            supportsImageInput = true,
+            visionGroupConfigured = true,
+            memoryEnabled = true,
             subAgentEnabled = true,
             codeGraphEnabled = true,
             mcpNativeEnabled = true,
+            hasSpeechModel = true,
+            includeLongTail = true,
         ),
     )
 
     /**
+     * Defense-in-depth against codemode self-recursion (P1 review): how many
+     * sandbox frames are running on THIS thread. The Rhino interpreter runs
+     * synchronously on the thread that called [CodemodeSandbox.run], and the
+     * bridge's runBlocking parks that very thread per nested tool call — so a
+     * script thread starting another codemode frame is the exact shape that
+     * parks one IO thread per level and deadlocks the pool at ~64 levels
+     * (Stop cannot reach parked threads). [ToolExposureGate.callableForCodemode]
+     * already excludes the entry tool from the default bridge; this guard
+     * covers paths that bypass that set (an explicit callableNames naming the
+     * entry, a future caller). Internal for the guard tests.
+     */
+    internal object NestingGuard {
+        private val depth = ThreadLocal.withInitial { 0 }
+
+        fun enter() {
+            depth.set(depth.get() + 1)
+        }
+
+        fun exit() {
+            depth.set(depth.get() - 1)
+        }
+
+        /** True while this thread executes inside a codemode sandbox frame. */
+        fun insideScript(): Boolean = depth.get() > 0
+    }
+
+    /**
+     * The honest refusal the bridge returns for a nested codemode attempt.
+     * Model-actionable on purpose: the self-rescue is to inline the logic.
+     */
+    internal fun nestingRefusal(): String =
+        "ERROR: codemode nesting is not supported — inline the logic in one script"
+
+    /**
      * [CodemodeSandbox.ToolHost] backed by the injected executor. Blocks the
      * Rhino thread per call (the sandbox runs on Dispatchers.IO, the same
-     * pattern tools.ExecuteCodeTool uses for its bridge).
+     * pattern tools.ExecuteCodeTool uses for its bridge) — EXCEPT for a
+     * re-entrant codemode attempt, which is refused without parking anything
+     * (see [NestingGuard]).
      */
-    private class ExecutorBridge(
+    internal class ExecutorBridge(
         private val invoke: suspend (name: String, argsJson: String) -> ToolExecutionResult,
         private val allowed: Set<String>,
     ) : CodemodeSandbox.ToolHost {
 
         override fun callableToolNames(): Set<String> = allowed
 
-        override fun callTool(name: String, argsJson: String): String = runBlocking {
-            val result = invoke(name, argsJson)
-            if (result.success) result.output else "ERROR: ${result.output}"
+        override fun callTool(name: String, argsJson: String): String {
+            // This thread is inside a sandbox frame, so a call to the ENTRY
+            // TOOL would start a SECOND codemode frame — the shape that parks
+            // one IO thread per level in runBlocking and deadlocks the pool.
+            // Refuse it honestly (the self-rescue is to inline the logic);
+            // ordinary nested tool calls are unaffected.
+            if (name == NAME && NestingGuard.insideScript()) return nestingRefusal()
+            return runBlocking {
+                val result = invoke(name, argsJson)
+                if (result.success) result.output else "ERROR: ${result.output}"
+            }
         }
     }
 }

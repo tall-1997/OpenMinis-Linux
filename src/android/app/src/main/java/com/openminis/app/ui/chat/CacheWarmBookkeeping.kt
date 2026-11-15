@@ -21,6 +21,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * [T-prompt-cache-warming] Wiring of the pi cache-warming port
@@ -39,12 +42,19 @@ import kotlinx.coroutines.launch
  *         before their next send).
  *
  * Trigger conditions (pi cache-warming.ts): prefs enabled (default OFF, ships
- * dark) + streaming idle + not a budget-thinking request (replay ban) + TTL
- * known AND due (90% elapsed) + not aged out + economics pay for themselves
- * (real models.dev rates — no invented numbers). The warm action replays the
- * last successful request's prompt through [LLMProvider.sendMessage] with the
- * hygiene triple (maxTokens = 1, no continuation, no retries) — sendMessage
- * takes a per-call maxTokens parameter, so no provider-side change is needed.
+ * dark) + streaming idle + replayable ([PromptCacheWarmer
+ * .isCacheWarmingReplayable] — Anthropic thinking shapes are banned because
+ * the warm's maxTokens=1 replay derives a different thinking budget, and so
+ * are budget-forced providers) + TTL known AND due (90% elapsed) + not aged
+ * out + economics pay for themselves (real models.dev rates — no invented
+ * numbers). The warm action replays the last successful request's prompt
+ * through [LLMProvider.sendMessage] with the hygiene triple (maxTokens = 1,
+ * no continuation, no retries) — sendMessage takes a per-call maxTokens
+ * parameter, so no provider-side change is needed — with thinking forced OFF
+ * and two race/safety guards: a process-wide in-flight mutex (the scheduled
+ * refresh point and the foreground hook must not double-bill one idle
+ * window) and a wall-clock deadline so an abandoned warm never sits on the
+ * single ProviderKeyGate permit for the 15-minute non-stream deadline.
  *
  * NOT a trigger on purpose: `ChatViewModelResumeExt.resume()`. A resume
  * immediately re-enters the agent loop with a REAL request, which itself
@@ -76,6 +86,10 @@ object PromptCacheWarmPlanner {
         enabled: Boolean,
         streamingActive: Boolean,
         forceThinking: Boolean,
+        /** Warming family key ([PromptCacheWarmer.familyOf]); null = unknown family. */
+        providerFamily: String?,
+        /** Whether the recorded request ran with an enabled thinking level. */
+        thinkingEnabled: Boolean,
         rates: PromptCacheWarmRates.Rates?,
         promptTokens: Int,
         /** Ledger-reported remaining fraction (0..1); null = pair never recorded / TTL unknown. */
@@ -87,7 +101,14 @@ object PromptCacheWarmPlanner {
     ): WarmDecision {
         if (!enabled) return WarmDecision.Stop("prefs-disabled")
         if (streamingActive) return WarmDecision.Stop("streaming-active")
-        if (forceThinking) return WarmDecision.Stop("budget-thinking-replay-ban")
+        if (!PromptCacheWarmer.isCacheWarmingReplayable(providerFamily, thinkingEnabled, forceThinking)) {
+            // One shared rule, two diagnostic tags: a forced provider is the
+            // budget-style ban (pi's forceAdaptiveThinking gap), everything
+            // else reaching here is the Anthropic request-shape ban.
+            return WarmDecision.Stop(
+                if (forceThinking) "budget-thinking-replay-ban" else "thinking-replay-ban",
+            )
+        }
         if (dueAtMs == null) return WarmDecision.Stop("ttl-unknown")
         // Idle horizon (pi MAX_IDLE_AGE): past it, continuation estimates are
         // meaningless and the entry is effectively lost anyway.
@@ -131,16 +152,58 @@ object PromptCacheWarmCoordinator {
 
     private const val TAG = "ChatViewModel"
 
+    /**
+     * Wall-clock ceiling for one warm replay. A warm runs inside the SAME
+     * request pipeline as user turns ([LLMProvider.sendMessage] ->
+     * ProviderKeyGate.withPermit), whose (host, credential, model) bucket has
+     * permits = 1 ([ProviderKeyGate.DEFAULT_PERMITS]) and whose caller-side
+     * acquire has NO timeout of its own — the 15-minute non-stream deadline
+     * (LLMProvider.nonStreamDeadlineMs) is the only thing that would ever free
+     * the permit. A background refresh must not hold the single permit that
+     * long; 30 s comfortably covers a one-token cache-read answer, and an
+     * overrun abandons the refresh (log only, ledger NOT re-recorded — the
+     * next real request re-arms warming as usual).
+     */
+    private const val WARM_DEADLINE_MS = 30_000L
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val ledger = PromptCacheTtlLedger()
     private val lock = Any()
     private var warmJob: Job? = null
+
+    /**
+     * In-flight mutex for warm dispatch (test-and-set at [sendWarm] entry):
+     * the scheduled refresh point and the foreground hook can both fire inside
+     * the same idle window, and without this both would send a billable
+     * replay. Reset on EVERY outcome path (success, failure, deadline,
+     * cancellation) in the warm coroutine's finally block.
+     */
+    private val warmInFlight = AtomicBoolean(false)
 
     @Volatile
     private var pending: PendingWarm? = null
 
     @Volatile
     private var foregroundHookInstalled = false
+
+    // ── Test seams (JVM unit tests have no SharedPreferences / models.dev
+    // registry / real clock slack; null always means "consult the production
+    // lookup"). Cleared by [resetForTest]. ───────────────────────────────────
+
+    /** Overrides [CacheWarmingPrefs.enabled] when non-null. */
+    @Volatile
+    internal var warmingEnabledForTest: Boolean? = null
+
+    /** Overrides [PromptCacheWarmRates.forModel] when non-null. */
+    @Volatile
+    internal var warmRatesForTest: PromptCacheWarmRates.Rates? = null
+
+    /** Shrinks the warm deadline below [WARM_DEADLINE_MS] when non-null. */
+    @Volatile
+    internal var warmDeadlineMsForTest: Long? = null
+
+    /** Test observation of the in-flight mutex without racing it. */
+    internal fun isWarmInFlightForTest(): Boolean = warmInFlight.get()
 
     /**
      * The last successful request's replay inputs. Held process-wide (not per
@@ -212,12 +275,15 @@ object PromptCacheWarmCoordinator {
         fireIfDue(nowMs)
     }
 
-    /** Test seam: drop all scheduled state. */
+    /** Test seam: drop all scheduled state and test overrides. */
     internal fun resetForTest() {
         synchronized(lock) {
             warmJob?.cancel()
             warmJob = null
             pending = null
+            warmingEnabledForTest = null
+            warmRatesForTest = null
+            warmDeadlineMsForTest = null
         }
     }
 
@@ -237,14 +303,16 @@ object PromptCacheWarmCoordinator {
 
     private fun fireIfDue(nowMs: Long = System.currentTimeMillis()) {
         val snapshot = pending ?: return
-        if (!CacheWarmingPrefs.enabled()) return
+        if (!(warmingEnabledForTest ?: CacheWarmingPrefs.enabled())) return
         val instanceId = snapshot.instanceId
         val modelId = snapshot.modelId
         val decision = PromptCacheWarmPlanner.decide(
             enabled = true,
             streamingActive = runCatching { snapshot.isBusy() }.getOrDefault(true),
             forceThinking = snapshot.forceThinking,
-            rates = PromptCacheWarmRates.forModel(modelId),
+            providerFamily = PromptCacheWarmer.familyOf(snapshot.providerTypeRaw),
+            thinkingEnabled = snapshot.thinkingLevel.isEnabled,
+            rates = warmRatesForTest ?: PromptCacheWarmRates.forModel(modelId),
             promptTokens = snapshot.promptTokens,
             ttlRemainingPct = ledger.ttlRemainingPct(instanceId, modelId, nowMs),
             lastRequestAtMs = snapshot.requestedAtMs,
@@ -255,7 +323,14 @@ object PromptCacheWarmCoordinator {
             is WarmDecision.Stop -> {
                 AppLogger.info(TAG, "[cache-warm] stop (${decision.reason}) model=$modelId")
             }
-            is WarmDecision.Warm -> sendWarm(snapshot, decision)
+            is WarmDecision.Warm -> {
+                if (!sendWarm(snapshot, decision)) {
+                    // The refresh dispatch lost the in-flight race — the warm
+                    // already sent on the other trigger; this one skips so the
+                    // idle window never double-bills.
+                    AppLogger.info(TAG, "[cache-warm] trigger skipped: refresh in flight model=$modelId")
+                }
+            }
         }
     }
 
@@ -264,57 +339,115 @@ object PromptCacheWarmCoordinator {
      * with the hygiene triple — maxTokens = 1 ([PromptCacheWarmer]
      * .warmRequestOptions), no continuation (there is none in this API), no
      * retries ([sendMessage] does not loop transient failures; the loop's
-     * retry ladder belongs to real turns). Best-effort: any failure is logged
-     * and ends warming until the next real request re-records the ledger.
+     * retry ladder belongs to real turns) — plus thinking forced OFF: the
+     * replay exists to refresh the cache entry, not to reproduce output, and
+     * a thinking level derived from request parameters (Anthropic budget
+     * tokens, reasoning effort) would either change the request shape or be
+     * rejected outright under the one-token output cap. The planner-level
+     * replay ban ([PromptCacheWarmer.isCacheWarmingReplayable]) already
+     * excludes thinking shapes; OFF is the defense in depth that keeps any
+     * future family whose thinking derives from request parameters from
+     * turning every warm into a guaranteed 400.
+     *
+     * Two guards make a refresh safe to race and safe to wait on:
+     *  - One in-flight warm per process: [warmInFlight] is test-and-set at
+     *    entry, and this call returns false when a refresh is already running
+     *    — the loser trigger (scheduled point vs foreground hook) skips
+     *    instead of double-billing. The flag is released on EVERY outcome
+     *    path in the coroutine's finally block.
+     *  - A wall-clock deadline ([WARM_DEADLINE_MS]): the replay holds the
+     *    single ProviderKeyGate permit of its (host, credential, model)
+     *    bucket, and the user-path acquire has no timeout of its own, so an
+     *    abandoned warm must not sit on that permit for the 15-minute
+     *    non-stream deadline. Deadline overrun abandons THIS refresh: log,
+     *    release the slot, do NOT re-record the ledger.
+     *
+     * Best-effort overall: any failure is logged and ends warming until the
+     * next real request re-records the ledger.
+     *
+     * @return true when this call dispatched the refresh; false when a warm
+     *   was already in flight and the trigger was skipped.
      */
-    private fun sendWarm(snapshot: PendingWarm, decision: WarmDecision.Warm) {
+    private fun sendWarm(snapshot: PendingWarm, decision: WarmDecision.Warm): Boolean {
+        if (!warmInFlight.compareAndSet(false, true)) {
+            AppLogger.info(TAG, "[cache-warm] refresh already in flight; duplicate trigger skipped model=${snapshot.modelId}")
+            return false
+        }
         AppLogger.info(
             TAG,
             "[cache-warm] sending refresh model=${snapshot.modelId} promptTokens=${snapshot.promptTokens} delayMs=${decision.delayMs}",
         )
         scope.launch {
-            val startedAt = System.currentTimeMillis()
-            val result = runCatching {
-                snapshot.provider.sendMessage(
-                    messages = snapshot.messages,
-                    systemPrompt = snapshot.systemPrompt,
-                    maxTokens = PromptCacheWarmer.warmRequestOptions().maxTokens,
-                    tools = snapshot.tools,
-                    thinkingLevel = snapshot.thinkingLevel,
-                )
+            try {
+                val deadlineMs = warmDeadlineMsForTest ?: WARM_DEADLINE_MS
+                val startedAt = System.currentTimeMillis()
+                val response = withTimeoutOrNull(deadlineMs) {
+                    snapshot.provider.sendMessage(
+                        messages = snapshot.messages,
+                        systemPrompt = snapshot.systemPrompt,
+                        maxTokens = PromptCacheWarmer.warmRequestOptions().maxTokens,
+                        tools = snapshot.tools,
+                        thinkingLevel = ThinkingLevel.OFF,
+                    )
+                }
+                if (response == null) {
+                    AppLogger.warning(
+                        TAG,
+                        "[cache-warm] refresh exceeded ${deadlineMs}ms deadline; abandoned model=${snapshot.modelId}",
+                    )
+                    return@launch
+                }
+                val finishedAt = System.currentTimeMillis()
+                AppLogger.info(TAG, "[cache-warm] warm ok in ${finishedAt - startedAt}ms model=${snapshot.modelId}")
+                // The replay refreshed the cache entry: reset the clock and
+                // keep pi's continuous warming chain alive while enabled.
+                val ttlMs = PromptCacheWarmer.promptCacheTtlMs(snapshot.providerTypeRaw)
+                ledger.recordRequest(snapshot.instanceId, snapshot.modelId, ttlMs, finishedAt)
+                scheduleNextWarm(snapshot.instanceId, snapshot.modelId, finishedAt)
+            } catch (e: Throwable) {
+                if (e is CancellationException) throw e
+                AppLogger.warning(TAG, "[cache-warm] warm failed: ${e.message}")
+            } finally {
+                // Success, failure, deadline overrun and cancellation all end
+                // here — a stuck false would disable warming forever.
+                warmInFlight.set(false)
             }
-            val finishedAt = System.currentTimeMillis()
-            result
-                .onSuccess {
-                    AppLogger.info(TAG, "[cache-warm] warm ok in ${finishedAt - startedAt}ms model=${snapshot.modelId}")
-                    // The replay refreshed the cache entry: reset the clock and
-                    // keep pi's continuous warming chain alive while enabled.
-                    val ttlMs = PromptCacheWarmer.promptCacheTtlMs(snapshot.providerTypeRaw)
-                    ledger.recordRequest(snapshot.instanceId, snapshot.modelId, ttlMs, finishedAt)
-                    scheduleNextWarm(snapshot.instanceId, snapshot.modelId, finishedAt)
-                }
-                .onFailure { e ->
-                    if (e is CancellationException) return@onFailure
-                    AppLogger.warning(TAG, "[cache-warm] warm failed: ${e.message}")
-                }
         }
+        return true
     }
 
-    /** Register the foreground hook once; removed implicitly when the process dies. */
+    /**
+     * Register the foreground hook once; removed implicitly when the process
+     * dies. The hook is a best-effort idle opportunity — the scheduled refresh
+     * path works without it — so dispatcher/lifecycle unavailability (plain
+     * JVM unit tests have no Main dispatcher and the launch call itself
+     * throws) downgrades to a log, never to a crash of the warm scheduling.
+     */
     private fun ensureForegroundHook() {
         if (foregroundHookInstalled) return
         synchronized(this) {
             if (foregroundHookInstalled) return
             foregroundHookInstalled = true
-            scope.launch(Dispatchers.Main) {
+            // Launch on the scope's IO dispatcher — NOT on Dispatchers.Main.
+            // Plain JVM tests have no Main dispatcher; coroutines-test installs
+            // a TestMainDispatcher whose scheduler closes when its runTest ends,
+            // and a launch scheduled on it AFTER the test has finished throws
+            // IllegalStateException that leaks into the NEXT runTest as an
+            // UncaughtExceptionsBeforeTest. The observer registration itself
+            // is main-thread-safe on Android (withContext(Main) below); a
+            // cancelled dispatcher inside withContext is caught by runCatching
+            // and degrades to a log, never an uncaught exception.
+            scope.launch {
                 runCatching {
-                    ProcessLifecycleOwner.get().lifecycle.addObserver(
-                        object : DefaultLifecycleObserver {
-                            override fun onStart(owner: LifecycleOwner) {
-                                onAppForeground()
-                            }
-                        },
-                    )
+                    withContext(Dispatchers.Main) {
+                        ProcessLifecycleOwner.get().lifecycle.addObserver(
+                            object : DefaultLifecycleObserver {
+                                override fun onStart(owner: LifecycleOwner) {
+                                    onAppForeground()
+                                }
+                            },
+                        )
+                    }
                 }.onFailure { e ->
                     AppLogger.warning(TAG, "[cache-warm] foreground hook unavailable: ${e.message}")
                     foregroundHookInstalled = false

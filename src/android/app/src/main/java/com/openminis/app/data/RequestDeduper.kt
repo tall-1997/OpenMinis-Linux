@@ -82,11 +82,15 @@ class RequestDeduper(
 
     companion object {
         /**
-         * Window for the accidental-double-submit class: double-taps land
-         * within a few hundred ms, enqueue/drain replays within one frame;
-         * 3 s absorbs both while staying invisible for a deliberate re-send.
+         * Window for the accidental-double-submit class. 3 s was too long: a
+         * deliberate fast re-send ("run this again" — and zh-style chained
+         * follow-ups that users fire within seconds) was silently swallowed
+         * long after the double-tap range. 800 ms still absorbs both
+         * double-taps and enqueue/drain replays (which land within one frame)
+         * while letting real re-sends through; a hit now also surfaces a
+         * short system-info notice instead of vanishing silently (P2-4).
          */
-        const val DEFAULT_WINDOW_MS = 3_000L
+        const val DEFAULT_WINDOW_MS = 800L
         const val DEFAULT_MAX_ENTRIES_PER_SESSION = 16
 
         /**

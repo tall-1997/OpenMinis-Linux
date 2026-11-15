@@ -189,6 +189,34 @@ class GrepSourceToolTest {
     // ----------------------------------------------------------- deadline --
 
     @Test
+    fun `deadline trips inside the line loop and stops the whole scan`() {
+        // review P2-9: a regex line with catastrophic backtracking can burn
+        // minutes inside ONE line — the deadline must be checked per line,
+        // not only between files. The matcher itself advances the fake clock,
+        // simulating that cost inside a single line; without a per-line check
+        // the line loop would finish before the next file-level check ran.
+        // Order-independence: whichever of the two files the filesystem
+        // lists first, exactly ONE gets read, its line loop trips mid-file,
+        // and the walk stops before the other is ever reached.
+        val root = tempRoot()
+        newFile(root, "f1.txt", (1..1000).joinToString("\n") { "nothing $it" })
+        newFile(root, "f2.txt", (1..1000).joinToString("\n") { "nothing $it" })
+        var now = 0L
+        val opts = GrepStreamScan.Options(clock = { now }, deadlineMs = 45_000L)
+
+        val stats = GrepStreamScan.scan(root, { line -> now += 50L; false }, opts)
+
+        // The trip lands mid-file: the remainder of the scanned file was
+        // dropped, the other file was never reached, and the walk stops.
+        assertTrue(stats.stoppedByTimeout)
+        assertEquals(1, stats.filesScanned)
+        assertEquals("the rest of the scanned file was dropped when the deadline tripped", 0, stats.totalMatches)
+        assertTrue(stats.output.isEmpty())
+        val report = GrepStreamScan.formatReport("needle", "/w", stats, 50)
+        assertTrue(report.contains("(scan deadline hit)"))
+    }
+
+    @Test
     fun `deadline stops the scan and the report says partial`() {
         val root = tempRoot()
         newFile(root, "f1.txt", "nothing\n")
@@ -214,23 +242,27 @@ class GrepSourceToolTest {
     @Test
     fun `deadline with matches keeps the match header and marks partial coverage`() {
         val root = tempRoot()
-        // Two matching files: whichever the filesystem lists first, the first
-        // read pushes the fake clock past the deadline and the next entry's
-        // check trips it — deterministic in any listing order.
+        // Two matching files; the clock advances only on the SECOND read, so
+        // whichever the filesystem lists first, the first file is read fully
+        // (clock 0) and its match stands, while the second file's line loop
+        // trips on its first line once its read pushed the clock past the
+        // deadline (deadlineMs defaults to 45s). Deterministic in any listing
+        // order.
         newFile(root, "a.txt", "needle a\n")
         newFile(root, "z.txt", "needle z\n")
         var now = 0L
+        var reads = 0
         val opts = GrepStreamScan.Options(
             clock = { now },
             readLines = { f ->
-                now += 100_000L
+                if (reads++ >= 1) now += 100_000L
                 f.readLines()
             },
         )
 
         val stats = scan(root, opts)
 
-        assertEquals(1, stats.filesScanned)
+        assertEquals(2, stats.filesScanned)
         assertEquals(1, stats.totalMatches)
         assertTrue(stats.stoppedByTimeout)
         val report = GrepStreamScan.formatReport("needle", "/w", stats, 50)
@@ -260,25 +292,28 @@ class GrepSourceToolTest {
     @Test
     fun `deadline during the remainder count reports unknown instead of a partial figure`() {
         val root = tempRoot()
-        // Every file matches, so the cap trips after the first file and the
-        // count phase starts; every read then pushes the clock past the
-        // deadline, so the count itself is cut short.
-        repeat(5) { i -> newFile(root, "f$i.txt", "needle $i\n") }
+        // Timeline with +5_000 per clock call: startedAt=5k, deadline=50k;
+        // the root child loop (5 dirs) burns 15k-35k, d0's file match-line
+        // check at 45k completes the match and trips the cap, then the next
+        // walk top at 55k trips the deadline with the count still unstarted
+        // → remainingKnown=false → the remainder is reported unknown.
+        repeat(5) { i ->
+            val d = newDir(root, "d$i")
+            newFile(d, "f$i.txt", "needle $i\n")
+        }
         var now = 0L
         val opts = GrepStreamScan.Options(
             maxMatches = 1,
-            clock = { now },
-            readLines = { f ->
-                now += 100_000L
-                f.readLines()
-            },
+            clock = { now += 5_000L; now },
+            readLines = { f -> f.readLines() },
         )
 
         val stats = scan(root, opts)
+        val dbg = "matchCap=${stats.stoppedByMatchCap} timeout=${stats.stoppedByTimeout} remaining=${stats.approxRemainingUnscanned} scanned=${stats.filesScanned} remainingKnown-hint"
 
-        assertTrue(stats.stoppedByMatchCap)
-        assertTrue(stats.stoppedByTimeout)
-        assertNull(stats.approxRemainingUnscanned)
+        assertTrue("$dbg — cap should trip", stats.stoppedByMatchCap)
+        assertTrue("$dbg — deadline should trip mid-count", stats.stoppedByTimeout)
+        assertNull("$dbg — remainder must be unknown", stats.approxRemainingUnscanned)
         val report = GrepStreamScan.formatReport("needle", "/w", stats, 1)
         assertTrue(report.contains("[scan deadline hit — partial coverage]"))
         assertFalse(report.contains("more file(s) unscanned"))
@@ -296,6 +331,30 @@ class GrepSourceToolTest {
         // about a zero remainder.
         assertEquals(0L, stats.approxRemainingUnscanned)
         val report = GrepStreamScan.formatReport("needle", "/w", stats, 50)
+        assertFalse(report.contains("more file(s) unscanned"))
+    }
+
+    @Test
+    fun `walk guard makes the remainder estimate unknown not an underestimate`() {
+        // review P2-10: the walk guard abandons whole subtrees (depth /
+        // directory-count guard), so any "K more files" figure would be a
+        // LOWER BOUND — report unknown and let the walk-guard bracket carry
+        // the honest partial-coverage signal instead of a silently
+        // underestimated remainder.
+        val root = tempRoot()
+        repeat(10) { i ->
+            val d = newDir(root, "d$i")
+            newFile(d, "f.txt", "needle $i\n")
+        }
+
+        val stats = scan(root, GrepStreamScan.Options(maxMatches = 1, maxDirsVisited = 4))
+
+        assertTrue(stats.stoppedByMatchCap)
+        assertTrue(stats.stoppedByWalkGuard)
+        assertNull(stats.approxRemainingUnscanned)
+        val report = GrepStreamScan.formatReport("needle", "/w", stats, 1)
+        assertTrue(report.contains("(match cap reached)"))
+        assertTrue(report.contains("[walk guard hit — partial coverage]"))
         assertFalse(report.contains("more file(s) unscanned"))
     }
 

@@ -5488,12 +5488,12 @@ fun ChatScreen(
                     location = sendSwipeLocation,
                     hoverAbovePx = swipeHapticOffsetPx,
                     arrowHalfPx = swipeArrowHalfPx,
-                    // While streaming, sendMessage() routes the prompt
-                    // through enqueuePrompt() instead — surface that in
-                    // the hint so the user knows the gesture still works
-                    // mid-stream (mirrors the send-button's send/enqueue
-                    // toggle, since on Android there's no separate visual
-                    // state for the queued case).
+                    // While streaming, sendMessage() offers the text to the
+                    // pi steering queue FIRST (steerPrompt: delivered at the
+                    // agent's next turn boundary without cutting the reply);
+                    // enqueuePrompt is only the attachment fallback — surface
+                    // that in the hint so the user knows the gesture still
+                    // works mid-stream (mirrors the send-button toggle).
                     isEnqueue = isStreaming,
                 )
             } // end swipe-to-send Box wrapping the composer Column

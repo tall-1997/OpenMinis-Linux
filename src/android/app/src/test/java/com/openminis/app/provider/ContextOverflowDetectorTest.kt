@@ -1,5 +1,6 @@
 package com.openminis.app.provider
 
+import com.openminis.app.data.model.LLMError
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -250,6 +251,68 @@ class ContextOverflowDetectorTest {
                 ContextOverflowDetector.detectFromError(status, null).isOverflow,
             )
         }
+    }
+
+    // ── detectFromLlmError: bracketed status prefix recovery ────────────────
+    //
+    // LLMProvider's shared HTTP error mapper (mapHttpErrorShared) formats
+    // ProviderError/TransientError details as "[413] body"; the line-anchored
+    // 413 table entry cannot see the status inside the brackets, so the
+    // status must be carried through detectFromError's statusCode param.
+
+    @Test
+    fun `llm error with a 413 status prefix is request-size overflow`() {
+        // The dead path this guards: without prefix recovery the status is lost
+        // and the body "payload too large" matches nothing.
+        val verdict = ContextOverflowDetector.detectFromLlmError(
+            LLMError.ProviderError("[413] payload too large"),
+        )
+        assertTrue("$verdict", verdict.isOverflow)
+        val overflow = verdict as OverflowVerdict.Overflow
+        assertEquals(ContextOverflowDetector.Source.HTTP_413, overflow.source)
+        assertNull(overflow.matchedPattern)
+
+        // The same shape on the transient side: the mapper stamps 5xx details
+        // with "[503] …" and the prefix must not be mistaken for an overflow.
+        val transient = ContextOverflowDetector.detectFromLlmError(
+            LLMError.TransientError("[503] backend temporarily unavailable"),
+        )
+        assertEquals(OverflowVerdict.NoMatch, transient)
+    }
+
+    @Test
+    fun `llm error with a non-413 status prefix and no signal is no match`() {
+        val verdict = ContextOverflowDetector.detectFromLlmError(
+            LLMError.ProviderError("[400] no overflow signal"),
+        )
+        assertEquals(OverflowVerdict.NoMatch, verdict)
+
+        // The suffix may still claim a 413 the way raw SDK bodies do (the
+        // line-anchored table entry is designed for exactly that), while the
+        // recovered status parameter (400) stays irrelevant for the verdict.
+        val stray413 = ContextOverflowDetector.detectFromLlmError(
+            LLMError.ProviderError("[400] 413 upstream was not the status"),
+        )
+        assertTrue("$stray413", stray413 is OverflowVerdict.Overflow)
+    }
+
+    @Test
+    fun `llm error body text still routes through the overflow table`() {
+        // A recognized wording outranks the status fallback (pi order), even
+        // when the status itself is a 413.
+        val verdict = ContextOverflowDetector.detectFromLlmError(
+            LLMError.ProviderError("[413] prompt is too long: 213462 tokens > 200000 maximum"),
+        )
+        val overflow = verdict as OverflowVerdict.Overflow
+        assertEquals(ContextOverflowDetector.Source.ERROR_PATTERN, overflow.source)
+        assertEquals("prompt (?:is )?too long", overflow.matchedPattern)
+
+        // The exclusion table vetoes just like it does on a raw body.
+        val vetoed = ContextOverflowDetector.detectFromLlmError(
+            LLMError.ProviderError("[413] Too many requests, please slow down"),
+        )
+        assertTrue(vetoed is OverflowVerdict.Excluded)
+        assertFalse(vetoed.isOverflow)
     }
 
     // ── Cerebras bodyless gate ──────────────────────────────────────────────

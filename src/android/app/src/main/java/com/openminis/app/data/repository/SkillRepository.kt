@@ -484,13 +484,13 @@ class SkillRepository(private val context: Context) {
      * Build the system-prompt fragment that makes skills discoverable.
      * Discloses up to [SkillManifest.MAX_SKILLS_IN_PROMPT] skills with 3-tier
      * priority (bundled > 7-day recent > most-used), matching iOS SkillStore.
-     * Returns null when the session has no enabled skills.
+     * disable-model-invocation skills are filtered out first (P2-6,
+     * [SkillManifest.disclosableSkills]). Returns null when the session
+     * has no disclosable skills.
      *
      * [T-prompt-cache] The fragment changes only on skill enable/disable
-     * toggles or override writes — both rare relative to turn frequency.
-     * The cache cuts ~200 cursor round-trips per turn (one
-     * `isEnabledForSession` call per skill) down to one bulk override
-     * query on cache miss.
+     * toggles or override writes — both rare; the cache cuts ~200 cursor
+     * round-trips per turn down to one bulk override query on cache miss.
      */
     fun skillPromptFragment(sessionId: String): String? {
         val skillsSnapshot = _skills.value
@@ -503,7 +503,7 @@ class SkillRepository(private val context: Context) {
 
         // Bulk-load session overrides once instead of per-skill cursor.
         val overrides = sessionOverrideMap(sessionId)
-        val enabled = skillsSnapshot.filter { overrides[it.id] ?: it.isEnabled }
+        val enabled = SkillManifest.disclosableSkills(skillsSnapshot.filter { overrides[it.id] ?: it.isEnabled })
         if (enabled.isEmpty()) {
             fragmentCacheSession = sessionId
             fragmentCacheSkills = skillsSnapshot
@@ -550,16 +550,16 @@ class SkillRepository(private val context: Context) {
     /**
      * [T-skill-manifest] pi skills.ts:358-388 progressive disclosure: a
      * name+description+location `<available_skills>` manifest; the model
-     * loads the matched skill's body with file_read on demand. Same
-     * enablement/selection rules as [skillPromptFragment];
-     * disable-model-invocation skills are hidden (invoke_skill only). Null
-     * when nothing is disclosable. No cache: [sessionOverrideMap] is one
-     * bulk query per build, so the legacy cache has nothing to amortize.
+     * loads the matched skill's body with file_read on demand. Same rules
+     * as [skillPromptFragment], but disable-model-invocation skills are
+     * filtered out BEFORE the selection ([SkillManifest.disclosableSkills],
+     * P2-6: hidden skills must not burn a cap slot or leak into the
+     * disclosure tail). Null when nothing is disclosable. No cache (one bulk override query per build).
      */
     fun skillManifestFragment(sessionId: String): String? {
         ensureLoaded()
         val overrides = sessionOverrideMap(sessionId)
-        val enabled = _skills.value.filter { overrides[it.id] ?: it.isEnabled }
+        val enabled = SkillManifest.disclosableSkills(_skills.value.filter { overrides[it.id] ?: it.isEnabled })
         val (selected, omitted) = SkillManifest.selectForPrompt(enabled)
         val manifest = SkillManifest.buildSkillManifest(selected) { skillMdPath(it.id) } ?: return null
         return manifest + (SkillManifest.disclosureNote(selected, omitted) ?: "")

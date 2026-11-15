@@ -138,6 +138,16 @@ internal object GrepStreamScan {
          * candidates the model never saw. `null` means the count itself was
          * cut short by the deadline — unknown is reported as unknown, never
          * as zero.
+         *
+         * Null too when [stoppedByWalkGuard] is set (review P2-10): the walk
+         * guard abandoned whole subtrees (depth / directory-count guard,
+         * already-queued leftovers excepted), so any figure here is a LOWER
+         * bound — the `[walk guard hit — partial coverage]` bracket is the
+         * independent, honest report for that case, and pairing it with a
+         * silently-underestimated "N more unscanned" would be the kind of
+         * half-truth the bounded-enumeration contract forbids. Pruned noise
+         * dirs ([PRUNED_DIR_NAMES]) are different: they are out of scope by
+         * contract, never part of the remainder.
          */
         val approxRemainingUnscanned: Long?,
         val stoppedByMatchCap: Boolean,
@@ -183,7 +193,9 @@ internal object GrepStreamScan {
         // the SAME walk keeps running with reads disabled, counting the files
         // the match loop never reached. `remainingKnown` flips to false when
         // the deadline exhausts mid-count: an unknown remainder is reported as
-        // unknown, never as zero (silent-loss avoidance again).
+        // unknown, never as zero (silent-loss avoidance again). It is ALSO
+        // reported as unknown when the walk guard tripped (see the
+        // approxRemainingUnscanned KDoc below).
         var countingRemainder = false
         var remaining = 0L
         var remainingKnown = true
@@ -224,7 +236,19 @@ internal object GrepStreamScan {
                 skippedIO++
                 return
             }
-            val hitIdx = lines.indices.filter { matcher(lines[it]) }
+            // (P2-9) The deadline must bound the MATCH LOOP, not only the walk
+            // between files: a catastrophic-regex line (Regex.containsMatchIn
+            // backtracking) can burn minutes inside ONE line, so the previous
+            // file-level checks never ran. One clock comparison per line keeps
+            // the per-line cost negligible while making the deadline
+            // authoritative inside the loop; tripping drops the rest of THIS
+            // file (it stays a partial file under the existing truncated
+            // report) and the next child/directory check stops the walk.
+            val hitIdx = ArrayList<Int>()
+            for (i in lines.indices) {
+                if (timedOut()) return
+                if (matcher(lines[i])) hitIdx.add(i)
+            }
             if (hitIdx.isEmpty()) return
             hitFiles++
             out.append("=== ").append(file.absolutePath).append(" ===\n")
@@ -331,7 +355,10 @@ internal object GrepStreamScan {
             filesScanned = scanned,
             filesSkippedLarge = skippedLarge,
             filesSkippedIO = skippedIO,
-            approxRemainingUnscanned = if (remainingKnown) remaining else null,
+            // (P2-10) A guard-tripped walk cannot vouch for a complete
+            // remainder count: report unknown, same policy as a deadline that
+            // trips mid-count.
+            approxRemainingUnscanned = if (remainingKnown && !stoppedByWalkGuard) remaining else null,
             stoppedByMatchCap = stoppedByMatchCap,
             stoppedByOutputCap = stoppedByOutputCap,
             stoppedByTimeout = stoppedByTimeout,
@@ -388,7 +415,10 @@ internal object GrepStreamScan {
             if (stats.stoppedByTimeout) append(" [scan deadline hit — partial coverage]")
             if (stats.stoppedByWalkGuard) append(" [walk guard hit — partial coverage]")
             // [P2 2-4] The match cap stops the scan mid-tree; say how much was
-            // left unread instead of letting the model guess.
+            // left unread instead of letting the model guess. When the walk
+            // guard ALSO tripped the figure is a lower bound and is reported
+            // as unknown (null) instead — the walk-guard bracket below is the
+            // independent honest signal for that case (review P2-10).
             val remaining = stats.approxRemainingUnscanned
             if (stats.stoppedEarly && remaining != null && remaining > 0) {
                 append(" [~$remaining more file(s) unscanned]")

@@ -64,6 +64,20 @@ object SkillManifest {
     )
 
     /**
+     * [T-skill-manifest-hidden-cap] (P2-6) The model-visible subset:
+     * `disable-model-invocation` skills are dropped BEFORE the disclosure
+     * selection (pi skills.ts:358-372 filters, then formats). Selecting from
+     * the unfiltered list let a hidden skill burn one of the 120 cap slots,
+     * and a hidden skill squeezed out by the cap resurfaced in
+     * [disclosureNote]'s "N more skills ...: <names>" tail — the model learned
+     * the name and read path of a skill that must stay invoke_skill-only
+     * (the class-doc promise). Filtered skills are equally absent from the
+     * omitted list, so they never reach the tail either.
+     */
+    fun disclosableSkills(enabled: List<SkillRepository.Skill>): List<SkillRepository.Skill> =
+        enabled.filter { !it.disableModelInvocation }
+
+    /**
      * The shared disclosure selection, moved verbatim from
      * SkillRepository.skillPromptFragment: up to [maxSkills] entries, priority
      * bundled > recently-updated ([RECENT_SLOTS] slots) > most-used. [nowMs]

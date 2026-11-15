@@ -131,8 +131,9 @@ object AgentTools {
         // [pi-port §2.7] Codemode entry: multi-step aggregation in one JS
         // program; nested tool results stay OUT of the conversation and only
         // the script's return value is returned. exposure=direct (declared),
-        // while ToolExposureGate also lists it in the codemode-callable set
-        // so scripts can bootstrap (CodemodeTool KDoc).
+        // while the codemode-callable set deliberately EXCLUDES it: a script
+        // re-entering this tool parks an IO thread per nesting level and
+        // deadlocks the pool (CodemodeTool KDoc, review P1-8).
         add(CodemodeTool.definition())
         add(InvokeSkillTool.definition())
         add(SkillManageTool.definition())

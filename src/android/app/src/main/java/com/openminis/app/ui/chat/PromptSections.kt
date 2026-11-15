@@ -138,12 +138,20 @@ internal object PromptSections {
     }
 
     /**
-     * Last published snapshot per session id, for [publishAndDiff]. Bounded by
-     * session count (one small list each); cleared only on process death — the
-     * cost is negligible and there is no correct moment to drop one (any
+     * Last published snapshot per session id, for [publishAndDiff], stored as
+     * per-section CONTENT HASHES (name → hash). The diff only needs
+     * equality per section — a hash change is exactly the "this section moved"
+     * signal — so a session's snapshot is ~6 Ints instead of the whole prompt
+     * text (tens of KB per session at real prompt sizes, the P2-5 leak).
+     * Only STABLE sections are stored: [RUNTIME_TAIL] is excluded from the
+     * signal by construction (see [publishAndDiff]), so its hash would be
+     * dead weight. [String.hashCode] collisions between different content
+     * are possible; the worst case is one missed observability line on a
+     * real change, never a wrong wire payload. Bounded by session count and
+     * cleared only on process death — no correct moment to drop one (any
      * session may resume).
      */
-    private val lastPublished = ConcurrentHashMap<String, List<PromptSection>>()
+    private val lastPublished = ConcurrentHashMap<String, Map<String, Int>>()
 
     /**
      * Publish a fresh build and return a one-line change summary when any
@@ -157,14 +165,21 @@ internal object PromptSections {
      * half of the pi section-diff port: the stable prefix is exactly the
      * prompt-cache-prefix region, so a non-null line means the next request
      * pays a prefix-cache miss on those bytes. Pure — the caller owns logging.
+     *
+     * Behaviourally identical to the pre-hash implementation (which compared
+     * full content via [diffSections]); only the retained memory shrank.
      */
     fun publishAndDiff(sessionId: String, sections: List<PromptSection>): String? {
         if (sessionId.isBlank()) return null
-        val previous = lastPublished.put(sessionId, sections) ?: return null
-        val patches = diffSections(previous, sections).filter { it.name != RUNTIME_TAIL }
-        if (patches.isEmpty()) return null
-        val changed = patches.filter { it.newContent != null }.map { it.name }
-        val removed = patches.filter { it.newContent == null }.map { it.name }
+        // Stable sections only (RUNTIME_TAIL excluded by construction).
+        val hashes = sections.filter { it.name != RUNTIME_TAIL }
+            .associate { it.name to it.content.hashCode() }
+        val previous = lastPublished.put(sessionId, hashes) ?: return null
+        val changed = hashes.mapNotNull { (name, hash) ->
+            if (previous[name] != hash) name else null
+        }
+        val removed = previous.keys.filterNot { it in hashes }
+        if (changed.isEmpty() && removed.isEmpty()) return null
         return buildString {
             append("[SectionDiff] stable sections changed: ")
             append(if (changed.isEmpty()) "(none)" else changed.joinToString(", "))

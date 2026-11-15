@@ -167,6 +167,52 @@ class CodemodeSandboxTest {
         assertNotNull(run("importClass(java.lang.Runtime); return 'escaped';").error)
     }
 
+    // ── return-value cap: surrogate-pair boundary (review P2-12) ──
+
+    @Test
+    fun returnValueCapNeverSplitsASurrogatePair() {
+        // The cap is a UTF-16 code-unit budget; a bare take() cut the emoji
+        // pair in half (lone high surrogate in the model-facing string).
+        // sliceHead drops the whole pair at the boundary instead.
+        val r = run(
+            "return 'a😀b';",
+            limits = CodemodeSandbox.Limits(maxReturnJsonChars = 2),
+        )
+        assertEquals("a", r.valueJson)
+        assertFalse("no orphaned surrogate may reach the result", r.valueJson!!.any { it.isHighSurrogate() })
+    }
+
+    @Test
+    fun returnValueCapKeepsTheWholePairWhenItFits() {
+        val r = run(
+            "return 'a😀b';",
+            limits = CodemodeSandbox.Limits(maxReturnJsonChars = 3),
+        )
+        assertEquals("a😀", r.valueJson)
+    }
+
+    @Test
+    fun returnValueCapOnObjectReturnAlsoSlicesAtCodeUnits() {
+        // Same path for JSON-serialized returns (a nested string carrying an
+        // emoji at the cap boundary).
+        val r = run(
+            "return {x: '😀😀'};",
+            limits = CodemodeSandbox.Limits(maxReturnJsonChars = 10),
+        )
+        // {"x":"😀😀"} is 12 code units (6 ASCII + 2 pairs); sliceHead(10)
+        // cuts at unit 10 — the pair boundary after the second emoji — so no
+        // orphaned half exists and both pairs survive; the closing quote is
+        // what gets dropped.
+        assertEquals("""{"x":"😀😀""", r.valueJson)
+        // No orphaned half: every high surrogate is followed by its low half.
+        assertTrue(
+            r.valueJson!!.indices.none { i ->
+                r.valueJson[i].isHighSurrogate() &&
+                    (i + 1 >= r.valueJson.length || !r.valueJson[i + 1].isLowSurrogate())
+            },
+        )
+    }
+
     // ── interruption: wall clock + instruction budget + call cap ──
 
     @Test
@@ -185,6 +231,7 @@ class CodemodeSandboxTest {
             ),
         )
         assertTrue(r.timedOut)
+        assertFalse("a clock trip is not a budget trip", r.limitExceeded)
         assertNotNull(r.error)
         assertTrue(r.error!!.contains("timed out"))
         assertNull(r.valueJson)
@@ -201,6 +248,7 @@ class CodemodeSandboxTest {
             ),
         )
         assertTrue(r.timedOut)
+        assertFalse(r.limitExceeded)
         assertTrue(r.error!!.contains("instruction budget"))
     }
 
@@ -215,6 +263,10 @@ class CodemodeSandboxTest {
         assertNotNull(r.error)
         assertTrue(r.error!!.contains("tool-call cap"))
         assertEquals(3, host.calls.size)
+        // review P2-13: the cap is a BUDGET trip, not a clock trip —
+        // timedOut must stay false so the UI renders a plain failure.
+        assertFalse(r.timedOut)
+        assertTrue(r.limitExceeded)
     }
 
     // ── honest failures ──

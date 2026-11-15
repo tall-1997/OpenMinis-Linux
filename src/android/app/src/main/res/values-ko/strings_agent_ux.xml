@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- [T-agent-ux-notices] P1-6/P2-4/P2-8 chat-UX notices: steering-queue
+     acceptance, enqueue-path dedupe hit, and thinking ceiling-sync
+     clamp/restore. Kept in a standalone split file (the
+     strings_token_usage.xml pattern) so every shipped locale carries all
+     keys in one place. -->
+<resources>
+    <string name="vm_steering_queued">Steering가 대기열에 추가되었습니다 — 현재 응답을 방해하지 않고 에이전트의 다음 단계에서 전달됩니다.</string>
+    <string name="vm_send_deduped">중복 전송을 무시했습니다 (방금 같은 텍스트를 전송했습니다).</string>
+    <string name="vm_thinking_clamped_to">Thinking이 모델 상한에 맞추어 일시적으로 %1$s로 낮춰졌습니다.</string>
+    <string name="vm_thinking_ceiling_restored">모델 상한이 복원되었습니다 — Thinking가 %1$s로 돌아왔습니다.</string>
+</resources>

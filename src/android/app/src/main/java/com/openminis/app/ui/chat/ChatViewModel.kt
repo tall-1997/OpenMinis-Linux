@@ -4301,10 +4301,10 @@ class ChatViewModel(
         val trimmed = text.trim()
         val pendingAttachments = _attachments.value
         if ((trimmed.isBlank() && pendingAttachments.isEmpty()) || !_isStreaming.value) return
-        // [T-pi-idempotent-submit] A same-text re-enqueue inside the 3 s dedupe window drops
-        // silently — a debounce, not an error; text-only (the fingerprint cannot see attachments).
+        // [T-pi-idempotent-submit] A same-text re-enqueue inside the 800 ms dedupe window drops with
+        // a system-info notice (a debounce, not an error; text-only; log+notice pair in ChatRequestDedupeExt).
         if (pendingAttachments.isEmpty() && requestDeduper.rejects(activeSessionId, trimmed)) {
-            AppLogger.info(TAG_STREAM, "enqueuePrompt deduped (same text inside window)")
+            notifyDuplicateSendDropped()
             return
         }
 

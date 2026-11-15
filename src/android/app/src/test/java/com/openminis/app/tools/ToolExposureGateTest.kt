@@ -163,11 +163,13 @@ class ToolExposureGateTest {
     }
 
     @Test
-    fun executeCodeJsIsCallableFromCodemodeScripts() {
-        // Bootstrap: the codemode entry tool itself stays callable from a
-        // codemode script (pi: codemode tools list direct tools too).
+    fun executeCodeJsIsExcludedFromCodemodeScripts() {
+        // Review P1-8: a script re-entering the codemode entry parks one
+        // Dispatchers.IO thread per nesting level in runBlocking and ~64
+        // levels deadlock the pool. pi's "codemode tools list the direct
+        // entry too" bootstrap is deliberately NOT ported for the entry tool.
         val registry = AgentTools.makeAgentTools(includeLongTail = true)
-        assertTrue(CodemodeTool.NAME in ToolExposureGate.callableNamesForCodemode(registry))
+        assertFalse(CodemodeTool.NAME in ToolExposureGate.callableNamesForCodemode(registry))
     }
 
     // ── dispatch-side MODEL_ONLY enforcement (levelForName + refusal) ──

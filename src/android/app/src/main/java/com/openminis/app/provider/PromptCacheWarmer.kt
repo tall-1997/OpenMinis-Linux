@@ -106,8 +106,8 @@ object PromptCacheWarmer {
      * Unknown families return null — pi warms only tiers with a known lifetime.
      */
     private val TTL_SECONDS_BY_FAMILY: Map<String, Pair<Long, Long>> = mapOf(
-        "anthropic" to (300L to 3_600L),
-        "openai" to (600L to 600L),
+        FAMILY_ANTHROPIC to (300L to 3_600L),
+        FAMILY_OPENAI to (600L to 600L),
     )
 
     // ── TTL lookup ──────────────────────────────────────────────────────────
@@ -121,8 +121,8 @@ object PromptCacheWarmer {
     fun familyOf(providerTypeRaw: String?): String? {
         val raw = providerTypeRaw?.lowercase() ?: return null
         return when {
-            raw.contains("anthropic") || raw.contains("claude") -> "anthropic"
-            raw.contains("openai") || raw.contains("azure") || raw.contains("gpt") -> "openai"
+            raw.contains("anthropic") || raw.contains("claude") -> FAMILY_ANTHROPIC
+            raw.contains("openai") || raw.contains("azure") || raw.contains("gpt") -> FAMILY_OPENAI
             else -> null
         }
     }
@@ -167,20 +167,53 @@ object PromptCacheWarmer {
         maxRetries = 0,
     )
 
-    // ── Replay ban for budget-based thinking (pi cache-warming.ts:64-72) ────
+    // ── Replay ban for request-shape-derived thinking (pi cache-warming.ts:64-72) ────
+
+    /** Warming family key [familyOf] assigns to Anthropic-shaped providers. */
+    const val FAMILY_ANTHROPIC = "anthropic"
+
+    /** Warming family key [familyOf] assigns to OpenAI-shaped providers (incl. relays). */
+    const val FAMILY_OPENAI = "openai"
 
     /**
      * Whether replaying the request with a one-token output cap leaves its
-     * cache entry untouched. Anthropic's budget-based thinking derives
-     * `budget_tokens` from `max_tokens`; a replay capped at one token gets a
-     * different budget, which Anthropic keys the message cache on, and the
-     * model could still think for thousands of tokens.
+     * cache entry untouched.
      *
-     * pi checks `model.api == "anthropic-messages" && options.reasoning &&
-     * !forceAdaptiveThinking`; our `forceThinking` flag IS the budget-style
-     * (max_tokens-derived) marker, so the check is the flag alone.
+     * Anthropic: NO for every thinking-enabled request. The real rule is pi's
+     * three-condition ban (`model.api == "anthropic-messages" &&
+     * options.reasoning && !forceAdaptiveThinking`) widened to ignore pi's
+     * adaptive-thinking escape hatch, because in THIS codebase
+     * [com.openminis.app.provider.anthropic.AnthropicProvider.thinkingBudget]
+     * derives `budget_tokens` from the REQUEST's `max_tokens` on ALL enabled
+     * thinking levels — and a warm replay runs with `maxTokens = 1`
+     * ([warmRequestOptions]), below the budget floor, so the replayed request
+     * carries a different (empty) thinking shape. Anthropic keys the message
+     * cache on the request shape, so the paid replay would MISS: warm at your
+     * own cost and still read nothing back. `forceThinking` does NOT restore
+     * replayability — it only marks that the provider forces thinking past its
+     * catalog ceiling, which changes nothing about the derivation above.
+     *
+     * Non-Anthropic families: replayable unless `forceThinking` — the ported
+     * budget-style marker ([com.openminis.app.provider.LLMProvider
+     * .forcesThinkingWhenEnabled]) — says the provider pins thinking onto
+     * enabled requests, meaning the model could still think for thousands of
+     * tokens past the one-token cap.
+     *
+     * @param providerFamily warming family key from [familyOf] (null = unknown
+     *   family: only the forcing rule applies)
+     * @param thinkingEnabled whether the recorded request ran with an enabled
+     *   [com.openminis.app.data.model.ThinkingLevel]
+     * @param forceThinking the provider's `forcesThinkingWhenEnabled` flag at
+     *   the time the recorded request was sent
      */
-    fun isCacheWarmingReplayable(forceThinking: Boolean): Boolean = !forceThinking
+    fun isCacheWarmingReplayable(
+        providerFamily: String?,
+        thinkingEnabled: Boolean,
+        forceThinking: Boolean,
+    ): Boolean {
+        if (providerFamily == FAMILY_ANTHROPIC && thinkingEnabled) return false
+        return !forceThinking
+    }
 
     // ── Economics (pi evaluateCacheWarming, cache-warming.ts:83-107) ────────
 

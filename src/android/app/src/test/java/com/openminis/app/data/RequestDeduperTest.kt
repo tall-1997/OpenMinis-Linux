@@ -140,4 +140,19 @@ class RequestDeduperTest {
         // hashes identically; only a real content edit changes the fingerprint.
         assertEquals(RequestDeduper.fingerprint("abc"), RequestDeduper.fingerprint(" abc "))
     }
+
+    @Test
+    fun `default window absorbs a double-tap but admits a deliberate re-send`() {
+        // P2-4: the shipped window is 800 ms. The old 3 s window silently
+        // swallowed deliberate fast re-sends ("run this again", chained
+        // follow-ups) long after the double-tap range; 800 ms still absorbs
+        // both double-taps and enqueue/drain replays while letting real
+        // re-sends through after under a second.
+        val d = deduper() // DEFAULT_WINDOW_MS
+        assertEquals(Decision.Accept, d.check("s1", "again", nowMs = 1_000))
+        // 500 ms later: still inside the 800 ms window — a double-tap.
+        assertTrue(d.check("s1", "again", nowMs = 1_500) is Decision.Reject)
+        // Just past the window: a deliberate re-send is admitted again.
+        assertEquals(Decision.Accept, d.check("s1", "again", nowMs = 1_801))
+    }
 }

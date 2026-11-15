@@ -33,7 +33,10 @@ object ExecuteCodeTool {
         name = NAME,
         description = "Run JavaScript (ES5, Rhino) to orchestrate multiple read-only tool calls. " +
             "Functions: ${SANDBOX_TOOLS.joinToString(", ")}(obj). Only print() output returns. " +
-            "No file_write/shell. JavaScript only — not Python.",
+            "No file_write/shell. JavaScript only — not Python. Companion: execute_code_js is the " +
+            "multi-step aggregation twin — it returns ONLY its final value and keeps the nested tool " +
+            "results OUT of the conversation, so prefer it when the intermediates do not matter; use " +
+            "this tool when you want print() output visible step by step.",
         parameters = mapOf(
             "tool_title" to AgentToolParam("string", "A concise 5-10 word summary shown to the user."),
             "code" to AgentToolParam("string", "JavaScript (ES5) source. Use print(...) for output."),

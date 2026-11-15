@@ -56,4 +56,22 @@ class RequestDedupeGateTest {
         val gate = RequestDedupeGate()
         assertFalse(gate.rejects("s1", ""))
     }
+
+    @Test
+    fun `deliberate re-send inside one second is admitted after the window`() {
+        // P2-4: the shipped window is 800 ms — the "run this again" pattern
+        // (and chained follow-ups users fire within seconds) must pass, while
+        // an immediate double-tap stays rejected. The hit itself now surfaces
+        // a system-info notice via notifyDuplicateSendDropped (VM wiring,
+        // manual regression).
+        var now = 1_000L
+        val gate = RequestDedupeGate(nowMs = { now })
+        assertFalse(gate.rejects("s1", "go"))
+        // Immediate second send: rejected (double-tap range).
+        now += 300
+        assertTrue(gate.rejects("s1", "go"))
+        // Deliberate re-send just past the window: admitted again.
+        now += 1_000
+        assertFalse(gate.rejects("s1", "go"))
+    }
 }

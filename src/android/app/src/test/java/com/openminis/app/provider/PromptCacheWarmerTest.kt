@@ -19,8 +19,8 @@ import org.junit.Test
  * Port-fidelity tests for the prompt cache warming policy (pi
  * ai/src/cache-warming.ts:31-107). Covers: TTL lookup per provider family, the
  * 90%-of-TTL refresh delay, the warm-or-stop economics with the $0.05 boundary,
- * idle vs streaming continuation, warm request hygiene, the budget-thinking
- * replay ban, and the TTL bookkeeping ledger.
+ * idle vs streaming continuation, warm request hygiene, the thinking replay
+ * ban, and the TTL bookkeeping ledger.
  */
 class PromptCacheWarmerTest {
 
@@ -185,16 +185,38 @@ class PromptCacheWarmerTest {
         assertEquals(0, options.maxRetries)
     }
 
-    // ── budget-based thinking replay ban (pi isCacheWarmingReplayable) ──────
+    // ── thinking replay ban (pi isCacheWarmingReplayable) ────────────────────
 
     @Test
-    fun `budget-style thinking models are not replayable`() {
-        assertFalse(isCacheWarmingReplayable(forceThinking = true))
+    fun `anthropic thinking sessions are not replayable regardless of forcing`() {
+        // AnthropicProvider.thinkingBudget derives budget_tokens from the
+        // REQUEST's maxTokens on every enabled level; the maxTokens=1 warm
+        // replay runs below the budget floor, so the request shape — which the
+        // message cache keys on — changes and the paid replay misses. pi's
+        // forceAdaptiveThinking escape hatch does NOT apply: forcing thinking
+        // past the catalog ceiling changes nothing about the derivation.
+        assertFalse(isCacheWarmingReplayable("anthropic", thinkingEnabled = true, forceThinking = false))
+        assertFalse(isCacheWarmingReplayable("anthropic", thinkingEnabled = true, forceThinking = true))
     }
 
     @Test
-    fun `plain models are replayable`() {
-        assertTrue(isCacheWarmingReplayable(forceThinking = false))
+    fun `anthropic with thinking off stays replayable`() {
+        // No enabled level -> no budget derivation -> the replay shape matches
+        // the recorded request.
+        assertTrue(isCacheWarmingReplayable("anthropic", thinkingEnabled = false, forceThinking = false))
+    }
+
+    @Test
+    fun `non-anthropic families keep the budget-forcing rule only`() {
+        // OpenAI-family relays do not derive a budget from maxTokens, so a
+        // thinking-enabled recorded request still replays to the same shape.
+        assertTrue(isCacheWarmingReplayable("openai", thinkingEnabled = true, forceThinking = false))
+        assertTrue(isCacheWarmingReplayable(null, thinkingEnabled = true, forceThinking = false))
+        // The forcing marker alone still bans: the model may think for
+        // thousands of tokens past the one-token cap whatever the family.
+        assertFalse(isCacheWarmingReplayable("openai", thinkingEnabled = true, forceThinking = true))
+        assertFalse(isCacheWarmingReplayable(null, thinkingEnabled = false, forceThinking = true))
+        assertFalse(isCacheWarmingReplayable("anthropic", thinkingEnabled = false, forceThinking = true))
     }
 
     // ── age horizons ────────────────────────────────────────────────────────

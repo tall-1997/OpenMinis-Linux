@@ -34,6 +34,8 @@ class PromptCacheWarmPlannerTest {
         enabled: Boolean = true,
         streamingActive: Boolean = false,
         forceThinking: Boolean = false,
+        providerFamily: String? = "openai",
+        thinkingEnabled: Boolean = false,
         ttlRemainingPct: Double? = 0.05,
         lastRequestAtMs: Long = t0,
         dueAtMs: Long? = t0 + 270_000L,
@@ -44,6 +46,8 @@ class PromptCacheWarmPlannerTest {
         enabled = enabled,
         streamingActive = streamingActive,
         forceThinking = forceThinking,
+        providerFamily = providerFamily,
+        thinkingEnabled = thinkingEnabled,
         rates = rates,
         promptTokens = promptTokens,
         ttlRemainingPct = ttlRemainingPct,
@@ -112,6 +116,32 @@ class PromptCacheWarmPlannerTest {
         val decision = happy(forceThinking = true)
         assertTrue(decision is WarmDecision.Stop)
         assertEquals("budget-thinking-replay-ban", (decision as WarmDecision.Stop).reason)
+    }
+
+    @Test
+    fun `anthropic thinking sessions are replay-banned`() {
+        // thinkingBudget derives budget_tokens from the request maxTokens on
+        // every enabled Anthropic level; the maxTokens=1 warm replay changes
+        // the request shape and the paid replay would miss.
+        val decision = happy(providerFamily = "anthropic", thinkingEnabled = true)
+        assertTrue(decision is WarmDecision.Stop)
+        assertEquals("thinking-replay-ban", (decision as WarmDecision.Stop).reason)
+    }
+
+    @Test
+    fun `anthropic with thinking off still triggers`() {
+        val decision = happy(providerFamily = "anthropic", thinkingEnabled = false)
+        assertTrue("$decision", decision is WarmDecision.Warm)
+    }
+
+    @Test
+    fun `non-anthropic thinking sessions still trigger`() {
+        // OpenAI-family relays do not derive a budget from maxTokens, so the
+        // one-token replay keeps the recorded request shape.
+        val decision = happy(providerFamily = "openai", thinkingEnabled = true)
+        assertTrue("$decision", decision is WarmDecision.Warm)
+        val unknownFamily = happy(providerFamily = null, thinkingEnabled = true)
+        assertTrue("$unknownFamily", unknownFamily is WarmDecision.Warm)
     }
 
     @Test

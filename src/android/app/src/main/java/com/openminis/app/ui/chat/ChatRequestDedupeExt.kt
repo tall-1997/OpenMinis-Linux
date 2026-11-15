@@ -1,6 +1,7 @@
 package com.openminis.app.ui.chat
 
 import com.openminis.app.data.RequestDeduper
+import com.openminis.app.logging.AppLogger
 
 /**
  * [T-pi-idempotent-submit] Per-VM adapter that wires [RequestDeduper] (the pi
@@ -51,4 +52,20 @@ internal class RequestDedupeGate(
         }
         return deduper.check(sid, trimmed, nowMs()) is RequestDeduper.Decision.Reject
     }
+}
+
+/**
+ * [T-pi-idempotent-submit] P2-4: a dedupe hit used to be a pure SILENT drop —
+ * the second tap vanished with no feedback, and a deliberate fast re-send
+ * (the "run this again" pattern the window exists to let through) looked
+ * like a broken send. The VM sits at its architecture line ceiling, so the
+ * log + notice pair lives here beside the gate; the wording stays a debounce
+ * notice, not an error. Called only from the enqueuePrompt reject branch.
+ */
+internal fun ChatViewModel.notifyDuplicateSendDropped() {
+    AppLogger.info(ChatViewModel.TAG_STREAM, "enqueuePrompt deduped (same text inside window)")
+    appendSystemInfo(
+        text = context.getString(com.openminis.app.R.string.vm_send_deduped),
+        iconKind = "info",
+    )
 }

@@ -1,5 +1,6 @@
 package com.openminis.app.sandbox
 
+import com.openminis.app.logging.AppLogger
 import com.openminis.app.ssh.SshBackend
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -28,7 +29,11 @@ import kotlinx.coroutines.withContext
  * - exec-channel only: no SFTP surface, no PTY, no interactive sessions.
  * - [ExecOptions.env] is honored by prefixing `export K='V'; ` (POSIX shell
  *   escaping) so the assignments apply to the WHOLE command line, not just
- *   the first simple command.
+ *   the first simple command. Keys that are not valid POSIX shell names are
+ *   dropped (with a log line, never silent): a poisoned key would make the
+ *   whole prefix a syntax error and break the ENTIRE command line, not just
+ *   one variable (review P2-15). The caller is environment negotiation, so
+ *   this is a skip, not an exception.
  * - [ExecOptions.stdin] is unsupported (the backend's exec channel exposes no
  *   stdin input); declared honestly in [environmentInfo].
  * - [com.openminis.app.ssh.SshFailure] propagates from [exec]: "the command
@@ -41,6 +46,9 @@ class SshExecutionEnvironment(
     /** Remote working directory; the backend wraps it as a quoted cd prefix. */
     private val cwd: String? = null,
 ) : ExecutionEnvironment {
+
+    /** Log tag. Not const: const val is only legal in objects/companions. */
+    private val tag = "SshExecutionEnvironment"
 
     override val id: String = "ssh:$hostRef"
 
@@ -71,12 +79,28 @@ class SshExecutionEnvironment(
         supportsStdin = false,
     )
 
+    /** POSIX shell export-name rule (review P2-15): [A-Za-z_][A-Za-z0-9_]*. */
+    private val SHELL_ENV_KEY = Regex("[A-Za-z_][A-Za-z0-9_]*")
+
     /** POSIX single-quote escaping: `it's` -> `'it'\''s'`. Visible for tests. */
     internal fun shellExportPrefix(env: Map<String, String>): String {
         if (env.isEmpty()) return ""
-        val assignments = env.entries.joinToString(" ") { (k, v) ->
-            "$k='${v.replace("'", "'\\''")}'"
+        // A key outside the POSIX name rule (empty, spaces, `-`, a leading
+        // digit) turns the whole `export ...` line into a remote-shell syntax
+        // error — that breaks the ENTIRE command, not one variable. Drop such
+        // keys with a log line: the caller is environment negotiation, so a
+        // malformed key is caller data, not an exception worth failing the
+        // exec over (review P2-15).
+        val assignments = StringBuilder()
+        for ((k, v) in env) {
+            if (!SHELL_ENV_KEY.matches(k)) {
+                AppLogger.warning(tag, "shellExportPrefix: dropping env var with invalid shell name: $k")
+                continue
+            }
+            if (assignments.isNotEmpty()) assignments.append(' ')
+            assignments.append("$k='${v.replace("'", "'\\''")}'")
         }
+        if (assignments.isEmpty()) return ""
         return "export $assignments; "
     }
 }

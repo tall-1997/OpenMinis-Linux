@@ -30,6 +30,10 @@ import java.util.concurrent.atomic.AtomicReference
  * first message wins, repeat calls are no-ops) and tracked unsubscribe
  * handles are themselves idempotent, so manual-unsubscribe-then-invalidate
  * and concurrent invalidation never double-call an unsubscribe.
+ * [GuardedContext.trackUnsubscribe] additionally re-checks invalidation
+ * AFTER enqueueing, so a registration that races the one-shot drain runs its
+ * unsubscribe immediately instead of leaking into the dead queue (review
+ * P2-3).
  *
  * Error isolation of deliveries THROUGH a dispatcher that fans out to
  * handlers stays the dispatcher's job (LifecycleHooks.fire already runs each
@@ -110,11 +114,19 @@ object ExtensionContextGuard {
          * from the pending set drops the lambda reference instead of letting
          * it linger until the next invalidation. CAS-guarded so two racing
          * callers (manual + invalidation) cannot double-run the unsubscribe.
+         *
+         * Concurrency note (review P2-3): the pre-registration
+         * [isInvalidated] check below is advisory only — [invalidate]'s drain
+         * may run between that check and the `unsubscriptions.add`. The
+         * RE-READ after the add closes that window: a registration that
+         * landed in the drained queue runs its unsubscribe immediately
+         * (exactly-once, via the handle's CAS) instead of lingering forever
+         * behind a one-shot drain that will never come back around.
          */
         fun trackUnsubscribe(unsubscribe: () -> Unit): () -> Unit {
-            // Post-invalidate registrations unsubscribe immediately: the
-            // context can never fire again, so queueing the handle would only
-            // pin the lambda (adversarial review P2-8).
+            // Fast path: registration after invalidation unsubscribes
+            // immediately — the context can never fire again, so queueing the
+            // handle would only pin the lambda (adversarial review P2-8).
             if (isInvalidated) {
                 unsubscribe()
                 return {}
@@ -128,6 +140,16 @@ object ExtensionContextGuard {
                 }
             }
             unsubscriptions.add(handle)
+            // Race-closure re-read (review P2-3): invalidate() may have
+            // drained the queue between the fast-path check and the add above
+            // — this handle would otherwise sit in the queue forever. Run it
+            // NOW. Exactly-once is guaranteed by the handle's CAS: if the
+            // concurrent drain already invoked it, this call is a no-op; if
+            // this call wins, the drained queue never sees an armed handle.
+            if (isInvalidated) {
+                handle()
+                return {} // already unsubscribed; nothing left to track
+            }
             return handle
         }
     }

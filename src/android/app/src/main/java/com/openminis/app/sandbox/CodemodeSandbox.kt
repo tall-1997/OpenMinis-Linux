@@ -1,5 +1,6 @@
 package com.openminis.app.sandbox
 
+import com.openminis.app.tools.ToolOutputTruncator
 import org.mozilla.javascript.BaseFunction
 import org.mozilla.javascript.ClassShutter
 import org.mozilla.javascript.Context
@@ -33,7 +34,11 @@ import org.mozilla.javascript.Undefined
  * observer; [ContextFactory.observeInstructionCount] accumulates the count
  * and throws [CodemodeTimeout] past the instruction budget or the wall-clock
  * deadline. That bounds compute-only infinite loops; a script stalled inside
- * a host tool call is bounded by that tool's own timeout.
+ * a host tool call is bounded by that tool's own timeout. The per-run
+ * tool-call cap trips the same exception with [CodemodeTimeout.reason] =
+ * [InterruptReason.TOOL_CALL_CAP] — a BUDGET trip, not a clock trip, so
+ * [RunResult.timedOut] stays false for it (review P2-13: the cap used to be
+ * reported as a timeout, which rendered a false timeout clock in the UI).
  *
  * Memory: the JVM Rhino context has no heap-metering API, so the pi
  * `memoryLimitBytes` maps onto the limits here as INDIRECT caps — the
@@ -105,8 +110,23 @@ class CodemodeSandbox(
         }
     }
 
-    /** Thrown from the instruction observer when a limit trips mid-script. */
-    class CodemodeTimeout(message: String) : RuntimeException(message)
+    /** Which budget cut a script short. */
+    enum class InterruptReason {
+        /** Wall-clock deadline or instruction budget (a TIME trip). */
+        TIME_BUDGET,
+        /** [Limits.maxToolCalls] exceeded (a BUDGET trip, not the clock). */
+        TOOL_CALL_CAP,
+    }
+
+    /**
+     * Thrown from the instruction observer or the tool bridge when a limit
+     * trips mid-script. [reason] says which one — the timeout and the
+     * tool-call cap must NOT be reported the same way downstream (P2-13).
+     */
+    class CodemodeTimeout(
+        message: String,
+        val reason: InterruptReason = InterruptReason.TIME_BUDGET,
+    ) : RuntimeException(message)
 
     /** Outcome of one [run]. Exactly one of [valueJson]/[error] carries data. */
     data class RunResult(
@@ -114,7 +134,14 @@ class CodemodeSandbox(
         val valueJson: String?,
         val toolCalls: Int,
         val durationMs: Long,
+        /** True only for TIME_BUDGET interruptions (wall clock / instruction budget). */
         val timedOut: Boolean,
+        /**
+         * True only for TOOL_CALL_CAP interruptions — a budget trip the model
+         * can act on (make fewer calls), rendered as a plain failure, never
+         * with the timeout clock.
+         */
+        val limitExceeded: Boolean,
         /** Honest failure line (syntax error, script throw, limit tripped). */
         val error: String?,
     )
@@ -137,23 +164,37 @@ class CodemodeSandbox(
             // inside a function, so the script runs in an implicit IIFE.
             val wrapped = "(function(){\n$script\n})()"
             val value = cx.evaluateString(scope, wrapped, "codemode", 1, null)
+            // sliceHead, not take(): maxReturnJsonChars is a UTF-16 code-unit
+            // budget, and a bare take() would cut a surrogate pair in half at
+            // the boundary (review P2-12) — the shared slicer drops the
+            // orphaned half instead.
             return RunResult(
-                valueJson = serializeReturn(cx, scope, value)?.take(limits.maxReturnJsonChars),
+                valueJson = serializeReturn(cx, scope, value)
+                    ?.let { ToolOutputTruncator.sliceHead(it, limits.maxReturnJsonChars) },
                 toolCalls = state.toolCalls,
                 durationMs = System.currentTimeMillis() - started,
                 timedOut = false,
+                limitExceeded = false,
                 error = null,
             )
         } catch (t: Throwable) {
             val durationMs = System.currentTimeMillis() - started
             return when (t) {
                 is CodemodeTimeout -> RunResult(
-                    valueJson = null, toolCalls = state.toolCalls, durationMs = durationMs,
-                    timedOut = true, error = t.message,
+                    valueJson = null,
+                    toolCalls = state.toolCalls,
+                    durationMs = durationMs,
+                    timedOut = t.reason == InterruptReason.TIME_BUDGET,
+                    limitExceeded = t.reason == InterruptReason.TOOL_CALL_CAP,
+                    error = t.message,
                 )
                 else -> RunResult(
-                    valueJson = null, toolCalls = state.toolCalls, durationMs = durationMs,
-                    timedOut = false, error = describeFailure(t),
+                    valueJson = null,
+                    toolCalls = state.toolCalls,
+                    durationMs = durationMs,
+                    timedOut = false,
+                    limitExceeded = false,
+                    error = describeFailure(t),
                 )
             }
         } finally {
@@ -221,7 +262,12 @@ class CodemodeSandbox(
             args: Array<out Any>,
         ): Any? {
             if (++state.toolCalls > limits.maxToolCalls) {
-                throw CodemodeTimeout("codemode script exceeded the ${limits.maxToolCalls}-tool-call cap.")
+                // BUDGET trip, not a clock trip: the reason field is what keeps
+                // this from being misreported as a timeout downstream (P2-13).
+                throw CodemodeTimeout(
+                    "codemode script exceeded the ${limits.maxToolCalls}-tool-call cap.",
+                    InterruptReason.TOOL_CALL_CAP,
+                )
             }
             val argsJson = toArgsJson(cx, scope, args.getOrNull(0))
             return host.callTool(name, argsJson)

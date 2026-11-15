@@ -8,6 +8,12 @@ enum class ToolErrorCode {
     AUTH_REQUIRED,
     NETWORK_ERROR,
     TIMEOUT,
+    /**
+     * A self-imposed BUDGET tripped, not the wall clock: e.g. the codemode
+     * tool-call cap. Distinct from [TIMEOUT] so the UI renders a plain
+     * failure (no timeout clock) and no timeout recovery hint is attached.
+     */
+    CODEMODE_LIMIT,
     UNSUPPORTED,
     EXECUTION_FAILED,
     UNKNOWN_TOOL,

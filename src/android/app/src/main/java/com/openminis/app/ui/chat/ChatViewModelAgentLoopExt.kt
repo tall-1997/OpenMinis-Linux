@@ -166,18 +166,15 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         }
     }
 
-    // Tracks whether the loop was exited via a `break` (any reason — no
-    // tool calls, msgIdx safety, etc.) or fell off the end of the range.
-    // Set false by every break path that *isn't* "the model wanted to
-    // keep going past MAX_AGENT_TURNS". Without this flag the post-loop
-    // tail can't tell the runaway path apart from a normal turn ending,
-    // which previously slapped a fake "200 turns hit" error on every
-    // ordinary completion.
+    // Tracks whether the loop exited via `break` (any reason) or fell off the
+    // range end. Set false by every break path that ISN'T "keep going past
+    // MAX_AGENT_TURNS" — without it the post-loop tail slapped a fake "200
+    // turns hit" error on every ordinary completion (the bug this flag fixed).
     var loopExitedNormally = false
-    // [T-android-auto-compact-inloop] How many times the in-loop guard has
-    // compacted during THIS runAgentLoop. Bounds compact-thrash: once the
-    // cap is hit, a still-over-threshold history stops the turn rather than
-    // compacting forever. Mirrors iOS maxInLoopCompactions.
+    // [T-android-auto-compact-inloop] In-loop guard compactions in THIS
+    // runAgentLoop — bounds compact-thrash: once the cap is hit, a
+    // still-over-threshold history stops the turn. Mirrors iOS
+    // maxInLoopCompactions.
     var inLoopCompactions = 0
     // [T-compact-on-context-overflow] How many times THIS runAgentLoop has
     // compacted in response to the provider's own context verdict
@@ -194,15 +191,13 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // AIChatViewModel.didInjectEmptyToolReminderThisRun.
     var didInjectEmptyToolReminder = false
     // [port-upstream-1.16][T-android-dsml-leak] Resends spent on a leaked DSML
-    // tool call this run; [T-b13-empty-fallback] entries that already came
-    // back empty so the empty-turn walk never revisits them.
+    // tool call; [T-b13-empty-fallback] empty-streak entries never revisited.
     var dsmlLeakRetries = 0
     val emptyStreakEntryIds = mutableSetOf<String>()
     // [T-android-readaloud-stop-stale] One-shot per REPLY (not per turn):
     // the first text delta stops any Read Aloud still playing from the
-    // previous reply. Scoped outside the turn loop so a tool-loop reply
-    // that emits text across several turns doesn't re-fire it and cut off
-    // its own speech mid-sentence.
+    // previous reply; scoped outside the turn loop so a multi-turn reply
+    // cannot re-fire it and cut off its own speech mid-sentence.
     var didStopStaleReadAloud = false
     val toolExecutionLedger = ToolExecutionLedger()  // [T-tool-execution-ledger] one per run
     val repeatTracker = ToolRepeatTracker()  // [T-frozen-repeat-hint] hint-only
@@ -1726,6 +1721,11 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             }
             // Auto-title after first exchange
             if (turn == 0) generateSessionTitleIfNeeded()
+            // [T-agent-steering-final-boundary] (P1-6b) pi agent-loop.ts:187-193
+            // keep-alive: steering accepted during THIS final turn (no tool
+            // calls, no later boundary) would strand in the queue — one more
+            // iteration (drainSteeringIntoRun at the top) delivers it in-run.
+            if (steeringKeepAlive()) continue
             loopExitedNormally = true
             break
         }

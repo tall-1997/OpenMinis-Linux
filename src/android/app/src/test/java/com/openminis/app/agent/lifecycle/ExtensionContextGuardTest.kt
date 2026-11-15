@@ -180,6 +180,54 @@ class ExtensionContextGuardTest {
         assertEquals(0, dropped.events.size)
         assertEquals(1, kept.events.size)
     }
+
+    // -- 5. Race closure: registration landing during the one-shot drain --
+
+    @Test
+    fun `trackUnsubscribe after invalidate runs immediately and tracks nothing`() {
+        // Pinned behavior (P2-8): a registration made AFTER invalidation
+        // unsubscribes immediately instead of queueing into a dead queue.
+        val guard = newGuard()
+        guard.invalidate()
+        var runs = 0
+        val handle = guard.trackUnsubscribe { runs++ }
+        assertEquals(1, runs)
+        // The returned handle is inert: the lambda already ran.
+        handle()
+        assertEquals(1, runs)
+    }
+
+    @Test
+    fun `racing invalidate and trackUnsubscribe run the unsubscribe exactly once`() {
+        // review P2-3 stress probe: 1000 fresh guards, one thread invalidating
+        // and one thread registering concurrently from behind a barrier. Every
+        // registration must end up UNSUBSCRIBED exactly once — either by the
+        // drain or by the post-add re-read (whichever wins the race). A lost
+        // registration — the check-then-add window staying open — would leave
+        // the lambda pinned in the dead queue and the count would under-fire.
+        val runs = java.util.concurrent.atomic.AtomicInteger(0)
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(2)
+        try {
+            val barrier = java.util.concurrent.CyclicBarrier(2)
+            repeat(1000) {
+                val guard = ExtensionContextGuard.create()
+                guards += guard
+                val invalidator = pool.submit {
+                    barrier.await()
+                    guard.invalidate()
+                }
+                val registrar = pool.submit {
+                    barrier.await()
+                    guard.trackUnsubscribe { runs.incrementAndGet() }
+                }
+                invalidator.get()
+                registrar.get()
+            }
+        } finally {
+            pool.shutdownNow()
+        }
+        assertEquals("every raced registration must unsubscribe exactly once", 1000, runs.get())
+    }
 }
 
 /** One delivered hook event, compared by value. */

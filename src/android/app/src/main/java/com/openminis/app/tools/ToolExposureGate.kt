@@ -28,9 +28,12 @@ import com.openminis.app.data.model.AgentToolDefinition
  *   script (CodemodeSandbox) through the injected tool host.
  *
  * The codemode-callable set ([callableForCodemode]) mirrors pi's
- * `ToolLoadout.callable`: everything registered EXCEPT model_only and hidden.
- * A direct tool such as execute_code_js therefore lands in that set too —
- * that is the pi "codemode tools list it" bootstrap.
+ * `ToolLoadout.callable`: everything registered EXCEPT model_only, hidden and
+ * the codemode ENTRY ITSELF. pi's "codemode tools list the direct entry too"
+ * bootstrap is deliberately NOT ported for the entry tool: a script
+ * re-entering execute_code_js parks one Dispatchers.IO thread per nesting
+ * level in the bridge's runBlocking and ~64 levels deadlock the whole IO pool
+ * (Stop cannot reach the parked threads) — see CodemodeTool's nesting guard.
  *
  * Schema assembly calls [filterForSchema] exactly once per path in
  * [AgentTools.makeAgentTools] (full mode and long-tail mode), keeping the
@@ -155,12 +158,20 @@ object ToolExposureGate {
      * (never callable) and hidden (unreachable). Deferred and codemode tools
      * ARE callable from scripts without being declared, which is the whole
      * point of the level.
+     *
+     * The codemode entry tool (execute_code_js) is excluded on purpose: each
+     * nesting level parks one Dispatchers.IO thread in the bridge's
+     * runBlocking and ~64 levels deadlock the pool. Scripts that need another
+     * aggregation layer inline it in the one script instead. The callable-set
+     * exclusion is the first line of defense; CodemodeTool's thread-depth
+     * guard catches any path that would bypass it (e.g. a custom
+     * callableNames set naming the entry).
      */
     fun callableForCodemode(definitions: List<AgentToolDefinition>): List<AgentToolDefinition> =
         definitions.filter {
             when (levelOf(it)) {
                 MODEL_ONLY, HIDDEN -> false
-                else -> true
+                else -> it.name != CodemodeTool.NAME
             }
         }
 

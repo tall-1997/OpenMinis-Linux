@@ -33,6 +33,14 @@ object ContextOverflowDetector {
     private const val CEREBRAS_PROVIDER = "cerebras"
 
     /**
+     * The HTTP status prefix [com.openminis.app.provider.LLMProvider]'s shared
+     * error mapper (mapHttpErrorShared, `messageLabel` default "[CODE]")
+     * stamps onto ProviderError/TransientError details. Line-anchored so a
+     * status mentioned mid-body is NOT taken as the response status.
+     */
+    private val BRACKETED_STATUS_PREFIX = Regex("""^\[(\d{3})\]""")
+
+    /**
      * Regex patterns to detect context overflow errors from different providers.
      *
      * These patterns match error messages returned when the input exceeds
@@ -208,6 +216,16 @@ object ContextOverflowDetector {
      * taxonomy: [com.openminis.app.data.model.LLMError.ContextLengthExceeded] short-circuits to
      * Overflow (the classifier already proved the verdict); every other variant's provider
      * detail routes through [detectFromError]. Call ONLY for a failed turn.
+     *
+     * Status recovery: [com.openminis.app.provider.LLMProvider]'s shared HTTP error mapper
+     * (mapHttpErrorShared) formats provider details as "[CODE] body" — e.g. a 413 arrives
+     * as "[413] ...". The status-prefix regex below recovers that status so [detectFromError]'s
+     * status-driven fallbacks work again (a bodyless or unrecognized-body HTTP 413 must still
+     * be Overflow, otherwise the 413 family is a dead path on every LLMError-carried error).
+     * The status is trusted over the body: the string PASSED to [detectFromError] is the
+     * suffix after the proven prefix, so the prefix can never double as the line-anchored
+     * "413..." table entry under a different real status. No bracket prefix -> null status,
+     * exactly the pre-recovery behavior.
      */
     fun detectFromLlmError(error: com.openminis.app.data.model.LLMError): OverflowVerdict {
         if (error is com.openminis.app.data.model.LLMError.ContextLengthExceeded) {
@@ -218,8 +236,16 @@ object ContextOverflowDetector {
             is com.openminis.app.data.model.LLMError.TransientError -> error.detail
             is com.openminis.app.data.model.LLMError.RateLimited -> error.detail
             else -> error.message
+        } ?: ""
+        val statusMatch = BRACKETED_STATUS_PREFIX.find(body)
+        return if (statusMatch != null) {
+            detectFromError(
+                statusCode = statusMatch.groupValues[1].toInt(),
+                body = body.substring(statusMatch.range.last + 1),
+            )
+        } else {
+            detectFromError(statusCode = null, body = body)
         }
-        return detectFromError(statusCode = null, body = body)
     }
 
     /**

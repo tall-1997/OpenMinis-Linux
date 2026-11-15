@@ -3,6 +3,7 @@ package com.openminis.app.ui.chat
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.CountDownLatch
@@ -116,5 +117,36 @@ class AgentSteeringQueueTest {
         queue.clear()
         assertTrue(queue.isEmpty)
         assertNull(queue.drainOne())
+    }
+
+    // -- P1-7: the session stamp must re-stamp, never clear --
+
+    @Test
+    fun `stamp change (draft to persisted promotion) keeps queued steering messages`() {
+        // The store used to clear the queue whenever the session id moved.
+        // A live VM's only move is the draft→persisted promotion (the store
+        // keys one VM per session and aliases the draft), so an offer made
+        // in the sync `_isStreaming` window — before ensureSession promotes —
+        // was destroyed between the composer and the request build.
+        val store = SteeringSessionStore()
+        val owner = Any()
+        val draft = store.stateFor(owner, "__new__draft")
+        assertTrue(draft.queue.offer("mid-run note"))
+        // The promotion: same owner, different id.
+        val promoted = store.stateFor(owner, "persisted-real")
+        assertSame("a stamp change is a re-stamp, not a new state", draft, promoted)
+        assertEquals("persisted-real", promoted.sessionId)
+        assertEquals(1, promoted.queue.size)
+        assertEquals("mid-run note", promoted.queue.drainOne())
+    }
+
+    @Test
+    fun `a fresh owner gets a fresh queue (cross-conversation isolation is structural)`() {
+        // A new conversation gets a new VM (new owner), so per-session
+        // isolation does not depend on the stamp rule clearing anything.
+        val store = SteeringSessionStore()
+        store.stateFor(Any(), "s1").queue.offer("for a")
+        val other = store.stateFor(Any(), "s1")
+        assertEquals(0, other.queue.size)
     }
 }
