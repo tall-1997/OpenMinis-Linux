@@ -20,6 +20,7 @@ import android.provider.AlarmClock
 import android.provider.Settings
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
+import com.openminis.app.data.model.ToolAnnotations
 import org.json.JSONObject
 
 /**
@@ -148,6 +149,8 @@ internal object SystemTools {
             parameters = mapOf(TOOL_TITLE_PARAM to titleParam()),
             required = listOf(TOOL_TITLE_PARAM),
             propertyOrdering = listOf(TOOL_TITLE_PARAM),
+            // [pi-port §4.1] Pure snapshot of device state.
+            annotations = ToolAnnotations(readOnlyHint = true, destructiveHint = false, idempotentHint = true),
         )
 
         fun execute(argsJson: String, context: Context): String {
@@ -237,6 +240,8 @@ internal object SystemTools {
             ),
             required = listOf(TOOL_TITLE_PARAM, "namespace"),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "namespace", "key", "filter"),
+            // [pi-port §4.1] Reads one settings value.
+            annotations = ToolAnnotations(readOnlyHint = true, destructiveHint = false, idempotentHint = true),
         )
 
         fun execute(argsJson: String, context: Context): String {
@@ -300,6 +305,8 @@ internal object SystemTools {
             ),
             required = listOf(TOOL_TITLE_PARAM, "mode"),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "mode"),
+            // [pi-port §4.1] Idempotent setter: same mode twice = no change.
+            annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = false, idempotentHint = true),
         )
 
         fun execute(argsJson: String, context: Context): String {
@@ -347,6 +354,8 @@ internal object SystemTools {
             ),
             required = listOf(TOOL_TITLE_PARAM, "stream", "percent"),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "stream", "percent"),
+            // [pi-port §4.1] Idempotent setter: same percent twice = no change.
+            annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = false, idempotentHint = true),
         )
 
         private fun streamOf(name: String): Int = when (name) {
@@ -394,6 +403,9 @@ internal object SystemTools {
             ),
             required = listOf(TOOL_TITLE_PARAM, "mode"),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "mode"),
+            // [pi-port §4.1] Idempotent setter (same filter twice = no change);
+            // mutates alerting state, hence not read-only.
+            annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = false, idempotentHint = true),
         )
 
         fun execute(argsJson: String, context: Context): String {
@@ -449,6 +461,8 @@ internal object SystemTools {
             ),
             required = listOf(TOOL_TITLE_PARAM),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "level", "adaptive"),
+            // [pi-port §4.1] Idempotent setter: same level twice = no change.
+            annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = false, idempotentHint = true),
         )
 
         fun execute(argsJson: String, context: Context): String {
@@ -507,6 +521,8 @@ internal object SystemTools {
             ),
             required = listOf(TOOL_TITLE_PARAM, "on"),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "on"),
+            // [pi-port §4.1] Idempotent torch setter.
+            annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = false, idempotentHint = true),
         )
 
         fun execute(argsJson: String, context: Context): String {
@@ -555,6 +571,8 @@ internal object SystemTools {
             ),
             required = listOf(TOOL_TITLE_PARAM),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "hour", "minute", "label", "days", "timer_seconds"),
+            // [pi-port §4.1] Additive, not idempotent: repeats create more alarms/timers.
+            annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = false, idempotentHint = false),
         )
 
         fun execute(argsJson: String, context: Context): String {
@@ -614,6 +632,8 @@ internal object SystemTools {
             ),
             required = listOf(TOOL_TITLE_PARAM, "on"),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "on"),
+            // [pi-port §4.1] Idempotent toggle: short-circuits when already on.
+            annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = false, idempotentHint = true),
         )
 
         @Suppress("DEPRECATION")
@@ -655,6 +675,8 @@ internal object SystemTools {
             ),
             required = listOf(TOOL_TITLE_PARAM, "on"),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "on"),
+            // [pi-port §4.1] Idempotent toggle: short-circuits when already on.
+            annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = false, idempotentHint = true),
         )
 
         fun execute(argsJson: String, context: Context): String {
@@ -701,6 +723,8 @@ internal object SystemTools {
             ),
             required = listOf(TOOL_TITLE_PARAM, "on"),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "on"),
+            // [pi-port §4.1] Idempotent toggle: same state twice = no change.
+            annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = false, idempotentHint = true),
         )
 
         fun execute(argsJson: String, context: Context): String {

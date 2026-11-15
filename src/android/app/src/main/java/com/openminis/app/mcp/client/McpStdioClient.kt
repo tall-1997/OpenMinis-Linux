@@ -1,13 +1,13 @@
 package com.openminis.app.mcp.client
 
+import com.openminis.app.logging.AppLogger
 import com.openminis.app.mcp.client.McpJsonRpc.McpError
+import com.openminis.app.mcp.client.McpRequestBook.Outcome
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * [T-mcp-native] STDIO transport: an MCP server process running inside the
@@ -18,15 +18,50 @@ import java.util.concurrent.ConcurrentHashMap
  * diagnostics, one in-flight request at a time.
  *
  * The process is spawned through a caller-supplied proot command prefix
- * ([SpawnSpec]) so this class stays JVM-testable with a plain
- * `ProcessBuilder` — no Android types below the spec.
+ * ([SpawnSpec]) so this class stays JVM-testable — everything below the
+ * [StdioProcessTarget] seam is process-free and the tests drive a fake target
+ * (pi tests its StdioTransport against child_process fakes the same way).
+ *
+ * Hardening ported from pi `mcp/src/client.ts` + `transports/stdio.ts`:
+ *  - [T-mcp-stdio-frames] 16 MiB single-message cap on stdout frames (pi
+ *    transport.ts `DEFAULT_MAX_MESSAGE_BYTES`), enforced by
+ *    [McpJsonRpcLineReader] — a server that streams an unterminated line can
+ *    no longer grow the reader buffer unbounded;
+ *  - [T-mcp-progress-refresh] every request gets a deadline
+ *    ([McpRequestBook.DEFAULT_REQUEST_TIMEOUT_MS] unless overridden per
+ *    request via [McpRequestOptions.timeoutMs]) and a `notifications/progress`
+ *    for the request's progress token re-arms it (pi client.ts:536-547), so
+ *    chatty long calls never time out while idle ones still do;
+ *  - [T-mcp-abort-cancelled] the per-request abort trigger settles the call
+ *    with ABORTED and sends the server `notifications/cancelled`
+ *    (`initialize` excepted — the spec forbids cancelling it);
+ *  - [T-mcp-stdio-close-sequence] close = stdin closed → grace window (500ms,
+ *    capped by the close timeout) → SIGTERM → close-timeout window (2s) →
+ *    SIGKILL, then the tree classification hook (pi stdio.ts:10-58);
+ *  - [T-mcp-list-all] `tools/list` follows `nextCursor` through all pages,
+ *    bounded at 1000 pages with duplicate-cursor detection (pi client.ts
+ *    listAll).
  */
 class McpStdioClient(
     override val serverName: String,
     private val spawn: SpawnSpec,
     private val startupTimeoutMs: Long = 60_000L,
-    private val callTimeoutMs: Long = 300_000L,
+    /**
+     * Default per-request deadline. pi client.ts defaults to 30s; the bridge
+     * passes the CLI-parity 300s for slow tool executions — this default is
+     * the pi-parity value for callers without an explicit override.
+     */
+    private val requestTimeoutMs: Long = McpRequestBook.DEFAULT_REQUEST_TIMEOUT_MS,
     private val hooks: ProcessHooks? = null,
+    /** Process seam — defaults to the in-process PRoot spawn. */
+    private val targetFactory: () -> StdioProcessTarget = { PRootSpawnTarget(spawn, hooks) },
+    private val nowMs: () -> Long = { System.nanoTime() / 1_000_000L },
+    /** Injectable timer scheduler (tests); null uses a shared daemon timer. */
+    private val schedule: ((delayMs: Long, task: Runnable) -> (() -> Unit))? = null,
+    private val stdinCloseGraceMs: Long = McpStdioClose.STDIN_CLOSE_GRACE_MS,
+    private val closeTimeoutMs: Long = McpStdioClose.DEFAULT_CLOSE_TIMEOUT_MS,
+    private val maxMessageBytes: Int = McpStdioFraming.DEFAULT_MAX_MESSAGE_BYTES,
+    private val maxStderrBytes: Int = McpStdioFraming.DEFAULT_MAX_STDERR_BYTES,
 ) : McpClient {
 
     /**
@@ -46,9 +81,9 @@ class McpStdioClient(
 
         /**
          * Called exactly once per spawned process when it stops.
-         * [graceful] = it exited after SIGTERM (proot --kill-on-exit already
-         * tore the tracees down); false = it had to be SIGKILLed, the host
-         * side must kill the surviving tree itself.
+         * [graceful] = it exited (possibly only after SIGTERM — proot
+         * --kill-on-exit already tore the tracees down); false = it had to be
+         * SIGKILLed, the host side must kill the surviving tree itself.
          */
         fun onTerminated(process: Process, graceful: Boolean)
     }
@@ -69,108 +104,123 @@ class McpStdioClient(
         val guestEnv: Map<String, String>,
     )
 
-    @Volatile private var process: Process? = null
-    @Volatile private var initialized = false
-    private var writer: java.io.BufferedWriter? = null
-    private var stdout: BufferedReader? = null
+    private val book = McpRequestBook(nowMs, schedule)
 
-    // [T-mcp-stdio-reply-loss] SynchronousQueue.offer() only succeeds when a
-    // taker is ALREADY parked. The reader thread can reach that line before the
-    // caller has finished re-serialising and writing the request, so on a fast
-    // local stdio server (typical for `initialize` against a node server) the
-    // reply was dropped SILENTLY and the call then hung until the 300s timeout
-    // even though the server had answered. A 1-slot LinkedBlockingQueue always
-    // accepts the offer, and the caller still removes its own entry.
-    private val pending = ConcurrentHashMap<String, java.util.concurrent.LinkedBlockingQueue<JSONObject>>()
-    private val stderrTail = StringBuilder()
+    @Volatile private var target: StdioProcessTarget? = null
+    @Volatile private var initialized = false
+    @Volatile private var framing: McpJsonRpcLineReader? = null
+    private var writer: java.io.BufferedWriter? = null
     private val lock = Any()
 
-    private fun alive(): Boolean = process?.isAlive == true
+    private fun alive(): Boolean = target?.isAlive() == true
 
     /** [T-mcp-stdio-cap] Occupies a live-server slot (process alive). */
     val isLive: Boolean get() = alive()
 
     /** [T-mcp-stdio-cap] A JSON-RPC request is in flight — not evictable. */
-    val isBusy: Boolean get() = pending.isNotEmpty()
+    val isBusy: Boolean get() = book.isBusy
 
-    private fun stderrSnapshot(): String = synchronized(stderrTail) { stderrTail.toString() }
-
-    private fun appendStderr(chunk: String) {
-        synchronized(stderrTail) {
-            stderrTail.append(chunk)
-            // Keep only the last ~2KB — enough for "why did it die" context.
-            val over = stderrTail.length - 2048
-            if (over > 0) stderrTail.delete(0, over)
-        }
-    }
+    private fun stderrSnapshot(): String = framing?.stderrSnapshot() ?: ""
 
     private fun startProcess() {
         stopProcess()
-        val pb = ProcessBuilder(spawn.argv)
-        pb.environment().clear()
-        pb.environment().putAll(spawn.processEnv)
-        pb.environment().putAll(spawn.guestEnv)
-        pb.redirectErrorStream(false)
-        val proc = try {
-            pb.start()
+        val t = try {
+            targetFactory()
+        } catch (e: McpError) {
+            throw e
         } catch (e: Exception) {
             throw McpError(McpError.CONNECTION_ERROR, "failed to spawn '${spawn.argv.lastOrNull()}': ${e.message}")
         }
-        process = proc
-        hooks?.onSpawned(proc)
-        writer = proc.outputStream.bufferedWriter(StandardCharsets.UTF_8)
-        stdout = BufferedReader(InputStreamReader(proc.inputStream, StandardCharsets.UTF_8))
+        target = t
+        writer = t.stdin.bufferedWriter(StandardCharsets.UTF_8)
+        val lines = McpJsonRpcLineReader(
+            maxMessageBytes = maxMessageBytes,
+            maxStderrBytes = maxStderrBytes,
+            onMessage = ::dispatchMessage,
+            onError = { message -> AppLogger.warning("McpStdioClient", "[$serverName] $message") },
+        )
+        framing = lines
 
-        // Reader thread: dispatch replies by id; ignore notifications.
-        val reader = Thread({
+        // Reader thread: replies dispatch by id through the book; progress
+        // notifications re-arm their request's deadline (pi handleMessage).
+        Thread({
+            val buf = ByteArray(64 * 1024)
             try {
                 while (true) {
-                    val line = stdout?.readLine() ?: break
-                    if (line.isBlank()) continue
-                    val obj = runCatching { JSONObject(line) }.getOrNull() ?: continue
-                    // JSON-RPC allows string OR numeric ids. Keying the map by
-                    // the string form makes an echo of `5` and `"5"` the same
-                    // request; `optInt` used to drop every string id.
-                    val rawId = obj.opt("id")
-                    if (rawId != null && rawId != JSONObject.NULL &&
-                        (obj.has("result") || obj.has("error"))
-                    ) {
-                        // [T-mcp-stdio-reply-loss] Offer into the caller's bounded
-                        // queue WITHOUT removing the map entry: the reply may land
-                        // before the caller has reached `poll`, and removal here is
-                        // what made the delivery race with the caller's own cleanup.
-                        // The caller's `finally { pending.remove(key) }` owns the
-                        // lifetime. A second reply for the same id (protocol
-                        // violation) is dropped by the 1-slot capacity.
-                        McpJsonRpc.idKey(rawId)?.let { pending[it]?.offer(obj) }
-                    }
+                    val n = t.stdout.read(buf)
+                    if (n < 0) break
+                    lines.readStdout(buf, n)
                 }
             } catch (_: Exception) {
             } finally {
+                lines.end()
                 // The reader is the only writer of replies. Once it exits,
                 // every in-flight call must fail now instead of each waiting
                 // out its own timeout.
-                failAllPending("stdio reader exited")
+                book.failAll("stdio reader exited")
             }
         }, "mcp-stdio-$serverName-reader").apply { isDaemon = true; start() }
 
         // Stderr drainer: bounded ring for diagnostics (daemon.py parity).
         Thread({
+            val buf = ByteArray(8 * 1024)
             try {
-                val err = BufferedReader(InputStreamReader(proc.errorStream, StandardCharsets.UTF_8))
                 while (true) {
-                    val l = err.readLine() ?: break
-                    appendStderr(l + "\n")
+                    val n = t.stderr.read(buf)
+                    if (n < 0) break
+                    lines.readStderr(buf, n)
                 }
             } catch (_: Exception) {
             }
         }, "mcp-stdio-$serverName-stderr").apply { isDaemon = true; start() }
     }
 
-    private fun rpc(method: String, params: JSONObject?, timeoutMs: Long): JSONObject {
-        val proc = process ?: throw McpError(McpError.CONNECTION_ERROR, "stdio server not running")
-        if (!proc.isAlive) {
-            val err = stderrSnapshot().trim()
+    /**
+     * Reader-thread message router (pi handleMessage): replies settle their
+     * request through the book, progress notifications re-arm the deadline,
+     * everything else is protocol traffic this client does not serve (no
+     * server→client requests are supported, so `notifications/cancelled`
+     * from the server has nothing to abort).
+     */
+    private fun dispatchMessage(obj: JSONObject) {
+        val rawId = obj.opt("id")
+        if (rawId != null && rawId != JSONObject.NULL && (obj.has("result") || obj.has("error"))) {
+            // First reply wins; a duplicate for an already settled id is a
+            // protocol violation and is dropped by the book.
+            McpJsonRpc.idKey(rawId)?.let { book.deliver(it, obj) }
+            return
+        }
+        when (obj.optString("method", "")) {
+            "notifications/progress" -> handleProgress(obj.optJSONObject("params"))
+            else -> Unit
+        }
+    }
+
+    /**
+     * pi handleProgress (client.ts:536-547): re-arm the request deadline and
+     * invoke the caller's callback. A callback throw is logged, never allowed
+     * to kill the reader.
+     */
+    private fun handleProgress(params: JSONObject?) {
+        if (params == null) return
+        val token = McpJsonRpc.idKey(params.opt("progressToken")) ?: return
+        val progress = params.optDouble("progress", Double.NaN)
+        if (progress.isNaN()) return
+        val entry = book.progress(token) ?: return
+        val total = params.optDouble("total", Double.NaN).takeUnless { it.isNaN() }
+        val message = params.optString("message", "").takeIf { it.isNotEmpty() }
+        val notification = McpProgress(progress, total, message, params)
+        try {
+            entry.onProgress?.invoke(notification)
+        } catch (e: Exception) {
+            AppLogger.warning("McpStdioClient", "[$serverName] progress callback failed: ${e.message}")
+        }
+    }
+
+    private fun rpc(method: String, params: JSONObject?, options: McpRequestOptions?): JSONObject {
+        val t = target ?: throw McpError(McpError.CONNECTION_ERROR, "stdio server not running")
+        if (!t.isAlive()) {
+            val err = stderrSnapshot().trim().take(2048)
             throw McpError(
                 McpError.CONNECTION_ERROR,
                 "stdio server exited before/while serving '$method'" +
@@ -179,43 +229,140 @@ class McpStdioClient(
         }
         val id = McpJsonRpc.nextId()
         val key = id.toString()
-        val queue = java.util.concurrent.LinkedBlockingQueue<JSONObject>(1)
-        pending[key] = queue
+        val timeoutMs = options?.timeoutMs ?: defaultTimeoutMs(method)
+        val onProgress = options?.onProgress
+        val pending = book.add(
+            id = key,
+            method = method,
+            timeoutMs = timeoutMs,
+            // [T-mcp-abort-cancelled] The spec forbids cancelling `initialize`
+            // (pi client.ts:423-432 entry.cancellable).
+            cancellable = method != "initialize",
+            onProgress = onProgress,
+            progressToken = if (onProgress != null) key else null,
+            replies = LinkedBlockingQueue(),
+        )
+        // [T-mcp-abort-cancelled] Hand the caller the abort trigger as soon as
+        // the request is queued. Firing it settles the call with ABORTED and —
+        // initialize excepted, and only when the request had NOT already
+        // completed (pi: the abort listener is removed on settle) — tells the
+        // server the request id is abandoned.
+        options?.let { opts ->
+            opts.onAbortHandle?.let { register ->
+                register {
+                    val aborted = book.abort(key, opts.abortReason ?: "Aborted")
+                    if (aborted is McpRequestBook.AbortResult.Settled && aborted.entry.cancellable) {
+                        sendCancelled(id, opts.abortReason ?: "Aborted")
+                    }
+                }
+            }
+        }
         try {
-            val payload = McpJsonRpc.request(id, method, params)
+            val payload = McpJsonRpc.request(
+                id, method,
+                if (onProgress != null) withProgressToken(params, id) else params,
+            )
             synchronized(lock) {
                 val w = writer ?: throw McpError(McpError.CONNECTION_ERROR, "stdin closed")
                 w.write(payload.toString())
                 w.newLine()
                 w.flush()
             }
-            val reply = queue.poll(timeoutMs, TimeUnit.MILLISECONDS)
-                // [T-mcp-stdio-reply-loss] Late-delivery re-check: a reply can land
-                // in the window between the poll timing out and the entry being
-                // removed. Take it rather than failing a call the server answered.
-                ?: pending.remove(key)?.poll()
-                ?: throw McpError(McpError.TIMEOUT, "no reply to '$method' within ${timeoutMs / 1000}s")
-            return McpJsonRpc.unwrapResult(reply)
+            val outcome = awaitOutcome(pending, key, timeoutMs, method)
+            return when (outcome) {
+                is Outcome.Reply -> McpJsonRpc.unwrapResult(outcome.value)
+                is Outcome.Failed -> {
+                    // [T-mcp-abort-cancelled] A deadline miss cancels the
+                    // request on the server too (pi: timeout → cancelPending
+                    // → notifications/cancelled, "Request timed out").
+                    if (outcome.error.code == McpError.TIMEOUT && pending.cancellable) {
+                        sendCancelled(id, McpRequestBook.TIMEOUT_REASON)
+                    }
+                    throw outcome.error
+                }
+                // The entry vanished while waiting (never happens outside a
+                // close race) — fail with the same deadline error shape.
+                null -> throw McpError(
+                    McpError.TIMEOUT,
+                    "no reply to '$method' within ${timeoutMs / 1000}s",
+                )
+            }
         } finally {
-            pending.remove(key)
+            book.remove(key)
         }
     }
 
-    /** Wake every waiting caller after the reader thread dies. */
-    private fun failAllPending(reason: String) {
-        if (pending.isEmpty()) return
-        val error = JSONObject().apply {
-            put("jsonrpc", "2.0")
-            put("id", JSONObject.NULL)
-            put(
-                "error",
-                JSONObject().apply {
-                    put("code", -32000)
-                    put("message", reason)
-                },
-            )
+    /**
+     * Waits for the reply with the deadline as the ONLY timeout authority —
+     * pi awaits a promise and lets the timer decide. A progress notification
+     * re-arms the entry's deadline mid-wait, so the poll window is recomputed
+     * from the entry (not the fixed initial timeout) every time it expires:
+     * a chatty long call never times out, an idle one still does.
+     */
+    private fun awaitOutcome(
+        pending: McpRequestBook.Pending,
+        key: String,
+        initialWindowMs: Long,
+        method: String,
+    ): McpRequestBook.Outcome? {
+        // pi armTimeout: a non-positive timeout never arms a deadline — the
+        // call waits until the reply or the connection dies (failAll wakes it).
+        if (initialWindowMs <= 0) return pending.replies.take()
+        var window = initialWindowMs
+        while (true) {
+            val got = pending.replies.poll(window, TimeUnit.MILLISECONDS)
+            if (got != null) return got
+            // The poll window expired — check the entry's CURRENT deadline,
+            // which a progress notification may have pushed out since.
+            val entry = book.get(key) ?: return null
+            val remaining = entry.deadlineMs - nowMs()
+            if (remaining <= 0) {
+                // Same belt-and-braces as the deadline miss: settle through
+                // the book (first-wins) and pick up whatever it queued —
+                // including a reply that raced the expiry.
+                return if (book.timeoutNow(key)) {
+                    pending.replies.poll()
+                } else {
+                    // Settled by a racing timer between the polls — its
+                    // outcome is already queued (settle offers under the same
+                    // lock timeoutNow just held).
+                    pending.replies.poll(50, TimeUnit.MILLISECONDS)
+                }
+            }
+            window = remaining
         }
-        for (queue in pending.values) queue.offer(error)
+    }
+
+    private fun defaultTimeoutMs(method: String): Long =
+        if (method == "initialize") startupTimeoutMs else requestTimeoutMs
+
+    /**
+     * pi requestInternal (client.ts:404-409): the caller's `onProgress`
+     * advertises a progress token via `_meta.progressToken` so the server can
+     * target its progress notifications at this request.
+     */
+    private fun withProgressToken(params: JSONObject?, requestId: Int): JSONObject {
+        val out = if (params != null) JSONObject(params.toString()) else JSONObject()
+        val meta = out.optJSONObject("_meta") ?: JSONObject()
+        meta.put("progressToken", requestId)
+        out.put("_meta", meta)
+        return out
+    }
+
+    /**
+     * [T-mcp-abort-cancelled] Best-effort `notifications/cancelled` (pi
+     * `cancelPending` sends it whenever the entry was still pending and
+     * cancellable; send errors are logged, never propagated).
+     */
+    private fun sendCancelled(requestId: Int, reason: String) {
+        val params = JSONObject().apply {
+            put("requestId", requestId)
+            if (reason.isNotBlank()) put("reason", reason)
+        }
+        runCatching { notify("notifications/cancelled", params) }
+            .onFailure {
+                AppLogger.warning("McpStdioClient", "[$serverName] notifications/cancelled failed: ${it.message}")
+            }
     }
 
     private fun notify(method: String, params: JSONObject? = null) {
@@ -234,57 +381,91 @@ class McpStdioClient(
         synchronized(lock) {
             if (initialized && alive()) return
             if (!alive()) startProcess()
-            val result = rpc("initialize", McpJsonRpc.initializeParams(), startupTimeoutMs)
+            // initialize rides the startup timeout (defaultTimeoutMs) and is
+            // never cancellable.
+            val result = rpc("initialize", McpJsonRpc.initializeParams(), null)
             // Server may negotiate a different version; we accept whatever it
             // answers (daemon.py parity) and keep the constant header value.
             val proto = result.optString("protocolVersion", McpJsonRpc.PROTOCOL_VERSION)
             notify("notifications/initialized")
             initialized = true
-            com.openminis.app.logging.AppLogger.info(
+            AppLogger.info(
                 "McpStdioClient",
                 "[$serverName] initialized (protocol=$proto)",
             )
         }
     }
 
+    /**
+     * [T-mcp-list-all] All pages of `tools/list`, following `nextCursor`
+     * (pi listAll): capped at 1000 pages, duplicate cursors refuse.
+     */
     override fun listTools(): JSONArray {
         ensureInitialized()
-        return rpc("tools/list", JSONObject(), callTimeoutMs).optJSONArray("tools") ?: JSONArray()
+        return McpListPager.collect("tools/list", "tools") { cursor ->
+            rpc("tools/list", cursorParams(cursor), null)
+        }
     }
 
-    override fun callTool(tool: String, arguments: JSONObject): JSONObject {
+    override fun callTool(tool: String, arguments: JSONObject): JSONObject =
+        callTool(tool, arguments, null)
+
+    /**
+     * `tools/call` with per-request options — a deadline override, a progress
+     * callback (whose notifications re-arm the deadline), and an abort handle
+     * that sends `notifications/cancelled` on cancellation.
+     */
+    fun callTool(tool: String, arguments: JSONObject, options: McpRequestOptions?): JSONObject {
         ensureInitialized()
         return rpc(
             "tools/call",
             JSONObject().apply { put("name", tool); put("arguments", arguments) },
-            callTimeoutMs,
+            options,
         )
     }
+
+    private fun cursorParams(cursor: String?): JSONObject =
+        if (cursor == null) JSONObject() else JSONObject().put("cursor", cursor)
 
     private fun stopProcess() {
         initialized = false
         writer = null
-        stdout = null
-        val p = process
-        process = null
-        if (p != null && p.isAlive) {
-            runCatching { p.destroy() }
-            val exited = runCatching { p.waitFor(2, TimeUnit.SECONDS) }.getOrDefault(false)
-            if (!exited) {
-                runCatching { p.destroyForcibly() }
-                // [T-mcp-stdio-cap] SIGKILLed proot cannot run its
-                // --kill-on-exit teardown — the host hook must kill the
-                // surviving tracee tree (SandboxWorkload.release kill=true).
-                hooks?.onTerminated(p, graceful = false)
-            } else {
-                hooks?.onTerminated(p, graceful = true)
-            }
-        } else if (p != null) {
-            hooks?.onTerminated(p, graceful = true)
+        val t = target
+        target = null
+        if (t == null) return
+        // [T-mcp-stdio-close-sequence] pi stdio.ts close(): close stdin FIRST
+        // and give the server its grace window to exit on its own — a well
+        // behaved server shuts down on EOF without ever seeing a signal. The
+        // grace is capped by the close timeout (McpStdioClose.graceMs).
+        runCatching { t.stdin.close() }
+        val grace = minOf(stdinCloseGraceMs, closeTimeoutMs)
+        if (t.awaitExit(grace)) {
+            // Graceful: proot's --kill-on-exit already reaped the tracees.
+            // (pi additionally SIGTERMs the group on close for children that
+            // survive the parent while holding its pipes; here every guest
+            // process is a proot tracee and --kill-on-exit covers them, so
+            // the hook only unregisters the root.)
+            t.onTerminated(graceful = true)
+            return
         }
+        t.sigterm()
+        if (t.awaitExit(closeTimeoutMs)) {
+            t.onTerminated(graceful = true)
+            return
+        }
+        t.sigkill()
+        // [T-mcp-stdio-cap] SIGKILLed proot cannot run its --kill-on-exit
+        // teardown — the host hook must kill the surviving tracee tree
+        // (SandboxWorkload.release kill=true → killOwned: /proc tree walk +
+        // process-group Os.kill(-pid, SIGKILL), the ExecutionCoordinator
+        // pattern).
+        t.onTerminated(graceful = false)
     }
 
     override fun close() {
-        synchronized(lock) { stopProcess() }
+        synchronized(lock) {
+            stopProcess()
+            book.dispose()
+        }
     }
 }

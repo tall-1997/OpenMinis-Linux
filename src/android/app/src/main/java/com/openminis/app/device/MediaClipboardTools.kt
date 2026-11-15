@@ -11,6 +11,7 @@ import android.media.session.PlaybackState
 import android.view.KeyEvent
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
+import com.openminis.app.data.model.ToolAnnotations
 import com.openminis.app.offload.MinisNotificationListenerService
 import org.json.JSONObject
 
@@ -59,6 +60,9 @@ internal object MediaClipboardTools {
             ),
             required = listOf(TOOL_TITLE_PARAM, "action"),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "action"),
+            // [pi-port §4.1] next/previous advance the queue each call, so not
+            // idempotent; play/pause/stop alone would be, the set is not.
+            annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = false, idempotentHint = false),
         )
 
         private fun keycode(action: String): Int = when (action) {
@@ -133,6 +137,8 @@ internal object MediaClipboardTools {
             parameters = mapOf(TOOL_TITLE_PARAM to titleParam()),
             required = listOf(TOOL_TITLE_PARAM),
             propertyOrdering = listOf(TOOL_TITLE_PARAM),
+            // [pi-port §4.1] Reads clipboard text; mutates nothing.
+            annotations = ToolAnnotations(readOnlyHint = true, destructiveHint = false, idempotentHint = true),
         )
 
         fun execute(argsJson: String, context: Context): String {
@@ -175,6 +181,8 @@ internal object MediaClipboardTools {
             ),
             required = listOf(TOOL_TITLE_PARAM, "text"),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "text"),
+            // [pi-port §4.1] Idempotent setter: same text twice = same state.
+            annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = false, idempotentHint = true),
         )
 
         fun execute(argsJson: String, context: Context): String {

@@ -428,6 +428,13 @@ object McpNativeBridge {
                 cfg.id,
                 buildSpawnSpec(context, cfg, command, resolve),
                 startupTimeoutMs = (cfg.startupTimeoutSeconds ?: DEFAULT_STARTUP_TIMEOUT_SECONDS) * 1000L,
+                // [T-mcp-progress-refresh] The client's own default is pi's 30s
+                // per-request deadline; the bridge keeps the CLI-parity long
+                // budget for slow tool executions (transport/http.py
+                // read=TIMEOUT_SECONDS). A server that streams progress
+                // notifications now re-arms that deadline per notification, so
+                // a chatty long call stays alive without the oversized cap.
+                requestTimeoutMs = 300_000L,
                 hooks = object : McpStdioClient.ProcessHooks {
                     override fun onSpawned(process: java.lang.Process) {
                         // [T-mcp-stdio-cap] Register the proot root with the

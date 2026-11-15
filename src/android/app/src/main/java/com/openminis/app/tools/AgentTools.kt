@@ -3,6 +3,7 @@ package com.openminis.app.tools
 import com.openminis.app.browser.BrowserAction
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
+import com.openminis.app.data.model.ToolAnnotations
 
 /**
  * Central registry of all agent tool definitions.
@@ -347,6 +348,10 @@ background=true detaches the wave: this call returns a dispatch_id at once inste
         ),
         required = listOf("tool_title", "command"),
         propertyOrdering = listOf("tool_title", "command", "timeout", "delay", "resource_class"),
+        // [pi-port §4.1] shell_execute runs arbitrary commands (installs, rm,
+        // redirects): destructive by nature, not read-only. Consumed by the
+        // approval layer to phrase the confirmation.
+        annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = true),
     )
 
     // Aligned with iOS AIChatViewModel.swift browser_use definition
@@ -450,5 +455,8 @@ background=true detaches the wave: this call returns a dispatch_id at once inste
         ),
         required = listOf("tool_title", "command"),
         propertyOrdering = listOf("tool_title", "command", "timeout"),
+        // [pi-port §4.1] Root commands on the HOST: destructive, worst blast
+        // radius of the shell family.
+        annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = true),
     )
 }

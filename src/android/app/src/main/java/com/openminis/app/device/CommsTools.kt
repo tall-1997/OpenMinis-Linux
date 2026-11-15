@@ -19,6 +19,7 @@ import android.telephony.SmsManager
 import androidx.core.content.ContextCompat
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
+import com.openminis.app.data.model.ToolAnnotations
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -113,6 +114,8 @@ internal object CommsTools {
             ),
             required = listOf(TOOL_TITLE_PARAM, "query"),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "query", "limit"),
+            // [pi-port §4.1] Contacts lookup; reads personal data, mutates nothing.
+            annotations = ToolAnnotations(readOnlyHint = true, destructiveHint = false, idempotentHint = true),
         )
 
         fun execute(argsJson: String, context: Context): String {
@@ -166,6 +169,8 @@ internal object CommsTools {
             ),
             required = listOf(TOOL_TITLE_PARAM),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "from", "to", "from_ms", "to_ms", "limit"),
+            // [pi-port §4.1] Calendar range query; reads personal data.
+            annotations = ToolAnnotations(readOnlyHint = true, destructiveHint = false, idempotentHint = true),
         )
 
         fun execute(argsJson: String, context: Context): String {
@@ -232,6 +237,8 @@ internal object CommsTools {
             propertyOrdering = listOf(
                 TOOL_TITLE_PARAM, "title", "start", "end", "start_ms", "end_ms", "location", "description",
             ),
+            // [pi-port §4.1] Additive: repeats create more events, not idempotent.
+            annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = false, idempotentHint = false),
         )
 
         fun execute(argsJson: String, context: Context): String {
@@ -308,6 +315,8 @@ internal object CommsTools {
             ),
             required = listOf(TOOL_TITLE_PARAM),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "query", "limit"),
+            // [pi-port §4.1] SMS inbox query; reads personal data.
+            annotations = ToolAnnotations(readOnlyHint = true, destructiveHint = false, idempotentHint = true),
         )
 
         fun execute(argsJson: String, context: Context): String {
@@ -359,6 +368,8 @@ internal object CommsTools {
             ),
             required = listOf(TOOL_TITLE_PARAM),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "limit"),
+            // [pi-port §4.1] Call-log query; reads personal data.
+            annotations = ToolAnnotations(readOnlyHint = true, destructiveHint = false, idempotentHint = true),
         )
 
         fun execute(argsJson: String, context: Context): String {
@@ -417,6 +428,14 @@ internal object CommsTools {
             ),
             required = listOf(TOOL_TITLE_PARAM, "to", "text"),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "to", "text"),
+            // [pi-port §4.1] Sends a message on the user's behalf via the
+            // carrier (open world) — the DANGEROUS risk class.
+            annotations = ToolAnnotations(
+                readOnlyHint = false,
+                destructiveHint = true,
+                idempotentHint = false,
+                openWorldHint = true,
+            ),
         )
 
         fun execute(argsJson: String, context: Context): String {
@@ -503,6 +522,8 @@ internal object CommsTools {
             ),
             required = listOf(TOOL_TITLE_PARAM),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "timeout_seconds"),
+            // [pi-port §4.1] One-shot location read; mutates nothing.
+            annotations = ToolAnnotations(readOnlyHint = true, destructiveHint = false, idempotentHint = true),
         )
 
         private fun permissionLabel(context: Context): String? {

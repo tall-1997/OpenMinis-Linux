@@ -42,6 +42,12 @@ object McpJsonRpc {
             const val PROTOCOL_ERROR = "PROTOCOL_ERROR"
             const val SERVER_ERROR = "SERVER_ERROR"
             const val NOT_INITIALIZED = "NOT_INITIALIZED"
+
+            /**
+             * [T-mcp-abort-cancelled] Client-side abort (pi `McpAbortError`):
+             * the caller cancelled the request before the server answered.
+             */
+            const val ABORTED = "ABORTED"
         }
     }
 
