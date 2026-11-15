@@ -9,12 +9,15 @@ import com.openminis.app.logging.AppLogger
 import com.openminis.app.mcp.client.McpJsonRpc.McpError
 import com.openminis.app.mcp.oauth.MCPOAuthStore
 import com.openminis.app.mcp.oauth.MCPTokenBridge
+import com.openminis.app.mcp.oauth.OAuthRefreshGuard
+import com.openminis.app.tools.ToolOutputSpill
 import com.openminis.app.mcp.server.McpServerManager
 import com.openminis.app.sandbox.PRootKernel
 import com.openminis.app.sandbox.RootfsManager
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import org.json.JSONObject
+import kotlinx.coroutines.runBlocking
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
@@ -47,6 +50,15 @@ object McpNativeBridge {
 
     /** Daemon-parity default when a stdio server sets no startupTimeoutSeconds. */
     private const val DEFAULT_STARTUP_TIMEOUT_SECONDS = 60
+
+    /**
+     * Proactive-refresh margin: access tokens this close to expiry are
+     * refreshed before they are sent. Kept at 60s for CLI parity (the in-guest
+     * bridge file documents "the CLI refreshes 60s early"); pi uses a 30s
+     * skew, which is a deliberate deviation so the native path and the guest
+     * CLI path never disagree about who is about to refresh.
+     */
+    private const val REFRESH_MARGIN_MS = 60_000L
 
     /** Connect/write are bounded; read stays long for slow tool executions
      *  (parity with httpx.Timeout(connect=15, read=TIMEOUT_SECONDS, …)). */
@@ -198,7 +210,38 @@ object McpNativeBridge {
             )
         }
         val result = client.callTool(tool, arguments)
-        return McpJsonRpc.formatCallResult(result)
+        // [T-mcp-output-limit] Bound the model-facing text at the MCP boundary
+        // (pi mcp/src/output-limit.ts): middle cut past 20KB with head/tail and
+        // a token-estimate warning, full text spilled into THIS session's
+        // workspace so the model can page it with file_read offset/limit.
+        return McpJsonRpc.formatCallResult(
+            result,
+            McpJsonRpc.McpResultContext(
+                serverName = cfg.id,
+                toolName = tool,
+                saveOutput = mcpOutputSaver(context, sessionId, cfg.id, tool),
+            ),
+        )
+    }
+
+    /**
+     * [T-mcp-output-limit] The pi `saveOutput` callback: persist the FULL text
+     * into the session tool-spill workspace and hand back the guest path the
+     * model can read with offset/limit. Null saver when there is no session —
+     * the preview is then bounded without a read-back path (pi behavior).
+     * Throws inside when the write fails, so the preview carries the reason.
+     */
+    private fun mcpOutputSaver(
+        context: Context,
+        sessionId: String,
+        server: String,
+        tool: String,
+    ): ((String) -> String)? {
+        if (sessionId.isBlank()) return null
+        return { full ->
+            ToolOutputSpill.offloadFullOutput(context, sessionId, "mcp-$server-$tool", full)
+                ?: throw java.io.IOException("could not write the MCP output file to the session workspace")
+        }
     }
 
     /** Drop the cached client for [server] (config changed / process died). */
@@ -469,6 +512,13 @@ object McpNativeBridge {
      * natively refreshed one when the stored grant expired (60s early margin,
      * same as the CLI). Null when unauthorized/expired-unrefreshable — the
      * request then goes out bare and the server's 401 maps to AUTH_REQUIRED.
+     *
+     * [T-mcp-oauth-refresh-guard] The refresh runs through [OAuthRefreshGuard]
+     * (pi resolve.ts invariants): one lock per server, the validity check is
+     * repeated under the lock, the refresh + persistence run inside
+     * NonCancellable, and the lock wait is bounded. Two concurrent calls on
+     * the same server previously raced two POSTs carrying the SAME refresh
+     * token — exactly what IdPs answer with `invalid_grant`, losing the grant.
      */
     private fun oauthTokenProvider(context: Context, cfg: MCPServerConfig): (() -> String?)? {
         if (cfg.oauth == null) return null
@@ -476,26 +526,52 @@ object McpNativeBridge {
         return provider@{
             val tokens = MCPOAuthStore.tokens(appContext, cfg.id) ?: return@provider null
             val now = System.currentTimeMillis()
-            if (tokens.expiresAtMs <= 0 || now < tokens.expiresAtMs - 60_000) {
-                tokens.accessToken
-            } else {
-                refreshTokens(appContext, cfg, tokens)?.accessToken
+            if (tokens.expiresAtMs <= 0 || now < tokens.expiresAtMs - REFRESH_MARGIN_MS) {
+                return@provider tokens.accessToken
             }
+            // Expired or inside the early-refresh margin: single-flight under
+            // the per-server guard. stillNeeded re-reads the store under the
+            // lock, so a caller that waited behind a finished refresh adopts
+            // the fresh token instead of spending the (possibly rotated)
+            // grant again.
+            runBlocking {
+                refreshGuard(cfg.id).refreshOnce(
+                    stillNeeded = {
+                        val current = MCPOAuthStore.tokens(appContext, cfg.id)
+                        current != null && current.refreshToken != null &&
+                            current.expiresAtMs > 0 &&
+                            current.expiresAtMs - REFRESH_MARGIN_MS <= System.currentTimeMillis()
+                    },
+                    refresh = { refreshTokens(appContext, cfg) },
+                )
+            }
+            // Whatever is stored NOW — our refresh, or another caller's — is
+            // the token to send (pi: "Tokens that changed meanwhile are used
+            // without refreshing").
+            MCPOAuthStore.tokens(appContext, cfg.id)?.accessToken ?: tokens.accessToken
         }
     }
+
+    /** [T-mcp-oauth-refresh-guard] One refresh lock per server id (pi: one lock per credential). */
+    private fun refreshGuard(serverId: String): OAuthRefreshGuard =
+        OAuthRefreshGuard.forKey("mcp-oauth:$serverId")
 
     /**
      * refresh_token grant against the server's token endpoint. On success the
      * store AND the guest token bridge are updated (the bridge write merges
      * refresh tokens, so a response without one never downgrades the CLI's
      * copy). Best-effort: any failure returns null → AUTH_REQUIRED surfaces.
+     *
+     * Runs under the [OAuthRefreshGuard] lock, so the credential read below is
+     * the CURRENT one — the refresh token this POST spends is never a stale
+     * pre-wait snapshot (pi re-loads the store inside `withRefreshLock`).
      */
     private fun refreshTokens(
         context: Context,
         cfg: MCPServerConfig,
-        tokens: MCPOAuthStore.StoredTokens,
     ): MCPOAuthStore.StoredTokens? {
         val oauth = cfg.oauth ?: return null
+        val tokens = MCPOAuthStore.tokens(context, cfg.id) ?: return null
         val refreshToken = tokens.refreshToken ?: return null
         if (oauth.tokenEndpoint.isBlank() || oauth.clientId.isBlank()) return null
         return try {
@@ -511,7 +587,13 @@ object McpNativeBridge {
                 .url(oauth.tokenEndpoint)
                 .post(form.build())
                 .build()
-            httpClient.newCall(request).execute().use { resp ->
+            val call = httpClient.newCall(request)
+            // [T-mcp-oauth-refresh-guard] pi bounds the refresh round-trip at
+            // 15s (AbortSignal.timeout). The guard's suspend-side timeout
+            // cannot interrupt blocking OkHttp I/O, so the deadline is set on
+            // the call itself — the persistence below always runs.
+            call.timeout().timeout(OAuthRefreshGuard.DEFAULT_REFRESH_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            call.execute().use { resp ->
                 if (!resp.isSuccessful) {
                     AppLogger.warning(TAG, "[${cfg.id}] token refresh HTTP ${resp.code}")
                     return null
@@ -526,6 +608,8 @@ object McpNativeBridge {
                     refreshToken = json.optString("refresh_token", "").ifBlank { refreshToken },
                     expiresAtMs = if (expiresIn > 0) System.currentTimeMillis() + expiresIn * 1000 else 0L,
                 )
+                // Invariant: persist BEFORE the guard releases its lock — both
+                // writes happen here, inside the refresh lambda.
                 MCPOAuthStore.setTokens(context, cfg.id, updated)
                 runCatching {
                     MCPTokenBridge.write(

@@ -1033,18 +1033,17 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                         actual,
                         providerRepository,
                     )
-                // Auto-retry on transient network/5xx/transient errors on the SAME provider
-                val isTimeoutConnect = actual is com.openminis.app.data.model.LLMError.Timeout &&
-                    actual.phase == com.openminis.app.data.model.LLMError.Timeout.TimeoutPhase.CONNECT
-                val isTransient = (actual is com.openminis.app.data.model.LLMError.NetworkError ||
-                    actual is com.openminis.app.data.model.LLMError.TransientError ||
-                    actual is com.openminis.app.data.model.LLMError.RateLimited ||
-                    is5xx || isTimeoutConnect) && !isPermanentCapacity
+                // Auto-retry on transient network/5xx/transient errors on the SAME provider.
+                // [T-pi-retry-classifier][T-pi-overflow-detector] Quota/billing wording
+                // suppresses same-provider retry (quota windows reset in hours, not
+                // seconds); generic provider errors route through the pi-ported overflow
+                // table into the compaction branch below — the exclusion table vetoes
+                // rate-limit text. See agent/LoopErrorGate.
+                val isTransient = com.openminis.app.agent.LoopErrorGate.isTransient(actual, is5xx, isPermanentCapacity)
+                val isContextOverflow = com.openminis.app.agent.LoopErrorGate.isContextOverflow(actual)
                 // [T-compact-on-context-overflow] Upstream 1.14 compaction
                 // robustness: compaction is triggered by the provider's
-                if (actual is com.openminis.app.data.model.LLMError.ContextLengthExceeded &&
-                    contextOverflowCompactions < 1
-                ) {
+                if (isContextOverflow && contextOverflowCompactions < 1) {
                     contextOverflowCompactions += 1
                     Log.w(
                         ChatViewModel.TAG,

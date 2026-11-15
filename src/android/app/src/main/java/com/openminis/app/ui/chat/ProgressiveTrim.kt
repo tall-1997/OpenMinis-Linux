@@ -47,6 +47,15 @@ import com.openminis.app.data.model.LLMMessage
  *     it only ever drops a whole iteration (assistant + its tool-result
  *     carriers together), replacing them with an index block — no orphaned
  *     tool_use survives.
+ *   - [pi-port 1.7] Cut-point hard constraints (pi compaction selectCut /
+ *     findCutPoint): the merge tier only ever collapses a CONTIGUOUS PREFIX
+ *     of the iteration list whose removal keeps every toolCall/toolResult
+ *     pair intact on both sides, and whose first surviving message sits on a
+ *     safe cut boundary ([isSafeCutBoundary] — never on a tool result, never
+ *     with a pre-cut call's result still hanging after it, and — absent pi's
+ *     turn-prefix summarization — only at a turn boundary). When no prefix
+ *     qualifies, the tier degrades to fewer collapsed iterations or none,
+ *     never a structurally invalid cut.
  *   - Never touches anything inside the CURRENT round (after the last
  *     user message) or the last [PROTECTED_RECENT_MESSAGES] messages.
  *   - Never touches user content or assistant text (except the index block
@@ -303,6 +312,17 @@ internal object ProgressiveTrim {
      * round / unpinned) into an index block appended to the last plain user
      * message before the collapsed range — upstream's "index host". Returns
      * null when nothing was collapsible (caller keeps the input).
+     *
+     * [pi-port 1.7] The collapsible set is hardened twice versus the original
+     * subset-of-candidates rule, mirroring pi compaction.ts selectCut /
+     * findCutPoint:
+     *  1. it is a contiguous PREFIX of the iteration list ([safeCollapsiblePrefix]),
+     *     validated for toolCall/toolResult pair closure and terminated by a
+     *     safe cut boundary — a structurally impossible cut degrades to fewer
+     *     collapsed iterations, never a hard cut;
+     *  2. the current-round guard also runs on the CARRIER side (a carrier at
+     *     or past the last user message is the round boundary itself), not
+     *     just the assistant side.
      */
     internal fun mergeOldSteps(
         messages: List<LLMMessage>,
@@ -312,10 +332,17 @@ internal object ProgressiveTrim {
         val its = iterations(messages)
         if (its.isEmpty()) return null
         val keepFrom = (its.size - MERGE_KEEP_RECENT_ITERATIONS).coerceAtLeast(0)
-        val collapsible = its.take(keepFrom).filter { it.paired && !it.pinned }
+        val candidates = its.take(keepFrom).filter { it.paired && !it.pinned }
             .filter { it.assistantIdx < firstTrimmableIdx }
             .filter { it.carrierIdx.all { c -> c < firstTrimmableIdx } }
+            // [pi-port 1.7] Carrier-side current-round guard: carriers trail
+            // their assistant, so the assistant-only check could still drop a
+            // carrier that IS the last user message (the round boundary) when
+            // a carrier chain reaches past it in a malformed history.
+            .filter { lastUserIdx < 0 || it.carrierIdx.all { c -> c < lastUserIdx } }
             .filter { lastUserIdx < 0 || it.assistantIdx < lastUserIdx }
+        if (candidates.isEmpty()) return null
+        val collapsible = safeCollapsiblePrefix(messages, its, candidates)
         if (collapsible.isEmpty()) return null
         val dropIdx = collapsible.flatMapTo(HashSet()) { listOf(it.assistantIdx) + it.carrierIdx }
         val firstDropped = collapsible.minOf { it.assistantIdx }
@@ -353,6 +380,178 @@ internal object ProgressiveTrim {
                     contentParts = listOf(AgentContentPart.Text(index)),
                 ),
             )
+        }
+        return out
+    }
+
+    // ── [pi-port 1.7] cut-point hard constraints ────────────────────────
+
+    /**
+     * Hard cut-point constraint, adapted from pi compaction.ts `selectCut` /
+     * `findCutPoint` (durable isCandidate) to this model, where tool results
+     * ride INSIDE user-role carrier messages instead of being standalone
+     * messages.
+     *
+     * "Cut at [index]" means messages[0 until index] would be merged/dropped
+     * and messages[index until size] stay verbatim. The boundary is safe only
+     * when ALL of these hold:
+     *
+     *  1. Never cut ON a tool result — the first kept message carries no
+     *     ToolResult parts (pi: a cut-point message starts with user or
+     *     assistant, never a toolResult; a result must follow its call, so a
+     *     result-carrying first-kept message would point at a call that just
+     *     got summarized away).
+     *  2. Pair integrity across the cut — no result of a pre-cut assistant
+     *     call may hang after the boundary (pi isCandidate's scan: "a result
+     *     of the preceding assistant's calls that follows this entry, before
+     *     the next assistant, belongs before it"). Scanned across the whole
+     *     kept region, not just up to the next assistant: in a well-formed
+     *     history a pre-cut call's result never appears there, so any hit is
+     *     a dangling answer and forbids the cut.
+     *  3. Turn boundary — the conservative stand-in for pi's turn-prefix
+     *     summarization (which this projection does not have): assistant
+     *     messages are mid-turn, so only a genuine user prompt qualifies as
+     *     the first kept message. Assertion 1 makes that a pure-prompt check.
+     *
+     * Index 0 (nothing kept before) and `messages.size` (nothing kept after)
+     * are not boundaries; out-of-range is false.
+     */
+    internal fun isSafeCutBoundary(messages: List<LLMMessage>, index: Int): Boolean {
+        if (index !in 1 until messages.size) return false
+        val first = messages[index]
+        // (1)+(3) never cut on a tool result; conservative turn boundary.
+        if (first.role != LLMMessage.Role.USER) return false
+        if (first.contentParts.any { it is AgentContentPart.ToolResult }) return false
+        // (2) a result of a pre-cut call hanging after the boundary.
+        val pending = callIdsBefore(messages, index)
+        if (pending.isNotEmpty()) {
+            for (i in index until messages.size) {
+                if (messages[i].contentParts.any {
+                        it is AgentContentPart.ToolResult && it.id in pending
+                    }
+                ) {
+                    return false
+                }
+            }
+        }
+        return true
+    }
+
+    /**
+     * Union of the ToolUse ids every assistant BEFORE [index] declares — the
+     * calls a cut at [index] would summarize away.
+     */
+    private fun callIdsBefore(messages: List<LLMMessage>, index: Int): Set<String> {
+        val ids = HashSet<String>()
+        for (i in 0 until index) {
+            val m = messages[i]
+            if (m.role == LLMMessage.Role.ASSISTANT) {
+                m.contentParts.filterIsInstance<AgentContentPart.ToolUse>().mapTo(ids) { it.id }
+            }
+        }
+        return ids
+    }
+
+    /**
+     * Reduce the candidate iterations to the longest PREFIX of the iteration
+     * list that can be dropped without breaking the cut-point hard
+     * constraints:
+     *
+     *  - prefix shape: a non-collapsible iteration in the middle stops the
+     *    collapse. The old scattered subset could drop around a pinned or
+     *    protected iteration, leaving it stranded between two holes; pi's cut
+     *    is a prefix cut, and a prefix keeps "first kept message after the
+     *    collapse" well-defined.
+     *  - pair closure: dropping the prefix must remove both sides of every
+     *    pair it touches ([prefixPairClosed]);
+     *  - safe boundary: the first message after the dropped prefix must pass
+     *    [isSafeCutBoundary].
+     *
+     * Each failure shrinks the prefix by one iteration from the tail and
+     * re-verifies the whole set, so whatever is returned has been validated
+     * as-is. Empty result = nothing may be collapsed (caller keeps the input).
+     */
+    private fun safeCollapsiblePrefix(
+        messages: List<LLMMessage>,
+        its: List<Iteration>,
+        candidates: List<Iteration>,
+    ): List<Iteration> {
+        val candidateSet = candidates.toHashSet()
+        var count = 0
+        while (count < its.size && its[count] in candidateSet) count++
+        val useOwners = toolUseOwners(messages)
+        val resultSites = toolResultSites(messages)
+        while (count > 0) {
+            val prefix = its.take(count)
+            val last = prefix.last()
+            val firstKept = (listOf(last.assistantIdx) + last.carrierIdx).max() + 1
+            if (prefixPairClosed(messages, prefix, useOwners, resultSites) &&
+                isSafeCutBoundary(messages, firstKept)
+            ) {
+                return prefix
+            }
+            count--
+        }
+        return emptyList()
+    }
+
+    /**
+     * True when dropping exactly [prefix] keeps every toolCall/toolResult
+     * pair intact across the WHOLE message list:
+     *
+     *  - every ToolResult inside a dropped carrier must belong to a call the
+     *    SAME prefix also drops — a result of a kept call would lose its
+     *    answer (the shared-carrier hole: iterations() hands a user message
+     *    holding results of several assistants to the FIRST matching one, so
+     *    a collapsible iteration's carrier can hold a protected call's
+     *    result);
+     *  - every ToolResult of a dropped call must live in a dropped carrier —
+     *    a call whose answer survives would point at nothing;
+     *  - a result with NO matching call anywhere (already orphaned history)
+     *    is treated as non-droppable: strictest default, the iteration just
+     *    stays verbatim.
+     */
+    private fun prefixPairClosed(
+        messages: List<LLMMessage>,
+        prefix: List<Iteration>,
+        useOwners: Map<String, List<Int>>,
+        resultSites: Map<String, List<Int>>,
+    ): Boolean {
+        val droppedAssistants = prefix.mapTo(HashSet()) { it.assistantIdx }
+        val droppedCarriers = prefix.flatMapTo(HashSet()) { it.carrierIdx }
+        for (c in droppedCarriers) {
+            for (r in messages[c].contentParts.filterIsInstance<AgentContentPart.ToolResult>()) {
+                val owners = useOwners[r.id]
+                if (owners.isNullOrEmpty() || owners.any { it !in droppedAssistants }) return false
+            }
+        }
+        for (a in droppedAssistants) {
+            for (u in messages[a].contentParts.filterIsInstance<AgentContentPart.ToolUse>()) {
+                val sites = resultSites[u.id] ?: continue
+                if (sites.any { it !in droppedCarriers }) return false
+            }
+        }
+        return true
+    }
+
+    /** ToolUse id → every message index holding a use with that id. */
+    private fun toolUseOwners(messages: List<LLMMessage>): Map<String, List<Int>> {
+        val out = HashMap<String, MutableList<Int>>()
+        for ((i, m) in messages.withIndex()) {
+            for (p in m.contentParts) {
+                if (p is AgentContentPart.ToolUse) out.getOrPut(p.id) { mutableListOf() }.add(i)
+            }
+        }
+        return out
+    }
+
+    /** ToolResult id → every message index holding a result with that id. */
+    private fun toolResultSites(messages: List<LLMMessage>): Map<String, List<Int>> {
+        val out = HashMap<String, MutableList<Int>>()
+        for ((i, m) in messages.withIndex()) {
+            for (p in m.contentParts) {
+                if (p is AgentContentPart.ToolResult) out.getOrPut(p.id) { mutableListOf() }.add(i)
+            }
         }
         return out
     }

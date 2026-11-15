@@ -97,6 +97,36 @@ object ToolOutputSpill {
         }
     }
 
+    /**
+     * [T-mcp-output-limit] Persist the FULL text of an over-limit MCP result
+     * into the session tool-spill workspace and return the guest path the
+     * model can `file_read` back. Same directory and naming discipline as
+     * [writeSpill] (unique file, atomic write), but it does NOT wrap the body
+     * in a preview — the caller (McpOutputLimit) owns the preview wording.
+     * Null when there is nowhere to write or the write failed.
+     */
+    fun offloadFullOutput(context: Context, sessionId: String, nameKey: String, content: String): String? {
+        if (sessionId.isBlank()) return null
+        val dir = spillDir(context, sessionId) ?: return null
+        return offloadFullOutput(dir, nameKey, content)
+    }
+
+    /** Dir-based overload so a plain-JVM test can exercise the raw path. */
+    internal fun offloadFullOutput(dir: File, nameKey: String, content: String): String? {
+        return try {
+            val file = uniqueSpillFile(dir, nameKey)
+            if (AtomicFileWrite.write(file, content) == null) {
+                // Claimed but not written: drop the empty placeholder file.
+                runCatching { file.delete() }
+                null
+            } else {
+                "/var/minis/workspace/tool-spill/${file.name}"
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     private fun spillDir(context: Context, sessionId: String): File? {
         val dir = File(
             com.openminis.app.sandbox.SessionWorkspace.hostDir(context.filesDir, sessionId, "workspace"),
@@ -265,15 +295,21 @@ object ToolOutputSpill {
     /**
      * [guestPath] is null when the full text could NOT be persisted, in which
      * case the preview says so instead of pointing at a file that does not exist.
+     *
+     * [T-mcp-output-limit] carries the two pi lines the preview was missing:
+     * the original size as a token estimate (bytes/4) and the total line count
+     * (pi `mcp/src/output-limit.ts` warning line). The head/tail slices are
+     * taken through [ToolOutputTruncator.sliceHead]/[sliceTail] — the shared
+     * surrogate-safe slicer — instead of ToolOutputPolicy.safeSubstring, with
+     * byte-identical behavior (same clamp, same surrogate guards).
      */
     fun formatPreview(toolName: String, guestPath: String?, output: String): String {
-        // Surrogate-safe slicing (ToolOutputPolicy.safeSubstring): take/takeLast
-        // could cut a emoji in half and poison the message with a lone surrogate.
-        val head = ToolOutputPolicy.safeSubstring(output, 0, HEAD)
+        val head = ToolOutputTruncator.sliceHead(output, HEAD)
         val tail = if (output.length > HEAD + TAIL)
-            ToolOutputPolicy.safeSubstring(output, output.length - TAIL, output.length) else ""
+            ToolOutputTruncator.sliceTail(output, TAIL) else ""
         return buildString {
-            append("[tool-output-spill] $toolName produced ${output.length} chars. ")
+            append("[tool-output-spill] $toolName produced ${output.length} chars.\n")
+            append(truncationStatsLine(output))
             if (guestPath != null) {
                 append("Full output saved to $guestPath — use file_read if you need more.\n")
                 append("Open in app: minis://workspace/tool-spill/${guestPath.substringAfterLast('/')}\n\n")
@@ -298,12 +334,13 @@ object ToolOutputSpill {
      * (`file_read` offset/limit, or a shell range read).
      */
     fun alreadySpilledPreview(toolName: String, guestPath: String, output: String): String {
-        val head = ToolOutputPolicy.safeSubstring(output, 0, HEAD)
+        val head = ToolOutputTruncator.sliceHead(output, HEAD)
         val tail = if (output.length > HEAD + TAIL)
-            ToolOutputPolicy.safeSubstring(output, output.length - TAIL, output.length) else ""
+            ToolOutputTruncator.sliceTail(output, TAIL) else ""
         return buildString {
             append("[tool-output-spill] $toolName returned ${output.length} chars from $guestPath, ")
             append("which is already an offloaded tool-output file — it is NOT being offloaded again.\n")
+            append(truncationStatsLine(output))
             append("Page it with file_read offset/limit (or a shell range read) instead of re-reading it whole.\n\n")
             append(head)
             if (tail.isNotEmpty()) {
@@ -312,6 +349,16 @@ object ToolOutputSpill {
             }
         }
     }
+
+    /**
+     * [T-mcp-output-limit] The pi warning line shared by both previews: the
+     * original size as a token estimate (UTF-8 bytes / 4, pi output-limit.ts)
+     * and the total line count.
+     */
+    private fun truncationStatsLine(output: String): String =
+        "Warning: truncated output (original token count: " +
+            "${(ToolOutputTruncator.utf8ByteLength(output) + 3) / 4})\n" +
+            "Total output lines: ${ToolOutputTruncator.totalLines(output)}\n"
 
     /** [T-hoisted-regex] Constant pattern, compiled once instead of per call. */
     private val SAFE_ID_RE = Regex("[^A-Za-z0-9._-]")

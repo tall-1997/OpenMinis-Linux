@@ -198,42 +198,77 @@ object McpJsonRpc {
     data class CallOutcome(val text: String, val isError: Boolean)
 
     /**
+     * [T-mcp-output-limit] Per-call labels for a truncated preview plus the
+     * saver that persists the full text. Null keeps the legacy behavior:
+     * flatten only, no byte limit at this boundary (the downstream
+     * ToolOutputSpill pass still bounds the result).
+     */
+    data class McpResultContext(
+        val serverName: String,
+        val toolName: String,
+        val saveOutput: ((fullText: String) -> String)? = null,
+    )
+
+    /**
      * Flatten a `tools/call` result into agent-readable text. Text content
      * parts are concatenated; image/audio parts are summarized (the native
-     * path does not inline binary blobs into the transcript); embedded
-     * resources render their text or JSON. `isError: true` results are
-     * surfaced as failures by the caller.
+     * path does not inline binary blobs into the transcript) and — like pi's
+     * image blocks — survive output truncation intact; embedded resources
+     * render their text or JSON. `isError: true` results are surfaced as
+     * failures by the caller.
+     *
+     * With [ctx], the combined text passes through [McpOutputLimit] (pi
+     * `mcp/src/output-limit.ts`): text over 20KB is cut in the middle, the
+     * warning line carries the token estimate and the total line count, and
+     * the full text lands in a session spill file the model can page back with
+     * `file_read` offset/limit.
      */
-    fun formatCallResult(result: JSONObject): CallOutcome {
+    fun formatCallResult(result: JSONObject, ctx: McpResultContext? = null): CallOutcome {
         val isError = result.optBoolean("isError", false)
         val content = result.optJSONArray("content")
-        val parts = mutableListOf<String>()
+        // Ordered parts in server order; the flag marks blocks that ride
+        // OUTSIDE the middle cut (pi keeps image blocks after the truncated
+        // text block instead of cutting through them).
+        val parts = mutableListOf<Pair<Boolean, String>>()
         if (content != null) {
             for (i in 0 until content.length()) {
                 val c = content.optJSONObject(i) ?: continue
                 when (c.optString("type")) {
-                    "text" -> parts.add(c.optString("text", ""))
+                    "text" -> parts.add(false to c.optString("text", ""))
                     "image" -> parts.add(
-                        "[image ${c.optString("mimeType", "image/*")}, " +
+                        true to "[image ${c.optString("mimeType", "image/*")}, " +
                             "${c.optString("data").length} b64 chars — not inlined]",
                     )
-                    "audio" -> parts.add("[audio ${c.optString("mimeType", "audio/*")}]")
+                    "audio" -> parts.add(true to "[audio ${c.optString("mimeType", "audio/*")}]")
                     "resource", "resource_link" -> {
                         val embedded = c.optJSONObject("resource")
                         val text = embedded?.optString("text", "")?.takeIf { it.isNotEmpty() }
                             ?: c.optString("uri", "").ifEmpty { null }
                             ?: embedded?.toString()
-                        if (text != null) parts.add(text)
+                        if (text != null) parts.add(false to text)
                     }
-                    else -> parts.add(c.toString())
+                    else -> parts.add(false to c.toString())
                 }
             }
         }
-        var text = parts.joinToString("\n").trim()
-        if (text.isEmpty()) {
-            val structured = result.optJSONObject("structuredContent")
-            text = structured?.toString(2) ?: result.toString(2)
+        val structuredFallback = { result.optJSONObject("structuredContent")?.toString(2) ?: result.toString(2) }
+        if (ctx == null) {
+            // Legacy path (no limit at this boundary): identical output to the
+            // pre-limit flattening, including the blank-result fallback.
+            val legacy = parts.joinToString("\n") { it.second }.trim()
+            val text = legacy.ifEmpty { structuredFallback() }
+            return CallOutcome(text, isError)
         }
+        val textParts = parts.filter { !it.first }.map { it.second }
+        val preserved = parts.filter { it.first }.map { it.second }
+        val combined = textParts.joinToString("\n")
+        // When the server sent no usable text the structured fallback is
+        // model-facing text too and gets the same limit instead of dumping a
+        // huge JSON blob straight in.
+        val payload = combined.ifEmpty { if (preserved.isEmpty()) structuredFallback() else "" }
+        val text = McpOutputLimit.limit(ctx.serverName, ctx.toolName, payload, preserved, ctx.saveOutput)
+            .text
+            .trim()
         return CallOutcome(text, isError)
     }
 }
