@@ -214,6 +214,8 @@ object ChatViewModelStore {
         // [P1-16] Evict the session's ui_read fingerprint alongside the VM —
         // the map is process-level and this is the session-gone path.
         evictUiReadFingerprints(key)
+        // [T-prior-read] Session-gone path: drop the read cache with the VM.
+        com.openminis.app.tools.SessionFileReadCaches.clear(key)
         models.remove(key)
         lastAccess.remove(key)
         mounted.remove(key)
