@@ -59,9 +59,10 @@ object ExtensionContextGuard {
 
         /**
          * Tracked unsubscribe handles (pi loader.ts `eventBusUnsubscribers`).
-         * Drained by [invalidate]; a handle still registered after the drain
-         * window (tracked post-invalidate) stays pending until then, matching
-         * pi — invalidate is the drain point, not a live registry.
+         * Drained by [invalidate]; a handle tracked AFTER the drain runs its
+         * unsubscribe immediately — the context is already dead, so letting
+         * the lambda linger in the queue until the (one-shot) drain would
+         * leak it forever (adversarial review P2-8).
          */
         private val unsubscriptions: Queue<() -> Unit> = ConcurrentLinkedQueue()
 
@@ -111,6 +112,13 @@ object ExtensionContextGuard {
          * callers (manual + invalidation) cannot double-run the unsubscribe.
          */
         fun trackUnsubscribe(unsubscribe: () -> Unit): () -> Unit {
+            // Post-invalidate registrations unsubscribe immediately: the
+            // context can never fire again, so queueing the handle would only
+            // pin the lambda (adversarial review P2-8).
+            if (isInvalidated) {
+                unsubscribe()
+                return {}
+            }
             val handle = object : () -> Unit {
                 val armed = AtomicBoolean(true)
                 override fun invoke() {

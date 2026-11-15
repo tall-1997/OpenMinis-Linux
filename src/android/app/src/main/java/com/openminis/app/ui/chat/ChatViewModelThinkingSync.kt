@@ -1,6 +1,7 @@
 package com.openminis.app.ui.chat
 
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
 import com.openminis.app.data.ThinkingDormancy
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.data.model.ThinkingLevel
@@ -135,8 +136,23 @@ internal fun ChatViewModel.persistThinkingOverride(level: ThinkingLevel) {
     viewModelScope.launch {
         runCatching {
             val sid = ensureSession()
-            chatRepository.dao.updateThinkingOverride(sid, level.name)
-            chatRepository.dao.updateDormantThinkingOverride(sid, ThinkingDormancy.encode(dormantNow))
+            val dao = chatRepository.dao
+            // One Room transaction: two concurrent persists interleave their
+            // two writes on Room's query executor (A1,B1,B2,A2) and the stale
+            // park can land AFTER the user's clear, resurrecting a level the
+            // user already vetoed on the next ceiling widen (adversarial
+            // review P2-2). Same null-db degradation as
+            // ChatRepository.deleteSession.
+            val db = chatRepository.db
+            if (db != null) {
+                db.withTransaction {
+                    dao.updateThinkingOverride(sid, level.name)
+                    dao.updateDormantThinkingOverride(sid, ThinkingDormancy.encode(dormantNow))
+                }
+            } else {
+                dao.updateThinkingOverride(sid, level.name)
+                dao.updateDormantThinkingOverride(sid, ThinkingDormancy.encode(dormantNow))
+            }
         }.onFailure { e ->
             AppLogger.warning(ChatViewModel.TAG, "thinking override persist failed: ${e.message}")
         }

@@ -177,7 +177,14 @@ fun TokenUsageSheet(
                         )
                         StatRow(
                             stringResource(R.string.token_usage_thinking_effective),
-                            s.thinkingLevelEffective ?: "—",
+                            // Same localized format as the requested row when
+                            // the wire tier decodes to a session level; raw
+                            // wire value otherwise (it is the provider's own
+                            // naming and must not be invented into a level).
+                            s.thinkingLevelEffective?.let { raw ->
+                                com.openminis.app.data.model.ThinkingLevel.decoded(raw)
+                                    ?.localizedName(LocalContext.current) ?: raw
+                            } ?: "—",
                         )
                     }
                     StatRow(stringResource(R.string.token_usage_thinking_supported), if (t.supported) yesText else noText)

@@ -146,7 +146,11 @@ class McpRequestBook(
     fun remove(id: String) {
         synchronized(lock) {
             val entry = pending.remove(id) ?: return
-            if (entry.progressToken != null) tokenIndex.remove(entry.progressToken)
+            // Only drop the token mapping when it still points at THIS id:
+            // a token reused by a later registration must survive the earlier
+            // request's exit (adversarial review P2-5).
+            val token = entry.progressToken
+            if (token != null && tokenIndex[token] == id) tokenIndex.remove(token)
             entry.disarm?.invoke()
             entry.disarm = null
         }
@@ -182,6 +186,12 @@ class McpRequestBook(
     fun progress(token: String): Pending? = synchronized(lock) {
         val id = tokenIndex[token] ?: return null
         val entry = pending[id] ?: return null
+        // A settled entry lingers in the map until the caller's finally
+        // remove(); pi removes it from pending at settle time
+        // (client.ts:577-582), so late progress notifications never re-arm or
+        // callback into an already-failed request. Gate here for the same
+        // observable behavior without changing the remove-ownership contract.
+        if (entry.settled) return null
         armLocked(entry)
         entry
     }

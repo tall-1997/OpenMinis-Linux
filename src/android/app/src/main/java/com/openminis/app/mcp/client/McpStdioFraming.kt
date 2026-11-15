@@ -106,7 +106,15 @@ class McpJsonRpcLineReader(
         synchronized(stderrTail) {
             stderrTail.append(String(chunk, 0, len, StandardCharsets.UTF_8))
             val over = stderrTail.length - maxStderrBytes
-            if (over > 0) stderrTail.delete(0, over)
+            if (over > 0) {
+                stderrTail.delete(0, over)
+                // The char-wise delete can land inside a surrogate pair; drop
+                // one more leading char so the snapshot never starts with an
+                // orphan low surrogate (adversarial review P2-9).
+                if (stderrTail.isNotEmpty() && Character.isLowSurrogate(stderrTail[0])) {
+                    stderrTail.deleteCharAt(0)
+                }
+            }
         }
     }
 

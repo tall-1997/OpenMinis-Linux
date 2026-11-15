@@ -65,7 +65,15 @@ class DeferredCommitBuffer<K : Any, V : Any>(
             check(!closed) { "DeferredCommitBuffer is closed" }
             pending[key] = value
             if (scheduledFlush == null) {
-                scheduledFlush = scheduler.schedule({ flushAll() }, deadlineMs, TimeUnit.MILLISECONDS)
+                scheduledFlush = scheduler.schedule({
+                    // Re-armable debounce: the deadline task clears the field
+                    // FIRST so submits that arrive right after this drain arm
+                    // a fresh timer instead of never being scheduled (P1-1,
+                    // adversarial review — the previous code left the field
+                    // set forever after the first drain).
+                    synchronized(lock) { scheduledFlush = null }
+                    flushAll()
+                }, deadlineMs, TimeUnit.MILLISECONDS)
             }
         }
     }
@@ -91,6 +99,11 @@ class DeferredCommitBuffer<K : Any, V : Any>(
     /** Drain every pending key in one pass. Called by the deadline task, explicit flushes, and [close]. */
     fun flushAll() {
         val drained: Map<K, V> = synchronized(lock) {
+            // An explicit drain supersedes the pending deadline task: cancel
+            // it and clear the field so the next submit re-arms (the drained
+            // deadline task clears its own field before calling in here).
+            scheduledFlush?.cancel(false)
+            scheduledFlush = null
             val copy = LinkedHashMap(pending)
             pending.clear()
             copy

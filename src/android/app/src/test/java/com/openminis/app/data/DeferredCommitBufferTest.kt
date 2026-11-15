@@ -67,6 +67,38 @@ class DeferredCommitBufferTest {
     }
 
     @Test
+    fun `submit after a deadline drain is scheduled again by the next deadline`() {
+        // P1-1 regression (adversarial review): the first deadline drain used
+        // to leave the scheduled-flush field set forever, so submits arriving
+        // after it stayed in memory until an explicit flush/close.
+        val firstDrain = CountDownLatch(1)
+        val writes = AtomicInteger()
+        val persisted = LinkedHashMap<String, String>()
+        val buffer = DeferredCommitBuffer<String, String>(deadlineMs) { key, value ->
+            synchronized(persisted) {
+                persisted[key] = value
+                if (writes.incrementAndGet() == 1) firstDrain.countDown()
+            }
+        }
+        buffer.submit("a", "first")
+        assertTrue("first deadline drain did not run", firstDrain.await(2, TimeUnit.SECONDS))
+
+        // A fresh submit after the drain must reach storage on its own deadline.
+        val secondDrain = CountDownLatch(1)
+        buffer.submit("b", "second")
+        buffer.submit("b", "second-again")
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2)
+        while (secondDrain.count > 0 && System.nanoTime() < deadline) {
+            synchronized(persisted) { if (persisted.containsKey("b")) secondDrain.countDown() }
+            Thread.sleep(10)
+        }
+        buffer.close()
+        assertTrue("second deadline drain did not run — P1-1 regression", secondDrain.count == 0L)
+        assertEquals("second-again", persisted["b"])
+        assertEquals(0, buffer.pendingCount())
+    }
+
+    @Test
     fun `flush writes one key immediately and leaves the other pending`() {
         val persisted = LinkedHashMap<String, String>()
         val buffer = DeferredCommitBuffer<String, String>(deadlineMs) { key, value ->
