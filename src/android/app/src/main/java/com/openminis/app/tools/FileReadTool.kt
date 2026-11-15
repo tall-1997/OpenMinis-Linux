@@ -313,6 +313,13 @@ object FileReadTool {
                         largeTextPreview(path, size, head, false)
                     else -> binaryPreview(path, size, head)
                 }
+                // [T-prior-read] Register the read. Binary/preview reads are
+                // registered but NOT text-backed: they cannot authorize an
+                // edit on their own (large-TEXT previews are text-backed —
+                // real bytes were shown, any read counts per qwen #3932→#4002).
+                FileIdentity.of(file)?.let {
+                    SessionFileReadCaches.forSession(sessionId).recordRead(it, cacheable = !isBinary)
+                }
                 return ToolExecutionResult(preview, true, toolTitle = toolTitle)
             }
 
@@ -334,6 +341,7 @@ object FileReadTool {
                 charCap = maxLength,
             )
             val totalLines = window.totalLines
+
             val selectedLines = window.lines
 
             val showStart = if (direction == "tail") {
@@ -394,6 +402,13 @@ object FileReadTool {
                           else ", retry with a smaller lines value"
             }
             header += "]"
+            // [T-prior-read] Register the text read ONLY on the success return —
+            // after the output is fully built (partial windows count, qwen
+            // #3932→#4002). If output assembly throws, the model got an error,
+            // not the content, so the cache must not claim a read.
+            FileIdentity.of(file)?.let {
+                SessionFileReadCaches.forSession(sessionId).recordRead(it, cacheable = true)
+            }
             ToolExecutionResult("$header\n$content", true, toolTitle = toolTitle)
         } catch (e: Exception) {
             ToolExecutionResult("Error reading file: ${e.message}", false)

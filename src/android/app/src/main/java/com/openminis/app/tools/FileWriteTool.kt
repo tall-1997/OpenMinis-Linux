@@ -66,6 +66,22 @@ object FileWriteTool {
             val file = PRootKernel.resolveSessionHostPath(sessionId, path, context)
                 ?: return ToolExecutionResult("Error: Cannot resolve path: $path", false, toolTitle = toolTitle)
 
+            // [T-prior-read] Overwrite gate: an EXISTING file (append included —
+            // it still mutates bytes the model never validated) must have been
+            // read or authored in this session; creates are exempt. Sits before
+            // the checkpoint capture so a refusal does not burn snapshot slots
+            // on no-op writes.
+            if (file.exists() && !file.isDirectory) {
+                PriorReadEnforcement.checkOverwrite(
+                    SessionFileReadCaches.forSession(sessionId), file, displayPath = path,
+                ).takeIf { !it.ok }?.let { d ->
+                    return ToolExecutionResult(
+                        d.modelMessage ?: "Error: file_write refused by prior-read gate",
+                        false, toolTitle = toolTitle,
+                    )
+                }
+            }
+
             // [T-file-checkpoint] Snapshot the CURRENT bytes before they are
             // replaced, so a bad rewrite is recoverable via file_checkpoint
             // restore. Best-effort — a capture failure must never block the
@@ -126,6 +142,12 @@ object FileWriteTool {
                         "and Settings → Mount External Folders.",
                     false, toolTitle = toolTitle,
                 )
+
+            // [T-prior-read] Seed the cache with the post-write identity: the
+            // model authored the current bytes.
+            FileIdentity.of(file)?.let {
+                SessionFileReadCaches.forSession(sessionId).recordWrite(it)
+            }
 
             com.openminis.app.logging.AppLogger.info(
                 "FileWrite",
