@@ -70,8 +70,12 @@ internal fun ChatViewModel.resolveModelSwitch(
  * returns null and the caller keeps the old prompt rather than blanking
  * the run.
  */
-internal fun ChatViewModel.rebuildSystemPromptForAdoptedEntry(): String? =
-    runCatching { buildSystemPrompt() }
+internal fun ChatViewModel.rebuildSystemPromptForAdoptedEntry(provider: LLMProvider): String? =
+    // [T-oauth-prefix-offset] The rebuilt prompt rides the SAME wrapper as the
+    // five request-side paths (wrap + stablePrefixLen shift) — an unwrapped
+    // base was self-consistent (the provider injects its own prefix block) but
+    // shaped differently and one contract change away from drifting.
+    runCatching { wrapSystemPromptForOAuth(provider, buildSystemPrompt()) }
         .onFailure {
             // [T-persona-switch-rebuild] A silent failure would leave the rest
             // of this run on the OLD provider's persona — exactly the symptom

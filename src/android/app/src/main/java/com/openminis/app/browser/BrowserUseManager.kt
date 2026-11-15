@@ -1531,8 +1531,8 @@ class BrowserUseManager(
      * Android exposes cookies as a single `Cookie` header string via
      * [CookieManager]; we split on `;` and match each `name=value` pair.
      *
-     * `fuzzy=false` (default): exact name match (case-insensitive).
-     * `fuzzy=true`: substring match within the cookie name.
+     * `fuzzy=true` (default): the name must contain ALL keywords
+     * (case-insensitive); `fuzzy=false`: the name must equal ANY one keyword.
      */
     private fun getCookies(keywords: List<String>?, fuzzy: Boolean): BrowserActionResult {
         val url = _currentURL.value.takeIf { it.isNotEmpty() }
@@ -1550,14 +1550,14 @@ class BrowserUseManager(
                 val eq = it.indexOf('=')
                 if (eq <= 0) null else it.substring(0, eq).trim() to it.substring(eq + 1).trim()
             }
-        // [T-cookie-fuzzy-default] Schema says "ALL keywords must appear" —
-        // align the quantifier (was ANY, which over-matched multi-keyword
-        // filters) and the default (true, matching the schema contract).
+        // [T-cookie-fuzzy-default] Quantifier follows the schema contract the
+        // params document: fuzzy=true → contains-ALL (a conjunction makes
+        // sense for substrings); fuzzy=false → equals-ANY — a name can never
+        // exactly equal two different keywords at once, so the old
+        // all { equals } always filtered to zero rows.
         val filtered = if (keywords.isNullOrEmpty()) pairs else pairs.filter { (name, _) ->
-            keywords.all { kw ->
-                if (fuzzy) name.contains(kw, ignoreCase = true)
-                else name.equals(kw, ignoreCase = true)
-            }
+            if (fuzzy) keywords.all { name.contains(it, ignoreCase = true) }
+            else keywords.any { name.equals(it, ignoreCase = true) }
         }
         val text = buildString {
             appendLine("Cookies for $url (${filtered.size} of ${pairs.size}):")

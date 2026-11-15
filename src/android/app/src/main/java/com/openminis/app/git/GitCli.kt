@@ -115,6 +115,15 @@ object GitCli {
         val lastSubject: String,
         /** Tracking branch short name (`origin/main`); null when untracked. */
         val upstream: String? = null,
+        /**
+         * [T-git-sandbox-checkout-route] True for remote-TRACKING refs
+         * (`origin/main`) — a slash in [name] does NOT imply remote (local
+         * `feature/x` exists). Checkout routing and anything that must treat
+         * "the branch exists locally" literally consults this flag; name
+         * matching alone once routed `origin/main` to `git checkout origin/main`
+         * → detached HEAD.
+         */
+        val isRemote: Boolean = false,
     )
 
     /** One stash entry: `stash@{n}` + subject. */
@@ -262,6 +271,10 @@ object GitCli {
                 // %(upstream:short) column (ZCode for-each-ref contract);
                 // blank for untracked branches and remote refs alike.
                 upstream = parts.getOrNull(4)?.takeIf { it.isNotBlank() },
+                // %(refname) column (index 5): the FULL ref path is the only
+                // reliable local/remote discriminator — short names collide
+                // (local `feature/x` vs `origin/feature/x`).
+                isRemote = parts.getOrNull(5)?.startsWith("refs/remotes/") == true,
             )
         }.distinctBy { it.name }
 

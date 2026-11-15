@@ -276,6 +276,11 @@ internal fun ChatViewModel.loadSession() {
         _thinkingLevel.value = session.thinkingOverride
             ?.let { runCatching { ThinkingLevel.valueOf(it) }.getOrNull() }
             ?: ThinkingLevel.OFF
+        // [T-thinking-dormant-restore] The loaded session row is the level
+        // authority now — a slot parked for the PREVIOUS session must not
+        // restore over this session's persisted override when the ceiling
+        // widens.
+        dormantThinkingLevel = null
 
         // Priority 1: restore from persisted model_binding (group or entry)
         var resolved = restoreFromBinding(session.modelBinding)

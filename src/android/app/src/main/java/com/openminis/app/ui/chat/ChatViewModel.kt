@@ -1325,6 +1325,16 @@ class ChatViewModel(
     /** Byte offset of the stable system-prompt prefix; -1 caches the whole prompt. */
     @Volatile internal var systemPromptStablePrefixLen: Int = -1
 
+    /**
+     * [T-thinking-dormant-restore] The user's explicit thinking level parked
+     * while the active model's ceiling was too low; restored (once) when the
+     * ceiling widens past it. A VM-instance field — a process-global slot bled
+     * across VMs. Every authority that sets the session level (user picker /
+     * toggle / group default / session load) clears it, so the parked value
+     * only ever beats the ceiling-sync's own demotion, never a newer decision.
+     */
+    @Volatile internal var dormantThinkingLevel: ThinkingLevel? = null
+
     /** Daily files already pasted verbatim into the system prompt. Recall must not repeat them. */
     @Volatile internal var residentDailyFiles: Set<String> = emptySet()
 
@@ -2495,23 +2505,6 @@ class ChatViewModel(
         )
     }
 
-    /** Toggle thinking between OFF and MEDIUM (matches iOS default toggle semantics). */
-    internal fun toggleThinking() {
-        if (!currentModelSupportsReasoning) {
-            appendSystemInfo(
-                text = context.getString(R.string.vm_thinking_unsupported),
-                iconKind = "thinking",
-            )
-            return
-        }
-        val newLevel = if (_thinkingLevel.value.isEnabled) ThinkingLevel.OFF else ThinkingLevel.MEDIUM
-        _thinkingLevel.value = newLevel; persistThinkingOverride(newLevel)
-        appendSystemInfo(
-            text = context.getString(R.string.vm_thinking_set_to, newLevel.localizedName(context)),
-            iconKind = "thinking",
-        )
-    }
-
     /**
      * Set thinking level explicitly. Used by the inline level picker in the
      * `/thinking` slash row. Mirrors iOS `setThinkingLevel(_:)` — silently
@@ -2525,6 +2518,9 @@ class ChatViewModel(
         // request can't persist a level the model can't reach.
         val ceiling = currentModelMaxThinkingLevel
         val clamped = if (level.rank > ceiling.rank) ceiling else level
+        // An explicit pick (even re-picking the same level) drops any level
+        // parked by ceiling-sync — see [dormantThinkingLevel].
+        dormantThinkingLevel = null
         if (_thinkingLevel.value == clamped) return
         _thinkingLevel.value = clamped
         persistThinkingOverride(clamped)

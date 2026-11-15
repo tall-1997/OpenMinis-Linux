@@ -85,11 +85,13 @@ object GitCliCmd {
      * `%(symref)` column is non-empty only for symbolic refs like
      * origin/HEAD, which [GitCli.parseBranches] drops — they are aliases, not
      * switchable branches. `%(upstream:short)` feeds the tracking label
-     * (ZCode's for-each-ref contract column).
+     * (ZCode's for-each-ref contract column). `%(refname)` (full path) is the
+     * only reliable local/remote discriminator for [GitCli.GitBranchRef.isRemote]
+     * — short names collide (local `feature/x` vs `origin/feature/x`).
      */
     fun branchesCmd(root: String? = null) =
         "${gitPrefix(root)} for-each-ref --sort=-committerdate refs/heads refs/remotes " +
-            "--format='%(objectname:short)%1f%(refname:short)%1f%(contents:subject)%1f%(symref)%1f%(upstream:short)' | head -40"
+            "--format='%(objectname:short)%1f%(refname:short)%1f%(contents:subject)%1f%(symref)%1f%(upstream:short)%1f%(refname)' | head -40"
 
     /** Stash list: `stash@{n}<x1f>subject`, newest first. */
     fun stashCmd(root: String? = null) =
@@ -105,9 +107,15 @@ object GitCliCmd {
             (if (skip > 0) " --skip $skip" else "") +
             " --date=unix --pretty=format:%H%x1f%h%x1f%an%x1f%ad%x1f%s"
 
-    /** Per-file +/- line counts for staged (`--cached`) or unstaged changes. */
+    /**
+     * Per-file +/- line counts for staged (`--cached`) or unstaged changes.
+     * [T-git-refresh-loop] --no-optional-locks, same rationale as [statusCmd]:
+     * this read rides the 2s auto-refresh loop on degraded (sandbox) probes,
+     * and a plain `diff` also refreshes .git/index's stat cache — the lock
+     * suppression keeps the read side-effect-free.
+     */
     fun numstatCmd(staged: Boolean, root: String? = null) =
-        "${gitPrefix(root)} -c core.quotepath=false diff --numstat" +
+        "${gitPrefix(root)} --no-optional-locks -c core.quotepath=false diff --numstat" +
             (if (staged) " --cached" else "")
 
     fun remoteCmd(root: String? = null) = "${gitPrefix(root)} remote -v"

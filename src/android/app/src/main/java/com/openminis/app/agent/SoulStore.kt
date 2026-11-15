@@ -700,6 +700,15 @@ object SystemPromptBuilder {
         identityCache?.takeIf { it.key == key }?.let { return it.value }
 
         val file = SoulStore.load(context)
+        // [T-persona-cache-transient] load() returning null has two different
+        // meanings: the file is genuinely absent (a stable, cacheable state —
+        // the default identity IS the correct answer) vs the file EXISTS but a
+        // transient IO/parse failure blanked it (load() already retried twice).
+        // Caching the second form pinned the default persona under the current
+        // fingerprint, so the user's real persona never came back — the
+        // "persona silently vanished" complaint. Transient failures degrade
+        // THIS build only and leave the cache untouched; the next build retries.
+        val cacheable = file != null || !soulFile.exists()
         val name = (file?.metadata?.name ?: SoulMetadata.DEFAULT.name)
             .trim()
             .ifEmpty { "Minis Ultra" }
@@ -740,7 +749,7 @@ object SystemPromptBuilder {
         val trimmed = resolved.body.trim()
         if (trimmed.isEmpty()) {
             val result = identityTrimmed + styleBlock(style) + "\n\n" + soulEditHint + "\n\n"
-            identityCache = IdentityCacheSlot(key, result)
+            if (cacheable) identityCache = IdentityCacheSlot(key, result)
             return result
         }
 
@@ -765,7 +774,7 @@ object SystemPromptBuilder {
             "\n\n" +
             soulEditHint +
             "\n\n"
-        identityCache = IdentityCacheSlot(key, result)
+        if (cacheable) identityCache = IdentityCacheSlot(key, result)
         return result
     }
 

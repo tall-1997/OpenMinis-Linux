@@ -88,12 +88,7 @@ fun ChatViewModel.resume() {
         // fragments) — keep it off the main dispatcher. All inputs are
         // StateFlow reads / pure helpers; written fields are @Volatile.
         val baseSystemPrompt = withContext(Dispatchers.Default) { buildSystemPrompt() }
-        val systemPrompt =
-            if ((provider as? com.openminis.app.provider.anthropic.AnthropicProvider)?.isOAuth == true) {
-                val prefix = com.openminis.app.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
-                if (baseSystemPrompt?.startsWith(prefix) == true) baseSystemPrompt
-                else "$prefix\n\n${baseSystemPrompt ?: ""}"
-            } else baseSystemPrompt
+        val systemPrompt = wrapSystemPromptForOAuth(provider, baseSystemPrompt)
 
         AppLogger.info(ChatViewModel.TAG_STREAM, "resume _isStreaming=true (sid=$activeSessionId)")
         _isStreaming.value = true

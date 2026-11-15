@@ -19,10 +19,28 @@ import kotlinx.coroutines.launch
  * force-thinking lift included. Lives in its own file because the VM sits at
  * its architecture ceiling — this is the one feature that pays for itself.
  */
-/** [T-thinking-dormant-restore] User's explicit level parked while the
- *  active model's ceiling was too low; restored (once) when the ceiling
- *  widens past it. Session-lifetime only — a process death clears it. */
-private var dormantThinkingLevel: ThinkingLevel? = null
+
+/** Toggle thinking between OFF and MEDIUM (matches iOS default toggle semantics).
+ *  Moved from the VM body (architecture ceiling) — same package, single call
+ *  site ([ChatViewModelSlashExec]) resolves the extension without imports. */
+internal fun ChatViewModel.toggleThinking() {
+    if (!currentModelSupportsReasoning) {
+        appendSystemInfo(
+            text = context.getString(com.openminis.app.R.string.vm_thinking_unsupported),
+            iconKind = "thinking",
+        )
+        return
+    }
+    val newLevel = if (_thinkingLevel.value.isEnabled) ThinkingLevel.OFF else ThinkingLevel.MEDIUM
+    // An explicit toggle drops any level parked by ceiling-sync — the newer
+    // user decision must win when the ceiling later widens.
+    dormantThinkingLevel = null
+    _thinkingLevel.value = newLevel; persistThinkingOverride(newLevel)
+    appendSystemInfo(
+        text = context.getString(com.openminis.app.R.string.vm_thinking_set_to, newLevel.localizedName(context)),
+        iconKind = "thinking",
+    )
+}
 
 internal fun ChatViewModel.launchThinkingCeilingSync(): kotlinx.coroutines.Job =
     viewModelScope.launch {
@@ -46,15 +64,19 @@ internal fun ChatViewModel.launchThinkingCeilingSync(): kotlinx.coroutines.Job =
                 val dormant = dormantThinkingLevel
                 if (clamped != _thinkingLevel.value) {
                     // [T-thinking-dormant-restore] The user's explicit level is
-                    // DEMOTED to a dormant slot, not destroyed: when the ceiling
-                    // widens again (Thinking switch re-enabled / override
-                    // raised / better model selected) the original choice is
-                    // restored — the old one-way demotion permanently erased it.
+                    // DEMOTED to the per-VM dormant slot, not destroyed: when
+                    // the ceiling widens again (Thinking switch re-enabled /
+                    // override raised / better model selected) the original
+                    // choice is restored — the old one-way demotion permanently
+                    // erased it.
                     dormantThinkingLevel = _thinkingLevel.value.takeIf { it != ThinkingLevel.OFF }
                     _thinkingLevel.value = clamped
                     persistThinkingOverride(clamped)
                 } else if (dormant != null && dormant.rank <= ceiling.rank) {
-                    // Ceiling widened past the dormant level: restore it.
+                    // Ceiling widened past the dormant level: restore it. Any
+                    // user-facing level assignment clears the slot (see
+                    // [ChatViewModel.dormantThinkingLevel]), so this can only
+                    // fire while the demotion is still the latest decision.
                     _thinkingLevel.value = dormant
                     persistThinkingOverride(dormant)
                     dormantThinkingLevel = null
@@ -85,6 +107,9 @@ internal fun ChatViewModel.persistThinkingOverride(level: ThinkingLevel) {
     internal fun ChatViewModel.applyGroupSessionDefaults(groupId: String) {
         val group = providerRepository.group(groupId) ?: return
         val level = group.defaultThinkingLevel ?: return
+        // [T-thinking-dormant-restore] The group default is the new level
+        // authority — a ceiling-sync-parked slot must not restore over it.
+        dormantThinkingLevel = null
         if (_thinkingLevel.value == level) return
         // [T-thinking-three-faces-unified] Clamp to the group model's ceiling
         // (force lift included).
