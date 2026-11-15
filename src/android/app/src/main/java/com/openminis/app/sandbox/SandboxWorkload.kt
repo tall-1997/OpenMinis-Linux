@@ -6,6 +6,7 @@ import android.os.SystemClock
 import android.system.Os
 import android.system.OsConstants
 import android.util.Log
+import com.openminis.app.sandbox.jobs.JobRegistry
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.concurrent.thread
@@ -109,17 +110,29 @@ internal object SandboxWorkload {
         lastStopReason = reason
         val sticky = roots[pid]?.sticky ?: StickyTree(pid)
         var victims = emptySet<Int>()
+        var links: List<ProcLink> = emptyList()
         repeat(KILL_PASSES) {
-            val now = discover(pid)
-            victims = sticky.observe(now, now)
+            // [T-job-tree-spare] Background jobs the model started on purpose
+            // are subtracted from every victim pass: a cap / pressure /
+            // deadline sweep must not take them down with the shell's tree.
+            val snapshot = snapshotProc()
+            links = snapshot.links
+            val now = snapshot.collect(pid)
+            victims = ProcessTree.exceptTrees(
+                sticky.observe(now, now), JobRegistry.activeJobPids(), links,
+            )
             for (victim in victims) {
                 if (victim == pid) continue
                 signal(victim)
             }
         }
         Log.w(TAG, "kill reason=$reason root=$pid victims=${victims.joinToString(",")}")
+        // The group signal never reaches a job (setsid put it in its own
+        // process group); it kills the root process itself.
         runCatching { Os.kill(-pid, OsConstants.SIGKILL) }
-        for (victim in sticky.snapshot()) signal(victim)
+        for (victim in ProcessTree.exceptTrees(
+            sticky.snapshot(), JobRegistry.activeJobPids(), links,
+        )) signal(victim)
     }
 
     private fun signal(pid: Int) {
@@ -155,7 +168,15 @@ internal object SandboxWorkload {
         if (rootPid <= 0) return emptySet()
         val killed = LinkedHashSet<Int>()
         repeat(KILL_PASSES) {
-            for (pid in discover(rootPid)) {
+            // [T-job-tree-spare] The walk starts at the shell's HOST process
+            // (proot), so without this subtraction a user Stop or a watchdog
+            // timeout would also sweep every setsid'd background job that has
+            // ever belonged to this shell. Registered job trees are spared.
+            val snapshot = snapshotProc()
+            val spared = ProcessTree.exceptTrees(
+                snapshot.collect(rootPid), JobRegistry.activeJobPids(), snapshot.links,
+            )
+            for (pid in spared) {
                 if (pid == rootPid) continue
                 if (ProcessTree.isGuestShellBash(
                         runCatching { File("/proc/$pid/cmdline").readText() }.getOrNull()
@@ -266,6 +287,15 @@ internal object SandboxWorkload {
         // collect+sameGroup set union) are identical to the old per-root
         // discover() calls.
         val snapshot = snapshotProc()
+        // [T-job-tree-spare] The process cap counts accidental leakage, not
+        // the model's own background jobs: owned excludes every registered
+        // job tree, so a legitimate background workload cannot trip the cap
+        // and nuke the shell with it. confine still applies to jobs — they
+        // should also yield CPU to the app.
+        val jobTree = LinkedHashSet<Int>()
+        for (jobRoot in JobRegistry.activeJobPids()) {
+            if (jobRoot > 0) jobTree.addAll(ProcessTree.collect(jobRoot, snapshot.links))
+        }
         for (root in live) {
             if (!File("/proc/${root.pid}").exists()) {
                 roots.remove(root.pid)
@@ -274,7 +304,7 @@ internal object SandboxWorkload {
             val current = snapshot.collect(root.pid)
             val alive = current.filter { File("/proc/$it").exists() }.toSet()
             val set = root.sticky.observe(current, alive)
-            owned += set.size
+            owned += (set - jobTree).size
             for (pid in set) confine(pid)
             if (root.deadlineAt > 0L && now >= root.deadlineAt) {
                 Log.w(TAG, "deadline pid=${root.pid} label=${root.label}")

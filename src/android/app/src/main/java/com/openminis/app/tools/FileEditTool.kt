@@ -70,6 +70,18 @@ object FileEditTool {
                 return ToolExecutionResult("Error: File not found: $path", false, toolTitle = toolTitle)
             }
 
+            // [T-prior-read] Read-before-edit gate (qwen priorReadEnforcement):
+            // refuse edits of files this session never read, and edits whose
+            // on-disk (mtime,size) fingerprint drifted since the read.
+            PriorReadEnforcement.checkOverwrite(
+                SessionFileReadCaches.forSession(sessionId), file, displayPath = path,
+            ).takeIf { !it.ok }?.let { d ->
+                return ToolExecutionResult(
+                    d.modelMessage ?: "Error: file_edit refused by prior-read gate",
+                    false, toolTitle = toolTitle,
+                )
+            }
+
             
 
             // T-tool-write-race: read, compute AND write under ONE lock.
@@ -121,10 +133,17 @@ object FileEditTool {
                     "Error: ${outcome.message}",
                     false, toolTitle = toolTitle,
                 )
-                is ReplaceOutcome -> ToolExecutionResult(
-                    "Edited $path (${outcome.replacements} replacement(s), ${outcome.newContent.length} bytes)",
-                    true, toolTitle = toolTitle,
-                )
+                is ReplaceOutcome -> {
+                    // [T-prior-read] Seed the cache: the model authored the
+                    // current bytes, so a follow-up edit does not re-read.
+                    FileIdentity.of(file)?.let {
+                        SessionFileReadCaches.forSession(sessionId).recordWrite(it)
+                    }
+                    ToolExecutionResult(
+                        "Edited $path (${outcome.replacements} replacement(s), ${outcome.newContent.length} bytes)",
+                        true, toolTitle = toolTitle,
+                    )
+                }
                 else -> ToolExecutionResult("Error: unexpected outcome", false, toolTitle = toolTitle)
             }
         } catch (e: Exception) {

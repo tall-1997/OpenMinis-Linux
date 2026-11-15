@@ -341,6 +341,35 @@ object JobRegistry {
         }
     }
 
+    // -------------------------------------------------------- protection
+
+    /**
+     * [T-job-tree-spare] Pids of every RUNNING job across ALL sessions (the
+     * setsid leader of each detached guest process). SandboxWorkload's tree
+     * walks subtract these trees from every kill sweep: a user Stop, a
+     * command watchdog timeout or the process-cap / memory-pressure
+     * supervisor must never kill a background job the model started on
+     * purpose. Qwen parity: there a background job is an independent
+     * PoolEntry process, invisible to the foreground command's
+     * pid-descendants walk; here jobs live inside the persistent shell's
+     * tree, so the walkers must actively spare them.
+     *
+     * Runs the lazy reconcile so a just-finished job is not spared.
+     */
+    fun activeJobPids(): Set<Int> {
+        val pids = LinkedHashSet<Int>()
+        for (k in memory.keys) {
+            lock(k).withLock {
+                for (record in memory[k].orEmpty()) {
+                    reconcileLocked(record)
+                    val pid = record.job.pid
+                    if (record.job.state == JobState.RUNNING && pid > 0) pids.add(pid)
+                }
+            }
+        }
+        return pids
+    }
+
     private sealed interface JobRef {
         data class Found(val record: Record) : JobRef
         data class Ambiguous(val ids: List<String>) : JobRef

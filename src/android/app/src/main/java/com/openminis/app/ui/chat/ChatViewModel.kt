@@ -3725,6 +3725,9 @@ class ChatViewModel(
         // [P1-16] The wiped session's ui_read fingerprint must not leak into
         // the next chat's "screen unchanged" detection.
         evictUiReadFingerprints(sid)
+        // [T-prior-read] Same process-level eviction: a wiped session's read
+        // cache must not vouch for the next chat's edits.
+        com.openminis.app.tools.SessionFileReadCaches.clear(sid)
         // Drop any browser tabs the agent spawned for this session, and
         // delete the persisted tab snapshot so a future open starts clean.
         // iOS calls BrowserTabPool.deletePersistedData(for:) +
@@ -3794,15 +3797,9 @@ class ChatViewModel(
         // user actually sends — the byte-read in prepareUserAttachments
         // then fails to open the stream and the image never makes it into
         // the LLM payload, leaving the model staring at "what is this?" with no
-        // picture. Copy the staged bytes into our own private dir so the
-        // attachment outlives the share-extension cleanup.
-        val durableDir = java.io.File(context.cacheDir, "share_inbound").apply { mkdirs() }
-        val durable = java.io.File(durableDir, "${java.util.UUID.randomUUID()}-${file.name}")
-        try {
-            file.inputStream().use { input ->
-                durable.outputStream().use { output -> input.copyTo(output) }
-            }
-        } catch (e: Exception) {
+        // picture. stageShareInboundCopy copies the staged bytes into our
+        // own private dir so the attachment outlives the share-extension cleanup.
+        val durable = stageShareInboundCopy(context, file).getOrElse { e ->
             Log.w(TAG, "failed to copy staged share file ${file.name}: ${e.message}")
             return null
         }

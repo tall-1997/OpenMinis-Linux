@@ -68,6 +68,16 @@ object MultiEditTool {
             if (!file.exists()) {
                 return ToolExecutionResult("Error: File not found: $path", false, toolTitle = toolTitle)
             }
+            // [T-prior-read] One gate for the whole batch (qwen
+            // priorReadEnforcement): the batch must be backed by a session read.
+            PriorReadEnforcement.checkOverwrite(
+                SessionFileReadCaches.forSession(sessionId), file, displayPath = path,
+            ).takeIf { !it.ok }?.let { d ->
+                return ToolExecutionResult(
+                    d.modelMessage ?: "Error: multi_edit refused by prior-read gate",
+                    false, toolTitle = toolTitle,
+                )
+            }
             com.openminis.app.data.repository.MemoryRepository
                 .fileToolQuotaRefusal(context.filesDir, sessionId, path)
                 ?.let { msg -> return ToolExecutionResult(msg, false, toolTitle = toolTitle) }
@@ -109,11 +119,18 @@ object MultiEditTool {
                 )
                 is FileEditTool.EditFailure ->
                     ToolExecutionResult("Error: ${outcome.message}", false, toolTitle = toolTitle)
-                is FileEditTool.ReplaceOutcome -> ToolExecutionResult(
-                    "Applied ${edits.length()} edits to $path " +
-                        "(${outcome.replacements} replacement(s), ${outcome.newContent.length} bytes)",
-                    true, toolTitle = toolTitle,
-                )
+                is FileEditTool.ReplaceOutcome -> {
+                    // [T-prior-read] Seed the cache with the post-batch identity:
+                    // the model authored the current bytes.
+                    FileIdentity.of(file)?.let {
+                        SessionFileReadCaches.forSession(sessionId).recordWrite(it)
+                    }
+                    ToolExecutionResult(
+                        "Applied ${edits.length()} edits to $path " +
+                            "(${outcome.replacements} replacement(s), ${outcome.newContent.length} bytes)",
+                        true, toolTitle = toolTitle,
+                    )
+                }
                 else -> ToolExecutionResult("Error: unexpected outcome", false, toolTitle = toolTitle)
             }
         } catch (e: Exception) {

@@ -50,6 +50,7 @@ class JobRegistryTest {
         private val exitCode: Int,
         private val hold: Boolean,
         override val outputGuestPath: String? = null,
+        override val pid: Int = -1,
     ) : JobRegistry.SpawnedProcess {
         private val release = CountDownLatch(1)
         private val finished = CountDownLatch(1)
@@ -96,17 +97,18 @@ class JobRegistryTest {
         private val createFile: Boolean = true,
     ) {
         private val counter = java.util.concurrent.atomic.AtomicLong()
+        private val fileCounter = java.util.concurrent.atomic.AtomicLong()
         val processes = mutableListOf<FakeProcess>()
         val guestPath = "/var/minis/workspace/tool-spill/jobs/fake.log"
 
         val fn: (String, String, String?) -> JobRegistry.SpawnedProcess = { _, _, _ ->
-            val p = FakeProcess(newOutputFile(), exitCode, hold, guestPath)
+            val p = FakeProcess(newOutputFile(), exitCode, hold, guestPath, 41000 + counter.incrementAndGet().toInt())
             synchronized(processes) { processes.add(p) }
             p
         }
 
         private fun newOutputFile(): File {
-            val f = File(dir, "job-${counter.incrementAndGet()}.log")
+            val f = File(dir, "job-${fileCounter.incrementAndGet()}.log")
             if (createFile) f.createNewFile()
             return f
         }
@@ -372,5 +374,31 @@ class JobRegistryTest {
         val result = JobTools.execute("""{"action":"bogus"}""", "s1", context = null)
         assertFalse(result.success)
         assertEquals(ToolErrorCode.INVALID_ARGUMENTS, result.errorCode)
+    }
+
+    // ---------------------------------------------------- [T-job-tree-spare]
+
+    @Test
+    fun activeJobPids_aggregatesRunningJobsAcrossSessions() {
+        install(FakeSpawner(tmp))
+        startJob("sess-a", "python3 server.py")
+        startJob("sess-b", "make all")
+        assertEquals(setOf(41001, 41002), JobRegistry.activeJobPids())
+    }
+
+    @Test
+    fun activeJobPids_excludesFinishedJobs() {
+        val spawner = FakeSpawner(tmp)
+        install(spawner)
+        val job = startJob("sess-a", "make all")
+        spawner.processes.single().finishNow()
+        awaitState("sess-a", job.id, JobRegistry.JobState.COMPLETED)
+        // A finished job must not keep its tree spared.
+        assertTrue(JobRegistry.activeJobPids().isEmpty())
+    }
+
+    @Test
+    fun activeJobPids_emptyRegistryIsEmpty() {
+        assertTrue(JobRegistry.activeJobPids().isEmpty())
     }
 }
