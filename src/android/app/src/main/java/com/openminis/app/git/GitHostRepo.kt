@@ -279,6 +279,10 @@ object GitHostRepo {
                         name = "origin/$short",
                         isCurrent = false,
                         lastSubject = commit,
+                        // [T-git-sandbox-checkout-route] The switcher entries
+                        // must carry their ref source — checkout routing
+                        // treats only non-remote entries as "exists locally".
+                        isRemote = true,
                     )
                 }
             } finally {

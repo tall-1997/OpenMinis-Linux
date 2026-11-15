@@ -491,7 +491,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 // A new model starts a new failure streak.
                 emptyStreakEntryIds.clear()
                 // [T-android-persona-switch-rebuild] Persona keys on providerInstanceId.
-                rebuildSystemPromptForAdoptedEntry()?.let { activeSystemPrompt = it }
+                rebuildSystemPromptForAdoptedEntry(currentProvider)?.let { activeSystemPrompt = it }
             }
             // [GH#521] Per-attempt phase clocks (see [StreamPhaseReport]).
             val streamPhase = StreamPhaseReport()

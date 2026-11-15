@@ -302,7 +302,10 @@ internal fun BranchMenu(
                                 tint = GitAddGreen,
                                 modifier = Modifier.size(14.dp),
                             )
-                            branch.name.contains('/') -> Text(
+                            // [T-git-branch-is-remote] Slash ≠ remote — a LOCAL
+                            // feature/x keeps the split icon; only a real
+                            // remote-tracking ref gets the ⇄ one.
+                            branch.isRemote -> Text(
                                 "⇄",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 13.sp,

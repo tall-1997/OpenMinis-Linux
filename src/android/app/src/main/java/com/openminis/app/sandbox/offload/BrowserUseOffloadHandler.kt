@@ -152,7 +152,12 @@ class BrowserUseOffloadHandler(private val app: MinisApp) : NativeOffloadHandler
         args.get("item-selector", "item_selector")?.let { obj.put("item_selector", it) }
         args.getInt("scroll-count", "scroll_count")?.let { obj.put("scroll_count", it) }
         args.getInt("timeout")?.let { obj.put("timeout", it) }
-        if (args.hasFlag("fuzzy")) obj.put("fuzzy", true)
+        // [T-cookie-fuzzy-default] fuzzy defaults to true at the JSON layer;
+        // mirror that here and let the CLI express BOTH values: bare --fuzzy
+        // is an explicit true, --fuzzy=false turns matching exact (getBool),
+        // absent leaves the JSON default untouched.
+        (args.getBool("fuzzy") ?: if (args.hasFlag("fuzzy")) true else null)
+            ?.let { obj.put("fuzzy", it) }
         args.get("keywords")?.let { raw ->
             // Comma- or whitespace-separated list.
             val tokens = raw.split(Regex("[,\\s]+"))
@@ -425,7 +430,7 @@ ACTIONS:
   new_tab         [--url <url>]
   close_tab       [--tab-id <n>]
   list_tabs
-  get_cookies     --keywords <list> [--fuzzy]
+  get_cookies     --keywords <list> [--fuzzy[=true|false]]
   set_cookies     --cookies <json-array> | --cookies-file <path>
                   Content (for both: the file holds the SAME JSON array):
                     [{"name":"n","value":"v",            // required

@@ -520,6 +520,22 @@ class GitCliParseTest {
         assertTrue(GitCli.parseBranches("fatal: not a repo\n", "main").isEmpty())
     }
 
+    @Test
+    fun `branches mark remote refs from the full refname column only`() {
+        // [T-git-branch-is-remote] 6-column rows (branchesCmd ships %(refname)):
+        // a slashed LOCAL branch must stay local; only refs/remotes/* is remote.
+        val out = "a1\u001ffeature/x\u001fLocal slashed\u001f\u001f\u001frefs/heads/feature/x\n" +
+            "b2\u001forigin/main\u001fRemote tip\u001f\u001f\u001frefs/remotes/origin/main\n" +
+            "c3\u001ffeature/y\u001fLegacy row without refname\u001f\u001f\n"
+        val list = GitCli.parseBranches(out, current = "")
+        assertEquals(3, list.size)
+        assertFalse("local slashed branch must not be remote", list[0].isRemote)
+        assertTrue("remote-tracking ref must be remote", list[1].isRemote)
+        // Old 5-column rows (no refname column) default to local — the flag is
+        // additive, not a break for cached/piped output.
+        assertFalse(list[2].isRemote)
+    }
+
     // -------------------------------------------------------------- stashes
 
     @Test

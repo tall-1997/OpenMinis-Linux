@@ -14,7 +14,6 @@ import com.openminis.app.git.GitCli.GitCommit
 import com.openminis.app.git.GitCli.GitFileEntry
 import com.openminis.app.git.GitCommitMessageGenerator
 import com.openminis.app.git.GitHostRepoDiff
-import com.openminis.app.git.GitHostRepoGraph
 import com.openminis.app.git.GitCli.GitRepoInfo
 import com.openminis.app.git.GitCli.GitStatus
 import com.openminis.app.git.GitHostRepo
@@ -79,10 +78,10 @@ class GitPanelViewModel(
     @Volatile internal var pendingAutoRefresh = false
 
     /** Native repo root on the host filesystem; null = sandbox path only. */
-    private var hostDir: File? = null
+    internal var hostDir: File? = null
 
     /** Guest path of [hostDir] — what sandbox commands `-C` into. */
-    private var guestRoot: String? = null
+    internal var guestRoot: String? = null
 
     init {
         refresh()
@@ -400,7 +399,7 @@ class GitPanelViewModel(
 
     private fun tryBeginMutation(): Boolean = mutationGate.compareAndSet(false, true)
 
-    private fun mutate(op: suspend () -> String?) {
+    internal fun mutate(op: suspend () -> String?) {
         if (!tryBeginMutation()) return
         viewModelScope.launch {
             _state.update { it.copy(busy = true) }
@@ -438,64 +437,6 @@ class GitPanelViewModel(
                 is GitHostRepoTransfer.Result.Done -> r.message ?: "pulled"
                 is GitHostRepoTransfer.Result.Error -> r.message
             }
-        }
-    }
-
-    /**
-     * Check out [name] with ZCode's pre-validation, host-first:
-     * JGit performs the checkout against the workspace's own `.git` (no
-     * PRoot round-trip — the old sandbox-only path reported "shell
-     * unavailable" whenever the sandbox wasn't booted, leaving the panel
-     * "visible but inert"); the sandbox path remains the fallback. A
-     * remote ref creates the local tracking branch named after its short
-     * name (`origin/main` → `main`). Creating a local branch literally
-     * named "origin/main" would collide with the remote-tracking
-     * namespace, so the short name is the only legal target.
-     */
-    fun switchBranch(name: String) {
-        mutate {
-            val dir = hostDir
-            if (dir != null) {
-                val hostError = withContext(Dispatchers.IO) { GitHostRepoGraph.checkout(dir, name) }
-                if (hostError == null) return@mutate null
-                // Host refused (in-progress operation / conflicts) is a real
-                // refusal, not a transport failure — surface it verbatim.
-                if (!hostError.contains("not a git repository")) return@mutate hostError
-            }
-            // [T-git-sandbox-checkout-route] Mirror the JGit route: check the
-            // LOCAL branch list (any branch the panel knows, slashed or not)
-            // before treating a slashed name as a remote-tracking ref. The old
-            // !contains('/') test misrouted a LOCAL feature/x into
-            // checkout -b feature/x → git refuses "already exists".
-            val localExists = _state.value.branches.any { it.name == name }
-            if (localExists || !name.contains('/')) {
-                GitCli.execSimple(sessionId, "checkout", name, root = guestRoot)
-            } else {
-                val local = name.substringAfter('/')
-                GitCli.execSimple(sessionId, "checkout", "-b", local, "--track", name, root = guestRoot)
-            }
-        }
-    }
-
-    /**
-     * Create a new branch at HEAD and check it out (ZCode's
-     * `createBranchAndSwitch`). Empty/whitespace names are refused; an
-     * existing branch name checks out in place instead of failing.
-     */
-    fun createBranchAndCheckout(name: String) {
-        val trimmed = name.trim()
-        if (trimmed.isEmpty() || _state.value.busy) return
-        mutate {
-            val dir = hostDir
-            if (dir != null) {
-                val exists = withContext(Dispatchers.IO) {
-                    runCatching { GitHostRepo.branches(dir).any { it.name == trimmed && !it.name.contains('/') } }
-                        .getOrDefault(false)
-                }
-                val err = withContext(Dispatchers.IO) { GitHostRepoGraph.checkout(dir, trimmed, create = !exists) }
-                if (err == null) return@mutate null
-            }
-            GitCli.execSimple(sessionId, "checkout", "-b", trimmed, root = guestRoot)
         }
     }
 
@@ -557,9 +498,19 @@ class GitPanelViewModel(
             // Gate and `busy` clear together — one release point, no drift.
             mutationGate.set(false)
             // [T-git-refresh-dirty] Drain a change that landed mid-mutation.
+            // [T-git-refresh-drain-dead] This tail runs INSIDE refreshJob, so a
+            // plain refresh() self-check (`refreshJob?.isActive == true`) always
+            // early-returned — the flag was cleared and the change swallowed.
+            // force=true is the honest drain (cancel-restart semantics).
+            // [T-git-drain-keep-notice] A just-failed mutation left its error
+            // banner in `notice`, and the drained refresh's final paint derives
+            // notice from the status probe — it would wipe the banner for no
+            // gain (the mutation didn't land, so the change event is mostly
+            // stale noise). Skip the drain while a notice is showing; the next
+            // workspace event or manual refresh covers the tail state.
             if (pendingAutoRefresh) {
                 pendingAutoRefresh = false
-                refresh()
+                if (_state.value.notice.isNullOrBlank()) refresh(force = true)
             }
         }
     }
@@ -785,7 +736,7 @@ class GitPanelViewModel(
     }
 
     companion object {
-        /** logcat tag — same as [GitHostRepo]/[GitHostRepoGraph] (one log stream). */
+        /** logcat tag — same as [GitHostRepo] / GitHostRepoGraph (one log stream). */
         private const val TAG = "GitPanel"
         internal const val AUTO_REFRESH_FLOOR_MS = 2_000L
         const val HISTORY_PAGE_SIZE = 50
