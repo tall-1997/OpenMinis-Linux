@@ -87,9 +87,9 @@ class AgentSteeringQueueTest {
     @Test
     fun `blank offers are rejected`() {
         val queue = AgentSteeringQueue()
-        assertFalse(queue.offer(""))
-        assertFalse(queue.offer("   "))
-        assertFalse(queue.offer("\n\t"))
+        assertNull(queue.offer(""))
+        assertNull(queue.offer("   "))
+        assertNull(queue.offer("\n\t"))
         assertTrue(queue.isEmpty)
     }
 
