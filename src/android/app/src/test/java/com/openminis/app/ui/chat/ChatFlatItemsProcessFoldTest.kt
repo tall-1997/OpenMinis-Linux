@@ -745,4 +745,34 @@ class ChatFlatItemsProcessFoldTest {
         // 59.9s truncates to whole seconds, never rounds up to "60s"
         assertEquals("59s", formatProcessDuration(59_900L))
     }
+    @Test
+    fun `process card key sanitizes provider tool-call ids with colons`() {
+        // [T-relay-toolcall-colon-id] Field regression: a free relay assigns
+        // tool_call ids WITH colons ("grep:121"); those ids are legal block
+        // ids, and when a run STARTS with a tool the first block id feeds the
+        // composite card key — which lands in the FlatKeys messageId slot and
+        // crashed construction with IllegalArgumentException. The key must
+        // come out colon-free and deterministic.
+        val items = buildFlatChatItems(
+            listOf(
+                user("u1"),
+                assistant(
+                    blocks = listOf(
+                        tool(id = "grep:121", name = "grep"),
+                        tool(id = "grep:122", name = "grep"),
+                    ),
+                ),
+            ),
+            foldAiProcess = true,
+        )
+        val summary = items.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single()
+        assertFalse(
+            "card key must be FlatKeys-safe (no ':'/'#'): ${summary.messageId}",
+            summary.messageId.contains(':') || summary.messageId.contains('#'),
+        )
+        assertTrue(
+            "sanitized first-block id must stay recognizable: ${summary.messageId}",
+            summary.messageId.endsWith("--grep-121"),
+        )
+    }
 }
