@@ -53,6 +53,22 @@ class LLMErrorClassificationTest {
     }
 
     @Test
+    fun `okhttp cancel io maps to a transient stall, not a network error`() {
+        // [T-canceled-io-mapping] OkHttp reports a cancelled call as
+        // IOException("Canceled") — the stall watchdog's cancel cascade, not a
+        // provider network failure. The old mapping filed it as NetworkError
+        // ("Network error: Canceled") which the loop could not retry (raw
+        // IOExceptions are not transport-transient) — runs died at the
+        // watchdog boundaries with the bare "Canceled" inline.
+        val mapped = mapThrowableToLLMError(java.io.IOException("Canceled"))
+        assertTrue("expected TransientError, got $mapped", mapped is LLMError.TransientError)
+        assertTrue(
+            "the loop must retry a teardown-cancelled stream in place",
+            com.openminis.app.agent.LoopErrorGate.isTransient(mapped, is5xx = false, isPermanentCapacity = false),
+        )
+    }
+
+    @Test
     fun `key-shaped material in upstream bodies is masked`() {
         val dirty = "request failed for key sk-prod-1234567890abcdef sent as Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.xxx"
         val masked = maskSecrets(dirty)

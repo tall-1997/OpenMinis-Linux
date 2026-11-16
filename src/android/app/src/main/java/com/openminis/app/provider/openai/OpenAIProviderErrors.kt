@@ -114,6 +114,14 @@ internal fun mapThrowableToLLMError(error: Throwable): LLMError {
     if (error is javax.net.ssl.SSLException) {
         return LLMError.ProviderError("TLS error: ${error.message ?: error.javaClass.simpleName}")
     }
+    // [T-canceled-io-mapping] OkHttp surfaces a cancelled call as
+    // IOException("Canceled") — a local teardown artifact (watchdog cancel
+    // cascade, HTTP/2 connection teardown), not a network failure. Map it to
+    // a transient stall so consumers retry on a fresh connection instead of
+    // surfacing "Network error: Canceled".
+    if (error is java.io.IOException && error.message == "Canceled") {
+        return LLMError.TransientError("stream was cancelled mid-run (local teardown) — retrying on a fresh connection")
+    }
     if (error is java.io.IOException) return LLMError.NetworkError(error)
     return LLMError.Unknown(error)
 }
