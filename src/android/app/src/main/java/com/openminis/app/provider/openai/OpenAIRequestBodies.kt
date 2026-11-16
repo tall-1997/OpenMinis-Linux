@@ -648,8 +648,8 @@ internal class OpenAIRequestBodies(
         }
         // [T-android-model-use-passthrough-mode] Per-call chat header overrides,
         // applied AFTER the ctor extraHeaders → same-name REPLACE over any
-        // default (incl. Authorization/Content-Type). Empty on normal calls.
-        for ((key, value) in host.chatExtraHeaders) {
+        // default; Accept sanitized like the ctor map. Empty on normal calls.
+        for ((key, value) in AcceptHeaderPolicy.sanitizeChatAccept(host.chatExtraHeaders)) {
             builder.header(key, value)
         }
         // [T-provider-custom-user-agent] Covers both chat/completions and

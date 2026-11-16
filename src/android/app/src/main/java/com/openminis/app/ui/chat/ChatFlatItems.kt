@@ -710,10 +710,10 @@ internal fun buildFlatChatItems(
     fun processCard(round: ChatRound, segment: ProcessSegment): FlatChatItem {
         // The card's own key, so collapsing one card never touches the next
         // one — manual collapse suppresses auto-expand for THIS card only.
-        // [T-flatkeys-invariants] The composite lands in FlatKeys.of's messageId
-        // slot (':'/'#' rejected) — sanitize parts (relay "grep:121" ids); the
-        // '--' joiner and any rewritten chars stay internal to this opaque key.
-        val cardKey = "${round.key}--${segment.firstBlockId}".replace(':', '-').replace('#', '-')
+        // [T-flatkeys-invariants] The composite lands in FlatKeys.of's messageId slot
+        // (':'/'#' rejected) — escape parts INJECTIVELY: a lossy '-' rewrite coupled
+        // "grep:121"/"grep-121" fold state; '%' goes FIRST, the key is never decoded.
+        val cardKey = "${round.key}--${segment.firstBlockId}".replace("%", "%25").replace(":", "%3A").replace("#", "%23")
         return FlatChatItem.AssistantProcessSummary(
             messageId = cardKey,
             thinkingCount = segment.thinkingCount,

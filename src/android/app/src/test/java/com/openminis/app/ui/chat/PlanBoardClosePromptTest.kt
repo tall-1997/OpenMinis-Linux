@@ -11,7 +11,8 @@ import org.junit.Test
 /**
  * [T-plan-close-nudge] The board close-out nudge that runs at natural turn
  * end. Pure logic in [PlanBoardClosePrompt] — these tests pin the contract the
- * agent-loop tail relies on: open boards get a reconcile nudge, fully-done
+ * agent-loop tail relies on: open boards get a reconcile nudge whose closing
+ * update_goal instruction rides on the Goal actually being active, fully-done
  * boards with an ACTIVE Goal get a complete nudge, empty/closed/or capped
  * states stay silent, and the nudge can never fire more than a run's cap.
  */
@@ -35,7 +36,26 @@ class PlanBoardClosePromptTest {
         assertTrue(nudge.contains("implement fix"))
         assertTrue(nudge.contains("ship pr"))
         assertTrue(nudge.contains("update_goal(op=complete)"))
+        assertFalse(nudge.contains("No active Goal"))
         assertFalse(nudge.contains("fully done"))
+    }
+
+    @Test
+    fun `open board with no active goal still reconciles but skips update_goal`() {
+        // The board outlives its Goal (cleared or never created): the nudge
+        // must still push the reconcile, but the closing instruction would
+        // make the model burn a tool call on a Goal that is not there.
+        val board = listOf(
+            plan("read skills", "done"),
+            plan("implement fix", "active"),
+        )
+        val nudge = PlanBoardClosePrompt.nudge(board, goalActive = false, nudgesUsed = 0, maxNudges = 2)
+        assertNotNull(nudge)
+        assertTrue(nudge!!.contains("agent_plan op=update status=done"))
+        assertTrue(nudge.contains("implement fix"))
+        assertTrue(nudge.contains("No active Goal — just reconcile the board above."))
+        assertFalse(nudge.contains("update_goal(op=complete)"))
+        assertFalse(nudge.contains("update_goal(op=clear)"))
     }
 
     @Test

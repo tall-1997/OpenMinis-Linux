@@ -19,6 +19,13 @@ import org.junit.Test
  * text/event-stream 406 in both stream modes). Every other declared value
  * passes through verbatim — the wildcard value or the combined form are the
  * user's per-provider verbatim escape hatch.
+ *
+ * Coverage census (kept truthful, matches the fusion commit message):
+ * 7 pure-policy cases + 4 request-wiring goldens = 11 tests, including the
+ * fourth-round review fixes — parameterized single-type variants hit via the
+ * primary-type check (P2-1), the raw-stream per-call fold channel cannot
+ * REPLACE the normalized Accept back onto the wire (P0-1), and the model-use
+ * chatExtraHeaders override channel is sanitized (P1-1).
  */
 class AcceptHeaderPolicyTest {
 
@@ -73,6 +80,29 @@ class AcceptHeaderPolicyTest {
         val headers = linkedMapOf("Accept" to "text/event-stream")
         AcceptHeaderPolicy.sanitizeChatAccept(headers)
         assertEquals("text/event-stream", headers["Accept"])
+    }
+
+    @Test
+    fun `parameterized single-type harmful variants hit the primary-type check`() {
+        // P2-1: `text/event-stream; q=1.0` no longer slips past the exact
+        // bare-value match — the decision is on the PRIMARY type (text before
+        // the first comma, `;`-parameters stripped, trimmed), case-insensitive.
+        assertEquals(
+            "application/json",
+            AcceptHeaderPolicy.sanitizeChatAccept(mapOf("Accept" to "text/event-stream; q=1.0"))["Accept"],
+        )
+        assertEquals(
+            "application/json",
+            AcceptHeaderPolicy.sanitizeChatAccept(mapOf("Accept" to " Text/Event-Stream;q=1.0 "))["Accept"],
+        )
+    }
+
+    @Test
+    fun `combined value with a safe primary type passes through verbatim`() {
+        // The composed form keeps its verbatim escape-hatch status even when a
+        // later member is the harmful type: only the PRIMARY type decides.
+        val headers = mapOf("Accept" to "application/json, text/event-stream;q=1.0")
+        assertSame(headers, AcceptHeaderPolicy.sanitizeChatAccept(headers))
     }
 
     // ------------------------------------------- request wiring (real) -----
@@ -135,6 +165,89 @@ class AcceptHeaderPolicyTest {
         )
         val request: Request = provider.requestBodies.buildRequest(body.toString())
         assertEquals("*/*", request.header("Accept"))
+    }
+
+    /**
+     * Dual-channel golden [P0-1]: the real streaming send is
+     * rawStreamMessage → buildRequest (ctor extraHeaders sanitized) → the
+     * per-call extraHeaders folded LAST over the built request via OkHttp
+     * header() — same-name REPLACE. Folding a RAW per-call map therefore
+     * overwrites the normalized ctor Accept back onto the wire; the production
+     * fold sanitizes the per-call map through the same choke point first.
+     * This test replicates that exact fold shape with the harmful value on
+     * BOTH channels and asserts the wire value; the differential raw fold
+     * below proves the REPLACE overwrite path is real, not a no-op.
+     */
+    @Test
+    fun `per-call fold cannot put the harmful accept back on the wire`() = runTest {
+        val provider = OpenAIProvider(
+            apiKey = placeholderCredential,
+            model = relayModel(),
+            basePath = "https://relay.example/v1",
+            extraHeaders = mapOf(
+                "Accept" to "text/event-stream",
+                "X-Custom" to "ctor-header",
+            ),
+        )
+        val body = provider.buildRequestBody(
+            messages = listOf(LLMMessage(role = LLMMessage.Role.USER, content = "hi")),
+            systemPrompt = null,
+            maxTokens = 2048,
+            stream = true,
+            temperature = null,
+            imageParts = emptyList(),
+        )
+        val base: Request = provider.requestBodies.buildRequest(body.toString())
+        assertEquals("application/json", base.header("Accept"))
+        // Per-call channel, replicating the OpenAIRawStream.rawStreamMessage fold.
+        val perCall: Map<String, String> = mapOf("Accept" to "text/event-stream")
+        val raw = perCall.entries.fold(base) { acc, (n, v) ->
+            acc.newBuilder().header(n, v).build()
+        }
+        assertEquals("text/event-stream", raw.header("Accept")) // REPLACE is real
+        val request = AcceptHeaderPolicy.sanitizeChatAccept(perCall).entries
+            .fold(base) { acc, (n, v) -> acc.newBuilder().header(n, v).build() }
+        assertEquals(
+            "the sanitized per-call fold must leave application/json on the wire",
+            "application/json",
+            request.header("Accept"),
+        )
+        assertEquals("ctor-header", request.header("X-Custom"))
+    }
+
+    /**
+     * [P1-1] The model-use per-call override channel —
+     * OpenAIProvider.chatExtraHeaders, populated per call by
+     * ModelUseOffloadHandler (user extra_headers + session headers) and
+     * applied AFTER the ctor extraHeaders with same-name REPLACE — passes
+     * through the same sanitize choke point: a per-call
+     * `Accept: text/event-stream` reaches the wire as application/json even
+     * though the ctor extraHeaders carry no Accept at all.
+     */
+    @Test
+    fun `chat extra headers override channel is sanitized too`() = runTest {
+        val provider = OpenAIProvider(
+            apiKey = placeholderCredential,
+            model = relayModel(),
+            basePath = "https://relay.example/v1",
+        )
+        // Same injection point ModelUseOffloadHandler uses:
+        // openAI.chatExtraHeaders = mergedHdrs.
+        provider.chatExtraHeaders = mapOf("Accept" to "text/event-stream")
+        val body = provider.buildRequestBody(
+            messages = listOf(LLMMessage(role = LLMMessage.Role.USER, content = "hi")),
+            systemPrompt = null,
+            maxTokens = 2048,
+            stream = true,
+            temperature = null,
+            imageParts = emptyList(),
+        )
+        val request: Request = provider.requestBodies.buildRequest(body.toString())
+        assertEquals(
+            "a per-call override Accept must not reach the wire as text/event-stream",
+            "application/json",
+            request.header("Accept"),
+        )
     }
 
     private fun relayModel() = LLMModel(

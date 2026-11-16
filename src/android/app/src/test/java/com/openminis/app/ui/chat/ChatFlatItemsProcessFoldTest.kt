@@ -752,7 +752,8 @@ class ChatFlatItemsProcessFoldTest {
         // ids, and when a run STARTS with a tool the first block id feeds the
         // composite card key — which lands in the FlatKeys messageId slot and
         // crashed construction with IllegalArgumentException. The key must
-        // come out colon-free and deterministic.
+        // come out ':'/'#'-free, deterministic, and ESCAPED (the ':' survives
+        // recognizably as %3A, not rewritten to a lossy '-').
         val items = buildFlatChatItems(
             listOf(
                 user("u1"),
@@ -771,8 +772,116 @@ class ChatFlatItemsProcessFoldTest {
             summary.messageId.contains(':') || summary.messageId.contains('#'),
         )
         assertTrue(
-            "sanitized first-block id must stay recognizable: ${summary.messageId}",
-            summary.messageId.endsWith("--grep-121"),
+            "escaped first-block id must stay recognizable: ${summary.messageId}",
+            summary.messageId.endsWith("--grep%3A121"),
+        )
+    }
+
+    @Test
+    fun `process card keys are injective across colon and hyphen block ids`() {
+        // [T-flatkeys-invariants] Regression for the lossy '-' sanitize: relay
+        // "grep:121" and literal "grep-121" both collapsed to the key tail
+        // "grep-121", so two DIFFERENT runs in one round shared one toggle key
+        // and their fold state moved together (collapsing one also collapsed
+        // the other; runningCardKeys synced both). The percent-style escape
+        // must keep the two keys distinct.
+        val items = buildFlatChatItems(
+            listOf(
+                user("u1"),
+                assistant(
+                    id = "a1",
+                    blocks = listOf(
+                        tool(id = "grep:121", name = "grep"),
+                        tool(id = "grep:122", name = "grep"),
+                        text(id = "tx1", content = "part"),
+                    ),
+                ),
+                assistant(
+                    id = "a2",
+                    blocks = listOf(
+                        tool(id = "grep-121", name = "grep"),
+                        tool(id = "grep-122", name = "grep"),
+                        text(id = "tx2", content = "done"),
+                    ),
+                ),
+            ),
+            showCompletedToolCards = false,
+            foldAiProcess = true,
+        )
+        val summaries = items.filterIsInstance<FlatChatItem.AssistantProcessSummary>()
+        assertEquals("cards=${summaries.size} rows=${kinds(items)}", 2, summaries.size)
+        val keys = summaries.map { it.messageId }
+        // Two runs, two distinct toggle keys: one per card, never shared.
+        assertEquals(2, keys.toSet().size)
+        assertEquals(
+            "first run escapes ':', the literal-hyphen run stays verbatim: $keys",
+            listOf("u1--grep%3A121", "u1--grep-121"),
+            keys,
+        )
+    }
+
+    @Test
+    fun `process card key percent-escapes literal percent block ids`() {
+        // [T-flatkeys-invariants] '%' must be escaped FIRST ("%25"): a literal
+        // '%' in a block id must not survive verbatim in the key, or it could
+        // impersonate the "%3A"/"%23" escapes of other ids and re-collapse two
+        // distinct keys into one. With '%' escaped first, every '%' in the key
+        // is the head of an escape token and the mapping stays injective.
+        val items = buildFlatChatItems(
+            listOf(
+                user("u1"),
+                assistant(
+                    blocks = listOf(
+                        tool(id = "a%b", name = "grep"),
+                        tool(id = "a%b2", name = "grep"),
+                        text(id = "tx1", content = "done"),
+                    ),
+                ),
+            ),
+            showCompletedToolCards = false,
+            foldAiProcess = true,
+        )
+        val summary = items.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single()
+        assertFalse(
+            "card key must be FlatKeys-safe (no ':'/'#'): ${summary.messageId}",
+            summary.messageId.contains(':') || summary.messageId.contains('#'),
+        )
+        assertTrue(
+            "literal '%' must be escaped to %25: ${summary.messageId}",
+            summary.messageId.endsWith("--a%25b"),
+        )
+    }
+
+    @Test
+    fun `process card key percent-escapes sub-agent hash block ids`() {
+        // [T-relay-toolcall-hash-id] Pin the '#' escape branch: sub-agent
+        // transcript cards carry "#sub-" ids (isSubAgentTranscriptCard), and a
+        // run can OPEN with such a block, feeding the id straight into the
+        // card key. The old code only fed ':' through the tests, so deleting
+        // the `.replace('#', ...)` rewrite turned no test red. The key must
+        // come out '#' free and keep the id recognizable as %23.
+        val items = buildFlatChatItems(
+            listOf(
+                user("u1"),
+                assistant(
+                    blocks = listOf(
+                        tool(id = "run#sub-3"),
+                        tool(id = "run#sub-4"),
+                        text(id = "tx1", content = "done"),
+                    ),
+                ),
+            ),
+            showCompletedToolCards = false,
+            foldAiProcess = true,
+        )
+        val summary = items.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single()
+        assertFalse(
+            "card key must be FlatKeys-safe (no ':'/'#'): ${summary.messageId}",
+            summary.messageId.contains(':') || summary.messageId.contains('#'),
+        )
+        assertTrue(
+            "escaped '#' must stay recognizable: ${summary.messageId}",
+            summary.messageId.endsWith("--run%23sub-3"),
         )
     }
 }

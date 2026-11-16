@@ -70,7 +70,11 @@ object PlanBoardClosePrompt {
             }
         }
 
-        // Board has unfinished steps: reconcile before the final answer.
+        // Board has unfinished steps: reconcile before the final answer. The
+        // board outlives its Goal (the user cleared it, or none was ever
+        // created), so the closing instruction is gated on goalActive — the
+        // update_goal call would fail anyway (modelUpdate requires an ACTIVE
+        // Goal; clear reports "none exists") and only burn a tool call.
         val openItems = plans.filter { it.status != "done" }.joinToString(", ") { it.title }
         return buildString {
             append("<system-reminder>\n")
@@ -81,8 +85,12 @@ object PlanBoardClosePrompt {
                 append("or mark done only if the work actually landed.\n")
             }
             append("Open items: $openItems.\n")
-            append("- When the board is fully done, call update_goal(op=complete) so the Goal closes; ")
-            append("if the objective changed shape, say so and use update_goal(op=clear).\n")
+            if (goalActive) {
+                append("- Once every open step above reads done, call update_goal(op=complete) so the Goal closes; ")
+                append("if the objective changed shape, say so and use update_goal(op=clear).\n")
+            } else {
+                append("- No active Goal — just reconcile the board above.\n")
+            }
             append("A board left with pending steps while the work is done reads as unfinished to the user.\n")
             append("</system-reminder>")
         }
