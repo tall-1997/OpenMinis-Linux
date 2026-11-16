@@ -1865,6 +1865,7 @@
     <string name="plan_board_all_done">すべてのステップが完了しました</string>
     <string name="cd_plan_board_toggle">プランボードの展開／折りたたみ</string>
     <string name="cd_plan_step_retry">失敗したこのステップを再試行</string>
+    <string name="cd_plan_board_dismiss">プランボードを閉じる</string>
     <string name="cd_goal_header">目標の詳細を開く</string>
     <string name="cd_goal_status_active">目標が進行中</string>
     <string name="cd_goal_status_paused">目標が一時停止中</string>

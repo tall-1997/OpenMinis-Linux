@@ -279,6 +279,24 @@ object AgentPlanStore {
         true
     }
 
+    /**
+     * [T-plan-orphan-sweep] Exact-id batch delete for the check_agent clear
+     * cascade: a dropped wave's lanes carry the ids of the board items the
+     * dispatch auto-filed, and those items must go with the wave record.
+     * Unlike [remove] this matches the id EXACTLY — the ids come from
+     * [SubAgentBatchRegistry.Lane.planId], never from a model transcription,
+     * so the fuzzy [resolveIndex] ladder would only add ambiguity risk.
+     * Unknown ids are ignored; positions re-index; returns how many went.
+     */
+    fun removeAll(sessionId: String, context: Context?, ids: Set<String>): Int = lock(sessionId).withLock {
+        if (ids.isEmpty()) return@withLock 0
+        val plans = loadLocked(sessionId, context)
+        val out = plans.filterNot { it.id in ids }.mapIndexed { i, p -> p.copy(position = i) }
+        val removed = plans.size - out.size
+        if (removed > 0) saveLocked(sessionId, context, out)
+        removed
+    }
+
     fun clear(sessionId: String, context: Context?) = lock(sessionId).withLock {
         saveLocked(sessionId, context, emptyList())
     }

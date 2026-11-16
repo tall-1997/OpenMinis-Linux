@@ -1873,6 +1873,7 @@
     <string name="plan_board_all_done">Semua langkah selesai</string>
     <string name="cd_plan_board_toggle">Bentangkan atau ciutkan papan rencana</string>
     <string name="cd_plan_step_retry">Coba lagi langkah yang gagal ini</string>
+    <string name="cd_plan_board_dismiss">Sembunyikan papan rencana</string>
     <string name="cd_goal_header">Buka detail tujuan</string>
     <string name="cd_goal_status_active">Tujuan sedang berjalan</string>
     <string name="cd_goal_status_paused">Tujuan dijeda</string>

@@ -1867,6 +1867,7 @@
     <string name="plan_board_all_done">Todos los pasos completados</string>
     <string name="cd_plan_board_toggle">Expandir o contraer el panel del plan</string>
     <string name="cd_plan_step_retry">Reintentar este paso fallido</string>
+    <string name="cd_plan_board_dismiss">Descartar el panel del plan</string>
     <string name="cd_goal_header">Abrir detalles del objetivo</string>
     <string name="cd_goal_status_active">Objetivo en curso</string>
     <string name="cd_goal_status_paused">Objetivo en pausa</string>

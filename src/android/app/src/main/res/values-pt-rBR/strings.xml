@@ -1868,6 +1868,7 @@
     <string name="plan_board_all_done">Todas as etapas concluídas</string>
     <string name="cd_plan_board_toggle">Expandir ou recolher o quadro do plano</string>
     <string name="cd_plan_step_retry">Tentar novamente esta etapa que falhou</string>
+    <string name="cd_plan_board_dismiss">Descartar o quadro do plano</string>
     <string name="cd_goal_header">Abrir detalhes da meta</string>
     <string name="cd_goal_status_active">Meta em andamento</string>
     <string name="cd_goal_status_paused">Meta pausada</string>

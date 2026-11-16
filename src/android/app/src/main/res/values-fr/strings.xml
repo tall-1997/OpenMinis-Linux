@@ -1868,6 +1868,7 @@
     <string name="plan_board_all_done">Toutes les étapes sont terminées</string>
     <string name="cd_plan_board_toggle">Développer ou réduire le tableau du plan</string>
     <string name="cd_plan_step_retry">Réessayer cette étape qui a échoué</string>
+    <string name="cd_plan_board_dismiss">Masquer le tableau du plan</string>
     <string name="cd_goal_header">Ouvrir les détails de l\'objectif</string>
     <string name="cd_goal_status_active">Objectif en cours</string>
     <string name="cd_goal_status_paused">Objectif en pause</string>

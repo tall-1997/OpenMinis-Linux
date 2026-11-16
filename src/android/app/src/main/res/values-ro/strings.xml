@@ -1872,6 +1872,7 @@
     <string name="plan_board_all_done">Toți pașii finalizați</string>
     <string name="cd_plan_board_toggle">Extinde sau restrânge tabla planului</string>
     <string name="cd_plan_step_retry">Reîncearcă acest pas eșuat</string>
+    <string name="cd_plan_board_dismiss">Ascunde tabla planului</string>
     <string name="cd_goal_header">Deschide detaliile obiectivului</string>
     <string name="cd_goal_status_active">Obiectiv în desfășurare</string>
     <string name="cd_goal_status_paused">Obiectiv pus în pauză</string>
