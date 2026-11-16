@@ -29,9 +29,9 @@ class AgentSteeringQueueTest {
     @Test
     fun `one-at-a-time drains the oldest message per call`() {
         val queue = AgentSteeringQueue() // default ONE_AT_A_TIME
-        assertTrue(queue.offer("first"))
-        assertTrue(queue.offer("second"))
-        assertTrue(queue.offer("third"))
+        assertNotNull(queue.offer("first"))
+        assertNotNull(queue.offer("second"))
+        assertNotNull(queue.offer("third"))
         assertEquals(3, queue.size)
         assertEquals("first", queue.drainOne()?.text)
         assertEquals("second", queue.drainOne()?.text)
@@ -96,12 +96,12 @@ class AgentSteeringQueueTest {
     @Test
     fun `offer returns a stable entry with deterministic placeholder ids`() {
         val queue = AgentSteeringQueue()
-        val entry = assertNotNull(queue.offer("follow-up"))
+        val entry = queue.offer("follow-up")!!
         // The ids are how the commit finds the placeholder bubble + hint row.
         assertEquals("steer_q_" + entry.id, entry.placeholderMessageId)
         assertEquals("steer_sys_" + entry.id, entry.sysinfoMessageId)
         // Distinct entries, distinct ids (the fallback filters by id).
-        val second = assertNotNull(queue.offer("again"))
+        val second = queue.offer("again")!!
         assertFalse(second.id == entry.id)
         assertFalse(second.placeholderMessageId == entry.placeholderMessageId)
     }
@@ -109,7 +109,7 @@ class AgentSteeringQueueTest {
     @Test
     fun `remove drops the entry (queued-bubble withdraw path)`() {
         val queue = AgentSteeringQueue()
-        val entry = assertNotNull(queue.offer("withdraw me"))
+        val entry = queue.offer("withdraw me")!!
         assertTrue(queue.remove(entry.id))
         assertTrue(queue.isEmpty)
         // Unknown ids report false without touching the queue.
@@ -120,12 +120,12 @@ class AgentSteeringQueueTest {
     @Test
     fun `updateText rewrites the entry and rejects blanks`() {
         val queue = AgentSteeringQueue()
-        val entry = assertNotNull(queue.offer("original"))
+        val entry = queue.offer("original")!!
         assertTrue(queue.updateText(entry.id, "edited text"))
         assertEquals("edited text", queue.drainOne()?.text)
         // Blank edits are rejected (an attachment-less steering entry has no
         // attachment to keep a blank text legal — mirrors editQueued's guard).
-        val entry2 = assertNotNull(queue.offer("second"))
+        val entry2 = queue.offer("second")!!
         assertFalse(queue.updateText(entry2.id, "   "))
         assertEquals("second", queue.drainOne()?.text)
         assertFalse(queue.updateText("steer_missing", "x"))
@@ -175,7 +175,7 @@ class AgentSteeringQueueTest {
         val store = SteeringSessionStore()
         val owner = Any()
         val draft = store.stateFor(owner, "__new__draft")
-        assertTrue(draft.queue.offer("mid-run note"))
+        assertNotNull(draft.queue.offer("mid-run note"))
         // The promotion: same owner, different id.
         val promoted = store.stateFor(owner, "persisted-real")
         assertSame("a stamp change is a re-stamp, not a new state", draft, promoted)
@@ -274,7 +274,7 @@ class AgentSteeringQueueTest {
         ChatMessage(id = id, role = "user", content = text)
 
     private fun hint(id: String): ChatMessage =
-        ChatMessage(id = id, role = "system", toolBlocks = listOf(AssistantBlock(id, "info", "queued")))
+        ChatMessage(id = id, role = "system", content = "", toolBlocks = listOf(AssistantBlock(id, "info", "queued")))
 
     @Test
     fun `reposition seals the assistant bubble above the user bubbles`() {
