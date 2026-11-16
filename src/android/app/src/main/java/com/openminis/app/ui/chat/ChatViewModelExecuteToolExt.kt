@@ -84,6 +84,44 @@ internal suspend fun ChatViewModel.executeTool(
     assistantId: String = "",
     currentText: String = "",
 ): ToolExecutionResult {
+    val result = executeToolDispatched(name, argsJson, toolId, toolBlocks, assistantId, currentText)
+    // [T-plan-host-derive] Board reconciliation from work evidence, after
+    // every successful tool: narration attribution advances a stale board
+    // (the model moved to the next step without the bookkeeping call), and
+    // an all-done board closes an ACTIVE Goal through the verifier path.
+    // Best-effort: a reconciliation failure must never fail the tool.
+    if (result.success) {
+        val note = runCatching {
+            com.openminis.app.tools.PlanBoardAdvance.reconcileAfterTool(
+                sessionId = activeSessionId,
+                context = context,
+                toolName = name,
+                toolTitle = runCatching { org.json.JSONObject(argsJson).optString("tool_title") }.getOrDefault(""),
+                succeeded = true,
+                goals = com.openminis.app.goal.GoalManager(chatRepository),
+            )
+        }.onFailure {
+            com.openminis.app.logging.AppLogger.warning(
+                "PlanBoardAdvance", "board reconcile failed: ${it.message}",
+            )
+        }.getOrNull()
+        if (!note.isNullOrEmpty()) return result.copy(output = result.output + "\n" + note)
+    }
+    return result
+}
+
+internal suspend fun ChatViewModel.executeToolDispatched(
+    name: String,
+    argsJson: String,
+    toolId: String,
+    // [T-android-capability-sets] Trailing params default for the detached
+    // child-executor call sites (sub-agent/supervisor/group-chat) that have
+    // no streaming UI context — kills the four-copy `("" , mutableListOf(),
+    // "", "")` ritual.
+    toolBlocks: MutableList<AssistantBlock> = mutableListOf(),
+    assistantId: String = "",
+    currentText: String = "",
+): ToolExecutionResult {
     // T330: tri-state permission gating moved into the offload IPC
     // handler (OffloadGate). The CLIs land there whether the LLM
     // emitted a named tool call or a raw shell command, so the gate
