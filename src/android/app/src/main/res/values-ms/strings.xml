@@ -1868,6 +1868,7 @@
     <string name="plan_board_all_done">Semua langkah selesai</string>
     <string name="cd_plan_board_toggle">Buka atau tutup papan pelan</string>
     <string name="cd_plan_step_retry">Cuba semula langkah yang gagal ini</string>
+    <string name="cd_plan_board_dismiss">Buang papan pelan</string>
     <string name="cd_goal_header">Buka butiran matlamat</string>
     <string name="cd_goal_status_active">Matlamat sedang berjalan</string>
     <string name="cd_goal_status_paused">Matlamat dijeda</string>

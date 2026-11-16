@@ -1,6 +1,7 @@
 package com.openminis.app.tools
 
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -17,6 +18,17 @@ class CheckAgentToolTest {
 
     private val registry = SubAgentBatchRegistry
 
+    /** [T-plan-orphan-sweep] board items are session-scoped memory; drop them
+     *  so a test's leftovers never leak into the next one's assertions. */
+    @After
+    fun wipeBoards() {
+        listOf(
+            "sess-tool-clear-cascade",
+            "sess-tool-clear-keep-board",
+            "sess-tool-clear-no-plans",
+        ).forEach { AgentPlanStore.clear(it, null) }
+    }
+
     private fun seed(
         session: String,
         lanes: Int = 1,
@@ -29,6 +41,28 @@ class CheckAgentToolTest {
         background = background,
         seeds = (1..lanes).map {
             SubAgentBatchRegistry.LaneSeed(index = it, kind = "worker", title = "lane $it", prompt = "do $it")
+        },
+    )
+
+    /** [T-plan-orphan-sweep] seed whose lanes carry board-item ids. */
+    private fun seedWithPlans(
+        session: String,
+        lanes: Int,
+        planIds: List<String>,
+    ): SubAgentBatchRegistry.Batch = registry.begin(
+        sessionId = session,
+        context = null,
+        toolId = "tool-1",
+        assistantId = "asst-1",
+        background = true,
+        seeds = (1..lanes).map {
+            SubAgentBatchRegistry.LaneSeed(
+                index = it,
+                kind = "worker",
+                title = "lane $it",
+                prompt = "do $it",
+                planId = planIds[it - 1],
+            )
         },
     )
 
@@ -137,6 +171,65 @@ class CheckAgentToolTest {
         assertTrue(r.output, r.output.contains("Cleared 1"))
         assertTrue(r.output, r.output.contains("Kept 1"))
         assertEquals(listOf(kept.id), registry.list(s, null).map { it.id })
+    }
+
+    // [T-plan-orphan-sweep] A dropped wave's auto-filed board items must go
+    // WITH the wave record — the device bug was a "1/3 done, 2 failed" zombie
+    // board sitting above the composer forever after op=clear, because the
+    // tool cleared SubAgentBatchRegistry but never touched AgentPlanStore.
+
+    @Test
+    fun `clear cascades the board items of the waves it dropped`() = runBlocking {
+        val s = "sess-tool-clear-cascade"
+        // wave A: 3 lanes, each auto-filed a board item; finished + collected
+        val waveA = seedWithPlans(s, 3, listOf("plan-1", "plan-2", "plan-3"))
+        finishAll(s, waveA.id, lanes = 3)
+        registry.markCollected(s, null, waveA.id)
+        AgentPlanStore.add(s, null, "子代理 1/3 · explore", status = "done", id = "plan-1")
+        AgentPlanStore.add(s, null, "子代理 2/3 · explore", status = "failed", id = "plan-2")
+        AgentPlanStore.add(s, null, "子代理 3/3 · worker", status = "failed", id = "plan-3")
+        // a manual agent_plan item with no lane link must survive the sweep
+        AgentPlanStore.add(s, null, "manual step", status = "pending", id = "plan-manual")
+
+        val r = CheckAgentTool.execute("""{"tool_title":"t","op":"clear"}""", s, null)
+
+        assertTrue(r.success)
+        assertTrue(r.output, r.output.contains("Cleared 1"))
+        assertTrue(r.output, r.output.contains("Also cleared 3 board item(s)"))
+        val left = AgentPlanStore.list(s, null).map { it.id }
+        assertEquals(listOf("plan-manual"), left)
+        // positions re-indexed after the sweep
+        assertEquals(0, AgentPlanStore.list(s, null).first().position)
+    }
+
+    @Test
+    fun `clear keeps the board items of waves it kept uncollected`() = runBlocking {
+        val s = "sess-tool-clear-keep-board"
+        val kept = seedWithPlans(s, 1, listOf("plan-kept"))
+        finishAll(s, kept.id, lanes = 1)
+        // finished but never collected: the wave record stays, so does its row
+        AgentPlanStore.add(s, null, "kept lane", status = "done", id = "plan-kept")
+
+        val r = CheckAgentTool.execute("""{"tool_title":"t","op":"clear"}""", s, null)
+
+        assertTrue(r.success)
+        assertTrue(r.output, r.output.contains("Kept 1"))
+        assertFalse(r.output, r.output.contains("Also cleared"))
+        assertEquals(listOf("plan-kept"), AgentPlanStore.list(s, null).map { it.id })
+    }
+
+    @Test
+    fun `clear with no board link reports no cascade`() = runBlocking {
+        val s = "sess-tool-clear-no-plans"
+        val b = seed(s, lanes = 1)
+        finishAll(s, b.id, lanes = 1)
+        registry.markCollected(s, null, b.id)
+
+        val r = CheckAgentTool.execute("""{"tool_title":"t","op":"clear"}""", s, null)
+
+        assertTrue(r.success)
+        assertFalse(r.output, r.output.contains("Also cleared"))
+        assertTrue(r.output, r.output.contains("Cleared 1"))
     }
 
     @Test

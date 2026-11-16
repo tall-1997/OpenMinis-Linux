@@ -410,28 +410,42 @@ object SubAgentBatchRegistry {
         }
 
     /**
+     * Outcome of [clearFinished]. Destructures as the historical
+     * `(removed, keptUncollected)` pair — the data class's own component1/2
+     * keep every existing `val (a, b) = clearFinished(...)` caller compiling
+     * — and additionally carries the FULL bodies of the dropped batches so
+     * the caller can cascade side records atomically: each lane's
+     * [Lane.planId] links an auto-filed [AgentPlanStore] item, and a wave
+     * whose record is gone must not leave those items orphaned on the board.
+     */
+    data class ClearResult(
+        val removed: Int,
+        val keptUncollected: Int,
+        val removedBatches: List<Batch> = emptyList(),
+    )
+
+    /**
      * Drop finished waves. A background wave whose reports nobody collected is
      * kept unless [includeUncollected] is set: `check_agent op=clear` is
      * housekeeping, and deleting the only copy of a finished lane report would
-     * quietly turn "clean up" into "lose the work". Returns
-     * (removed, keptUncollected).
+     * quietly turn "clean up" into "lose the work". Returns a [ClearResult]
+     * (removed, keptUncollected, removedBatches).
      */
     fun clearFinished(
         sessionId: String,
         context: Context?,
         includeUncollected: Boolean = false,
-    ): Pair<Int, Int> = lock(sessionId).withLock {
+    ): ClearResult = lock(sessionId).withLock {
         val all = loadLocked(sessionId, context)
         fun isUncollected(b: Batch) = b.background && b.complete && b.collectedAt == 0L
-        val doomedIds = all
+        val doomed = all
             .filter { it.complete && (includeUncollected || !isUncollected(it)) }
-            .map { it.id }
-            .toSet()
+        val doomedIds = doomed.map { it.id }.toSet()
         val keep = all.filterNot { it.id in doomedIds }
         val removed = all.size - keep.size
         val keptUncollected = if (includeUncollected) 0 else all.count { isUncollected(it) }
         if (removed > 0) saveLocked(sessionId, context, keep)
-        removed to keptUncollected
+        ClearResult(removed, keptUncollected, doomed)
     }
 
     /**

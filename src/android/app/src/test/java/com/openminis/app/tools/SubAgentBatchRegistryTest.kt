@@ -193,6 +193,40 @@ class SubAgentBatchRegistryTest {
         assertEquals(listOf(b.id), registry.list(s, null).map { it.id })
     }
 
+    // [T-plan-orphan-sweep] ClearResult keeps the historical
+    // (removed, keptUncollected) destructuring AND carries the dropped batch
+    // bodies so check_agent can cascade their board items atomically.
+
+    @Test
+    fun `clearFinished returns the dropped batches with their lane plan links`() {
+        val s = "sess-reg-clear-bodies"
+        val dropped = seed(s, background = true, lanes = 2)
+        finishAll(s, dropped.id, lanes = 2)
+        registry.markCollected(s, null, dropped.id)
+        val kept = seed(s, background = true, lanes = 1)
+        finishAll(s, kept.id, lanes = 1) // uncollected -> kept
+
+        val result = registry.clearFinished(s, null)
+
+        val (removed, keptUncollected) = result
+        assertEquals(1, removed)
+        assertEquals(1, keptUncollected)
+        assertEquals(listOf(dropped.id), result.removedBatches.map { it.id })
+        assertEquals(2, result.removedBatches.single().lanes.size)
+    }
+
+    @Test
+    fun `clearFinished with nothing to drop returns an empty body list`() {
+        val s = "sess-reg-clear-empty"
+        val b = seed(s, background = true, lanes = 1)
+        registry.markRunning(s, null, b.id, 1, null, "gpt-x", 1)
+
+        val result = registry.clearFinished(s, null)
+
+        assertEquals(0, result.removed)
+        assertTrue(result.removedBatches.isEmpty())
+    }
+
     @Test
     fun `encode and decode preserve the collected marker across a restart`() {
         val s = "sess-reg-roundtrip"

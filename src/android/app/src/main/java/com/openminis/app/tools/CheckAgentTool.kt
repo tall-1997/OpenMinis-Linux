@@ -69,9 +69,25 @@ object CheckAgentTool {
 
         return when (op) {
             "clear" -> {
-                val (removed, keptUncollected) = runCatching {
+                val result = runCatching {
                     registry.clearFinished(sessionId, context)
-                }.getOrDefault(0 to 0)
+                }.getOrDefault(SubAgentBatchRegistry.ClearResult(0, 0))
+                val (removed, keptUncollected) = result
+                // [T-plan-orphan-sweep] A dropped wave's lanes carry the ids of
+                // the board items the dispatch auto-filed; the record and its
+                // board rows must go together, or the card above the composer
+                // shows a zombie "1/3 done, 2 failed" board forever. Kept
+                // (uncollected) batches keep their rows — the wave survives,
+                // so does its progress.
+                val orphanIds = result.removedBatches
+                    .flatMap { it.lanes }
+                    .mapNotNull { it.planId }
+                    .toSet()
+                val plansCleared = if (orphanIds.isEmpty()) {
+                    0
+                } else {
+                    runCatching { AgentPlanStore.removeAll(sessionId, context, orphanIds) }.getOrDefault(0)
+                }
                 // Never let housekeeping delete a report nobody has read yet.
                 val note = if (keptUncollected > 0) {
                     " Kept $keptUncollected finished wave(s) whose reports were never collected — " +
@@ -79,7 +95,16 @@ object CheckAgentTool {
                 } else {
                     ""
                 }
-                ToolExecutionResult("Cleared $removed finished dispatch record(s).$note", true, toolTitle = toolTitle)
+                val planNote = if (plansCleared > 0) {
+                    " Also cleared $plansCleared board item(s) left by those waves."
+                } else {
+                    ""
+                }
+                ToolExecutionResult(
+                    "Cleared $removed finished dispatch record(s).$note$planNote",
+                    true,
+                    toolTitle = toolTitle,
+                )
             }
 
             "list" -> {

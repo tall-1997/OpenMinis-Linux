@@ -1865,6 +1865,7 @@
     <string name="plan_board_all_done">모든 단계 완료</string>
     <string name="cd_plan_board_toggle">계획 보드 펼치기/접기</string>
     <string name="cd_plan_step_retry">실패한 이 단계 재시도</string>
+    <string name="cd_plan_board_dismiss">계획 보드 닫기</string>
     <string name="cd_goal_header">목표 세부정보 열기</string>
     <string name="cd_goal_status_active">목표 진행 중</string>
     <string name="cd_goal_status_paused">목표 일시정지됨</string>

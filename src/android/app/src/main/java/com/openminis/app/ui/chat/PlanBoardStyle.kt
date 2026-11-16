@@ -30,6 +30,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.foundation.shape.CircleShape
@@ -109,6 +110,19 @@ internal fun planBoardSummary(done: Int, total: Int, title: String?): String {
 }
 
 /**
+ * [T-plan-board-dismiss] May the USER close this board right now?
+ *
+ * A board whose every step is static — done lingering in its retire window,
+ * failed lanes the model already reported, a stale manual list — is closed
+ * work, and the card used to have no exit for any of it: retireFinished only
+ * clears ALL-DONE boards, so a "1/3 done, 2 failed" zombie sat above the
+ * composer forever. A board holding an ACTIVE step is live progress and
+ * stays until it settles; an empty board has nothing to dismiss.
+ */
+internal fun planBoardDismissible(board: List<AgentPlanStore.Plan>): Boolean =
+    board.isNotEmpty() && board.none { it.status == "active" }
+
+/**
  * The board segment: summary row (identity glyph + "2/5 · current step" +
  * disclosure chevron), the row list when [expanded]. Signature unchanged from
  * the pre-redesign version — the card calls it exactly as before.
@@ -149,6 +163,15 @@ internal fun PlanBoardBody(
      * restores that entry without adding a second row.
      */
     onOpenGoal: (() -> Unit)? = null,
+    /**
+     * [T-plan-board-dismiss] User-side exit for a static board: clears the
+     * store, and the emptied board routes through the card's presence driver
+     * for the same exit animation the all-done retire uses. Null when the
+     * host wires no callback; the control also hides while any step is
+     * ACTIVE ([planBoardDismissible]) so a live board can never be swiped
+     * away mid-run.
+     */
+    onDismissBoard: (() -> Unit)? = null,
 ) {
     val accent = if (allDone) ToolCheckColor else MaterialTheme.colorScheme.primary
     val title: String? = goalObjective?.takeIf { it.isNotBlank() } ?: if (allDone) {
@@ -290,6 +313,29 @@ internal fun PlanBoardBody(
                     Icon(
                         imageVector = Icons.Filled.Flag,
                         contentDescription = stringResource(R.string.cd_goal_header),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
+                Spacer(Modifier.width(2.dp))
+            }
+            // [T-plan-board-dismiss] The user-side exit, same 36dp circular
+            // grammar as the flag button (Apple inset-grouped rows: quiet
+            // glyph, no border, finger-sized target). Only a static board
+            // grows it — an active board is live progress and must not be
+            // dismissible mid-run.
+            if (onDismissBoard != null && planBoardDismissible(board)) {
+                val dismissLabel = stringResource(R.string.cd_plan_board_dismiss)
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .clickable(role = Role.Button, onClickLabel = dismissLabel) { onDismissBoard() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Close,
+                        contentDescription = dismissLabel,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                         modifier = Modifier.size(16.dp),
                     )

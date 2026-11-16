@@ -1949,6 +1949,7 @@
     <string name="plan_board_all_done">所有步驟已完成</string>
     <string name="cd_plan_board_toggle">展開或收起計畫看板</string>
     <string name="cd_plan_step_retry">重試這個失敗的步驟</string>
+    <string name="cd_plan_board_dismiss">關閉計畫看板</string>
     <string name="cd_goal_header">開啟目標詳細資訊</string>
     <string name="cd_goal_status_active">目標進行中</string>
     <string name="cd_goal_status_paused">目標已暫停</string>

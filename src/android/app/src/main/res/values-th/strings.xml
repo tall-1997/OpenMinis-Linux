@@ -1868,6 +1868,7 @@
     <string name="plan_board_all_done">ทำทุกขั้นตอนเสร็จสมบูรณ์</string>
     <string name="cd_plan_board_toggle">ขยายหรือยุบกระดานแผน</string>
     <string name="cd_plan_step_retry">ลองทำขั้นตอนที่ล้มเหลวนี้อีกครั้ง</string>
+    <string name="cd_plan_board_dismiss">ปิดกระดานแผน</string>
     <string name="cd_goal_header">เปิดรายละเอียดเป้าหมาย</string>
     <string name="cd_goal_status_active">เป้าหมายกำลังดำเนินการ</string>
     <string name="cd_goal_status_paused">เป้าหมายถูกพักไว้</string>

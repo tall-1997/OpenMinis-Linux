@@ -177,6 +177,30 @@ class AgentPlanToolTest {
         assertFalse(AgentPlanStore.remove(sidA, null, "no-such-id"))
     }
 
+    // [T-plan-orphan-sweep] Exact-id batch delete for the check_agent clear
+    // cascade: ids come from Lane.planId (never a model transcription), so
+    // no fuzzy resolution — unknown ids ignored, positions re-indexed.
+
+    @Test
+    fun removeAllDeletesExactIdsAndReindexes() {
+        AgentPlanStore.clear(sidA, null)
+        val ids = (1..5).map { AgentPlanStore.add(sidA, null, "step $it").id }
+        val removed = AgentPlanStore.removeAll(sidA, null, setOf(ids[1], ids[3], "zz-unknown"))
+        assertEquals(2, removed)
+        val left = AgentPlanStore.list(sidA, null)
+        assertEquals(listOf("step 1", "step 3", "step 5"), left.map { it.title })
+        assertEquals(listOf(0, 1, 2), left.map { it.position })
+    }
+
+    @Test
+    fun removeAllWithUnknownIdsOnlyReturnsZero() {
+        AgentPlanStore.clear(sidA, null)
+        AgentPlanStore.add(sidA, null, "only")
+        assertEquals(0, AgentPlanStore.removeAll(sidA, null, setOf("a", "b")))
+        assertEquals(1, AgentPlanStore.list(sidA, null).size)
+        assertEquals(0, AgentPlanStore.removeAll(sidA, null, emptySet()))
+    }
+
     @Test
     fun clearEmptiesList() {
         AgentPlanStore.add(sidA, null, "t1")

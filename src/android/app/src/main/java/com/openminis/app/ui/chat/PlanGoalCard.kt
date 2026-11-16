@@ -287,6 +287,16 @@ internal fun PlanGoalCard(viewModel: ChatViewModel, modifier: Modifier = Modifie
                                     GoalSheetSignal.open()
                                 }
                             },
+                            // [T-plan-board-dismiss] The user-side exit for a
+                            // static board: clear the store and let the
+                            // presence driver run the same exit animation the
+                            // all-done retire uses. The control itself hides
+                            // while any step is active, so live progress is
+                            // never dismissible mid-run.
+                            onDismissBoard = {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                AgentPlanStore.clear(sid, context)
+                            },
                             onToggle = {
                                 expanded = !expanded
                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)

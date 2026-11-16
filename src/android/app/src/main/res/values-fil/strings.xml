@@ -1868,6 +1868,7 @@
     <string name="plan_board_all_done">Lahat ng hakbang ay nakumpleto</string>
     <string name="cd_plan_board_toggle">Palakihin o paliitin ang plan board</string>
     <string name="cd_plan_step_retry">Subukang muli ang hakbang na nabigo</string>
+    <string name="cd_plan_board_dismiss">I-dismiss ang plan board</string>
     <string name="cd_goal_header">Buksan ang mga detalye ng layunin</string>
     <string name="cd_goal_status_active">Layunin sa proseso</string>
     <string name="cd_goal_status_paused">Naka-pause ang layunin</string>

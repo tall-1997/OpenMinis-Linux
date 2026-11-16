@@ -1875,6 +1875,7 @@
     <string name="plan_board_all_done">Wszystkie kroki ukończone</string>
     <string name="cd_plan_board_toggle">Rozwiń lub zwiń tablicę planu</string>
     <string name="cd_plan_step_retry">Ponów ten nieudany krok</string>
+    <string name="cd_plan_board_dismiss">Ukryj tablicę planu</string>
     <string name="cd_goal_header">Otwórz szczegóły celu</string>
     <string name="cd_goal_status_active">Cel w toku</string>
     <string name="cd_goal_status_paused">Cel wstrzymany</string>
