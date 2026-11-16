@@ -10,6 +10,7 @@ import com.openminis.app.data.model.ProviderType
 import com.openminis.app.data.model.VoiceProviderTemplate
 import com.openminis.app.data.model.hasVoiceModality
 import com.openminis.app.provider.ModelsDevApi
+import com.openminis.app.provider.ModelRefreshGeneration
 import com.openminis.app.provider.anthropic.AnthropicModelsApi
 import com.openminis.app.provider.gemini.GeminiModelsApi
 import com.openminis.app.provider.openai.OpenAIModelsApi
@@ -39,6 +40,17 @@ internal class ModelCatalogCache(
     private val context: Context,
     private val prefs: SharedPreferences,
 ) {
+    /**
+     * [T-model-refresh-generation] Per-instance refresh generation guard (pi
+     * `Models.refresh` port). Manual refresh, the toolbar Sync sweep, the SWR
+     * picker refresh and the daily sweep can all target the same instance
+     * concurrently; without this guard the slowest of two overlapping
+     * refreshes published last and its stale catalog overwrote the fresh one.
+     * See [refreshModels] — every publish site checks its captured generation
+     * before touching the cache or notifying the UI.
+     */
+    private val refreshGenerations = ModelRefreshGeneration()
+
     private companion object {
         /**
          * Per-instance model-cache TTL. Matches iOS's daily calendar-day
@@ -132,6 +144,11 @@ internal class ModelCatalogCache(
             )
             return ModelRefreshResult.FAILURE
         }
+        // [T-model-refresh-generation] Capture this run's generation (pi
+        // beginProviderRefresh). Any refresh of this instance started after
+        // this point supersedes it: this run's fetch result will be dropped
+        // at publish time instead of overwriting the newer catalog.
+        val generation = refreshGenerations.begin(instance.id)
         val liveForce = forceRefresh || clearFirst
         // [T-refresh-no-destructive-clear] `clearFirst` used to wipe this
         // instance's model entries BEFORE the network call. A hard refresh does
@@ -148,7 +165,10 @@ internal class ModelCatalogCache(
         // old order: entries are gone before `replaceEntries` runs, so nothing
         // is carried forward and `pruned` is empty exactly as before.
         var hardCleared = false
-        suspend fun hardClearIfNeeded() {
+        // [T-model-refresh-generation] Non-suspending on purpose: the whole
+        // body is synchronized config bookkeeping, and the generation-gated
+        // publish lambdas below call it from a plain () -> Unit.
+        fun hardClearIfNeeded() {
             if (!clearFirst || hardCleared) return
             hardCleared = true
             val clearedIds = clearFetchedModelEntries(instance.id)
@@ -201,8 +221,12 @@ internal class ModelCatalogCache(
         ) {
             val models = OpenAIModelsApi.fetchModelsOAuth()
             if (models.isNotEmpty()) {
-                hardClearIfNeeded()
-                repo.replaceEntries(instance.id, models)
+                // [T-model-refresh-generation] Publish only while still the
+                // live generation; a superseded run writes nothing.
+                if (!publishCatalog(generation, instance) {
+                    hardClearIfNeeded()
+                    repo.replaceEntries(instance.id, models)
+                }) return ModelRefreshResult.PRESERVED
                 return ModelRefreshResult.SUCCESS_API
             }
         }
@@ -333,9 +357,13 @@ internal class ModelCatalogCache(
 
             // Step 2: If API returned results, use them
             if (models.isNotEmpty()) {
-                hardClearIfNeeded()
-                val pruned = repo.replaceEntries(instance.id, models, dropStaleRefs = clearFirst)
-                if (pruned.isNotEmpty()) repo.scrubExternalEntryRefs(pruned)
+                // [T-model-refresh-generation] Publish only while still the
+                // live generation; a superseded run writes nothing.
+                if (!publishCatalog(generation, instance) {
+                    hardClearIfNeeded()
+                    val pruned = repo.replaceEntries(instance.id, models, dropStaleRefs = clearFirst)
+                    if (pruned.isNotEmpty()) repo.scrubExternalEntryRefs(pruned)
+                }) return ModelRefreshResult.PRESERVED
                 return ModelRefreshResult.SUCCESS_API
             }
         }
@@ -350,7 +378,13 @@ internal class ModelCatalogCache(
             // an entry). A failed/empty refresh that reseeded missing built-ins
             // reports SUCCESS_BUILTIN rather than a bare failure — the picker
             // is not empty and the UI says so.
-            return if (addMissingBuiltInModels(instance)) ModelRefreshResult.SUCCESS_BUILTIN
+            // [T-model-refresh-generation] The reseed is a config write, so it
+            // goes through the same generation gate as a catalog publish.
+            var builtinAdded = false
+            if (!publishCatalog(generation, instance) {
+                builtinAdded = addMissingBuiltInModels(instance)
+            }) return ModelRefreshResult.PRESERVED
+            return if (builtinAdded) ModelRefreshResult.SUCCESS_BUILTIN
             else lastFetchError ?: ModelRefreshResult.FAILURE
         }
 
@@ -364,7 +398,11 @@ internal class ModelCatalogCache(
         val curatedFallback = fallbackModels
         if (curatedFallback.isNotEmpty()) {
             android.util.Log.i("ProviderRepo", "models.dev fallback returned ${curatedFallback.size} models for ${instance.label}")
-            repo.replaceEntries(instance.id, curatedFallback)
+            // [T-model-refresh-generation] Publish only while still the live
+            // generation; a superseded run writes nothing.
+            if (!publishCatalog(generation, instance) {
+                repo.replaceEntries(instance.id, curatedFallback)
+            }) return ModelRefreshResult.PRESERVED
             return ModelRefreshResult.SUCCESS_API
         } else if (isThirdParty) {
             android.util.Log.i("ProviderRepo", "Third-party endpoint, no models.dev match — preserving existing models for ${instance.label}")
@@ -372,12 +410,50 @@ internal class ModelCatalogCache(
             // too: a third-party OpenAI-compat base never seeds (addInstance
             // skips it), so a failed refresh has nothing to reseed — the call
             // is a no-op and PRESERVED stands. Official bases DO reseed.
-            addMissingBuiltInModels(instance)
+            // [T-model-refresh-generation] The reseed is a config write, so it
+            // goes through the same generation gate as a catalog publish; the
+            // result is PRESERVED either way.
+            publishCatalog(generation, instance) { addMissingBuiltInModels(instance) }
             return ModelRefreshResult.PRESERVED
         }
-        return if (apiKey == null) ModelRefreshResult.NO_KEY
-        else if (addMissingBuiltInModels(instance)) ModelRefreshResult.SUCCESS_BUILTIN
+        if (apiKey == null) return ModelRefreshResult.NO_KEY
+        // [T-model-refresh-generation] Same gate for the last-resort reseed.
+        var builtinAdded = false
+        if (!publishCatalog(generation, instance) {
+            builtinAdded = addMissingBuiltInModels(instance)
+        }) return ModelRefreshResult.PRESERVED
+        return if (builtinAdded) ModelRefreshResult.SUCCESS_BUILTIN
         else ModelRefreshResult.FAILURE
+    }
+
+    /**
+     * [T-model-refresh-generation] Publish a fetched catalog only while this
+     * refresh's captured [generation] is still the live one for the instance
+     * (pi `publishProviderModels` re-check before persist + update).
+     *
+     * A superseded run — a newer refresh of the same instance started while
+     * this one was still in flight — drops the whole result here: no config
+     * write, no StateFlow update, one log line. The caller reports
+     * PRESERVED, which is exactly what happened: the persisted state was left
+     * untouched for the newer refresh to update. [publish] runs under the
+     * guard lock and must complete synchronously (all current call sites
+     * end in [ProviderRepository.replaceEntries] / config writes, which are
+     * plain synchronized blocks).
+     */
+    private fun publishCatalog(
+        generation: Int,
+        instance: ProviderInstance,
+        publish: () -> Unit,
+    ): Boolean {
+        val published = refreshGenerations.publishIfCurrent(instance.id, generation, publish)
+        if (!published) {
+            android.util.Log.i(
+                "ProviderRepo",
+                "[ModelList] refreshModels: stale generation for ${instance.id} — fetch result " +
+                    "discarded, nothing written or announced (a newer refresh is in charge)",
+            )
+        }
+        return published
     }
 
     /**

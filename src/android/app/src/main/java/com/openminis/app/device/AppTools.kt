@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
+import com.openminis.app.data.model.ToolAnnotations
 import com.openminis.app.knowledge.AppKnowledgeStore
 import org.json.JSONObject
 
@@ -91,6 +92,8 @@ internal object AppTools {
             ),
             required = listOf(TOOL_TITLE_PARAM),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "query", "include_system", "limit"),
+            // [pi-port §4.1] Package-manager listing only.
+            annotations = ToolAnnotations(readOnlyHint = true, destructiveHint = false, idempotentHint = true),
         )
 
         fun execute(argsJson: String, context: Context): String {
@@ -136,6 +139,8 @@ internal object AppTools {
             ),
             required = listOf(TOOL_TITLE_PARAM, "package"),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "package"),
+            // [pi-port §4.1] Inspects one package; mutates nothing.
+            annotations = ToolAnnotations(readOnlyHint = true, destructiveHint = false, idempotentHint = true),
         )
 
         fun execute(argsJson: String, context: Context): String {
@@ -180,6 +185,8 @@ internal object AppTools {
             ),
             required = listOf(TOOL_TITLE_PARAM, "package"),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "package", "activity"),
+            // [pi-port §4.1] Starts an activity; repeat calls re-foreground the app.
+            annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = false, idempotentHint = false),
         )
 
         fun execute(argsJson: String, context: Context, sessionId: String? = null): String {
@@ -230,6 +237,8 @@ internal object AppTools {
             ),
             required = listOf(TOOL_TITLE_PARAM, "uri"),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "uri", "package"),
+            // [pi-port §4.1] Opens a URI each call; not idempotent, not destructive.
+            annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = false, idempotentHint = false),
         )
 
         fun execute(argsJson: String, context: Context): String {
@@ -278,6 +287,9 @@ internal object AppTools {
             ),
             required = listOf(TOOL_TITLE_PARAM, "action"),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "action", "data", "type", "package", "component", "extras"),
+            // [pi-port §4.1] Arbitrary Intent on the user's screen — the
+            // DANGEROUS risk class, hence destructiveHint.
+            annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = true, idempotentHint = false),
         )
 
         fun execute(argsJson: String, context: Context): String {
@@ -341,6 +353,8 @@ internal object AppTools {
             ),
             required = listOf(TOOL_TITLE_PARAM, "text"),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "text", "subject", "mime", "package"),
+            // [pi-port §4.1] Opens the share sheet; repeat calls re-open it.
+            annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = false, idempotentHint = false),
         )
 
         fun execute(argsJson: String, context: Context): String {

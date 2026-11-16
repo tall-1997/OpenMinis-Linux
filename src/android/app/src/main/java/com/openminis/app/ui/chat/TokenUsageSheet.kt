@@ -23,6 +23,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -46,6 +47,9 @@ import com.openminis.app.i18n.uppercaseForDisplay
  *   - Tokens (Session Total): Input (incl. cache) / Output
  *   - Cache (Session Total): Cache Read / Cache Write
  *   - Agent Loop: Total Loops
+ *   - Tool calls (only when the loaded window carries tool_use blocks):
+ *     one "name × N" row per tool, busiest first, top 5 + folded remainder
+ *     (the UsageLedger tools bucket, [T-pi-tools-bucket])
  *
  * Data loads asynchronously via [ChatViewModel.loadSessionTokenStats] when the
  * sheet appears; we intentionally don't hold a live subscription — token
@@ -163,6 +167,29 @@ fun TokenUsageSheet(
                 StatSection(title = stringResource(R.string.token_usage_section_thinking)) {
                     StatRow(stringResource(R.string.token_usage_thinking_label), if (t.enabled) onText else offText)
                     if (t.enabled) StatRow(stringResource(R.string.token_usage_thinking_level), t.level)
+                    // [T-thinking-dual-ledger] The session's most recent turn:
+                    // what the user requested vs what the response evidenced.
+                    // "—" = unknown (pre-ledger rows, no thinking streamed, or
+                    // the wire tier could not be named honestly).
+                    val lastRequested = s?.thinkingLevelRequested
+                    if (s != null && lastRequested != null) {
+                        val requestedLevel = com.openminis.app.data.model.ThinkingLevel.decoded(lastRequested)
+                        StatRow(
+                            stringResource(R.string.token_usage_thinking_requested),
+                            requestedLevel.localizedName(LocalContext.current),
+                        )
+                        StatRow(
+                            stringResource(R.string.token_usage_thinking_effective),
+                            // Same localized format as the requested row when
+                            // the wire tier decodes to a session level; raw
+                            // wire value otherwise (it is the provider's own
+                            // naming and must not be invented into a level).
+                            s.thinkingLevelEffective?.let { raw ->
+                                com.openminis.app.data.model.ThinkingLevel.decoded(raw)
+                                    ?.localizedName(LocalContext.current) ?: raw
+                            } ?: "—",
+                        )
+                    }
                     StatRow(stringResource(R.string.token_usage_thinking_supported), if (t.supported) yesText else noText)
                 }
             }
@@ -191,6 +218,30 @@ fun TokenUsageSheet(
 
             StatSection(title = stringResource(R.string.token_usage_section_agent_loop)) {
                 StatRow(stringResource(R.string.token_usage_total_loops), (s?.loopCount ?: 0).toString())
+            }
+            // [T-pi-tools-bucket] UsageLedger tools bucket: one row per tool the loaded
+            // window carries, busiest first ("name × N"). Bounded — top rows plus a folded
+            // remainder row for MCP-heavy sessions. Hidden while the map is empty: empty
+            // means "no tool_use in memory", never a fabricated zero.
+            val toolCounts = s?.toolCallCounts.orEmpty()
+            if (toolCounts.isNotEmpty()) {
+                StatSection(title = stringResource(R.string.token_usage_section_tool_calls)) {
+                    val rows = toolCounts.entries.toList()
+                        .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+                    rows.take(TOOL_ROWS_SHOWN).forEach { (name, calls) ->
+                        StatRow(name, "× $calls")
+                    }
+                    if (rows.size > TOOL_ROWS_SHOWN) {
+                        val remaining = rows.drop(TOOL_ROWS_SHOWN)
+                        StatRow(
+                            stringResource(
+                                R.string.token_usage_tools_more,
+                                remaining.size,
+                            ),
+                            "× ${remaining.sumOf { it.value }}",
+                        )
+                    }
+                }
             }
             // [T-tool-result-aging] What the history-side saver actually did on
             // the most recent request. Zero rows read "—" instead of 0 so an
@@ -313,3 +364,6 @@ private fun ContextBlockKey.labelRes(): Int = when (this) {
     ContextBlockKey.HISTORY -> R.string.context_block_history
     ContextBlockKey.PENDING_ATTACHMENTS -> R.string.context_block_attachments
 }
+
+/** Per-tool rows shown before the calls fold into the "more kinds" remainder row. */
+private const val TOOL_ROWS_SHOWN = 5

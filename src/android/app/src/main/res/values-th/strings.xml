@@ -327,6 +327,8 @@
     <string name="token_usage_section_thinking">การคิด</string>
     <string name="token_usage_thinking_label">การคิด</string>
     <string name="token_usage_thinking_level">ระดับ</string>
+    <string name="token_usage_thinking_requested">ระดับที่ขอ</string>
+    <string name="token_usage_thinking_effective">ระดับที่ใช้จริง</string>
     <string name="token_usage_thinking_supported">รองรับ</string>
     <string name="token_usage_section_tokens">โทเค็น (รวมทั้งเซสชัน)</string>
     <string name="token_usage_input_with_cache">อินพุต (รวมแคช)</string>
@@ -2038,6 +2040,9 @@
     <string name="mcp_approval_restart_notice">การรีสตาร์ทล้างคำอนุมัติที่รอดำเนินการ %1$d รายการ</string>
     <string name="context_saver_title">ประหยัดบริบท</string>
     <string name="context_saver_footer">พับเอาต์พุตเครื่องมือเก่าที่อยู่เกินผลลัพธ์ล่าสุดให้เป็นตัวยึดบรรทัดเดียวเมื่อคำขอใหญ่ขึ้น ไม่มีการลบใด ๆ ผลลัพธ์ที่พับแล้วยังคงพาธไฟล์หรือบอกให้เรียกเครื่องมือใหม่</string>
+    <!-- [T-prompt-cache-warming] Settings toggle for the idle-time prompt cache warming hook. -->
+    <string name="cache_warming_title">การอุ่นแคชพรอมป์</string>
+    <string name="cache_warming_footer">เมื่อเปิดใช้ หลังจากไม่มีการใช้งาน แอปอาจเล่นซ้ำคำขอที่สำเร็จล่าสุดด้วยขีดจำกัดเอาต์พุตหนึ่งโทเค็น เพื่อรีเฟรชแคชพรอมป์ของผู้ให้บริการก่อนหมดอายุ ส่งคำขอที่คิดค่าบริการเพิ่มเติม ปิดอยู่โดยค่าเริ่มต้น</string>
     <string name="context_saver_off">ปิด</string>
     <string name="context_saver_balanced">สมดุล</string>
     <string name="context_saver_aggressive">เชิงรุก</string>

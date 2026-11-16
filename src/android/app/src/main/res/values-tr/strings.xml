@@ -327,6 +327,8 @@
     <string name="token_usage_section_thinking">Düşünme</string>
     <string name="token_usage_thinking_label">Düşünme</string>
     <string name="token_usage_thinking_level">Düzey</string>
+    <string name="token_usage_thinking_requested">İstenen</string>
+    <string name="token_usage_thinking_effective">Etkin</string>
     <string name="token_usage_thinking_supported">Destekleniyor</string>
     <string name="token_usage_section_tokens">Token (Oturum Toplamı)</string>
     <string name="token_usage_input_with_cache">Giriş (önbellek dahil)</string>
@@ -2038,6 +2040,9 @@
     <string name="mcp_approval_restart_notice">Yeniden başlatma %1$d bekleyen onayı geçersiz kıldı</string>
     <string name="context_saver_title">Bağlam tasarrufu</string>
     <string name="context_saver_footer">İstek büyüdüğünde son sonuçların ötesindeki eski araç çıktılarını tek satırlık yer tutuculara katlar. Hiçbir şey silinmez - katlanan sonuç dosya yolunu korur veya aracı yeniden çalıştırmayı söyler.</string>
+    <!-- [T-prompt-cache-warming] Settings toggle for the idle-time prompt cache warming hook. -->
+    <string name="cache_warming_title">Prompt önbelleği ısıtma</string>
+    <string name="cache_warming_footer">Etkinleştirildiğinde, boşta kalma arasından sonra uygulama, sağlayıcının prompt önbelleğini süre dolmadan tazelemek için son başarılı isteği tek tokenlik çıkı sınırıyla yeniden gönderebilir. Ek ücretli istekler gönderir; varsayılan olarak kapalı.</string>
     <string name="context_saver_off">Kapalı</string>
     <string name="context_saver_balanced">Dengeli</string>
     <string name="context_saver_aggressive">Agresif</string>

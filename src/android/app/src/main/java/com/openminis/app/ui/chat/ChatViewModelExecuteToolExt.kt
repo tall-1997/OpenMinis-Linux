@@ -93,6 +93,20 @@ internal suspend fun ChatViewModel.executeTool(
     // — they always fall through to shell_execute or the offload
     // bridge, which is now where checkPermission runs.
     val canonical = com.openminis.app.security.ToolAliases.canonical(name)
+    // [pi-port] MODEL_ONLY callability enforcement (ToolExposureGate): the
+    // lookup is a pure in-memory name read, so it runs FIRST — before the
+    // failure-memory ledger and SecurityGate reads, which a tool that can
+    // never execute has no business spending — and refuses in the unified
+    // early-refusal shape. direct / deferred names fall through unchanged
+    // (a deferred tool called straight after find_tools enablement is the
+    // normal path, not a refusal).
+    if (com.openminis.app.tools.ToolExposureGate.levelForName(canonical) ==
+        com.openminis.app.tools.ToolExposureGate.MODEL_ONLY
+    ) {
+        return com.openminis.app.tools.ToolExposureGate.modelOnlyRefusal(
+            canonical, resolveToolTitle(canonical, argsJson),
+        )
+    }
     // [T-known-failure] A call that already failed twice with these exact
     // arguments is refused by code, not by the model remembering. Any argument
     // change produces a different fingerprint and runs normally.
@@ -300,8 +314,15 @@ internal suspend fun ChatViewModel.executeTool(
         // [P1-19] The when dispatches on the ToolAliases.canonical() name, so
         // the historical alias labels "shell_exec" (→ shell_execute) can never
         // match here; env_exec is its own registered tool and stays.
+        // [pi-port §2.6] Session ExecutionEnvironment: no override (the default)
+        // = the legacy PRoot pipeline below, byte-for-byte; an override runs there.
         "shell_execute", "env_exec" -> {
-            executeShellCommand(argsJson, toolId, toolBlocks, assistantId, currentText)
+            val envOverride = com.openminis.app.sandbox.ExecutionEnvironments.overrideFor(activeSessionId)
+            if (envOverride == null) {
+                executeShellCommand(argsJson, toolId, toolBlocks, assistantId, currentText)
+            } else {
+                com.openminis.app.sandbox.ExecutionEnvironments.executeShell(envOverride, argsJson)
+            }
         }
         "su_exec" -> {
             // [T-android-sueexec-tool-home] Command rewriting (android-su -c
@@ -403,6 +424,12 @@ internal suspend fun ChatViewModel.executeTool(
             com.openminis.app.tools.ExecuteCodeTool.execute(argsJson) { n, a ->
                 executeTool(n, a, toolId, toolBlocks, assistantId, currentText)
             }
+        // [pi-port §2.7] Nested calls take the SAME executeTool path (SecurityGate
+        // + guards); only the script's return value becomes this toolResult.
+        com.openminis.app.tools.CodemodeTool.NAME ->
+            com.openminis.app.tools.CodemodeTool.execute(argsJson, invoke = { n, a ->
+                executeTool(n, a, toolId, toolBlocks, assistantId, currentText)
+            })
         com.openminis.app.tools.ProductMediaTools.DESCRIBE_IMAGE -> executeReadImageTool(argsJson)
         com.openminis.app.tools.ProductMediaTools.GENERATE_IMAGE ->
             executeGenerateImageTool(argsJson, currentProvider, activeSessionId)

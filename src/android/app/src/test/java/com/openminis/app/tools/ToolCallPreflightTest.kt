@@ -130,8 +130,69 @@ class ToolCallPreflightTest {
         val outcome = finalize("file_read", """{"path":"/tmp/a.txt"}""", finishReason = "length")
         assertTrue("must reject, got $outcome", outcome is ToolCallPreflight.Outcome.Rejected)
         outcome as ToolCallPreflight.Outcome.Rejected
-        assertTrue(outcome.modelMessage.contains("finish_reason=length"))
-        assertTrue(outcome.modelMessage.contains("truncated"))
+        // [pi-port 1.2] Verbatim pi failToolCallsFromTruncatedMessage guidance:
+        // names the call, names the output-token limit, and tells the model to
+        // re-issue with complete arguments.
+        assertEquals(
+            ToolCallPreflight.truncatedBatchModelMessage("file_read"),
+            outcome.modelMessage,
+        )
+        assertTrue(outcome.modelMessage.contains("output token limit"))
+        assertTrue(outcome.modelMessage.contains("Re-issue the tool call with complete arguments."))
+        assertEquals(ToolCallPreflight.TRUNCATED_BATCH_UI_MESSAGE, outcome.uiMessage)
+    }
+
+    // ── [pi-port 1.2] whole-batch truncation deprecation ────────────────
+
+    @Test
+    fun `truncated turn deprecates the whole batch with a per-call error result`() {
+        // pi agent-loop.ts:277 routes a length-stopped message through
+        // failToolCallsFromTruncatedMessage instead of execution: every call
+        // in the batch gets its own error tool_result, none executes. The
+        // shared layer reproduces that with the per-call truncated-turn
+        // predicate — simulate a 3-call batch here.
+        val batch = listOf(
+            Triple("call_1", "file_read", JSONObject("""{"path":"/tmp/a.txt"}""")),
+            Triple("call_2", "no_args_tool", JSONObject("{}")),
+            Triple("call_3", "memory_write", JSONObject("""{"content":"notes"}""")),
+        )
+        for ((id, name, args) in batch) {
+            val outcome = ToolCallPreflight.finalize(
+                toolName = name,
+                args = args,
+                rawArgumentTail = null,
+                advertisedTools = tools,
+                turnFinishReason = "length",
+            )
+            assertTrue("$id must be rejected", outcome is ToolCallPreflight.Outcome.Rejected)
+            outcome as ToolCallPreflight.Outcome.Rejected
+            assertEquals(
+                "each call of the truncated batch hears the pi guidance for ITS name",
+                ToolCallPreflight.truncatedBatchModelMessage(name),
+                outcome.modelMessage,
+            )
+            assertTrue(outcome.uiMessage.contains("output token limit"))
+        }
+    }
+
+    @Test
+    fun `truncation rejection names the call so the model can match its own tool_use`() {
+        // The old message never named the call; pi's does — the model maps the
+        // error back onto the exact tool_use it emitted.
+        val message = ToolCallPreflight.truncatedBatchModelMessage("multi_edit")
+        assertTrue(message.contains("\"multi_edit\""))
+        assertTrue(message.contains("was not executed"))
+    }
+
+    @Test
+    fun `truncated turn rejection wins over missing required fields`() {
+        // Order matters: a truncated turn must never leak the weaker
+        // "missing required fields" message — the batch deprecation is the
+        // authoritative reason nothing ran.
+        val outcome = finalize("file_read", "{}", finishReason = "max_tokens")
+        assertTrue("must reject, got $outcome", outcome is ToolCallPreflight.Outcome.Rejected)
+        outcome as ToolCallPreflight.Outcome.Rejected
+        assertEquals(ToolCallPreflight.truncatedBatchModelMessage("file_read"), outcome.modelMessage)
     }
 
     @Test

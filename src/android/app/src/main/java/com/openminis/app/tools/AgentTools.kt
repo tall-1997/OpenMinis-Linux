@@ -3,6 +3,7 @@ package com.openminis.app.tools
 import com.openminis.app.browser.BrowserAction
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
+import com.openminis.app.data.model.ToolAnnotations
 
 /**
  * Central registry of all agent tool definitions.
@@ -10,6 +11,25 @@ import com.openminis.app.data.model.AgentToolParam
  * Tool definitions aligned with iOS AIChatViewModel.makeAgentTools().
  */
 object AgentTools {
+
+    /**
+     * [pi-port §2.4] Long-tail tools whose loading is ALREADY deferred get the
+     * explicit exposure level. Behaviour is unchanged — none of them is in the
+     * alwaysOn core set, so find_tools was already the only way they reach the
+     * schema; [ToolExposureGate] now carries the policy on the definition data
+     * instead of only in the alwaysOn set comment.
+     *
+     * Marked centrally (a post-buildList map) rather than `.copy()` at each
+     * add site on purpose: scripts/ci/check_announced_tools.py resolves
+     * registry tool names from the exact `add(X.definition())` shapes; a
+     * `.copy()` wrapper there would drop the name from that resolution and
+     * silently un-guard the announced-tool gate for these tools.
+     */
+    private val deferredExposureTools: Set<String> = setOf(
+        SshTool.NAME,
+        JobTools.NAME,
+        PresentTool.NAME,
+    )
 
     // [T-ui-skill-prompt-fragment-dead → wired] `UI_SKILL_PROMPT_FRAGMENT`
     // (the `- ui_skill: …` guidance) used to live here with ZERO readers —
@@ -108,6 +128,13 @@ object AgentTools {
         }
         add(GoalTool.definition())
         add(ExecuteCodeTool.definition())
+        // [pi-port §2.7] Codemode entry: multi-step aggregation in one JS
+        // program; nested tool results stay OUT of the conversation and only
+        // the script's return value is returned. exposure=direct (declared),
+        // while the codemode-callable set deliberately EXCLUDES it: a script
+        // re-entering this tool parks an IO thread per nesting level and
+        // deadlocks the pool (CodemodeTool KDoc, review P1-8).
+        add(CodemodeTool.definition())
         add(InvokeSkillTool.definition())
         add(SkillManageTool.definition())
         // Agent-facing surface for the evolution engine (status/list/decide).
@@ -173,13 +200,16 @@ object AgentTools {
             add(CheckAgentTool.definition())
         }
         }
-        // [T-find-tools] With long-tail loading, the main session schema starts
-        // with the core set plus find_tools; everything else is enabled on
-        // demand. Gated tools (memory / code_graph / sub-agent dispatch) stay
-        // present whenever their gate is on so existing injected prompts still
-        // resolve. Full mode (sub-agents / group chat) keeps the historical
-        // all-tools schema unchanged.
-        if (includeLongTail) return all
+            // [pi-port §2.4] Stamp the explicit deferred exposure on the
+            // long-tail tools named above (see deferredExposureTools KDoc).
+            .map { if (it.name in deferredExposureTools) it.copy(exposure = ToolExposureGate.DEFERRED) else it }
+        // [pi-port §2.4] Full mode (sub-agents / group chat) keeps the
+        // historical all-tools schema. The active set names every registered
+        // tool, so deferred tools stay present here; the Gate still runs so
+        // model_only / codemode / hidden can never leak into ANY schema.
+        if (includeLongTail) {
+            return ToolExposureGate.filterForSchema(all, all.map { it.name }.toSet())
+        }
         val alwaysOn = buildSet {
             addAll(
                 listOf(
@@ -229,7 +259,21 @@ object AgentTools {
                 add(CheckAgentTool.NAME)
             }
         }
-        return (all.filter { it.name in alwaysOn || it.name in enabledToolNames } + FindTools.definition())
+        // [T-find-tools] With long-tail loading, the main session schema starts
+        // with the core set plus find_tools; everything else is enabled on
+        // demand. Gated tools (memory / code_graph / sub-agent dispatch) stay
+        // present whenever their gate is on so existing injected prompts still
+        // resolve.
+        // [pi-port §2.4] The Gate is the last say on what is DECLARED: a
+        // find_tools-enabled deferred tool rides enabledToolNames into the
+        // schema exactly as before, while codemode / hidden tools can never be
+        // declared regardless of how they were enabled.
+        return (
+            ToolExposureGate.filterForSchema(
+                all.filter { it.name in alwaysOn || it.name in enabledToolNames },
+                alwaysOn + enabledToolNames,
+            ) + FindTools.definition()
+            )
             .distinctBy { it.name }
     }
 
@@ -347,6 +391,10 @@ background=true detaches the wave: this call returns a dispatch_id at once inste
         ),
         required = listOf("tool_title", "command"),
         propertyOrdering = listOf("tool_title", "command", "timeout", "delay", "resource_class"),
+        // [pi-port §4.1] shell_execute runs arbitrary commands (installs, rm,
+        // redirects): destructive by nature, not read-only. Consumed by the
+        // approval layer to phrase the confirmation.
+        annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = true),
     )
 
     // Aligned with iOS AIChatViewModel.swift browser_use definition
@@ -450,5 +498,8 @@ background=true detaches the wave: this call returns a dispatch_id at once inste
         ),
         required = listOf("tool_title", "command"),
         propertyOrdering = listOf("tool_title", "command", "timeout"),
+        // [pi-port §4.1] Root commands on the HOST: destructive, worst blast
+        // radius of the shell family.
+        annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = true),
     )
 }

@@ -300,8 +300,8 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     // the file_write hook below) becomes visible on the very next user
     // turn instead of "after kill app". Cheap: loadAll is a SQLite
     // SELECT + listFiles, no network.
-    skillRepository?.reloadFromDisk()
-    val skillFragment = skillRepository?.skillPromptFragment(activeSessionId)
+    // [T-skill-manifest] pi skills.ts:358 progressive loading (default ON, SkillPromptPrefs); OFF = legacy one-line fragment byte-identical.
+    val skillFragment = skillRepository?.let { it.reloadFromDisk(); com.openminis.app.data.repository.SkillManifest.sessionFragment(it, activeSessionId, context) }
     // [T-mcp-integration-android] Re-read servers.json (the CLI / file
     // browser may have changed it out-of-band) then build the Top-20
     // enabled-MCP disclosure, injected right after the skills fragment.
@@ -482,26 +482,23 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         // daily memory window.
         dailyMemoryFragment = dailyMemoryFragment,
     )
-    var stablePrefixLen = -1
-    val prompt = buildString {
-        append(base)
-        if (skillFragment != null) {
-            append("\n\n")
-            append(skillFragment)
-        }
-        if (mcpFragment != null) {
-            append("\n\n")
-            append(mcpFragment)
-        }
-        if (globalMemoryFragment != null) {
-            append("\n\n")
-            append(globalMemoryFragment)
-        }
-            stablePrefixLen = length
-        append(dynamicTail)
-    }
+    // [T-prompt-sections] pi coding-agent src/core/system-prompt.ts:128-228: the assembly
+    // is expressed as named sections; join() is byte-identical to the previous buildString
+    // (pinned by PromptSectionsGoldenTest) and stablePrefixLength() derives the boundary
+    // published below from the SAME list that produced the prompt, so they cannot drift.
+    val promptSections = PromptSections.buildSections(
+        base = base,
+        skillFragment = skillFragment,
+        mcpFragment = mcpFragment,
+        globalMemoryFragment = globalMemoryFragment,
+        dynamicTail = dynamicTail,
+    )
+    val prompt = PromptSections.join(promptSections)
     if (publishStablePrefix) {
-        systemPromptStablePrefixLen = stablePrefixLen
+        systemPromptStablePrefixLen = PromptSections.stablePrefixLength(promptSections)
+        PromptSections.publishAndDiff(activeSessionId, promptSections)?.let {
+            AppLogger.info("PromptSections", it)
+        }
     }
     // [#25][T-context-breakdown-race] The per-block sections of THIS build are
     // returned WITH the prompt instead of being published into a global

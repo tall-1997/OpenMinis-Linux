@@ -26,20 +26,24 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AuditEntryEntity::class,
         MemoryEmbeddingEntity::class,
     ],
-    version = 33, // keep DatabaseVersionGuard.CODE_DB_VERSION in lockstep; 33 = memory_embeddings (#27)
+    version = 34, // keep DatabaseVersionGuard.CODE_DB_VERSION in lockstep; 34 = sessions.dormant_thinking_override (P2 1-8), 33 = memory_embeddings (#27)
     // [T-android-downgrade-compat] Kept ON so MigrationTestHelper and CI can
     // validate migrations against the committed schema json. The chain now
-    // runs 12-29 complete. 13.json and 17.json were never exported by a
+    // runs 12-34 complete. 13.json and 17.json were never exported by a
     // compiling build (Room only writes the version it compiles) and were
     // reconstructed in place from their neighbours: 13 = 12 + the
     // code_symbols/code_edges entities copied verbatim from 16.json, 17 =
     // 16 + the sessions.permissionMode field copied verbatim from 18.json —
-    // exactly what MIGRATION_12_13 / MIGRATION_16_17 produce. Their
-    // identityHash values are carried over from the neighbouring export as
-    // placeholders: MigrationTestHelper validates TABLE SHAPE, not the hash
+    // exactly what MIGRATION_12_13 / MIGRATION_16_17 produce. 34.json follows
+    // the same reconstruction discipline (33 + the
+    // sessions.dormant_thinking_override field that MIGRATION_33_34 adds —
+    // the fix phase for P2 1-8 ran without a Gradle build, so Room's export
+    // did not exist yet): its identityHash is carried over from 33.json as a
+    // placeholder. MigrationTestHelper validates TABLE SHAPE, not the hash
     // (only Room's runtime open check reads it), so replay validation is
-    // sound. If a future test ever asserts on those hashes, regenerate both
-    // by compiling at version 13/17.
+    // sound; the first compiling build regenerates 34.json with the true
+    // hash. If a future test ever asserts on those hashes, regenerate them
+    // by compiling at the corresponding version.
     exportSchema = true,
 )
 abstract class AppDatabase : RoomDatabase() {

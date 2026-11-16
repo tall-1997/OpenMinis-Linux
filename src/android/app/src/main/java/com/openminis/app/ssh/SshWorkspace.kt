@@ -93,6 +93,12 @@ class SshWorkspaceBindings(private val store: SshWorkspaceStore) {
     fun unbind(ownerSessionId: String) {
         if (ownerSessionId.isBlank()) return
         store.remove(bindingKey(ownerSessionId))
+        // [T-ssh-exec-env] Eager registry teardown: the SSH environment the
+        // session registered while bound dies with the binding. Keys are the
+        // OWNER session id (see the class KDoc — sub-agent lanes ride the same
+        // key), so this one removal covers the chat and every lane it spawned;
+        // a lane that never calls a tool again cannot leak its entry.
+        com.openminis.app.sandbox.ExecutionEnvironments.unregister(ownerSessionId)
     }
 
     /**
@@ -114,6 +120,10 @@ class SshWorkspaceBindings(private val store: SshWorkspaceStore) {
         for ((owner, bound) in all()) {
             if (bound == target) {
                 store.remove(bindingKey(owner))
+                // [T-ssh-exec-env] Same teardown contract as unbind(): a
+                // binding swept with the removed host must not leave its
+                // registered ExecutionEnvironment pointing at a dead host.
+                com.openminis.app.sandbox.ExecutionEnvironments.unregister(owner)
                 cleared++
             }
         }
@@ -212,6 +222,17 @@ object SshWorkspaceOps {
      * Returns a [ToolExecutionResult] when this call is handled by the SSH
      * workspace (remote exec or a refusal), or null when the local pipeline
      * should proceed unchanged.
+     *
+     * [T-ssh-exec-env] This is also the PRODUCTION REGISTRANT for the
+     * [com.openminis.app.sandbox.ExecutionEnvironments] registry: the first
+     * remote-routed call of a binding pins
+     * [com.openminis.app.sandbox.SshExecutionEnvironment] under the OWNER
+     * session id (the binding map's key — one entry serves the chat and every
+     * lane inheriting its binding), and every teardown path (unbind, host
+     * removal, binding gone at call time) unregisters it, so the registry
+     * never outlives the SSH session that justified it. Registration is
+     * lifecycle bookkeeping only: remote execution keeps flowing through
+     * [routeShellRemotely], so no model-visible result shape changes.
      */
     suspend fun intercept(
         canonical: String,
@@ -222,12 +243,33 @@ object SshWorkspaceOps {
         if (sessionId.isNullOrEmpty()) return null
         val owner = SessionWorkspace.ownerSessionId(sessionId)
         val hostId = SshWorkspaceBindings.forContext(context).hostIdFor(owner)
-            ?: return null
+        if (hostId == null) {
+            // [T-ssh-exec-env] Lazy teardown for sessions that leave SSH
+            // without an unbind() reaching them (e.g. a lane whose owner was
+            // unbound in another process): the missing binding unregisters.
+            com.openminis.app.sandbox.ExecutionEnvironments.unregister(owner)
+            return null
+        }
         return when (val d = SshWorkspaceRouter.decide(canonical, hostId)) {
             is SshWorkspaceRouter.Decision.Local -> null
             is SshWorkspaceRouter.Decision.Unsupported -> unsupportedResult(context, d.tool)
-            is SshWorkspaceRouter.Decision.RouteRemote ->
+            is SshWorkspaceRouter.Decision.RouteRemote -> {
+                // [T-ssh-exec-env] Pin the session's SSH environment (id-guarded
+                // so a rebind to another host replaces the stale entry; same-host
+                // calls are a no-op). Sandbox-side consumers read the session's
+                // execution environment from the registry instead of hard-wiring
+                // the ssh package.
+                val current = com.openminis.app.sandbox.ExecutionEnvironments.overrideFor(owner)
+                if (current == null || current.id != "ssh:${d.hostId}") {
+                    com.openminis.app.sandbox.ExecutionEnvironments.register(
+                        owner,
+                        com.openminis.app.sandbox.SshExecutionEnvironment(
+                            SshEngine.backend(context), d.hostId,
+                        ),
+                    )
+                }
                 routeShellRemotely(argsJson, d.hostId, canonical, context)
+            }
         }
     }
 

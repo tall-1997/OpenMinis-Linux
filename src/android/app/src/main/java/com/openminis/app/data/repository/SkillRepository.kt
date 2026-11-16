@@ -47,17 +47,10 @@ class SkillRepository(private val context: Context) {
         private const val LEARNED_SKILL_END = "<!-- LEARNED-SKILL-END -->"
         private const val DB_NAME = "skills.db"
         private const val DB_VERSION = 3
-        // [skill-startup-refresh] Default-enable means the library can hold
-        // 100+ skills; every listed one costs a prompt line forever.
-        // [T-prompt-slim] 300 -> 120: with the one-line format plus the
-        // existing "N more not shown" disclosure the whole library stays
-        // reachable (grep /var/minis/skills/) without spending hundreds of
-        // context lines on entries the model has not shown interest in.
-        // Descriptions are still capped at 200 chars.
-        private const val MAX_SKILLS_IN_PROMPT = 120
+        // [T-prompt-slim] Disclosure tunables (cap, recency window, recent
+        // slots) live in SkillManifest now — shared verbatim by both prompt
+        // formats. Descriptions are still capped at 200 chars.
         private const val MAX_SKILL_DESC_LENGTH = 200
-        private const val RECENT_WINDOW_MS = 7L * 24 * 3600 * 1000
-        private const val RECENT_SLOTS = 10
         private const val NORMALIZE_THRESHOLD = 1000.0
 
         /** [T-android-skill-export] How long an exported zip stays on disk
@@ -114,6 +107,10 @@ class SkillRepository(private val context: Context) {
         val sourceURL: String? = null,
         /** Cumulative read count of this skill's SKILL.md; normalized to 0–100 after exceeding 1000. */
         val useCount: Double = 0.0,
+        /** [T-skill-manifest] pi skills.ts:341 `disable-model-invocation`: true hides
+         *  the skill from the prompt manifest — reachable only via explicit invocation.
+         *  Source of truth is SKILL.md frontmatter (re-read like [body]), not a DB column. */
+        val disableModelInvocation: Boolean = false,
     )
 
     enum class UsageFrequency { NEVER, LOW, REGULAR, HIGH }
@@ -214,7 +211,16 @@ class SkillRepository(private val context: Context) {
 
     // -- CRUD --
 
-    fun add(name: String, description: String, body: String, version: String = "1.0.0", source: ImportSource = ImportSource.FILE, sourceURL: String? = null): Skill? {
+    fun add(
+        name: String,
+        description: String,
+        body: String,
+        version: String = "1.0.0",
+        source: ImportSource = ImportSource.FILE,
+        sourceURL: String? = null,
+        /** [T-skill-manifest] pi `disable-model-invocation` frontmatter flag. */
+        disableModelInvocation: Boolean = false,
+    ): Skill? {
         ensureLoaded()
         val id = slugify(name)
         if (id.isBlank()) return null
@@ -228,6 +234,7 @@ class SkillRepository(private val context: Context) {
             importSource = source,
             body = body,
             sourceURL = sourceURL,
+            disableModelInvocation = disableModelInvocation,
         )
 
         insertDb(skill)
@@ -475,15 +482,15 @@ class SkillRepository(private val context: Context) {
 
     /**
      * Build the system-prompt fragment that makes skills discoverable.
-     * Discloses up to [MAX_SKILLS_IN_PROMPT] skills with 3-tier priority
-     * (bundled > 7-day recent > most-used), matching iOS SkillStore.
-     * Returns null when the session has no enabled skills.
+     * Discloses up to [SkillManifest.MAX_SKILLS_IN_PROMPT] skills with 3-tier
+     * priority (bundled > 7-day recent > most-used), matching iOS SkillStore.
+     * disable-model-invocation skills are filtered out first (P2-6,
+     * [SkillManifest.disclosableSkills]). Returns null when the session
+     * has no disclosable skills.
      *
      * [T-prompt-cache] The fragment changes only on skill enable/disable
-     * toggles or override writes — both rare relative to turn frequency.
-     * The cache cuts ~200 cursor round-trips per turn (one
-     * `isEnabledForSession` call per skill) down to one bulk override
-     * query on cache miss.
+     * toggles or override writes — both rare; the cache cuts ~200 cursor
+     * round-trips per turn down to one bulk override query on cache miss.
      */
     fun skillPromptFragment(sessionId: String): String? {
         val skillsSnapshot = _skills.value
@@ -496,7 +503,7 @@ class SkillRepository(private val context: Context) {
 
         // Bulk-load session overrides once instead of per-skill cursor.
         val overrides = sessionOverrideMap(sessionId)
-        val enabled = skillsSnapshot.filter { overrides[it.id] ?: it.isEnabled }
+        val enabled = SkillManifest.disclosableSkills(skillsSnapshot.filter { overrides[it.id] ?: it.isEnabled })
         if (enabled.isEmpty()) {
             fragmentCacheSession = sessionId
             fragmentCacheSkills = skillsSnapshot
@@ -505,38 +512,9 @@ class SkillRepository(private val context: Context) {
             return null
         }
 
-        val total = enabled.size
-        val selected: List<Skill>
-        val hasMore: Boolean
-
-        if (total <= MAX_SKILLS_IN_PROMPT) {
-            selected = enabled.sortedByDescending { it.updatedAt }
-            hasMore = false
-        } else {
-            val picked = linkedMapOf<String, Skill>() // preserves insertion order + id dedupe
-            // Priority 1: bundled
-            enabled.filter { it.importSource == ImportSource.BUNDLED }
-                .forEach { picked.putIfAbsent(it.id, it) }
-            // Priority 2: recently updated (within 7 days), up to RECENT_SLOTS more
-            val cutoff = System.currentTimeMillis() - RECENT_WINDOW_MS
-            val recentLimit = minOf(RECENT_SLOTS, MAX_SKILLS_IN_PROMPT - picked.size).coerceAtLeast(0)
-            enabled.asSequence()
-                .filter { it.updatedAt > cutoff && it.id !in picked }
-                .sortedByDescending { it.updatedAt }
-                .take(recentLimit)
-                .forEach { picked.putIfAbsent(it.id, it) }
-            // Priority 3: fill remaining slots by useCount (desc)
-            if (picked.size < MAX_SKILLS_IN_PROMPT) {
-                val remaining = MAX_SKILLS_IN_PROMPT - picked.size
-                enabled.asSequence()
-                    .filter { it.id !in picked }
-                    .sortedByDescending { it.useCount }
-                    .take(remaining)
-                    .forEach { picked.putIfAbsent(it.id, it) }
-            }
-            selected = picked.values.toList()
-            hasMore = total > selected.size
-        }
+        // [T-skill-manifest] Selection lives in SkillManifest (shared by both prompt formats).
+        val (selected, omitted) = SkillManifest.selectForPrompt(enabled)
+        val hasMore = omitted.isNotEmpty()
 
         // [T-prompt-slim] One line per skill (was a 6-line XML block). The
         // header below already states the shared path convention
@@ -559,17 +537,7 @@ class SkillRepository(private val context: Context) {
             append("Reusable instruction sets stored at /var/minis/skills/<name>/SKILL.md. Read the SKILL.md file to load full instructions before using a skill.\n\n")
             append(xml)
             if (hasMore) {
-                val selectedIds = selected.mapTo(HashSet(selected.size)) { it.id }
-                val omitted = enabled.filter { it.id !in selectedIds }
-                // [T-prompt-slim] Name-disclosure budget: with the 120 cap a
-                // heavy library can omit 200+ skills — naming up to 200 of
-                // them keeps every omitted skill FINDABLE from the prompt
-                // (the rest are still one `ls /var/minis/skills/` away).
-                val maxUndisclosed = (200 - selected.size).coerceAtLeast(0)
-                val names = omitted.take(maxUndisclosed).joinToString(", ") { it.name }
-                append("\n\n")
-                append(omitted.size).append(" more skills not shown above: ").append(names)
-                append(". List /var/minis/skills/ or grep to search all.")
+                append(SkillManifest.disclosureNote(selected, omitted))
             }
         }
         fragmentCacheSession = sessionId
@@ -577,6 +545,24 @@ class SkillRepository(private val context: Context) {
         fragmentCacheRevision = overrideRevision
         fragmentCacheValue = result
         return result
+    }
+
+    /**
+     * [T-skill-manifest] pi skills.ts:358-388 progressive disclosure: a
+     * name+description+location `<available_skills>` manifest; the model
+     * loads the matched skill's body with file_read on demand. Same rules
+     * as [skillPromptFragment], but disable-model-invocation skills are
+     * filtered out BEFORE the selection ([SkillManifest.disclosableSkills],
+     * P2-6: hidden skills must not burn a cap slot or leak into the
+     * disclosure tail). Null when nothing is disclosable. No cache (one bulk override query per build).
+     */
+    fun skillManifestFragment(sessionId: String): String? {
+        ensureLoaded()
+        val overrides = sessionOverrideMap(sessionId)
+        val enabled = SkillManifest.disclosableSkills(_skills.value.filter { overrides[it.id] ?: it.isEnabled })
+        val (selected, omitted) = SkillManifest.selectForPrompt(enabled)
+        val manifest = SkillManifest.buildSkillManifest(selected) { skillMdPath(it.id) } ?: return null
+        return manifest + (SkillManifest.disclosureNote(selected, omitted) ?: "")
     }
     /**
      * Record that a skill's SKILL.md was read. Matches iOS `SkillStore.recordSkillUse`:
@@ -671,6 +657,7 @@ class SkillRepository(private val context: Context) {
                 body = parsed.body,
                 updatedAt = System.currentTimeMillis(),
                 sourceURL = sourceURL ?: current.sourceURL,
+                disableModelInvocation = parsed.disableModelInvocation,
             )
             db.execSQL(
                 "UPDATE skills SET name=?, description=?, version=?, import_source=?, source_url=?, updated_at=? WHERE id=?",
@@ -691,6 +678,7 @@ class SkillRepository(private val context: Context) {
             version = parsed.version,
             source = source,
             sourceURL = sourceURL,
+            disableModelInvocation = parsed.disableModelInvocation,
         )
     }
 
@@ -1583,6 +1571,7 @@ class SkillRepository(private val context: Context) {
                 description = parsed.description,
                 importSource = ImportSource.SESSION,
                 body = parsed.body,
+                disableModelInvocation = parsed.disableModelInvocation,
             )
         } else {
             Skill(
@@ -1632,6 +1621,8 @@ class SkillRepository(private val context: Context) {
             description = description,
             version = version,
             body = parsed?.body ?: "",
+            // [T-skill-manifest] A malformed re-read keeps the previous flag (fail closed).
+            disableModelInvocation = parsed?.disableModelInvocation ?: skill.disableModelInvocation,
         )
     }
 
@@ -1682,7 +1673,7 @@ class SkillRepository(private val context: Context) {
                 Log.i(TAG, "Pruned orphan skill row (no SKILL.md on disk): $id")
                 continue
             }
-            val body = readSkillMdBody(id)
+            val parsedOnDisk = readSkillMd(id)
             val sourceUrlIdx = cursor.getColumnIndex("source_url")
             val useCountIdx = cursor.getColumnIndex("use_count")
             var description = cursor.getString(cursor.getColumnIndexOrThrow("description"))
@@ -1779,7 +1770,8 @@ class SkillRepository(private val context: Context) {
                 isEnabled = cursor.getInt(cursor.getColumnIndexOrThrow("is_enabled")) == 1,
                 installedAt = cursor.getLong(cursor.getColumnIndexOrThrow("installed_at")),
                 updatedAt = cursor.getLong(cursor.getColumnIndexOrThrow("updated_at")),
-                body = body,
+                body = parsedOnDisk?.body ?: "",
+                disableModelInvocation = parsedOnDisk?.disableModelInvocation ?: false,
                 sourceURL = if (sourceUrlIdx >= 0 && !cursor.isNull(sourceUrlIdx)) cursor.getString(sourceUrlIdx) else null,
                 useCount = if (useCountIdx >= 0) cursor.getDouble(useCountIdx) else 0.0,
             ))
@@ -1808,6 +1800,7 @@ class SkillRepository(private val context: Context) {
                         description = parsed.description,
                         importSource = ImportSource.SESSION,
                         body = parsed.body,
+                        disableModelInvocation = parsed.disableModelInvocation,
                     )
                 } else {
                     Skill(
@@ -1848,6 +1841,8 @@ class SkillRepository(private val context: Context) {
             appendLine("name: ${skill.name}")
             appendLine("description: ${skill.description}")
             appendLine("version: ${skill.version}")
+            // [T-skill-manifest] Round-trip the flag: disk frontmatter is the source of truth.
+            if (skill.disableModelInvocation) appendLine("disable-model-invocation: true")
             appendLine("---")
             append(skill.body)
         }
@@ -1905,11 +1900,10 @@ class SkillRepository(private val context: Context) {
         return out
     }
 
-    private fun readSkillMdBody(id: String): String {
+    private fun readSkillMd(id: String): ParsedSkill? {
         val file = File(skillsDir, "$id/SKILL.md")
-        if (!file.exists()) return ""
-        val parsed = parseSkillMd(file.readText())
-        return parsed?.body ?: ""
+        if (!file.exists()) return null
+        return parseSkillMd(file.readText())
     }
 
     data class ParsedSkill(
@@ -1917,6 +1911,8 @@ class SkillRepository(private val context: Context) {
         val description: String,
         val version: String = "1.0.0",
         val body: String,
+        /** [T-skill-manifest] pi `disable-model-invocation` frontmatter flag. */
+        val disableModelInvocation: Boolean = false,
     )
 
     /**
@@ -1971,6 +1967,7 @@ class SkillRepository(private val context: Context) {
         var name = ""
         var description = ""
         var version = "1.0.0"
+        var disableModelInvocation = false
 
         var i = 1
         while (i < frontmatterEndLine) {
@@ -2018,6 +2015,9 @@ class SkillRepository(private val context: Context) {
                 "name" -> name = resolved
                 "description" -> description = resolved
                 "version" -> version = resolved
+                // [T-skill-manifest] pi skills.ts:341 — only the YAML boolean `true` hides a skill.
+                "disable-model-invocation" ->
+                    disableModelInvocation = resolved.equals("true", ignoreCase = true)
             }
         }
 
@@ -2028,7 +2028,7 @@ class SkillRepository(private val context: Context) {
             lines.subList(bodyStartLine, lines.size).joinToString("\n").trim('\n')
         } else ""
 
-        return ParsedSkill(name, description, version, body)
+        return ParsedSkill(name, description, version, body, disableModelInvocation)
     }
 
     private fun slugify(name: String): String =

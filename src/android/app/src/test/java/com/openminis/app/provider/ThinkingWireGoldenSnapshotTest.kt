@@ -74,6 +74,25 @@ import org.junit.Test
  *
  * `clampEffort` itself is untouched — the fix is the ceiling, not the clamp.
  *
+ * BASELINE MOVED AGAIN, DELIBERATELY — [T-thinking-no-upward-jump] (P2 3-9).
+ * 8 rows changed when the generic clamp stopped LIFTING a request onto the
+ * declared floor: the old `?: declared.first().second` fallback turned a LOW
+ * ask against a [high,max] set into `reasoning_effort:"high"` — the opposite
+ * of clamping, and invisible to the user because the UI had already shown LOW.
+ * Now the tier field is OMITTED when the declared set has no tier at or below
+ * the ask (the OFF branch's omit-on-no-legal-value policy, extended to enabled
+ * levels):
+ *
+ *   • `glm-declared` / `sparse-high-max` LOW·MEDIUM, `deepseek-v4-unified`
+ *     LOW·MEDIUM — `{reasoning_effort:"high"}` became `{}`: no legal tier at
+ *     or below the ask, so nothing is sent and the provider applies its own
+ *     default. OFF and exact-hit rows are byte-identical to the old baseline.
+ *
+ *   • `deepseek-v4` LOW·MEDIUM — `{reasoning_effort:"high",thinking:{...}}`
+ *     became `{thinking:{type:"enabled"}}`: the V4 sibling shape keeps its
+ *     explicit toggle (V4 thinks by default and needs the gate) but the tier
+ *     field is omitted on the same no-legal-tier condition.
+ *
  * READING THE BASELINE — `mimo/XHIGH` and `seed/XHIGH` record `reasoning_effort:"xhigh"`
  * even though both families 400 on that value (72968c4f). That is correct: the family
  * ceiling is applied UPSTREAM, by the clamp in LLMProvider.streamMessage/sendMessage,
@@ -266,22 +285,22 @@ qwen-tiny-max/XHIGH -> {enable_thinking:true,extra_body:{enable_thinking:true}}
 qwen-tiny-max/MAX -> {enable_thinking:true,extra_body:{enable_thinking:true}}
 qwen-tiny-max/ULTRA -> {enable_thinking:true,extra_body:{enable_thinking:true}}
 deepseek-v4/OFF -> {thinking:{type:"disabled"}}
-deepseek-v4/LOW -> {reasoning_effort:"high",thinking:{type:"enabled"}}
-deepseek-v4/MEDIUM -> {reasoning_effort:"high",thinking:{type:"enabled"}}
+deepseek-v4/LOW -> {thinking:{type:"enabled"}}
+deepseek-v4/MEDIUM -> {thinking:{type:"enabled"}}
 deepseek-v4/HIGH -> {reasoning_effort:"high",thinking:{type:"enabled"}}
 deepseek-v4/XHIGH -> {reasoning_effort:"high",thinking:{type:"enabled"}}
 deepseek-v4/MAX -> {reasoning_effort:"max",thinking:{type:"enabled"}}
 deepseek-v4/ULTRA -> {reasoning_effort:"max",thinking:{type:"enabled"}}
 deepseek-v4-unified/OFF -> {reasoning_effort:"minimal"}
-deepseek-v4-unified/LOW -> {reasoning_effort:"high"}
-deepseek-v4-unified/MEDIUM -> {reasoning_effort:"high"}
+deepseek-v4-unified/LOW -> {}
+deepseek-v4-unified/MEDIUM -> {}
 deepseek-v4-unified/HIGH -> {reasoning_effort:"high"}
 deepseek-v4-unified/XHIGH -> {reasoning_effort:"high"}
 deepseek-v4-unified/MAX -> {reasoning_effort:"max"}
 deepseek-v4-unified/ULTRA -> {reasoning_effort:"max"}
 glm-declared/OFF -> {}
-glm-declared/LOW -> {reasoning_effort:"high"}
-glm-declared/MEDIUM -> {reasoning_effort:"high"}
+glm-declared/LOW -> {}
+glm-declared/MEDIUM -> {}
 glm-declared/HIGH -> {reasoning_effort:"high"}
 glm-declared/XHIGH -> {reasoning_effort:"high"}
 glm-declared/MAX -> {reasoning_effort:"max"}
@@ -322,8 +341,8 @@ generic-unknown/XHIGH -> {reasoning_effort:"xhigh"}
 generic-unknown/MAX -> {reasoning_effort:"xhigh"}
 generic-unknown/ULTRA -> {reasoning_effort:"xhigh"}
 sparse-high-max/OFF -> {}
-sparse-high-max/LOW -> {reasoning_effort:"high"}
-sparse-high-max/MEDIUM -> {reasoning_effort:"high"}
+sparse-high-max/LOW -> {}
+sparse-high-max/MEDIUM -> {}
 sparse-high-max/HIGH -> {reasoning_effort:"high"}
 sparse-high-max/XHIGH -> {reasoning_effort:"high"}
 sparse-high-max/MAX -> {reasoning_effort:"max"}

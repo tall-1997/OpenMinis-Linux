@@ -1,5 +1,6 @@
 package com.openminis.app.sandbox
 
+import com.openminis.app.tools.ToolOutputTruncator
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -202,6 +203,94 @@ class TerminalSanitizerTest {
         val input = "x".repeat(200)
         val result = TerminalSanitizer.truncateIfNeeded(input, 100)
         assertTrue(result.contains("[... 100 characters omitted ...]"))
+    }
+
+    // ==================== truncateStructured (pi-port §4.7) ====================
+
+    @Test
+    fun `truncateStructured reports null result when the output fits`() {
+        val input = "short output"
+        val (content, result) = TerminalSanitizer.truncateStructured(input, 100)
+        assertEquals(input, content)
+        assertNull(result)
+    }
+
+    @Test
+    fun `truncateStructured keeps the legacy content shape when cutting`() {
+        // 450 chars through a 100-char budget: head 50 + legacy marker + tail 50.
+        val input = "A".repeat(150) + "B".repeat(150) + "C".repeat(150)
+        val (content, result) = TerminalSanitizer.truncateStructured(input, 100)
+        assertNotNull(result)
+        assertTrue(result!!.truncated)
+        assertEquals(content, result.content)
+        // Legacy marker preserved verbatim — downstream parsers keep working.
+        assertTrue(content.contains("[... 350 characters omitted ...]"))
+        assertTrue(content.startsWith("A".repeat(50)))
+        assertTrue(content.endsWith("C".repeat(50)))
+    }
+
+    @Test
+    fun `truncateStructured result carries honest line and byte accounting`() {
+        val input = (1..600).joinToString("\n") { "line $it " + "x".repeat(200) }
+        val (content, result) = TerminalSanitizer.truncateStructured(input, 20_000)
+        assertNotNull(result)
+        assertEquals(ToolOutputTruncator.totalLines(input), result!!.totalLines)
+        assertEquals(ToolOutputTruncator.utf8ByteLength(input), result.totalBytes)
+        assertEquals(ToolOutputTruncator.totalLines(content), result.outputLines)
+        assertEquals(ToolOutputTruncator.utf8ByteLength(content), result.outputBytes)
+        assertEquals(ToolOutputTruncator.TruncatedBy.BYTES, result.truncatedBy)
+        assertTrue(result.outputLines < result.totalLines)
+    }
+
+    @Test
+    fun `formatTruncationNote is derived from the TruncationResult fields`() {
+        val input = (1..600).joinToString("\n") { "line $it " + "x".repeat(200) }
+        val (_, result) = TerminalSanitizer.truncateStructured(input, 20_000)
+        val note = TerminalSanitizer.formatTruncationNote(result!!)
+        // GrepStreamScan report style: one bracketed line, no hand-built strings.
+        assertTrue("note was: $note", note.startsWith("[output truncated — showed "))
+        assertTrue(note.contains(" of ${result.totalLines} lines "))
+        assertTrue(note.contains(" dropped)]"))
+        val droppedSize = ToolOutputTruncator.formatSize(result.totalBytes - result.outputBytes)
+        assertEquals(
+            "[output truncated — showed ${result.outputLines} of ${result.totalLines} lines ($droppedSize dropped)]",
+            note,
+        )
+    }
+
+    @Test
+    fun `structured note lands at the tail of the tool result body`() {
+        // The exact shape ExecutionCoordinator assembles: content + note line.
+        // The note must be the LAST line so it sits at the tool card's
+        // output-preview tail.
+        val input = (1..400).joinToString("\n") { "row $it " + "y".repeat(200) }
+        val (content, result) = TerminalSanitizer.truncateStructured(input, 20_000)
+        val note = TerminalSanitizer.formatTruncationNote(result!!)
+        val full = "$content\n$note"
+        assertEquals(note, full.lineSequence().last())
+    }
+
+    @Test
+    fun `formatTruncationNote degrades to bytes-only for the one-giant-line cut`() {
+        // A single 60k-char line through a 20k-char budget: the legacy marker
+        // inflates the kept line count past the total, so the note must not
+        // print a nonsensical "showed N of 1 lines".
+        val input = "z".repeat(60_000)
+        val (_, result) = TerminalSanitizer.truncateStructured(input, 20_000)
+        val note = TerminalSanitizer.formatTruncationNote(result!!)
+        assertEquals(
+            "[output truncated — ${ToolOutputTruncator.formatSize(result.totalBytes - result.outputBytes)} dropped]",
+            note,
+        )
+        assertFalse(note.contains("lines"))
+    }
+
+    @Test
+    fun `untruncated output carries no note`() {
+        val input = (1..50).joinToString("\n") { "line $it" }
+        val (content, result) = TerminalSanitizer.truncateStructured(input, 20_000)
+        assertNull(result)
+        assertFalse(content.contains("output truncated"))
     }
 
     // ==================== Edge cases ====================

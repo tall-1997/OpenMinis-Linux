@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- [T-agent-ux-notices] P1-6/P2-4/P2-8 chat-UX notices: steering-queue
+     acceptance, enqueue-path dedupe hit, and thinking ceiling-sync
+     clamp/restore. Kept in a standalone split file (the
+     strings_token_usage.xml pattern) so every shipped locale carries all
+     keys in one place. -->
+<resources>
+    <string name="vm_steering_queued">已排隊，將在 agent 的下一步驟送達，不會打斷目前回覆。</string>
+    <string name="vm_send_deduped">重複傳送已略過（剛傳送過相同內容）</string>
+    <string name="vm_thinking_clamped_to">已依模型上限暫時降為 %1$s</string>
+    <string name="vm_thinking_ceiling_restored">上限已恢復，已回到 %1$s</string>
+</resources>

@@ -1291,18 +1291,18 @@ class ChatViewModel(
     override val activeEntryId: StateFlow<String?> = _activeEntryId.asStateFlow()
 
     /**
-     * Prompts enqueued while the agent loop is running. Drained after the loop finishes.
+     * Prompts enqueued while the agent loop is running; drained after it finishes.
      *
-     * [T-android-queue-atomic-mutation] This list is written from TWO threads:
-     * `enqueuePrompt` / the withdraw + remove helpers run on Main, while the
-     * drain + mid-loop inject claim it from the agent loop on Dispatchers.IO.
-     * A `_promptQueue.value = _promptQueue.value + x` read-modify-write is not
-     * atomic across that boundary — so every mutation here goes through
-     * `update { }` (CAS loop) and every claim through `compareAndSet`, which
-     * takes a snapshot atomically or retries on the value that won the race.
+     * [T-android-queue-atomic-mutation] Written from TWO threads — enqueuePrompt and
+     * the withdraw/remove helpers on Main, drain + mid-loop inject on Dispatchers.IO —
+     * so mutations go through `update { }` (CAS loop) and claims through `compareAndSet`.
      */
     internal val _promptQueue = MutableStateFlow<List<QueuedPrompt>>(emptyList())
     val promptQueue: StateFlow<List<QueuedPrompt>> = _promptQueue.asStateFlow()
+
+    // [T-pi-idempotent-submit] Duplicate-submission gate for the enqueue path AND the
+    // steering offer (see ChatRequestDedupeExt; internal so the ext file can wire it).
+    internal val requestDeduper = RequestDedupeGate()
 
     /** [T-plan-step-retry] One-shot retry steering, consumed by [commitSessionNoticesOnce]. */
     internal val _planStepRetry = MutableStateFlow<PlanStepRetryRequest?>(null)
@@ -2346,7 +2346,10 @@ class ChatViewModel(
      * fallback is ULTRA ([T-thinking-ultra-manual]): the wire layer clamps
      * onto whatever the model declares, so a generous ceiling only widens
      * the picker, never the request.     */
-    private val currentModelMaxThinkingLevel: ThinkingLevel
+    // internal (was private): setThinkingLevelInternal lives in
+    // ChatViewModelThinkingSync.kt as an extension and reads the ceiling
+    // there — same promotion #372 applied when toggleThinking moved out.
+    internal val currentModelMaxThinkingLevel: ThinkingLevel
         get() {
             val entry = _activeEntryId.value?.let { id ->
                 providerRepository.config.value.modelEntries.find { it.id == id }
@@ -2436,10 +2439,8 @@ class ChatViewModel(
      * Aggregated token usage for this session, computed from all persisted
      * `token_usage` JSON rows. Mirrors iOS [sessionTokenStats].
      *
-     * @param context the most recent [LLMUsage.latestContextTokens] — reflects
-     * how much of the model's context window was consumed at the last turn.
-     * @param loopCount number of agent loop iterations (approximated by
-     * max(tool_use blocks, assistant message count), matching iOS).
+     * @param context the most recent [LLMUsage.latestContextTokens] — how much of the context window the last turn consumed.
+     * @param loopCount agent loop iterations (approximated by max(tool_use blocks, assistant message count), matching iOS).
      */
     data class SessionTokenStats(
         val input: Long,
@@ -2448,6 +2449,16 @@ class ChatViewModel(
         val cacheWrite: Long,
         val context: Int,
         val loopCount: Int,
+        // [T-thinking-dual-ledger] The session's MOST RECENT turn's thinking
+        // ledger (see TurnThinkingUsage): requested is always recorded by the
+        // persist path, effective only when the response evidenced it — null
+        // = unknown (pre-ledger rows, no thinking streamed, undeclared set).
+        val thinkingLevelRequested: String? = null,
+        val thinkingLevelEffective: String? = null,
+        // [T-pi-tools-bucket] UsageLedger tools bucket: per-tool call counts over
+        // the LOADED message window — the same scope loopCount reads. Default keeps
+        // every existing constructor call compiling unchanged.
+        val toolCallCounts: Map<String, Int> = emptyMap(),
     )
 
     data class ThinkingInfo(
@@ -2456,9 +2467,8 @@ class ChatViewModel(
         val level: String,
     )
 
-    // [T-android-split-chat-tokenext] thinkingInfo / loadSessionTokenStats live
-    // in ChatViewModelTokenExt.kt; the data classes stay nested because
-    // TokenUsageSheet references ChatViewModel.SessionTokenStats.
+    // [T-android-split-chat-tokenext] thinkingInfo / loadSessionTokenStats live in ChatViewModelTokenExt.kt;
+    // the data classes stay nested because TokenUsageSheet references ChatViewModel.SessionTokenStats.
 
     // [T-android-split-chat] toggleMemorySheet / dismissMemorySheet moved to ChatViewModelUiStateExt.kt.
 
@@ -2506,37 +2516,12 @@ class ChatViewModel(
     }
 
     /**
-     * Set thinking level explicitly. Used by the inline level picker in the
-     * `/thinking` slash row. Mirrors iOS `setThinkingLevel(_:)` — silently
-     * ignored when the current model doesn't support reasoning.
+     * Set thinking level explicitly. Body lives in ChatViewModelThinkingSync.kt
+     * (architecture ceiling — same split #372 applied to toggleThinking); the
+     * member stays because the [com.openminis.app.session.ChatSessionPort]
+     * override must.
      */
-    override fun setThinkingLevel(level: ThinkingLevel) {
-        if (!currentModelSupportsReasoning) return
-        // [T-android-thinking-level-arch] Double-safety clamp: the composer UI
-        // already filters to availableThinkingLevels, but never fully trust the
-        // caller — cap to the current model's ceiling so a stale/over-range
-        // request can't persist a level the model can't reach.
-        val ceiling = currentModelMaxThinkingLevel
-        val clamped = if (level.rank > ceiling.rank) ceiling else level
-        // An explicit pick (even re-picking the same level) drops any level
-        // parked by ceiling-sync — see [dormantThinkingLevel].
-        dormantThinkingLevel = null
-        if (_thinkingLevel.value == clamped) return
-        _thinkingLevel.value = clamped
-        persistThinkingOverride(clamped)
-    }
-
-    /**
-     * T239: write the user's explicit thinking-level choice back to the
-     * sessions row so it survives cold-start. Stored as enum name; null
-     * means "no override" (legacy behaviour). We always store a non-null
-     * value here — including OFF — because the user's explicit "turn it
-     * off for this session" must persist as distinct from "never set".
-     *
-     * Uses [ensureSession] so toggling on a draft (no DB row yet) first
-     * materialises the row, mirroring how toggleMemoryEnabled lands its
-     * preference on the persisted id rather than the `__new__…` draft key.
-     */
+    override fun setThinkingLevel(level: ThinkingLevel) = setThinkingLevelInternal(level)
 
     /**
      * If `text` is a slash command literal (e.g. "/compact"), run it and
@@ -3101,11 +3086,10 @@ class ChatViewModel(
             }
         }
 
-    // T203 part 2: these MUST be declared before `init { loadSession() }` below —
-    // launch defaults to Main.immediate and runs the body to its first suspend,
-    // which reads `isDraft`; a later declaration would read the JVM default
-    // `false` and route every draft through load-from-DB, so no model/group
-    // name was ever set on the draft chat (bug T203 chased through the wrong layer).
+    // T203 part 2: these MUST be declared before `init { loadSession() }` below — launch
+    // defaults to Main.immediate and runs the body to its first suspend, which reads `isDraft`;
+    // a later declaration would read the JVM default `false` and route every draft through
+    // load-from-DB, so no model/group name was ever set on the draft chat (chased through the wrong layer).
     /** Model group ID from long-press FAB, encoded in the draft session ID.
      *  substringBefore strips the folder marker in case both are present. */
     internal val initialGroupId: String? =
@@ -3134,15 +3118,15 @@ class ChatViewModel(
         // [port-upstream-1.16] Provider-edit watch — see ChatViewModelProviderEditExt.
         startProviderEditWatch()
         loadSession()
-        // [T-session-paused-badge-active-false-positive] Drive the session-list PAUSED badge directly off canResume — the authoritative "this session
-        // is interrupted (tap Resume)" flag. Single chokepoint over every _canResume setter: canResume true → badge on; false → badge off. Replaces
-        // both the old foreground heuristic AND clear-on-open, so a session the user merely glanced at keeps its badge and a running one never shows one.
+        // [T-session-paused-badge-active-false-positive] Drive the session-list PAUSED badge directly off canResume — the authoritative "this session is
+        // interrupted (tap Resume)" flag; single chokepoint over every _canResume setter. Replaces the foreground heuristic AND clear-on-open: a glanced-at session keeps its badge, a running one never shows one.
         viewModelScope.launch {
             com.openminis.app.service.OverlayComposeBus.pending.collect { req ->
                 val sid = realSessionId.ifBlank { sessionId }
                 if (req.sessionId != sessionId && req.sessionId != sid) return@collect
                 com.openminis.app.service.OverlayComposeBus.consumeSticky(req.sessionId)
-                if (_isStreaming.value) enqueuePrompt(req.text) else sendMessage(req.text)
+                // [T-agent-steering] Streaming dispatch (steer-first, enqueue fallback) lives inside sendMessage.
+                sendMessage(req.text)
             }
         }
         viewModelScope.launch {
@@ -3151,7 +3135,7 @@ class ChatViewModel(
             val sticky = com.openminis.app.service.OverlayComposeBus.consumeSticky(sid)
                 ?: com.openminis.app.service.OverlayComposeBus.consumeSticky(sessionId)
             if (!sticky.isNullOrBlank()) {
-                if (_isStreaming.value) enqueuePrompt(sticky) else sendMessage(sticky)
+                sendMessage(sticky)
             }
         }
         viewModelScope.launch {
@@ -3177,11 +3161,10 @@ class ChatViewModel(
                 }
             }
         }
-        // T-android-crash-safe-mode-v2: when the user dismisses the
-        // safe-mode dialog, retry the restore that we skipped during
-        // cold start. loadSession() is idempotent (re-checks isSafeMode
-        // on entry; sessionLoaded gate prevents double-population), so
-        // this is a clean "now finish the work you skipped" hook.
+        // T-android-crash-safe-mode-v2: when the user dismisses the safe-mode dialog, retry
+        // the restore we skipped during cold start. loadSession() is idempotent (re-checks
+        // isSafeMode on entry; sessionLoaded gate prevents double-population), so this is a
+        // clean "now finish the work you skipped" hook.
         unsubscribeSafeMode = com.openminis.app.crash.CrashFrequencyDetector
             .registerSafeModeClearedListener {
                 viewModelScope.launch(kotlinx.coroutines.Dispatchers.Main) {
@@ -4251,9 +4234,8 @@ class ChatViewModel(
         index: Int,
         target: ChatMessage,
     ): Int {
-        // [T-delete-anchor-by-id] Resolve the anchor row id first: the target
-        // itself for a user message, the preceding visible user message for
-        // an assistant target (its whole turn goes).
+        // [T-delete-anchor-by-id] Resolve the anchor row id first: the target itself
+        // for a user message, the preceding visible user turn for an assistant one.
         val anchorMessage: ChatMessage? = if (target.role == "user") {
             target
         } else {
@@ -4297,10 +4279,9 @@ class ChatViewModel(
             // editMessage restored, mirroring how the caller clears the text.
             //
             // Symmetry with editMessage is the whole point: it REPLACES the
-            // composer's attachments with the edited message's, so leaving
-            // them behind on cancel would strand files the user never picked
-            // in a composer they thought they had backed out of — and the next
-            // ordinary send would silently attach them.
+            // composer's attachments with the edited message's, so leaving them
+            // behind on cancel would strand files the user never picked — and the
+            // next ordinary send would silently attach them.
             //
             // Guarded by the same non-null check as the log so a stray call
             // outside edit mode cannot wipe a draft's real attachments.
@@ -4309,17 +4290,22 @@ class ChatViewModel(
         _editingMessageId.value = null
     }
 
-
     /**
-     * Enqueue a prompt to be injected into the currently running agent loop.
-     * The message appears immediately in the chat with isQueued=true; when the
-     * current agent loop finishes, drainQueuedPrompts() consumes the queue.
-     * Mirrors iOS AIChatViewModel.enqueuePrompt().
+     * Enqueue a prompt into the running loop; shows immediately with isQueued=true, consumed
+     * by drainQueuedPrompts() when the loop finishes. Mirrors iOS AIChatViewModel.enqueuePrompt().
+     * [skipDedupe] bypasses the text-only dedupe gate for steering re-routed at the loop's
+     * natural exit (their fingerprint was recorded at offer acceptance — ChatRequestDedupeExt).
      */
-    fun enqueuePrompt(text: String) {
+    fun enqueuePrompt(text: String, skipDedupe: Boolean = false) {
         val trimmed = text.trim()
         val pendingAttachments = _attachments.value
         if ((trimmed.isBlank() && pendingAttachments.isEmpty()) || !_isStreaming.value) return
+        // [T-pi-idempotent-submit] A same-text re-enqueue inside the 800 ms window drops with a
+        // system-info notice (a debounce, not an error; log+notice pair in ChatRequestDedupeExt).
+        if (!skipDedupe && pendingAttachments.isEmpty() && requestDeduper.rejects(activeSessionId, trimmed)) {
+            notifyDuplicateSendDropped()
+            return
+        }
 
         val prompt = QueuedPrompt(
             id = "queued_${System.currentTimeMillis()}_${(Math.random() * 1_000_000).toInt()}",
@@ -4363,25 +4349,22 @@ class ChatViewModel(
     }
 
     /**
-     * [T-android-queued-message-interrupt-on-toolclose] Mid-tool-loop
-     * interrupt: take everything in [_promptQueue] right now, finalize the
-     * just-finished assistant bubble in the UI, persist a fresh user
-     * message carrying the queued text + attachments, append an assistant
-     * "bridge" entry into [agentHistory] (so Anthropic's
-     * mergeConsecutiveSameRole doesn't fold the queued user msg into the
-     * preceding tool_result), and spawn a new assistant placeholder for
-     * the next iteration's response.
+     * [T-android-queued-message-interrupt-on-toolclose] Mid-tool-loop interrupt:
+     * take everything in [_promptQueue] right now, finalize the just-finished
+     * assistant bubble in the UI, persist a fresh user message carrying the
+     * queued text + attachments, append an assistant "bridge" entry into
+     * [agentHistory] (so Anthropic's mergeConsecutiveSameRole doesn't fold the
+     * queued user msg into the preceding tool_result), and spawn a new assistant
+     * placeholder for the next iteration's response. Returns an [InjectedTurn]
+     * carrying the new assistantId (which the caller swaps into its loop-scope
+     * `assistantId` before `continue`-ing the agent loop), or `null` if every
+     * queued prompt was empty after attachment processing (caller falls through
+     * to a normal next-turn dispatch in that case).
      *
-     * Returns an [InjectedTurn] carrying the new assistantId (which the
-     * caller swaps into its loop-scope `assistantId` before `continue`-ing
-     * the agent loop), or `null` if every queued prompt was empty after
-     * attachment processing (caller falls through to a normal next-turn
-     * dispatch in that case).
-     *
-     * Mirrors iOS `injectQueuedPromptsAsNewTurn`
-     * (AIChatViewModel.swift:2794). Unlike iOS we don't persist the bridge
-     * entry — its sole purpose is to break up the consecutive-user run for
-     * the next API call; chat history reconstruction would just hide it.
+     * Mirrors iOS `injectQueuedPromptsAsNewTurn` (AIChatViewModel.swift:2794).
+     * Unlike iOS we don't persist the bridge entry — its sole purpose is to break
+     * up the consecutive-user run for the next API call; chat history
+     * reconstruction would just hide it.
      */
     internal data class InjectedTurn(val newAssistantId: String)
 

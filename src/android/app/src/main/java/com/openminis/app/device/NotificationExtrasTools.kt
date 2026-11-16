@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.service.notification.StatusBarNotification
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
+import com.openminis.app.data.model.ToolAnnotations
 import com.openminis.app.offload.MinisNotificationListenerService
 import org.json.JSONObject
 
@@ -87,6 +88,9 @@ internal object NotificationExtrasTools {
             ),
             required = listOf(TOOL_TITLE_PARAM),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "keys", "all"),
+            // [pi-port §4.1] Deletion-class: dismissed notifications are gone
+            // (all=true sweeps everything clearable), hence destructiveHint.
+            annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = true, idempotentHint = false),
         )
 
         fun execute(argsJson: String, context: Context): String {
@@ -127,6 +131,8 @@ internal object NotificationExtrasTools {
             ),
             required = listOf(TOOL_TITLE_PARAM, "key"),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "key"),
+            // [pi-port §4.1] Taps a notification each call; not destructive.
+            annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = false, idempotentHint = false),
         )
 
         fun execute(argsJson: String, context: Context): String {
@@ -174,6 +180,9 @@ internal object NotificationExtrasTools {
             ),
             required = listOf(TOOL_TITLE_PARAM, "key", "text"),
             propertyOrdering = listOf(TOOL_TITLE_PARAM, "key", "text"),
+            // [pi-port §4.1] Sends a message on the user's behalf — the
+            // DANGEROUS risk class, hence destructiveHint.
+            annotations = ToolAnnotations(readOnlyHint = false, destructiveHint = true, idempotentHint = false),
         )
 
         fun execute(argsJson: String, context: Context): String {

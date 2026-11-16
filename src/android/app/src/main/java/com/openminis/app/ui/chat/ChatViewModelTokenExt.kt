@@ -1,6 +1,8 @@
 package com.openminis.app.ui.chat
 
 import com.openminis.app.data.BPETokenizer
+import com.openminis.app.data.UsageState
+import com.openminis.app.data.foldToolUse
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.provider.LLMProvider
@@ -98,6 +100,7 @@ internal fun ChatViewModel.contextTokensForPolicy(): Int =
 fun ChatViewModel.refreshContextUsage() {
     val reported = _lastTurnContextTokens.value
     var usedChars = 0L
+    var imageCount = 0
     for (msg in effectiveAgentHistoryUncounted()) {
         for (part in msg.contentParts) {
             when (part) {
@@ -106,11 +109,17 @@ fun ChatViewModel.refreshContextUsage() {
                 is AgentContentPart.ToolResult -> {
                     usedChars += part.content.length
                 }
-                is AgentContentPart.ImageData -> {}
+                is AgentContentPart.ImageData -> imageCount += 1
             }
         }
     }
-    val estTokens = (usedChars / 3.5).toLong()
+    // [T-pi-context-token-estimator] The flat chars/3.5 heuristic ignored
+    // image parts entirely; the pi-ported estimator counts each image as
+    // ~4800 chars (its empirical image-token weight) and ceils the char
+    // division instead of truncating it.
+    val estTokens = com.openminis.app.data.ContextTokenEstimator.estimateTextTokens(
+        usedChars + imageCount * com.openminis.app.data.ContextTokenEstimator.ESTIMATED_IMAGE_CHARS,
+    )
     val used = if (reported > 0) reported.toLong() else estTokens
     val window = currentModelContextWindow?.toLong() ?: 0L
     contextUsage.value = com.openminis.app.data.model.ContextUsage(used, window)
@@ -147,6 +156,10 @@ suspend fun ChatViewModel.loadSessionTokenStats(): ChatViewModel.SessionTokenSta
     var cacheRead = 0L
     var cacheWrite = 0L
     var context = 0
+    // [T-thinking-dual-ledger] The MOST RECENT turn's ledger — the query is
+    // sort_order ASC, so the last row carrying a requested level wins.
+    var lastRequested: String? = null
+    var lastEffective: String? = null
     for (json in usages) {
         try {
             val obj = org.json.JSONObject(json)
@@ -156,6 +169,11 @@ suspend fun ChatViewModel.loadSessionTokenStats(): ChatViewModel.SessionTokenSta
             cacheWrite += obj.optLong("cacheCreationTokens", 0L)
             val ctx = obj.optInt("latestContextTokens", 0)
             if (ctx > 0) context = ctx
+            val requested = obj.optString("thinkingLevelRequested", "")
+            if (requested.isNotEmpty()) {
+                lastRequested = requested
+                lastEffective = obj.optString("thinkingLevelEffective", "").ifEmpty { null }
+            }
         } catch (_: Exception) { /* skip malformed row */ }
     }
     val snapshot = _messages.value
@@ -163,7 +181,40 @@ suspend fun ChatViewModel.loadSessionTokenStats(): ChatViewModel.SessionTokenSta
     val toolCalls = snapshot.filter { it.role == "assistant" }
         .sumOf { msg -> msg.toolBlocks.count { it.kind != "text" && it.kind != "info" } }
     val loops = maxOf(toolCalls, assistantCount)
-    return ChatViewModel.SessionTokenStats(input, output, cacheRead, cacheWrite, context, loops)
+    return ChatViewModel.SessionTokenStats(
+        input, output, cacheRead, cacheWrite, context, loops, lastRequested, lastEffective,
+        toolCallCounts = sessionToolCallCounts(snapshot),
+    )
+}
+
+/**
+ * [T-pi-tools-bucket] UsageLedger tools bucket for one session: per-tool call
+ * counts folded from the LOADED message window's `tool_use` blocks through
+ * [foldToolUse] — the exact in-memory path the ledger's KDoc prescribes
+ * ("fold from blocks ALREADY in memory"); a parts_json rebuild would pull
+ * every stored message body (MBs, partially offloaded) just to count calls.
+ *
+ * Counts `tool_use` blocks with a real name ONLY: info/thinking blocks reuse
+ * [AssistantBlock.toolName] for icons and markers, and toolResult blocks
+ * mirror the same call set (would double-count). Scope note: the models
+ * bucket aggregates ALL persisted usage rows (the token sums in
+ * [loadSessionTokenStats]); the tools bucket covers the loaded window — the
+ * same window loopCount already reports, so the two agent-activity figures
+ * always agree on what a "session" is.
+ *
+ * Pure — JVM-tested.
+ */
+internal fun sessionToolCallCounts(messages: List<ChatMessage>): Map<String, Int> {
+    val ledger = UsageState()
+    for (message in messages) {
+        if (message.role != "assistant") continue
+        for (block in message.toolBlocks) {
+            if (block.kind == "tool_use" && block.toolName.isNotBlank()) {
+                foldToolUse(ledger, block.toolName)
+            }
+        }
+    }
+    return ledger.tools.mapValues { (_, usage) -> usage.calls.toInt() }
 }
 
 /**

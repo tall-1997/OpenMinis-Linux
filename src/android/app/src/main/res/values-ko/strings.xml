@@ -327,6 +327,8 @@
     <string name="token_usage_section_thinking">사고</string>
     <string name="token_usage_thinking_label">사고</string>
     <string name="token_usage_thinking_level">수준</string>
+    <string name="token_usage_thinking_requested">요청 레벨</string>
+    <string name="token_usage_thinking_effective">실제 레벨</string>
     <string name="token_usage_thinking_supported">지원됨</string>
     <string name="token_usage_section_tokens">토큰 (세션 합계)</string>
     <string name="token_usage_input_with_cache">입력 (캐시 포함)</string>
@@ -2035,6 +2037,9 @@
     <string name="mcp_approval_restart_notice">재시작으로 대기 중인 승인 %1$d개가 무효화되었습니다</string>
     <string name="context_saver_title">컨텍스트 절약</string>
     <string name="context_saver_footer">요청이 커지면 최근 몇 개를 제외한 오래된 도구 출력을 한 줄 자리표시자로 접습니다. 삭제하지 않으며, 접힌 결과는 저장 경로를 유지하거나 도구 재실행을 안내합니다.</string>
+    <!-- [T-prompt-cache-warming] Settings toggle for the idle-time prompt cache warming hook. -->
+    <string name="cache_warming_title">프롬프트 캐시 워밍</string>
+    <string name="cache_warming_footer">사용하도록 설정하면 유휴 상태 이후 앱이 마지막으로 성공한 요청을 1토큰 출력 한도로 재전송하여 만료되기 전에 공급자의 프롬프트 캐시를 새로 고칠 수 있습니다. 추가 유료 요청이 발생하며 기본값은 꺼짐입니다.</string>
     <string name="context_saver_off">끔</string>
     <string name="context_saver_balanced">균형</string>
     <string name="context_saver_aggressive">적극적</string>

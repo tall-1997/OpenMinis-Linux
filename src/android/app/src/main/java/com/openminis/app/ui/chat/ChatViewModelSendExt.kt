@@ -49,8 +49,37 @@ internal fun ChatViewModel.sendMessage(
     // here — clearing at this point would strip the content out from under
     // a send that then bails on the context-check paths below.
     val trimmed = text.trim()
-    // While streaming, enqueue instead of silently dropping (iOS: send vs enqueuePrompt).
+    // [T-agent-steering] While streaming, offer the text to the pi steering queue
+    // FIRST: it lands as a real user message at the NEXT turn boundary and never
+    // cuts the current turn (drainSteeringIntoRun consumes it inside the live
+    // run). enqueuePrompt — the iOS-parity INTERRUPT queue — is only the
+    // fallback for the tiny race where the stream ended between the caller's
+    // check and steerPrompt's own guard, and the only path for attachment
+    // sends: steering carries text only, and an image the user just picked
+    // must not be silently dropped. Every user-text entry funnels here
+    // (composer, overlay bus, voice, headless), so no caller keeps its own
+    // streaming-dispatch branch.
     if (_isStreaming.value) {
+        if (_attachments.value.isEmpty()) {
+            // [T-agent-steering-dedupe] Gate the offer with the SAME text
+            // fingerprint the enqueue path uses — the offer used to bypass the
+            // gate entirely, so a streaming double-tap delivered the text twice.
+            // Check-only first (no record): the fingerprint is committed only
+            // when the offer is ACCEPTED, so if steerPrompt loses the
+            // end-of-stream race below, the enqueue fallback still meets an
+            // unrecorded fingerprint and its own atomic gate stays the sole
+            // record point on that path (no mis-reject of a legitimate send).
+            if (requestDedupeSeen(activeSessionId, trimmed)) {
+                notifyDuplicateSendDropped()
+                return
+            }
+            if (steerPrompt(text)) {
+                requestDedupeRecord(activeSessionId, trimmed)
+                return
+            }
+            // steerPrompt returned false: the stream ended between the funnel's
+            // check and the offer's own guard — fall through to enqueuePrompt.
+        }
         enqueuePrompt(text)
         return
     }

@@ -3,6 +3,7 @@ package com.openminis.app.ui.chat
 
 import android.util.Log
 import androidx.lifecycle.viewModelScope
+import com.openminis.app.data.ThinkingDormancy
 import com.openminis.app.data.db.MessageEntity
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
@@ -277,10 +278,11 @@ internal fun ChatViewModel.loadSession() {
             ?.let { runCatching { ThinkingLevel.valueOf(it) }.getOrNull() }
             ?: ThinkingLevel.OFF
         // [T-thinking-dormant-restore] The loaded session row is the level
-        // authority now — a slot parked for the PREVIOUS session must not
-        // restore over this session's persisted override when the ceiling
-        // widens.
-        dormantThinkingLevel = null
+        // authority now — and with the park persisted (P2 1-8) the row also
+        // carries THIS session's parked slot, which replaces whatever was
+        // parked for the previous session. Unknown/stale names decode to
+        // "no park" (never throws the session load).
+        dormantThinkingLevel = ThinkingDormancy.decode(session.dormantThinkingOverride)
 
         // Priority 1: restore from persisted model_binding (group or entry)
         var resolved = restoreFromBinding(session.modelBinding)

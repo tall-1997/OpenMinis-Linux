@@ -159,8 +159,9 @@ internal suspend fun ChatViewModel.runOneSubAgentInner(
         val requestedThinking = spawn.thinkingLevel ?: run {
             val slot = multiAgentSettings.slotThinkingLevel(poolSlotIdx)
             if (slot.isNullOrBlank()) {
-                val sessionLevel = _thinkingLevel.value
-                if (sessionLevel.rank > laneCeiling.rank) laneCeiling else sessionLevel
+                // [T-thinking-three-faces-unified] Session level + lane ceiling —
+                // the shared policy (same as group/supervisor faces).
+                laneSessionThinkingLevel(_thinkingLevel.value, laneCeiling)
             } else {
                 parseThinkingLevel(slot, laneCeiling)
             }
@@ -283,14 +284,13 @@ internal suspend fun ChatViewModel.runOneSubAgentInner(
                 // level to the ACTUAL entry on retry rotations — the old code
                 // kept the baseEntry-derived value, which over-shot (higher
                 // ceiling) or under-shot (lower ceiling) after rotation.
-                val laneThinkingLevel = if (entry != baseEntry) {
-                    clampThinkingToCeiling(
-                        requestedThinking,
-                        forcedThinkingCeilingFor(entry),
-                    )
-                } else {
-                    requestedThinking
-                }
+                // [T-subagent-retry-reclamp] Pure policy helper, JVM-tested
+                // (see SubAgentThinkingPolicyTest): downward-only, never lifts.
+                val laneThinkingLevel = laneRetryThinkingLevel(
+                    requestedThinking,
+                    entry != baseEntry,
+                    forcedThinkingCeilingFor(entry),
+                )
                 val provider = providerForModelEntry(entry)
                 if (provider == null) {
                     if (attempt >= maxAttempts) {

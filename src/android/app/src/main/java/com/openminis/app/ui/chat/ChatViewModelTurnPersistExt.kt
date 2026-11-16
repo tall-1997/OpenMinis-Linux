@@ -8,6 +8,7 @@ import com.openminis.app.data.model.LLMStreamChunk
 import com.openminis.app.data.model.LLMUsage
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.provider.NonFiniteJson
+import com.openminis.app.provider.selectableThinkingLevels
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -113,6 +114,24 @@ internal fun ChatViewModel.buildTurnParts(
     allToolBlocks: List<AssistantBlock>,
     turnStartBlockIndex: Int,
     toolCallInputs: Map<String, String>,
+): List<AgentContentPart> = turnPartsFromBlocks(allToolBlocks, turnStartBlockIndex, toolCallInputs)
+
+/**
+ * Pure slice builder behind [buildTurnParts]. Extracted so the slice contract
+ * is JVM-testable — the extension needs a ChatViewModel receiver, which no JVM
+ * test can construct.
+ *
+ * [T-compact-retry-rebase] The compact-and-retry seal+swap clears allToolBlocks
+ * and rebases the loop's lower bound to 0; this function is where a STALE bound
+ * fails. `turnStartBlockIndex >= allToolBlocks.size` (the stale pre-clear size
+ * against the rewound list) returns an EMPTY list — the guard is silent by
+ * design for the genuine empty-turn case, which is exactly why a stale bound
+ * used to drop the whole retried turn at persist with no error anywhere.
+ */
+internal fun turnPartsFromBlocks(
+    allToolBlocks: List<AssistantBlock>,
+    turnStartBlockIndex: Int,
+    toolCallInputs: Map<String, String>,
 ): List<AgentContentPart> {
     if (turnStartBlockIndex >= allToolBlocks.size) return emptyList()
     val out = mutableListOf<AgentContentPart>()
@@ -205,9 +224,26 @@ internal suspend fun ChatViewModel.persistAssistantTurnForRun(
     toolBlockMeta: Map<String, AssistantBlock> = emptyMap(),
     assistantText: String? = null,
     uiMessageId: String? = run.assistantMessageId,
+    // [T-thinking-dual-ledger] The tier the turn was REQUESTED under (the
+    // loop's run-scoped snapshot, not the live flow — mid-run adoption may
+    // have moved the latter). Null from callers that genuinely don't know;
+    // the agent loop always knows.
+    requestedLevel: ThinkingLevel? = null,
 ): String? = run.withPersistencePermit {
     kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
-        persistAssistantTurn(parts, usage, reasoningContent, toolBlockMeta, streamDurationMs = run.streamRate.takeDurationMs()).also { id ->
+        // [T-thinking-dual-ledger] Resolve the ledger HERE, where the turn's
+        // reasoning evidence (reasoningContent) and the model's declared tier
+        // set are both in scope — persistAssistantTurn stays a dumb writer.
+        // reasoningContent "" is DeepSeek V4's explicit non-thinking signal:
+        // empty = no evidence, not evidence of nothing.
+        val thinkingUsage = requestedLevel?.let {
+            resolveTurnThinkingUsage(
+                requestedLevel = it,
+                thinkingObserved = !reasoningContent.isNullOrEmpty(),
+                declaredSelectableLevels = currentModel?.selectableThinkingLevels ?: emptyList(),
+            )
+        }
+        persistAssistantTurn(parts, usage, reasoningContent, toolBlockMeta, streamDurationMs = run.streamRate.takeDurationMs(), thinkingUsage = thinkingUsage).also { id ->
             if (id != null) {
                 withContext(Dispatchers.Main.immediate) { notePersistedUiRow(uiMessageId, id) }
                 if (assistantText != null) run.markAssistantTurnPersisted(assistantText)
@@ -242,12 +278,23 @@ internal suspend fun ChatViewModel.persistAssistantTurn(
     // [T-android-usage-tok-s] Streamed-text wall clock (first→last delta of
     // this persisted window) for the footer's tok/s readout; null = no text.
     streamDurationMs: Long? = null,
+    // [T-thinking-dual-ledger] Requested vs provider-evidenced thinking tier
+    // for THIS turn; null = caller could not know (no request was made).
+    thinkingUsage: TurnThinkingUsage? = null,
 ): String? {
     if (parts.isEmpty()) return null
     val partsJson = buildAssistantPartsJson(parts, toolBlockMeta)
     val tokenJson = usage?.let {
         val durSuffix = streamDurationMs?.let { d -> ",\"streamDurationMs\":$d" } ?: ""
-        """{"inputTokens":${it.inputTokens},"outputTokens":${it.outputTokens},"cacheCreationTokens":${it.cacheCreationInputTokens ?: 0},"cacheReadTokens":${it.cacheReadInputTokens ?: 0},"latestContextTokens":${it.latestContextTokens}$durSuffix}"""
+        // [T-thinking-dual-ledger] thinkingLevelRequested is ALWAYS written
+        // when the ledger is known (every agent-loop turn); effective is
+        // written only when the response produced evidence — absent key =
+        // unknown, deliberately distinct from a written "OFF".
+        val thinkingSuffix = thinkingUsage?.let { t ->
+            ",\"thinkingLevelRequested\":${escapeJson(t.requested)}" +
+                (t.effective?.let { e -> ",\"thinkingLevelEffective\":${escapeJson(e)}" } ?: "")
+        } ?: ""
+        """{"inputTokens":${it.inputTokens},"outputTokens":${it.outputTokens},"cacheCreationTokens":${it.cacheCreationInputTokens ?: 0},"cacheReadTokens":${it.cacheReadInputTokens ?: 0},"latestContextTokens":${it.latestContextTokens}$durSuffix$thinkingSuffix}"""
     }
     val entity = chatRepository.appendMessage(
         realSessionId.ifEmpty { sessionId }, "assistant", partsJson, tokenJson,

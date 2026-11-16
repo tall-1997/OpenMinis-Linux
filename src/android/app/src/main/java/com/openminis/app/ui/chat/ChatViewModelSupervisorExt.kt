@@ -370,8 +370,9 @@ private suspend fun ChatViewModel.runSupervisorSession(
                 tools = SupervisorSeats.supervisorTools(supervisorBaseTools(supervisorEntry)),
                 toolGate = null,
                 // [T-thinking-three-faces-unified] Session level clamped to
-                // the supervisor model's ceiling — same as spawn lanes.
-                thinkingLevel = clampThinkingToCeiling(
+                // the supervisor model's ceiling — the shared
+                // laneSessionThinkingLevel policy, same as spawn lanes.
+                thinkingLevel = laneSessionThinkingLevel(
                     _thinkingLevel.value,
                     forcedThinkingCeilingFor(supervisorEntry),
                 ),
@@ -426,8 +427,9 @@ private suspend fun ChatViewModel.runSupervisorSession(
                 writePaths = writePaths,
                 maxTurns = multiAgentSettings.subagentMaxTurns.value,
                 // [T-thinking-three-faces-unified] Session level clamped to
-                // the worker model's ceiling — same as spawn lanes.
-                thinkingLevel = clampThinkingToCeiling(
+                // the worker model's ceiling — the shared
+                // laneSessionThinkingLevel policy, same as spawn lanes.
+                thinkingLevel = laneSessionThinkingLevel(
                     _thinkingLevel.value,
                     forcedThinkingCeilingFor(workerEntry),
                 ),

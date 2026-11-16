@@ -5,6 +5,7 @@ import com.openminis.app.data.model.LLMMessage
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -380,5 +381,232 @@ class ProgressiveTrimTest {
         assertTrue(text.contains("shell"))
         assertTrue(text.contains("ok"))
         assertTrue(text.contains("/var/minis/workspace/tool-spill/x.txt"))
+    }
+
+    // ── [pi-port 1.7] cut-point hard constraints ────────────────────────
+    //
+    // mergeOldSteps only ever considers its.take(size - MERGE_KEEP_RECENT_ITERATIONS)
+    // as candidates, so every merge-level test below builds ≥ 8 iterations to
+    // get a non-empty candidate set and actually reach the new constraint code.
+
+    private fun useCall(id: String) = AgentContentPart.ToolUse(
+        id = id, name = "shell", input = JSONObject("""{"cmd":"ls"}"""),
+    )
+
+    private fun resultMsg(callId: String, dbId: String, extra: List<AgentContentPart> = emptyList()) =
+        LLMMessage(
+            role = LLMMessage.Role.USER,
+            content = "",
+            contentParts = listOf(
+                AgentContentPart.ToolResult(id = callId, name = "shell", content = "out $callId"),
+            ) + extra,
+            dbMessageId = dbId,
+        )
+
+    private fun useMsg(vararg callIds: String, dbId: String) = LLMMessage(
+        role = LLMMessage.Role.ASSISTANT,
+        content = "calling ${callIds.joinToString()}",
+        contentParts = callIds.map { useCall(it) },
+        dbMessageId = dbId,
+    )
+
+    private fun userMsg(text: String, dbId: String) = LLMMessage(
+        role = LLMMessage.Role.USER,
+        content = text,
+        dbMessageId = dbId,
+    )
+
+    /** tool_use ids vs tool_result ids still in the projection. */
+    private fun pairingOf(messages: List<LLMMessage>): Pair<Set<String>, Set<String>> {
+        val uses = messages.flatMap { it.contentParts }
+            .filterIsInstance<AgentContentPart.ToolUse>().map { it.id }.toSet()
+        val results = messages.flatMap { it.contentParts }
+            .filterIsInstance<AgentContentPart.ToolResult>().map { it.id }.toSet()
+        return uses to results
+    }
+
+    @Test
+    fun `user prompt boundary is a safe cut`() {
+        val list = listOf(
+            user("t0", 0), useMsg("call_a", dbId = "a1"),
+            resultMsg("call_a", "r1"), user("t1", 3),
+        )
+        assertTrue(ProgressiveTrim.isSafeCutBoundary(list, 3))
+    }
+
+    @Test
+    fun `tool result carrier is never a safe cut boundary`() {
+        val list = listOf(
+            user("t0", 0), useMsg("call_a", dbId = "a1"),
+            resultMsg("call_a", "r1"), user("t1", 3),
+        )
+        // The pure carrier, and any message carrying results alongside text.
+        assertFalse(ProgressiveTrim.isSafeCutBoundary(list, 2))
+        val pinned = LLMMessage(
+            role = LLMMessage.Role.USER,
+            content = "note",
+            contentParts = listOf(
+                AgentContentPart.Text("note"),
+                AgentContentPart.ToolResult(id = "call_a", name = "shell", content = "out"),
+            ),
+            dbMessageId = "r1",
+        )
+        val pinnedList = listOf(user("t0", 0), useMsg("call_a", dbId = "a1"), pinned, user("t1", 3))
+        assertFalse(ProgressiveTrim.isSafeCutBoundary(pinnedList, 2))
+    }
+
+    @Test
+    fun `assistant boundary is rejected as mid-turn without turn-prefix summarization`() {
+        val list = listOf(
+            user("t0", 0), useMsg("call_a", dbId = "a1"),
+            resultMsg("call_a", "r1"), useMsg("call_b", dbId = "a2"),
+        )
+        assertFalse(ProgressiveTrim.isSafeCutBoundary(list, 3))
+    }
+
+    @Test
+    fun `boundary at index zero list end or out of range is never safe`() {
+        val list = listOf(user("t0", 0), useMsg("call_a", dbId = "a1"), resultMsg("call_a", "r1"))
+        assertFalse(ProgressiveTrim.isSafeCutBoundary(list, 0))
+        assertFalse(ProgressiveTrim.isSafeCutBoundary(list, list.size))
+        assertFalse(ProgressiveTrim.isSafeCutBoundary(list, -1))
+        assertFalse(ProgressiveTrim.isSafeCutBoundary(list, list.size + 1))
+    }
+
+    @Test
+    fun `a pre-cut call result hanging after a plain user forbids the cut`() {
+        // Malformed history: the answer trails AFTER a later plain prompt. The
+        // cut at the prompt would summarize the call away and leave the result
+        // dangling — pi isCandidate's forward scan rejects it.
+        val list = listOf(
+            user("t0", 0),
+            useMsg("call_a", dbId = "a1"),
+            user("continue?", 2),
+            resultMsg("call_a", "r1"),
+        )
+        assertFalse(ProgressiveTrim.isSafeCutBoundary(list, 2))
+    }
+
+    @Test
+    fun `merge refuses to orphan a use whose result rides a later carrier`() {
+        // The exact #265-class shape the old subset-collapse could corrupt:
+        // assistant 1's call never got a carrier of its own (its carrier chain
+        // breaks at assistant 2), so its result rides the carrier of
+        // assistant 2. The old code collapsed assistant 2 + its carrier ALONE
+        // (the unpaired head iteration was filtered out of the subset),
+        // deleting the result and orphaning assistant 1's tool_use. The new
+        // prefix rule stops at the unpaired head iteration and degrades to NO
+        // merge at all.
+        val list = buildList {
+            add(userMsg("q0", "u0"))
+            add(useMsg("call_1", dbId = "a1"))   // unpaired head iteration
+            add(useMsg("call_2", dbId = "a2"))   // carrier chain breaks here
+            add(resultMsg("call_1", "rx", extra = listOf(
+                AgentContentPart.ToolResult(id = "call_2", name = "shell", content = "out call_2"),
+            )))
+            var q = 1
+            for (i in 3..8) {
+                add(userMsg("q$q", "uq$q")); q++
+                add(useMsg("call_$i", dbId = "a$i"))
+                add(resultMsg("call_$i", "r$i"))
+            }
+        }
+        assertNull(ProgressiveTrim.mergeOldSteps(list, lastUserIdx = 21, firstTrimmableIdx = 19))
+    }
+
+    @Test
+    fun `merge degrades to nothing when no safe cut boundary exists`() {
+        // One pure tool loop: no interstitial prompts, so every candidate cut
+        // lands mid-turn on an assistant. Constraint 3 (turn boundary) has no
+        // turn boundary to offer → collapse nothing rather than hard-cut.
+        val list = buildList {
+            add(userMsg("q0", "u0"))
+            for (i in 1..8) {
+                add(useMsg("call_$i", dbId = "a$i"))
+                add(resultMsg("call_$i", "r$i"))
+            }
+        }
+        assertNull(ProgressiveTrim.mergeOldSteps(list, lastUserIdx = -1, firstTrimmableIdx = 13))
+    }
+
+    @Test
+    fun `merge collapses a whole old turn and cuts at the next turn boundary`() {
+        // Positive pi case: the two oldest iterations are exactly turn 0 (the
+        // rest of the session covers the kept-recent window), so the collapsed
+        // prefix ends at the next turn's user prompt — a safe boundary — and
+        // the whole old turn merges into the index block while the new turn
+        // stays verbatim.
+        val list = buildList {
+            add(userMsg("task", "u0"))
+            add(useMsg("call_1", dbId = "a1")); add(resultMsg("call_1", "r1"))
+            add(useMsg("call_2", dbId = "a2")); add(resultMsg("call_2", "r2"))
+            add(userMsg("new question", "t1"))
+            for (i in 3..8) {
+                add(useMsg("call_$i", dbId = "a$i"))
+                add(resultMsg("call_$i", "r$i"))
+            }
+        }
+        val merged = ProgressiveTrim.mergeOldSteps(list, lastUserIdx = 17, firstTrimmableIdx = 15)
+        assertNotNull("turn-boundary collapse must be allowed", merged)
+        merged!!
+        val ids = merged.mapNotNull { it.dbMessageId }.toSet()
+        assertFalse("collapsed calls must be gone", ids.any { it == "a1" || it == "a2" || it == "r1" || it == "r2" })
+        assertTrue("the turn boundary prompt survives", "t1" in ids)
+        assertTrue("the kept-recent iterations survive", "a8" in ids && "r8" in ids)
+        assertEquals(18 - 4 + 1, merged.size)
+        assertEquals(1, merged.count { it.content.startsWith("[Minis context]") })
+        val (uses, results) = pairingOf(merged)
+        assertEquals(uses, results)
+    }
+
+    @Test
+    fun `merge keeps a protected tail carrier even when its assistant is trimmable`() {
+        // #265 regression: iteration 2's assistant (index 4) sits inside the
+        // trimmable prefix but its carrier (index 5) is in the protected tail
+        // (firstTrimmableIdx = 5). The iteration must not collapse, and the
+        // older fully-trimmable iteration still merges — fewer collapses,
+        // never a dropped tail result.
+        val list = buildList {
+            add(userMsg("q0", "u0"))
+            add(useMsg("call_1", dbId = "a1")); add(resultMsg("call_1", "r1"))
+            add(userMsg("q1", "u1"))
+            add(useMsg("call_2", dbId = "a2")); add(resultMsg("call_2", "r2"))  // carrier at 5
+            var q = 2
+            for (i in 3..9) {
+                add(userMsg("q$q", "uq$q")); q++
+                add(useMsg("call_$i", dbId = "a$i"))
+                add(resultMsg("call_$i", "r$i"))
+            }
+        }
+        val merged = ProgressiveTrim.mergeOldSteps(list, lastUserIdx = 21, firstTrimmableIdx = 5)!!
+        assertTrue("protected-tail result must survive verbatim", "r2" in merged.mapNotNull { it.dbMessageId }.toSet())
+        assertTrue("its call must survive with it", "a2" in merged.mapNotNull { it.dbMessageId }.toSet())
+        assertFalse("the older trimmable iteration still merges", "r1" in merged.mapNotNull { it.dbMessageId }.toSet())
+        val (uses, results) = pairingOf(merged)
+        assertEquals(uses, results)
+    }
+
+    @Test
+    fun `merge collapses both carriers of an assistant whose results span users`() {
+        // Consecutive toolResult carriers: one assistant, two result messages.
+        // Both carriers must drop together with their assistant.
+        val list = buildList {
+            add(userMsg("q0", "u0"))
+            add(useMsg("call_1", "call_2", dbId = "a1"))
+            add(resultMsg("call_1", "r1"))
+            add(resultMsg("call_2", "r2"))
+            var q = 1
+            for (i in 3..9) {
+                add(userMsg("q$q", "uq$q")); q++
+                add(useMsg("call_$i", dbId = "a$i"))
+                add(resultMsg("call_$i", "r$i"))
+            }
+        }
+        val its = ProgressiveTrim.iterations(list)
+        assertEquals(listOf(2, 3), its.first().carrierIdx)
+        val merged = ProgressiveTrim.mergeOldSteps(list, lastUserIdx = 24, firstTrimmableIdx = 5)!!
+        assertFalse(merged.mapNotNull { it.dbMessageId }.toSet().any { it == "r1" || it == "r2" })
+        val (uses, results) = pairingOf(merged)
+        assertEquals(uses, results)
     }
 }

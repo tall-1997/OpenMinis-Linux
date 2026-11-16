@@ -327,6 +327,8 @@
     <string name="token_usage_section_thinking">思考</string>
     <string name="token_usage_thinking_label">思考</string>
     <string name="token_usage_thinking_level">レベル</string>
+    <string name="token_usage_thinking_requested">要求レベル</string>
+    <string name="token_usage_thinking_effective">実効レベル</string>
     <string name="token_usage_thinking_supported">サポート済み</string>
     <string name="token_usage_section_tokens">トークン（セッション合計）</string>
     <string name="token_usage_input_with_cache">入力（キャッシュ含む）</string>
@@ -2035,6 +2037,9 @@
     <string name="mcp_approval_restart_notice">再起動により承認待ち %1$d 件が失効しました</string>
     <string name="context_saver_title">コンテキスト節約</string>
     <string name="context_saver_footer">リクエストが大きくなると、直近の数件を除く古いツール出力を1行のプレースホルダーに畳みます。削除は行いません。畳んだ結果は保存先パスを保持するか、ツールの再実行を促します。</string>
+    <!-- [T-prompt-cache-warming] Settings toggle for the idle-time prompt cache warming hook. -->
+    <string name="cache_warming_title">プロンプトキャッシュのウォームアップ</string>
+    <string name="cache_warming_footer">有効にすると、アイドル状態の後、アプリが最後に成功したリクエストを 1 トークンの出力上限で再生し、プロバイダーのプロンプトキャッシュが失効する前に更新することがあります。追加の課金リクエストが発生します。デフォルトはオフです。</string>
     <string name="context_saver_off">オフ</string>
     <string name="context_saver_balanced">バランス</string>
     <string name="context_saver_aggressive">積極的</string>

@@ -161,6 +161,23 @@ object LifecycleHooks {
     }
 
     /**
+     * [T-ext-ctx-guard] Demonstration consumer of [ExtensionContextGuard]: the
+     * hook dispatcher owns the listener list for the whole process lifetime,
+     * so a chat-scoped listener registered through this path cannot outlive
+     * its session by accident. The owner invalidates the returned guard on
+     * session switch/close — the listener is unsubscribed automatically and
+     * any code still holding the stale guard fails fast with the
+     * self-explanatory pi stale-ctx message instead of firing into a dead
+     * session.
+     */
+    fun registerSessionListener(listener: LifecycleListener): ExtensionContextGuard.GuardedContext {
+        val guard = ExtensionContextGuard.create()
+        registerListener(listener)
+        guard.trackUnsubscribe { unregisterListener(listener) }
+        return guard
+    }
+
+    /**
      * 触发一个生命周期事件。永不抛异常、永不阻塞：监听器同步回调（各自
      * runCatching），脚本投递到 IO 协程。
      *

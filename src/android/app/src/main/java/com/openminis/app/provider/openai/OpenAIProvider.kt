@@ -1557,10 +1557,10 @@ class OpenAIProvider private constructor(
         override val chatExtraHeaders get() = this@OpenAIProvider.chatExtraHeaders
         override val absoluteEndpointOverride get() = this@OpenAIProvider.absoluteEndpointOverride
         override val isOpenRouter get() = this@OpenAIProvider.isOpenRouter
-        override val needsOpenRouterAnthropicCacheControl get() =
-            this@OpenAIProvider.needsOpenRouterAnthropicCacheControl
+        override val needsOpenRouterAnthropicCacheControl get() = this@OpenAIProvider.needsOpenRouterAnthropicCacheControl
         override val isMistral get() = this@OpenAIProvider.isMistral
         override val isDashScope get() = this@OpenAIProvider.isDashScope
+        override val compatFlags get() = com.openminis.app.provider.compat.CompatResolver.forBasePath(basePath, model.id)
         override val isXAI get() = this@OpenAIProvider.isXAI
         override val usesUnifiedReasoningEffort get() = this@OpenAIProvider.usesUnifiedReasoningEffort
         override val thinkingRuleInstanceId get() = this@OpenAIProvider.thinkingRuleInstanceId
@@ -1622,33 +1622,15 @@ class OpenAIProvider private constructor(
      */
 
     /**
-     * [T-reasoning-effort-data-driven] Snap an effort string onto the tiers the
-     * model actually declares. Mirrors iOS
-     * `OpenAIAgentProvider.clampEffort(_:to:)` — keep both in sync.
-     *
-     * Necessary because the catalog's effort sets are far from uniform
-     * (["low","medium","high"], ["high","max"], ["high","xhigh"], …). Sending an
-     * undeclared tier is the same class of failure the MiMo/Agnes xhigh clamp
-     * already guards against ("Invalid reasoning_effort: xhigh" 400s).
-     *
-     * Nearest-tier semantics: step down to the closest declared tier at or below
-     * the request; only if none exists step up to the lowest declared one.
-     * Downgrading is preferred because overshooting costs money and latency the
-     * user did not ask for. Null/empty values pass the string through unchanged.
+     * [T-reasoning-effort-data-driven] The provider-level clamp member was
+     * removed: it duplicated [com.openminis.app.provider.thinking.ThinkingEffort.clampEffort]
+     * with a stale upward-jump fallback (a LOW ask against a [high,max] set was
+     * lifted to "high" — P2 3-9) and had ZERO production callers (the wire path
+     * resolves through ThinkingRuleResolver). The duplicate was a drift hazard:
+     * a future edit to one copy silently left the other pinning the old
+     * contract in tests. The live clamp lives in ThinkingEffort.clampEffort
+     * and its contract is pinned there.
      */
-    internal fun clampEffort(effort: String, values: List<String>?): String {
-        if (values.isNullOrEmpty()) return effort
-        if (values.contains(effort)) return effort
-        val ladder = listOf("none", "minimal", "low", "medium", "high", "xhigh", "max")
-        val want = ladder.indexOf(effort)
-        if (want < 0) return effort
-        val declared = values.mapNotNull { v ->
-            val i = ladder.indexOf(v)
-            if (i >= 0) i to v else null
-        }.sortedBy { it.first }
-        if (declared.isEmpty()) return effort
-        return declared.lastOrNull { it.first <= want }?.second ?: declared.first().second
-    }
 
 
 

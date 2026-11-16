@@ -2,6 +2,7 @@ package com.openminis.app.tools
 
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
+import com.openminis.app.data.repository.SkillManifest
 import com.openminis.app.data.repository.SkillRepository
 import org.json.JSONObject
 
@@ -24,6 +25,18 @@ object InvokeSkillTool {
         propertyOrdering = listOf("tool_title", "name"),
     )
 
+    /**
+     * [T-skill-manifest-hidden-cap] The Available list a MISS surfaces must not
+     * leak hidden skills: the prompt manifest filters them out
+     * ([SkillManifest.disclosableSkills]), and echoing them here would hand the
+     * model the exact names the disclosure promised to withhold. The lookup
+     * itself (exact / loose match below) still resolves hidden skills — an
+     * explicit invocation by name is the one sanctioned doorway.
+     * Pure + JVM-testable: [SkillRepository] needs an Android Context.
+     */
+    internal fun availableSkillNames(enabled: List<SkillRepository.Skill>): String =
+        SkillManifest.disclosableSkills(enabled).joinToString { it.name }.ifEmpty { "none" }
+
     fun execute(argsJson: String, repo: SkillRepository?, sessionId: String): ToolExecutionResult {
         val toolTitle = try { JSONObject(argsJson).optString("tool_title", NAME) } catch (_: Exception) { NAME }
         if (repo == null) return ToolExecutionResult("Skills unavailable", false, toolTitle = toolTitle)
@@ -38,7 +51,7 @@ object InvokeSkillTool {
         }
         val skill = exact ?: loose.singleOrNull()
             ?: return ToolExecutionResult(
-                "Skill not found: $raw. Available: ${skills.joinToString { it.name }}",
+                "Skill not found: $raw. Available: ${availableSkillNames(skills)}",
                 false,
                 toolTitle = toolTitle,
             )

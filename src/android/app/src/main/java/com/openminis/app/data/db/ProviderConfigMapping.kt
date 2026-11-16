@@ -135,6 +135,11 @@ fun ProviderConfig.toSnapshot(
                     isHidden = if (e.isHidden) 1 else 0,
                     sortOrder = idx,
                     userModifiedAt = e.userModifiedAt,
+                    // [T-compat-flags-persist] Opaque CompatFlags JSON blob
+                    // round-trips so a future write side (UI editor / models.json
+                    // import) survives every save; read side feeds
+                    // CompatResolver.override at repository load. Null = no overlay.
+                    compatJson = e.compatJson,
                 )
             )
         }
@@ -286,6 +291,9 @@ fun ProviderConfigSnapshot.toProviderConfig(jsonForBlobs: Json): ProviderConfig 
             isHidden = row.isHidden != 0,
             uuid = row.id,
             userModifiedAt = row.userModifiedAt,
+            // [T-compat-flags-persist] Carry the overlay into memory; the
+            // repository load path decodes it into CompatResolver.override.
+            compatJson = row.compatJson,
         )
     }.toMutableList()
 

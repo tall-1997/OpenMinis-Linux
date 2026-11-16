@@ -327,6 +327,8 @@
     <string name="token_usage_section_thinking">Réflexion</string>
     <string name="token_usage_thinking_label">Réflexion</string>
     <string name="token_usage_thinking_level">Niveau</string>
+    <string name="token_usage_thinking_requested">Demandé</string>
+    <string name="token_usage_thinking_effective">Effectif</string>
     <string name="token_usage_thinking_supported">Pris en charge</string>
     <string name="token_usage_section_tokens">Tokens (total de session)</string>
     <string name="token_usage_input_with_cache">Entrée (cache incluse)</string>
@@ -2038,6 +2040,9 @@
     <string name="mcp_approval_restart_notice">Le redémarrage a annulé %1$d approbation(s) en attente</string>
     <string name="context_saver_title">Économie de contexte</string>
     <string name="context_saver_footer">Regroupe les anciennes sorties d\'outil au-delà des derniers résultats en une ligne dès que la requête grossit. Rien n\'est supprimé : un résultat regroupé garde son chemin de fichier ou indique de relancer l\'outil.</string>
+    <!-- [T-prompt-cache-warming] Settings toggle for the idle-time prompt cache warming hook. -->
+    <string name="cache_warming_title">Préchauffage du cache de prompts</string>
+    <string name="cache_warming_footer">Une fois activé, après une pause l&#8217;app peut rejouer la dernière requête réussie avec une limite de sortie d&#8217;un token pour rafraîchir le cache de prompts du fournisseur avant expiration. Envoie des requêtes facturables supplémentaires ; désactivé par défaut.</string>
     <string name="context_saver_off">Désactivé</string>
     <string name="context_saver_balanced">Équilibré</string>
     <string name="context_saver_aggressive">Agressif</string>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- [T-agent-ux-notices] P1-6/P2-4/P2-8 chat-UX notices: steering-queue
+     acceptance, enqueue-path dedupe hit, and thinking ceiling-sync
+     clamp/restore. Kept in a standalone split file (the
+     strings_token_usage.xml pattern) so every shipped locale carries all
+     keys in one place. -->
+<resources>
+    <string name="vm_steering_queued">Steering поставлен в очередь — будет передан на следующем шаге агента, не прерывая текущий ответ.</string>
+    <string name="vm_send_deduped">Дублирующая отправка проигнорирована (тот же текст только что был отправлен).</string>
+    <string name="vm_thinking_clamped_to">Thinking временно понижен до %1$s для соответствия лимиту модели.</string>
+    <string name="vm_thinking_ceiling_restored">Лимит модели восстановлен — thinking снова %1$s.</string>
+</resources>

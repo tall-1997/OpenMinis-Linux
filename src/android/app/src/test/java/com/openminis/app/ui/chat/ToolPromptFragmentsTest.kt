@@ -1,5 +1,6 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.data.model.AgentToolDefinition
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -48,5 +49,65 @@ class ToolPromptFragmentsTest {
     @Test
     fun `render is stable across calls`() {
         assertEquals(ToolPromptFragments.render(), ToolPromptFragments.render())
+    }
+
+    // ── §4.1 definition-side aggregation ──
+
+    @Test
+    fun `renderFromDefinitions emits definition snippets and registry fallback`() {
+        val definitions = listOf(
+            AgentToolDefinition(
+                name = "future_tool",
+                description = "A tool carrying its own bullet.",
+                parameters = emptyMap(),
+                promptSnippet = "- future_tool: does the new thing.",
+            ),
+        )
+        val rendered = ToolPromptFragments.renderFromDefinitions(definitions)
+        assertTrue(rendered.contains("- future_tool: does the new thing."))
+        // Registry tools without a definition snippet stay rendered.
+        assertTrue(rendered.contains("- ui_skill:"))
+    }
+
+    @Test
+    fun `renderFromDefinitions does not double-render a migrated fragment`() {
+        // ui_skill moved onto the definition: the registry copy must drop out.
+        val definitions = listOf(
+            AgentToolDefinition(
+                name = "ui_skill",
+                description = "The migrated definition.",
+                parameters = emptyMap(),
+                promptSnippet = "- ui_skill: migrated bullet.",
+            ),
+        )
+        val rendered = ToolPromptFragments.renderFromDefinitions(definitions)
+        assertTrue(rendered.contains("migrated bullet"))
+        assertEquals(1, rendered.split("- ui_skill:").size - 1)
+    }
+
+    @Test
+    fun `renderFromDefinitions honours the excluded set`() {
+        val definitions = listOf(
+            AgentToolDefinition(
+                name = "future_tool",
+                description = "Gated off this turn.",
+                parameters = emptyMap(),
+                promptSnippet = "- future_tool: hidden now.",
+            ),
+        )
+        val rendered = ToolPromptFragments.renderFromDefinitions(definitions, excluded = setOf("future_tool"))
+        assertFalse(rendered.contains("future_tool"))
+        // Registry fragment excluded by key too.
+        val registryExcluded = ToolPromptFragments.renderFromDefinitions(emptyList(), excluded = setOf("ui_skill"))
+        assertFalse(registryExcluded.contains("ui_skill"))
+    }
+
+    @Test
+    fun `renderFromDefinitions with no snippets falls back to the registry`() {
+        val definitions = listOf(
+            AgentToolDefinition(name = "plain_tool", description = "No snippet.", parameters = emptyMap()),
+        )
+        val rendered = ToolPromptFragments.renderFromDefinitions(definitions)
+        assertEquals(ToolPromptFragments.render(), rendered)
     }
 }

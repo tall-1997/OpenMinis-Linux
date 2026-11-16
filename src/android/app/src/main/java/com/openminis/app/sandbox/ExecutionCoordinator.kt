@@ -300,11 +300,22 @@ object ExecutionCoordinator {
             val handlerTimedOut = (effectiveExit == 0 && stripped.contains("handler_timeout")) ||
                 loggedExit == 124
             if (effectiveExit == 0 && stripped.contains("handler_timeout")) effectiveExit = 124
-            val truncated = TerminalSanitizer.truncateIfNeeded(stripped)
-            val output = if (effectiveExit != 0 && effectiveExit != 124) {
-                "$truncated\n(exit code: $effectiveExit)"
+            // [pi-port §4.7] Structured truncation: keep the legacy content
+            // shape, and when the cut actually happened append ONE structured
+            // annotation line (derived from ToolOutputTruncator.TruncationResult,
+            // GrepStreamScan report style) so both the model and the tool card
+            // see how much output was dropped. Sits before the exit-code line,
+            // i.e. at the tail of the tool card's output preview.
+            val (truncated, truncation) = TerminalSanitizer.truncateStructured(stripped)
+            val truncatedWithNote = if (truncation != null) {
+                "$truncated\n${TerminalSanitizer.formatTruncationNote(truncation)}"
             } else {
                 truncated
+            }
+            val output = if (effectiveExit != 0 && effectiveExit != 124) {
+                "$truncatedWithNote\n(exit code: $effectiveExit)"
+            } else {
+                truncatedWithNote
             }
 
             CommandResult(

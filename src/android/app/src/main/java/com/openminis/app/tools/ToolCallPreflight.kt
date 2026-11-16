@@ -29,6 +29,15 @@ import org.json.JSONObject
  *  5. 参数已解析但缺必填字段 / 空 `{}`（[requiredFieldViolation]）→ 拒绝执行
  *     （#61 的子代理/群聊缺口：它们曾把 provider 顶替的 `{}` 当合法调用）。
  *
+ * [pi-port 1.2] Whole-batch truncation deprecation (pi
+ * `agent/src/agent-loop.ts:488-513`): a response cut by the output-token
+ * limit deprecates EVERY tool call it carries — the truncated-turn predicate
+ * above runs per call inside [finalize], so a batch of N calls produces N
+ * [Outcome.Rejected] outcomes, each carrying the model-visible re-issue
+ * guidance from [truncatedBatchModelMessage] that the caller backfills as an
+ * error tool_result. No call of a truncated batch may execute, and none may
+ * be silently dropped without its error result.
+ *
  * Returns a sealed [Outcome]: [Outcome.Ready] carries the repaired args (the
  * same JSONObject, mutated in place) so every caller executes exactly what the
  * shared layer validated; [Outcome.Rejected] carries the model-visible and
@@ -47,6 +56,36 @@ internal object ToolCallPreflight {
     /** True when this turn's stream was cut by the output-token budget. */
     fun isTruncatedFinishReason(reason: String?): Boolean =
         reason != null && reason in TRUNCATED_FINISH_REASONS
+
+    /**
+     * Short UI status for the truncated-batch refusal. The long guidance is
+     * for the model (see [truncatedBatchModelMessage]); the tool card only
+     * needs to name the cause, like the other refusal paths' short statuses.
+     */
+    internal const val TRUNCATED_BATCH_UI_MESSAGE: String =
+        "Blocked: response hit the output token limit"
+
+    /**
+     * [pi-port 1.2] Model-visible rejection for EVERY tool call carried by a
+     * response the output-token limit cut short.
+     *
+     * Ported verbatim from pi `agent/src/agent-loop.ts:488-513`
+     * (`failToolCallsFromTruncatedMessage`): streamed tool-call arguments are
+     * finalized with a best-effort JSON salvage parser, so a truncated message
+     * can yield calls whose arguments parse and validate but are silently
+     * incomplete. None of them are safe to execute; each one is reported as an
+     * error result carrying this exact guidance so the model re-issues the
+     * call with complete arguments instead of assuming a partial run.
+     *
+     * [ToolCallPreflight.finalize] applies this to every call of the batch
+     * (the truncated-turn predicate is checked per call, so a batch of N calls
+     * yields N error results — the pi whole-batch semantics), which keeps the
+     * tool_use/tool_result pairing balanced in every consumer.
+     */
+    fun truncatedBatchModelMessage(toolName: String): String =
+        "Tool call \"$toolName\" was not executed: the response hit the output token " +
+            "limit, so its arguments may be truncated. Re-issue the tool call with " +
+            "complete arguments."
 
     sealed class Outcome {
         /**
@@ -253,20 +292,25 @@ internal object ToolCallPreflight {
             )
         }
 
-        // [T-truncated-tool-call-reject] 整轮被输出预算切断：即使本调用解析成功，
-        // 流尾参数也不可信。主循环、子代理、群聊在这里统一拒绝。
+        // [T-truncated-tool-call-reject][pi-port 1.2] The whole turn was cut by
+        // the output-token budget: even a call whose arguments parse cleanly is
+        // not trustworthy, because a salvage parser can close a half-streamed
+        // JSON into something that validates but is silently incomplete (pi
+        // agent-loop.ts failToolCallsFromTruncatedMessage). EVERY call in this
+        // turn's batch is refused here — the shared layer is called once per
+        // call by all three entry points, so the batch deprecation falls out of
+        // this one predicate — and each refused call gets the re-issue guidance
+        // below as its error tool_result (the caller backfills it; the main
+        // loop assembles refusedParts in phase 3, so nothing is silently
+        // dropped).
         if (isTruncatedFinishReason(turnFinishReason)) {
-            val reason = turnFinishReason
-            val msg = "Error: This tool call was rejected because the model output was " +
-                "truncated (finish_reason=$reason). The arguments are likely incomplete. " +
-                "Re-read any relevant context and re-issue the call with complete arguments."
             AppLogger.warning(
                 "ToolPreflight",
-                "BLOCKED truncated turn tool=$toolName finishReason=$reason",
+                "BLOCKED truncated turn tool=$toolName finishReason=$turnFinishReason",
             )
             return Outcome.Rejected(
-                modelMessage = msg,
-                uiMessage = msg,
+                modelMessage = truncatedBatchModelMessage(toolName),
+                uiMessage = TRUNCATED_BATCH_UI_MESSAGE,
                 repairs = repairs,
                 truncationRepairTag = truncationRepairTag,
                 rawBytes = args.toString().toByteArray(Charsets.UTF_8).size,

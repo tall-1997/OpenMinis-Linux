@@ -36,4 +36,10 @@ data class ProviderModelEntryEntity(
     @ColumnInfo(name = "is_hidden") val isHidden: Int = 0,
     @ColumnInfo(name = "sort_order") val sortOrder: Int = 0,
     @ColumnInfo(name = "user_modified_at") val userModifiedAt: Long? = null,
+    // [T-compat-flags-persist] Serialized per-model CompatFlags overlay (pi
+    // models.json `compat`). Nullable TEXT, added by MIGRATION_7_8; null rows
+    // keep the family-default table. Kept as an opaque JSON string here —
+    // this package must not import com.openminis.app.provider (architecture
+    // policy), so decode lives in the repository load path.
+    @ColumnInfo(name = "compat_json") val compatJson: String? = null,
 )
