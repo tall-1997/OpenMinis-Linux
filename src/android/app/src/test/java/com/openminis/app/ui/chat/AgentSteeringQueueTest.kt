@@ -267,8 +267,9 @@ class AgentSteeringQueueTest {
     // bubbles, fresh assistant below; an EMPTY assistant bubble is dropped
     // rather than sealed (no empty bubble in the transcript).
 
-    private fun assistant(id: String, text: String, streaming: Boolean = true): ChatMessage =
-        ChatMessage(id = id, role = "assistant", content = text, isStreaming = streaming)
+    private fun assistant(id: String, text: String, streaming: Boolean = true, awaiting: Boolean = false): ChatMessage =
+        ChatMessage(id = id, role = "assistant", content = text, isStreaming = streaming,
+            isAwaitingModelResponse = awaiting)
 
     private fun user(id: String, text: String): ChatMessage =
         ChatMessage(id = id, role = "user", content = text)
@@ -291,7 +292,7 @@ class AgentSteeringQueueTest {
             accumulatedText = "partial answer",
             allToolBlocks = listOf(AssistantBlock("b1", "tool_use", toolName = "Read")),
             bubbles = listOf(user("db_1", "follow-up")),
-            newAssistantMsg = assistant("assistant_new", ""),
+            newAssistantMsg = assistant("assistant_new", "", awaiting = true),
         )
         // Placeholder + hint gone; sealed assistant with its text; user bubble
         // right after it; fresh assistant last.
@@ -321,7 +322,7 @@ class AgentSteeringQueueTest {
             accumulatedText = "",
             allToolBlocks = emptyList(),
             bubbles = listOf(user("db_1", "early question")),
-            newAssistantMsg = assistant("assistant_new", ""),
+            newAssistantMsg = assistant("assistant_new", "", awaiting = true),
         )
         assertEquals(listOf("db_1", "assistant_new"), out.map { it.id })
     }
@@ -342,7 +343,7 @@ class AgentSteeringQueueTest {
             accumulatedText = "running",
             allToolBlocks = emptyList(),
             bubbles = listOf(user("db_1", "mine")),
-            newAssistantMsg = assistant("assistant_new", ""),
+            newAssistantMsg = assistant("assistant_new", "", awaiting = true),
         )
         // The unrelated system-info row survives; the steering one is dropped.
         assertTrue(out.any { it.id == "sysinfo_unrelated" })
@@ -361,7 +362,7 @@ class AgentSteeringQueueTest {
             accumulatedText = "x",
             allToolBlocks = emptyList(),
             bubbles = listOf(user("db_1", "first"), user("db_2", "second")),
-            newAssistantMsg = assistant("assistant_new", ""),
+            newAssistantMsg = assistant("assistant_new", "", awaiting = true),
         )
         assertEquals(listOf("assistant_1", "db_1", "db_2", "assistant_new"), out.map { it.id })
     }
