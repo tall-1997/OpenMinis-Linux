@@ -126,6 +126,20 @@ fun Flow<LLMStreamChunk>.streamStallWatchdog(
             // Cancelled by the watchdog (or by the outer job) — nothing to
             // rethrow here; the job completes cancelled and join() returns.
             throw e
+        } catch (e: Exception) {
+            // [T-stall-watchdog-cancel-cascade] When WE fired the timeout,
+            // upstream.cancel() cascades into the provider's call.cancel()
+            // and its blocked body read throws raw — IOException("Canceled"),
+            // SocketException("Socket closed") — which the provider rethrows
+            // onto the channel; the channel close-with-cause can beat our own
+            // cancellation to the collector and leak the raw transport error
+            // past the TransientError verdict below (field-observed: the
+            // agent loop surfaced "Canceled" inline at the 45s/90s watchdog
+            // boundaries while the relay was slow). The timeout is the
+            // dominant fact: swallow the cascade so the verdict wins. A
+            // genuine provider failure before any timeout (timedOutPhase
+            // still null) still propagates.
+            if (timedOutPhase.get() == null) throw e
         }
     }
 

@@ -1053,7 +1053,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 break
             } catch (e: Exception) {
                 if (e is CancellationException && e.cause == null) { CancellationDiagnostic.log(provider.model.displayName, activeSessionId, e, _isStreaming.value); throw e }  // [T-cancel-diag] record timeline, real job cancellation
-                val actual = unwrapFlowException(e)
+                val actual = CanceledIoClassification.asTransientStall(unwrapFlowException(e), turnTextSb.isNotEmpty()) ?: unwrapFlowException(e)
                 streamPhase.logFailure(turn, actual)
                 val isRateLimit = actual is com.openminis.app.data.model.LLMError.RateLimited
                 val is5xx = actual is com.openminis.app.data.model.LLMError.ProviderError &&
