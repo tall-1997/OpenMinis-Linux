@@ -1541,7 +1541,7 @@ class OpenAIProvider private constructor(
         return code to text
     }
 
-    private val requestBodies by lazy { OpenAIRequestBodies(OpenAIRequestHost()) }
+    internal val requestBodies by lazy { OpenAIRequestBodies(OpenAIRequestHost()) }
 
     private inner class OpenAIRequestHost : OpenAIRequestBodies.Host {
         override val model get() = this@OpenAIProvider.model

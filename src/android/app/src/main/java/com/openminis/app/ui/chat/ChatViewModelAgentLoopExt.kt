@@ -126,6 +126,8 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     var goalContinuations = 0
     // [T-subagent-background] Bounded nudges for uncollected detached waves.
     var subAgentCollectNudges = 0
+    // [T-plan-close-nudge] Same bounded shape, for an unreconciled plan board.
+    var planCloseNudges = 0
     var goalRunRequested = goalExecutionRun
     // [T-perf-ui-batch] Non-text mutations batch through a 200ms window on Dispatchers.Default.
     val uiBatcher = UiUpdateBatcher(viewModelScope, ::updateAssistantMessage)
@@ -1427,6 +1429,13 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             }
         }
 
+        // [T-plan-close-nudge] Natural turn end with an unreconciled board leaves the Goal ACTIVE forever.
+        when (nudgePlanBoardCloseFor(toolCalls.isEmpty(), goalSessionId, planCloseNudges, allToolBlocks, turnStartBlockIndex, allToolInputs, lastUsage, turnReasoningContent, turnThinkingLevel, accumulatedText, activeRun)) {
+            PlanBoardCloseResult.NUDGED -> { planCloseNudges++; continue }
+            PlanBoardCloseResult.STOPPED -> { loopExitedNormally = true; break }
+            PlanBoardCloseResult.NONE -> {}
+        }
+
         // [T-subagent-background] Ending the turn while a detached wave still owes
         // a result (lanes in flight, or finished reports nobody collected) is how
         // background work gets abandoned — the user reads a confident final answer
@@ -1835,10 +1844,9 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             break
         }
 
-        // [T-no-mid-task-speech] No stall nudge rides the loop: a synthetic
-        // USER turn makes the model stop and answer in prose, which is exactly
-        // what ZCode/DeepSeek-Harness avoid. Repeated calls still get a hint
-        // appended INSIDE the tool result (ToolLoopDetector), never as a turn.
+        // [T-no-mid-task-speech] No stall nudge rides the loop: a synthetic USER turn
+        // makes the model stop and answer in prose (what ZCode/DeepSeek-Harness avoid);
+        // repeated calls still get the hint INSIDE the tool result (ToolLoopDetector), never as a turn.
 
         if (turn == 0) generateSessionTitleIfNeeded()  // auto-title after first exchange
 
@@ -1854,8 +1862,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 swapLoopStateToInjectedBubble(handled)
                 continue
             }
-            // null = empty-after-build / drain rejected; fall through to
-            // normal next-turn dispatch so the queue doesn't pin the loop.
+            // null = empty-after-build / drain rejected; fall through to normal next-turn dispatch so the queue doesn't pin the loop.
         }
     }
     uiBatcher.flush()
@@ -1865,8 +1872,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             ChatViewModel.TAG_STREAM,
             "runAgentLoop EXIT — hit turn cap=$maxTurns, finalizing as resumable",
         )
-        // [T-generation-run] Not a clean finish — close the ledger so the
-        // launch scan reserves ABANDONED for a process that actually died.
+        // [T-generation-run] Not a clean finish — close the ledger so the launch scan reserves ABANDONED for a process that actually died.
         com.openminis.app.agent.GenerationRunLifecycle.failed(context, generationRunId)
         withContext(Dispatchers.Main) {
             finalizeAtTurnLimit(assistantId, accumulatedText, allToolBlocks, loopResumeEpoch)
@@ -1874,18 +1880,12 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     } else {
         AppLogger.info(ChatViewModel.TAG_STREAM, "runAgentLoop EXIT (loop body ended naturally)")
     }
-    // [T-context-ring] Refresh the live token ring after the turn settles.
+    // [T-context-ring] Refresh after settlement.
     refreshContextUsage()
-    // [GH#131] Lifecycle hook: one assistant response has settled. Detail is a
-    // bounded tail of the reply (hooks get MINIS_HOOK_DETAIL), not the whole
-    // transcript; fired after the UI/finalize work so a slow hook cannot delay
-    // what the user sees.
-    //
-    // A cancelled turn (Stop) deliberately does NOT fire: there is no complete
-    // reply, and user scripts treat OnResponse as "the answer is final" (notify,
-    // sync out, trigger downstream automation). Cancellation normally throws out
-    // of the loop before this point; the isActive guard closes the race where it
-    // lands between the last suspension and here.
+    // [GH#131] One assistant response has settled. A cancelled turn (Stop) deliberately
+    // does NOT fire: there is no complete reply, and user scripts treat OnResponse as
+    // "the answer is final" (notify, sync out, downstream automation). Cancellation
+    // normally exits the loop first; the isActive guard closes the race where it lands here.
     if (currentCoroutineContext().isActive) {
         runCatching {
             com.openminis.app.agent.lifecycle.LifecycleHooks.fire(
@@ -1895,10 +1895,6 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             )
         }
     }
-    // [T-android-tts-scene-announcements] 收敛后按用户开关播报（默认关，失败全吞在 coordinator 内）。
-    runCatching {
-        val sink = announcementSink ?: return@runCatching
-        com.openminis.app.speech.VoiceAnnouncementCoordinator(sink)
-            .onScene(context, com.openminis.app.speech.AnnouncementScene.IDLE_AGENT_DONE)
-    }
+    // [T-tts-announce] 播报。
+    runCatching { announcementSink?.let { com.openminis.app.speech.VoiceAnnouncementCoordinator(it).onScene(context, com.openminis.app.speech.AnnouncementScene.IDLE_AGENT_DONE) } }
 }

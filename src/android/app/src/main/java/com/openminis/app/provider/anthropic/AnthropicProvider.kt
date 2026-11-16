@@ -5,6 +5,7 @@ import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.sanitizeToolId
 import com.openminis.app.data.model.LLMError
+import com.openminis.app.provider.AcceptHeaderPolicy
 import com.openminis.app.provider.FullBodyJson
 import com.openminis.app.provider.executeCancellable
 import com.openminis.app.provider.NonFiniteJson
@@ -1183,9 +1184,8 @@ class AnthropicProvider(
             customUserAgent,
             defaultUserAgent = if (isOAuth) null else com.openminis.app.provider.MinisUserAgent.DEFAULT,
         )
-        // [GH#221] 用户请求头最后应用：与 OpenAIProvider 的 per-call
-        // extraHeaders 一致，同名 header 以用户配置为准。
-        for ((key, value) in extraHeaders) {
+        // [GH#221] user headers last, same-name wins; [T-relay-accept-406] Accept sanitized per policy.
+        for ((key, value) in AcceptHeaderPolicy.sanitizeChatAccept(extraHeaders)) {
             builder.header(key, value)
         }
         return builder.build()

@@ -2,6 +2,7 @@ package com.openminis.app.provider.openai
 
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.LLMError
+import com.openminis.app.provider.AcceptHeaderPolicy
 import com.openminis.app.provider.FullBodyJson
 import com.openminis.app.provider.NonFiniteJson
 import com.openminis.app.data.model.LLMMessage
@@ -125,10 +126,11 @@ internal fun OpenAIProvider.rawStreamMessage(
                 memBefore, serStartNs, failure = null,
             )
         }
-        // Per-call headers (x-opencode-session) merge LAST, per call.
-        val request = extraHeaders.entries.fold(buildRequest(bodyStr)) { acc, (n, v) ->
-            acc.newBuilder().header(n, v).build()
-        }
+        // Per-call headers (x-opencode-session) merge LAST, per call — through
+        // the same AcceptHeaderPolicy choke point as the ctor set: OkHttp
+        // header() REPLACE would otherwise put a raw per-call Accept back on the wire.
+        val request = AcceptHeaderPolicy.sanitizeChatAccept(extraHeaders).entries
+            .fold(buildRequest(bodyStr)) { acc, (n, v) -> acc.newBuilder().header(n, v).build() }
         val headerMap = mutableMapOf<String, String>()
         for (name in request.headers.names()) {
             headerMap[name] = request.headers[name] ?: ""
@@ -1058,8 +1060,6 @@ internal fun OpenAIProvider.rawStreamMessage(
             // close the socket, so Finished is emitted from this tail (gated on
             // sawFinishReason: reaching here WITHOUT one is a genuine
             // truncation and must fall through to the warning below).
-            // truncation, and must keep falling through to the warning below so
-            // the interrupted-reply UI still fires for real drops.
             if (sawFinishReason && !sentFinished) {
                 // Mirror the [DONE] branch's ordering: flush the think-tag
                 // parser and reasoning blob before the terminal chunk, or a

@@ -8,6 +8,7 @@ import com.openminis.app.data.model.LLMModel
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.data.model.hasImageInput
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.provider.AcceptHeaderPolicy
 import com.openminis.app.provider.SamplingIdentity
 import com.openminis.app.provider.SamplingPolicy
 import com.openminis.app.provider.applyUserAgentOverride
@@ -617,23 +618,15 @@ internal class OpenAIRequestBodies(
 
         val endpointPath = if (host.useResponsesAPI) "/responses" else "/chat/completions"
         // [T-android-azure-openai] Azure routes via the deployments path and
-        // auths with the api-key header. azureUrl() returns null when not in
-        // Azure mode / no base, so the standard basePath join stays the default.
-        // [T-android-model-use-passthrough-mode] endpointURL() honors an
-        // absolute-path override ("/...") that replaces the whole path on the
-        // provider host; otherwise Azure/basePath as before.
+        // auths with api-key; azureUrl() is null off Azure mode / no base.
         val requestUrl = when {
             host.absoluteEndpointOverride?.startsWith("/") == true -> host.endpointURL(endpointPath)
             host.isAzure -> host.azureUrl(endpointPath) ?: "${host.basePath}$endpointPath"
             else -> "${host.basePath}$endpointPath"
         }
         // T-responses-include: match iOS bare `application/json` Content-Type
-        // by using a custom RequestBody (same workaround the OAuth branch
-        // above already does). OkHttp's `String.toRequestBody(MediaType)`
-        // helper attaches the MediaType to the body and several proxies/
-        // backends end up seeing `application/json; charset=utf-8`. iOS sends
-        // bare `application/json`; some third-party Responses-API proxies are
-        // stricter and reject the charset suffix.
+        // via a custom RequestBody (same workaround as the OAuth branch):
+        // several proxies/backends reject the charset suffix.
         val jsonMediaType = "application/json".toMediaType()
         val bodyBytes = bodyStr.toByteArray(Charsets.UTF_8)
         val requestBody = object : okhttp3.RequestBody() {
@@ -646,13 +639,17 @@ internal class OpenAIRequestBodies(
             .post(requestBody)
             .applyKeyAuth(token)
             .header("Content-Type", "application/json")
-        for ((key, value) in host.extraHeaders) {
+        // [T-relay-accept-406] A declared `Accept: text/event-stream` is 406
+        // on strict relay gateways (even for streaming) — normalized to the
+        // SDK-standard application/json; every other value passes verbatim.
+        // See AcceptHeaderPolicy for the measured matrix.
+        for ((key, value) in AcceptHeaderPolicy.sanitizeChatAccept(host.extraHeaders)) {
             builder.header(key, value)
         }
         // [T-android-model-use-passthrough-mode] Per-call chat header overrides,
         // applied AFTER the ctor extraHeaders → same-name REPLACE over any
-        // default (incl. Authorization/Content-Type). Empty on normal calls.
-        for ((key, value) in host.chatExtraHeaders) {
+        // default; Accept sanitized like the ctor map. Empty on normal calls.
+        for ((key, value) in AcceptHeaderPolicy.sanitizeChatAccept(host.chatExtraHeaders)) {
             builder.header(key, value)
         }
         // [T-provider-custom-user-agent] Covers both chat/completions and
