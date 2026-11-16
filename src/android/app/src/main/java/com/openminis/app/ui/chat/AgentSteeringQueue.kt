@@ -287,7 +287,7 @@ internal suspend fun ChatViewModel.drainSteeringIntoRun(
     assistantId: String,
     accumulatedText: String,
     allToolBlocks: List<AssistantBlock>,
-    uiBatcher: UiBatcher,
+    uiBatcher: UiUpdateBatcher,
     onCommitted: (String) -> Unit,
 ) {
     val entries = steeringState().queue.drainPerMode()
