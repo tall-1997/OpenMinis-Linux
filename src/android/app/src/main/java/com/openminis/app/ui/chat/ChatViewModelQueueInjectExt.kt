@@ -300,10 +300,48 @@ internal fun ChatViewModel.settleInterruptedThinkingTurn(
             updated = true
             queue.toMutableList().apply { this[idx] = prompt.copy(text = trimmed) }
         }
+        // [steering-commit-ui] Steering placeholders reuse the isQueued/
+        // queuedPromptId conventions, so the queued-bubble edit affordance
+        // must reach them too — update the steering entry itself (blank edits
+        // are rejected by the queue primitive, same as attachment-less
+        // _promptQueue edits).
+        if (!updated && promptId.startsWith("steer_")) {
+            updated = steeringState().queue.updateText(promptId, trimmed)
+        }
         if (!updated) return false
         _messages.value = _messages.value.map { m ->
             if (m.queuedPromptId == promptId) m.copy(content = trimmed) else m
         }
         Log.i("ChatViewModel", "Edited queued prompt (${trimmed.length}ch), queue=${_promptQueue.value.size}")
         return true
+    }
+
+    /**
+     * [T-steering-queued-messages] Queued-message lifecycle (moved here from
+     * ChatViewModel.kt when the steering placeholder lifecycle landed —
+     * ChatViewModel.kt is at its architecture-ratchet ceiling and the queued
+     * bubble ops belong with the queue they drain). Steering placeholders
+     * (queuedPromptId `steer_…`, owned by the steering queue) route to
+     * [ChatViewModel.withdrawSteeringPlaceholder]; _promptQueue-owned
+     * bubbles keep the original behaviour.
+     */
+
+    /** Remove a queued prompt and its chat message by prompt id. */
+    fun ChatViewModel.removeQueuedPrompt(promptId: String) {
+        _promptQueue.update { queue -> queue.filterNot { it.id == promptId } }
+        _messages.value = _messages.value.filterNot { it.queuedPromptId == promptId }
+    }
+
+    /** Withdraw a queued message before it gets injected into the agent loop. */
+    fun ChatViewModel.withdrawQueuedMessage(messageId: String) {
+        if (withdrawSteeringPlaceholder(messageId)) {
+            Log.i("ChatViewModel", "Withdrew steering placeholder")
+            return
+        }
+        val msg = _messages.value.firstOrNull { it.id == messageId } ?: return
+        if (!msg.isQueued) return
+        val pid = msg.queuedPromptId ?: return
+        _promptQueue.update { queue -> queue.filterNot { it.id == pid } }
+        _messages.value = _messages.value.filterNot { it.id == messageId }
+        Log.i("ChatViewModel", "Withdrew queued message, queue=${_promptQueue.value.size}")
     }

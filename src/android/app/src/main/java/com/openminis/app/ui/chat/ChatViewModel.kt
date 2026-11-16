@@ -2566,9 +2566,10 @@ class ChatViewModel(
      * iOS `appendSystemInfo` behavior which surfaces a local notice in the chat
      * stream. Future work: wire real conversation compaction through the LLM.
      */
-    internal fun appendSystemInfo(text: String, iconKind: String, payload: String? = null) {
+    internal fun appendSystemInfo(text: String, iconKind: String, payload: String? = null, messageId: String? = null) {
+        val id = messageId ?: "sysinfo_${System.currentTimeMillis()}"
         val block = AssistantBlock(
-            id = "sysinfo_${System.currentTimeMillis()}",
+            id = id,
             kind = "info",
             content = text,
             toolName = iconKind,
@@ -2578,7 +2579,7 @@ class ChatViewModel(
             toolArgs = payload.orEmpty(),
         )
         _messages.value = trimLoadedWindow(_messages.value + ChatMessage(
-            id = "sysinfo_${System.currentTimeMillis()}",
+            id = id,
             role = "system",
             content = "",
             toolBlocks = listOf(block),
@@ -4330,22 +4331,6 @@ class ChatViewModel(
         _messages.value = trimLoadedWindow(_messages.value + chatMsg)
         clearAttachments()
         Log.i(TAG, "Enqueued prompt (${trimmed.length}ch, ${pendingAttachments.size} attachments), queue=${_promptQueue.value.size}")
-    }
-
-    /** Remove a queued prompt and its chat message by prompt id. */
-    fun removeQueuedPrompt(promptId: String) {
-        _promptQueue.update { queue -> queue.filterNot { it.id == promptId } }
-        _messages.value = _messages.value.filterNot { it.queuedPromptId == promptId }
-    }
-
-    /** Withdraw a queued message before it gets injected into the agent loop. */
-    fun withdrawQueuedMessage(messageId: String) {
-        val msg = _messages.value.firstOrNull { it.id == messageId } ?: return
-        if (!msg.isQueued) return
-        val pid = msg.queuedPromptId ?: return
-        _promptQueue.update { queue -> queue.filterNot { it.id == pid } }
-        _messages.value = _messages.value.filterNot { it.id == messageId }
-        Log.i(TAG, "Withdrew queued message, queue=${_promptQueue.value.size}")
     }
 
     /**

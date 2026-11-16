@@ -517,7 +517,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 // [T-agent-steering + T-toolset-delta] pi turn-boundary injections, before history build.
                 commitSessionNoticesOnce(goalObjective = requestGoalState?.objective.orEmpty(),
                     goalPrompt = goalMount.prompt, goalCanContinue = goalMount.canContinue)
-                drainSteeringIntoRun()
+                drainSteeringIntoRun(assistantId, accumulatedText, allToolBlocks, uiBatcher) { swapLoopStateToInjectedBubble(it) }
                 declareToolSetDeltaIfChanged(agentTools)
                 val requestHistory = ToolIdNormalization.normalizeMessages(
                     effectiveAgentHistory().let { history ->
