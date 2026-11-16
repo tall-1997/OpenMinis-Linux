@@ -1197,6 +1197,10 @@
     <string name="chat_longpress_copy">คัดลอก</string>
     <string name="chat_longpress_retry">ลองอีกครั้ง</string>
     <string name="tool_longpress_rerun_from_here">รันใหม่จากจุดนี้</string>
+    <string name="turn_changes_title">การเปลี่ยนแปลงในรอบนี้ (%1$d)</string>
+    <string name="turn_changes_revert_file">ย้อนกลับ</string>
+    <string name="turn_changes_revert_all">ย้อนกลับทั้งหมด</string>
+    <string name="turn_changes_reverted">ย้อนกลับแล้ว</string>
     <string name="tool_longpress_copy_details">คัดลอกรายละเอียดเครื่องมือ</string>
     <string name="tool_longpress_copied_toast">คัดลอกรายละเอียดเครื่องมือแล้ว</string>
     <string name="chat_attach_take_photo">ถ่ายรูป</string>

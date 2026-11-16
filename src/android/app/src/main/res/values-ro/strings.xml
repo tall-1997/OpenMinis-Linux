@@ -1198,6 +1198,10 @@
     <string name="chat_longpress_copy">Copiază</string>
     <string name="chat_longpress_retry">Reîncearcă</string>
     <string name="tool_longpress_rerun_from_here">Rulează din nou de aici</string>
+    <string name="turn_changes_title">Modificările acestei ture (%1$d)</string>
+    <string name="turn_changes_revert_file">Anulează</string>
+    <string name="turn_changes_revert_all">Revino la starea inițială</string>
+    <string name="turn_changes_reverted">Anulat</string>
     <string name="tool_longpress_copy_details">Copiază detaliile instrumentului</string>
     <string name="tool_longpress_copied_toast">Detaliile instrumentului au fost copiate</string>
     <string name="chat_attach_take_photo">Fă o fotografie</string>

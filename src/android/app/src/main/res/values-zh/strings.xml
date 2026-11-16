@@ -1560,6 +1560,10 @@
     <string name="chat_longpress_copy">复制</string>
     <string name="chat_longpress_retry">重试</string>
     <string name="tool_longpress_rerun_from_here">从此处重新执行</string>
+    <string name="turn_changes_title">本轮改动（%1$d 个文件）</string>
+    <string name="turn_changes_revert_file">撤销</string>
+    <string name="turn_changes_revert_all">回滚全部改动</string>
+    <string name="turn_changes_reverted">已撤销</string>
     <string name="tool_longpress_copy_details">拷贝工具信息</string>
     <string name="tool_longpress_copied_toast">已拷贝工具信息</string>
     <string name="chat_attach_take_photo">拍照</string>

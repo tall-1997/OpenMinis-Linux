@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
@@ -446,6 +447,25 @@ internal fun ChatFlatItemRow(
                                     safeMutate { if (canResume) viewModel.resume() else viewModel.retryLast() }
                                 },
                             )
+                            // [T-tool-undo-replay] ZCode-style per-turn
+                            // changes card. Reverted keys come from the
+                            // ViewModel state flow so already-undone rows
+                            // gray out reactively (also across reload).
+                            is FlatChatItem.AssistantTurnChanges -> {
+                                val reverted by viewModel.toolUndo.revertedKeys.collectAsState()
+                                TurnChangesCard(
+                                    paths = item.paths,
+                                    revertedKeys = reverted,
+                                    messageKeyPrefix = item.messageId,
+                                    onRevertFile = { path ->
+                                        safeMutate { viewModel.undoTurnFileChange(item.messageId, path) }
+                                    },
+                                    onRevertAll = {
+                                        safeMutate { viewModel.undoAllTurnChanges(item.messageId) }
+                                    },
+                                    modifier = Modifier.padding(start = 6.dp, end = 6.dp, bottom = 6.dp),
+                                )
+                            }
                             is FlatChatItem.AssistantLegacyContent -> BoundsTrackedBlock(
                                 messageId = item.messageId,
                                 slotKey = "legacy",

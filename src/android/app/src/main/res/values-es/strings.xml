@@ -1196,6 +1196,10 @@
     <string name="chat_longpress_copy">Copiar</string>
     <string name="chat_longpress_retry">Reintentar</string>
     <string name="tool_longpress_rerun_from_here">Reejecutar desde aquí</string>
+    <string name="turn_changes_title">Cambios de esta ronda (%1$d)</string>
+    <string name="turn_changes_revert_file">Deshacer</string>
+    <string name="turn_changes_revert_all">Revertir todos los cambios</string>
+    <string name="turn_changes_reverted">Deshecho</string>
     <string name="tool_longpress_copy_details">Copiar detalles de la herramienta</string>
     <string name="tool_longpress_copied_toast">Detalles de la herramienta copiados</string>
     <string name="chat_attach_take_photo">Tomar foto</string>

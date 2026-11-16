@@ -1197,6 +1197,10 @@
     <string name="chat_longpress_copy">Kopyala</string>
     <string name="chat_longpress_retry">Yeniden Dene</string>
     <string name="tool_longpress_rerun_from_here">Buradan yeniden çalıştır</string>
+    <string name="turn_changes_title">Bu turdaki değişiklikler (%1$d)</string>
+    <string name="turn_changes_revert_file">Geri al</string>
+    <string name="turn_changes_revert_all">Tüm değişiklikleri geri al</string>
+    <string name="turn_changes_reverted">Geri alındı</string>
     <string name="tool_longpress_copy_details">Araç ayrıntılarını kopyala</string>
     <string name="tool_longpress_copied_toast">Araç ayrıntıları kopyalandı</string>
     <string name="chat_attach_take_photo">Fotoğraf Çek</string>

@@ -1202,6 +1202,10 @@
     <string name="chat_longpress_copy">Salin</string>
     <string name="chat_longpress_retry">Coba Lagi</string>
     <string name="tool_longpress_rerun_from_here">Jalankan ulang dari sini</string>
+    <string name="turn_changes_title">Perubahan giliran ini (%1$d)</string>
+    <string name="turn_changes_revert_file">Urungkan</string>
+    <string name="turn_changes_revert_all">Kembalikan semua perubahan</string>
+    <string name="turn_changes_reverted">Diurungkan</string>
     <string name="tool_longpress_copy_details">Salin detail alat</string>
     <string name="tool_longpress_copied_toast">Detail alat disalin</string>
     <string name="chat_attach_take_photo">Ambil Foto</string>

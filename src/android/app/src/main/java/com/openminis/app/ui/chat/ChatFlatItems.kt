@@ -246,6 +246,24 @@ internal sealed class FlatChatItem {
     }
 
     /**
+     * [T-tool-undo-replay] ZCode-style "changes this turn" card payload:
+     * per-path net file changes of one completed assistant message. Paths
+     * are aggregated at flat-build time (pure, from tool blocks); checkpoint
+     * resolution and the actual restore happen at undo time in the
+     * ViewModel (see ChatViewModelUndoExt.kt). Only attached to the LAST
+     * completed assistant message.
+     */
+    data class AssistantTurnChanges(
+        val messageId: String,
+        val paths: List<String>,
+        private val keySuffix: String = "",
+    ) : FlatChatItem() {
+        override val key = FlatKeys.of(FlatKeys.KIND_TURN_CHANGES, messageId) + keySuffix
+        override val contentType = "turnChanges"
+        override fun withKeySuffix(suffix: String): FlatChatItem = copy(keySuffix = suffix)
+    }
+
+    /**
      * See [AssistantMarkdownBlock] — same cheap-equals rationale.
      */
     class AssistantLegacyContent(
@@ -1035,6 +1053,22 @@ internal fun buildFlatChatItems(
         // Inline error banner — [T-stale-sticker] tail assistant row only.
         message.error?.takeIf { idx == messages.indexOfLast { m -> m.role == "assistant" } }?.let {
             out.add(dedupe(FlatChatItem.AssistantError(message.id, it)))
+        }
+
+        // [T-tool-undo-replay] ZCode-style "changes this turn" card on the
+        // LAST completed assistant message only: earlier turns' snapshots
+        // are stale relative to later edits, and undoing an old turn now
+        // would clobber newer work. Streaming rows don't get the card —
+        // mutating files mid-turn corrupts agent state. Aggregation is
+        // pure (tool blocks only); checkpoint resolution is deferred to
+        // undo time in the ViewModel.
+        if (!message.isStreaming &&
+            idx == messages.indexOfLast { m -> m.role == "assistant" }
+        ) {
+            val changedPaths = TurnChanges.collect(message.toolBlocks).map { it.path }
+            if (changedPaths.isNotEmpty()) {
+                out.add(dedupe(FlatChatItem.AssistantTurnChanges(message.id, changedPaths)))
+            }
         }
     }
     return out

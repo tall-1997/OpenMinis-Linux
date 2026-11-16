@@ -1197,6 +1197,10 @@
     <string name="chat_longpress_copy">복사</string>
     <string name="chat_longpress_retry">재시도</string>
     <string name="tool_longpress_rerun_from_here">여기서부터 다시 실행</string>
+    <string name="turn_changes_title">이 턴의 변경 (%1$d)</string>
+    <string name="turn_changes_revert_file">되돌리기</string>
+    <string name="turn_changes_revert_all">모든 변경 되돌리기</string>
+    <string name="turn_changes_reverted">되돌려짐</string>
     <string name="tool_longpress_copy_details">도구 세부 정보 복사</string>
     <string name="tool_longpress_copied_toast">도구 세부 정보를 복사했습니다</string>
     <string name="chat_attach_take_photo">사진 촬영</string>

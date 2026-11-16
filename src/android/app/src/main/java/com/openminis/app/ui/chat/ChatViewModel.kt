@@ -90,6 +90,8 @@ class ChatViewModel(
     internal val isDraft: Boolean = sessionId.startsWith("__new__")
     /** The real session ID, populated on first message for drafts. */
     internal var realSessionId: String = if (isDraft) "" else sessionId
+    /** [T-tool-undo-replay] Turn-card undo state (reverted "msgId\npath" keys). */
+    internal val toolUndo = ChatToolUndoController(this)
     /** [T-android-tts-scene-announcements] Speech sink for scene announcements, injected by the UI layer; null = no engine bound yet (degrade to silence). */
     @Volatile
     var announcementSink: ((String) -> Unit)? = null

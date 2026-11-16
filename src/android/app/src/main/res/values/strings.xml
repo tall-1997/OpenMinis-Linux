@@ -1739,6 +1739,10 @@
     <string name="chat_longpress_copy">Copy</string>
     <string name="chat_longpress_retry">Retry</string>
     <string name="tool_longpress_rerun_from_here">Re-run from here</string>
+    <string name="turn_changes_title">Changes this turn (%1$d)</string>
+    <string name="turn_changes_revert_file">Undo</string>
+    <string name="turn_changes_revert_all">Roll back all changes</string>
+    <string name="turn_changes_reverted">Undone</string>
     <string name="tool_longpress_copy_details">Copy tool details</string>
     <string name="tool_longpress_copied_toast">Tool details copied</string>
     <string name="chat_attach_take_photo">Take Photo</string>

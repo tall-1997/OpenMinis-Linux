@@ -1197,6 +1197,10 @@
     <string name="chat_longpress_copy">Kopyahin</string>
     <string name="chat_longpress_retry">Subukan Muli</string>
     <string name="tool_longpress_rerun_from_here">Patakbuhin muli mula rito</string>
+    <string name="turn_changes_title">Mga pagbabago sa turn na ito (%1$d)</string>
+    <string name="turn_changes_revert_file">I-undo</string>
+    <string name="turn_changes_revert_all">Ibalik lahat ng pagbabago</string>
+    <string name="turn_changes_reverted">Na-undo</string>
     <string name="tool_longpress_copy_details">Kopyahin ang detalye ng tool</string>
     <string name="tool_longpress_copied_toast">Nakopya ang detalye ng tool</string>
     <string name="chat_attach_take_photo">Kumuha ng Larawan</string>

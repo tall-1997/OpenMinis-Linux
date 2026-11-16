@@ -1199,6 +1199,10 @@
     <string name="chat_longpress_copy">Копировать</string>
     <string name="chat_longpress_retry">Повторить</string>
     <string name="tool_longpress_rerun_from_here">Перезапустить отсюда</string>
+    <string name="turn_changes_title">Изменения этого хода (%1$d)</string>
+    <string name="turn_changes_revert_file">Отменить</string>
+    <string name="turn_changes_revert_all">Откатить все изменения</string>
+    <string name="turn_changes_reverted">Отменено</string>
     <string name="tool_longpress_copy_details">Копировать сведения об инструменте</string>
     <string name="tool_longpress_copied_toast">Сведения об инструменте скопированы</string>
     <string name="chat_attach_take_photo">Сделать фото</string>
