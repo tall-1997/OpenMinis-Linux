@@ -2,7 +2,6 @@ package com.openminis.app.ui.chat
 
 import android.content.Context
 import com.openminis.app.data.model.AgentContentPart
-import com.openminis.app.data.model.AssistantBlock
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.LLMUsage
 import com.openminis.app.data.model.ThinkingLevel
@@ -35,8 +34,9 @@ enum class PlanBoardCloseResult {
  * bounded push to collect finished lanes.
  *
  * Pure-function core ([PlanBoardClosePrompt]) is JVM-testable without a
- * Context; the call site loads the board and Goal snapshot and passes them
- * in. This file keeps only the loop-tail plumbing.
+ * Context; the loop-tail plumbing in this file loads the board and the Goal
+ * snapshot itself (GoalManager built from chatRepository, matching
+ * ChatViewModelGoalExt's pattern) and persists the nudge turn.
  */
 object PlanBoardClosePrompt {
 
@@ -111,8 +111,9 @@ object PlanBoardClosePrompt {
  * appends the nudge as a user message exactly like the sub-agent collect
  * nudge does, so history never carries two consecutive user messages. The
  * caller advances its counter and continues/breaks on the returned outcome.
- * Receiver is [ChatViewModel] so members ([goalManager], persistence,
- * bounded history) stay reachable without a parameter parade.
+ * Receiver is [ChatViewModel] so repository-backed state (persistence, bounded
+ * history, the Goal via GoalManager(chatRepository)) stays reachable without a
+ * parameter parade.
  */
 internal suspend fun ChatViewModel.nudgePlanBoardCloseFor(
     isFinalTurn: Boolean,
@@ -121,7 +122,7 @@ internal suspend fun ChatViewModel.nudgePlanBoardCloseFor(
     allToolBlocks: List<AssistantBlock>,
     turnStartBlockIndex: Int,
     allToolInputs: Map<String, String>,
-    lastUsage: LLMUsage,
+    lastUsage: LLMUsage?,
     turnReasoningContent: String?,
     turnThinkingLevel: ThinkingLevel,
     accumulatedText: String,
@@ -131,7 +132,11 @@ internal suspend fun ChatViewModel.nudgePlanBoardCloseFor(
         return PlanBoardCloseResult.NONE
     }
     val boardPlans = PlanBoardClosePrompt.snapshot(goalSessionId, context)
-    val goalForClose = runCatching { goalManager.get(goalSessionId) }.getOrNull()
+    val goalForClose = runCatching {
+        // goalManager is a loop-local, not a ChatViewModel member — build the
+        // manager from the repository here, matching ChatViewModelGoalExt.
+        com.openminis.app.goal.GoalManager(chatRepository).get(goalSessionId)
+    }.getOrNull()
     val planNudge = PlanBoardClosePrompt.nudge(
         plans = boardPlans,
         goalActive = goalForClose?.let { PlanBoardClosePrompt.goalActive(it.status) } ?: false,

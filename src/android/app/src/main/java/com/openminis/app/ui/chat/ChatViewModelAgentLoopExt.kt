@@ -1430,7 +1430,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         }
 
         // [T-plan-close-nudge] Natural turn end with an unreconciled board leaves the Goal ACTIVE forever.
-        when (maybeNudgePlanBoardClose(toolCalls.isEmpty(), goalSessionId, planCloseNudges, allToolBlocks, turnStartBlockIndex, allToolInputs, lastUsage, turnReasoningContent, turnThinkingLevel, accumulatedText, activeRun)) {
+        when (nudgePlanBoardCloseFor(toolCalls.isEmpty(), goalSessionId, planCloseNudges, allToolBlocks, turnStartBlockIndex, allToolInputs, lastUsage, turnReasoningContent, turnThinkingLevel, accumulatedText, activeRun)) {
             PlanBoardCloseResult.NUDGED -> { planCloseNudges++; continue }
             PlanBoardCloseResult.STOPPED -> { loopExitedNormally = true; break }
             PlanBoardCloseResult.NONE -> {}
