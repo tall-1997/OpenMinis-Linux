@@ -205,7 +205,7 @@ class StreamStallWatchdogTest {
     }
 
     @Test
-    fun `genuine provider failure before any timeout still propagates`() = runBlocking {
+    fun `genuine provider failure before any timeout still propagates`() {
         // [T-stall-watchdog-cancel-cascade] The cascade swallow must only
         // apply when the watchdog itself fired (timedOutPhase != null). A
         // provider that fails with a raw IOException before any deadline must
@@ -215,11 +215,13 @@ class StreamStallWatchdogTest {
             throw java.io.IOException("boom")
         }
         val e = assertThrows(java.io.IOException::class.java) {
-            src.streamStallWatchdog(
-                firstTimeoutMs = 5_000,
-                firstContentTimeoutMs = 5_000,
-                idleTimeoutMs = 0,
-            ).toList()
+            runBlocking {
+                src.streamStallWatchdog(
+                    firstTimeoutMs = 5_000,
+                    firstContentTimeoutMs = 5_000,
+                    idleTimeoutMs = 0,
+                ).toList()
+            }
         }
         assertEquals("boom", e.message)
     }
