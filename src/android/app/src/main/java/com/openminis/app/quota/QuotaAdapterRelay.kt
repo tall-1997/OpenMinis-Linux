@@ -75,11 +75,24 @@ object RelayQuotaAdapter : ProviderQuotaAdapter {
             try {
                 val snap = query(kind, root, ctx)
                 return QuotaFetchOutcome(snap, isComplete = true, partialErrors = errors, relayKind = kind)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: QuotaFetchError) {
                 // A known type that now refuses is reported as is (key rejected,
                 // rate limited...). While probing, move on to the next family.
                 if (ctx.relayKindHint != null) throw e
                 errors += e
+            } catch (e: Exception) {
+                // [T-relay-probe-transport] A transport-level failure on ONE
+                // family (connection reset on /v1/usage while the new-api and
+                // billing endpoints answer 200) must not abort the probe
+                // chain — field report: the user saw an error instead of
+                // their balance. Record and keep probing.
+                if (ctx.relayKindHint != null) throw e
+                errors += QuotaFetchError(
+                    QuotaError.Kind.badResponse,
+                    "transport: ${e.message ?: e.javaClass.simpleName} at ${kind.path}",
+                )
             }
         }
         // Every family refused the key -> it is the key (or the relay's policy),
@@ -178,21 +191,43 @@ object RelayQuotaAdapter : ProviderQuotaAdapter {
     fun parseNewAPI(data: ByteArray, subjectId: QuotaSubjectID, relayHost: String, now: Long): UpstreamQuotaSnapshot {
         val o = obj(data, RelayKind.newAPI)
         val d = o.obj("data")
-        if (d == null || (d["total_granted"] == null && d["total_available"] == null)) {
+        val uq = d?.obj("user_quota")
+        if (d == null || (d["total_granted"] == null && d["total_available"] == null && uq == null)) {
             throw QuotaFetchError(QuotaError.Kind.unsupportedResponse, "no data.total_granted: not New API")
         }
-        val granted = d.dec("total_granted")
-        val used = d.dec("total_used")
-        val available = d.dec("total_available")
-        val unlimited = d.bool("unlimited_quota") == true || (granted?.let { it.signum() < 0 } ?: false)
         val key = QuotaPoolKey.of(subjectId, "relay")
-        val pool = QuotaPool(
-            id = key, subjectId = subjectId, kind = QuotaPool.Kind.allowance, unit = QuotaUnit.Custom("quota"),
-            vendorLabel = d.str("name")?.let { "New API · $it" } ?: "New API token quota",
-            amounts = if (unlimited) QuotaAmounts(used = used) else QuotaAmounts(total = granted, used = used, remaining = available),
-            unlimited = unlimited, provenance = provenance(RelayKind.newAPI, relayHost), observedAt = now,
-        )
-        return snapshot(pool, RelayKind.newAPI, subjectId, relayHost, now)
+        val nameLabel = d.str("name")?.let { "New API · $it" } ?: "New API token quota"
+        // [T-relay-newapi-user-quota] Newer New API deployments answer
+        // `/api/usage/token` with BOTH token-level totals AND the account
+        // wallet (`data.user_quota.total_available`, in the relay's quota
+        // units). Tokens are frequently created unlimited with zero totals,
+        // so the token level reads "unlimited / 0" while the user's REAL
+        // balance lives one level down — the field report's "查询不到对应
+        // 余额". Prefer the account wallet when present; older deployments
+        // without user_quota keep the token-level shape verbatim.
+        val uqAvailable = uq?.dec("total_available")
+        val uqUsed = uq?.dec("total_used")
+        return if (uq != null && (uqAvailable != null || uqUsed != null)) {
+            val pool = QuotaPool(
+                id = key, subjectId = subjectId, kind = QuotaPool.Kind.allowance, unit = QuotaUnit.Custom("quota"),
+                vendorLabel = "$nameLabel · account",
+                amounts = QuotaAmounts(used = uqUsed, remaining = uqAvailable),
+                unlimited = false, provenance = provenance(RelayKind.newAPI, relayHost), observedAt = now,
+            )
+            snapshot(pool, RelayKind.newAPI, subjectId, relayHost, now)
+        } else {
+            val granted = d.dec("total_granted")
+            val used = d.dec("total_used")
+            val available = d.dec("total_available")
+            val unlimited = d.bool("unlimited_quota") == true || (granted?.let { it.signum() < 0 } ?: false)
+            val pool = QuotaPool(
+                id = key, subjectId = subjectId, kind = QuotaPool.Kind.allowance, unit = QuotaUnit.Custom("quota"),
+                vendorLabel = nameLabel,
+                amounts = if (unlimited) QuotaAmounts(used = used) else QuotaAmounts(total = granted, used = used, remaining = available),
+                unlimited = unlimited, provenance = provenance(RelayKind.newAPI, relayHost), observedAt = now,
+            )
+            snapshot(pool, RelayKind.newAPI, subjectId, relayHost, now)
+        }
     }
 
     // OpenAI-compatible billing
