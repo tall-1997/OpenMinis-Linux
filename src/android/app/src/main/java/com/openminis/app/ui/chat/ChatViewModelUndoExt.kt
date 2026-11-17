@@ -239,3 +239,19 @@ private fun ChatViewModel.insertUndoNotice(text: String) {
         }
     }
 }
+
+/**
+ * Unwrap exceptions thrown inside callbackFlow.
+ * callbackFlow wraps internal throws into CancellationException(cause=original).
+ * This extracts the original LLMError if present.
+ * (Moved from a ChatViewModel member to a top-level helper when the
+ * ViewModel hit its architecture-policy line ceiling.)
+ */
+internal fun unwrapFlowException(e: Throwable): Throwable {
+    var cause: Throwable? = e
+    while (cause != null) {
+        if (cause is com.openminis.app.data.model.LLMError) return cause
+        cause = cause.cause
+    }
+    return e
+}

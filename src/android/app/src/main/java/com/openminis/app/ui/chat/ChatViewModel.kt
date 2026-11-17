@@ -4422,21 +4422,6 @@ class ChatViewModel(
 
 
     /**
-     * Unwrap exceptions thrown inside callbackFlow.
-     * callbackFlow wraps internal throws into CancellationException(cause=original).
-     * This extracts the original LLMError if present.
-     */
-
-    internal fun unwrapFlowException(e: Throwable): Throwable {
-        var cause: Throwable? = e
-        while (cause != null) {
-            if (cause is com.openminis.app.data.model.LLMError) return cause
-            cause = cause.cause
-        }
-        return e
-    }
-
-    /**
      * Offload candidate descriptor. `msgIdx` and `partIdx` index back into
      * [agentHistory] so we can mutate the part in place after writing the
      * stub to disk.

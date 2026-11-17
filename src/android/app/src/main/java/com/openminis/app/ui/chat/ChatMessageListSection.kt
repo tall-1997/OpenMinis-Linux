@@ -10,7 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
@@ -452,7 +452,7 @@ internal fun ChatFlatItemRow(
                             // ViewModel state flow so already-undone rows
                             // gray out reactively (also across reload).
                             is FlatChatItem.AssistantTurnChanges -> {
-                                val reverted by viewModel.toolUndo.revertedKeys.collectAsState()
+                                val reverted by viewModel.toolUndo.revertedKeys.collectAsStateWithLifecycle()
                                 TurnChangesCard(
                                     paths = item.paths,
                                     revertedKeys = reverted,
