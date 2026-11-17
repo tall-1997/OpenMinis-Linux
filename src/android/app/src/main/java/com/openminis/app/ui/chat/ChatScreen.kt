@@ -2354,6 +2354,16 @@ fun ChatScreen(
                     }
                 }
 
+                // [T-resume-banner-slots] The resume state declares TWO synthetic
+                // items (__work_stage__ + __resume_banner__) but the jump helper used
+                // to count one — every up/search jump in resume state landed one lazy
+                // index short. One shared value so the copies never drift.
+                val lastAssistantHasError = messages
+                    .lastOrNull { it.role == "assistant" }
+                    ?.error
+                    ?.isNotBlank() == true
+                val resumeBannerSlots = if (canResume && !isStreaming && error == null && !lastAssistantHasError) 2 else 0
+
                 // [T-android-search-jump] Shared row-count prefix: the number
                 // of synthetic LazyColumn items declared BEFORE the message
                 // rows (compact-progress, resume banner). Both the up-button
@@ -2368,11 +2378,7 @@ fun ChatScreen(
                 fun historyItemsBeforeMessages(): Int {
                     var count = 0
                     if (compactProgress != null) count++
-                    val lastAssistantHasError = messages
-                        .lastOrNull { it.role == "assistant" }
-                        ?.error
-                        ?.isNotBlank() == true
-                    if (canResume && !isStreaming && error == null && !lastAssistantHasError) count++
+                    count += resumeBannerSlots
                     return count
                 }
 
@@ -2454,20 +2460,11 @@ fun ChatScreen(
                     )
                     searchFocusMessageId = focus.messageId
                     searchFocusActive = true
-                    // Two-step calibrated landing, same as the up-button walk:
-                    // position once to materialise the row, read its size, then
-                    // place the matched row's top edge just under the header.
-                    tracedScrollToItem("SEARCH-FOCUS/land", landIndex, 0)
+                    // [T-upbtn-landing] Same two-step calibrated landing.
                     val targetKey = flatItems[flatIdx].key
-                    val rowSize = listState.layoutInfo.visibleItemsInfo
-                        .firstOrNull { it.key == targetKey }?.size ?: 0
-                    val vpH = listState.layoutInfo.viewportSize.height
-                    val topOffset = rowSize - vpH + listState.layoutInfo.beforeContentPadding
-                    tracedScrollToItem("SEARCH-FOCUS/top", landIndex, topOffset)
-                    // The jump landed — the matched row is the reading anchor
-                    // now, so the down-FAB shows and no follower moves the
-                    // viewport out from under the highlight.
-                    scrollPolicy.landReading(targetKey, topOffset)
+                    landJumpTop(listState, targetKey, landIndex,
+                        trace = { t, i, o -> tracedScrollToItem(t, i, o) },
+                        landReading = { k, o -> scrollPolicy.landReading(k, o) })
                     // Hold the highlight until streaming moves content under it or the user
                     // scrolls away (5-min bound guards a forgotten highlight).
                     val landedSize = viewModel.uiMessages.value.size
@@ -2569,7 +2566,7 @@ fun ChatScreen(
         // `flatItems` asynchronously. Wait for its versioned publish before
         // resolving the index; a missing target keeps the viewport.
         withFrameNanos { }
-        if (flatItems.none { it.key == targetKey } && pagesLoaded > 0) {
+        if (flatItems.none { it.key == targetKey } && pagesLoaded >= 0) {
             ChatScrollController.awaitPublishedVersion(
                 snapshotFlow { flatItemsVersion },
                 requestedFlatVersion = requestedFlatVersion,
@@ -2597,22 +2594,10 @@ fun ChatScreen(
             return@scrollToPreviousUserTurn
         }
         lastJumpedUserId = target
-        // Land the user bubble's TOP edge just under the header — iOS's
-        // `scrollToItem(at: .top)`. Position once to materialise the row,
-        // read its size, then place it precisely; the offset math
-        // (rowSize - viewportHeight + beforeContentPadding) is the
-        // device-calibrated landing from the original implementation.
-        tracedScrollToItem("FAB-UP/turn-walk", landIndex, 0)
-        val rowSize = listState.layoutInfo.visibleItemsInfo
-            .firstOrNull { it.key == targetKey }?.size ?: 0
-        val vpH = listState.layoutInfo.viewportSize.height
-        val headerInset = listState.layoutInfo.beforeContentPadding
-        val topOffset = rowSize - vpH + headerInset
-        tracedScrollToItem("FAB-UP/turn-walk-top", landIndex, topOffset)
-        // [T-android-scroll-policy] The jump landed — the target bubble is
-        // the reading anchor now, so the down-FAB shows and no follower can
-        // move the viewport.
-        scrollPolicy.landReading(targetKey, topOffset)
+        // [T-upbtn-landing] Two-step calibrated landing (see ChatScreenSections).
+        landJumpTop(listState, targetKey, landIndex,
+            trace = { t, i, o -> tracedScrollToItem(t, i, o) },
+            landReading = { k, o -> scrollPolicy.landReading(k, o) })
     }
 
                 // [T-android-coldload-offmain-parse] Composition-snapshot
@@ -2673,6 +2658,8 @@ fun ChatScreen(
                     // effect run (a plain `remember(subAgentMembers)` value).
                     var frozenActiveSubAgent: Set<String> = emptySet()
                     var streamWasActive = false
+                    // [T-entry-first-frame] Last flatten publish time (see the gate).
+                    var lastFlattenNs = 0L
                     // [T-android-stream-pipeline-incremental] Flush the perf
                     // turn when this effect is CANCELLED mid-turn: the
                     // turn-end drain emits `_messages` FIRST (restarting this
@@ -2691,11 +2678,20 @@ fun ChatScreen(
                         Triple(msgs, stream, expanded to members.mapTo(HashSet()) { it.parentToolId })
                     }
                         .conflate()
-                        .sample(80L)
+                        // [T-entry-first-frame] No sample() on the first non-empty
+                        // publication — the 80ms throttle gated the entry flatten behind
+                        // a fixed extra window. Streaming ticks throttle manually below.
                         .collect { (msgs, stream, expandedAndActive) ->
                             val expandedIds = expandedAndActive.first
                             val activeIds = if (showSubAgentBar) expandedAndActive.second else emptySet()
                             val tickStartNs = System.nanoTime()
+                            // [T-entry-first-frame] Manual throttle: streaming ticks
+                            // pace at ~12fps; the FIRST non-empty tick (entry, older-page
+                            // publish) applies immediately — never waits a window.
+                            if (!stream.isEmpty() && tickStartNs - lastFlattenNs < 80_000_000L) {
+                                return@collect
+                            }
+                            lastFlattenNs = tickStartNs
                             if (stream.isNotEmpty() && !streamWasActive) {
                                 streamWasActive = true
                                 com.openminis.app.diagnostics.StreamPerfMonitor.turnStart(sessionId)
@@ -3102,11 +3098,16 @@ fun ChatScreen(
                 val perfFirstItemComposeFired = remember(sessionId) { java.util.concurrent.atomic.AtomicBoolean(false) }
                 val perfFirstItemPlacedFired = remember(sessionId) { java.util.concurrent.atomic.AtomicBoolean(false) }
                 LaunchedEffect(listState) {
+                    // [T-history-prefetch] Older pages load while the viewport is
+                    // within 12 items of the oldest content — before the pill
+                    // (predicate lives in ChatScreenSections.kt).
                     snapshotFlow {
                         val info = listState.layoutInfo
                         val visible = info.visibleItemsInfo
                         HistoryEdgeVisible(
-                            olderSentinel = visible.any { it.key == "__load_older__" },
+                            olderSentinel = olderEdgePrefetchVisible(
+                                info, viewModel.hasOlderMessages.value,
+                            ),
                             // The newer edge is not a sentinel. A gap after the
                             // loaded cursor is attached by the view model.
                             newerSentinel = false,
@@ -3233,11 +3234,9 @@ fun ChatScreen(
                     // a message-level error — the inline Retry banner already
                     // covers that turn, and showing both at once is confusing
                     // (Resume on a turn that hit rate-limit would just retrace
-                    // into the same failure).
-                    val lastAssistantHasError = messages
-                        .lastOrNull { it.role == "assistant" }
-                        ?.error
-                        ?.isNotBlank() == true
+                    // into the same failure). [T-resume-banner-slots] The
+                    // lastAssistantHasError / resumeBannerSlots values were
+                    // hoisted above — same condition, one shared copy.
                     // [T-android-compact-progress] Live compaction status, so a
                     // long-running compact reads as "working" rather than
                     // "hung". Sits above the resume banner because the two are
@@ -3247,7 +3246,7 @@ fun ChatScreen(
                             CompactProgressIndicator(progress = progress, onCancel = { viewModel.cancelCompact() })
                         }
                     }
-                    if (canResume && !isStreaming && error == null && !lastAssistantHasError) {
+                    if (resumeBannerSlots > 0) {
                     item(key = "__work_stage__", contentType = "work_stage") { WorkStageBanner(sessionId) }
                         item(key = "__resume_banner__", contentType = "resume_banner") {
                             ResumeBanner(onResume = {

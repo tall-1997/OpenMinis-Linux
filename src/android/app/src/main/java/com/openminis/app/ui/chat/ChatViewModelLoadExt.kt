@@ -596,11 +596,15 @@ internal fun ChatViewModel.loadSession() {
             }
             applyCompactMarkerGraying(ordered, marker, loaded.messages, historyDbIds)
         }
-        refreshHistoryEdges()
+        // [T-entry-first-frame] refreshHistoryEdges runs 3 DB COUNT queries
+        // and only feeds the has-older/has-newer pill state — move it OFF the
+        // pre-first-frame critical path (the pill can appear a beat later).
+        viewModelScope.launch(Dispatchers.IO) { refreshHistoryEdges() }
 
         // [T-p9-revert-recovery] A staged revert survives process death on
         // disk: re-register the record (the banner comes back) and re-apply
-        // the in-memory tail trim.
+        // the in-memory tail trim. Kept synchronous: it trims _messages BEFORE
+        // the user can interact, so no untrimmed flash is possible.
         applyStagedRevertTrim(realSessionId.takeIf { it.isNotEmpty() } ?: sessionId)
 
         // Cold-start interrupt detection: an agent loop that was killed by
@@ -714,19 +718,27 @@ internal fun ChatViewModel.loadSession() {
         // this, the menu ring stays `?` until the next model call even though
         // the session has persisted an exact latestContextTokens value.
         // [P1-15] The usage read + parse were launched concurrently at the top
-        // of the restore (independent of the session row and the tail window);
-        // awaiting here keeps the restore write below in its original order.
+        // of the restore (independent of the session row and the tail window).
+        // [T-entry-first-frame] The await + refreshContextUsage (a full
+        // per-part char walk over agentHistory) and the log-only instruction
+        // drift replay move OFF the pre-first-frame critical path: content is
+        // already published at this point, so these state refreshes continue
+        // asynchronously.
         if (!isDraft) {
-            val restoredContext = tokenUsagesDeferred.await()
-            if (restoredContext != null) {
-                _lastTurnContextTokens.value = restoredContext
-                    .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+            viewModelScope.launch(Dispatchers.IO) {
+                val restoredContext = tokenUsagesDeferred.await()
+                if (restoredContext != null) {
+                    _lastTurnContextTokens.value = restoredContext
+                        .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                }
+                refreshContextUsage()
+                checkInstructionSnapshotDrift()
             }
-            refreshContextUsage()
+        } else {
+            // [T-p1-instruction-snapshot] Log-only: replay the frozen instruction
+            // events and report drift. Never gates the load.
+            checkInstructionSnapshotDrift()
         }
-        // [T-p1-instruction-snapshot] Log-only: replay the frozen instruction
-        // events and report drift. Never gates the load.
-        checkInstructionSnapshotDrift()
         } finally {
             // T201: open the gate even on early `return@launch` (draft path,
             // missing-session path) and on exception, so the init-time

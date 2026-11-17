@@ -21,7 +21,14 @@ import kotlinx.coroutines.sync.withLock
  */
 fun ChatViewModel.loadOlderMessages() {
     if (loadingOlderFlag.get()) return
-    viewModelScope.launch { loadOlderPage() }
+    viewModelScope.launch {
+        // [T-history-batch-pages] Two pages per publish: the flatten pipeline
+        // restarts on EVERY _messages publish and re-runs a full O(transcript)
+        // build, so one-page-per-publish painted the transcript in 5-turn
+        // segments. Batching halves the segment count at the same total IO;
+        // the single-flight flag keeps callers honest.
+        if (loadOlderPage()) loadOlderPage()
+    }
 }
 
 /**
@@ -121,8 +128,27 @@ internal suspend fun ChatViewModel.loadOlderPage(): Boolean {
             val rows = pageRows
             if (rows.isNotEmpty()) {
                 val current = _messages.value
-                val known = current.flatMapTo(mutableSetOf()) { it.sourceDbIds }
+                // [T-history-batch-pages] Pure-prepend fast path: when the page
+                // sits strictly BEFORE the painted window's oldest bound (no
+                // overlap possible — the cursor excluded painted rows), skip
+                // the O(window × page) containment merge and the per-message
+                // `updated` map entirely. timeline.oldestSortOrder IS the
+                // painted window's oldest bound (noted on every load/publish).
+                val pageMax = rows.maxOfOrNull { it.sortOrder }
+                // Snapshot the mutable property into a local: a smart cast
+                // through the live var is impossible (concurrent mutation).
+                val paintedOldest = timeline.oldestSortOrder
+                val purePrepend = paintedOldest == null ||
+                    (pageMax != null && pageMax < paintedOldest)
                 val older = toChatMessages(rows)
+                if (purePrepend) {
+                    _messages.value = older + current
+                    added = true
+                    timeline.noteBounds(rows)
+                    refreshHistoryEdges(scheduleTail = false)
+                    return@withLock
+                }
+                val known = current.flatMapTo(mutableSetOf()) { it.sourceDbIds }
                 val updated = current.map { message ->
                     older.firstOrNull { incoming ->
                         incoming.sourceDbIds.any(message.sourceDbIds::contains)
