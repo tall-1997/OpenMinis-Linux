@@ -31,6 +31,8 @@ internal object FlatKeys {
     const val KIND_TYPING = "typing"
     const val KIND_ERROR = "error"
     const val KIND_LEGACY = "legacy"
+    /** [T-tool-undo-replay] ZCode-style "changes this turn" card row. */
+    const val KIND_TURN_CHANGES = "turnChanges"
 
     fun of(kind: String, messageId: String, vararg extras: Any?): String {
         // [T-flatkeys-invariants] parse() recovers the id as the segment
