@@ -126,13 +126,22 @@ object RelayQuotaAdapter : ProviderQuotaAdapter {
             )
         }
 
-        // [T-relay-probe-classification] All probe families failed. If any
-        // family genuinely answered "this is not a balance endpoint" (404 or
-        // unrecognized probe response), classify as notFound so the refresh
-        // gate doesn't cache a transient network error as permanent. Otherwise
-        // fall through to notFound too — the end-of-chain signal means no
-        // balance endpoint is available on this relay right now.
+        // [T-relay-probe-classification] Classify the end-of-chain failure
+        // honestly. A family that DID answer "not a balance endpoint" (404 or
+        // unrecognized probe response) → notFound (parks relay for 24 h).
+        // A credential rejection → keep the auth error (refresh gate stops on it).
+        // Anything else (pure transport failures) → rethrow the first error,
+        // badResponse takes the normal short backoff instead of lying about
+        // a missing endpoint.
         val allPaths = (candidates + listOf(RelayKind.openAIBilling)).joinToString(", ") { it.path }
+        val first = errors.firstOrNull()
+        if (first != null &&
+            errors.none { it.kind == QuotaError.Kind.notFound || it.kind == QuotaError.Kind.unsupportedResponse }
+        ) {
+            throw (errors.firstOrNull {
+                it.kind == QuotaError.Kind.unauthorized || it.kind == QuotaError.Kind.forbidden
+            } ?: first)
+        }
         throw QuotaFetchError(QuotaError.Kind.notFound, "no balance endpoint on this relay (checked $allPaths)")
     }
 
