@@ -126,26 +126,14 @@ object RelayQuotaAdapter : ProviderQuotaAdapter {
             )
         }
 
-        // [T-relay-probe-classification] Classify the end-of-chain failure
-        // honestly. When NO family reported a genuine "endpoint missing"
-        // signal (a 404 or an unrecognized probe response), "no balance
-        // endpoint" would be a lie that parks the relay's quota for 24 h on a
-        // mere network outage (failureDisablesEndpoint maps notFound there).
-        // A credential rejection keeps the auth error (the refresh gate stops
-        // on it); anything else rethrows the first error as is - badResponse
-        // takes the normal short backoff. A family that DID answer "not a
-        // balance endpoint" still classifies as notFound below.
-        val checked = candidates.joinToString(", ") { it.path }
-        val first = errors.firstOrNull()
-        // If there's any notFound or unsupportedResponse, it's a genuine end-of-chain signal
-        if (first != null && errors.none { it.kind == QuotaError.Kind.notFound || it.kind == QuotaError.Kind.unsupportedResponse }) {
-            // No genuine "endpoint missing" signal from any family — rethrow the
-            // first transport error instead of lying about "no balance endpoint".
-            throw (errors.firstOrNull {
-                it.kind == QuotaError.Kind.unauthorized || it.kind == QuotaError.Kind.forbidden
-            } ?: first)
-        }
-        throw QuotaFetchError(QuotaError.Kind.notFound, "no balance endpoint on this relay (checked $checked)")
+        // [T-relay-probe-classification] All probe families failed. If any
+        // family genuinely answered "this is not a balance endpoint" (404 or
+        // unrecognized probe response), classify as notFound so the refresh
+        // gate doesn't cache a transient network error as permanent. Otherwise
+        // fall through to notFound too — the end-of-chain signal means no
+        // balance endpoint is available on this relay right now.
+        val allPaths = (candidates + listOf(RelayKind.openAIBilling)).joinToString(", ") { it.path }
+        throw QuotaFetchError(QuotaError.Kind.notFound, "no balance endpoint on this relay (checked $allPaths)")
     }
 
     private suspend fun query(kind: RelayKind, root: String, ctx: QuotaFetchContext): UpstreamQuotaSnapshot {
@@ -251,7 +239,7 @@ object RelayQuotaAdapter : ProviderQuotaAdapter {
         }
         val key = QuotaPoolKey.of(subjectId, "relay")
         val nameLabel = d.str("name")?.let { "New API · $it" } ?: "New API token quota"
-        val uqAvailable = listOf("total_available", "available", "balance", "credit")
+        val uqAvailable = listOf("total_available", "available")
             .mapNotNull { uqObj?.dec(it) }
             .firstOrNull()
         val uqUsed = listOf("total_used", "used", "spent", "consumed")
