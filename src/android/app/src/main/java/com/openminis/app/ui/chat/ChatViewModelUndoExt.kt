@@ -2,6 +2,7 @@ package com.openminis.app.ui.chat
 
 import android.util.Log
 import androidx.lifecycle.viewModelScope
+import com.openminis.app.R
 import com.openminis.app.tools.FileCheckpointStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -86,7 +87,7 @@ fun ChatViewModel.undoTurnFileChange(messageId: String, path: String) {
     val change = TurnChanges.collect(message.toolBlocks).firstOrNull { it.path == path } ?: return
     val sid = realSessionId.ifEmpty { sessionId }
     if (sid.isEmpty()) {
-        insertUndoNotice("撤销失败：找不到该轮次所属的会话。")
+        insertUndoNotice(context.getString(R.string.turn_changes_undo_no_session))
         return
     }
     viewModelScope.launch(Dispatchers.IO) {
@@ -95,7 +96,7 @@ fun ChatViewModel.undoTurnFileChange(messageId: String, path: String) {
         }
         if (undoState == null) {
             insertUndoNotice(
-                "撤销失败：$path 在本轮之前的原始快照已不存在（可能被清理），无法自动恢复原值。",
+                context.getString(R.string.turn_changes_undo_no_snapshot, path),
             )
             return@launch
         }
@@ -105,7 +106,7 @@ fun ChatViewModel.undoTurnFileChange(messageId: String, path: String) {
                 toolUndo.markReverted(messageId, path)
                 insertUndoNotice(result.message)
             }
-            is UndoOutcome.Failed -> insertUndoNotice("撤销失败：${result.reason}\n当前文件未被改动，可继续手动编辑。")
+            is UndoOutcome.Failed -> insertUndoNotice(context.getString(R.string.turn_changes_undo_failed, result.reason))
         }
     }
 }
@@ -116,7 +117,7 @@ fun ChatViewModel.undoAllTurnChanges(messageId: String) {
     val changes = TurnChanges.collect(message.toolBlocks)
     val sid = realSessionId.ifEmpty { sessionId }
     if (sid.isEmpty()) {
-        insertUndoNotice("回滚失败：找不到该轮次所属的会话。")
+        insertUndoNotice(context.getString(R.string.turn_changes_rollback_no_session))
         return
     }
     if (changes.isEmpty()) return
@@ -127,7 +128,7 @@ fun ChatViewModel.undoAllTurnChanges(messageId: String) {
         }
         val unresolved = changes.map { it.path } - resolved.map { it.first }
         if (resolved.isEmpty()) {
-            insertUndoNotice("回滚失败：本轮所有文件的原始快照均已不存在（可能被清理），无法恢复。")
+            insertUndoNotice(context.getString(R.string.turn_changes_rollback_no_snapshots))
             return@launch
         }
         if (!captureUndoGuard(sid, resolved.map { it.first })) return@launch
@@ -143,15 +144,16 @@ fun ChatViewModel.undoAllTurnChanges(messageId: String) {
                 is UndoOutcome.Failed -> failed.add(path)
             }
         }
+        val sep = context.getString(R.string.turn_changes_list_separator)
         val lines = buildList {
             if (restored.isNotEmpty()) {
-                add("已回滚 ${restored.size} 个文件到本轮开始前的状态。")
+                add(context.getString(R.string.turn_changes_rollback_done, restored.size))
             }
             if (failed.isNotEmpty()) {
-                add("以下文件恢复失败（未被改动）：${failed.joinToString("、")}")
+                add(context.getString(R.string.turn_changes_rollback_failed_files, failed.joinToString(sep)))
             }
             if (unresolved.isNotEmpty()) {
-                add("以下文件缺少本轮之前的快照，跳过：${unresolved.joinToString("、")}")
+                add(context.getString(R.string.turn_changes_rollback_skipped, unresolved.joinToString(sep)))
             }
         }
         if (lines.isNotEmpty()) insertUndoNotice(lines.joinToString("\n"))
@@ -173,7 +175,10 @@ private fun ChatViewModel.captureUndoGuard(
     )
     if (guard.checkpoint == null) {
         insertUndoNotice(
-            "撤销失败：无法为当前文件建立保护快照（${guard.reason ?: "未知原因"}），已中止。",
+            context.getString(
+                R.string.turn_changes_undo_guard_failed,
+                guard.reason ?: context.getString(R.string.turn_changes_unknown_reason),
+            ),
         )
         return false
     }
@@ -196,12 +201,12 @@ private suspend fun ChatViewModel.restoreViaCheckpoints(
         )
         when {
             !restored.success ->
-                UndoOutcome.Failed(restored.lines.joinToString("\n").ifEmpty { "恢复失败" })
+                UndoOutcome.Failed(restored.lines.joinToString("\n").ifEmpty { context.getString(R.string.turn_changes_restore_failed) })
             undoState.existedBefore -> UndoOutcome.Restored(
-                "已撤销（${undoState.path}）：文件已恢复为本轮开始前的内容。",
+                context.getString(R.string.turn_changes_undo_restored, undoState.path),
             )
             else -> UndoOutcome.Restored(
-                "已撤销（${undoState.path}）：该文件在本轮之前不存在，已删除此次新建。",
+                context.getString(R.string.turn_changes_undo_deleted, undoState.path),
             )
         }
     } catch (e: Exception) {
