@@ -47,8 +47,9 @@ object SubAgentRunner {
 
     /** Cap on a single tool-result / report chunk kept in history (tail kept).
      *  Generous: truncation here is a last-resort runaway guard, not a
-     *  content policy — the coordinator asked for full reports. */
-    private const val MAX_REPORT_CHARS = 64_000
+     *  content policy — the coordinator asked for full reports.
+     *  [T-subagent-report-spill] internal so tests can pin the budget. */
+    internal const val MAX_REPORT_CHARS = 64_000
 
     /**
      * [T-subagent-memory-cap] timeline 的硬上限。
@@ -85,6 +86,14 @@ object SubAgentRunner {
         writePaths: List<String> = emptyList(),
         maxTurns: Int = ABSOLUTE_MAX_TURNS,
         roleContext: Context? = null,
+        /**
+         * [T-subagent-report-spill] Parent session id that keys the report /
+         * old-history spills into THIS session's tool-spill workspace (guest
+         * path the parent's `file_read` can reach). Null (callers not yet
+         * wiring it) keeps truncation honest — head+tail preserved, exact
+         * omitted count reported — without a recovery path.
+         */
+        sessionId: String? = null,
         temperature: Double? = null,
         tokenBudget: SubAgentTokenBudget? = null,
         thinkingLevel: ThinkingLevel = ThinkingLevel.ULTRA,
@@ -123,6 +132,13 @@ object SubAgentRunner {
         val history = mutableListOf(
             LLMMessage(role = LLMMessage.Role.USER, content = briefed),
         )
+        // [T-subagent-report-spill] One session-keyed spiller shared by the
+        // final-report truncation and the history compactor's recoverable
+        // stubs. Deterministic file name (content hash), so the per-turn
+        // re-compaction rewrites its own file instead of accumulating one
+        // spill per turn.
+        val sessionSpill: (nameKey: String, content: String) -> String? =
+            { nameKey, content -> spillToSession(roleContext, sessionId, nameKey, content) }
         // Turn budget is whatever the coordinator assigned (auto-sized or
         // explicit), bounded only by ABSOLUTE_MAX_TURNS as a runaway guard —
         // there is no longer a low global settings clamp here.
@@ -144,7 +160,10 @@ object SubAgentRunner {
                     runCatching { onStep(turn, "token budget exhausted") }
                     val partial = report.toString().trim()
                     val footer = "(stopped: shared token budget exhausted at $turn/$turns turns)"
-                    return ToolExecutionResult(composeOutput(partial, timeline.toString(), footer), true)
+                    return ToolExecutionResult(
+                        composeOutput(partial, timeline.toString(), footer, spillFullReport = { sessionSpill("subagent-report", it) }),
+                        true,
+                    )
                 }
                 turn++
                 runCatching { onStep(turn, "") }
@@ -172,8 +191,13 @@ object SubAgentRunner {
                 var textSeg = 0
                 var thinkSeg = 0
                 // Compact accumulated history before it can blow the context
-                // window; the freshest tool results stay verbatim.
-                val sendHistory = SubAgentHistoryCompactor.compact(history)
+                // window; the freshest tool results stay verbatim. [T-subagent-history-spill]
+                // The spiller lets oversized old results keep a recovery path
+                // in their stub instead of a bare head+tail excerpt.
+                val sendHistory = SubAgentHistoryCompactor.compact(
+                    history,
+                    spill = { _, content -> sessionSpill("history", content) },
+                )
                 val textSb = StringBuilder()
                 val toolCalls = mutableListOf<Triple<String, String, JSONObject>>()
                 // [GH#61/#83/#146] The parsed `args` is `{}` when the provider
@@ -276,7 +300,10 @@ object SubAgentRunner {
 
                 if (toolCalls.isEmpty()) {
                     runCatching { onStep(turn, "done") }
-                    return ToolExecutionResult(composeOutput(report.toString(), timeline.toString()), true)
+                    return ToolExecutionResult(
+                        composeOutput(report.toString(), timeline.toString(), spillFullReport = { sessionSpill("subagent-report", it) }),
+                        true,
+                    )
                 }
 
                 val assistantParts = mutableListOf<AgentContentPart>()
@@ -460,7 +487,10 @@ object SubAgentRunner {
             } else {
                 "(sub-agent reached the $turns-turn budget with no findings to report)"
             }
-            return ToolExecutionResult(composeOutput(partial, timeline.toString(), footer), true)
+            return ToolExecutionResult(
+                composeOutput(partial, timeline.toString(), footer, spillFullReport = { sessionSpill("subagent-report", it) }),
+                true,
+            )
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -469,13 +499,24 @@ object SubAgentRunner {
                     report.toString(),
                     timeline.toString(),
                     "Sub-agent failed: ${e.message ?: e.javaClass.simpleName}",
+                    spillFullReport = { sessionSpill("subagent-report", it) },
                 ),
                 false,
             )
         }
     }
 
-    fun composeOutput(report: String, timeline: String, footer: String = ""): String {
+    /**
+     * [spillFullReport] is invoked at most once, only when the composed output
+     * exceeds [MAX_REPORT_CHARS]; it returns the guest path the full report
+     * was spilled to (or null when no session wiring / the write failed).
+     */
+    fun composeOutput(
+        report: String,
+        timeline: String,
+        footer: String = "",
+        spillFullReport: ((String) -> String?)? = null,
+    ): String {
         val body = report.trim()
         val trace = timeline.trim()
         val note = footer.trim()
@@ -495,7 +536,7 @@ object SubAgentRunner {
             }
             if (isEmpty()) append("(sub-agent finished with empty output)")
         }
-        return truncate(composed)
+        return truncate(composed, spillFullReport)
     }
 
     /**
@@ -558,9 +599,86 @@ object SubAgentRunner {
         }
     }
 
-    private fun truncate(text: String): String {
+    /**
+     * Head chars of an over-cap composed output kept alongside the tail.
+     * [T-subagent-report-spill] The old form was `"…(truncated)\n" +
+     * takeLast(MAX_REPORT_CHARS)`: the head of the report (the Trace, the
+     * opening findings, everything the sub-agent confirmed FIRST) vanished
+     * with no count and no recovery path. Reports are tail-heavy, so the tail
+     * stays the bulk — but the head is preserved too, and the note is
+     * explicit: the spill path when the full report was persisted, otherwise
+     * the exact omitted char count.
+     */
+    private const val REPORT_HEAD_CHARS = 8_000
+
+    /** Reserved room for the truncation note inside [MAX_REPORT_CHARS]. */
+    private const val TRUNCATION_NOTE_BUDGET = 160
+
+    private fun truncate(text: String, spillFullReport: ((String) -> String?)? = null): String {
         if (text.length <= MAX_REPORT_CHARS) return text
-        return "…(truncated)\n" + text.takeLast(MAX_REPORT_CHARS)
+        // [T-subagent-report-spill] Spill FIRST so the note can point at the
+        // full report; the hook is null (or fails) when no session wiring
+        // exists, and the honest omitted-count note is the fallback.
+        val spillPath = spillFullReport?.invoke(text)
+        val head = ToolOutputTruncator.sliceHead(text, REPORT_HEAD_CHARS)
+        val tail = ToolOutputTruncator.sliceTail(
+            text,
+            MAX_REPORT_CHARS - head.length - TRUNCATION_NOTE_BUDGET,
+        )
+        val omitted = text.length - head.length - tail.length
+        // [T-subagent-report-spill][T-unified-exit-passthrough] The composed
+        // output starts with the `[tool-output-spill]` placeholder prefix so
+        // the dispatch boundary's unified exit (ToolOutputSpill.planFor →
+        // isOffloadPlaceholder → PASSTHROUGH) does NOT re-plan a body that
+        // already carries its own recoverable spill — the old free-form note
+        // got re-planned as WRITE and shrunk an already-spilled report to the
+        // ~10.3k preview again. The head/tail content itself is untouched.
+        val note = if (spillPath != null) {
+            "(truncated — full report at $spillPath)"
+        } else {
+            "(truncated — $omitted chars omitted between the preserved head and tail excerpts)"
+        }
+        return buildString {
+            if (spillPath != null) append("[tool-output-spill] sub_agent_report produced ")
+                .append(text.length)
+                .append(" chars.\n")
+            append(head)
+            append("\n\n…").append(note).append("…\n\n")
+            append(tail)
+        }
+    }
+
+    /**
+     * [T-subagent-report-spill] Spill [content] into the session's tool-spill
+     * workspace under a deterministic, content-hashed name: the same content
+     * always lands in the SAME file, so the per-turn history-compaction
+     * re-spill rewrites its own file instead of accumulating one spill per
+     * turn. Guest path the model can `file_read`, or null when there is no
+     * session wiring or the write failed. Same directory, naming discipline
+     * and atomic-write machinery as [ToolOutputSpill].
+     */
+    private fun spillToSession(
+        context: Context?,
+        sessionId: String?,
+        nameKey: String,
+        content: String,
+    ): String? {
+        if (context == null || sessionId.isNullOrBlank()) return null
+        val dir = java.io.File(
+            com.openminis.app.sandbox.SessionWorkspace.hostDir(context.filesDir, sessionId, "workspace"),
+            "tool-spill",
+        )
+        if (!dir.mkdirs() && !dir.isDirectory) return null
+        val sha = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(content.toByteArray(Charsets.UTF_8))
+            .take(8)
+            .joinToString("") { "%02x".format(it) }
+        val file = java.io.File(dir, "$nameKey-$sha.txt")
+        return if (AtomicFileWrite.write(file, content) != null) {
+            "/var/minis/workspace/tool-spill/${file.name}"
+        } else {
+            null
+        }
     }
 
     private fun workerSystemPrompt(

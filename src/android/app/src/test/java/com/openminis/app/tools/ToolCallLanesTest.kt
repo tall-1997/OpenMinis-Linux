@@ -29,9 +29,9 @@ class ToolCallLanesTest {
             subAgentEnabled = true,
             codeGraphEnabled = true,
             mcpNativeEnabled = true,
-            // [P2-transcribe-audio-gate] transcribe_audio rides the CONCURRENT
-            // set and is now schema-gated on the speech model; opt in so the
-            // guard still covers it.
+            // [T-transcribe-unadvertise] the hasSpeechModel opt-in is a no-op
+            // now: transcribe_audio left both the registry and the CONCURRENT
+            // set (its dispatch branch has no executor behind it).
             hasSpeechModel = true,
             includeLongTail = true,
         ).map { it.name }.toSet()

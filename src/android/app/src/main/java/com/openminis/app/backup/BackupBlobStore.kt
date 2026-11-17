@@ -76,6 +76,18 @@ class BackupBlobStore(
 
     data class SkippedPath(val path: String, val size: Long)
 
+    /**
+     * [T-backup-decode-honesty] Record a skip that happened OUTSIDE the blob
+     * pipeline (e.g. an unreadable credential store) so it surfaces exactly
+     * like a size-cap skip: [skippedFiles] drives the run's "with issues"
+     * status and the entry lands in the history record's skipped list.
+     */
+    fun recordSkip(logicalPath: String, size: Long = 0) {
+        skippedFiles += 1
+        skippedBytes += size
+        skippedPaths.add(SkippedPath(logicalPath, size))
+    }
+
     sealed interface Outcome {
         data class Stored(val sha256: String, val size: Long) : Outcome
         /** Same content already in the package; no new bytes written. */

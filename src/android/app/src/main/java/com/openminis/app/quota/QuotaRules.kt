@@ -326,11 +326,21 @@ object QuotaMerge {
             }
             var merged = existing
             if (incoming.observedAt >= existing.observedAt) {
+                // [T-quota-ingest-null-amounts] A present-but-empty amounts
+                // blob (no total, used or remaining, not unlimited) carries no
+                // measurement - it must not erase the amounts we already hold
+                // (e.g. a relay that briefly answered without readable
+                // numbers). The label, provenance and verdict below still
+                // update, and a real amounts payload replaces as before.
+                val blankAmounts = run {
+                    val a = incoming.amounts
+                    a != null && a.total == null && a.used == null && a.remaining == null && !incoming.unlimited
+                }
                 merged = merged.copy(
                     kind = incoming.kind,
                     unit = incoming.unit,
                     vendorLabel = incoming.vendorLabel ?: existing.vendorLabel,
-                    amounts = incoming.amounts,
+                    amounts = if (blankAmounts) existing.amounts else incoming.amounts,
                     verdict = incoming.verdict,
                     unlimited = incoming.unlimited,
                     provenance = incoming.provenance,

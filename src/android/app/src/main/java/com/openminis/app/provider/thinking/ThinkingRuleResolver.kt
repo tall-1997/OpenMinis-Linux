@@ -98,8 +98,13 @@ data class ThinkingResolveTrace(
  *
  * PHASE 1 SCOPE — read before extending:
  *  • Covers the OpenAI-compatible family only. Gemini and Anthropic keep their own
- *    emitters; their formats are declared in [ThinkingWireFormat] so the vocabulary is
- *    complete, but nothing resolves to them here. Wiring them in is Phase 2.
+ *    request builders, whose native formats ([ThinkingWireFormat.AnthropicThinking],
+ *    [ThinkingWireFormat.GeminiBudget], [ThinkingWireFormat.GeminiThinkingLevel]) are
+ *    emitted by those builders through the shared [ThinkingShapes] plumbing — the same
+ *    fields the built-in thinking levels ride. On THIS path those three formats cannot
+ *    be expressed: a custom rule restored from a backup that names one degrades to a
+ *    logged warning + skip instead of crashing the request ([T-thinking-phase2-emission],
+ *    same bug class as [OpenMinis#306]).
  *  • Built-in rules only. No persistence, no user rules, no UI. [ThinkingRule.Kind.CUSTOM]
  *    and [ThinkingWireFormat.CustomPath] exist so Phase 2 need not change these types.
  *  • Behaviour must stay byte-for-byte identical to the pre-refactor chain. That is not an
@@ -633,11 +638,49 @@ object ThinkingRuleResolver {
                 null to null
             }
 
-            else -> {
-                // Phase 1: declared for vocabulary completeness, never resolved to on this
-                // path. Reaching here means the registry named a format the OpenAI emitter
-                // cannot produce — a programmer error, not a runtime condition.
-                error("ThinkingWireFormat $format is not emitted on the OpenAI path in Phase 1")
+            // [T-thinking-phase2-emission] The three native vendor formats. Their
+            // EMISSION lives on the provider paths where they are native —
+            // AnthropicThinking on the Anthropic request builder and
+            // GeminiBudget/GeminiThinkingLevel on the Gemini request builder, both
+            // routed through the same thinkingConfig/budget plumbing as the built-in
+            // thinking levels (ThinkingRuleResolver.anthropicThinkingShape /
+            // geminiThinkingConfig → ThinkingShapes). This resolver's [apply] is
+            // consulted only by the OpenAI-compatible request builder, whose body
+            // shape cannot express any of the three — but [ThinkingRuleCoding]
+            // decodes them from a restored backup and the rule editor can hold
+            // them, so reaching here is a REAL runtime state, not a programmer
+            // error. The old `else -> error(...)` crashed the request builder for
+            // exactly that state (the same bug class [OpenMinis#306] fixed for
+            // BooleanToggle/ExtraBodyToggle/CustomPath). Degrade the way every
+            // other "not emitted here" outcome does: the matched rule emits
+            // nothing (an empty emittedKeys trace) and leaves a visible log line
+            // explaining why.
+            is ThinkingWireFormat.AnthropicThinking -> {
+                AppLogger.warning(
+                    "Thinking",
+                    "[rules] format anthropic_thinking cannot be expressed on the " +
+                        "OpenAI-compatible body path (rule=${ctx.modelId}); " +
+                        "skipping the rule — the native Anthropic builder owns this shape",
+                )
+                null to null
+            }
+            is ThinkingWireFormat.GeminiBudget -> {
+                AppLogger.warning(
+                    "Thinking",
+                    "[rules] format gemini_budget cannot be expressed on the " +
+                        "OpenAI-compatible body path (rule=${ctx.modelId}); " +
+                        "skipping the rule — the native Gemini builder owns this shape",
+                )
+                null to null
+            }
+            is ThinkingWireFormat.GeminiThinkingLevel -> {
+                AppLogger.warning(
+                    "Thinking",
+                    "[rules] format gemini_thinking_level cannot be expressed on the " +
+                        "OpenAI-compatible body path (rule=${ctx.modelId}); " +
+                        "skipping the rule — the native Gemini builder owns this shape",
+                )
+                null to null
             }
         }
     }

@@ -123,16 +123,19 @@ class CodemodeToolTest {
     @Test
     fun defaultCallableSetBuildsFromTheAllFlagsRegistry() = runBlocking {
         // review P2-14: the bridge used to be built with vision/speech flags
-        // OFF, which silently dropped read_image / transcribe_audio from the
-        // bridge — scripts saw a JS TypeError instead of the executor's honest
-        // refusal. The default set now rides the same all-flags registry as
+        // OFF, which silently dropped read_image from the bridge — scripts saw
+        // a JS TypeError instead of the executor's honest refusal. The default
+        // set now rides the same all-flags registry as
         // ToolExposureGate.levelByName.
+        // [T-transcribe-unadvertise] transcribe_audio is no longer registered
+        // at all (its dispatch branch has no executor behind it), so the
+        // all-flags registry no longer emits it either.
         val invoke = RecordingInvoke { _, _ -> ToolExecutionResult("ok", true) }
         val result = execute(
             "return (Object.keys(tools).indexOf('read_image') >= 0) + ':' + (Object.keys(tools).indexOf('transcribe_audio') >= 0);",
             invoke,
         )
-        assertEquals("true:true", result.output)
+        assertEquals("true:false", result.output)
     }
 
     @Test

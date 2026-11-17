@@ -20,8 +20,13 @@ interface A11yActor {
     /** Tap the first node matching text or contentDescription. False if none. */
     fun tapByText(text: String): Boolean
 
-    /** Write [text] into the focused editable node. */
-    fun typeText(text: String): Boolean
+    /**
+     * Write [text] into an editable node. [viewId] (the recorded step's view
+     * id resource name, when the recorder captured one) is the preferred
+     * target: the editable node whose view id matches, then the focused
+     * editable node, then the first editable node. False if none applies.
+     */
+    fun typeText(text: String, viewId: String? = null): Boolean
 
     /** Swipe between two points (duration ms). */
     fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durationMs: Long): Boolean
@@ -57,8 +62,38 @@ class ServiceA11yActor(private val svc: MinisAccessibilityService) : A11yActor {
 
     override fun dumpScreen(): String = AccessibilityQueryGuard.query("") {
         buildString {
-            for (root in svc.rootNodes()) walk(root, 0, MAX_DUMP_DEPTH)
+            // [T-a11y-popup-gate] Emit one marker line per interactive window
+            // (type + bounds + focus) before its node walk, so consumers can
+            // tell a real dialog/overlay apart from the app's own full-screen
+            // form. The service config enables flagRetrieveInteractiveWindows,
+            // so the window list is normally available; when it is not, no
+            // markers are emitted and popup-dismissal consumers must skip.
+            val wins = runCatching { svc.windows }.getOrNull().orEmpty()
+            if (wins.isEmpty()) {
+                for (root in svc.rootNodes()) walk(root, 0, MAX_DUMP_DEPTH)
+            } else {
+                wins.forEachIndexed { i, w ->
+                    val rect = android.graphics.Rect()
+                    runCatching { w.getBoundsInScreen(rect) }
+                    append("window index=").append(i)
+                    append(" type=").append(wTypeName(w.type))
+                    append(" bounds=").append(rect.left).append(",").append(rect.top)
+                    append("-").append(rect.right).append(",").append(rect.bottom)
+                    append(" focused=").append(runCatching { w.isFocused }.getOrDefault(false))
+                    append(" active=").append(runCatching { w.isActive }.getOrDefault(false))
+                    append("\n")
+                    runCatching { w.root }.getOrNull()?.let { walk(it, 0, MAX_DUMP_DEPTH) }
+                }
+            }
         }
+    }
+
+    private fun wTypeName(type: Int): String = when (type) {
+        android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION -> "application"
+        android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD -> "input_method"
+        android.view.accessibility.AccessibilityWindowInfo.TYPE_SYSTEM -> "system"
+        android.view.accessibility.AccessibilityWindowInfo.TYPE_ACCESSIBILITY_OVERLAY -> "overlay"
+        else -> "other"
     }
 
     private fun StringBuilder.walk(node: android.view.accessibility.AccessibilityNodeInfo?, depth: Int, max: Int) {
@@ -102,12 +137,45 @@ class ServiceA11yActor(private val svc: MinisAccessibilityService) : A11yActor {
         return tap(r.centerX(), r.centerY())
     }
 
-    override fun typeText(text: String): Boolean {
-        for (root in svc.rootNodes()) {
+    override fun typeText(text: String, viewId: String?): Boolean {
+        val roots = svc.rootNodes()
+        if (viewId != null) {
+            // [T-a11y-replay-field-target] The recorder stores the field's view
+            // id (A11yScriptRecorder.fromEvent), so target the recorded field
+            // instead of whatever editable node comes first:
+            //  1) the editable node whose viewId resource name matches,
+            //  2) the focused editable node (focus usually still sits on the
+            //     recorded field even after a re-layout),
+            //  3) the first editable node (legacy behavior).
+            for (root in roots) {
+                // [T-a11y-replay-field-target] The viewId predicate must CONJUNCT
+                // with isEditable (a recycled list item can share the recorded
+                // resource name) — replacing the default predicate matched
+                // non-editable nodes and failed the whole INPUT step.
+                val byId = findEditable(root, 0) {
+                    it.isEditable && viewIdMatches(it.viewIdResourceName, viewId)
+                }
+                if (byId != null) return svc.setNodeText(byId, text)
+            }
+            for (root in roots) {
+                val focused = findEditable(root, 0) { it.isFocused }
+                if (focused != null) return svc.setNodeText(focused, text)
+            }
+        }
+        for (root in roots) {
             val editable = findEditable(root, 0) ?: continue
             return svc.setNodeText(editable, text)
         }
         return false
+    }
+
+    /** Recorded vs live view id: full form equal, or same resource name after ":id/". */
+    private fun viewIdMatches(nodeViewId: String?, recorded: String): Boolean {
+        if (nodeViewId == null) return false
+        if (nodeViewId == recorded) return true
+        val nodeName = nodeViewId.substringAfterLast('/')
+        val recordedName = recorded.substringAfterLast('/')
+        return nodeName.isNotEmpty() && nodeName == recordedName
     }
 
     override fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durationMs: Long): Boolean {
@@ -170,11 +238,12 @@ class ServiceA11yActor(private val svc: MinisAccessibilityService) : A11yActor {
     private fun findEditable(
         node: android.view.accessibility.AccessibilityNodeInfo?,
         depth: Int,
+        predicate: (android.view.accessibility.AccessibilityNodeInfo) -> Boolean = { it.isEditable },
     ): android.view.accessibility.AccessibilityNodeInfo? {
         if (node == null || depth > MAX_DUMP_DEPTH) return null
-        if (node.isEditable) return node
+        if (predicate(node)) return node
         for (i in 0 until node.childCount) {
-            findEditable(node.getChild(i), depth + 1)?.let { return it }
+            findEditable(node.getChild(i), depth + 1, predicate)?.let { return it }
         }
         return null
     }
@@ -199,14 +268,19 @@ class ServiceA11yActor(private val svc: MinisAccessibilityService) : A11yActor {
  *
  * Per step:
  *  1. popup pre-check: dump once; dismiss up to [MAX_POPUP_DISMISS] dialogs
- *     whose labels hit the close-word list (zh + en);
+ *     whose labels hit the close-word list (zh + en) — and only when the
+ *     label sits inside a popup-like window ([findPopupLabel]'s gate; the
+ *     app's own form buttons are never auto-tapped);
  *  2. loading-word wait: while the dump shows a loading spinner label, retry
  *     up to [LOADING_RETRIES] × [LOADING_RETRY_MS];
  *  3. label-first resolution: for TAP steps with a label (text / viewId /
  *     contentDescription), re-find the node in the fresh dump; on a hit tap
  *     there AND write the new coordinates back into the store
  *     (坐标自愈); on a miss fall back to the recorded coordinates;
- *  4. inter-step pacing from the recorded atMs deltas, clamped to
+ *  4. INPUT steps type into the RECORDED field (step.viewId) — see
+ *     [A11yActor.typeText] — falling back to the focused, then the first
+ *     editable node;
+ *  5. inter-step pacing from the recorded atMs deltas, clamped to
  *     [MIN_STEP_GAP_MS]..[MAX_STEP_GAP_MS].
  *
  * Any step failure aborts with a structured [ReplayResult] and bumps the
@@ -319,7 +393,9 @@ class SkillReplayEngine(
 
     private fun runInput(step: A11ySkillStore.Step): Boolean {
         val text = step.text ?: return false
-        return actor.typeText(text)
+        // [T-a11y-replay-field-target] The recorder stores the field's viewId —
+        // thread it through so the actor targets the recorded field.
+        return actor.typeText(text, step.viewId)
     }
 
     // ── popup + loading handling ─────────────────────────────────────────
@@ -343,12 +419,58 @@ class SkillReplayEngine(
     }
 
     private fun findPopupLabel(dump: String): String? {
+        // [T-a11y-popup-gate] Dismissal is gated on an actual dialog/overlay
+        // window: the dump's window marker lines carry the type and bounds of
+        // each window, and the label only counts when its enclosing window is
+        // popup-like — a system/accessibility-overlay window, or an application
+        // window strictly smaller than the largest application window (a
+        // dialog/sheet). The app's own full-screen form is the largest
+        // application window, so its 取消/Close buttons are never auto-tapped;
+        // dumps without window metadata dismiss nothing (opt-out-safe).
+        val popupIndexes = popupWindowIndexes(dump)
+        if (popupIndexes.isEmpty()) return null
+        var currentWindow = -1
         for (line in dump.lineSequence()) {
-            for (word in POPUP_WORDS) {
-                if (line.contains("text=$word") || line.contains("desc=$word")) return word
+            val marker = WINDOW_INDEX_REGEX.find(line)
+            if (marker != null && line.startsWith("window ")) {
+                currentWindow = marker.groupValues[1].toIntOrNull() ?: -1
+                continue
+            }
+            if (currentWindow in popupIndexes) {
+                for (word in POPUP_WORDS) {
+                    if (line.contains("text=$word") || line.contains("desc=$word")) return word
+                }
             }
         }
         return null
+    }
+
+    private data class DumpWindowInfo(val index: Int, val type: String, val area: Long)
+
+    /**
+     * Indexes of the popup-like windows in [dump] (see [findPopupLabel]).
+     * Empty when the dump carries no window metadata.
+     */
+    private fun popupWindowIndexes(dump: String): Set<Int> {
+        val windows = ArrayList<DumpWindowInfo>()
+        for (line in dump.lineSequence()) {
+            if (!line.startsWith("window ")) continue
+            val index = WINDOW_INDEX_REGEX.find(line)?.groupValues?.get(1)?.toIntOrNull() ?: continue
+            val type = Regex("type=(\\w+)").find(line)?.groupValues?.get(1) ?: "other"
+            val area = Regex("bounds=(-?\\d+),(-?\\d+)-(-?\\d+),(-?\\d+)").find(line)?.let { m ->
+                val (l, t, r, b) = m.destructured
+                val w = r.toLong() - l.toLong()
+                val h = b.toLong() - t.toLong()
+                if (w > 0 && h > 0) w * h else 0L
+            } ?: 0L
+            windows.add(DumpWindowInfo(index, type, area))
+        }
+        if (windows.isEmpty()) return emptySet()
+        val maxAppArea = windows.filter { it.type == "application" }.maxOfOrNull { it.area }
+        return windows.filterTo(HashSet()) {
+            it.type == "system" || it.type == "overlay" ||
+                (it.type == "application" && maxAppArea != null && it.area < maxAppArea)
+        }.map { it.index }.toSet()
     }
 
     /** Returns the last dump (as evidence) when loading words persist, else null. */
@@ -394,6 +516,9 @@ class SkillReplayEngine(
             "Got it", "Skip", "Not now", "Cancel", "Allow later", "Close",
         )
         val LOADING_WORDS = listOf("加载中", "正在加载", "请稍候", "Loading")
+
+        /** `window index=<n>` marker line prefix (see [findPopupLabel]). */
+        internal val WINDOW_INDEX_REGEX = Regex("index=(-?\\d+)")
 
         /** Parse `text=…` / `desc=…` out of a dump line for popup detection. */
         fun dumpLabels(dump: String): List<String> =

@@ -20,8 +20,19 @@ internal suspend fun ProviderRepository.loadThinkingRulesSnapshot(
     instanceId: String,
 ): ProviderRepository.ThinkingRulesSnapshot = withContext(kotlinx.coroutines.Dispatchers.IO) {
     ensureConfigLoaded()
+    // [T-thinking-rules-read-observability] The emptyList fallback keeps this
+    // read-only path alive (it must not crash request assembly), but a
+    // transient SQLite error silently stripping every user rule has to be
+    // diagnosable: warn with the throwable instead of vanishing.
     val customRules = runCatching {
         providerDao.loadThinkingRules(instanceId).map { it.toRule() }
+    }.onFailure { e ->
+        android.util.Log.w(
+            "ProviderRepo",
+            "[ThinkingRules] snapshot load failed for $instanceId; falls back to " +
+                "NO custom rules (built-ins only): ${e.message}",
+            e,
+        )
     }.getOrDefault(emptyList())
     val builtIns = builtInThinkingRulesForDisplay(instanceId)
     val sampleModelId = _config.value.modelEntries

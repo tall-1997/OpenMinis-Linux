@@ -48,23 +48,21 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     /** [T-android-instant-thinking] send 路径已预插占位气泡，复用其 id。 */
     overrideAssistantId: String? = null,
 ) {
-    // Room is the transcript authority. Rebuild immediately before the first
-    // request so UI paging, cold-open tail limits, and the resident hot-cache
-    // cannot hide older user instructions from the model. The current user row
-    // is already persisted by sendMessage; this also restores raw BodyStore
-    // bodies instead of the display projection.
+    // Room is the transcript authority: rebuild right before the first request so UI
+    // paging, cold-open tail limits and the resident hot-cache cannot hide older user
+    // instructions; restores raw BodyStore bodies instead of the display projection
+    // (the current user row is already persisted by sendMessage).
     withContext(Dispatchers.IO) {
         rebuildAgentHistoryFromDatabase(activeSessionId)
     }
-    // [T-android-resume-banner-race] Snapshot the resume epoch at run start:
-    // every `_canResume = true` this loop's tail may emit is only allowed to
-    // land while this snapshot is still current. A newer send bumps the
-    // epoch, so a tail that outlives its replacement drops the raise instead
-    // of re-showing the resume banner over the fresh turn.
+    // [T-android-resume-banner-race] Snapshot the resume epoch at run start: every
+    // `_canResume = true` the tail emits must land while this snapshot is current —
+    // a newer send bumps the epoch, so a tail outliving its replacement drops the
+    // raise instead of re-showing the resume banner over the fresh turn.
     val loopResumeEpoch = snapshotResumeEpoch()
-    // [T-android-model-switch-midrun-adopt] Epoch this run last acted on.
-    // var: resolveModelSwitch reassigns it when a mid-run pick is adopted,
-    // so the fallback writeback below may still persist the ADOPTED model.
+    // [T-android-model-switch-midrun-adopt] Epoch this run last acted on (var:
+    // resolveModelSwitch reassigns it on mid-run adoption, so the fallback writeback
+    // below may still persist the ADOPTED model).
     var loopModelEpoch = snapshotModelSelectionEpoch()
     AppLogger.info(ChatViewModel.TAG_STREAM, "runAgentLoop ENTER provider=${provider.javaClass.simpleName} historySize=${agentHistory.size}")
     // [T-generation-run] 每轮生成落账：崩溃后可定位半截流归属哪个会话/模型。
@@ -84,12 +82,11 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // normally a single message id for the whole agent loop (iOS-parity:
     var assistantId = overrideAssistantId ?: "assistant_${System.currentTimeMillis()}"
     val allToolBlocks = mutableListOf<AssistantBlock>()
-    // Per-tool ring of the most recent `accumulated` JSON snapshots emitted
-    // by `LLMStreamChunk.ToolInputDelta`. Capped at TOOL_INPUT_CHUNK_RING_MAX
-    // entries per tool id so memory stays bounded even on long streams.
-    // The preflight validator below drains this on a blocked call so we
-    // can reconstruct how the model assembled (or failed to assemble) the
-    // args.
+    // Per-tool ring of the most recent `accumulated` JSON snapshots from
+    // `LLMStreamChunk.ToolInputDelta`, capped at TOOL_INPUT_CHUNK_RING_MAX per tool id
+    // so memory stays bounded on long streams. The preflight validator below drains it
+    // on a blocked call to reconstruct how the model assembled (or failed to assemble)
+    // the args.
     val toolInputChunkRings: MutableMap<String, MutableList<String>> = mutableMapOf()
     // [GH#61/#83/#146] 本轮无法解析的参数尾巴（keyed by toolCall id，每轮清空）。
     val toolCallRawArgs = mutableMapOf<String, String>()
@@ -101,12 +98,16 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // T94 fix 2: throttle text-delta UI updates to ~20fps (50ms).
     var lastUiUpdateMs = 0L
     var lastFlushedLen = 0
-    // T307: per-delta String += chunk.text on Pixel-class heaps was O(n²)
-    // — every SSE chunk allocated a fresh String the size of turnText so
+    // [T-thinking-delta-ui-gate] Reasoning models stream thinking deltas at 50-200/s;
+    // the thinking branch re-publishes the full block list at human cadence (100ms)
+    // instead of delta cadence — see the ThinkingDelta arm.
+    var lastThinkingUiMs = 0L
+    // T307: per-delta String += chunk.text on Pixel-class heaps was O(n²) — every SSE
+    // chunk allocated a fresh String the size of turnText.
     val pendingChunkSb = StringBuilder()
-    // T256 tier 2: per-tool-kind input-delta gates. file_write/file_edit
-    // pills churn JSON the user can't read anyway — 1Hz update is plenty;
-    // other tools get 5Hz so command/url previews stay legible.
+    // T256 tier 2: per-tool-kind input-delta gates. file_write/file_edit pills churn
+    // JSON the user can't read anyway — 1Hz update is plenty; other tools get 5Hz so
+    // command/url previews stay legible.
     var lastFileToolInputMs = 0L
     var lastOtherToolInputMs = 0L
     // [T-android-throttle-ladder-converge] 150ms first tier for this surface.
@@ -137,15 +138,13 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // turnFinishReason == null branch below).
     var streamDropContinuations = 0
 
-    // Add placeholder assistant message (once). Mark as awaiting so the
-    // "Minis is thinking" indicator shows during the initial request gap
-    // before the first stream chunk arrives. Mirrors iOS isAwaitingModelResponse.
-    // T300: snapshot the user's current thinking level at message
-    // creation so the renderer can hide Deep Thinking blocks for
-    // turns the user explicitly asked not to surface, even when a
-    // forced-reasoning model still streams reasoning_content.
-    // turnThinkingLevel 保留在块外：in-loop compact 的 freshAssistantId
-    // 分支同样引用它。
+    // Add placeholder assistant message (once). Marked awaiting so the "Minis is
+    // thinking" indicator shows during the initial request gap before the first
+    // stream chunk arrives. Mirrors iOS isAwaitingModelResponse. T300: snapshot the
+    // user's current thinking level at message creation so the renderer can hide
+    // Deep Thinking blocks for turns the user explicitly asked not to surface, even
+    // when a forced-reasoning model still streams reasoning_content.
+    // turnThinkingLevel 保留在块外：in-loop compact 的 freshAssistantId 分支同样引用它。
     val turnThinkingLevel = _thinkingLevel.value
     // [T-android-instant-thinking] send 路径已把占位气泡插入 _messages，
     // 此处跳过，避免同一回复出现两条气泡。
@@ -168,24 +167,23 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         }
     }
 
-    // Tracks whether the loop exited via `break` (any reason) or fell off the
-    // range end. Set false by every break path that ISN'T "past MAX_AGENT_TURNS" —
-    // without it the post-loop tail slapped a fake turn-limit error everywhere.
+    // Tracks whether the loop exited via `break` (any reason) or fell off the range
+    // end. Set false by every break path that ISN'T "past MAX_AGENT_TURNS" — without
+    // it the post-loop tail slapped a fake turn-limit error everywhere.
     var loopExitedNormally = false
-    // [T-android-auto-compact-inloop] In-loop guard compactions in THIS
-    // runAgentLoop — bounds compact-thrash: once the cap is hit, a
-    // still-over-threshold history stops the turn. Mirrors iOS
-    // maxInLoopCompactions.
+    // [T-android-auto-compact-inloop] In-loop guard compactions in THIS runAgentLoop —
+    // bounds compact-thrash: once the cap is hit, a still-over-threshold history stops
+    // the turn. Mirrors iOS maxInLoopCompactions.
     var inLoopCompactions = 0
-    // [T-compact-on-context-overflow] How many times THIS runAgentLoop compacted
-    // in response to the provider's own context verdict (ContextLengthExceeded),
-    // not the token estimate. Capped at 1: if the provider still refuses after
-    // a compaction, fallback/terminal-error handling takes over.
+    // [T-compact-on-context-overflow] How many times THIS runAgentLoop compacted in
+    // response to the provider's own context verdict (ContextLengthExceeded), not the
+    // token estimate. Capped at 1: if the provider still refuses after a compaction,
+    // fallback/terminal-error handling takes over.
     var contextOverflowCompactions = 0
     // [T-android-empty-after-toolresult-reminder] One-shot guard for the
-    // "<system-reminder> + retry one round" recovery after an empty response
-    // following a tool result. At most once per runAgentLoop (it can never
-    // loop); a still-empty reminder round surfaces a real error. iOS parity:
+    // "<system-reminder> + retry one round" recovery after an empty response following
+    // a tool result — at most once per runAgentLoop (it can never loop); a still-empty
+    // reminder round surfaces a real error. iOS parity:
     // AIChatViewModel.didInjectEmptyToolReminderThisRun.
     var didInjectEmptyToolReminder = false
     // [T-agent-steering-empty-fallback] (P2-1) Latched when the empty-response
@@ -195,20 +193,18 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // tool call; [T-b13-empty-fallback] empty-streak entries never revisited.
     var dsmlLeakRetries = 0
     val emptyStreakEntryIds = mutableSetOf<String>()
-    // [T-android-readaloud-stop-stale] One-shot per REPLY (not per turn):
-    // the first text delta stops any Read Aloud still playing from the
-    // previous reply; scoped outside the turn loop so a multi-turn reply
-    // cannot re-fire it and cut off its own speech mid-sentence.
+    // [T-android-readaloud-stop-stale] One-shot per REPLY (not per turn): the first
+    // text delta stops any Read Aloud still playing from the previous reply — scoped
+    // outside the turn loop so a multi-turn reply cannot re-fire it mid-sentence.
     var didStopStaleReadAloud = false
     val toolExecutionLedger = ToolExecutionLedger()  // [T-tool-execution-ledger] one per run
     val repeatTracker = ToolRepeatTracker()  // [T-frozen-repeat-hint] hint-only
-    // [T-main-session-turn-cap] The runaway guard is user-tunable
-    // (Settings → Tool Limits); 200 is only the shipped default. Read once
-    // per run so a mid-run settings change can't shift the range end under
-    // an in-flight iteration.
+    // [T-main-session-turn-cap] The runaway guard is user-tunable (Settings → Tool
+    // Limits); 200 is only the shipped default. Read once per run so a mid-run settings
+    // change can't shift the range end under an in-flight iteration.
     val maxTurns = ToolLimitPrefs.mainSessionMaxTurns()
-    // [T-android-queued-message-interrupt-*] Shared by both mid-loop
-    // injection sites: switch loop-scope state to the injected bubble.
+    // [T-android-queued-message-interrupt-*] Shared by both mid-loop injection sites:
+    // switch loop-scope state to the injected bubble.
     fun swapLoopStateToInjectedBubble(newAssistantId: String) {
         goalRunRequested = false
         assistantId = newAssistantId
@@ -228,13 +224,12 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         // Sanitize history before each API call (mirrors iOS pre-API validation)
         sanitizeAgentHistory()
 
-        // Context window management: offload large tool outputs in older messages
-        // to disk when this model's window threshold is crossed; stubs in
-        // agentHistory still tell the model where to file_read.
-        // [T-anthropic-context-window] Heuristic-backed contextWindowTokens (offload
-        // fires for heuristic-only 1M Claude/Gemini models). [T-context-window-live-read]
-        // Live read per loop turn — a stale snapshot inside a long turn is exactly
-        // the iOS fcc22b66 item-3 bug.
+        // Context window management: offload large tool outputs in older messages to disk
+        // when this model's window threshold is crossed (stubs in agentHistory still tell
+        // the model where to file_read). [T-anthropic-context-window] heuristic-backed
+        // contextWindowTokens (offload fires for heuristic-only 1M Claude/Gemini models).
+        // [T-context-window-live-read] live read per loop turn — a stale snapshot inside a
+        // long turn is exactly the iOS fcc22b66 item-3 bug.
         effectiveContextWindowTokens()?.takeIf { it > 0 }?.let { window ->
             offloadContextIfNeeded(
                 contextWindow = window,
@@ -242,12 +237,11 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             )
         }
 
-        // [T-android-auto-compact-inloop] In-loop context guard (iOS
-        // f70ac173). checkContextBeforeSend only runs at the SEND entry
-        // point, so a single turn fanning out into many tool iterations
-        // could blow past the thresholds mid-loop; offload alone can't
-        // recover when the bulk is the model's own text. Runs AFTER offload
-        // so it judges the post-offload size.
+        // [T-android-auto-compact-inloop] In-loop context guard (iOS f70ac173):
+        // checkContextBeforeSend only runs at the SEND entry point, so one turn fanning
+        // out into many tool iterations could blow past the thresholds mid-loop; offload
+        // alone can't recover when the bulk is the model's own text. Runs AFTER offload,
+        // judging the post-offload size.
         when (inLoopContextCheck(inLoopCompactions)) {
             ChatViewModel.InLoopContextAction.PROCEED -> {}
             ChatViewModel.InLoopContextAction.COMPACTED -> {
@@ -255,13 +249,11 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 // effectiveAgentHistory automatically — compaction already
                 inLoopCompactions++
 
-                // [T-android-inloop-compact-divider-order / GH#235] Seal the
-                // bubble this run has been writing into and continue in a
-                // FRESH one below the divider — shared implementation with
-                // the overflow compact-and-retry body (ChatCompactSealSwap.kt).
-                // Same loop-scope reset as the queued-prompt swap, so the new
-                // bubble starts empty and buildTurnParts slices only the new
-                // turn's blocks.
+                // [T-android-inloop-compact-divider-order / GH#235] Seal the bubble this run
+                // has been writing into and continue in a FRESH one below the divider — shared
+                // implementation with the overflow compact-and-retry body (ChatCompactSealSwap
+                // .kt). Same loop-scope reset as the queued-prompt swap, so the new bubble starts
+                // empty and buildTurnParts slices only the new turn's blocks.
                 val freshAssistantId = "assistant_${System.currentTimeMillis()}_${turn}"
                 sealCompactedBubbleAndSwap(assistantId, accumulatedText, allToolBlocks, freshAssistantId, turnThinkingLevel)
                 assistantId = freshAssistantId
@@ -299,55 +291,49 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     text = context.getString(R.string.vm_context_full_unreduced),
                     iconKind = "compact",
                 )
-                // [T-android-group-pause-badge-restamp] A LIVE interruption
-                // just happened: real entry into the paused state.
+                // [T-android-group-pause-badge-restamp] A LIVE interruption just happened:
+                // real entry into the paused state.
                 markLiveInterruptionAndArmResume(loopResumeEpoch)
-                // Android's equivalent of iOS's `hitTurnLimit = false`: this
-                // is a deliberate stop, NOT the runaway-ceiling path, so the
-                // post-loop tail must not slap a fake "hit 200 turns" error
-                // on it. finalizeAtTurnLimit is skipped; the notice above is
-                // the user-visible explanation.
+                // Android's `hitTurnLimit = false`: deliberate stop, NOT the runaway-ceiling
+                // path — finalizeAtTurnLimit is skipped (the notice above is the user-visible
+                // explanation) and the post-loop tail must not slap a fake "hit 200 turns" error.
                 loopExitedNormally = true
                 break
             }
         }
 
-        // Mark where this turn's blocks start in allToolBlocks so we persist
-        // only the NEW parts from this turn. Matches iOS's per-turn RawMessage persistence.
+        // Mark where this turn's blocks start in allToolBlocks so we persist only the NEW
+        // parts from this turn. Matches iOS's per-turn RawMessage persistence.
         var turnStartedAtMs = System.currentTimeMillis()
         var turnStartBlockIndex = allToolBlocks.size
-        // T307: per-delta StringBuilder for the running turn text + the
-        // currently-open trailing text block, so GROWTH is amortised. The
-        // snapshot is still O(message length) per publish (see
-        // `messageTextSnapshot` below). `currentTextBlockSb` mirrors the
-        // trailing block's growing content; reset when a new text block
-        // opens (after a tool_use / thinking break).
+        // T307: per-delta StringBuilder for the running turn text + the currently-open
+        // trailing text block amortises GROWTH (snapshot still O(message length) per
+        // publish — see `messageTextSnapshot`). `currentTextBlockSb` mirrors the trailing
+        // block's growing content; reset when a new text block opens (after tool_use /
+        // thinking break).
         val turnTextSb = StringBuilder()
-        // [T-android-stream-snapshot-helper] The single source for the bubble
-        // text published mid-turn: the cross-turn prefix + THIS turn's streamed
+        // [T-android-stream-snapshot-helper] Single source for the bubble text published
+        // mid-turn: the cross-turn prefix + THIS turn's streamed text.
         fun messageTextSnapshot(): String =
             if (turnTextSb.isEmpty()) accumulatedText else accumulatedText + turnTextSb.toString()
-        // [T-stall-echo-strip] Armed only when the previous attempt stalled
-        // mid-stream (see the retry-rollback path); the retried attempt's
-        // text deltas route through it before reaching any consumer.
+        // [T-stall-echo-strip] Armed only when the previous attempt stalled mid-stream
+        // (see the retry-rollback path); the retried attempt's text deltas route through
+        // it before reaching any consumer.
         var stallEchoStripper: com.openminis.app.provider.StallEchoStripper? = null
         var currentTextBlockSb: StringBuilder? = null
-        // [T-android-tool-splits-reply-fix] Index (into allToolBlocks) of
-        // THIS turn's single text block, used only when the provider's
-        // streamed content is monolithic (streamTextIsMonolithic — OpenAI
-        // Chat Completions). -1 until the turn's first text delta. The
-        // merge scope is ONE streamed response: text arriving after a
-        // tool RESULT round-trip belongs to the NEXT agent-loop turn,
-        // which is a separate assistant message — so genuine
-        // multi-segment turns are unaffected by the merge.
+        // [T-android-tool-splits-reply-fix] Index (into allToolBlocks) of THIS turn's
+        // single text block, used only when the provider's streamed content is monolithic
+        // (streamTextIsMonolithic — OpenAI Chat Completions); -1 until the turn's first
+        // text delta. Merge scope is ONE streamed response: text arriving after a tool
+        // RESULT round-trip belongs to the NEXT agent-loop turn (a separate assistant
+        // message), so genuine multi-segment turns are unaffected by the merge.
         var turnTextBlockIdx = -1
-        // One-shot observability: future endpoints that adopt qwen-style
-        // post-tool_calls content chunking show up in the log.
+        // One-shot observability: future endpoints that adopt qwen-style post-tool_calls
+        // content chunking show up in the log.
         var loggedPostToolTextMerge = false
-        // Materialise the active text block's StringBuilder into its
-        // immutable content. Monolithic mode targets the tracked turn
-        // text block — which may NOT be the last block once trailing
-        // content arrived after tool_calls; ordered mode keeps the
+        // Materialise the active text block's StringBuilder into its immutable content.
+        // Monolithic mode targets the tracked turn text block — which may NOT be the last
+        // block once trailing content arrived after tool_calls; ordered mode keeps the
         // original trailing-block behaviour.
         fun materializeActiveTextBlock() {
             val sb = currentTextBlockSb ?: return
@@ -357,10 +343,16 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             }
         }
         val turnThinking = StringBuilder()
-        // Opaque reasoning_content blob captured from the provider's
-        // ReasoningContent stream chunk. When set (including empty string),
-        // takes precedence over turnThinking concatenation so the exact
-        // server-emitted value round-trips on the next request — DeepSeek V4
+        // [T-thinking-delta-ui-gate] The gated thinking publish leaves the block
+        // content up to 100ms behind the StringBuilder; settles and the stream-end
+        // flush materialise the FULL thinking first — buildTurnParts reads block content.
+        fun materializeThinkingBlock() {
+            val idx = allToolBlocks.indexOfFirst { it.kind == "thinking" && it.id == "thinking_$turn" }
+            if (idx >= 0) allToolBlocks[idx] = allToolBlocks[idx].copy(content = turnThinking.toString())
+        }
+        // Opaque reasoning_content blob from the provider's ReasoningContent chunk. When
+        // set (including empty string) it takes precedence over turnThinking concatenation
+        // so the exact server-emitted value round-trips on the next request — DeepSeek V4
         // emits "" legitimately and fabricated text would be in-context-learned.
         var turnReasoningBlob: String? = null
         // T321: capture finish_reason from LLMStreamChunk.Finished so we can
@@ -379,10 +371,10 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         // thoughtSignature for this turn's calls (null for other providers).
         val toolCallSignatures = mutableMapOf<String, String>()
 
-        // [T-android-duplicate-toolcall-replay] Idempotence for re-emitted
-        // ToolCallComplete events. A gateway/SSE replay can deliver the same
-        // completed call (same raw id, same name, same args) twice within one
-        // stream attempt; the [T-dedupe-toolcallid] renamer turns the second
+        // [T-android-duplicate-toolcall-replay] Idempotence for re-emitted ToolCallComplete
+        // events: a gateway/SSE replay can deliver the same completed call (same raw id,
+        // name, args) twice within one stream attempt; the [T-dedupe-toolcallid] renamer
+        // turns the second
         val toolReplayGuard = com.openminis.app.provider.ToolReplayGuard()
         val replayRenamedIds = mutableSetOf<String>()
 
@@ -394,15 +386,15 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         // so we catch at collect level and unwrap.
         var collectDone = false
         var retryAttempt = 0  // per-provider; reset when falling back to the next member
-        // [T-stall-resume] Mid-stream stalls (stream was alive, then went quiet
-        // past the idle budget) carry the already-streamed text into the retry
-        // so the model continues instead of regenerating from scratch. Set in
-        // the retry catch when the TransientError carries stalledAfterFirstEvent,
-        // consumed by the retried requestHistory, cleared once a stream attempt
-        // succeeds (a normal `continue` never reaches the rollback that sets it).
+        // [T-stall-resume] Mid-stream stalls (stream alive, then quiet past the idle
+        // budget) carry the already-streamed text into the retry so the model continues
+        // instead of regenerating from scratch. Set in the retry catch when the
+        // TransientError carries stalledAfterFirstEvent, consumed by the retried
+        // requestHistory, cleared once a stream attempt succeeds (a normal `continue`
+        // never reaches the rollback that sets it).
         var stallResumeContext: String? = null
-        // [T-android-queued-message-interrupt-thinking] Set by the dedicated
-        // catch below; read after the stream loop to inject as a new turn.
+        // [T-android-queued-message-interrupt-thinking] Set by the dedicated catch below;
+        // read after the stream loop to inject as a new turn.
         var queuedPromptInterrupted = false
         // [T-android-queued-message-interrupt-thinking] iOS d14174d3 parity:
         // A queued prompt must not wait out the stream — cut (both branches call this).
@@ -443,12 +435,11 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             assistantId = freshAssistantId
             accumulatedText = ""
             allToolBlocks.clear()
-            // [T-compact-retry-rebase] The seal+swap rewound the list to EMPTY but
-            // the caller's `continue` re-enters the WHILE loop, not the turn
-            // prologue — rebase the slice lower bound with the clear (a stale
-            // pre-clear size made buildTurnParts slice from out-of-range, whose
-            // empty-slice guard dropped the whole retried turn at persist) and
-            // restart the goal-usage clock the retried attempt owns.
+            // [T-compact-retry-rebase] The seal+swap rewound the list to EMPTY but the
+            // caller's `continue` re-enters the WHILE loop, not the turn prologue — rebase
+            // the slice lower bound with the clear (a stale pre-clear size made buildTurnParts
+            // slice out-of-range, whose empty-slice guard dropped the whole retried turn at
+            // persist) and restart the goal-usage clock the retried attempt owns.
             turnStartBlockIndex = 0
             turnStartedAtMs = System.currentTimeMillis()
             allToolInputs.clear()
@@ -458,6 +449,9 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             currentTextBlockSb = null
             turnTextBlockIdx = -1
             turnThinking.clear()
+            // [T-reasoning-blob-per-attempt] The compact-retried attempt owns the reasoning
+            // field; the overflowing attempt's blob must not survive the rebase.
+            turnReasoningBlob = null
             toolCalls.clear()
             toolCallSignatures.clear()
             toolReplayGuard.reset()
@@ -469,10 +463,9 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             return true
         }
 
-        // pi case ② (natural stop + over-window usage): compact ONLY — the
-        // answer already streamed and must complete normally. No retry, no
-        // turn-state reset, no usage drop (the turn's own usage still gets
-        // persisted by the turn-end path).
+        // pi case ② (natural stop + over-window usage): compact ONLY — the answer already
+        // streamed and must complete normally. No retry, no turn-state reset, no usage
+        // drop (the turn's own usage still gets persisted by the turn-end path).
         suspend fun compactForSilentOverflow(details: String): Boolean =
             runOverflowCompaction(details)
         while (!collectDone) {
@@ -490,15 +483,14 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             // [GH#521] Per-attempt phase clocks (see [StreamPhaseReport]).
             val streamPhase = StreamPhaseReport()
             try {
-                // [T-android-enhanced-cache] Per-turn stamp at the single
-                // choke point every request passes through; non-Anthropic
-                // providers ignore the cast.
+                // [T-android-enhanced-cache] Per-turn stamp at the single choke point every
+                // request passes through; non-Anthropic providers ignore the cast.
                 (currentProvider as? com.openminis.app.provider.anthropic.AnthropicProvider)
                     ?.enhancedCache = _enhancedCacheEnabled.value
-                // effectiveAgentHistory() prepends `<context-summary>` when
-                // a compact exists; raw agentHistory (zero-copy) otherwise.
-                // A Goal belongs to the session, not only to an explicit /goal
-                // resume run — read it every request so ordinary turns carry it.
+                // effectiveAgentHistory() prepends `<context-summary>` when a compact exists;
+                // raw agentHistory (zero-copy) otherwise. A Goal belongs to the session, not
+                // only to an explicit /goal resume run — read it every request so ordinary
+                // turns carry it.
                 val requestGoalState = withContext(Dispatchers.IO) {
                     goalManager.get(goalSessionId)
                 }
@@ -577,20 +569,30 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                             // thinking contributed 0 to the card's 时长).
                             startTimeMs = System.currentTimeMillis(),
                         ))
-                    } else {
-                        allToolBlocks[thinkIdx] = allToolBlocks[thinkIdx].copy(content = turnThinking.toString())
                     }
-                    uiBatcher.enqueue(assistantId, messageTextSnapshot(), true, allToolBlocks.toList())
+                    // [T-thinking-delta-ui-gate] The per-delta publish built an O(thinking)
+                    // string + an O(reply) snapshot + a full block-list copy at 50-200 deltas/s
+                    // — multi-MB/s of throwaway allocation on the collect thread before the
+                    // batcher even coalesced. The thinking tail is a human-cadence surface:
+                    // re-publish at ~100ms; the next non-thinking branch (text/tool flush) and
+                    // the final persist always carry the complete thinking regardless of this
+                    // gate.
+                    val nowThinkingMs = System.currentTimeMillis()
+                    if (nowThinkingMs - lastThinkingUiMs >= 100) {
+                        lastThinkingUiMs = nowThinkingMs
+                        if (thinkIdx >= 0) {
+                            allToolBlocks[thinkIdx] = allToolBlocks[thinkIdx].copy(content = turnThinking.toString())
+                        }
+                        uiBatcher.enqueue(assistantId, messageTextSnapshot(), true, allToolBlocks.toList())
+                    }
                     if (hasQueuedPromptDuringPureThinking(toolCalls, turnTextSb)) cutForQueuedPrompt("thinking-phase")
                 }
                 is LLMStreamChunk.Text -> {
-                    // [T-android-readaloud-stop-stale] First actual text of
-                    // this reply — stop the previous reply's Read Aloud so
-                    // old and new audio don't overlap. Deferred to here
-                    // rather than fired from send() on purpose: while the
-                    // model is still thinking there is nothing to supersede
-                    // the old speech with, so it keeps playing until real
-                    // new text arrives.
+                    // [T-android-readaloud-stop-stale] First actual text of this reply — stop
+                    // the previous reply's Read Aloud so old and new audio don't overlap.
+                    // Deferred to here rather than fired from send() on purpose: while the
+                    // model is still thinking there is nothing to supersede the old speech
+                    // with, so it keeps playing until real new text arrives.
                     if (!didStopStaleReadAloud) {
                         didStopStaleReadAloud = true
                         _stopStaleReadAloud.tryEmit(Unit)
@@ -598,21 +600,21 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     // Mark thinking block as done when text starts flowing
                     val thinkIdx = allToolBlocks.indexOfFirst { it.kind == "thinking" && it.id == "thinking_$turn" }
                     if (thinkIdx >= 0 && allToolBlocks[thinkIdx].toolStatus != ToolBlockStatus.SUCCESS) {
-                        // [P-process-card] Settle the thinking duration here:
-                        // first text after reasoning is the end of the thinking
-                        // phase, so now - startTimeMs is what the block ran for.
+                        // [P-process-card] Settle the thinking duration here: first text after
+                        // reasoning is the end of the thinking phase, so now - startTimeMs is
+                        // what the block ran for.
+                        materializeThinkingBlock()
                         allToolBlocks[thinkIdx] = allToolBlocks[thinkIdx].copy(
                             toolStatus = ToolBlockStatus.SUCCESS,
                             durationMs = settleThinkingDurationMs(allToolBlocks[thinkIdx]),
                         )
                     }
-                    // [T-stall-echo-strip] Route the delta through the echo
-                    // suppressor when the previous attempt stalled mid-stream:
-                    // the retried request carried a verbatim tail of the
-                    // already-shown text as a continuation seed, and echo-prone
-                    // models restate it before continuing. Empty output means
-                    // the delta is still aligned inside the seed (probe phase)
-                    // — hold every UI-side consumer until it resolves.
+                    // [T-stall-echo-strip] Route the delta through the echo suppressor when
+                    // the previous attempt stalled mid-stream: the retried request carried a
+                    // verbatim tail of the already-shown text as a continuation seed, and
+                    // echo-prone models restate it before continuing. Empty output means the
+                    // delta is still aligned inside the seed (probe phase) — hold every UI-side
+                    // consumer until it resolves.
                     val strippedDelta = stallEchoStripper?.feed(chunk.text) ?: chunk.text
                     if (strippedDelta.isEmpty() && stallEchoStripper != null) {
                         return@collect
@@ -621,24 +623,25 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     // overlay reads is taken by `messageTextSnapshot()`.
                     turnTextSb.append(strippedDelta)
                     activeRun?.streamRate?.onTextDelta() // [T-android-usage-tok-s]
-                    activeRun?.updateAssistantText(messageTextSnapshot())
-                    // Append to the trailing text block — or open a new one if the last
-                    // block isn't a text block (i.e. a tool call or thinking was in between).
-                    // This preserves the chronological interleaving of text and tool calls
-                    // across a single assistant turn. The block's `content` field stays
-                    // immutable String — we keep a parallel StringBuilder for the active
-                    // block and materialise via .toString() only on flush.
+                    // [T-thinking-delta-ui-gate] The ActiveRun text (stop-path rescue, session
+                    // preview) is a human-cadence surface: building the O(reply) snapshot per
+                    // delta was pure waste — it now rides the throttle gate below and the
+                    // pre-tool flush, both of which run at UI cadence.
+                    // Append to the trailing text block — or open a new one if the last block
+                    // isn't a text block (i.e. a tool call or thinking was in between). This
+                    // preserves the chronological interleaving of text and tool calls across a
+                    // single assistant turn. The block's `content` field stays immutable String
+                    // — we keep a parallel StringBuilder for the active block and materialise
+                    // via .toString() only on flush.
                     val lastIdx = allToolBlocks.lastIndex
                     val monolithic = currentProvider.streamTextIsMonolithic
                     val activeSb = if (monolithic && turnTextBlockIdx >= 0 && currentTextBlockSb != null) {
-                        // [T-android-tool-splits-reply-fix] Chat Completions
-                        // content is ONE string per response — a content
-                        // delta arriving after tool_calls deltas (qwen
-                        // chunking artifact) is still part of the same
-                        // pre-tool sentence. Merge it back instead of
-                        // fabricating a post-tool text block, which split
-                        // sentences mid-word in the chat UI. Scope: this
-                        // streamed response only (see turnTextBlockIdx).
+                        // [T-android-tool-splits-reply-fix] Chat Completions content is ONE
+                        // string per response — a content delta arriving after tool_calls deltas
+                        // (qwen chunking artifact) is still part of the same pre-tool sentence.
+                        // Merge it back instead of fabricating a post-tool text block, which
+                        // split sentences mid-word in the chat UI. Scope: this streamed response
+                        // only (see turnTextBlockIdx).
                         if (!loggedPostToolTextMerge &&
                             allToolBlocks.subList(turnTextBlockIdx + 1, allToolBlocks.size).any { it.kind == "tool_use" }
                         ) {
@@ -654,10 +657,9 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                         currentTextBlockSb!!.append(strippedDelta)
                         currentTextBlockSb!!
                     } else {
-                        // New text run — either first text after a tool_use/thinking
-                        // break, or first text in this turn. Open a fresh block AND
-                        // a fresh accumulator. The new block's content carries the
-                        // first delta verbatim; subsequent deltas append to the SB.
+                        // New text run — either first text after a tool_use/thinking break, or
+                        // first text in this turn. Open a fresh block AND accumulator; content
+                        // carries the first delta verbatim, subsequent deltas append to the SB.
                         val freshSb = StringBuilder(strippedDelta)
                         currentTextBlockSb = freshSb
                         val block = AssistantBlock(
@@ -666,12 +668,10 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                             content = strippedDelta,
                         )
                         if (monolithic) {
-                            // Single text block per response. If tool blocks
-                            // already arrived (content-after-tool_calls
-                            // chunking with no preface text), insert BEFORE
-                            // the first tool block of this turn so the
-                            // persisted order matches the canonical
-                            // {content, tool_calls} message shape.
+                            // Single text block per response. If tool blocks already arrived
+                            // (content-after-tool_calls chunking with no preface text), insert
+                            // BEFORE the first tool block of this turn so the persisted order
+                            // matches the canonical {content, tool_calls} message shape.
                             val firstToolIdx = (turnStartBlockIndex until allToolBlocks.size)
                                 .firstOrNull { allToolBlocks[it].kind == "tool_use" }
                             if (firstToolIdx != null) {
@@ -686,13 +686,11 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                         }
                         freshSb
                     }
-                    // T94 fix 2 + T256: tiered text-delta throttle. Mutate local
-                    // state every delta (above) so block boundaries stay correct
-                    // for ToolUseStart / ToolInputDelta which read allToolBlocks
-                    // directly. Only push to _messages when the length-aware gate
-                    // opens (or a newline lands during a short reply). Pending
-                    // text lives in `pendingChunkSb` so the stream-end final
-                    // flush at line ~3580 can drain it.
+                    // T94 fix 2 + T256: tiered text-delta throttle. Mutate local state every
+                    // delta (above) so block boundaries stay correct for ToolUseStart /
+                    // ToolInputDelta which read allToolBlocks directly. Only push to _messages
+                    // when the length-aware gate opens (or a newline lands during a short
+                    // reply); pending text lives in `pendingChunkSb` for the stream-end flush.
                     pendingChunkSb.append(strippedDelta)
                     val len = turnTextSb.length
                     val unflushed = len - lastFlushedLen
@@ -703,23 +701,21 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                         lastUiUpdateMs = nowMs
                         lastFlushedLen = len
                         pendingChunkSb.setLength(0)
-                        // Materialise SB → String for the active block's
-                        // content (so Compose sees an immutable snapshot); the
-                        // message body itself comes from
-                        // `messageTextSnapshot()`. Both are O(n) calls but
-                        // happen at throttled cadence, not per delta.
-                        // (activeSb === currentTextBlockSb by construction.)
+                        // Materialise SB → String for the active block's content (so Compose
+                        // sees an immutable snapshot); the message body comes from
+                        // `messageTextSnapshot()`. Both are O(n) but happen at throttled
+                        // cadence, not per delta. (activeSb === currentTextBlockSb by construction.)
                         materializeActiveTextBlock()
+                        activeRun?.updateAssistantText(messageTextSnapshot())
                         withContext(Dispatchers.Main) {
                             updateAssistantMessage(assistantId, messageTextSnapshot(), true, allToolBlocks)
                         }
                     }
                 }
                 is LLMStreamChunk.ToolUseStart -> {
-                    // [T-dedupe-toolcallid] Rewrite duplicate id ASAP — the
-                    // renamed value drives the AssistantBlock.id used by
-                    // ToolCallComplete / ToolInputDelta lookups and ends
-                    // up as the persisted tool_call_id on the next request.
+                    // [T-dedupe-toolcallid] Rewrite duplicate id ASAP — the renamed value
+                    // drives the AssistantBlock.id used by ToolCallComplete / ToolInputDelta
+                    // lookups and becomes the persisted tool_call_id on the next request.
                     val toolUseId = toolCallIdDedupe.startId(chunk.id)
                     android.util.Log.d("ToolChain[VM]", "[turn=$turn] ToolUseStart id=$toolUseId name=${chunk.name}")
                     // Mark thinking block as done when tool use starts
@@ -727,26 +723,26 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     if (thinkIdx >= 0 && allToolBlocks[thinkIdx].toolStatus != ToolBlockStatus.SUCCESS) {
                         // [P-process-card] Same settle as the text path: a tool
                         // call after reasoning also ends the thinking phase.
+                        materializeThinkingBlock()
                         allToolBlocks[thinkIdx] = allToolBlocks[thinkIdx].copy(
                             toolStatus = ToolBlockStatus.SUCCESS,
                             durationMs = settleThinkingDurationMs(allToolBlocks[thinkIdx]),
                         )
                     }
                     // T154: when the last few text deltas landed inside the 50ms throttle
-                    // window, the UI hadn't yet been pushed with the trailing text — and
+                    // window, the UI hadn't been pushed with the trailing text — and
                     if (turnTextSb.isNotEmpty() && pendingChunkSb.isNotEmpty()) {
                         pendingChunkSb.setLength(0)
                         lastUiUpdateMs = System.currentTimeMillis()
+                        activeRun?.updateAssistantText(messageTextSnapshot())
                         lastFlushedLen = turnTextSb.length
-                        // T307: pre-tool-use flush also materialises the
-                        // active text block + the message snapshot.
+                        // T307: pre-tool-use flush also materialises the active text block +
+                        // the message snapshot.
                         materializeActiveTextBlock()
-                        // [T-android-tool-splits-reply-fix] Ordered mode:
-                        // the tool block breaks the text run, so the next
-                        // text delta opens a new block. Monolithic mode
-                        // keeps the accumulator alive — same-response
-                        // content deltas arriving after tool_calls merge
-                        // back into the pre-tool text block instead.
+                        // [T-android-tool-splits-reply-fix] Ordered mode: the tool block breaks
+                        // the text run, so the next text delta opens a new block. Monolithic mode
+                        // keeps the accumulator alive — same-response content deltas arriving
+                        // after tool_calls merge back into the pre-tool text block instead.
                         if (!currentProvider.streamTextIsMonolithic) {
                             currentTextBlockSb = null
                         }
@@ -755,11 +751,10 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                         }
                         yield()
                     }
-                    // T256 tier 2: force the next ToolInputDelta to flush
-                    // immediately by zeroing both gate timestamps. iOS does the
-                    // same in .startToolUse (AIChatViewModel.swift:6075-6116) so
-                    // the user sees the pill name/title arrive without waiting
-                    // out the 1s/200ms gate.
+                    // T256 tier 2: zero both gate timestamps to force the next ToolInputDelta
+                    // to flush immediately. iOS does the same in .startToolUse
+                    // (AIChatViewModel.swift:6075-6116) so the pill name/title arrives without
+                    // waiting out the 1s/200ms gate.
                     lastFileToolInputMs = 0L
                     lastOtherToolInputMs = 0L
                     // Guard: only add if not already present (prevent duplicate blocks from repeated ToolUseStart)
@@ -784,11 +779,9 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     if (com.openminis.app.text.BoundedText.shouldLogLengthStride(deltaLen)) {
                         android.util.Log.d("ToolChain[VM]", "[turn=$turn] ToolInputDelta id=$toolInputId len=$deltaLen")
                     }
-                    // Maintain a per-tool ring of the most recent `accumulated`
-                    // snapshots so the preflight validator below can dump them
-                    // when an empty/invalid call is detected. Cheap (single
-                    // append + bounded trim) and lives outside any throttle so
-                    // every delta lands here.
+                    // Per-tool ring of the most recent `accumulated` snapshots so the
+                    // preflight validator below can dump them on an empty/invalid call. Cheap
+                    // (single append + bounded trim), outside any throttle so every delta lands.
                     val ring = toolInputChunkRings.getOrPut(toolInputId) { mutableListOf() }
                     ring.add(chunk.accumulated)
                     if (ring.size > ChatViewModel.TOOL_INPUT_CHUNK_RING_MAX) {
@@ -810,14 +803,12 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                             toolTitle = liveTitle,
                             content = "",
                         )
-                        // T256 tier 2: gate UI push by tool kind. file_write/file_edit
-                        // pump multi-KB JSON through the SSE — pushing every delta
-                        // pegs the UI thread for no readable benefit (the user can't
-                        // skim a partial JSON blob anyway). Mirrors iOS
-                        // AIChatViewModel.swift:6229-6259 (1s file / 200ms other).
-                        // Local state above is mutated unconditionally so when the
-                        // gate eventually opens — or ToolCallComplete force-flushes —
-                        // the latest accumulated args are pushed.
+                        // T256 tier 2: gate UI push by tool kind. file_write/file_edit pump
+                        // multi-KB JSON through the SSE — pushing every delta pegs the UI thread
+                        // for no readable benefit (the user can't skim a partial JSON blob anyway).
+                        // Mirrors iOS AIChatViewModel.swift:6229-6259 (1s file / 200ms other).
+                        // Local state above is mutated unconditionally so when the gate opens —
+                        // or ToolCallComplete force-flushes — the latest accumulated args push.
                         val toolName = prev.toolName
                         val isHeavyFileTool = toolName == "file_write" || toolName == "file_edit"
                         val gateMs = if (isHeavyFileTool) 1_000L else 200L
@@ -833,21 +824,18 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     }
                 }
                 is LLMStreamChunk.ToolCallComplete -> {
-                    // [T-android-duplicate-toolcall-replay] Record the RAW id
-                    // sighting BEFORE the renamer runs. An identical re-emission
-                    // (same raw id + name + serialized args) is flagged so the
-                    // dispatch loop refuses it; a same-id call with different
-                    // name/args is the documented gateway parallel case and
-                    // still dispatches under its renamed id.
-                    // [T-perf-async-db-init] args.toString() can be multi-KB
-                    // linear copy — run on Dispatchers.Default.
+                    // [T-android-duplicate-toolcall-replay] Record the RAW id sighting BEFORE
+                    // the renamer runs: an identical re-emission (same raw id + name + args) is
+                    // flagged so the dispatch loop refuses it; a same-id call with different
+                    // name/args is the documented gateway parallel case and still dispatches
+                    // under its renamed id. [T-perf-async-db-init] args.toString() can be a
+                    // multi-KB linear copy — run on Dispatchers.Default.
                     val argsString = StreamChunkJsonHelper.serializeArgs(chunk.args)
                     val isReplayedComplete = toolReplayGuard.registerAndCheckReplay(
                         chunk.id, chunk.name, argsString,
                     )
-                    // [T-dedupe-toolcallid] Rewrite duplicate id so the
-                    // persisted tool_calls list, the block lookup, and
-                    // the downstream tool-result join all key on the
+                    // [T-dedupe-toolcallid] Rewrite duplicate id so the persisted tool_calls
+                    // list, the block lookup and the downstream tool-result join all key on the
                     // same value (matches the rename applied at start).
                     val toolCompleteId = toolCallIdDedupe.completeId(chunk.id)
                     if (isReplayedComplete) {
@@ -873,10 +861,9 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                             toolTitle = title,
                             toolArgs = chunk.args.toString(),
                             content = "", // Clear ToolInputDelta JSON accumulation before real output arrives
-                            // [T-android-gemini3-thoughtsig / #179] Persist the
-                            // signature onto the block so buildTurnParts (the DB
-                            // path) round-trips it. Preserve any prior value if
-                            // this chunk lacked one.
+                            // [T-android-gemini3-thoughtsig / #179] Persist the signature onto
+                            // the block so buildTurnParts (the DB path) round-trips it; preserve
+                            // any prior value if this chunk lacked one.
                             thoughtSignature = chunk.thoughtSignature ?: allToolBlocks[idx].thoughtSignature,
                         )
                         uiBatcher.enqueue(assistantId, messageTextSnapshot(), true, allToolBlocks.toList())
@@ -918,11 +905,10 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     }
                 }
                 is LLMStreamChunk.ReasoningContent -> {
-                    // Opaque reasoning blob (DeepSeek/Kimi reasoning_content) — record
-                    // on the last assistant turn so it echoes back on the next request.
-                    // Empty strings are preserved (DeepSeek V4 emits "" on non-thinking
-                    // turns and we must round-trip exactly that). No live UI surface;
-                    // the thinking panel is driven by ThinkingDelta events above.
+                    // Opaque reasoning blob (DeepSeek/Kimi reasoning_content) — recorded on
+                    // the last assistant turn so it echoes back on the next request. Empty
+                    // strings preserved (DeepSeek V4 emits "" on non-thinking turns; round-trip
+                    // exactly). No live UI surface — ThinkingDelta events drive the panel.
                     turnReasoningBlob = chunk.content
                     // DeepSeek/Kimi emit opaque reasoning_content in the same window.
                     if (hasQueuedPromptDuringPureThinking(toolCalls, turnTextSb)) cutForQueuedPrompt("reasoning_content-phase")
@@ -942,10 +928,9 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     }
             }
                 }  // end collect
-                // [T-stall-echo-strip] Stream finished: resolve any seed-
-                // aligned bytes the stripper still holds (and its final echo
-                // determination) before the finalize snapshot below —
-                // otherwise a short resumed reply would never surface.
+                // [T-stall-echo-strip] Stream finished: resolve any seed-aligned bytes the
+                // stripper still holds (and its final echo determination) before the finalize
+                // snapshot below — otherwise a short resumed reply would never surface.
                 stallEchoStripper?.let { stripper ->
                     val tail = stripper.flush()
                     if (tail.isNotEmpty()) {
@@ -970,23 +955,29 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     }
                     stallEchoStripper = null
                 }
-                // T94 fix 2: flush any text that landed in the throttle
-                // window after the last UI tick. The retry-rollback /
-                // turn-finalize paths below assume _messages reflects all
-                // accumulated text-deltas, so we must not leave the last
-                // 0-50ms worth on the floor.
+                // T94 fix 2: flush text that landed in the throttle window after the last UI
+                // tick — the retry-rollback / turn-finalize paths below assume _messages
+                // reflects all accumulated text-deltas; don't leave the last 0-50ms on the floor.
                 if (pendingChunkSb.isNotEmpty()) {
                     pendingChunkSb.setLength(0)
-                    // T307: also flush the active text block's pending
-                    // tail and publish the message snapshot.
+                    // T307: also flush the active text block's pending tail + the snapshot.
                     materializeActiveTextBlock()
+                    activeRun?.updateAssistantText(messageTextSnapshot())
                     withContext(Dispatchers.Main) {
                         updateAssistantMessage(assistantId, messageTextSnapshot(), true, allToolBlocks)
                     }
+                } else {
+                    // [T-thinking-delta-ui-gate] No pending text, but the ActiveRun text may
+                    // still lag the throttle gate — the stop-path rescue and session preview
+                    // read it.
+                    activeRun?.updateAssistantText(messageTextSnapshot())
                 }
-                // T256: reset throttle bookkeeping for the next turn so the
-                // first delta of the next assistant message fires immediately
-                // rather than coalescing against this turn's stale baseline.
+                // [T-thinking-delta-ui-gate] The gated thinking publish can leave the block's
+                // content behind; the persist paths below read block.content — materialise
+                // the full thinking once at stream end.
+                materializeThinkingBlock()
+                // T256: reset throttle bookkeeping for the next turn so its first delta
+                // fires immediately rather than coalescing against this turn's baseline.
                 lastFlushedLen = 0
                 lastUiUpdateMs = 0L
                 lastFileToolInputMs = 0L
@@ -994,23 +985,20 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 collectDone = true
                 streamPhase.logSuccess(turn, activeSessionId, currentProvider.model.id)
                 com.openminis.app.agent.GenerationRunLifecycle.succeeded(context, generationRunId)
-                // [T-prompt-cache-warming] TTL bookkeeping for the warming hook
-                // (planner gates any actual warm; default OFF); captures the
-                // exact request shape so the warm replay hits the same entry.
+                // [T-prompt-cache-warming] TTL bookkeeping for the warming hook (planner gates
+                // any actual warm; default OFF); captures the exact request shape for replay.
                 PromptCacheWarmCoordinator.onStreamTurnSucceeded(
                     currentProvider, requestHistory, turnSystemPrompt, agentTools,
                     if (currentModelSupportsReasoning) _thinkingLevel.value else ThinkingLevel.OFF,
                     lastUsage, isBusy = { _isStreaming.value },
                 )
-                // [T-context-overflow-usage] Success-path overflow gate (pi
-                // isContextOverflow cases 2+3), two families with DIFFERENT
-                // recovery paths, matching pi exactly:
-                //  - TRUNCATED (length stop + zero output on a full window,
-                //    Xiaomi MiMo): no answer — compact once, re-dispatch (①).
-                //  - SILENT (natural stop + prompt side over the window, z.ai):
-                //    the answer DID stream — compact ONLY ("overflow is never
-                //    retried"), let the turn end with its streamed content;
-                //    touching turn state here would drop the user's answer.
+                // [T-context-overflow-usage] Success-path overflow gate (pi isContextOverflow
+                // cases 2+3), two families with DIFFERENT recovery paths, matching pi exactly:
+                //  - TRUNCATED (length stop + zero output on a full window, Xiaomi MiMo): no
+                //    answer — compact once, re-dispatch (①).
+                //  - SILENT (natural stop + prompt side over the window, z.ai): the answer DID
+                //    stream — compact ONLY ("overflow is never retried"), let the turn end with
+                //    its streamed content; touching turn state here would drop the user's answer.
                 val win = effectiveContextWindowTokens() ?: 0
                 val successOverflowKind = com.openminis.app.provider.ContextOverflowDetector.successfulOverflowKind(
                     finishReason = turnFinishReason,
@@ -1021,9 +1009,8 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 when (successOverflowKind) {
                     com.openminis.app.provider.ContextOverflowDetector.SuccessfulOverflowKind.TRUNCATED -> {
                         if (compactAndRetryForOverflow("truncation overflow on ${currentProvider.model.displayName} (usage=${lastUsage?.latestContextTokens ?: 0}, window=$win)")) {
-                            // [P0-fix] collectDone was already set above, so a bare
-                            // `continue` fell out of the exited while (two reviews);
-                            // re-arm the loop for the real retry.
+                            // [P0-fix] collectDone was already set above, so a bare `continue`
+                            // fell out of the exited while (two reviews); re-arm for the retry.
                             collectDone = false
                             continue
                         }
@@ -1035,8 +1022,8 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     }
                     null -> {}
                 }
-                // [T-stall-resume] The stream attempt succeeded — no resume
-                // context should leak into a later turn.
+                // [T-stall-resume] The stream attempt succeeded — no resume context may leak
+                // into a later turn.
                 stallResumeContext = null
                 // Stream completed without error — clear any lingering retry UI state.
                 if (_autoRetryAttempt.value != 0 || _autoRetryCountdown.value != 0) {
@@ -1075,20 +1062,18 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 // compaction branch — the exclusion table vetoes rate-limit text (LoopErrorGate).
                 val isTransient = com.openminis.app.agent.LoopErrorGate.isTransient(actual, is5xx, isPermanentCapacity)
                 val isContextOverflow = com.openminis.app.agent.LoopErrorGate.isContextOverflow(actual)
-                // [T-compact-on-context-overflow] Compaction triggered by the
-                // provider's own context verdict (shared with the success gate).
+                // [T-compact-on-context-overflow] Compaction triggered by the provider's own
+                // context verdict (shared with the success gate).
                 if (isContextOverflow && compactAndRetryForOverflow("${currentProvider.model.displayName}: ${actual.message?.take(160) ?: actual.javaClass.simpleName}")) {
                     continue  // retry on same provider with compacted history
                 }
                 // Compaction failed or cap spent — fall through to fallback/throw.
-                // [T-android-model-switch-midrun-adopt] No abandon here: the
-                // adoption at the top of the loop already moved onto the
-                // user's pick, so this retry goes out on it.
+                // [T-android-model-switch-midrun-adopt] No abandon here: the adoption at the
+                // top of the loop already moved onto the user's pick, so this retry goes out on it.
                 val maxRetries = effectiveMaxRetries()
-                // 429 with another group member: switch endpoints instead of
-                // hammering the same key through 1/2/4/8/16s (inside a typical
-                // 60s relay window). Same-provider retries remain for network
-                // / 5xx, and for 429 when this is the last candidate — at most once.
+                // 429 with another group member: switch endpoints instead of hammering the
+                // same key through 1/2/4/8/16s (inside a typical 60s relay window). Same-provider
+                // retries remain for network/5xx, and for 429 when this is the last candidate.
                 val skipSameProviderRetry = (isRateLimit && remainingFallbacks.isNotEmpty()) || isPermanentCapacity
                 val sameProviderBudget = if (isRateLimit) minOf(maxRetries, 1) else maxRetries
                 if (isTransient && !skipSameProviderRetry && sameProviderBudget > 0 && retryAttempt < sameProviderBudget) {
@@ -1119,56 +1104,54 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     withContext(Dispatchers.Main) {
                         clearInlineError()
                     }
-                    // Roll back partial blocks from the failed stream attempt so the retried
-                    // stream's deltas don't double-append; turns before the bound survive.
+                    // Roll back partial blocks from the failed attempt so the retried stream's
+                    // deltas don't double-append; turns before the bound survive.
                     if (allToolBlocks.size > turnStartBlockIndex) {
                         while (allToolBlocks.size > turnStartBlockIndex) {
                             allToolBlocks.removeAt(allToolBlocks.size - 1)
                         }
-                        // [T-android-fallback-text-rewind] Keep this turn's already-
-                        // streamed text on screen across the rollback: accumulatedText
-                        // only folds in turnTextSb after the while loop completes, so
-                        // bare accumulatedText would visibly rewind what the user read.
-                        // The next attempt streams into a fresh turnTextSb and re-
-                        // publishes `accumulatedText + newTurnText` (no duplication).
+                        // [T-android-fallback-text-rewind] Keep this turn's already-streamed
+                        // text on screen across the rollback: accumulatedText only folds in
+                        // turnTextSb after the while loop completes, so bare accumulatedText
+                        // would visibly rewind what the user read; the next attempt streams
+                        // into a fresh turnTextSb and re-publishes `accumulatedText + newTurnText`.
                         withContext(Dispatchers.Main) {
                             updateAssistantMessage(assistantId, messageTextSnapshot(), true, allToolBlocks)
                         }
                     }
                     // T307: SB-based per-turn accumulators reset.
-                    // [T-stall-resume] Capture the partial text BEFORE the reset:
-                    // a mid-stream stall (stalledAfterFirstEvent) carries the
-                    // already-produced text into the retried request so the model
-                    // continues instead of regenerating from scratch.
+                    // [T-stall-resume] Capture the partial text BEFORE the reset: a mid-stream
+                    // stall (stalledAfterFirstEvent) carries the already-produced text into
+                    // the retried request so the model continues, not regenerates.
                     if ((actual as? com.openminis.app.data.model.LLMError.TransientError)?.stalledAfterFirstEvent == true) {
                         val partial = turnTextSb.toString()
                         stallResumeContext = com.openminis.app.provider.StallResume.note(partial)
-                        // [T-stall-echo-strip] Arm the echo suppressor for the
-                        // retried attempt. The seed must be the exact bytes the
-                        // note embeds — StallResume.tail is the single source.
+                        // [T-stall-echo-strip] Arm the echo suppressor for the retried attempt;
+                        // the seed must be the exact bytes the note embeds (StallResume.tail).
                         stallEchoStripper = com.openminis.app.provider.StallEchoStripper(
                             com.openminis.app.provider.StallResume.tail(partial),
                         )
                     }
                     turnTextSb.setLength(0)
                     currentTextBlockSb = null
-                    // [T-android-tool-splits-reply-fix] The tracked turn
-                    // text block was just rolled back with the rest of
-                    // this turn's partial blocks.
+                    // [T-android-tool-splits-reply-fix] The tracked turn text block was just
+                    // rolled back with the rest of this turn's partial blocks.
                     turnTextBlockIdx = -1
                     turnThinking.clear()
+                    // [T-reasoning-blob-per-attempt] The dead attempt's reasoning echo must not
+                    // survive onto the retried turn — a fallback on a non-reasoning provider
+                    // would replay attempt 1's reasoning_content verbatim.
+                    turnReasoningBlob = null
                     toolCalls.clear()
                     toolCallSignatures.clear()  // [T-android-gemini3-thoughtsig / #179]
-                    // [T-android-duplicate-toolcall-replay] Reset replay
-                    // bookkeeping with the dispatch list: the retried attempt
-                    // re-streams into an empty toolCalls, so raw-id sightings
-                    // from the dead attempt must not refuse the fresh ones.
+                    // [T-android-duplicate-toolcall-replay] Reset replay bookkeeping with the
+                    // dispatch list: the retried attempt re-streams into an empty toolCalls, so
+                    // dead-attempt raw-id sightings must not refuse the fresh ones.
                     toolReplayGuard.reset()
                     replayRenamedIds.clear()
-                    // T94 fix 2 + T256: throttle bookkeeping is per-stream
-                    // attempt; reset alongside the partial-block rollback so
-                    // the next attempt's first delta fires through immediately
-                    // rather than coalescing against stale baselines.
+                    // T94 fix 2 + T256: throttle bookkeeping is per-stream attempt; reset with
+                    // the partial-block rollback so the next attempt's first delta fires
+                    // immediately rather than coalescing against stale baselines.
                     pendingChunkSb.setLength(0)
                     lastUiUpdateMs = 0L
                     lastFlushedLen = 0
@@ -1209,12 +1192,10 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     currentProvider = next
                     triedEntryIds.add(nextCandidate.entryId)
                     retryAttempt = 0
-                    // [T-android-model-switch-midrun-adopt] The run stays on
-                    // `next` for the rest of THIS request, but persisting it
-                    // when the user picked another model mid-stream would
-                    // clobber that pick and leave the adoption at the top of
-                    // the loop with nothing to adopt. The old code wrote
-                    // unconditionally.
+                    // [T-android-model-switch-midrun-adopt] The run stays on `next` for the
+                    // rest of THIS request, but persisting when the user picked another model
+                    // mid-stream would clobber that pick and leave the top-of-loop adoption
+                    // with nothing to adopt (the old code wrote unconditionally).
                     if (ModelSwitchGate.mayWriteBack(loopModelEpoch, snapshotModelSelectionEpoch())) {
                         persistFallbackModelSelection(next, nextCandidate.entryId, isRealModelChange)
                     } else {
@@ -1233,28 +1214,28 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                         toolTitle = "Switched model",
                         toolStatus = ToolBlockStatus.SUCCESS,
                     ))
-                    // [T-android-fallback-text-rewind] Same as the retry-rollback
-                    // path above: preserve this turn's streamed text on screen while
-                    // we switch providers — accumulatedText hasn't folded turnTextSb
-                    // in yet, so the new provider streams into a fresh turnTextSb
-                    // and re-publishes `accumulatedText + newTurnText`.
+                    // [T-android-fallback-text-rewind] Same as the retry-rollback path above:
+                    // preserve this turn's streamed text on screen while switching providers —
+                    // accumulatedText hasn't folded turnTextSb in yet, so the new provider
+                    // streams into a fresh turnTextSb and re-publishes `accumulatedText + newTurnText`.
                     withContext(Dispatchers.Main) {
                         updateAssistantMessage(assistantId, messageTextSnapshot(), true, allToolBlocks)
                     }
                     // Reset turn state for retry with new provider
                     turnTextSb.setLength(0)
                     currentTextBlockSb = null
-                    // [T-android-tool-splits-reply-fix] Fresh stream from a
-                    // different provider — and the add(0, info) above
-                    // shifted every block index anyway.
+                    // [T-android-tool-splits-reply-fix] Fresh stream from a different provider
+                    // — and the add(0, info) above shifted every block index anyway.
                     turnTextBlockIdx = -1
                     turnThinking.clear()
+                    // [T-reasoning-blob-per-attempt] Same contract as the same-provider retry
+                    // above: the fallback provider owns the reasoning field now.
+                    turnReasoningBlob = null
                     toolCalls.clear()
                     toolCallSignatures.clear()  // [T-android-gemini3-thoughtsig / #179]
-                    // [T-android-duplicate-toolcall-replay] Reset replay
-                    // bookkeeping with the dispatch list: the retried attempt
-                    // re-streams into an empty toolCalls, so raw-id sightings
-                    // from the dead attempt must not refuse the fresh ones.
+                    // [T-android-duplicate-toolcall-replay] Reset replay bookkeeping with the
+                    // dispatch list: the retried attempt re-streams into an empty toolCalls, so
+                    // dead-attempt raw-id sightings must not refuse the fresh ones.
                     toolReplayGuard.reset()
                     replayRenamedIds.clear()
                     // loop continues — will retry collect with currentProvider
@@ -1425,13 +1406,27 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 )
                 goalContinuations++
                 AppLogger.info(ChatViewModel.TAG_STREAM, "Goal auto-continuation $goalContinuations/${ChatViewModel.MAX_GOAL_CONTINUATIONS} (session=$goalSessionId)")
+                // [T-nudge-turn-cap-guard] Same contract as the P2-2 steering
+                // guard: a continuation needs a dispatch slot left. Riding a
+                // nudge into the cap falls out of `for (turn in 0 until
+                // maxTurns)` into the runaway finalize ("kept calling tools
+                // without finishing") even though the model had stopped
+                // cleanly — end the run naturally instead.
+                if (turn >= maxTurns - 1) { loopExitedNormally = true; break }
                 continue
             }
         }
 
         // [T-plan-close-nudge] Natural turn end with an unreconciled board leaves the Goal ACTIVE forever.
         when (nudgePlanBoardCloseFor(toolCalls.isEmpty(), goalSessionId, planCloseNudges, allToolBlocks, turnStartBlockIndex, allToolInputs, lastUsage, turnReasoningContent, turnThinkingLevel, accumulatedText, activeRun)) {
-            PlanBoardCloseResult.NUDGED -> { planCloseNudges++; continue }
+            PlanBoardCloseResult.NUDGED -> {
+                planCloseNudges++
+                // [T-nudge-turn-cap-guard] Same cap contract as the goal
+                // continuation above: no dispatch slot left → natural end,
+                // not the runaway finalize.
+                if (turn >= maxTurns - 1) { loopExitedNormally = true; break }
+                continue
+            }
             PlanBoardCloseResult.STOPPED -> { loopExitedNormally = true; break }
             PlanBoardCloseResult.NONE -> {}
         }
@@ -1501,6 +1496,9 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     "sub-agent collect nudge $subAgentCollectNudges/${ChatViewModel.MAX_SUBAGENT_COLLECT_NUDGES} " +
                         "(session=$goalSessionId, dispatches=${pending.size})",
                 )
+                // [T-nudge-turn-cap-guard] Same cap contract as the goal
+                // continuation / plan-board nudge above.
+                if (turn >= maxTurns - 1) { loopExitedNormally = true; break }
                 continue
             }
         }

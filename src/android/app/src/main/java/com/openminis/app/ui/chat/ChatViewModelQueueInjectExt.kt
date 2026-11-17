@@ -1,6 +1,7 @@
 package com.openminis.app.ui.chat
 
 import android.util.Log
+import com.openminis.app.R
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
@@ -18,6 +19,12 @@ internal suspend fun ChatViewModel.injectQueuedPromptsAsNewTurn(
     // — see the note there for why a read-then-clear lost prompts (and re-sent
     // drained ones) across the Main/IO boundary.
     val queued = claimPromptQueue() ?: return null
+    // [T-android-queue-atomic-mutation] The claim ALREADY emptied the queue:
+    // any exception between here and the placeholder removal would silently
+    // swallow the user's words (the dashed placeholders would stay forever).
+    // Catch, surface honestly, drop the stale placeholders — the prompts are
+    // NOT restored (retrying a throwing prepare would loop forever).
+    try {
 
     // [T-android-queued-message-duplicated-on-inject] REMOVE the queued
     // placeholder bubbles (the ones enqueuePrompt added with
@@ -55,13 +62,30 @@ internal suspend fun ChatViewModel.injectQueuedPromptsAsNewTurn(
     prepared.attachedFilesXml?.let { combinedParts.add(AgentContentPart.Text(it)) }
 
     // Guard: every queued prompt produced no content (no text, no
-    // image). An empty user msg is a 400 from every provider. Skip —
-    // the caller falls through to a normal next-turn dispatch so the
-    // loop doesn't spin.
+    // image). An empty user msg is a 400 from every provider.
+    //
+    // [T-android-queue-empty-claims-honest] The CAS claim above ALREADY
+    // emptied the queue, so "skip — the caller falls through to a normal
+    // next-turn dispatch" was wishful thinking: there was nothing left to
+    // dispatch, the user's queued words were silently lost, and the dashed
+    // placeholder bubbles stayed in the transcript forever
+    // (msgsAfterUnqueue was computed but never committed). Surface the loss
+    // honestly: drop the stale placeholders and show an inline error.
+    // Re-queueing would loop forever — revoked attachment URIs fail
+    // deterministically.
     if (combinedParts.isEmpty()) {
         AppLogger.warning(
             ChatViewModel.TAG_STREAM,
-            "injectQueuedPromptsAsNewTurn: ${queued.size} queued prompt(s) produced no content, skipping",
+            "injectQueuedPromptsAsNewTurn: ${queued.size} queued prompt(s) produced no content, dropping honestly",
+        )
+        withContext(Dispatchers.Main.immediate) {
+            val queuedIds = queued.map { it.id }.toSet()
+            _messages.value = _messages.value.filterNot { m ->
+                m.queuedPromptId != null && queuedIds.contains(m.queuedPromptId)
+            }
+        }
+        setInlineError(
+            context.getString(R.string.queue_dropped_no_content),
         )
         return null
     }
@@ -193,6 +217,27 @@ internal suspend fun ChatViewModel.injectQueuedPromptsAsNewTurn(
             "finishedId=$finishedAssistantId newId=$newAssistantId",
     )
     return ChatViewModel.InjectedTurn(newAssistantId)
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        // [T-android-queue-atomic-mutation] The claim already emptied the
+        // queue — an exception here (prepareUserAttachments on a broken URI,
+        // a DB write failure) must not silently swallow the user's words and
+        // leave the dashed placeholders forever. Drop the placeholders and
+        // surface the loss; do NOT re-queue (a throwing prepare would loop).
+        AppLogger.error(
+            ChatViewModel.TAG_STREAM,
+            "injectQueuedPromptsAsNewTurn failed after claim: ${e.javaClass.simpleName}: ${e.message}",
+        )
+        withContext(Dispatchers.Main.immediate) {
+            val queuedIds = queued.map { it.id }.toSet()
+            _messages.value = _messages.value.filterNot { m ->
+                m.queuedPromptId != null && queuedIds.contains(m.queuedPromptId)
+            }
+        }
+        setInlineError(context.getString(R.string.queue_dropped_no_content))
+        return null
+    }
 }
 
 /**

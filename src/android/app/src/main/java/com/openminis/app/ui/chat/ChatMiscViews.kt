@@ -2,7 +2,8 @@ package com.openminis.app.ui.chat
 
 // [T-android-split-chat] Tail composables extracted verbatim from ChatScreen.kt:
 // BorderedMarkdownTable, FallbackInfoBlock, CompactSummarySheet,
-// parseInlineMarkdown, rememberBrowserLiveSnapshot, ResumeBanner, SwipeToSendHint.
+// parseInlineMarkdown, rememberBrowserLiveSnapshot, ResumeBanner.
+// SwipeToSendHint moved on to ChatMiscViewsParts.kt (architecture ceiling).
 // Imports trimmed after ChatScreen.kt split. Externally
 // called ones flipped private->internal; cluster-only ones stay private.
 
@@ -33,10 +34,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.CloseFullscreen
@@ -67,13 +66,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -81,7 +77,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -676,7 +671,14 @@ internal val LocalBrowserTabPool = compositionLocalOf<com.openminis.app.browser.
 @Composable
 internal fun rememberBrowserLiveSnapshot(
     block: AssistantBlock,
-    intervalMs: Long = 3000L,
+    // [T-browser-preview-cadence] 3s → 10s. captureLiveSnapshot() draws the
+    // full agent-viewport WebView onto a fresh ARGB_8888 bitmap ON the main
+    // thread (BrowserUseManager.captureWebViewBitmap runs withContext(Main)),
+    // so the old 3s cadence paid that draw 20×/min while the detail sheet was
+    // merely open — and kept doing it while the app was backgrounded with the
+    // sheet composed. 10s still keeps the preview visibly live (it mirrors
+    // navigation within a couple of polls) at a third of the cost.
+    intervalMs: Long = 10_000L,
 ): android.graphics.Bitmap? {
     if (block.toolName != "browser_use") return null
     val isLive = block.toolStatus == ToolBlockStatus.RUNNING ||
@@ -689,15 +691,28 @@ internal fun rememberBrowserLiveSnapshot(
     // browserSnapshot on imageFilePath change, achieving the same result).
     if (!isLive) return null
     val tabPool = LocalBrowserTabPool.current ?: return null
+    // [T-browser-preview-cadence] Cheapest correct visibility gate: the
+    // hosting window's lifecycle, checked per tick. The card has no
+    // onVisible/onDispose signal of its own (it is plain detail-sheet
+    // content), but `while(true)` above used to capture even while the app
+    // was backgrounded with the sheet still composed. Skipping when the host
+    // is not RESUMED pauses the loop's captures entirely — no main-thread
+    // draw, no bitmap — while staying correct on resume (the next tick
+    // captures the then-current page). Plain lifecycle read per tick: no
+    // extra coroutine, no state writes, no recomposition.
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
     val snapshot by produceState<android.graphics.Bitmap?>(
         initialValue = null,
         block.id,
         tabPool,
     ) {
-        val first = tabPool.activeManager?.captureLiveSnapshot()
-        if (first != null) value = first
+        if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) {
+            val first = tabPool.activeManager?.captureLiveSnapshot()
+            if (first != null) value = first
+        }
         while (true) {
             kotlinx.coroutines.delay(intervalMs)
+            if (!lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) continue
             val next = tabPool.activeManager?.captureLiveSnapshot() ?: continue
             value = next
         }
@@ -780,102 +795,6 @@ internal fun ResumeBanner(onResume: () -> Unit) {
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White,
-            )
-        }
-    }
-}
-
-/// Floating "send arrow + Release to send capsule" hint shown while the
-/// user is dragging the input bar upward to send. Mirrors iOS
-/// `SwipeToSendHint` in AIChatView.swift. Reuses `ChatColors.sendButton` /
-/// `ChatColors.background` for theme-aware contrast (auto-inverts in dark
-/// mode without needing a separate palette).
-///
-/// - `progress` 0..1: drag distance as a fraction of the trigger threshold.
-///   Arrow opacity = `min(1, progress * 1.4)`. Capsule opacity ramps in over
-///   the band `[armFraction - 0.4, armFraction]` so it reaches full opacity
-///   exactly at the haptic / arming point.
-/// - `armFraction`: progress at which release fires send (default 0.8 in
-///   the caller, matching iOS).
-/// - `location`: live fingertip position in the wrapping Box's local px.
-///   Hint sits `hoverAbovePx` above this point, ~one thumb-tip away.
-/// - `arrowHalfPx`: half the rendered arrow size, used to center the
-///   arrow on the fingertip's X.
-@Composable
-internal fun SwipeToSendHint(
-    progress: Float,
-    armFraction: Float,
-    location: Offset,
-    hoverAbovePx: Float,
-    arrowHalfPx: Float,
-    /** When true, the capsule advertises "Release to queue" instead of
-     *  "Release to send" — used while the agent is mid-stream, when the
-     *  gesture routes through `enqueuePrompt()` instead of an immediate
-     *  send. Lets the user see the gesture still works mid-stream. */
-    isEnqueue: Boolean = false,
-) {
-    if (progress <= 0f) return
-    val palette = ChatColors
-    val chipBg = palette.sendButton
-    val chipFg = palette.background
-    // Capsule full opacity at `armFraction`. Linear from
-    // `armFraction - 0.4` -> `armFraction`.
-    val capsuleStart = (armFraction - 0.4f).coerceAtLeast(0f)
-    val capsuleSpan = (armFraction - capsuleStart).coerceAtLeast(0.0001f)
-    val capsuleAlpha = ((progress - capsuleStart) / capsuleSpan).coerceIn(0f, 1f)
-    val rootAlpha = (progress * 1.4f).coerceIn(0f, 1f)
-    val scale = 0.9f + 0.18f * progress
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val xDp = with(density) { (location.x - arrowHalfPx).toDp() }
-    val yDp = with(density) { (location.y - hoverAbovePx - arrowHalfPx).toDp() }
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        modifier = Modifier
-            .offset(x = xDp, y = yDp)
-            .graphicsLayer {
-                alpha = rootAlpha
-                scaleX = scale
-                scaleY = scale
-                transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
-            },
-    ) {
-        // Send arrow disc — paints the same circle background + inverted
-        // arrow as the real send button so the gesture reads as "drag the
-        // message up to send".
-        Box(
-            modifier = Modifier
-                .size(34.dp)
-                .background(chipBg, CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Default.ArrowUpward,
-                contentDescription = null,
-                tint = chipFg,
-                modifier = Modifier.size(18.dp),
-            )
-        }
-        // "Release to send" capsule — same height as the disc, opacity
-        // ramps in over the second half of the drag so it doubles as a
-        // "you're almost there" confirmation cue.
-        Box(
-            modifier = Modifier
-                .height(34.dp)
-                .background(chipBg, RoundedCornerShape(50))
-                .padding(horizontal = 14.dp)
-                .graphicsLayer { alpha = capsuleAlpha },
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = stringResource(
-                    if (isEnqueue) R.string.composer_swipe_release_to_queue
-                    else R.string.composer_swipe_release_to_send,
-                ),
-                color = chipFg,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold,
             )
         }
     }

@@ -77,9 +77,7 @@ class OutwardPacing(private val random: (Long, Long) -> Long) {
         const val WINDOW_MS = 30 * 60_000L
 
         /**
-         * The configurable outward-keyword table. A call is "outward" when any keyword appears
-         * (case-insensitive substring) in the tool name or in the `text` argument - the
-         * natural-language payload ui_action types into an app: send / submit / post / reply /
+         * The configurable outward-keyword table. Keywords: send / submit / post / reply /
          * publish / comment / follow and their Chinese counterparts. Add entries here to
          * configure; keeping it a substring match is deliberate (covers "resend", "提交表单"...).
          */
@@ -88,14 +86,45 @@ class OutwardPacing(private val random: (Long, Long) -> Long) {
             "发送", "提交", "发布", "评论", "回复", "关注", "打招呼", "投递",
         )
 
+        /**
+         * [T-outward-tool-scoped] Tools that are outward BY NAME: every call
+         * transmits something toward the outside world (a message, a share, an
+         * Intent handed to another app). Always paced, regardless of payload.
+         */
+        val OUTWARD_TOOLS: Set<String> = setOf(
+            "sms_send", "notification_reply", "share_to_app", "app_send_intent",
+        )
+
+        /**
+         * [T-outward-tool-scoped] The text-transmitting category: tools that
+         * type/share text INTO the target app, where the `text` payload IS the
+         * outward content (the DSH semantics the payload matching was written
+         * for). Keyword matching against the payload applies ONLY to these —
+         * an arbitrary tool's text argument (clipboard_set "please submit the
+         * form") never triggers pacing.
+         */
+        val TEXT_TRANSMITTING_TOOLS: Set<String> = setOf("ui_action", "virtual_screen") + OUTWARD_TOOLS
+
         /** Args fields (first present wins) whose string value names the target app for pacing. */
         val APP_KEYS = listOf("package", "packageName", "appId", "app", "targetApp")
 
-        /** True when [tool] or its `text` argument matches the outward keyword table. */
+        /**
+         * [T-outward-tool-scoped] True when the tool is outward:
+         *  (a) the tool names a dedicated [OUTWARD_TOOLS] entry, or
+         *  (b) the TOOL NAME (not the payload) contains a keyword and the tool
+         *      is in the [TEXT_TRANSMITTING_TOOLS] category, or
+         *  (c) the tool is a payload-typing tool and its `text` argument
+         *      contains a keyword — the payload is what gets typed into the
+         *      target app, so it is the outward content.
+         * Arbitrary text payload content never matches on its own.
+         */
         fun isOutward(tool: String, args: JsonObject): Boolean {
             val toolName = tool.lowercase()
+            if (toolName in OUTWARD_TOOLS) return true
+            if (toolName !in TEXT_TRANSMITTING_TOOLS) return false
+            if (KEYWORDS.any { toolName.contains(it) }) return true
             val text = (args["text"] as? JsonPrimitive)?.content?.lowercase().orEmpty()
-            return KEYWORDS.any { toolName.contains(it) || text.contains(it) }
+            return KEYWORDS.any { text.contains(it) }
         }
 
         /** Target-app pacing key taken from the args, or null when the caller falls back to the session key. */

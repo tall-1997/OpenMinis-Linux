@@ -150,8 +150,16 @@ object ApprovalGate {
         val detail = approvalDetails[id] ?: return false
         if (sessionId != null && detail.sessionId != sessionId) return false
         val flow = pending[id] ?: return false
+        // [T-approval-gate-ce-rethrow] Catch order matters:
+        // TimeoutCancellationException IS a CancellationException, so the
+        // timeout branch must come first (deny + false). A plain
+        // CancellationException, though, is the caller's job being cancelled —
+        // the user pressed Stop — and must REJECT the deny: swallowing it
+        // fabricated a user decision ("denied") and persisted it for a request
+        // the user never answered.
         return try { withTimeout(TIMEOUT_MS) { flow.first { it != null } == true } }
         catch (_: TimeoutCancellationException) { deny(id, sessionId); false }
+        catch (e: kotlinx.coroutines.CancellationException) { throw e }
         catch (_: Exception) { deny(id, sessionId); false }
     }
 

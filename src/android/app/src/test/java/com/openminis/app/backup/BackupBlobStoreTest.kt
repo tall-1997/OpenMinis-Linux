@@ -154,4 +154,28 @@ class BackupBlobStoreTest {
             BackupBlobStore.sha256OfFile(f),
         )
     }
+
+    /**
+     * [T-backup-decode-honesty] An unreadable credential store is recorded as a
+     * skip through the SAME accounting as a size-cap skip, so the run lands as
+     * "completed with issues" naming the omission instead of packaging as a
+     * clean success that silently left every provider signed out.
+     */
+    @Test
+    fun `recordSkip counts an external omission like a size-cap skip`() {
+        val store = BackupBlobStore(staging, maxFileBytes = null)
+        assertEquals(0, store.skippedFiles)
+
+        store.recordSkip("secrets/oauth_prefs (oauth token store unreadable)")
+        assertEquals(1, store.skippedFiles)
+        assertEquals(0L, store.skippedBytes)
+        assertEquals("secrets/oauth_prefs (oauth token store unreadable)", store.skippedPaths.single().path)
+
+        // A skip is what makes the summary honest: skippedFiles > 0 is exactly
+        // the condition the history record maps to COMPLETED_WITH_ISSUES.
+        store.recordSkip("secrets/another", size = 128)
+        assertEquals(2, store.skippedFiles)
+        assertEquals(128L, store.skippedBytes)
+        assertEquals(2, store.skippedPaths.size)
+    }
 }

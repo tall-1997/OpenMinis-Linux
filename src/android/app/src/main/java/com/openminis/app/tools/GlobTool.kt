@@ -14,8 +14,8 @@ import java.io.File
  */
 object GlobTool {
     const val NAME = "glob"
-    private const val MAX_HITS = 500
-    private const val MAX_WALK = 4_000
+    internal const val MAX_HITS = 500
+    internal const val MAX_WALK = 4_000
 
     fun definition(): AgentToolDefinition = AgentToolDefinition(
         name = NAME,
@@ -39,38 +39,75 @@ object GlobTool {
             val root = PRootKernel.resolveSessionHostPath(sessionId, path, context)
                 ?: return ToolExecutionResult("Error: Cannot resolve path: $path", false, toolTitle = toolTitle)
             if (!root.exists()) return ToolExecutionResult("Error: not found: $path", false, toolTitle = toolTitle)
-            val regex = globToRegex(pattern)
-            val hits = mutableListOf<File>()
-            var walked = 0
-            fun walk(dir: File) {
-                if (walked > MAX_WALK || hits.size >= MAX_HITS) return
-                val kids = dir.listFiles() ?: return
-                for (f in kids) {
-                    walked++
-                    if (f.name.startsWith(".git")) continue
-                    val rel = f.relativeTo(root).path.replace('\\', '/')
-                    if (f.isFile && regex.matches(rel)) hits += f
-                    if (f.isDirectory) walk(f)
-                    if (hits.size >= MAX_HITS) return
-                }
-            }
-            if (root.isFile) {
-                if (regex.matches(root.name)) hits += root
-            } else {
-                walk(root)
-            }
-            val sorted = hits.sortedByDescending { it.lastModified() }.take(MAX_HITS)
-            val body = buildString {
-                append("${sorted.size} files for $pattern under $path\n")
-                for (f in sorted) {
-                    val rel = if (root.isDirectory) f.relativeTo(root).path.replace('\\', '/') else f.name
-                    append(rel)
-                    append('\n')
-                }
-            }
-            ToolExecutionResult(body, true, toolTitle = toolTitle)
+            ToolExecutionResult(walkAndReport(root, pattern, path), true, toolTitle = toolTitle)
         } catch (e: Exception) {
             ToolExecutionResult("Error glob: ${e.message}", false, toolTitle = toolTitle)
+        }
+    }
+
+    /**
+     * Walk + report core, extracted from [execute] so a plain-JVM test can
+     * drive real directories without PRootKernel/Context.
+     *
+     * [T-glob-coverage-note] Matches found once the hit cap is full are
+     * COUNTED, not dropped silently: the walk keeps running (name matching
+     * only — no content reads, same cost class as before) so the result can
+     * say "first 500 of N" the way GrepStreamScan reports its match cap,
+     * instead of leaving the model to guess what it never saw. A walk-budget
+     * stop is reported too — every count is then a lower bound, and the model
+     * must know coverage is partial rather than read "500 files" as "all".
+     */
+    internal fun walkAndReport(root: File, pattern: String, path: String): String {
+        val regex = globToRegex(pattern)
+        val hits = mutableListOf<File>()
+        var walked = 0
+        var overflow = 0
+        var walkCapped = false
+        fun walk(dir: File) {
+            if (walked > MAX_WALK) {
+                walkCapped = true
+                return
+            }
+            val kids = dir.listFiles() ?: return
+            for (f in kids) {
+                walked++
+                if (walked > MAX_WALK) {
+                    walkCapped = true
+                    return
+                }
+                if (f.name.startsWith(".git")) continue
+                val rel = f.relativeTo(root).path.replace('\\', '/')
+                if (f.isFile && regex.matches(rel)) {
+                    if (hits.size < MAX_HITS) hits += f else overflow++
+                }
+                if (f.isDirectory) walk(f)
+            }
+        }
+        if (root.isFile) {
+            if (regex.matches(root.name)) hits += root
+        } else {
+            walk(root)
+        }
+        val sorted = hits.sortedByDescending { it.lastModified() }.take(MAX_HITS)
+        return buildString {
+            append("${sorted.size} files for $pattern under $path")
+            // Cap reached → say so with the real total (GrepStreamScan's
+            // "(match cap reached)" convention).
+            if (overflow > 0) {
+                append(
+                    " (match cap reached — showing first $MAX_HITS of " +
+                        "${sorted.size + overflow} matches; sort/filter or narrow the query for the rest)",
+                )
+            }
+            append('\n')
+            for (f in sorted) {
+                val rel = if (root.isDirectory) f.relativeTo(root).path.replace('\\', '/') else f.name
+                append(rel)
+                append('\n')
+            }
+            if (walkCapped) {
+                append("(walk budget of $MAX_WALK entries reached — counts and coverage are partial; narrow the path)\n")
+            }
         }
     }
 

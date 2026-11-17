@@ -73,6 +73,10 @@ import kotlinx.coroutines.withContext
  * this package.
  *
  * i18n: visible labels come from the card_* res strings (all 17 locales).
+ * [T-card-title-i18n] Card TITLES follow the same rule now: the derivers
+ * set titleResId/labelResId and the renderers resolve them via
+ * [cardTitleText] (CardTitleParts.kt), falling back to the English `title`
+ * field only for tests and non-UI consumers.
  */
 private const val TAG = "ToolCards"
 
@@ -119,7 +123,7 @@ fun ToolCardSection(
 
 @Composable
 private fun FactsCardBody(card: ToolCard.Facts) {
-    CardTitle(card.title)
+    CardTitle(cardTitleText(card.title, card.titleResId, card.titleResArg))
     card.highlight?.let {
         Spacer(Modifier.height(2.dp))
         Text(
@@ -156,7 +160,10 @@ private fun FactsCardBody(card: ToolCard.Facts) {
 
 @Composable
 private fun ListCardBody(card: ToolCard.ListCard) {
-    CardTitle(card.title, trailing = card.total.toString())
+    CardTitle(
+        cardTitleText(card.title, card.titleResId, card.titleResArg),
+        trailing = card.total.toString(),
+    )
     Spacer(Modifier.height(4.dp))
     card.items.forEach { item ->
         Column(modifier = Modifier.padding(vertical = 2.dp)) {
@@ -294,7 +301,7 @@ private fun EventCardBody(card: ToolCard.EventCard) {
         }
     }
     Text(
-        text = card.title,
+        text = cardTitleText(card.title, card.titleResId, card.titleResArg),
         fontSize = 13.sp,
         color = ChatColors.secondaryText,
         maxLines = 2,
@@ -305,7 +312,7 @@ private fun EventCardBody(card: ToolCard.EventCard) {
 
 @Composable
 private fun ChangeCardBody(card: ToolCard.Change) {
-    CardTitle(card.label)
+    CardTitle(cardTitleText(card.label, card.labelResId, card.titleResArg))
     Spacer(Modifier.height(3.dp))
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         card.oldText?.let { old ->
@@ -375,6 +382,13 @@ private fun CardActionRow(card: ToolCard, callId: String?) {
 
     val copyText = remember(card) { card.copyText() }
     val openable = card is ToolCard.Link || card is ToolCard.Media || card is ToolCard.FileCard
+    // [T-undo-staleness-ordering] UndoLedger.undoable is more than the 10-min
+    // TTL now: it also refuses a STALE record (a newer record exists for the
+    // same tool+subject, or this record was voided by a successful undo of a
+    // newer one), so re-executing an old undo can no longer silently clobber
+    // newer state. Refusal is the plain boolean-disable the file already uses
+    // — no user-facing staleness string exists in resources, and none is
+    // invented here; the raw tool output stays visible in the detail sheet.
     val canUndo = card is ToolCard.Change && card.undoable && card.tool != null &&
         card.undoArgsJson != null && !undone &&
         (callId == null || UndoLedger.undoable(callId))
@@ -482,30 +496,6 @@ private fun CardActionButton(
             fontWeight = FontWeight.Medium,
             color = tint,
         )
-    }
-}
-
-@Composable
-private fun CardTitle(title: String, trailing: String? = null) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(
-            text = title,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold,
-            color = ChatColors.secondaryText,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
-        )
-        trailing?.let {
-            Spacer(Modifier.width(6.dp))
-            Text(
-                text = it,
-                fontSize = 11.sp,
-                fontFamily = FontFamily.Monospace,
-                color = ChatColors.tertiaryText,
-            )
-        }
     }
 }
 

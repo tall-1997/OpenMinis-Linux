@@ -68,8 +68,16 @@ class OutwardPacingTest {
     }
 
     @Test
-    fun keywordTableMatchesToolNamesAndTextArguments() {
-        assertTrue(OutwardPacing.isOutward("send_message", JsonObject(emptyMap()))) // tool name
+    fun keywordTableMatchesOutwardToolsAndTypingPayloads() {
+        // [T-outward-tool-scoped] Dedicated outward tools: paced by name alone.
+        assertTrue(OutwardPacing.isOutward("sms_send", JsonObject(emptyMap())))
+        assertTrue(OutwardPacing.isOutward("share_to_app", JsonObject(emptyMap())))
+        assertTrue(OutwardPacing.isOutward("app_send_intent", JsonObject(emptyMap())))
+        assertTrue(OutwardPacing.isOutward("notification_reply", JsonObject(emptyMap())))
+        // (b) a keyword in the TOOL NAME of a text-transmitting tool (the
+        // dedicated set members are all keyword-named today, so (a) already
+        // pins them).
+        // (c) the payload a typing tool transmits into the target app.
         assertTrue(OutwardPacing.isOutward("ui_action", args("text" to "please submit the form")))
         assertTrue(OutwardPacing.isOutward("ui_action", args("text" to "Reply to their comment")))
         assertTrue(OutwardPacing.isOutward("ui_action", args("text" to "发送这条消息")))
@@ -78,6 +86,17 @@ class OutwardPacingTest {
         assertTrue(OutwardPacing.isOutward("ui_action", args("text" to "投递简历")))
         assertFalse(OutwardPacing.isOutward("ui_action", args("text" to "type hello world")))
         assertFalse(OutwardPacing.isOutward("ui_read", JsonObject(emptyMap())))
+    }
+
+    @Test
+    fun innocuousTextPayloadsAreNeverPaced() {
+        // [T-outward-tool-scoped] The two overmatching cases from the review:
+        // an unregistered send-named tool, and an innocuous clipboard payload.
+        assertFalse(OutwardPacing.isOutward("send_message", JsonObject(emptyMap())))
+        assertFalse(OutwardPacing.isOutward("clipboard_set", args("text" to "please submit the form")))
+        assertFalse(OutwardPacing.isOutward("clipboard_set", args("text" to "发送测试")))
+        // Clipboard with no text arg at all stays inward.
+        assertFalse(OutwardPacing.isOutward("clipboard_set", JsonObject(emptyMap())))
     }
 
     @Test

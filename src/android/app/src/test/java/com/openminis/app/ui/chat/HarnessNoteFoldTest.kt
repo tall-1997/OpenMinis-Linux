@@ -166,4 +166,88 @@ class HarnessNoteFoldTest {
         assertEquals(2, folded.size)
         assertTrue(folded[0].content.contains(com.openminis.app.data.repository.PreviewText.HOST_NOTE_NO_REPLY_HEAD))
     }
+
+    @Test
+    fun `a real user message quoting a marker mid-sentence is NOT folded`() {
+        // [T-harness-note-leading-match] The old CONTAINS match classified a
+        // question that merely quoted a marker ("what does [working memory]
+        // in your prompt do?") as a harness note and folded it into the
+        // previous turn — the user's question lost its turn boundary. The
+        // match is leading-only now: framing artifacts may precede the
+        // marker, real prose may not.
+        val quoted = user("what does [working memory] in your prompt do? and why do I see RETRY REQUESTED by the user sometimes?")
+        val history = listOf(
+            user("earlier question"),
+            assistant("answer"),
+            quoted,
+        )
+        val folded = foldHarnessNotes(history)
+        assertEquals(3, folded.size)
+        assertEquals(quoted.content, folded[2].content)
+        assertTrue(!HarnessNoteMarkers.isUserHarnessNote(quoted))
+    }
+
+    @Test
+    fun `a note preceded by framing artifacts still folds`() {
+        // [T-harness-note-leading-match] The v2 compact path prepends a
+        // <context-summary> block; the no-reply head precedes the reminder in
+        // legacy rows. Both artifacts strip before the leading marker check.
+        val withSummary = user("<context-summary>\nold summary\n</context-summary>\n\n<system-reminder>\n${HarnessNoteMarkers.GOAL} text\n</system-reminder>")
+        val withHead = user(
+            com.openminis.app.data.repository.PreviewText.HOST_NOTE_NO_REPLY_HEAD +
+                "\n<system-reminder>\n${HarnessNoteMarkers.RECALL} text\n</system-reminder>",
+        )
+        val history = listOf(user("task"), assistant("a"), withSummary, withHead)
+        val folded = foldHarnessNotes(history)
+        assertEquals(2, folded.size)
+        // Both notes fold forward onto the LAST user turn (folded[0]); the
+        // assistant row is untouched.
+        assertTrue(folded[0].content.contains(HarnessNoteMarkers.GOAL))
+        assertTrue(folded[0].content.contains(HarnessNoteMarkers.RECALL))
+        assertTrue(folded[1].content == "a")
+    }
+
+    @Test
+    fun `fold-forward onto a parts-carrying carrier syncs contentParts`() {
+        // [T-user-text-prefix-parts-sync] The wire builders serialize
+        // contentParts when non-empty and never read `content`, so a
+        // content-only fold silently drops the note for tool-result
+        // carriers (the dominant fold target). The appended note must
+        // appear as a Text part too.
+        val history = listOf(
+            user("do the task"),
+            assistant("calling tool"),
+            toolCarrier("call_1", "ok"),
+            framedNote(HarnessNoteMarkers.GOAL),
+        )
+        val folded = foldHarnessNotes(history)
+        val carrier = folded[2]
+        val textParts = carrier.contentParts.filterIsInstance<AgentContentPart.Text>()
+        assertTrue(
+            "folded note must ride the parts as well as content",
+            textParts.any { it.text.contains(HarnessNoteMarkers.GOAL) },
+        )
+        assertTrue(carrier.content.contains(HarnessNoteMarkers.GOAL))
+    }
+
+    @Test
+    fun `leading note flushed into a parts-carrying user turn syncs contentParts`() {
+        // [T-user-text-prefix-parts-sync] Leading notes are prepended onto
+        // the first real user turn — which always carries parts on the
+        // production send path. The prefix must become a Text part.
+        val note = framedNote(HarnessNoteMarkers.RECALL)
+        val realSend = user(
+            "do the task",
+            AgentContentPart.Text("do the task"),
+        )
+        val folded = foldHarnessNotes(listOf(note, realSend))
+        assertEquals(1, folded.size)
+        val textParts = folded[0].contentParts.filterIsInstance<AgentContentPart.Text>()
+        assertTrue(
+            "prefix must ride the parts as well as content",
+            textParts.first().text.contains(HarnessNoteMarkers.RECALL),
+        )
+        assertTrue(folded[0].content.contains(HarnessNoteMarkers.RECALL))
+        assertTrue(folded[0].content.contains("do the task"))
+    }
 }

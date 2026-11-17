@@ -62,12 +62,10 @@ class MainActivity : ComponentActivity() {
 
     /**
      * [T-android-prefs-double-read] Single canonical appearance-prefs handle
-     * for this Activity. Previously the composition used
-     * `remember { getAppearancePrefs(this) }` while [onStart] re-fetched the
-     * same file through a second call — two lookups for one preference file,
-     * and (before the [getAppearancePrefs] implementation gained its own
-     * process-wide cache) two separate listener registrations on
-     * configuration change. One field, one instance, shared by both readers.
+     * for this Activity: previously the composition and [onStart] each
+     * re-fetched the same prefs file (two lookups, and before
+     * [getAppearancePrefs] gained its process-wide cache, two listener
+     * registrations per configuration change). One field, both readers.
      */
     private val appearancePrefs: SharedPreferences by lazy {
         getAppearancePrefs(this)
@@ -76,27 +74,25 @@ class MainActivity : ComponentActivity() {
     /**
      * T166: id of the chat the user is currently inside, mirrored from
      * the nav back-stack so [onSaveInstanceState] can persist it across
-     * process death. Restored value is fed into [AppNavigation] as the
-     * initial deep-link so the user lands back where they were.
+     * process death (re-fed to [AppNavigation] as the initial deep-link).
      */
     private var currentChatSessionId: String? = null
 
     /**
      * T166: id of the chat to re-open on first composition after a
-     * process-death restart. Set in [onCreate] from the saved state
-     * bundle, consumed exactly once by [AppNavigation] via the
-     * synthesised deep-link.
+     * process-death restart (set in [onCreate], consumed exactly once
+     * by [AppNavigation] via the synthesised deep-link).
      */
     private var restoredChatSessionId: String? = null
 
     /**
      * T293 / issue #10: tracks whether [onStart] has fired at least once, so
-     * that the very first ON_START (the cold-start one — already covered by
-     * [com.openminis.app.ui.navigation.AppNavigation]'s LaunchedEffect that
-     * resolves [KEY_LAUNCH_SESSION]) is skipped here. Subsequent ON_STARTs
-     * are background → foreground transitions, where the launch-session
-     * preference must be honoured again so "New Chat on launch" actually
-     * does what it says when the user resumes from the recents tray.
+     * the very first ON_START (cold start — already covered by
+     * [com.openminis.app.ui.navigation.AppNavigation]'s [KEY_LAUNCH_SESSION]
+     * LaunchedEffect) is skipped here. Later ON_STARTs are background →
+     * foreground transitions where the launch-session preference must be
+     * honoured again so "New Chat on launch" works when resuming from the
+     * recents tray.
      */
     private var hasResumedFromBackground = false
 
@@ -516,6 +512,9 @@ class MainActivity : ComponentActivity() {
         // while inside a chat, synthesise an OpenSession deep-link so
         // the navigation stack lands on that chat instead of the
         // sessions list. T166.
+        // [T-deeplink-coldstart] This parse IS the cold-start deep-link dispatch
+        // (handleDeepLink runs only for onNewIntent); every DeepLinkAction needs
+        // a branch in BOTH this path's AppNavigation `when` and handleDeepLink.
         val explicitDeepLink = when {
             intent?.action == Intent.ACTION_ASSIST || intent?.action == Intent.ACTION_VOICE_COMMAND ->
                 DeepLinkAction.NewChat
@@ -744,9 +743,8 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         // T51: warm-start share — ShareReceiverActivity re-launches with
-        // FLAG_ACTIVITY_CLEAR_TOP, which delivers the new intent here when
-        // MainActivity is already alive. Process the buffered share before
-        // touching the deep-link path so the share coordinator sees it.
+        // FLAG_ACTIVITY_CLEAR_TOP (delivered here when MainActivity is alive);
+        // process the buffered share before the deep-link path.
         if (intent.getBooleanExtra("shared_content", false)) {
             com.openminis.app.share.ShareCoordinator.processPendingShare(this)
         }
@@ -808,9 +806,11 @@ class MainActivity : ComponentActivity() {
             // three open a fresh draft chat; voice/camera additionally seed
             // DeepLinkCoordinator.pendingChatAction so ChatScreen auto-fires
             // the corresponding UI on first compose.
+            // [T-deeplink-share-wired] minis://share joins the group: its landing is a fresh draft composer.
             is DeepLinkAction.NewChat,
             is DeepLinkAction.NewVoiceChat,
-            is DeepLinkAction.NewCameraChat -> {
+            is DeepLinkAction.NewCameraChat,
+            is DeepLinkAction.OpenShare -> {
                 when (action) {
                     is DeepLinkAction.NewVoiceChat -> DeepLinkCoordinator
                         .setPendingChatAction(DeepLinkCoordinator.ChatAction.START_VOICE)

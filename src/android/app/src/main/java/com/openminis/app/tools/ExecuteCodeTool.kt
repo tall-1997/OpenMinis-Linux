@@ -21,7 +21,26 @@ import org.mozilla.javascript.ScriptableObject
 object ExecuteCodeTool {
     const val NAME = "execute_code"
     private const val MAX_TOOL_CALLS = 50
-    private const val MAX_STDOUT = 50_000
+
+    /**
+     * [T-executecode-spill] Preview trigger threshold, not a loss point. The
+     * stdout buffer used to hard-stop at this size (and `take(MAX_STDOUT)`
+     * clipped again at the end), so every printed char past 50k vanished with
+     * no spill file and no coverage note — the silent-loss shape
+     * [ToolOutputSpill] exists to prevent. The threshold still triggers the
+     * bounded head+tail preview; the FULL stdout is now spilled into the
+     * session workspace so the model can `file_read` the rest.
+     */
+    internal const val MAX_STDOUT = 50_000
+
+    /**
+     * [T-executecode-spill] Hard capture bound for the in-memory print
+     * buffer. Above [MAX_STDOUT] the buffer keeps growing (up to here) so the
+     * full stdout can be spilled; past this ceiling prints are dropped but
+     * COUNTED, and the count is reported to the model instead of vanishing.
+     */
+    internal const val MAX_CAPTURE_CHARS = 512_000
+
     private const val INSTRUCTION_BUDGET = 20_000_000
 
     val SANDBOX_TOOLS = setOf(
@@ -47,9 +66,17 @@ object ExecuteCodeTool {
 
     class Bridge(private val invoke: suspend (String, String) -> ToolExecutionResult) {
         val out = StringBuilder()
+
+        /** [T-executecode-spill] Chars dropped past [MAX_CAPTURE_CHARS]; reported, never silent. */
+        var droppedPrintChars = 0L
         var toolCalls = 0
         fun print(v: Any?) {
-            if (out.length < MAX_STDOUT) out.append(v?.toString() ?: "null").append('\n')
+            val line = (v?.toString() ?: "null") + "\n"
+            if (out.length < MAX_CAPTURE_CHARS) {
+                out.append(line)
+            } else {
+                droppedPrintChars += line.length
+            }
         }
         fun call(toolName: String, argsJson: String): String {
             if (toolName !in SANDBOX_TOOLS) return "ERROR: '$toolName' not in sandbox"
@@ -65,9 +92,32 @@ object ExecuteCodeTool {
         }
     }
 
+    /**
+     * Backward-compatible entry (dispatch sites that hold no session yet).
+     * Without session access an oversized stdout cannot be spilled HERE, so
+     * the captured buffer is handed to the caller in FULL and the unified exit
+     * ([ToolOutputPolicy.apply] → [ToolOutputSpill], which resolves the
+     * session) does the cap + spill — never a silent `take()`.
+     */
     suspend fun execute(
         argsJson: String,
         invoke: suspend (String, String) -> ToolExecutionResult,
+    ): ToolExecutionResult = execute(argsJson, invoke, sessionId = null, context = null)
+
+    /**
+     * [T-executecode-spill] Session-aware form. When the captured stdout
+     * exceeds [MAX_STDOUT], the FULL stdout is spilled into the session's
+     * tool-spill workspace and the result becomes a head+tail preview plus
+     * the spill path (the [ToolOutputSpill] placeholder shape). When the
+     * spill is impossible (no session, or the write failed), the full
+     * captured stdout is returned instead of silently dropped: the unified
+     * exit still caps and spills it.
+     */
+    suspend fun execute(
+        argsJson: String,
+        invoke: suspend (String, String) -> ToolExecutionResult,
+        sessionId: String?,
+        context: android.content.Context?,
     ): ToolExecutionResult {
         val args = try { JSONObject(argsJson) } catch (_: Exception) { JSONObject() }
         val toolTitle = args.optString("tool_title", NAME)
@@ -154,7 +204,7 @@ object ExecuteCodeTool {
                 Context.exit()
             }
             val text = bridge.out.toString().ifBlank { "(no print output, ${bridge.toolCalls} tool calls)" }
-            ToolExecutionResult(text.take(MAX_STDOUT), true, toolTitle = toolTitle)
+            ToolExecutionResult(presentStdout(text, bridge.droppedPrintChars, sessionId, context), true, toolTitle = toolTitle)
             }
         } catch (t: Throwable) {
             ToolExecutionResult(
@@ -164,4 +214,48 @@ object ExecuteCodeTool {
             )
         }
     }
+
+    /**
+     * [T-executecode-spill] Over-cap stdout handling. With a session the FULL
+     * stdout is spilled (guest path handed back in the shared placeholder
+     * shape); without one the full captured buffer is deferred to the unified
+     * exit rather than `take()`-clipped. Print chars dropped past the capture
+     * ceiling are reported with a "cap reached" note, mirroring
+     * [GrepStreamScan]'s coverage phrasing. Pure apart from the spill, so a
+     * plain-JVM test can pin the decision.
+     */
+    internal fun presentStdout(
+        text: String,
+        droppedPrintChars: Long,
+        sessionId: String?,
+        context: android.content.Context?,
+    ): String {
+        var out = text
+        if (text.length > MAX_STDOUT) {
+            val guestPath = if (context != null && !sessionId.isNullOrBlank()) {
+                ToolOutputSpill.offloadFullOutput(context, sessionId, NAME, text)
+            } else {
+                null
+            }
+            out = presentOverCap(text, guestPath)
+        }
+        if (droppedPrintChars > 0) {
+            out += "\n(print cap reached — $droppedPrintChars more chars were dropped beyond the " +
+                "$MAX_CAPTURE_CHARS-char capture bound; reduce print volume or aggregate in code)"
+        }
+        return out
+    }
+
+    /**
+     * [T-executecode-spill] Pure over-cap decision so a plain-JVM test can pin
+     * it: with a spill file the body is the shared [ToolOutputSpill] preview
+     * (placeholder shape, path, head+tail); without one the FULL stdout is
+     * deferred to the unified exit rather than dropped.
+     */
+    internal fun presentOverCap(stdout: String, guestPath: String?): String =
+        if (guestPath != null) {
+            ToolOutputSpill.formatPreview(NAME, guestPath, stdout)
+        } else {
+            stdout
+        }
 }

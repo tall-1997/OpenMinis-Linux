@@ -147,4 +147,32 @@ class CompactDetachedAnchorTest {
             }
         }
     }
+
+    @Test
+    fun `summary injection onto a parts-carrying user turn syncs contentParts`() {
+        // [T-user-text-prefix-parts-sync] The wire builders serialize
+        // contentParts when non-empty and never read `content`, so the
+        // content-only injection dropped the whole summary from the wire
+        // whenever the first tail row carried parts (tool-result carrier
+        // or a real send). The summary must ride the parts as well.
+        // [T-anthropic-toolresult-first] On a carrier the text appends AFTER
+        // the tool parts (Anthropic requires tool_result first in a user
+        // message) — the assertions below pin both the ride and the order.
+        val h = listOf(useMsg("call_1"), resultMsg("call_1"))
+        val out = buildDetachedCompactHistory("<summary/>", h, tailSize = 2)
+        val first = out.first()
+        assertEquals(LLMMessage.Role.USER, first.role)
+        assertTrue(first.content.startsWith("<summary/>"))
+        assertTrue(
+            "summary must ride contentParts too",
+            first.contentParts.filterIsInstance<AgentContentPart.Text>()
+                .any { it.text.contains("<summary/>") },
+        )
+        // The tool result part is preserved after the injected text.
+        val toolIdx = first.contentParts.indexOfFirst { it is AgentContentPart.ToolResult }
+        val textIdx = first.contentParts.indexOfFirst {
+            it is AgentContentPart.Text && it.text.contains("<summary/>")
+        }
+        assertTrue("summary text must follow the tool_result on the carrier", textIdx > toolIdx)
+    }
 }

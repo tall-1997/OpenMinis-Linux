@@ -16,11 +16,13 @@ import com.openminis.app.data.model.LLMMessage
  * so the model sees them as part of the original request rather than as
  * separate "turn to speak" invitations.
  *
- * Matching is CONTAINS-based, not startsWith: every committed note carries a
- * `<system-reminder>` framing (see [ChatViewModelHiddenNote.commitHiddenUserNote]),
- * and the compact path prepends a `<context-summary>` prefix onto the first
- * post-anchor user message — a startsWith match on the inner marker fails on
- * both, which made the head-only fold a no-op on device.
+ * Matching is LEADING ([T-harness-note-leading-match]): every committed note
+ * carries a `<system-reminder>` framing (see
+ * [ChatViewModelHiddenNote.commitHiddenUserNote]) and the compact path may
+ * prepend a `<context-summary>` block, so known framing artifacts are
+ * stripped from the head and the marker must then START the remaining text —
+ * the old contains-match folded real user questions that merely QUOTED a
+ * marker mid-sentence.
  *
  * Deliberately NOT in this set: the steering rounds that follow an assistant
  * turn (goal continuation, sub-agent collect nudge, empty-turn recovery,
@@ -42,11 +44,42 @@ internal object HarnessNoteMarkers {
     /** All markers that identify a harness-generated USER message. */
     val ALL: List<String> = listOf(RECALL, GOAL, STATE, WORKING_MEMORY, PLAN_RETRY, DROPPED_ROUNDS)
 
-    /** True if [content] carries any harness marker (framing-aware, contains-based). */
+    private const val REMINDER_OPEN = "<system-reminder>"
+    private const val SUMMARY_OPEN = "<context-summary>"
+    private const val SUMMARY_CLOSE = "</context-summary>"
+
+    /**
+     * True if [content] carries any harness marker (framing-aware, LEADING).
+     *
+     * [T-harness-note-leading-match] The match was CONTAINS-based, so a real
+     * user message that merely QUOTED a marker mid-sentence ("what does
+     * `[working memory]` in your prompt do?") was classified as a note and
+     * folded into the previous turn — the user's question lost its own turn
+     * boundary. The marker can legitimately sit after framing artifacts
+     * (the compact `<context-summary>` block prepended by the v2 path), but
+     * never after real prose: strip the known leading artifacts, then
+     * require the marker to START the remaining text. The
+     * source-attributed steering variant (`<system-reminder source=…>`,
+     * deliberately outside this set) does not strip and does not match.
+     */
     fun isHarnessNote(content: String): Boolean {
-        val c = content.trimStart()
+        var c = content.trimStart()
         if (c.isEmpty()) return false
-        return ALL.any { c.contains(it) }
+        while (true) {
+            c = when {
+                c.startsWith(SUMMARY_OPEN) -> {
+                    val end = c.indexOf(SUMMARY_CLOSE)
+                    if (end < 0) return false
+                    c.substring(end + SUMMARY_CLOSE.length).trimStart()
+                }
+                c.startsWith(REMINDER_OPEN) -> c.removePrefix(REMINDER_OPEN).trimStart()
+                c.startsWith(com.openminis.app.data.repository.PreviewText.HOST_NOTE_NO_REPLY_HEAD) ->
+                    c.removePrefix(com.openminis.app.data.repository.PreviewText.HOST_NOTE_NO_REPLY_HEAD).trimStart()
+                else -> break
+            }
+        }
+        if (c.isEmpty()) return false
+        return ALL.any { c.startsWith(it) }
     }
 
     /**

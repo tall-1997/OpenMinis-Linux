@@ -30,6 +30,12 @@ sealed class ToolCard {
     /** Key–value snapshot card: device status, settings read, clipboard. */
     data class Facts(
         val title: String,
+        // [T-card-title-i18n] Localized-title plumbing (fields only grow):
+        // when [titleResId] is set the renderer shows
+        // stringResource(titleResId, titleResArg) instead of the English
+        // [title] fallback, which stays for tests and non-UI consumers.
+        val titleResId: Int? = null,
+        val titleResArg: String? = null,
         val rows: List<FactRow>,
         /** Optional emphasized value (e.g. the battery percentage). */
         val highlight: String? = null,
@@ -41,6 +47,8 @@ sealed class ToolCard {
     /** Result list card: contacts, SMS, calls, apps, search hits, cron tasks. */
     data class ListCard(
         val title: String,
+        val titleResId: Int? = null,
+        val titleResArg: String? = null,
         val items: List<CardItem>,
         /** Total result count even when [items] is truncated for display. */
         val total: Int,
@@ -75,6 +83,8 @@ sealed class ToolCard {
     /** Schedule card: alarm_set / calendar_add / cronjob create. */
     data class EventCard(
         val title: String,
+        val titleResId: Int? = null,
+        val titleResArg: String? = null,
         val timeText: String,
         /** Human repeat rule ("Mon, Wed", "every 30m"); null for one-shot. */
         val repeat: String? = null,
@@ -94,6 +104,12 @@ was: <old>
      */
     data class Change(
         val label: String,
+        // [T-card-title-i18n] Same localized-label plumbing as the title
+        // fields above: [labelResId] (+ [titleResArg] for parameterized
+        // labels like "Volume <stream>") wins at render time; [label] stays
+        // the English fallback and the undo/tool matching token.
+        val labelResId: Int? = null,
+        val titleResArg: String? = null,
         val oldText: String? = null,
         val newText: String,
         val undoable: Boolean = false,

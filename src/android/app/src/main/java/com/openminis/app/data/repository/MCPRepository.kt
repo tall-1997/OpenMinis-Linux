@@ -660,6 +660,20 @@ class MCPRepository(private val context: Context) {
                 if (note.isNotBlank()) append(": ").append(note)
                 append("\n")
             }
+            // [T-mcp-prompt-overflow-note] Enabled servers beyond the Top-N
+            // used to be completely invisible: the cap kept the prompt small,
+            // but the model could not know the omitted servers existed. They
+            // ARE fully callable — the native `mcp` tool resolves the whole
+            // enabled map (McpNativeBridge.effectiveEnabledMap), not this
+            // Top-N list — so one summary line with the omitted NAMES makes
+            // the cap's cost visible (GrepStreamScan's "cap reached"
+            // convention) without weakening it.
+            if (enabled.size > selected.size) {
+                val omitted = enabled.drop(MAX_MCPS_IN_PROMPT)
+                append("+ ${omitted.size} more enabled MCP server(s) beyond the first $MAX_MCPS_IN_PROMPT, not detailed here: ")
+                append(omitted.joinToString(", ") { it.id })
+                append(". They are enabled and callable exactly like the servers listed above.\n")
+            }
             append("\n")
             append("To use: call the native `mcp` tool — {\"action\":\"tools\",\"server\":\"<server>\"} to list,\n")
             append("{\"action\":\"call\",\"server\":\"<server>\",\"tool\":\"<tool>\",\"arguments\":{…}} to invoke.\n")

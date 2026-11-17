@@ -13,7 +13,7 @@ import org.json.JSONObject
  */
 object ListDirTool {
     const val NAME = "list_dir"
-    private const val MAX_ENTRIES = 400
+    internal const val MAX_ENTRIES = 400
 
     fun definition(): AgentToolDefinition = AgentToolDefinition(
         name = NAME,
@@ -44,7 +44,16 @@ object ListDirTool {
                     if (!f.isDirectory) append(" ${f.length()}")
                     append('\n')
                 }
-                if (kids.size > shown.size) append("… truncated\n")
+                // [T-listdir-coverage-note] The bare "… truncated" said the
+                // list was cut but not by how much or what to do about it; the
+                // header total was easy to miss. Mirror GrepStreamScan's cap
+                // phrasing with the real total and the way to the rest.
+                if (kids.size > shown.size) {
+                    append(
+                        "(entry cap reached — showing first $MAX_ENTRIES of ${kids.size} entries; " +
+                            "narrow the path or filter for the rest)\n",
+                    )
+                }
             }
             ToolExecutionResult(body, true, toolTitle = toolTitle)
         } catch (e: Exception) {

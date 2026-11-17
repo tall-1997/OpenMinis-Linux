@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.documentfile.provider.DocumentFile
+import com.openminis.app.logging.AppLogger
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
@@ -28,11 +29,42 @@ class PhoneBackupFolderStore(private val context: Context) {
     private val prefs: SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
+    /**
+     * [T-backup-decode-honesty] The stored folders, or an empty list when none
+     * is configured OR the stored bytes are unreadable. Both return empty (the
+     * UI must not crash), but an unreadable config also latches
+     * [configDecodeFailed] so the next backup run reports the condition instead
+     * of quietly backing up to nothing. The latch clears on the first
+     * successful read or write.
+     */
     val folders: List<Folder>
-        get() = runCatching {
-            val raw = prefs.getString(KEY, null) ?: return emptyList()
-            json.decodeFromString(ListSerializer(Folder.serializer()), raw)
-        }.getOrDefault(emptyList())
+        get() {
+            val raw = runCatching { prefs.getString(KEY, null) }.getOrNull()
+                ?: return emptyList() // never configured — not a failure
+            val decoded = decodeFolders(raw)
+            if (decoded != null) {
+                if (configDecodeFailed) {
+                    prefs.edit().putBoolean(KEY_CONFIG_DECODE_FAILED, false).apply()
+                    AppLogger.info(TAG, "[Backup] phone-folder config readable again")
+                }
+                return decoded
+            }
+            prefs.edit().putBoolean(KEY_CONFIG_DECODE_FAILED, true).apply()
+            AppLogger.error(
+                TAG,
+                "[Backup] stored phone-folder config is UNREADABLE; returning zero folders " +
+                    "until it is re-saved (raw length=${raw.length})",
+            )
+            return emptyList()
+        }
+
+    /**
+     * [T-backup-decode-honesty] True while the stored phone-folder config could
+     * not be decoded. Backup runs consult this and refuse to write a success
+     * record — the phone destinations the user configured are silently absent.
+     */
+    val configDecodeFailed: Boolean
+        get() = runCatching { prefs.getBoolean(KEY_CONFIG_DECODE_FAILED, false) }.getOrDefault(false)
 
     val enabledFolders: List<Folder> get() = folders.filter { it.enabled }
 
@@ -111,15 +143,30 @@ class PhoneBackupFolderStore(private val context: Context) {
     }
 
     private fun save(list: List<Folder>) {
+        // [T-backup-decode-honesty] A successful write replaces whatever corrupt
+        // bytes were there — the unreadable latch must not outlive them.
         prefs.edit()
             .putString(KEY, json.encodeToString(ListSerializer(Folder.serializer()), list))
+            .putBoolean(KEY_CONFIG_DECODE_FAILED, false)
             .apply()
     }
 
     companion object {
+        private const val TAG = "Backup"
         private const val PREFS = "minis_phone_backup_folders"
         private const val KEY = "folders"
+
+        /** [T-backup-decode-honesty] Latched while the stored config is unreadable. */
+        private const val KEY_CONFIG_DECODE_FAILED = "config_decode_failed"
+
         private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+        /**
+         * [T-backup-decode-honesty] Decode the stored folder list; null when the
+         * bytes are unreadable. Pure so the contract is testable without prefs.
+         */
+        internal fun decodeFolders(raw: String): List<Folder>? =
+            runCatching { json.decodeFromString(ListSerializer(Folder.serializer()), raw) }.getOrNull()
 
         fun treeDisplayName(context: Context, uri: Uri): String? {
             val docId = runCatching { DocumentsContract.getTreeDocumentId(uri) }.getOrNull()

@@ -205,7 +205,21 @@ class ActionGuardTest {
         assertNull(ActionGuard.signature("ui_read", """{"x":1}"""))
         assertTrue(ActionGuard.isRead("ui_read"))
         assertFalse(ActionGuard.isRead("ui_action"))
-        assertTrue(ActionGuard.isOutward("send_message", "{}"))
+        // [T-guard-ignore-tool-title] tool_title is free-text narration and is
+        // ignored: two identical calls with rephrased titles share a signature.
+        val base = ActionGuard.signature("sms_send", """{"to":"1","text":"hi"}""")
+        assertEquals(
+            base,
+            ActionGuard.signature("sms_send", """{"to":"1","text":"hi","tool_title":"Send greeting SMS"}"""),
+        )
+        assertEquals(
+            base,
+            ActionGuard.signature("sms_send", """{"to":"1","text":"hi","tool_title":"Message the contact"}"""),
+        )
+        // [T-outward-tool-scoped] Outward detection is tool-scoped now: the
+        // dedicated send tool is outward; clipboard payload text is not.
+        assertTrue(ActionGuard.isOutward("sms_send", "{}"))
+        assertFalse(ActionGuard.isOutward("clipboard_set", """{"text":"please submit the form"}"""))
     }
 
     @Test

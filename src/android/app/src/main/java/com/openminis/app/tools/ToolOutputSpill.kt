@@ -220,10 +220,19 @@ object ToolOutputSpill {
      * 中文：raw → spill → readback 不能成环 —— 已落盘的占位符和从 spill 目录
      * 读回的内容都必须原样/受限返回，不能再次落盘。
      */
+    /** [T-spill-passthrough-bound] Hard ceiling for a marker-trusted passthrough. */
+    private const val MAX_PASSTHROUGH_CHARS = 64_000
+
     internal fun planFor(output: String, hasSession: Boolean, sourcePath: String?): SpillPlan {
         if (output.length <= LIMIT) return SpillPlan.PASSTHROUGH
         // Never wrap a placeholder in another placeholder (idempotency).
-        if (isOffloadPlaceholder(output)) return SpillPlan.PASSTHROUGH
+        // [T-spill-passthrough-bound] The marker check is tool-emitted, but a
+        // model can AUTHOR the literal marker into file content and read it
+        // back — bound the passthrough at the sub-agent report budget (64k)
+        // so an authored marker can never blow the context window unbounded.
+        if (isOffloadPlaceholder(output) && output.length <= MAX_PASSTHROUGH_CHARS) {
+            return SpillPlan.PASSTHROUGH
+        }
         // Reading a spill file back must answer from the existing file.
         if (isSpillGuestPath(sourcePath)) return SpillPlan.ALREADY_SPILLED
         // Nowhere to hang the file — still cap, the model just gets no path.

@@ -24,6 +24,9 @@ internal object SandboxWorkload {
 
     private const val TAG = "SandboxWorkload"
     private const val SWEEP_MS = 400L
+
+    /** [T-sandbox-sweep-backoff] Adaptive ceiling: quiet workloads back off to this. */
+    private const val SWEEP_MAX_MS = 2_000L
     private const val KILL_PASSES = 3
 
     private val CGROUP_FILES = listOf(
@@ -199,14 +202,36 @@ internal object SandboxWorkload {
         if (failed != null) Log.w(TAG, "setpgid $pid failed: ${failed.message}")
     }
 
+    // [T-sandbox-sweep-backoff] confine() used to re-apply group/priority/
+    // cgroup writes to EVERY owned pid on EVERY 400ms sweep — reflection
+    // lookup + up to 6 cgroup open/write/close per pid per tick. Membership
+    // in the confined set is sticky (new pids arrive via the sticky tree);
+    // a periodic 30s re-confine catches system-side resets (lmkd priority
+    // bumps, cgroup moves) without the per-tick cost.
+    private val confinedAt = HashMap<Int, Long>()
+    private const val RECONFINE_INTERVAL_MS = 30_000L
+
+    @Volatile
+    private var setProcessGroupMethod: java.lang.reflect.Method? = null
+
     private fun confine(pid: Int) {
-        runCatching {
-            val method = AndroidProcess::class.java.getMethod(
-                "setProcessGroup",
-                Integer.TYPE,
-                Integer.TYPE,
-            )
-            method.invoke(null, pid, 0)
+        val now = SystemClock.elapsedRealtime()
+        synchronized(confinedAt) {
+            val last = confinedAt[pid]
+            if (last != null && now - last < RECONFINE_INTERVAL_MS) return
+            confinedAt[pid] = now
+        }
+        val method = synchronized(this) {
+            setProcessGroupMethod ?: runCatching {
+                AndroidProcess::class.java.getMethod(
+                    "setProcessGroup",
+                    Integer.TYPE,
+                    Integer.TYPE,
+                )
+            }.getOrNull()?.also { setProcessGroupMethod = it }
+        }
+        if (method != null) {
+            runCatching { method.invoke(null, pid, 0) }
         }
         runCatching { AndroidProcess.setThreadPriority(pid, AndroidProcess.THREAD_PRIORITY_LOWEST) }
         val text = pid.toString()
@@ -264,10 +289,28 @@ internal object SandboxWorkload {
             if (supervisorStarted) return
             supervisorStarted = true
             thread(name = "SandboxWorkload", isDaemon = true) {
+                // [T-sandbox-sweep-backoff] The supervisor ticked every 400ms
+                // forever — a full /proc walk plus per-pid cgroup writes even
+                // when the tracked set had not changed for hours (sustained
+                // 600-1000 procfs reads/s for the whole session lifetime).
+                // The interval now adapts: a sweep whose observed workload
+                // fingerprint (roots, tree sizes, pending deadlines) is
+                // unchanged doubles the sleep up to 2s; ANY change resets to
+                // the fast 400ms cadence. Deadline and memory-pressure checks
+                // ride the same loop — at worst 2s late instead of 400ms,
+                // which is immaterial against the 600s tool walls.
+                var sleepMs = SWEEP_MS
+                var lastFingerprint = -1L
                 while (true) {
                     try {
-                        Thread.sleep(SWEEP_MS)
-                        sweep()
+                        Thread.sleep(sleepMs)
+                        val fingerprint = sweep()
+                        if (fingerprint == lastFingerprint) {
+                            sleepMs = (sleepMs * 2).coerceAtMost(SWEEP_MAX_MS)
+                        } else {
+                            lastFingerprint = fingerprint
+                            sleepMs = SWEEP_MS
+                        }
                     } catch (t: Throwable) {
                         Log.w(TAG, "supervisor: ${t.message}")
                     }
@@ -276,11 +319,13 @@ internal object SandboxWorkload {
         }
     }
 
-    private fun sweep() {
+    /** [T-sandbox-sweep-backoff] Root/tree/deadline fingerprint for the adaptive sweep interval. */
+    private fun sweep(): Long {
         val live = roots.values.toList()
-        if (live.isEmpty()) return
+        if (live.isEmpty()) return 0L
         val now = SystemClock.elapsedRealtime()
         var owned = 0
+        var fp = 1125899906842597L
         // ONE /proc walk for the whole sweep: every root's collect/sameGroup
         // runs against the same tables (per-root discover() used to redo the
         // full walk). The per-root inputs (rootPid) and outputs (the same
@@ -296,28 +341,44 @@ internal object SandboxWorkload {
         for (jobRoot in JobRegistry.activeJobPids()) {
             if (jobRoot > 0) jobTree.addAll(ProcessTree.collect(jobRoot, snapshot.links))
         }
+        val ownedPids = HashSet<Int>()
         for (root in live) {
             if (!File("/proc/${root.pid}").exists()) {
                 roots.remove(root.pid)
+                fp = fp * 31 + root.pid
                 continue
             }
             val current = snapshot.collect(root.pid)
             val alive = current.filter { File("/proc/$it").exists() }.toSet()
             val set = root.sticky.observe(current, alive)
             owned += (set - jobTree).size
+            ownedPids.addAll(set)
             for (pid in set) confine(pid)
             if (root.deadlineAt > 0L && now >= root.deadlineAt) {
                 Log.w(TAG, "deadline pid=${root.pid} label=${root.label}")
                 releasePid(root.pid, kill = true, reason = "deadline:${root.label}")
             }
+            // [T-sandbox-sweep-backoff] Fingerprint input: root pid + sticky
+            // tree size + deadline presence — workload SHAPE, so a quiet
+            // session backs off and a spawning one stays fast. Membership
+            // churn inside a stable shape is bounded by the 30s confine
+            // re-check instead of forcing the fast tick.
+            fp = fp * 31 + root.pid
+            fp = fp * 31 + set.size.toLong()
+            fp = fp * 31 + (if (root.deadlineAt > 0L) 1L else 0L)
         }
+        // [T-sandbox-sweep-backoff] Drop confine-stamp entries for pids that
+        // left every live tree — hours of short-lived command churn would
+        // otherwise grow the map monotonically for the process lifetime.
+        synchronized(confinedAt) { confinedAt.keys.retainAll(ownedPids) }
         if (GuestWorkloadPolicy.exceedsProcessCap(owned)) {
             stopUnprotected("process-cap owned=$owned")
-            return
+            return 0L
         }
         val ctx = appContext
         if (ctx != null && SandboxMemoryPressure.isCritical(ctx) && roots.isNotEmpty()) {
             stopUnprotected("memory-pressure")
         }
+        return fp
     }
 }

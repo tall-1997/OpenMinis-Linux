@@ -144,4 +144,57 @@ class AgentToolsCoreSchemaTest {
         }
         assertTrue(CodeGraphTool.NAME in core)
     }
+
+    // ── [T-rule-allowlist-enforce] per-rule tool whitelist ──
+
+    @Test
+    fun allowlistKeepsOnlyTheNamedToolsInBothModes() {
+        val wanted = setOf("shell_execute", "file_read")
+        val full = AgentTools.makeAgentTools(includeLongTail = true, allowedTools = wanted)
+            .map { it.name }.toSet()
+        assertTrue(full == wanted)
+        val core = AgentTools.makeAgentTools(includeLongTail = false, allowedTools = wanted)
+            .map { it.name }.toSet()
+        assertTrue(core == wanted)
+    }
+
+    @Test
+    fun emptyAllowlistMeansUnrestricted() {
+        val unrestricted = AgentTools.makeAgentTools(includeLongTail = false, allowedTools = null)
+            .map { it.name }.toSet()
+        val emptySet = AgentTools.makeAgentTools(includeLongTail = false, allowedTools = emptySet())
+            .map { it.name }.toSet()
+        // RuleValidation preserves an all-unknown allowedTools list as empty —
+        // that must stay "unrestricted", not "no tools at all".
+        assertTrue(unrestricted == emptySet)
+        assertTrue(FindTools.NAME in emptySet)
+    }
+
+    @Test
+    fun whitelistedRunCannotDiscoverToolsOutsideItsSet() {
+        // find_tools itself is subject to the cut: without it in the whitelist
+        // an unattended run can neither declare nor discover outside its set.
+        val names = AgentTools.makeAgentTools(
+            includeLongTail = false,
+            allowedTools = setOf("shell_execute"),
+        ).map { it.name }.toSet()
+        assertFalse(FindTools.NAME in names)
+        val withDiscovery = AgentTools.makeAgentTools(
+            includeLongTail = false,
+            allowedTools = setOf("shell_execute", FindTools.NAME),
+        ).map { it.name }.toSet()
+        assertTrue(FindTools.NAME in withDiscovery)
+    }
+
+    @Test
+    fun subAgentExtrasInheritTheParentWhitelist() {
+        val parent = setOf("shell_execute", "grep")
+        val extras = AgentTools.makeSubAgentExtraTools(parent).map { it.name }
+        // grep_source / execute_code / web_fetch … are outside the parent's
+        // set and must be dropped from the lane's schema too.
+        assertTrue(extras == listOf(GrepTool.NAME))
+        val unrestricted = AgentTools.makeSubAgentExtraTools(null).map { it.name }
+        assertTrue(GrepSourceTool.NAME in unrestricted)
+        assertTrue(ExecuteCodeTool.NAME in unrestricted)
+    }
 }

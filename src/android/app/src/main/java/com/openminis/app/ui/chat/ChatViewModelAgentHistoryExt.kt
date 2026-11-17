@@ -251,8 +251,11 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
         // the model's window too (≤35%, ceiling 60k) — preAnchorBudget was
         // computed above (≤20%) so summary + preAnchor + postAnchor stays
         // under the 80% compact threshold on every model (no oscillation).
+        // [T-budget-floor-fraction-clamp] The old 8k floor overrode the 35%
+        // share on windows <~23k (20k window → 8k = 40%); the fraction itself
+        // is the floor now, same clamp policy as preAnchorTokenBudget.
         val postAnchorBudget = if (windowTokens != null) {
-            minOf(PostAnchorTail.BUDGET_TOKENS, (windowTokens * 0.35).toInt().coerceAtLeast(8_000))
+            minOf(PostAnchorTail.BUDGET_TOKENS, (windowTokens * 0.35).toInt())
         } else {
             PostAnchorTail.BUDGET_TOKENS
         }
@@ -298,13 +301,14 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
                 result.addAll(postAnchor.subList(0, firstUserOffset))
             }
             val target = postAnchor[firstUserOffset]
-            // Prepend `<context-summary>...` to the user content. We
-            // edit `content` directly because Android LLMMessage uses
-            // `content: String` as the canonical text payload; any
-            // contentParts the message also carries get preserved.
-            val injected = target.copy(
-                content = effectiveSummaryWrappedText + "\n\n" + target.content,
-            )
+            // Prepend `<context-summary>...` to the user content. Every
+            // provider wire builder serializes contentParts when non-empty
+            // and ignores `content` on that path, so the injection MUST
+            // update both fields — a real user turn always carries parts
+            // (fresh send / queue inject / steering / tool-result carrier),
+            // and a content-only edit silently dropped the whole summary
+            // from the wire. See prependUserText / [T-user-text-prefix-parts-sync].
+            val injected = prependUserText(target, effectiveSummaryWrappedText)
             result.add(injected)
             if (firstUserOffset + 1 < postAnchor.size) {
                 result.addAll(postAnchor.subList(firstUserOffset + 1, postAnchor.size))
@@ -417,11 +421,12 @@ internal fun foldHarnessNotes(history: List<LLMMessage>): List<LLMMessage> {
     for (msg in history) {
         if (HarnessNoteMarkers.isUserHarnessNote(msg)) {
             if (lastUserTarget >= 0) {
-                // Fold forward onto the nearest preceding user turn.
+                // Fold forward onto the nearest preceding user turn. Both
+                // fields must move together: the fold target is frequently a
+                // tool-result carrier whose contentParts override `content`
+                // on the wire ([T-user-text-prefix-parts-sync]).
                 val target = out[lastUserTarget]
-                out[lastUserTarget] = target.copy(
-                    content = target.content + "\n\n" + msg.content.trimStart(),
-                )
+                out[lastUserTarget] = appendUserText(target, msg.content.trimStart())
             } else {
                 leadingNotes.append(msg.content.trimStart()).append("\n")
             }
@@ -433,7 +438,7 @@ internal fun foldHarnessNotes(history: List<LLMMessage>): List<LLMMessage> {
             if (flushed) {
                 val prefix = leadingNotes.toString().trimEnd()
                 leadingNotes.clear()
-                out.add(msg.copy(content = prefix + "\n\n" + msg.content))
+                out.add(prependUserText(msg, prefix))
             } else {
                 out.add(msg)
             }

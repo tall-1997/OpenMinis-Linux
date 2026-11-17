@@ -83,13 +83,18 @@ fun AppNavigation(
 
     // T219-5: use the application-scoped singleton from MinisApp so UI
     // add/remove shares state with PRootKernel and the lifecycle re-probe
-    // path. Pre-T219-5 a `remember { MountedFoldersStore(...) }` here made
-    // a SECOND instance — UI updated but PRoot never saw the change.
+    // path (a `remember { ... }` here made a SECOND instance — UI updated
+    // but PRoot never saw the change).
     val mountedFoldersStore = remember {
         (context.applicationContext as com.openminis.app.MinisApp).mountedFoldersStore
     }
 
-    // Handle initial deep link after composition
+    // Handle initial deep link after composition.
+    // [T-deeplink-coldstart] MainActivity.onCreate parses the launch intent
+    // into `initialDeepLink`, so THIS is the cold-start deep-link dispatch
+    // (its handleDeepLink runs only for onNewIntent). Every DeepLinkAction
+    // needs a branch in BOTH `when`s — OpenAlarmList / OpenDevSuiteInstall /
+    // OpenShare were missing here and dead-ended on cold start.
     LaunchedEffect(initialDeepLink) {
         when (initialDeepLink) {
             is DeepLinkAction.OpenTerminal -> {
@@ -123,6 +128,27 @@ fun AppNavigation(
             is DeepLinkAction.OpenSettingsScreen -> navController.safeNavigate(initialDeepLink.route)
             is DeepLinkAction.OpenPermissionSettings -> {
                 navController.safeNavigate(Routes.PERMISSIONS)
+            }
+            // [T-deeplink-share-wired] minis://share → the share flow's landing: a fresh draft composer.
+            is DeepLinkAction.OpenShare -> {
+                navController.safeNavigate(Routes.chat("__new__${java.util.UUID.randomUUID()}")) {
+                    popUpTo(Routes.SESSION_LIST) { inclusive = false }
+                }
+            }
+            // [T-deeplink-coldstart] minis://views/alarm (AlarmOffloadHandler view_url) → system Clock app.
+            is DeepLinkAction.OpenAlarmList -> {
+                val showAlarms = android.content.Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS)
+                    .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                try {
+                    context.startActivity(showAlarms)
+                } catch (_: android.content.ActivityNotFoundException) {
+                    com.openminis.app.logging.AppLogger.warning("DeepLink", "OpenAlarmList: no Clock app handles SHOW_ALARMS")
+                }
+            }
+            // [T-deeplink-coldstart] minis://devsuite/install/<id> → park the bundle id, land on the market.
+            is DeepLinkAction.OpenDevSuiteInstall -> {
+                DeepLinkCoordinator.setPendingDevSuiteInstall(initialDeepLink.bundleId)
+                navController.safeNavigate(Routes.PLUGIN_MARKET)
             }
             // OpenHtmlPreview is handled by setting startDestination
             // (see below) so the NavHost mounts directly into the right
@@ -276,38 +302,28 @@ fun AppNavigation(
             if (autoSession.isNotEmpty() && !autoSession.startsWith("__new__")) {
                 com.openminis.app.diagnostics.RouteFuse.noteAutoEnter(context, autoSession)
             }
-            // T314: navigate directly without the safeNavigate guard.
-            // safeNavigate exists to defang back-then-tap-settings races
-            // where a popped destination is mid-tear-down — it requires
-            // RESUMED to be safe. But this LaunchedEffect fires on the
-            // first composition pass, when the start destination is
-            // STARTED but not yet RESUMED. There's no race here: we're
-            // the deterministic startup dispatcher, the start destination
-            // hasn't even rendered, and we want to navigate to it BEFORE
-            // it shows. Calling navigate() unconditionally produces the
-            // intended cold-start dispatch (mode 1 → last session, mode 2
-            // → new chat, mode 0 → auto). Pre-T314 the safeNavigate guard
-            // silently dropped this navigation and stranded the user on
-            // the SESSION_LIST start destination regardless of mode.
+            // T314: navigate directly WITHOUT the safeNavigate guard. safeNavigate
+            // defangs back-then-tap races by requiring RESUMED, but this
+            // LaunchedEffect fires on the first composition pass — start
+            // destination STARTED, not yet RESUMED — and pre-T314 the guard
+            // silently dropped this navigation, stranding the user on the
+            // SESSION_LIST start destination regardless of mode. Unconditional
+            // navigate() is the intended cold-start dispatch (mode 1 → last
+            // session, mode 2 → new chat, mode 0 → auto).
             navController.navigate(target) {
                 popUpTo(Routes.SESSION_LIST) { inclusive = false }
             }
         }
     }
 
-    // T185: warm-share fallback — if a share lands while the user is sitting
-    // on the session list (cold-start with mode 3 that raced past the launch
-    // resolver, or onNewIntent re-fires processPendingShare), route into a
-    // fresh chat so ChatScreen's existing LaunchedEffect(shareBufferVersion)
-    // can drain it. The drain itself is idempotent: consumeBuffer is one-shot,
-    // so a ChatScreen already in the backstack won't double-inject.
+    // T185: warm-share fallback — a share landing while the user sits on the
+    // session list routes into a fresh chat so ChatScreen's
+    // LaunchedEffect(shareBufferVersion) drains it (consumeBuffer is one-shot,
+    // so a ChatScreen already in the backstack won't double-inject).
     //
     // [T-android-highfreq-read-isolation] The collect lives in a dedicated
-    // child composable now: ShareCoordinator.bufferVersion ticks on EVERY
-    // share, and collecting it in AppNavigation's body re-invalidated this
-    // whole 1.5k-line function (and with it the NavHost call) per share.
-    // AppNavigationShareHost reads the flow internally, so a share tick
-    // recomposes only that child.
+    // child composable: bufferVersion ticks on EVERY share and used to
+    // re-invalidate this whole body (NavHost call included) per share.
     AppNavigationShareHost(navController)
 
     // Pinned-shortcut / quick-action cold start: start NavHost directly at
@@ -316,16 +332,11 @@ fun AppNavigation(
     // preference detour, no duplicate back-stack entry.
     //
     // [T-android-deeplink-reseed] Both seeds used to run in the COMPOSITION
-    // BODY. DeepLinkCoordinator's pending slots are one-shot — consume*() puts
-    // them back to null — so once ChatScreen drained one, any later
-    // recomposition of AppNavigation RE-SEEDED it and the preview sheet (or a
-    // seeded quick-action) popped open again by itself. AppNavigation used to
-    // recompose readily — `htmlBrowserUrl` flipped when an in-app file preview
-    // opened/closed, and ShareCoordinator.bufferVersion ticked on every share
-    // (both isolated into child composables since, see
-    // [T-android-highfreq-read-isolation]) — and remember(initialDeepLink)
-    // remains the guard that runs this block exactly once per deep link,
-    // which also freezes the `__new__<uuid>` draft id.
+    // BODY; the pending slots are one-shot (consume*() nulls them), so once
+    // ChatScreen drained one, any later recomposition RE-SEEDED it and the
+    // preview sheet (or seeded quick-action) popped open by itself.
+    // remember(initialDeepLink) keeps this block one-shot per deep link and
+    // also freezes the `__new__<uuid>` draft id.
     val startDestination = remember(initialDeepLink) {
         val htmlShortcut = initialDeepLink as? DeepLinkAction.OpenHtmlPreview
         val quickActionStart: String? = when (initialDeepLink) {
@@ -355,13 +366,10 @@ fun AppNavigation(
             else -> Routes.SESSION_LIST
         }
     }
-    // [T-android-highfreq-read-isolation] The in-app HTML preview URL used to
-    // be a `mutableStateOf` remembered in THIS body, which meant every open/
-    // close of a file preview recomposed all of AppNavigation (and re-ran the
-    // NavHost call). The state now lives in [HtmlBrowserState]: the FILE_BROWSER
-    // / CHAT_FILES closures only WRITE it (writes do not subscribe), and the
-    // reader — [HtmlBrowserHost] at the bottom — subscribes internally. A
-    // preview open/close now invalidates just the host child.
+    // [T-android-highfreq-read-isolation] The preview URL used to be a
+    // `mutableStateOf` in THIS body — every preview open/close recomposed all
+    // of AppNavigation. Now [HtmlBrowserState] holds it: closures only WRITE,
+    // and [HtmlBrowserHost] at the bottom subscribes internally.
     val htmlBrowserState = remember { HtmlBrowserState() }
     NavHost(
         navController = navController,
@@ -378,23 +386,15 @@ fun AppNavigation(
             .background(MaterialTheme.colorScheme.background),
         // T342: Material 3 motion — shared-axis X transition.
         // Spec (m3.material.io/styles/motion/transitions):
-        //   - enter uses EmphasizedDecelerate (cubic-bezier 0.05, 0.7, 0.1, 1.0)
-        //     so the new destination eases in confidently
-        //   - exit uses EmphasizedAccelerate (cubic-bezier 0.3, 0.0, 0.8, 0.15)
-        //     so the leaving destination clears out fast
-        //   - both legs together feel like a single 300ms motion (200ms
-        //     exit overlapping 300ms enter), short enough that a rapid second
-        //     tap still lands on the next destination once safeNavigate's
-        //     RESUMED guard releases
-        //   - the small slide distance (~SlideDirection default ≈ container
-        //     width ÷ N — Compose's slideIntoContainer already picks a
-        //     subtle distance) plus fade reads as a single coordinated
-        //     motion rather than a hard cut, matching Settings/Files in
-        //     Material You system apps.
-        // RESUMED guard via safeNavigate + the colorScheme.background
-        // modifier above (T333) still defend against rapid-tap white
-        // flashes; the slightly longer enter spec (300ms vs 220ms) is
-        // covered by the same guard.
+        //   - enter: EmphasizedDecelerate (0.05, 0.7, 0.1, 1.0) — eases in confidently
+        //   - exit: EmphasizedAccelerate (0.3, 0.0, 0.8, 0.15) — clears out fast
+        //   - together: a single 300ms motion (200ms exit overlapping 300ms
+        //     enter); a rapid second tap still lands once safeNavigate's RESUMED
+        //     guard releases
+        //   - the subtle slide (~SlideDirection default) plus fade reads as one
+        //     coordinated motion, matching Settings/Files in Material You apps.
+        // safeNavigate + the colorScheme.background modifier (T333) still defend
+        // against rapid-tap white flashes (300ms vs 220ms covered by the guard).
         enterTransition = {
             slideIntoContainer(
                 AnimatedContentTransitionScope.SlideDirection.Start,

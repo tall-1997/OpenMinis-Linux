@@ -633,6 +633,19 @@ val BigDecimal.quotaString: String
 object QuotaDecimalParser {
     private val allowed = Regex("^[0-9.+\\-eE]+$")
 
+    /**
+     * [T-quota-magnitude-cap] Magnitude bounds. The parser accepts exponent
+     * form and [BigDecimal.quotaString] renders plain, so an upstream "1e999999999"
+     * would expand into a ~1 GB string at persist time (and a negative exponent
+     * into an equally long fraction); no real quota in any unit comes near
+     * 10^30 or 30 decimal places, so beyond these bounds a value is not a
+     * measurement. Such values return null - the same "not an amount"
+     * convention as an unparseable field - so probes move on and callers
+     * treat the field as absent.
+     */
+    private const val MAX_SIGNIFICANT_DIGITS = 40
+    private const val MAX_ADJUSTED_EXPONENT = 30
+
     /** A JSON value: string or number. A boolean or null is never an amount. */
     fun parse(value: JsonElement?): BigDecimal? {
         if (value == null || value is JsonNull || value !is JsonPrimitive) return null
@@ -646,7 +659,17 @@ object QuotaDecimalParser {
         // Whole-string validation: a numeric PREFIX ("12abc") must not become a number.
         if (!allowed.matches(s) || s.none { it.isDigit() }) return null
         return try {
-            BigDecimal(s).canonical()
+            // [T-quota-magnitude-cap] Adjusted exponent = the power of ten the
+            // value is written with in scientific notation (d.ddd x 10^n).
+            val v = BigDecimal(s).canonical()
+            val adjusted = v.precision() - v.scale() - 1
+            if (v.precision() > MAX_SIGNIFICANT_DIGITS ||
+                adjusted > MAX_ADJUSTED_EXPONENT || adjusted < -MAX_ADJUSTED_EXPONENT
+            ) {
+                null
+            } else {
+                v
+            }
         } catch (_: NumberFormatException) {
             null
         }

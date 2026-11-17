@@ -60,8 +60,17 @@ internal object WalkBack {
      */
     internal fun preAnchorTokenBudget(windowTokens: Int?): Int {
         if (windowTokens == null) return COMPACT_PREANCHOR_TOKEN_BUDGET
-        return (windowTokens * PREANCHOR_WINDOW_FRACTION).toInt()
-            .coerceAtLeast(PREANCHOR_TOKEN_FLOOR)
+        val fractionBudget = (windowTokens * PREANCHOR_WINDOW_FRACTION).toInt()
+        // [T-budget-floor-fraction-clamp] The floor is a usability minimum
+        // for large windows, never a license to exceed the declared ≤20%
+        // share: on a 32k window the old 8k floor forced 25%, and on smaller
+        // windows worse — breaking the corridor invariant the assembly doc
+        // promises ("summary + preAnchor + postAnchor stays under the 80%
+        // compact threshold on every model"). The floor now applies only
+        // when it sits BELOW the fraction (large windows, unchanged); small
+        // windows take the fraction itself.
+        return fractionBudget
+            .coerceAtLeast(minOf(PREANCHOR_TOKEN_FLOOR, fractionBudget))
             .coerceAtMost(COMPACT_PREANCHOR_TOKEN_BUDGET)
     }
 

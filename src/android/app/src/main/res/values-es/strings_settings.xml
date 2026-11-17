@@ -64,4 +64,15 @@
     <string name="cot_translate_settings_language">Idioma de destino</string>
     <string name="cot_translate_privacy_notice">El razonamiento expandido se envía al servicio de traducción seleccionado. Puede contener código privado o detalles de la conversación.</string>
     <string name="cot_translate_anonymous_notice">Bing y Google no requieren inicio de sesión ni clave de API. Sus endpoints anónimos pueden rechazar o limitar solicitudes.</string>
+    <!-- backfill: strings_settings.xml -->
+    <string name="perm_section_vscreen_tiers">Niveles de pantalla virtual</string>
+    <string name="perm_vscreen_tier_degraded">Indisponible temporalmente</string>
+    <string name="perm_vscreen_tier_native">En la app (respaldo)</string>
+    <string name="perm_vscreen_tier_ready">Listo</string>
+    <string name="perm_vscreen_tier_root">Root (SU / KSU)</string>
+    <string name="perm_vscreen_tier_shizuku">Shizuku (pantalla pública)</string>
+    <string name="perm_vscreen_tier_unknown">Aún sin sondear — crea una pantalla virtual para sondear</string>
+    <string name="perm_vscreen_tiers_footer">Las pantallas virtuales del agente eligen el mejor nivel disponible: root (pantalla privilegiada), Shizuku (pantalla pública) o el respaldo en la app. Conceder un nivel superior actualiza las pantallas nuevas automáticamente; las pantallas en vivo nunca se migran.</string>
+    <string name="provider_list_config_load_failed_banner">No se pudo cargar la configuración de proveedores. Los cambios quedan bloqueados hasta que la app pueda leerla de nuevo — prueba una acción de proveedor para reintentar.</string>
+    <string name="provider_share_no_credentials">Nada que compartir: las credenciales quedan excluidas de los exportes compartidos. Usa la copia de seguridad cifrada para mover claves.</string>
 </resources>
