@@ -68,6 +68,7 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.FactCheck
@@ -210,6 +211,7 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Email
 import androidx.compose.material.icons.outlined.Error
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.FactCheck
@@ -382,6 +384,7 @@ private val iconPairs: List<Pair<ImageVector, ImageVector>> = listOf(
     Icons.Filled.Email to Icons.Outlined.Email,
     Icons.Filled.Error to Icons.Outlined.Error,
     Icons.Filled.ErrorOutline to Icons.Outlined.ErrorOutline,
+    Icons.Filled.ExpandLess to Icons.Outlined.ExpandLess,
     Icons.Filled.ExpandMore to Icons.Outlined.ExpandMore,
     Icons.Filled.Extension to Icons.Outlined.Extension,
     Icons.Filled.FactCheck to Icons.Outlined.FactCheck,

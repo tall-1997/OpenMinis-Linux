@@ -2302,4 +2302,6 @@
 <string name="git_panel_history_read_failed">No se pudo leer el historial de commits: detalles en los registros (etiqueta GitPanel)</string>
 
     <string name="git_panel_status_read_failed">No se pudo leer el estado del árbol de trabajo — detalles en el registro (etiqueta GitPanel)</string>
+    <string name="appearance_show_turn_changes_card_title">Tarjeta de cambios del turno</string>
+    <string name="appearance_show_turn_changes_card_subtitle">Muestra una tarjeta por turno con los archivos que modificó el asistente, estadísticas de líneas y deshacer con un toque. Desactivada por defecto; la conversación se mantiene limpia sin ella.</string>
 </resources>

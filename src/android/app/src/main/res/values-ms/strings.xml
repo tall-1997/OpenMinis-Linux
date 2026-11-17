@@ -2316,4 +2316,6 @@
 <string name="git_panel_history_read_failed">Gagal membaca sejarah komit — butiran dalam log (tag GitPanel)</string>
 
     <string name="git_panel_status_read_failed">Gagal membaca status pokok kerja — butiran dalam log (tag GitPanel)</string>
+    <string name="appearance_show_turn_changes_card_title">Kad perubahan giliran</string>
+    <string name="appearance_show_turn_changes_card_subtitle">Memaparkan kad setiap giliran yang menyenaraikan fail yang diubah oleh pembantu, statistik baris dan buat asal satu ketukan. Lalai dimatikan.</string>
 </resources>

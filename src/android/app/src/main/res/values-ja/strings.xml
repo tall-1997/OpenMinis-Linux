@@ -2311,4 +2311,6 @@
 <string name="git_panel_history_read_failed">コミット履歴の読み取りに失敗しました——詳細はログ（GitPanel タグ）を参照</string>
 
     <string name="git_panel_status_read_failed">ワークツリーの状態を読み取れませんでした — 詳細はログへ（GitPanel タグ）</string>
+    <string name="appearance_show_turn_changes_card_title">ターン変更カード</string>
+    <string name="appearance_show_turn_changes_card_subtitle">アシスタントが変更したファイルを行数統計つきでターンごとに表示し、ワンタップで元に戻せます。デフォルトはオフです。</string>
 </resources>

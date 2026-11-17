@@ -2316,4 +2316,6 @@
 <string name="git_panel_history_read_failed">Falha ao ler o histórico de commits — detalhes nos logs (tag GitPanel)</string>
 
     <string name="git_panel_status_read_failed">Falha ao ler o status da árvore de trabalho — detalhes nos logs (tag GitPanel)</string>
+    <string name="appearance_show_turn_changes_card_title">Cartão de alterações da rodada</string>
+    <string name="appearance_show_turn_changes_card_subtitle">Mostra um cartão por rodada com os arquivos alterados pelo assistente, estatísticas de linhas e desfazer com um toque. Desativado por padrão.</string>
 </resources>

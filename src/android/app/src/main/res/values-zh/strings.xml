@@ -2877,4 +2877,6 @@
     <string name="web_search_tool_enabled_sub">允许智能体在聊天中搜索网页。关闭 → 完全不提供该工具。</string>
     <string name="web_search_tool_section">Tool</string>
     <string name="web_search_tool_section_footer">关闭该工具不会删除下方的引擎配置；重新开启即可恢复原行为。</string>
+    <string name="appearance_show_turn_changes_card_title">本轮改动卡片</string>
+    <string name="appearance_show_turn_changes_card_subtitle">在对话中显示每轮的改动卡片，列出助手修改的文件、行数统计，并支持一键撤销。默认关闭，保持对话简洁。</string>
 </resources>

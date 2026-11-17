@@ -2316,4 +2316,6 @@
 <string name="git_panel_history_read_failed">Nabigo basahin ang kasaysayan ng mga commit — tingnan ang logs (GitPanel tag)</string>
 
     <string name="git_panel_status_read_failed">Hindi mabasa ang status ng working tree — detalye sa logs (GitPanel tag)</string>
+    <string name="appearance_show_turn_changes_card_title">Kard ng mga pagbabago sa turn</string>
+    <string name="appearance_show_turn_changes_card_subtitle">Nagpapakita ng kada-turn na kard na naglilista ng mga binago ng assistant na file, may line stats at one-tap undo. Nakasara bilang default.</string>
 </resources>

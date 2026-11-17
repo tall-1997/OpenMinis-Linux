@@ -2316,4 +2316,6 @@
 <string name="git_panel_history_read_failed">Commit geçmişi okunamadı — ayrıntılar günlüklerde (GitPanel etiketi)</string>
 
     <string name="git_panel_status_read_failed">Çalışma ağacı durumu okunamadı — ayrıntılar günlükte (GitPanel etiketi)</string>
+    <string name="appearance_show_turn_changes_card_title">Tur değişiklik kartı</string>
+    <string name="appearance_show_turn_changes_card_subtitle">Asistanın değiştirdiği dosyaları her tur için satır istatistikleri ve tek dokunuşla geri alma ile gösterir. Varsayılan olarak kapalıdır.</string>
 </resources>

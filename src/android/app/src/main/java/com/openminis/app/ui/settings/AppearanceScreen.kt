@@ -106,6 +106,18 @@ const val KEY_AUTO_EXPAND_THINKING = "chat.autoExpandThinking"  // Boolean, defa
 
 const val KEY_FOLD_AI_PROCESS = "chat.foldAiProcess"
 const val DEFAULT_FOLD_AI_PROCESS = true
+
+/**
+ * [T-turn-card-visibility-toggle] Show the per-turn changes card
+ * (TurnChangesCard) in the transcript. Default OFF — the transcript stays
+ * clean; the card is an opt-in surface for users who want one-tap file
+ * undo visible per turn.
+ */
+const val KEY_SHOW_TURN_CHANGES_CARD = "chat.showTurnChangesCard"  // Boolean, default false
+
+/** Default OFF — see [KEY_SHOW_TURN_CHANGES_CARD]. */
+fun showTurnChangesCardEnabled(context: Context): Boolean =
+    getAppearancePrefs(context).getBoolean(KEY_SHOW_TURN_CHANGES_CARD, false)
 // [T-composer-mic-toggle] Show the composer's mic button. Default OFF; voice mode re-shows it so hiding never strands the user.
 const val KEY_SHOW_MIC_BUTTON = "chat.showMicButton"
 const val DEFAULT_SHOW_MIC_BUTTON = false
@@ -212,6 +224,7 @@ fun AppearanceScreen(
     var autoExpandThinking by remember { mutableStateOf(true) }
     var showFullThinking by remember { mutableStateOf(false) }
     var foldAiProcess by remember { mutableStateOf(DEFAULT_FOLD_AI_PROCESS) }
+    var showTurnChangesCard by remember { mutableStateOf(false) }
     // Material You is Android 12+; the row renders disabled below S.
     val monetSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     var dynamicColor by remember { mutableStateOf(false) }
@@ -241,6 +254,7 @@ fun AppearanceScreen(
             autoExpandThinking = p.getBoolean(KEY_AUTO_EXPAND_THINKING, true)
             showFullThinking = p.getBoolean(KEY_SHOW_FULL_THINKING, false)
             foldAiProcess = p.getBoolean(KEY_FOLD_AI_PROCESS, DEFAULT_FOLD_AI_PROCESS)
+            showTurnChangesCard = p.getBoolean(KEY_SHOW_TURN_CHANGES_CARD, false)
             dynamicColor = p.getBoolean(KEY_DYNAMIC_COLOR, false)
             showChatTitle = p.getBoolean(KEY_SHOW_CHAT_TITLE, true)
             autoGrouping = p.getBoolean(KEY_AUTO_GROUPING, true)
@@ -512,6 +526,20 @@ fun AppearanceScreen(
                 onCheckedChange = {
                     foldAiProcess = it
                     prefs.value.edit().putBoolean(KEY_FOLD_AI_PROCESS, it).apply()
+                },
+                showDivider = false,
+            )
+            // [T-turn-card-visibility-toggle] Per-turn changes card (file
+            // undo surface) — default OFF, opt-in here.
+            SettingsSwitchRow(
+                icon = Icons.Outlined.History,
+                iconColor = tilePurple,
+                title = stringResource(R.string.appearance_show_turn_changes_card_title),
+                subtitle = stringResource(R.string.appearance_show_turn_changes_card_subtitle),
+                checked = showTurnChangesCard,
+                onCheckedChange = {
+                    showTurnChangesCard = it
+                    prefs.value.edit().putBoolean(KEY_SHOW_TURN_CHANGES_CARD, it).apply()
                 },
                 showDivider = false,
             )

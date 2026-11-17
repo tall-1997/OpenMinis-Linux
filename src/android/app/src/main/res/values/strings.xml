@@ -3076,4 +3076,6 @@
     <string name="handsfree_state_speaking">Speaking…</string>
     <string name="handsfree_exit_recognition">Hands-free stopped: speech recognition failed repeatedly. Tap Hands-free to try again.</string>
     <string name="handsfree_exit_tts">Hands-free stopped: replies could not be read aloud. Tap Hands-free to try again.</string>
+    <string name="appearance_show_turn_changes_card_title">Turn changes card</string>
+    <string name="appearance_show_turn_changes_card_subtitle">Show a per-turn card listing the files the assistant changed, with line stats and one-tap undo. Off by default; the transcript stays clean without it.</string>
 </resources>

@@ -2316,4 +2316,6 @@
 <string name="git_panel_history_read_failed">อ่านประวัติคอมมิตไม่สำเร็จ — ดูรายละเอียดใน log (แท็ก GitPanel)</string>
 
     <string name="git_panel_status_read_failed">อ่านสถานะ working tree ไม่สำเร็จ — ดูรายละเอียดใน log (แท็ก GitPanel)</string>
+    <string name="appearance_show_turn_changes_card_title">การ์ดการเปลี่ยนแปลงของรอบ</string>
+    <string name="appearance_show_turn_changes_card_subtitle">แสดงการ์ดรายไฟล์ที่ผู้ช่วยแก้ไขในแต่ละรอบ พร้อมสถิติบรรทัดและการเลิกทำแตะเดียว ปิดอยู่ตามค่าเริ่มต้น</string>
 </resources>

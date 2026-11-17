@@ -25,7 +25,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -39,14 +38,13 @@ import com.openminis.app.R
 import com.openminis.app.ui.components.MinisAlertDialog
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.theme.m3Icon
-import kotlinx.coroutines.delay
-
-private const val AUTO_COLLAPSE_DELAY_MS = 8_000L
 
 /**
- * [T-tool-undo-replay] ZCode-style per-turn change card. It opens for the
- * latest turn, folds into a single summary row after a short delay, and keeps
- * destructive actions behind an explicit confirmation.
+ * [T-tool-undo-replay] ZCode-style per-turn change card. [T-turn-card-collapsed]
+ * Default COLLAPSED into a single summary row (tap to expand) — an always-open
+ * wall of file rows hurts transcript scannability, and the 8-second auto-collapse
+ * this replaced was a re-timed surprise on every process recreation. Destructive
+ * actions stay behind an explicit confirmation.
  */
 @Composable
 internal fun TurnChangesCard(
@@ -59,17 +57,9 @@ internal fun TurnChangesCard(
     onRevertAll: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var expanded by rememberSaveable("$messageKeyPrefix:expanded") { mutableStateOf(true) }
-    var userToggled by rememberSaveable("$messageKeyPrefix:toggled") { mutableStateOf(false) }
+    var expanded by rememberSaveable("$messageKeyPrefix:expanded") { mutableStateOf(false) }
     var pendingFile by rememberSaveable("$messageKeyPrefix:file") { mutableStateOf<String?>(null) }
     var pendingAll by rememberSaveable("$messageKeyPrefix:all") { mutableStateOf(false) }
-
-    LaunchedEffect(messageKeyPrefix, expanded, userToggled) {
-        if (expanded && !userToggled) {
-            delay(AUTO_COLLAPSE_DELAY_MS)
-            expanded = false
-        }
-    }
 
     val allStatsAvailable = statsComplete && paths.all { path ->
         stats.containsKey(TurnChanges.revertedKey(messageKeyPrefix, path))
@@ -104,10 +94,7 @@ internal fun TurnChangesCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 44.dp)
-                        .clickable {
-                            userToggled = true
-                            expanded = true
-                        },
+                        .clickable { expanded = true },
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
@@ -153,10 +140,7 @@ internal fun TurnChangesCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(min = 44.dp)
-                            .clickable {
-                                userToggled = true
-                                expanded = false
-                            },
+                            .clickable { expanded = false },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(

@@ -2320,4 +2320,6 @@
 <string name="git_panel_history_read_failed">Citirea istoricului de commit-uri a eșuat — detalii în loguri (eticheta GitPanel)</string>
 
     <string name="git_panel_status_read_failed">Nu s-a putut citi starea arborelui de lucru — detalii în jurnal (eticheta GitPanel)</string>
+    <string name="appearance_show_turn_changes_card_title">Cardul modificărilor turei</string>
+    <string name="appearance_show_turn_changes_card_subtitle">Afișează la fiecare tură un card cu fișierele modificate de asistent, statistici pe linii și anulare dintr-o atingere. Dezactivat în mod implicit.</string>
 </resources>

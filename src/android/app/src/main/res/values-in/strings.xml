@@ -2321,4 +2321,6 @@
 <string name="git_panel_history_read_failed">Gagal membaca riwayat commit — detailnya di log (tag GitPanel)</string>
 
     <string name="git_panel_status_read_failed">Gagal membaca status working tree — detail di log (tag GitPanel)</string>
+    <string name="appearance_show_turn_changes_card_title">Kartu perubahan giliran</string>
+    <string name="appearance_show_turn_changes_card_subtitle">Menampilkan kartu per giliran yang mencantumkan file yang diubah asisten, statistik baris, dan undo satu ketukan. Nonaktif secara default.</string>
 </resources>

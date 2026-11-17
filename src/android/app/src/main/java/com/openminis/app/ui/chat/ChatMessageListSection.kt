@@ -11,7 +11,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.openminis.app.ui.settings.showTurnChangesCardEnabled
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
@@ -453,12 +455,21 @@ internal fun ChatFlatItemRow(
                             // ViewModel state flow so already-undone rows
                             // gray out reactively (also across reload).
                             is FlatChatItem.AssistantTurnChanges -> {
-                                val reverted by viewModel.toolUndo.revertedKeys.collectAsStateWithLifecycle()
-                                val diffStats by viewModel.toolUndo.diffStats.collectAsStateWithLifecycle()
-                                val completedDiffs by viewModel.toolUndo.completedDiffs.collectAsStateWithLifecycle()
-                                LaunchedEffect(item.messageId, item.changes) {
-                                    viewModel.ensureTurnDiffStats(item.messageId, item.changes)
+                                // [T-turn-card-visibility-toggle] The card is
+                                // an opt-in surface (Appearance → Turn changes
+                                // card, default OFF): read the flag here so a
+                                // toggle takes effect on the next recomposition
+                                // without re-flatting the list.
+                                val showTurnCard = remember {
+                                    com.openminis.app.ui.settings.showTurnChangesCardEnabled(context)
                                 }
+                                if (showTurnCard) {
+                                    val reverted by viewModel.toolUndo.revertedKeys.collectAsStateWithLifecycle()
+                                    val diffStats by viewModel.toolUndo.diffStats.collectAsStateWithLifecycle()
+                                    val completedDiffs by viewModel.toolUndo.completedDiffs.collectAsStateWithLifecycle()
+                                    LaunchedEffect(item.messageId, item.changes) {
+                                        viewModel.ensureTurnDiffStats(item.messageId, item.changes)
+                                    }
                                 TurnChangesCard(
                                     paths = item.changes.map { it.path },
                                     stats = diffStats,
@@ -472,7 +483,8 @@ internal fun ChatFlatItemRow(
                                         safeMutate { viewModel.undoAllTurnChanges(item.messageId) }
                                     },
                                     modifier = Modifier.padding(start = 6.dp, end = 6.dp, bottom = 6.dp),
-                                )
+                                    )
+                                }
                             }
                             is FlatChatItem.AssistantLegacyContent -> BoundsTrackedBlock(
                                 messageId = item.messageId,

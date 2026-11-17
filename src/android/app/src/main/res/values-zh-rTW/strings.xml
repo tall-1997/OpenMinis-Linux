@@ -2395,4 +2395,6 @@
 <string name="git_panel_history_read_failed">提交歷史讀取失敗——詳情見日誌（GitPanel 標籤）</string>
 <string name="git_panel_status_read_failed">工作區狀態讀取失敗——詳情見日誌（GitPanel 標籤）</string>
 
+    <string name="appearance_show_turn_changes_card_title">本輪改動卡片</string>
+    <string name="appearance_show_turn_changes_card_subtitle">在對話中顯示每輪的改動卡片，列出助手修改的檔案、行數統計，並支援一鍵撤銷。預設關閉，保持對話簡潔。</string>
 </resources>

@@ -2302,4 +2302,6 @@
 <string name="git_panel_history_read_failed">Commit-Verlauf konnte nicht gelesen werden – Details in den Logs (Tag GitPanel)</string>
 
     <string name="git_panel_status_read_failed">Arbeitsverzeichnis-Status konnte nicht gelesen werden – Details im Log (Tag GitPanel)</string>
+    <string name="appearance_show_turn_changes_card_title">Änderungskarte pro Runde</string>
+    <string name="appearance_show_turn_changes_card_subtitle">Zeigt pro Runde eine Karte mit den vom Assistenten geänderten Dateien, Zeilenstatistik und Ein-Tipp-Rückgängig. Standardmäßig aus; das Protokoll bleibt ohne sie aufgeräumt.</string>
 </resources>
