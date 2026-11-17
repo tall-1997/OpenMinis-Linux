@@ -10,6 +10,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import com.openminis.app.testsupport.takeRequestOrThrow
 
 class OpenAIImageGenerationTest {
     private lateinit var server: MockWebServer
@@ -45,7 +46,7 @@ class OpenAIImageGenerationTest {
             size = "1024x1024",
         )
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         assertEquals("POST", request.method)
         assertEquals("/v1/images/generations", request.path)
         val body = request.body.readUtf8()

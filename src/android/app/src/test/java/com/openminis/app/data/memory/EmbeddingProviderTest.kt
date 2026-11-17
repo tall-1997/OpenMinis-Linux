@@ -10,6 +10,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import kotlinx.coroutines.runBlocking
+import com.openminis.app.testsupport.takeRequestOrThrow
 
 /**
  * [T-memory-embedding-recall] Pure-JVM coverage of the #27 embedding seam:
@@ -134,7 +135,7 @@ class EmbeddingProviderTest {
         assertEquals(0.5f, out[0][0], 1e-6f)
         assertEquals(2.0f, out[1][1], 1e-6f)
 
-        val recorded = server.takeRequest()
+        val recorded = server.takeRequestOrThrow()
         assertEquals("/v1/embeddings", recorded.path)
         assertEquals("Bearer sk-test", recorded.getHeader("Authorization"))
         val sent = recorded.body.readUtf8()

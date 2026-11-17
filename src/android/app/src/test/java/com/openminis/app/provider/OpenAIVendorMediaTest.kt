@@ -15,6 +15,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
+import com.openminis.app.testsupport.takeRequestOrThrow
 
 class OpenAIVendorMediaTest {
     private lateinit var server: MockWebServer
@@ -71,7 +72,7 @@ class OpenAIVendorMediaTest {
             .generateVideo("一只小狗在草地上奔跑，写实，4k")
         assertTrue(response.mediaAttachments.single().data.contentEquals(mp4))
 
-        val create = server.takeRequest()
+        val create = server.takeRequestOrThrow()
         assertEquals("POST", create.method)
         assertEquals("/api/v3/contents/generations/tasks", create.path)
         assertEquals("Bearer test-key", create.getHeader("Authorization"))
@@ -81,7 +82,7 @@ class OpenAIVendorMediaTest {
         assertEquals(5, body.getInt("duration"))
         assertEquals("720p", body.getString("resolution"))
 
-        val poll = server.takeRequest()
+        val poll = server.takeRequestOrThrow()
         assertEquals("GET", poll.method)
         assertEquals("/api/v3/contents/generations/tasks/ftask-1", poll.path)
     }
@@ -95,7 +96,7 @@ class OpenAIVendorMediaTest {
         enqueueMp4()
 
         provider("doubao-seedance-1-0-pro", VendorMediaKind.ARK).generateVideo("slow dolly in")
-        val body = JSONObject(server.takeRequest().body.readUtf8())
+        val body = JSONObject(server.takeRequestOrThrow().body.readUtf8())
         assertEquals("text", body.getJSONArray("content").getJSONObject(0).getString("type"))
         assertEquals("slow dolly in", body.getJSONArray("content").getJSONObject(0).getString("text"))
         assertTrue(!body.has("duration"))
@@ -106,7 +107,7 @@ class OpenAIVendorMediaTest {
         server.enqueue(MockResponse().setBody("""{"data":[]}"""))
         provider("doubao-seedream-4-0", VendorMediaKind.ARK)
             .generateImage("red kite")
-        val req = server.takeRequest()
+        val req = server.takeRequestOrThrow()
         assertEquals("POST", req.method)
         assertEquals("/api/v3/images/generations", req.path)
         val body = JSONObject(req.body.readUtf8())
@@ -128,8 +129,8 @@ class OpenAIVendorMediaTest {
         val response = provider("cogvideox-3", VendorMediaKind.ZHIPU).generateVideo("waves")
         assertEquals(LLMMediaAttachment.MediaType.VIDEO, response.mediaAttachments.single().type)
 
-        assertEquals("/api/paas/v4/videos/generations", server.takeRequest().path)
-        val poll = server.takeRequest()
+        assertEquals("/api/paas/v4/videos/generations", server.takeRequestOrThrow().path)
+        val poll = server.takeRequestOrThrow()
         assertEquals("GET", poll.method)
         assertEquals("/api/paas/v4/async-result/task-1", poll.path)
     }
@@ -138,7 +139,7 @@ class OpenAIVendorMediaTest {
     fun `zhipu image posts paas v4 images generations`() = runBlocking {
         server.enqueue(MockResponse().setBody("""{"data":[]}"""))
         provider("cogview-4", VendorMediaKind.ZHIPU).generateImage("studio backdrop")
-        assertEquals("/api/paas/v4/images/generations", server.takeRequest().path)
+        assertEquals("/api/paas/v4/images/generations", server.takeRequestOrThrow().path)
     }
 
     @Test
@@ -155,12 +156,12 @@ class OpenAIVendorMediaTest {
         enqueueMp4()
 
         provider("wanx2.1-t2v-turbo", VendorMediaKind.DASHSCOPE).generateVideo("fog over hills")
-        val create = server.takeRequest()
+        val create = server.takeRequestOrThrow()
         assertEquals("/api/v1/services/aigc/video-generation/video-synthesis", create.path)
         assertEquals("enable", create.getHeader("X-DashScope-Async"))
         val body = JSONObject(create.body.readUtf8())
         assertEquals("fog over hills", body.getJSONObject("input").getString("prompt"))
-        assertEquals("/api/v1/tasks/t1", server.takeRequest().path)
+        assertEquals("/api/v1/tasks/t1", server.takeRequestOrThrow().path)
     }
 
     @Test
@@ -172,18 +173,18 @@ class OpenAIVendorMediaTest {
         enqueueMp4()
 
         provider("video-01", VendorMediaKind.MINIMAX).generateVideo("cat walking")
-        assertEquals("/v1/video_generation", server.takeRequest().path)
-        val poll = server.takeRequest()
+        assertEquals("/v1/video_generation", server.takeRequestOrThrow().path)
+        val poll = server.takeRequestOrThrow()
         assertTrue(poll.path!!.startsWith("/v1/query/video_generation"))
         assertTrue(poll.path!!.contains("task_id=m1"))
-        assertTrue(server.takeRequest().path!!.contains("file_id=f1"))
+        assertTrue(server.takeRequestOrThrow().path!!.contains("file_id=f1"))
     }
 
     @Test
     fun `dashscope qwen-image uses compatible-mode images generations`() = runBlocking {
         server.enqueue(MockResponse().setBody("""{"data":[]}"""))
         provider("qwen-image-plus", VendorMediaKind.DASHSCOPE).generateImage("ink wash")
-        assertEquals("/compatible-mode/v1/images/generations", server.takeRequest().path)
+        assertEquals("/compatible-mode/v1/images/generations", server.takeRequestOrThrow().path)
     }
 
     @Test
@@ -200,19 +201,19 @@ class OpenAIVendorMediaTest {
         } catch (e: LLMError.ProviderError) {
             assertTrue(e.detail.contains("DashScope image completed"))
         }
-        val create = server.takeRequest()
+        val create = server.takeRequestOrThrow()
         assertEquals("/api/v1/services/aigc/text2image/image-synthesis", create.path)
         assertEquals("enable", create.getHeader("X-DashScope-Async"))
         val body = JSONObject(create.body.readUtf8())
         assertEquals("lotus pond", body.getJSONObject("input").getString("prompt"))
-        assertEquals("/api/v1/tasks/img1", server.takeRequest().path)
+        assertEquals("/api/v1/tasks/img1", server.takeRequestOrThrow().path)
     }
 
     @Test
     fun `minimax image posts image_generation`() = runBlocking {
         server.enqueue(MockResponse().setBody("""{"data":{}}"""))
         provider("image-01", VendorMediaKind.MINIMAX).generateImage("a lantern")
-        val req = server.takeRequest()
+        val req = server.takeRequestOrThrow()
         assertEquals("/v1/image_generation", req.path)
         val body = JSONObject(req.body.readUtf8())
         assertEquals("a lantern", body.getString("prompt"))
@@ -260,6 +261,6 @@ class OpenAIVendorMediaTest {
         server.enqueue(MockResponse().setBody("""{"data":[]}"""))
         val p = provider("agnes-pro", VendorMediaKind.AGNES, server.url("/v1").toString().trimEnd('/'))
         p.generateImage("watercolor fox")
-        assertEquals("/v1/images/generations", server.takeRequest().path)
+        assertEquals("/v1/images/generations", server.takeRequestOrThrow().path)
     }
 }

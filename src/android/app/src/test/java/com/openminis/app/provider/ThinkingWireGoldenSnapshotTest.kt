@@ -13,6 +13,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
+import com.openminis.app.testsupport.takeRequestOrThrow
 
 /**
  * GOLDEN SNAPSHOT of the thinking-parameter injection on the Chat Completions path.
@@ -162,7 +163,7 @@ class ThinkingWireGoldenSnapshotTest {
                 )
             }
         }
-        val body = JSONObject(server.takeRequest().body.readUtf8())
+        val body = JSONObject(server.takeRequestOrThrow().body.readUtf8())
         val present = watched.filter { body.has(it) }.sorted()
         return present.joinToString(",", "{", "}") { "$it:${canonical(body.get(it))}" }
     }

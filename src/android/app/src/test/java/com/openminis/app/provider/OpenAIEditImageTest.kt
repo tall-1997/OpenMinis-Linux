@@ -13,6 +13,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import com.openminis.app.testsupport.takeRequestOrThrow
 
 /**
  * [T-android-image-edit-endpoint] Wire-level coverage for the /images/edits
@@ -75,7 +76,7 @@ class OpenAIEditImageTest {
             images = listOf(imagePart(pngBytes, "image/png")),
         )
 
-        val recorded = server.takeRequest()
+        val recorded = server.takeRequestOrThrow()
         assertEquals("POST", recorded.method)
         assertTrue(
             "should hit /images/edits, got ${recorded.path}",
@@ -103,7 +104,7 @@ class OpenAIEditImageTest {
     fun `editImage sends b64_json response_format by default`() = runBlocking {
         server.enqueue(MockResponse().setBody(imageResponseBody()))
         provider.editImage("p", listOf(imagePart(pngBytes, "image/png")))
-        val body = server.takeRequest().body.readUtf8()
+        val body = server.takeRequestOrThrow().body.readUtf8()
         assertTrue("expected b64_json response_format", body.contains("b64_json"))
     }
 
@@ -122,7 +123,7 @@ class OpenAIEditImageTest {
             ),
         )
 
-        val body = server.takeRequest().body.readUtf8()
+        val body = server.takeRequestOrThrow().body.readUtf8()
         // First → `image`, extras → `image[]` (iOS field naming).
         assertTrue("first image should use name=\"image\"", body.contains("""name="image""""))
         val extraParts = Regex("""name="image\[\]"""").findAll(body).count()
@@ -149,8 +150,8 @@ class OpenAIEditImageTest {
         val response = provider.editImage("p", listOf(imagePart(pngBytes, "image/png")))
 
         assertEquals(2, server.requestCount)
-        val first = server.takeRequest().body.readUtf8()
-        val second = server.takeRequest().body.readUtf8()
+        val first = server.takeRequestOrThrow().body.readUtf8()
+        val second = server.takeRequestOrThrow().body.readUtf8()
         assertTrue("first attempt should carry b64_json", first.contains("b64_json"))
         assertFalse("retry must NOT carry response_format", second.contains("response_format"))
         assertEquals(0, response.mediaAttachments.size)
@@ -188,7 +189,7 @@ class OpenAIEditImageTest {
     fun `editImage does not hit the generations endpoint`() = runBlocking {
         server.enqueue(MockResponse().setBody(imageResponseBody()))
         provider.editImage("p", listOf(imagePart(pngBytes, "image/png")))
-        val path = server.takeRequest().path ?: ""
+        val path = server.takeRequestOrThrow().path ?: ""
         assertFalse("must not route to /images/generations", path.contains("generations"))
     }
 }

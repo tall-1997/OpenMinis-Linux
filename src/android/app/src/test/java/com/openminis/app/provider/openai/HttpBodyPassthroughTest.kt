@@ -17,6 +17,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
+import com.openminis.app.testsupport.takeRequestOrThrow
 
 /**
  * Pins the transport-layer contract for [HttpBody] and
@@ -78,7 +79,7 @@ class HttpBodyPassthroughTest {
             body = HttpBody.Json(body),
         )
 
-        val recorded = server.takeRequest()
+        val recorded = server.takeRequestOrThrow()
         assertEquals("application/json", recorded.getHeader("Content-Type"))
         // Byte-identical to the old `bodyObject.toString()` path.
         assertEquals(body.toString(), recorded.body.readUtf8())
@@ -95,7 +96,7 @@ class HttpBodyPassthroughTest {
             body = null,
         )
 
-        val recorded = server.takeRequest()
+        val recorded = server.takeRequestOrThrow()
         // The old code set this header unconditionally, even with no body.
         // Preserved so existing requests are unchanged.
         assertEquals("application/json", recorded.getHeader("Content-Type"))
@@ -114,7 +115,7 @@ class HttpBodyPassthroughTest {
             body = HttpBody.Json(JSONObject().put("ignored", true)),
         )
 
-        val recorded = server.takeRequest()
+        val recorded = server.takeRequestOrThrow()
         assertEquals("GET", recorded.method)
         assertEquals("application/json", recorded.getHeader("Content-Type"))
         assertEquals(0, recorded.bodySize)
@@ -131,7 +132,7 @@ class HttpBodyPassthroughTest {
             body = HttpBody.Empty,
         )
 
-        val recorded = server.takeRequest()
+        val recorded = server.takeRequestOrThrow()
         assertEquals("application/json", recorded.getHeader("Content-Type"))
         assertEquals(0, recorded.bodySize)
     }
@@ -147,7 +148,7 @@ class HttpBodyPassthroughTest {
             body = HttpBody.Bytes(byteArrayOf(1, 2, 3), "application/octet-stream"),
         )
 
-        val recorded = server.takeRequest()
+        val recorded = server.takeRequestOrThrow()
         assertEquals("application/octet-stream", recorded.getHeader("Content-Type"))
         assertEquals(3, recorded.bodySize)
     }
@@ -176,7 +177,7 @@ class HttpBodyPassthroughTest {
             ),
         )
 
-        val recorded = server.takeRequest()
+        val recorded = server.takeRequestOrThrow()
         val contentType = recorded.getHeader("Content-Type")
         assertNotNull("multipart must declare its type", contentType)
         assertTrue(
@@ -222,7 +223,7 @@ class HttpBodyPassthroughTest {
             body = HttpBody.Multipart(listOf(HttpBody.Part.Field("a", "b"))),
         )
 
-        val recorded = server.takeRequest()
+        val recorded = server.takeRequestOrThrow()
         val contentType = recorded.getHeader("Content-Type")
         assertTrue(
             "user Content-Type must not override the multipart boundary, was: $contentType",

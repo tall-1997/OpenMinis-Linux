@@ -19,6 +19,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import com.openminis.app.testsupport.takeRequestOrThrow
 
 class AnthropicProviderTest {
     private lateinit var server: MockWebServer
@@ -134,7 +135,7 @@ class AnthropicProviderTest {
 
         provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "test")), "system", 100)
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         // MockWebServer uses custom base URL, so Bearer auth is used
         assertEquals("Bearer test-key", request.getHeader("Authorization"))
         assertEquals("2023-06-01", request.getHeader("anthropic-version"))
@@ -148,7 +149,7 @@ class AnthropicProviderTest {
 
         provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "test")), "You are helpful", 100)
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         val body = JSONObject(request.body.readUtf8())
         // System prompt is now a JSONArray with cache_control
         val system = body.getJSONArray("system")
@@ -162,7 +163,7 @@ class AnthropicProviderTest {
 
         provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "test")), null, 100)
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         val body = JSONObject(request.body.readUtf8())
         assertTrue(!body.has("system"))
     }
@@ -173,7 +174,7 @@ class AnthropicProviderTest {
 
         provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "test")), null, 100, temperature = 0.7)
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         val body = JSONObject(request.body.readUtf8())
         assertEquals(0.7, body.getDouble("temperature"), 0.001)
     }
@@ -184,7 +185,7 @@ class AnthropicProviderTest {
 
         provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "test")), null, 100, temperature = null)
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         val body = JSONObject(request.body.readUtf8())
         assertTrue(!body.has("temperature"))
     }
@@ -195,7 +196,7 @@ class AnthropicProviderTest {
 
         provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "test")), null, 2048)
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         val body = JSONObject(request.body.readUtf8())
         assertEquals(LLMModel.claudeHaiku45.id, body.getString("model"))
         assertEquals(2048, body.getInt("max_tokens"))
@@ -213,7 +214,7 @@ class AnthropicProviderTest {
             ), null, 100
         )
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         val body = JSONObject(request.body.readUtf8())
         val messages = body.getJSONArray("messages")
         assertEquals("user", messages.getJSONObject(0).getString("role"))
@@ -321,7 +322,7 @@ class AnthropicProviderTest {
 
         provider.streamMessage(listOf(LLMMessage(LLMMessage.Role.USER, "Hi")), null, 1024, temperature = 0.5).toList()
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         val body = JSONObject(request.body.readUtf8())
         assertEquals(0.5, body.getDouble("temperature"), 0.001)
         assertTrue(body.getBoolean("stream"))
@@ -521,7 +522,7 @@ class AnthropicProviderTest {
 
         provider.sendMessage(toolHistory(), null, 1024, thinkingLevel = ThinkingLevel.MEDIUM)
 
-        val body = JSONObject(server.takeRequest().body.readUtf8())
+        val body = JSONObject(server.takeRequestOrThrow().body.readUtf8())
         val content = firstAssistantContent(body)
         // Thinking block must lead the assistant turn, carrying the captured text.
         assertEquals("thinking", content.getJSONObject(0).getString("type"))
@@ -559,7 +560,7 @@ class AnthropicProviderTest {
         )
         provider.sendMessage(history, null, 1024, thinkingLevel = ThinkingLevel.MEDIUM)
 
-        val content = firstAssistantContent(JSONObject(server.takeRequest().body.readUtf8()))
+        val content = firstAssistantContent(JSONObject(server.takeRequestOrThrow().body.readUtf8()))
         assertEquals("thinking", content.getJSONObject(0).getString("type"))
         assertEquals("", content.getJSONObject(0).getString("thinking"))
     }
@@ -581,7 +582,7 @@ class AnthropicProviderTest {
         )
         provider.sendMessage(history, null, 1024, thinkingLevel = ThinkingLevel.MEDIUM)
 
-        val content = firstAssistantContent(JSONObject(server.takeRequest().body.readUtf8()))
+        val content = firstAssistantContent(JSONObject(server.takeRequestOrThrow().body.readUtf8()))
         assertEquals("thinking", content.getJSONObject(0).getString("type"))
         assertEquals("The user greeted me.", content.getJSONObject(0).getString("thinking"))
         assertEquals("text", content.getJSONObject(1).getString("type"))
@@ -605,7 +606,7 @@ class AnthropicProviderTest {
 
         provider.sendMessage(toolHistory(), null, 1024, thinkingLevel = ThinkingLevel.MEDIUM)
 
-        val content = firstAssistantContent(JSONObject(server.takeRequest().body.readUtf8()))
+        val content = firstAssistantContent(JSONObject(server.takeRequestOrThrow().body.readUtf8()))
         for (i in 0 until content.length()) {
             assertTrue(
                 "no thinking block should be emitted for non-interleaved model",
@@ -630,7 +631,7 @@ class AnthropicProviderTest {
             thinkingLevel = ThinkingLevel.MEDIUM,
         )
 
-        val body = JSONObject(server.takeRequest().body.readUtf8())
+        val body = JSONObject(server.takeRequestOrThrow().body.readUtf8())
         val thinking = body.getJSONObject("thinking")
         assertEquals("adaptive", thinking.getString("type"))
         assertEquals("summarized", thinking.getString("display"))
@@ -656,7 +657,7 @@ class AnthropicProviderTest {
             thinkingLevel = ThinkingLevel.MEDIUM,
         )
 
-        val beta = server.takeRequest().getHeader("anthropic-beta") ?: ""
+        val beta = server.takeRequestOrThrow().getHeader("anthropic-beta") ?: ""
         assertTrue(
             "anthropic-beta must not contain redact-thinking; was: $beta",
             !beta.contains("redact-thinking"),
@@ -714,7 +715,7 @@ class AnthropicProviderTest {
             listOf(LLMMessage(LLMMessage.Role.USER, "hi")), null, 4096,
             thinkingLevel = ThinkingLevel.HIGH,
         )
-        val body = JSONObject(server.takeRequest().body.readUtf8())
+        val body = JSONObject(server.takeRequestOrThrow().body.readUtf8())
         val thinking = body.optJSONObject("thinking")
         assertNotNull("forced request must carry the thinking object: $body", thinking)
         assertEquals("enabled", thinking?.optString("type"))

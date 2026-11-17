@@ -59,3 +59,46 @@ internal data class HistoryEdgeVisible(
     val newestEdge: Boolean,
     val oldestEdge: Boolean,
 )
+
+/**
+ * [T-history-prefetch] Older-edge prefetch predicate: the sentinel is
+ * composed OR the viewport is within [prefetchItems] lazy indices of the
+ * OLDEST content (highest index in this reversed layout), so older pages
+ * load before the user reaches the "load earlier" pill.
+ */
+internal fun olderEdgePrefetchVisible(
+    info: androidx.compose.foundation.lazy.LazyListLayoutInfo,
+    prefetchItems: Int = 12,
+): Boolean {
+    if (info.visibleItemsInfo.any { it.key == "__load_older__" }) return true
+    val oldestVisible = info.visibleItemsInfo.maxOfOrNull { it.index } ?: return false
+    return info.totalItemsCount - oldestVisible <= prefetchItems
+}
+
+/**
+ * [T-upbtn-landing] Two-step calibrated landing shared by the up-button
+ * turn walk and the search-focus jump: position once to materialise the
+ * row, read its size, then place the target's TOP edge just under the
+ * header. Under reverseLayout the TOP visual inset is the AFTER content
+ * padding; the offset math (rowSize − viewportHeight + inset) is the
+ * device-calibrated landing from the original implementation.
+ */
+internal suspend fun landJumpTop(
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    targetKey: String,
+    landIndex: Int,
+    trace: suspend (String, Int, Int) -> Unit,
+    landReading: (String, Int) -> Unit,
+) {
+    trace("$targetKey/land", landIndex, 0)
+    val rowSize = listState.layoutInfo.visibleItemsInfo
+        .firstOrNull { it.key == targetKey }?.size ?: 0
+    val vpH = listState.layoutInfo.viewportSize.height
+    // [T-upbtn-landing] Scroll-offset origin is the BEFORE-padding edge under
+    // reverseLayout — beforeContentPadding is the calibrated landing inset
+    // (the after padding is the visual-top 8dp gap; both origin/main sites
+    // used before). Restored after the after-variant landed rows 12-40px high.
+    val topOffset = rowSize - vpH + listState.layoutInfo.beforeContentPadding
+    trace("$targetKey/top", landIndex, topOffset)
+    landReading(targetKey, topOffset)
+}
