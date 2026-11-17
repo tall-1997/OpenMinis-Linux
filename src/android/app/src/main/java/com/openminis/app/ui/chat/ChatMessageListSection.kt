@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -453,8 +454,15 @@ internal fun ChatFlatItemRow(
                             // gray out reactively (also across reload).
                             is FlatChatItem.AssistantTurnChanges -> {
                                 val reverted by viewModel.toolUndo.revertedKeys.collectAsStateWithLifecycle()
+                                val diffStats by viewModel.toolUndo.diffStats.collectAsStateWithLifecycle()
+                                val completedDiffs by viewModel.toolUndo.completedDiffs.collectAsStateWithLifecycle()
+                                LaunchedEffect(item.messageId, item.changes) {
+                                    viewModel.ensureTurnDiffStats(item.messageId, item.changes)
+                                }
                                 TurnChangesCard(
-                                    paths = item.paths,
+                                    paths = item.changes.map { it.path },
+                                    stats = diffStats,
+                                    statsComplete = item.messageId in completedDiffs,
                                     revertedKeys = reverted,
                                     messageKeyPrefix = item.messageId,
                                     onRevertFile = { path ->

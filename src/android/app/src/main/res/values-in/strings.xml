@@ -1219,6 +1219,14 @@
     <string name="turn_changes_restore_failed">pemulihan gagal</string>
     <string name="turn_changes_undo_restored">Dibatalkan (%1$s): file dipulihkan ke konten sebelum giliran ini.</string>
     <string name="turn_changes_undo_deleted">Dibatalkan (%1$s): file tidak ada sebelum giliran ini; file yang baru dibuat telah dihapus.</string>
+    <string name="turn_changes_summary">%1$d file · +%2$d / -%3$d</string>
+    <string name="turn_changes_stats">+%1$d / -%2$d</string>
+    <string name="turn_changes_expand">Perluas perubahan</string>
+    <string name="turn_changes_collapse">Ciutkan perubahan</string>
+    <string name="turn_changes_confirm_file_title">Batalkan perubahan file ini?</string>
+    <string name="turn_changes_confirm_file_message">Pulihkan %1$s ke isi sebelum giliran ini?</string>
+    <string name="turn_changes_confirm_all_title">Batalkan semua perubahan?</string>
+    <string name="turn_changes_confirm_all_message">Pulihkan %1$d file ke kondisi sebelum giliran ini?</string>
     <string name="turn_changes_list_separator">, </string>
     <string name="tool_longpress_copy_details">Salin detail alat</string>
     <string name="tool_longpress_copied_toast">Detail alat disalin</string>

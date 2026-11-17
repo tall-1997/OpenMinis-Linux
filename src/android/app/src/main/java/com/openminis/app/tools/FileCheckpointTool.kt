@@ -361,6 +361,36 @@ object FileCheckpointStore {
             ?.maxByOrNull { it.lastModified() }
             ?.let { load(filesDir, sessionId, it.name) }
 
+    /**
+     * Reads one path's pre-image from a checkpoint without restoring it.
+     * A null result means the path was created in the turn, the payload is
+     * absent, or the checkpoint manifest/payload is unreadable.
+     */
+    fun readPreImage(
+        context: Context,
+        sessionId: String,
+        checkpointId: String,
+        path: String,
+        maxBytes: Long = MAX_FILE_BYTES,
+    ): ByteArray? = readPreImage(context.filesDir, sessionId, checkpointId, path, maxBytes)
+
+    fun readPreImage(
+        filesDir: File,
+        sessionId: String,
+        checkpointId: String,
+        path: String,
+        maxBytes: Long = MAX_FILE_BYTES,
+    ): ByteArray? {
+        val checkpoint = load(filesDir, sessionId, checkpointId) ?: return null
+        val entry = checkpoint.entries.firstOrNull { it.path == path } ?: return null
+        if (!entry.existed || entry.isDir) return null
+        val payloadName = entry.payloadName ?: return null
+        if (!validPayloadName(payloadName)) return null
+        val payload = File(File(dirFor(filesDir, sessionId, checkpointId), PAYLOAD), payloadName)
+        if (!payload.isFile || payload.length() > minOf(maxBytes, MAX_FILE_BYTES)) return null
+        return runCatching { payload.readBytes() }.getOrNull()
+    }
+
     private fun load(filesDir: File, sessionId: String, id: String): Checkpoint? = try {
         val f = File(dirFor(filesDir, sessionId, id), MANIFEST)
         if (!f.isFile) null else {

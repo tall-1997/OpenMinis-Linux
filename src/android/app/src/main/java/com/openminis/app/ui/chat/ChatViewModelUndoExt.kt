@@ -3,6 +3,7 @@ package com.openminis.app.ui.chat
 import android.util.Log
 import androidx.lifecycle.viewModelScope
 import com.openminis.app.R
+import com.openminis.app.sandbox.PRootKernel
 import com.openminis.app.tools.FileCheckpointStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,9 +48,30 @@ data class TurnFileUndoState(
 internal class ChatToolUndoController(private val vm: ChatViewModel) {
     private val _revertedKeys = MutableStateFlow<Set<String>>(emptySet())
     val revertedKeys: StateFlow<Set<String>> = _revertedKeys.asStateFlow()
+    private val _diffStats = MutableStateFlow<Map<String, FileDiffStat>>(emptyMap())
+    val diffStats: StateFlow<Map<String, FileDiffStat>> = _diffStats.asStateFlow()
+    private val _completedDiffs = MutableStateFlow<Set<String>>(emptySet())
+    val completedDiffs: StateFlow<Set<String>> = _completedDiffs.asStateFlow()
+    private var requestedDiffMessageId: String? = null
 
     fun markReverted(messageId: String, path: String) {
         _revertedKeys.value = _revertedKeys.value + TurnChanges.revertedKey(messageId, path)
+    }
+
+    @Synchronized
+    fun claimDiffStats(messageId: String): Boolean {
+        if (requestedDiffMessageId == messageId) return false
+        requestedDiffMessageId = messageId
+        _diffStats.value = emptyMap()
+        _completedDiffs.value = emptySet()
+        return true
+    }
+
+    @Synchronized
+    fun publishDiffStats(messageId: String, stats: Map<String, FileDiffStat>) {
+        if (requestedDiffMessageId != messageId) return
+        _diffStats.value = stats
+        _completedDiffs.value = setOf(messageId)
     }
 }
 
@@ -76,6 +98,50 @@ internal fun resolveTurnFileUndoState(
         checkpointId = earliest.id,
         existedBefore = entry.existed,
     )
+}
+
+/** Loads stable pre-turn/current file pairs once per visible turn card. */
+fun ChatViewModel.ensureTurnDiffStats(
+    messageId: String,
+    changes: List<TurnChanges.PathChange>,
+) {
+    if (changes.isEmpty()) return
+    val sid = realSessionId.ifEmpty { sessionId }
+    if (sid.isEmpty() || !toolUndo.claimDiffStats(messageId)) return
+    viewModelScope.launch(Dispatchers.IO) {
+        val stats = runCatching {
+            val checkpoints = FileCheckpointStore.list(context, sid)
+            buildMap {
+                changes.forEach { change ->
+                    val state = resolveTurnFileUndoState(change, checkpoints) ?: return@forEach
+                    val before = if (state.existedBefore) {
+                        FileCheckpointStore.readPreImage(
+                            context,
+                            sid,
+                            state.checkpointId,
+                            change.path,
+                            TurnDiffStats.MAX_BYTES.toLong(),
+                        ) ?: return@forEach
+                    } else {
+                        null
+                    }
+                    val file = PRootKernel.resolveSessionHostPath(sid, change.path, context)
+                        ?: return@forEach
+                    if (file.isDirectory || (file.exists() && !file.isFile)) return@forEach
+                    if (file.isFile && file.length() > TurnDiffStats.MAX_BYTES) return@forEach
+                    val after = if (file.isFile) {
+                        runCatching { file.readBytes() }.getOrNull() ?: return@forEach
+                    } else {
+                        null
+                    }
+                    TurnDiffStats.compute(before, state.existedBefore, after)?.let { stat ->
+                        put(TurnChanges.revertedKey(messageId, change.path), stat)
+                    }
+                }
+            }
+        }.getOrDefault(emptyMap())
+        toolUndo.publishDiffStats(messageId, stats)
+    }
 }
 
 /**

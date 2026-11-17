@@ -1214,6 +1214,14 @@
     <string name="turn_changes_restore_failed">복원 실패</string>
     <string name="turn_changes_undo_restored">되돌림(%1$s): 파일이 턴 시작 전 내용으로 복원되었습니다.</string>
     <string name="turn_changes_undo_deleted">되돌림(%1$s): 이 파일은 턴 전에 존재하지 않아 새로 만든 파일을 삭제했습니다.</string>
+    <string name="turn_changes_summary">%1$d개 파일 · +%2$d / -%3$d</string>
+    <string name="turn_changes_stats">+%1$d / -%2$d</string>
+    <string name="turn_changes_expand">변경 사항 펼치기</string>
+    <string name="turn_changes_collapse">변경 사항 접기</string>
+    <string name="turn_changes_confirm_file_title">이 파일을 되돌릴까요?</string>
+    <string name="turn_changes_confirm_file_message">%1$s를 이 턴 이전 내용으로 복원할까요?</string>
+    <string name="turn_changes_confirm_all_title">모든 변경 사항을 롤백할까요?</string>
+    <string name="turn_changes_confirm_all_message">파일 %1$d개를 이 턴 이전 상태로 복원할까요?</string>
     <string name="turn_changes_list_separator">·</string>
     <string name="tool_longpress_copy_details">도구 세부 정보 복사</string>
     <string name="tool_longpress_copied_toast">도구 세부 정보를 복사했습니다</string>

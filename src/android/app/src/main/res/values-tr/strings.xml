@@ -1214,6 +1214,14 @@
     <string name="turn_changes_restore_failed">geri yükleme başarısız</string>
     <string name="turn_changes_undo_restored">Geri alındı (%1$s): dosya bu turdan önceki içeriğine geri yüklendi.</string>
     <string name="turn_changes_undo_deleted">Geri alındı (%1$s): dosya bu turdan önce yoktu; yeni oluşturulan dosya silindi.</string>
+    <string name="turn_changes_summary">%1$d dosya · +%2$d / -%3$d</string>
+    <string name="turn_changes_stats">+%1$d / -%2$d</string>
+    <string name="turn_changes_expand">Değişiklikleri genişlet</string>
+    <string name="turn_changes_collapse">Değişiklikleri daralt</string>
+    <string name="turn_changes_confirm_file_title">Bu dosyanın değişiklikleri geri alınsın mı?</string>
+    <string name="turn_changes_confirm_file_message">%1$s bu turdan önceki içeriğine döndürülsün mü?</string>
+    <string name="turn_changes_confirm_all_title">Tüm değişiklikler geri alınsın mı?</string>
+    <string name="turn_changes_confirm_all_message">%1$d dosya bu turdan önceki durumuna döndürülsün mü?</string>
     <string name="turn_changes_list_separator">, </string>
     <string name="tool_longpress_copy_details">Araç ayrıntılarını kopyala</string>
     <string name="tool_longpress_copied_toast">Araç ayrıntıları kopyalandı</string>

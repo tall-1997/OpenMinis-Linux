@@ -67,6 +67,48 @@ class FileCheckpointStoreTest {
     }
 
     @Test
+    fun readPreImageReturnsSnapshotBytesWithoutChangingTarget() {
+        writeTarget("before")
+        val snapshot = FileCheckpointStore.capture(
+            filesDir,
+            session,
+            listOf("/a.txt"),
+            resolver("/a.txt" to target),
+        ).checkpoint!!
+        writeTarget("after")
+
+        assertEquals(
+            "before",
+            FileCheckpointStore.readPreImage(filesDir, session, snapshot.id, "/a.txt")!!.decodeToString(),
+        )
+        assertEquals("after", target.readText())
+    }
+
+    @Test
+    fun readPreImageReturnsNullForCreatedPathAndWhenReadLimitIsExceeded() {
+        val fresh = File(filesDir, "workspace/new.txt")
+        val snapshot = FileCheckpointStore.capture(
+            filesDir,
+            session,
+            listOf("/new.txt"),
+            resolver("/new.txt" to fresh),
+        ).checkpoint!!
+        fresh.parentFile.mkdirs()
+        fresh.writeText("created")
+
+        assertNull(FileCheckpointStore.readPreImage(filesDir, session, snapshot.id, "/new.txt"))
+
+        writeTarget("12345")
+        val sized = FileCheckpointStore.capture(
+            filesDir,
+            session,
+            listOf("/a.txt"),
+            resolver("/a.txt" to target),
+        ).checkpoint!!
+        assertNull(FileCheckpointStore.readPreImage(filesDir, session, sized.id, "/a.txt", maxBytes = 4))
+    }
+
+    @Test
     fun restoreWithoutIdUsesNewest() {
         writeTarget("old")
         FileCheckpointStore.capture(filesDir, session, listOf("/a.txt"), resolver("/a.txt" to target), label = "first")

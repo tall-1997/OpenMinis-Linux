@@ -1214,6 +1214,14 @@
     <string name="turn_changes_restore_failed">échec de restauration</string>
     <string name="turn_changes_undo_restored">Annulé (%1$s) : le fichier a été restauré à son contenu d\'avant ce tour.</string>
     <string name="turn_changes_undo_deleted">Annulé (%1$s) : le fichier n\'existait pas avant ce tour ; le fichier créé a été supprimé.</string>
+    <string name="turn_changes_summary">%1$d fichiers · +%2$d / -%3$d</string>
+    <string name="turn_changes_stats">+%1$d / -%2$d</string>
+    <string name="turn_changes_expand">Développer les modifications</string>
+    <string name="turn_changes_collapse">Réduire les modifications</string>
+    <string name="turn_changes_confirm_file_title">Annuler les modifications de ce fichier ?</string>
+    <string name="turn_changes_confirm_file_message">Restaurer %1$s à son contenu d’avant ce tour ?</string>
+    <string name="turn_changes_confirm_all_title">Annuler toutes les modifications ?</string>
+    <string name="turn_changes_confirm_all_message">Restaurer les %1$d fichiers à leur état d’avant ce tour ?</string>
     <string name="turn_changes_list_separator">, </string>
     <string name="tool_longpress_copy_details">Copier les détails de l\'outil</string>
     <string name="tool_longpress_copied_toast">Détails de l\'outil copiés</string>

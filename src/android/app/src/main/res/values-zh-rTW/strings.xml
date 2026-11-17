@@ -1287,6 +1287,14 @@
     <string name="turn_changes_restore_failed">恢復失敗</string>
     <string name="turn_changes_undo_restored">已撤銷（%1$s）：檔案已恢復為本輪開始前的內容。</string>
     <string name="turn_changes_undo_deleted">已撤銷（%1$s）：該檔案在本輪之前不存在，已刪除此次新建。</string>
+    <string name="turn_changes_summary">%1$d 個檔案 · +%2$d / −%3$d</string>
+    <string name="turn_changes_stats">+%1$d / −%2$d</string>
+    <string name="turn_changes_expand">展開變更</string>
+    <string name="turn_changes_collapse">收合變更</string>
+    <string name="turn_changes_confirm_file_title">還原此檔案的變更？</string>
+    <string name="turn_changes_confirm_file_message">將 %1$s 還原為本輪開始前的內容？</string>
+    <string name="turn_changes_confirm_all_title">回滾本輪所有變更？</string>
+    <string name="turn_changes_confirm_all_message">將 %1$d 個檔案還原到本輪開始前的狀態？</string>
     <string name="turn_changes_list_separator">、</string>
     <string name="tool_longpress_copy_details">複製工具詳細資訊</string>
     <string name="tool_longpress_copied_toast">已複製工具詳細資訊</string>

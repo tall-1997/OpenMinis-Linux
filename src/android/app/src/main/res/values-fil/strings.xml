@@ -1214,6 +1214,14 @@
     <string name="turn_changes_restore_failed">nabigo ang pagbalik</string>
     <string name="turn_changes_undo_restored">Na-undo (%1$s): naibalik ang file sa nilalaman nito bago ang turn na ito.</string>
     <string name="turn_changes_undo_deleted">Na-undo (%1$s): hindi umiral ang file bago ang turn na ito; tinanggal ang bagong ginawang file.</string>
+    <string name="turn_changes_summary">%1$d file · +%2$d / -%3$d</string>
+    <string name="turn_changes_stats">+%1$d / -%2$d</string>
+    <string name="turn_changes_expand">Palawakin ang mga pagbabago</string>
+    <string name="turn_changes_collapse">I-collapse ang mga pagbabago</string>
+    <string name="turn_changes_confirm_file_title">I-undo ang file na ito?</string>
+    <string name="turn_changes_confirm_file_message">Ibalik ang %1$s sa nilalaman nito bago ang turn na ito?</string>
+    <string name="turn_changes_confirm_all_title">I-rollback ang lahat ng pagbabago?</string>
+    <string name="turn_changes_confirm_all_message">Ibalik ang %1$d file sa kalagayan bago ang turn na ito?</string>
     <string name="turn_changes_list_separator">, </string>
     <string name="tool_longpress_copy_details">Kopyahin ang detalye ng tool</string>
     <string name="tool_longpress_copied_toast">Nakopya ang detalye ng tool</string>
