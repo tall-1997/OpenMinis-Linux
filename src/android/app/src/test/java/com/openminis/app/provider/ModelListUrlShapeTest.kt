@@ -10,6 +10,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import com.openminis.app.testsupport.takeRequestOrThrow
 
 /**
  * [T-models-fetch-no-query-buster] The catalog request must reach the endpoint
@@ -56,7 +57,7 @@ class ModelListUrlShapeTest {
         assertEquals(
             "a query string here 404s on strict-path gateways",
             "/v1/models",
-            server.takeRequest().path,
+            server.takeRequestOrThrow().path,
         )
     }
 
@@ -64,14 +65,14 @@ class ModelListUrlShapeTest {
     fun `a plain refresh puts no query string on the catalog URL either`() = runBlocking {
         enqueueCatalog()
         OpenAIModelsApi.fetchModels("k", base(), cacheScope = "instance-1")
-        assertEquals("/v1/models", server.takeRequest().path)
+        assertEquals("/v1/models", server.takeRequestOrThrow().path)
     }
 
     @Test
     fun `force refresh defeats caches with headers, not with the URL`() = runBlocking {
         enqueueCatalog()
         OpenAIModelsApi.fetchModels("k", base(), forceRefresh = true, cacheScope = "instance-1")
-        val recorded = server.takeRequest()
+        val recorded = server.takeRequestOrThrow()
         assertEquals("no-cache, no-store", recorded.getHeader("Cache-Control"))
         assertEquals("no-cache", recorded.getHeader("Pragma"))
     }
@@ -80,7 +81,7 @@ class ModelListUrlShapeTest {
     fun `a plain refresh sends no cache overrides`() = runBlocking {
         enqueueCatalog()
         OpenAIModelsApi.fetchModels("k", base())
-        val recorded = server.takeRequest()
+        val recorded = server.takeRequestOrThrow()
         assertNull(recorded.getHeader("Pragma"))
         assertTrue(
             "a plain refresh must not claim no-store",

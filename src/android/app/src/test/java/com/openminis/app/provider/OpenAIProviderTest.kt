@@ -17,6 +17,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import com.openminis.app.testsupport.takeRequestOrThrow
 
 class OpenAIProviderTest {
     private lateinit var server: MockWebServer
@@ -124,7 +125,7 @@ class OpenAIProviderTest {
 
         provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "test")), null, 100)
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         assertEquals("Bearer test-key", request.getHeader("Authorization"))
         assertTrue(request.path!!.contains("/chat/completions"))
     }
@@ -138,7 +139,7 @@ class OpenAIProviderTest {
             "You are helpful", 100,
         )
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         val body = JSONObject(request.body.readUtf8())
         val messages = body.getJSONArray("messages")
         // System message should be first
@@ -154,7 +155,7 @@ class OpenAIProviderTest {
 
         provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "test")), null, 100)
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         val body = JSONObject(request.body.readUtf8())
         val messages = body.getJSONArray("messages")
         assertEquals(1, messages.length())
@@ -167,7 +168,7 @@ class OpenAIProviderTest {
 
         provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "test")), null, 100, temperature = 0.8)
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         val body = JSONObject(request.body.readUtf8())
         assertEquals(0.8, body.getDouble("temperature"), 0.001)
     }
@@ -178,7 +179,7 @@ class OpenAIProviderTest {
 
         provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "test")), null, 100, temperature = null)
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         val body = JSONObject(request.body.readUtf8())
         assertTrue(!body.has("temperature"))
     }
@@ -189,7 +190,7 @@ class OpenAIProviderTest {
 
         provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "test")), null, 2048)
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         val body = JSONObject(request.body.readUtf8())
         assertEquals(2048, body.getInt("max_completion_tokens"))
         assertTrue(!body.has("max_tokens"))
@@ -212,7 +213,7 @@ class OpenAIProviderTest {
 
         dashscopeProvider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "test")), null, 2048)
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         val body = JSONObject(request.body.readUtf8())
         assertEquals(2048, body.getInt("max_tokens"))
         assertTrue(!body.has("max_completion_tokens"))
@@ -224,7 +225,7 @@ class OpenAIProviderTest {
 
         provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "test")), null, 100)
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         val body = JSONObject(request.body.readUtf8())
         assertEquals(false, body.getBoolean("stream"))
         assertTrue(!body.has("stream_options"))
@@ -281,7 +282,7 @@ class OpenAIProviderTest {
 
         provider.streamMessage(listOf(LLMMessage(LLMMessage.Role.USER, "Hi")), null, 1024).toList()
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         val body = JSONObject(request.body.readUtf8())
         assertTrue(body.getBoolean("stream"))
         val streamOptions = body.getJSONObject("stream_options")
@@ -300,7 +301,7 @@ class OpenAIProviderTest {
 
         provider.streamMessage(listOf(LLMMessage(LLMMessage.Role.USER, "Hi")), null, 1024, temperature = 1.0).toList()
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         val body = JSONObject(request.body.readUtf8())
         assertEquals(1.0, body.getDouble("temperature"), 0.001)
     }
@@ -417,7 +418,7 @@ class OpenAIProviderTest {
                 thinkingLevel = level,
             )
         }
-        return JSONObject(server.takeRequest().body.readUtf8())
+        return JSONObject(server.takeRequestOrThrow().body.readUtf8())
     }
 
     @Test

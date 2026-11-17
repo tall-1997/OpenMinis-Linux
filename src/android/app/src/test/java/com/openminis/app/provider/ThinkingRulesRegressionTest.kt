@@ -14,6 +14,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import com.openminis.app.testsupport.takeRequestOrThrow
 
 /**
  * Regression safety-net for the thinking/reasoning wire-format rules catalogued in
@@ -117,7 +118,7 @@ class ThinkingRulesRegressionTest {
                 )
             }
         }
-        return JSONObject(server.takeRequest().body.readUtf8())
+        return JSONObject(server.takeRequestOrThrow().body.readUtf8())
     }
 
     /** Every key anywhere in the body that could carry a thinking control. */
@@ -220,7 +221,7 @@ class ThinkingRulesRegressionTest {
                     )
                 }
             }
-            val body = JSONObject(server.takeRequest().body.readUtf8())
+            val body = JSONObject(server.takeRequestOrThrow().body.readUtf8())
             assertFalse(
                 "Responses-path Mistral must not carry `reasoning` at level=$level (422 extra_forbidden): $body",
                 body.has("reasoning"),
@@ -261,7 +262,7 @@ class ThinkingRulesRegressionTest {
                 )
             }
         }
-        val body = JSONObject(server.takeRequest().body.readUtf8())
+        val body = JSONObject(server.takeRequestOrThrow().body.readUtf8())
         assertTrue(
             "a non-Mistral Responses provider must still get reasoning — the gate must be vendor-specific: $body",
             body.has("reasoning"),

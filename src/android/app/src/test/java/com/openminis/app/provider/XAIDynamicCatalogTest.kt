@@ -12,6 +12,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import com.openminis.app.testsupport.takeRequestOrThrow
 
 /**
  * [T-provider-dynamic-catalog-reconcile] GH#265 — a Grok model released after
@@ -92,7 +93,7 @@ class XAIDynamicCatalogTest {
 
         resolve(baseUrl())
 
-        val path = server.takeRequest().path
+        val path = server.takeRequestOrThrow().path
         // Regression guard for the null-base trap: an OAuth xAI instance has no
         // customBaseURL, so effectiveBaseURL is null and buildURL(null) would
         // resolve to api.openai.com. refreshModels defaults to api.x.ai/v1

@@ -13,6 +13,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import com.openminis.app.testsupport.takeRequestOrThrow
 
 /**
  * [T-android-mistral-reasoning-422] GH OpenMinis#87 / iOS 29065ca0.
@@ -92,7 +93,7 @@ class MistralReasoningFieldTest {
                 thinkingLevel = ThinkingLevel.MEDIUM,
             )
         } }
-        return JSONObject(server.takeRequest().body.readUtf8())
+        return JSONObject(server.takeRequestOrThrow().body.readUtf8())
     }
 
     private fun anyMessageHasReasoning(body: JSONObject): Boolean {

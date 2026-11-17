@@ -16,6 +16,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import com.openminis.app.testsupport.takeRequestOrThrow
 
 class GeminiProviderTest {
     private lateinit var server: MockWebServer
@@ -173,7 +174,7 @@ class GeminiProviderTest {
 
         provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "test")), null, 100)
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         assertTrue(request.path!!.contains("key=test-key"))
         assertTrue(request.path!!.contains("generateContent"))
     }
@@ -191,7 +192,7 @@ class GeminiProviderTest {
             null, 100,
         )
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         val body = JSONObject(request.body.readUtf8())
         val contents = body.getJSONArray("contents")
         assertEquals("user", contents.getJSONObject(0).getString("role"))
@@ -205,7 +206,7 @@ class GeminiProviderTest {
 
         provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "test")), "Be concise", 100)
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         val body = JSONObject(request.body.readUtf8())
         val sysInstruction = body.getJSONObject("systemInstruction")
         val text = sysInstruction.getJSONArray("parts").getJSONObject(0).getString("text")
@@ -218,7 +219,7 @@ class GeminiProviderTest {
 
         provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "test")), null, 100)
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         val body = JSONObject(request.body.readUtf8())
         assertTrue(!body.has("systemInstruction"))
     }
@@ -229,7 +230,7 @@ class GeminiProviderTest {
 
         provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "test")), null, 100, temperature = 0.9)
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         val body = JSONObject(request.body.readUtf8())
         val config = body.getJSONObject("generationConfig")
         assertEquals(0.9, config.getDouble("temperature"), 0.001)
@@ -242,7 +243,7 @@ class GeminiProviderTest {
 
         provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "test")), null, 100, temperature = null)
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         val body = JSONObject(request.body.readUtf8())
         val config = body.getJSONObject("generationConfig")
         assertTrue(!config.has("temperature"))
@@ -260,7 +261,7 @@ class GeminiProviderTest {
 
         provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "")), null, 100)
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         val body = JSONObject(request.body.readUtf8())
         val parts = body.getJSONArray("contents").getJSONObject(0).getJSONArray("parts")
         assertTrue("parts must not be empty", parts.length() > 0)
@@ -274,7 +275,7 @@ class GeminiProviderTest {
 
         provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "hello world")), null, 100)
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         val body = JSONObject(request.body.readUtf8())
         val text = body.getJSONArray("contents").getJSONObject(0)
             .getJSONArray("parts").getJSONObject(0).getString("text")
@@ -368,7 +369,7 @@ class GeminiProviderTest {
 
         provider.streamMessage(listOf(LLMMessage(LLMMessage.Role.USER, "Hi")), null, 1024, temperature = 0.3).toList()
 
-        val request = server.takeRequest()
+        val request = server.takeRequestOrThrow()
         val body = JSONObject(request.body.readUtf8())
         assertEquals(0.3, body.getJSONObject("generationConfig").getDouble("temperature"), 0.001)
         assertTrue(request.path!!.contains("streamGenerateContent"))

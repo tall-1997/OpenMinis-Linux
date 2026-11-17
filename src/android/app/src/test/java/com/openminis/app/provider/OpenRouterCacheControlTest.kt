@@ -14,6 +14,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import com.openminis.app.testsupport.takeRequestOrThrow
 
 /**
  * [OpenMinis#191] OpenRouter does not enable Anthropic prompt caching on its
@@ -73,7 +74,7 @@ class OpenRouterCacheControlTest {
                 )
             }
         }
-        return JSONObject(server.takeRequest().body.readUtf8())
+        return JSONObject(server.takeRequestOrThrow().body.readUtf8())
     }
 
     private fun openRouter() = server.url("/openrouter.ai/api/v1").toString().trimEnd('/')

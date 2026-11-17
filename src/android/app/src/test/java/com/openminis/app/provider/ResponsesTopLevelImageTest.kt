@@ -14,6 +14,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import com.openminis.app.testsupport.takeRequestOrThrow
 
 /**
  * [T-android-responses-toplevel-images] Regression tests for images passed as
@@ -90,7 +91,7 @@ class ResponsesTopLevelImageTest {
                 imageParts = images,
             )
         }
-        return JSONObject(server.takeRequest().body.readUtf8())
+        return JSONObject(server.takeRequestOrThrow().body.readUtf8())
     }
 
     /** All content blocks of the last `input` item, flattened. */
