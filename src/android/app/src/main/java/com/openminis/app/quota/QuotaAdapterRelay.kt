@@ -118,8 +118,12 @@ object RelayQuotaAdapter : ProviderQuotaAdapter {
         try {
             val openAIBillingSnap = query(RelayKind.openAIBilling, root, ctx)
             return QuotaFetchOutcome(openAIBillingSnap, isComplete = true, partialErrors = errors, relayKind = RelayKind.openAIBilling)
+        } catch (e: QuotaFetchError) {
+            // [T-relay-probe-parallel] QuotaFetchError (e.g. notFound from a 404)
+            // must propagate as-is, not be demoted to badResponse.
+            errors += e
         } catch (e: Exception) {
-            // [T-relay-probe-parallel] Same: record and fall through, never abort.
+            // [T-relay-probe-parallel] Record transport failure and fall through.
             errors += QuotaFetchError(
                 QuotaError.Kind.badResponse,
                 "openAIBilling transport failure: ${e.message ?: e.javaClass.simpleName}"
