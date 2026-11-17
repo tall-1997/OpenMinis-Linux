@@ -2354,10 +2354,9 @@ fun ChatScreen(
                     }
                 }
 
-                // [T-resume-banner-slots] The resume state declares TWO synthetic
-                // items (__work_stage__ + __resume_banner__) but the jump helper used
-                // to count one — every up/search jump in resume state landed one lazy
-                // index short. One shared value so the copies never drift.
+                // [T-resume-banner-slots] Resume state declares TWO synthetic items
+                // but the jump helper counted one — every up/search jump landed one
+                // lazy index short. One shared value so the copies never drift.
                 val lastAssistantHasError = messages
                     .lastOrNull { it.role == "assistant" }
                     ?.error
@@ -2382,20 +2381,8 @@ fun ChatScreen(
                     return count
                 }
 
-                // [T-android-search-jump] Search-result → matched-message
-                // jump. SessionListScreen stashed the matched message id in
-                // DeepLinkCoordinator before opening this session; consume it,
-                // page older history until the row is loaded, land it at the
-                // visual top and pulse a highlight.
-                //
-                // Keyed on (sessionId, searchFocusRevision), not just
-                // sessionId: tapping a search result for the chat ALREADY in
-                // the detail pane changes no contentKey, so no recomposition
-                // happens — the revision counter is what re-triggers the
-                // effect for a same-session re-tap. The consume itself is
-                // session-guarded (see DeepLinkCoordinator.SearchFocus), so a
-                // stale ChatScreen composition for another session can never
-                // steal this tap's focus.
+                // [T-android-search-jump] Keyed on (sessionId, searchFocusRevision):
+                // the revision re-triggers for same-session re-taps; session-guarded.
                 var searchFocusMessageId by remember(sessionId) { mutableStateOf<String?>(null) }
                 var searchFocusActive by remember(sessionId) { mutableStateOf(false) }
                 val searchFocusRevision by com.openminis.app.deeplink.DeepLinkCoordinator
@@ -2686,17 +2673,11 @@ fun ChatScreen(
                             val expandedIds = expandedAndActive.first
                             val activeIds = if (showSubAgentBar) expandedAndActive.second else emptySet()
                             val tickStartNs = System.nanoTime()
-                            // [T-entry-first-frame] Manual throttle replacing
-                            // sample(80): streaming ticks pace at ~12fps; the FIRST
-                            // non-empty tick (entry, older-page publish) applies
-                            // immediately. A streaming tick inside the window DELAYS
-                            // to the window end and then applies — conflate() replays
-                            // the LATEST tuple on the next iteration, so the newest
-                            // state is never dropped (a bare drop lost the final
-                            // arg-delta tick before silent tool executions, leaving
-                            // truncated previews on screen). The stale captured
-                            // tuple is re-read after the delay via the next
-                            // iteration's state.
+                            // [T-entry-first-frame] Manual throttle replacing sample(80):
+                            // streaming ticks pace at ~12fps; the first non-empty tick applies
+                            // immediately; in-window ticks delay then apply — conflate replays
+                            // the LATEST state next iteration, so the newest state is never
+                            // dropped (a bare drop lost the final arg-delta tick on screen).
                             if (!stream.isEmpty()) {
                                 // [T-entry-first-frame] remainMs: ns→ms conversion —
                                 // the raw ns value fed to delay() parked the collector
