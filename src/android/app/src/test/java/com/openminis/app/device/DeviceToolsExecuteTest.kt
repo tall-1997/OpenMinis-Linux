@@ -136,6 +136,29 @@ class DeviceToolsExecuteTest {
     }
 
     @Test
+    fun dndSetMapsOffToAllInterruptionsAndAllToTotalSilence() {
+        // [T-dnd-mode-mapping] "off" = INTERRUPTION_FILTER_ALL (all
+        // interruptions pass), "all" = INTERRUPTION_FILTER_NONE (total
+        // silence) — the inverted mapping used to mute on "off".
+        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+        shadowOf(nm).setNotificationPolicyAccessGranted(true)
+
+        val off = exec("dnd_set", """{"mode":"off"}""")
+        assertTrue(off, off.contains("Do Not Disturb is off."))
+        assertEquals(
+            android.app.NotificationManager.INTERRUPTION_FILTER_ALL,
+            nm.currentInterruptionFilter,
+        )
+
+        val all = exec("dnd_set", """{"mode":"all"}""")
+        assertTrue(all, all.contains("total silence"))
+        assertEquals(
+            android.app.NotificationManager.INTERRUPTION_FILTER_NONE,
+            nm.currentInterruptionFilter,
+        )
+    }
+
+    @Test
     fun argHelpersParseNumbersBooleansAndLists() {
         val obj = JSONObject(
             """{"i":12,"iStr":"13","b":true,"bStr":"false","arr":["a","b"],"single":"s","blank":""}""",

@@ -84,6 +84,23 @@ internal suspend fun ChatViewModel.executeTool(
     assistantId: String = "",
     currentText: String = "",
 ): ToolExecutionResult {
+    // [T-rule-allowlist-enforce] Dispatch-side enforcement of the per-rule
+    // tool whitelist: the schema cut keeps the model from DECLARING outside
+    // tools; this gate keeps it from CALLING them (aliases resolved first).
+    // Covers every executor that routes through this entry (main loop,
+    // sub-agent lanes, supervisor, group chat).
+    sessionToolAllowlist?.let { allow ->
+        val canonical = com.openminis.app.security.ToolAliases.canonical(name)
+        if (canonical !in allow && name !in allow) {
+            return ToolExecutionResult(
+                output = "Error: tool '$name' is not in this session's allowed tool set " +
+                    "(set by the automation rule whitelist). " +
+                    "Allowed: ${allow.sorted().joinToString(", ")}.",
+                success = false,
+                errorCode = com.openminis.app.tools.ToolErrorCode.PERMISSION_DENIED,
+            )
+        }
+    }
     val result = executeToolDispatched(name, argsJson, toolId, toolBlocks, assistantId, currentText)
     // [T-plan-host-derive] Board reconciliation from work evidence, after
     // every successful tool: narration attribution advances a stale board
@@ -243,7 +260,9 @@ internal suspend fun ChatViewModel.executeToolDispatched(
         com.openminis.app.tools.GrepTool.NAME, com.openminis.app.tools.GrepSourceTool.NAME ->
             com.openminis.app.tools.GrepTool.execute(argsJson, activeSessionId, context)
         com.openminis.app.tools.GlobTool.NAME -> com.openminis.app.tools.GlobTool.execute(argsJson, activeSessionId, context)
-        com.openminis.app.tools.WebFetchTool.NAME -> com.openminis.app.tools.WebFetchTool.execute(argsJson)
+        com.openminis.app.tools.WebFetchTool.NAME -> com.openminis.app.tools.WebFetchTool.execute(
+            argsJson, activeSessionId, context, // [T-webfetch-spill] session spill path
+        )
         // [T-ui-read] GUI Agent 的眼睛：a11y 读屏快照，配合 shell_execute 里
         // 的 android-a11y-cli 点击/输入形成"看屏→决策→执行→再看"闭环。
         com.openminis.app.tools.UiReadTool.NAME -> {
@@ -459,9 +478,13 @@ internal suspend fun ChatViewModel.executeToolDispatched(
             // with a programmatically built JSON string, so there is no raw
             // argument tail to repair. Malformed JSON still fails closed inside
             // executeTool's own parse sites — it can never silently become `{}`.
-            com.openminis.app.tools.ExecuteCodeTool.execute(argsJson) { n, a ->
-                executeTool(n, a, toolId, toolBlocks, assistantId, currentText)
-            }
+            com.openminis.app.tools.ExecuteCodeTool.execute(
+                argsJson,
+                invoke = { n, a -> executeTool(n, a, toolId, toolBlocks, assistantId, currentText) },
+                // [T-executecode-spill] session spill path
+                sessionId = activeSessionId,
+                context = context,
+            )
         // [pi-port §2.7] Nested calls take the SAME executeTool path (SecurityGate
         // + guards); only the script's return value becomes this toolResult.
         com.openminis.app.tools.CodemodeTool.NAME ->

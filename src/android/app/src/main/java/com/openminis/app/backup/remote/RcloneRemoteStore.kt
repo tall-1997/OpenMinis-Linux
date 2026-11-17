@@ -114,13 +114,50 @@ class RcloneRemoteStore(private val context: Context) {
     private val prefs by lazy { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
     private val secrets by lazy { EncryptedPrefsFactory.safeCreate(context, SECRETS_PREFS_NAME) }
 
+    /**
+     * [T-backup-decode-honesty] The stored remote list, or an empty list when
+     * none is configured OR the stored bytes are unreadable. The two cases
+     * return the same empty list (the UI must not crash), but an unreadable
+     * config also latches [configDecodeFailed] — one corrupt prefs write must
+     * not let every future backup quietly cover ZERO destinations and still be
+     * reported as a success. The latch clears as soon as a read or write
+     * succeeds again (e.g. after the user re-saves the config).
+     */
     var remotes: List<Remote>
-        get() = runCatching {
-            prefs.getString(KEY_REMOTES, null)?.let { JSON.decodeFromString(REMOTE_LIST, it) }
-        }.getOrNull() ?: emptyList()
-        private set(value) {
-            prefs.edit().putString(KEY_REMOTES, JSON.encodeToString(REMOTE_LIST, value)).apply()
+        get() {
+            val raw = runCatching { prefs.getString(KEY_REMOTES, null) }.getOrNull()
+                ?: return emptyList() // never configured — not a failure
+            val decoded = decodeRemotes(raw)
+            if (decoded != null) {
+                if (configDecodeFailed) {
+                    prefs.edit().putBoolean(KEY_CONFIG_DECODE_FAILED, false).apply()
+                    AppLogger.info(TAG, "[Rclone] remote config readable again")
+                }
+                return decoded
+            }
+            prefs.edit().putBoolean(KEY_CONFIG_DECODE_FAILED, true).apply()
+            AppLogger.error(
+                TAG,
+                "[Rclone] stored remote config is UNREADABLE; returning zero remotes " +
+                    "until it is re-saved (raw length=${raw.length})",
+            )
+            return emptyList()
         }
+        private set(value) {
+            prefs.edit()
+                .putString(KEY_REMOTES, JSON.encodeToString(REMOTE_LIST, value))
+                .putBoolean(KEY_CONFIG_DECODE_FAILED, false)
+                .apply()
+        }
+
+    /**
+     * [T-backup-decode-honesty] True while the stored remote config could not
+     * be decoded. Backup runs consult this and refuse to write a success
+     * record — a backup produced while this is set covered none of the
+     * rclone destinations the user thinks they have.
+     */
+    val configDecodeFailed: Boolean
+        get() = runCatching { prefs.getBoolean(KEY_CONFIG_DECODE_FAILED, false) }.getOrDefault(false)
 
     fun remote(name: String): Remote? = remotes.firstOrNull { it.name == name }
 
@@ -156,6 +193,11 @@ class RcloneRemoteStore(private val context: Context) {
 
     /** Remove a remote and its credential. */
     fun remove(name: String) {
+        // [T-backup-decode-honesty] Mirror setEnabled's guard: with a corrupt
+        // config, `remotes` is empty and assigning `filterNot` would write []
+        // — silently destroying unreadable (maybe recoverable) bytes and
+        // clearing the honest latch.
+        if (remotes.none { it.name == name }) return
         remotes = remotes.filterNot { it.name == name }
         secrets.edit().remove(name).apply()
         AppLogger.info(TAG, "[Rclone] remote removed: $name")
@@ -377,6 +419,9 @@ class RcloneRemoteStore(private val context: Context) {
         private const val SECRETS_PREFS_NAME = "backup_rclone_secrets"
         private const val KEY_REMOTES = "remotes"
 
+        /** [T-backup-decode-honesty] Latched while the stored config is unreadable. */
+        private const val KEY_CONFIG_DECODE_FAILED = "config_decode_failed"
+
         /**
          * Which parameter carries the secret, per backend. rclone names these
          * differently and there is no generic "password" key, so the mapping
@@ -542,5 +587,13 @@ class RcloneRemoteStore(private val context: Context) {
 
         private val JSON = Json { ignoreUnknownKeys = true; encodeDefaults = true }
         private val REMOTE_LIST = ListSerializer(Remote.serializer())
+
+        /**
+         * [T-backup-decode-honesty] Decode the stored remote list; null when the
+         * bytes are unreadable. Pure so the "corrupt config must be detectable"
+         * contract is testable without prefs.
+         */
+        internal fun decodeRemotes(raw: String): List<Remote>? =
+            runCatching { JSON.decodeFromString(REMOTE_LIST, raw) }.getOrNull()
     }
 }

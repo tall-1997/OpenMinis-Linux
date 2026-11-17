@@ -31,8 +31,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -55,6 +59,80 @@ import kotlinx.coroutines.delay
  * ChatAssistantMessageUI when its architecture ceiling left no room for the
  * reasoning-translation UI. Pure display, no state beyond local toggles.
  */
+
+// ─── [T-shared-second-clock] One 1Hz clock for every running process card ────
+//
+// Each running card used to run its OWN `while(true) { delay(1000) }` loop
+// writing a per-card `nowMs` state — N running cards meant N independent 1Hz
+// snapshot writes per second (plus N wakeups), all recomposing the same
+// duration text. Now every card reads one shared `nowMs`, written once a
+// second by the single [SharedSecondClockAnchor] loop (mounted in
+// ChatScreen), which runs only while ≥1 card is subscribed.
+// Same package as ChatMiscViews.kt / ChatIndicators.kt (com.openminis.app.ui.chat),
+// so the other 1Hz consumers in this package can adopt it without a cross-
+// package cycle.
+internal object ProcessCardSecondClock {
+
+    /** Shared "now", written once a second while [subscribers] > 0. */
+    val nowMs = mutableLongStateOf(System.currentTimeMillis())
+
+    /** Active subscriber count — snapshot state so 0↔1 drives the loop. */
+    val subscribers = mutableIntStateOf(0)
+
+    val hasSubscribers: Boolean get() = subscribers.intValue > 0
+
+    fun register() {
+        subscribers.intValue += 1
+    }
+
+    /** Defensive underflow guard: register/unregister must pair, but a stray
+     *  extra unregister must never wedge the clock on permanently. */
+    fun unregister() {
+        if (subscribers.intValue > 0) subscribers.intValue -= 1
+    }
+}
+
+/**
+ * [T-shared-second-clock] The shared second clock as a [State<Long>].
+ *
+ * [active] is the caller's "I need fresh seconds right now" flag (for a
+ * process card: `running`). Subscribing while inactive is harmless but keeps
+ * the loop alive with nothing reading the value, so pass the real condition —
+ * the loop then stops the moment the last active subscriber leaves (the same
+ * consumer-gate pattern as DecorClock in ui/theme/DecorClock.kt). Reads of
+ * the returned state should sit behind the same condition so settled cards
+ * do not recompose on every shared tick.
+ *
+ * This helper deliberately does NOT tick — [SharedSecondClockAnchor] is the
+ * one writer. Starting a loop per caller would recreate the N-writers problem.
+ */
+@Composable
+internal fun rememberSharedSecondClock(active: Boolean): State<Long> {
+    DisposableEffect(active) {
+        if (active) ProcessCardSecondClock.register()
+        onDispose { if (active) ProcessCardSecondClock.unregister() }
+    }
+    return ProcessCardSecondClock.nowMs
+}
+
+/**
+ * [T-shared-second-clock] Mount ONCE per screen (ChatScreen): the single 1Hz
+ * writer for [ProcessCardSecondClock]. Runs only while ≥1 card is subscribed
+ * — with zero running cards there are no wakeups and no snapshot writes at
+ * all. Contained in its own composable so the subscriber-count read never
+ * invalidates a larger scope.
+ */
+@Composable
+internal fun SharedSecondClockAnchor() {
+    if (ProcessCardSecondClock.hasSubscribers) {
+        LaunchedEffect(Unit) {
+            while (true) {
+                delay(1000)
+                ProcessCardSecondClock.nowMs.longValue = System.currentTimeMillis()
+            }
+        }
+    }
+}
 
 @Composable
 internal fun ProcessSummaryBar(
@@ -87,21 +165,25 @@ internal fun ProcessSummaryBar(
     val iconTint = thinkingBlue
     // A running card ticks once a second so the duration walks. Bounded by
     // the run: the moment it settles, running flips false and the loop ends.
-    var nowMs by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(running) {
-        if (!running) return@LaunchedEffect
-        while (true) {
-            delay(1000)
-            nowMs = System.currentTimeMillis()
-        }
-    }
+    // [T-shared-second-clock] The per-card 1Hz loop is gone — the duration
+    // now derives from the one shared second clock, subscribed only while
+    // this card is running. The `.value` read stays inside the running
+    // branch so a settled card never recomposes on the shared tick.
+    val sharedNowMs = rememberSharedSecondClock(active = running)
     val duration = if (running && startedAtMs > 0L) {
-        formatProcessDuration((nowMs - startedAtMs).coerceAtLeast(0L))
+        formatProcessDuration((sharedNowMs.value - startedAtMs).coerceAtLeast(0L))
     } else {
         formatProcessDuration(totalMs)
     }
     val header = processCardHeader(
         thinkingCount, toolCount, running, expanded, activity, activityTitle, duration,
+        labels = ProcessCardHeaderLabels(
+            thinking = stringResource(R.string.process_card_thinking),
+            tools = stringResource(R.string.process_card_tools),
+            aiProcess = stringResource(R.string.process_card_ai_process),
+            thinkingNow = stringResource(R.string.process_card_thinking_now),
+            callingTool = stringResource(R.string.subagent_status_calling_tool),
+        ),
     )
     Column(
         modifier = Modifier
@@ -209,10 +291,15 @@ private fun ProcessStepRow(step: ProcessStepRef, onOpen: () -> Unit) {
     var stepExpanded by remember(step.id) { mutableStateOf(step.running) }
     var userTouched by remember(step.id) { mutableStateOf(false) }
     LaunchedEffect(step.id, step.running) {
-        if (!step.running && !userTouched) {
-            delay(500)
-            stepExpanded = false
-        }
+        if (step.running) return@LaunchedEffect
+        // [T-step-collapse-tap-guard] The settle window must not clobber a tap
+        // that lands DURING it: the !userTouched / !running / stepExpanded
+        // guards are re-checked AFTER the delay (mirroring the card-level
+        // pattern in ChatScreen), so a tap inside the 500ms window that pins
+        // the step open wins over the auto-collapse. Only collapse what the
+        // user did not pin open themselves.
+        delay(500)
+        if (!userTouched && !step.running && stepExpanded) stepExpanded = false
     }
 
     Column(modifier = Modifier.fillMaxWidth()) {

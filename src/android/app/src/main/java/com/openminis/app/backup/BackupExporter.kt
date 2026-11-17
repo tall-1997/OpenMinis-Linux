@@ -3,18 +3,10 @@ package com.openminis.app.backup
 import android.content.Context
 import org.json.JSONObject
 import com.openminis.app.data.db.AppDatabase
-import com.openminis.app.data.db.ChatSessionEntity
-import com.openminis.app.data.db.CompactMarkerEntity
-import com.openminis.app.data.db.FolderEntity
-import com.openminis.app.data.db.MessageEntity
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.tools.AtomicFileWrite
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
 import java.io.File
 import com.openminis.app.util.IsoTime
 import java.util.UUID
@@ -82,6 +74,29 @@ class BackupExporter(
         // [T-backup-credentials-without-encryption] No passphrase guard: the
         // unencrypted-credentials risk is surfaced in the UI, not by silently
         // dropping data. Matches iOS, same tag.
+        // [T-backup-decode-honesty] An unreadable destination config returns an
+        // empty list (see RcloneRemoteStore.configDecodeFailed /
+        // PhoneBackupFolderStore.configDecodeFailed), so this run would quietly
+        // cover zero destinations and still be written up as a success. Refuse
+        // to run: the caller records a FAILED run carrying this message instead
+        // of a false "backup ready".
+        // [T-backup-decode-honesty] TOUCH the configs FIRST: the latch is
+        // only SET inside the getters when a decode actually fails. A fresh
+        // process whose config corrupted after the last successful read has
+        // configDecodeFailed == false until something reads the stores —
+        // checking the flags without reading would let the first corrupted
+        // run slip through as a clean success.
+        runCatching { com.openminis.app.backup.remote.RcloneRemoteStore(context).remotes }
+        runCatching { PhoneBackupFolderStore(context).folders }
+        if (com.openminis.app.backup.remote.RcloneRemoteStore(context).configDecodeFailed ||
+            PhoneBackupFolderStore(context).configDecodeFailed
+        ) {
+            AppLogger.error(
+                TAG,
+                "[Backup] destination config unreadable; refusing to present this run as a backup",
+            )
+            throw BackupException(CONFIG_UNREADABLE_MESSAGE)
+        }
         val started = System.currentTimeMillis()
         val backupId = UUID.randomUUID().toString()
 
@@ -186,7 +201,12 @@ class BackupExporter(
             // category exports. Mirrors iOS.
             if (options.includeCredentials) {
                 onProgress?.invoke("Collecting credentials…")
-                BackupSecretsCollector.collect(context, staging, options.categories)
+                BackupSecretsCollector.collect(context, staging, options.categories) { detail ->
+                    // [T-backup-decode-honesty] An unreadable credential source
+                    // rides the same skip record as a size-cap skip, so the
+                    // run lands as "with issues" naming the omission.
+                    blobStore.recordSkip(detail)
+                }
             }
 
             // Blob index last — it is only complete once every category has
@@ -336,29 +356,6 @@ class BackupExporter(
     }
 
     /**
-     * The session row as iOS writes it: camelCase + ISO-8601 keys; Android-only
-     * columns preserved per §2.2 rule 4, device-local fields absent.
-     */
-    private fun sessionRecord(s: ChatSessionEntity): JsonElement = buildJsonObject {
-        put("id", JsonPrimitive(s.id))
-        put("title", s.title?.let(::JsonPrimitive) ?: JsonNull)
-        put("category", s.category?.let(::JsonPrimitive) ?: JsonNull)
-        put("modelId", JsonPrimitive(s.modelId))
-        put("createdAt", JsonPrimitive(iso8601(s.createdAt)))
-        put("updatedAt", JsonPrimitive(iso8601(s.updatedAt)))
-        put("lastMessage", s.lastMessage?.let(::JsonPrimitive) ?: JsonNull)
-        put("source", s.source?.let(::JsonPrimitive) ?: JsonNull)
-        put("pinnedAt", s.pinnedAt?.let { JsonPrimitive(iso8601(it)) } ?: JsonNull)
-        put("folderId", s.folderId?.let(::JsonPrimitive) ?: JsonNull)
-        // iOS's SessionRecord wrapper fields.
-        put("memoryEnabled", JsonPrimitive(s.memoryEnabled != 0))
-        put("modelBinding", s.modelBinding?.let(::JsonPrimitive) ?: JsonNull)
-        // Android-only, preserved per §2.2 rule 4.
-        put("editCount", JsonPrimitive(s.editCount))
-        put("thinkingOverride", s.thinkingOverride?.let(::JsonPrimitive) ?: JsonNull)
-    }
-
-    /**
      * Content-addressed message bodies -> blobs + file index; absent when the
      * device has none.
      */
@@ -385,57 +382,6 @@ class BackupExporter(
                 }
             }
         }
-    }
-
-    private fun messageRecord(m: MessageEntity): JsonElement = buildJsonObject {
-        put("id", JsonPrimitive(m.id))
-        put("sessionId", JsonPrimitive(m.sessionId))
-        put("role", JsonPrimitive(m.role))
-        put("parts", parseParts(m.partsJson))
-        put("createdAt", JsonPrimitive(iso8601(m.createdAt)))
-        put("updatedAt", JsonPrimitive(iso8601(m.updatedAt ?: m.createdAt)))
-        put("tokenUsage", m.tokenUsage?.let { parseJsonOrNull(it) } ?: JsonNull)
-        put("reasoningContent", m.reasoningContent?.let(::JsonPrimitive) ?: JsonNull)
-        put("streamInterruptCount", JsonPrimitive(m.streamInterruptCount))
-        put("sortOrder", JsonPrimitive(m.sortOrder))
-        put("bodyBytes", JsonPrimitive(m.bodyBytes))
-        m.bodyRef?.let { put("bodyRef", JsonPrimitive(it)) }
-        m.bodySha?.let { put("bodySha", JsonPrimitive(it)) }
-        // [T-token-attribution-snapshot] Per-message model attribution,
-        // camelCase to match iOS Codable's wire keys (snake_case would not
-        // decode there).
-        m.modelId?.let { put("modelId", JsonPrimitive(it)) }
-        m.modelDisplayName?.let { put("modelDisplayName", JsonPrimitive(it)) }
-        m.providerType?.let { put("providerType", JsonPrimitive(it)) }
-        m.providerInstanceId?.let { put("providerInstanceId", JsonPrimitive(it)) }
-    }
-
-    private fun markerRecord(c: CompactMarkerEntity): JsonElement = buildJsonObject {
-        put("id", JsonPrimitive(c.id))
-        put("sessionId", JsonPrimitive(c.sessionId))
-        put("summary", JsonPrimitive(c.summary))
-        put("firstKeptSortOrder", JsonPrimitive(c.firstKeptSortOrder))
-        put("compactedCount", JsonPrimitive(c.compactedCount))
-        put("createdAt", JsonPrimitive(iso8601(c.createdAt)))
-        put("uiBoundarySortOrder", c.uiBoundarySortOrder?.let(::JsonPrimitive) ?: JsonNull)
-        put("boundaryMessageId", c.boundaryMessageId?.let(::JsonPrimitive) ?: JsonNull)
-        put("firstKeptMessageId", c.firstKeptMessageId?.let(::JsonPrimitive) ?: JsonNull)
-        put("lastCompactedMessageId", c.lastCompactedMessageId?.let(::JsonPrimitive) ?: JsonNull)
-    }
-
-    private fun folderRecord(f: FolderEntity): JsonElement = buildJsonObject {
-        put("id", JsonPrimitive(f.id))
-        put("name", JsonPrimitive(f.name))
-        put("icon", f.icon?.let(::JsonPrimitive) ?: JsonNull)
-        put("color", f.color?.let(::JsonPrimitive) ?: JsonNull)
-        put("origin", JsonPrimitive(f.origin))
-        put("sortIndex", JsonPrimitive(f.sortIndex))
-        put("pinnedAt", f.pinnedAt?.let { JsonPrimitive(iso8601(it)) } ?: JsonNull)
-        put("description", f.description?.let(::JsonPrimitive) ?: JsonNull)
-        put("createdAt", JsonPrimitive(iso8601(f.createdAt)))
-        // Record edits only (rename / pin / icon) — a session moving in or out
-        // of the group must not touch it, so this is a stable merge key.
-        put("updatedAt", JsonPrimitive(iso8601(f.updatedAt)))
     }
 
     // MARK: - Shared files / Skills / Memory
@@ -749,12 +695,6 @@ class BackupExporter(
 
     // MARK: - Helpers
 
-    private fun parseParts(partsJson: String): JsonElement =
-        parseJsonOrNull(partsJson) ?: BackupFormat.json.parseToJsonElement("[]")
-
-    private fun parseJsonOrNull(raw: String): JsonElement? =
-        runCatching { BackupFormat.json.parseToJsonElement(raw) }.getOrNull()
-
     private fun appVersion(): String = runCatching {
         context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "?"
     }.getOrDefault("?")
@@ -766,6 +706,16 @@ class BackupExporter(
 
     companion object {
         private const val TAG = "Backup"
+
+        /**
+         * [T-backup-decode-honesty] Recorded as the error of a run that started
+         * while either destination store's config could not be decoded (see
+         * RcloneRemoteStore.configDecodeFailed and
+         * PhoneBackupFolderStore.configDecodeFailed). Not localized on purpose —
+         * like BackupHistory.INTERRUPTED_MARKER it is a stored marker, and the
+         * history row renders it verbatim.
+         */
+        const val CONFIG_UNREADABLE_MESSAGE = "Backup config unreadable — nothing was backed up."
 
         /**
          * Process-wide export/restore lock. Both read the same stores, and a

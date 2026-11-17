@@ -26,6 +26,15 @@ interface ChatSessionPort {
     fun compactBefore(dbMessageId: String, includesBoundary: Boolean = false)
     fun revertCompact()
     fun selectEntry(entryId: String)
+
+    /**
+     * [T-rule-allowlist-enforce] Narrow the session's callable toolset to
+     * [allowlist] (null/empty = unrestricted): the toolset build filters the
+     * declared schema AND the dispatch gate refuses anything outside the set.
+     * Used by unattended automation-rule runners ([HeadlessChatRunner]).
+     * Default no-op for ports without a toolset concept.
+     */
+    fun setToolAllowlist(allowlist: Set<String>?) {}
 }
 
 interface ChatSessionBinder {

@@ -48,6 +48,12 @@ object SkillManifest {
      * can omit 200+ skills — naming up to 200 of them keeps every omitted
      * skill FINDABLE from the prompt (the rest are still one
      * `ls /var/minis/skills/` away).
+     *
+     * [T-skills-prompt-overflow-note] When the budget itself runs out
+     * (omitted > budget − selected), the names that did NOT fit must not
+     * vanish silently: [disclosureNote] appends the unnamed remainder count,
+     * so the model always sees the FULL overflow count and how to reach the
+     * rest, never a name list that quietly stops early.
      */
     private const val MAX_UNDISCLOSED_NAMES = 200
 
@@ -121,6 +127,13 @@ object SkillManifest {
      * The "N more skills not shown above" tail, byte-identical to the legacy
      * fragment's rendering. Leading "\n\n" included; null when nothing was
      * omitted (callers append only when non-null, so no stray separator).
+     *
+     * [T-skills-prompt-overflow-note] The overflow COUNT always leads (a
+     * heavy library can omit far more skills than the name budget can list),
+     * and when the name list itself was truncated by [MAX_UNDISCLOSED_NAMES]
+     * the unnamed remainder is spelled out — the model sees the true size of
+     * the overflow plus the one recovery path that always works
+     * (`ls /var/minis/skills/` / grep), never a name list that quietly stops.
      */
     fun disclosureNote(
         selected: List<SkillRepository.Skill>,
@@ -128,8 +141,11 @@ object SkillManifest {
     ): String? {
         if (omitted.isEmpty()) return null
         val maxUndisclosed = (MAX_UNDISCLOSED_NAMES - selected.size).coerceAtLeast(0)
-        val names = omitted.take(maxUndisclosed).joinToString(", ") { it.name }
+        val named = omitted.take(maxUndisclosed)
+        val unnamed = omitted.size - named.size
+        val names = named.joinToString(", ") { it.name }
         return "\n\n" + omitted.size + " more skills not shown above: " + names +
+            (if (unnamed > 0) " (+$unnamed more not named)" else "") +
             ". List /var/minis/skills/ or grep to search all."
     }
 

@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Settings > Network. Translations shared with iOS come from its Localizable.xcstrings; locales without one fall back to English. -->
 <resources>
-    <string name="network_title">网络</string>
-    <string name="network_settings_subtitle">Tailscale、代理与路由</string>
     <string name="network_default_route">默认路由</string>
     <string name="network_default_route_footer">所有设为“跟随默认”的部分都使用此路由。Tailscale 开启时，tailnet 内的地址始终经 Tailscale 连接，与路由设置无关。</string>
     <string name="network_default_route_covers">App 自己发出的请求也使用此路由：检查更新、下载技能、语音、天气和聊天中的图片。服务商的模型列表、用量和登录跟随该服务商的路由。镜像测速始终直连，测的是本机网络本身。</string>
@@ -94,7 +92,6 @@
     <string name="network_entry_note">Minis 会在 127.0.0.1 上为自身连接开一个本地入口。本机其他 App 也能连到这个端口，但没有口令就无法使用；口令在每次 Minis 启动时更换。</string>
     <!-- [FEAT-261021-04] Settings > Network section -->
     <string name="network_routing_title">网络路由</string>
-    <string name="network_container_dns">Shell 容器 DNS</string>
     <!-- [PAR-261021-01] LLM Providers: only routed ones listed, bulk add -->
     <string name="network_add_providers">添加服务商</string>
     <string name="network_route">路由</string>
@@ -132,4 +129,6 @@
     <string name="network_pill_connected">已连接</string>
     <string name="network_pill_connecting">连接中</string>
     <string name="network_pill_sign_in">待登录</string>
+    <!-- backfill: strings_network.xml -->
+    <string name="network_login_timeout">登录未能在限时内完成。请重新打开登录页，并在浏览器中完成登录。</string>
 </resources>

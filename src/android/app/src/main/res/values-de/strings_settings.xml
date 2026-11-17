@@ -64,4 +64,15 @@
     <string name="cot_translate_settings_language">Zielsprache</string>
     <string name="cot_translate_privacy_notice">Erweiterte Gedankengänge werden an den gewählten Übersetzungsdienst gesendet. Sie können privaten Code oder Gesprächsdetails enthalten.</string>
     <string name="cot_translate_anonymous_notice">Bing und Google benötigen keinen Übersetzungs-Login oder API-Schlüssel. Ihre anonymen Endpunkte können Anfragen ablehnen oder einschränken.</string>
+    <!-- backfill: strings_settings.xml -->
+    <string name="perm_section_vscreen_tiers">Virtuelle Bildschirm-Stufen</string>
+    <string name="perm_vscreen_tier_degraded">Vorübergehend nicht verfügbar</string>
+    <string name="perm_vscreen_tier_native">In der App (Fallback)</string>
+    <string name="perm_vscreen_tier_ready">Bereit</string>
+    <string name="perm_vscreen_tier_root">Root (SU / KSU)</string>
+    <string name="perm_vscreen_tier_shizuku">Shizuku (öffentlicher Bildschirm)</string>
+    <string name="perm_vscreen_tier_unknown">Noch nicht geprüft — erstelle einen virtuellen Bildschirm, um zu prüfen</string>
+    <string name="perm_vscreen_tiers_footer">Die vom Agenten verwalteten virtuellen Bildschirme wählen die beste verfügbare Stufe: root (privilegierter Bildschirm), Shizuku (öffentlicher Bildschirm) oder den In-App-Fallback. Eine höherer Stufe zu geben rüstet neue Bildschirme automatisch auf; laufende Bildschirme werden nie migriert.</string>
+    <string name="provider_list_config_load_failed_banner">Die Anbieter-Konfiguration ließ sich nicht laden. Änderungen sind gesperrt, bis die App sie wieder lesen kann — probiere eine Anbieter-Aktion zum Wiederholen.</string>
+    <string name="provider_share_no_credentials">Nichts zu teilen: Geteilte Exporte enthalten keine Zugangsdaten. Nutze das verschlüsselte Backup, um Schlüssel zu übertragen.</string>
 </resources>

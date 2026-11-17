@@ -403,6 +403,9 @@ private suspend fun ChatViewModel.runSupervisorSession(
                 modelDisplayName = workerEntry.model.displayName,
                 userPrompt = user,
                 role = null,
+                // [T-subagent-report-spill] Session-keyed spill for oversized
+                // worker reports (see SubAgentRun wiring note).
+                sessionId = sessionId,
                 skillsHint = null,
                 tools = SupervisorSeats.workerTools(supervisorBaseTools(workerEntry)),
                 maxTokens = (workerEntry.model.maxOutputTokens ?: 4096).coerceIn(256, 8192),

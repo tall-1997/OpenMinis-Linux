@@ -106,7 +106,10 @@ object ActionGuard {
     /** Screen coordinates are snapped to this grid (px) so nearby taps compare as the same target. */
     const val COORD_TOLERANCE_PX = 8
 
-    private val IGNORED_ARG_KEYS = setOf("durationMs", "timeoutMs")
+    // [T-guard-ignore-tool-title] tool_title is free-text per-call narration;
+    // including it in the signature lets two identical calls with rephrased
+    // titles look different, so the repeat ladder never accumulates.
+    private val IGNORED_ARG_KEYS = setOf("durationMs", "timeoutMs", "tool_title")
     private val COORD_SCALAR_KEYS = setOf("x", "y", "x1", "y1", "x2", "y2", "left", "top", "right", "bottom", "centerx", "centery")
     private val COORD_PAIR_KEYS = setOf("point", "coordinate", "coords", "position", "center", "offset")
 

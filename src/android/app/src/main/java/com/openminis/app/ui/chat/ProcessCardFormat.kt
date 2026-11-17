@@ -40,6 +40,20 @@ internal fun formatProcessDuration(totalMs: Long): String? =
  * "输出中" is deliberately absent. Reply text ends the card on arrival, so
  * that state would render for a single frame and then vanish.
  */
+/**
+ * [P-process-card][T-process-card-i18n] Pre-resolved localized labels for
+ * [processCardHeader]. The function stays pure (JVM-test pinned) — the
+ * composable caller resolves the strings via stringResource; the old
+ * hardcoded Chinese literals rendered Chinese headers in every locale.
+ */
+internal data class ProcessCardHeaderLabels(
+    val thinking: String,
+    val tools: String,
+    val aiProcess: String,
+    val thinkingNow: String,
+    val callingTool: String,
+)
+
 internal fun processCardHeader(
     thinkingCount: Int,
     toolCount: Int,
@@ -48,15 +62,16 @@ internal fun processCardHeader(
     activity: String,
     activityTitle: String,
     duration: String?,
+    labels: ProcessCardHeaderLabels,
 ): String {
     val counts = buildString {
-        append("思考 ").append(thinkingCount)
-        append(" · 工具 ").append(toolCount)
+        append(labels.thinking).append(" ").append(thinkingCount)
+        append(" · ").append(labels.tools).append(" ").append(toolCount)
         if (duration != null) append(" · ").append(duration)
     }
     val state = when (activity) {
-        "thinking" -> "思考中"
-        "tool" -> if (activityTitle.isBlank()) "调用工具" else "调用工具 $activityTitle"
+        "thinking" -> labels.thinkingNow
+        "tool" -> if (activityTitle.isBlank()) labels.callingTool else "${labels.callingTool} $activityTitle"
         else -> ""
     }
     return when {
@@ -65,9 +80,9 @@ internal fun processCardHeader(
         !running -> counts
         // Running + expanded: the steps are on screen, so the header shows
         // only the live state; fall back to the generic label when idle.
-        expanded -> state.ifEmpty { "AI 过程" }
+        expanded -> state.ifEmpty { labels.aiProcess }
         // Running + collapsed: fixed label with ticking duration. The live
         // state stays out — that is what the expanded header is for.
-        else -> "AI 过程 · $counts"
+        else -> "${labels.aiProcess} · $counts"
     }
 }

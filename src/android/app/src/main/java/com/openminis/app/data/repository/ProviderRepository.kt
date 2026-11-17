@@ -510,6 +510,9 @@ class ProviderRepository(
     }
 
     // ── [T-newchat-default-model-fallback-android] last-used + newest-model ──
+    // Resolution impls live in ProviderRepositoryDefaultModel.kt
+    // (architecture-policy line ceiling); the member facades below keep the
+    // public surface unchanged for callers.
 
     /**
      * The model entry id the user last actively selected (model picker tap) or
@@ -529,37 +532,14 @@ class ProviderRepository(
      * entry — or null when the recorded id was deleted / hidden / its provider
      * disabled. Callers treat null as "fall through to the next tier".
      */
-    fun lastUsedVisibleEntry(): ModelEntry? {
-        val id = lastUsedEntryId ?: return null
-        return allVisibleEntries().firstOrNull { it.id == id }
-    }
+    fun lastUsedVisibleEntry(): ModelEntry? = resolveLastUsedVisibleEntry()
 
     /**
      * [T-newchat-default-model-fallback-android] Final-tier default for a new
      * chat: the newest text-output model from the newest-added enabled
-     * provider. "Newest provider" = max [ProviderInstance.createdAt]; "newest
-     * model" = last text-capable entry in add order (modelEntries is appended
-     * in add order, so the instance's last matching entry is the most recently
-     * added). Image/audio-only models are excluded — a fresh chat must default
-     * to something that can produce a text reply.
-     *
-     * Walks providers newest→oldest so that if the newest provider somehow has
-     * no text model (all image/audio), we still land on the newest text model
-     * from the next provider rather than returning null.
+     * provider. Impl in [resolveNewestProviderNewestTextEntry].
      */
-    fun newestProviderNewestTextEntry(): ModelEntry? {
-        val config = _config.value
-        val enabledProviders = config.instances
-            .filter { it.isEnabled }
-            .sortedByDescending { it.createdAt }
-        for (instance in enabledProviders) {
-            val textEntry = config.modelEntries
-                .filter { it.providerInstanceId == instance.id && !it.isHidden && it.model.isTextOutput }
-                .lastOrNull()
-            if (textEntry != null) return textEntry
-        }
-        return null
-    }
+    fun newestProviderNewestTextEntry(): ModelEntry? = resolveNewestProviderNewestTextEntry()
 
     /**
      * [T-disabled-provider-via-group-android] Members of [group] whose
@@ -1118,7 +1098,19 @@ class ProviderRepository(
     /** Suspend variant of [thinkingRules] — reads provider.db on IO, never the caller's thread. */
     suspend fun thinkingRulesSuspending(instanceId: String): List<ThinkingRule> =
         withContext(kotlinx.coroutines.Dispatchers.IO) {
+            // [T-thinking-rules-read-observability] The emptyList fallback keeps
+            // request assembly alive, but a transient SQLite error silently
+            // stripping EVERY user thinking rule must at least be diagnosable in
+            // the logs: warn (with the throwable) instead of vanishing.
             runCatching { providerDao.loadThinkingRules(instanceId).map { it.toRule() } }
+                .onFailure { e ->
+                    android.util.Log.w(
+                        "ProviderRepo",
+                        "[ThinkingRules] load failed for $instanceId; request assembly falls " +
+                            "back to NO custom rules (built-ins only): ${e.message}",
+                        e,
+                    )
+                }
                 .getOrDefault(emptyList())
         }
 

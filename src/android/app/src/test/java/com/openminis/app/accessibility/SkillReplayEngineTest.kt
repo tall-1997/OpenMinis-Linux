@@ -29,6 +29,7 @@ class SkillReplayEngineTest {
         val taps = mutableListOf<Pair<Int, Int>>()
         val tapsByText = mutableListOf<String>()
         val typed = mutableListOf<String>()
+        val typedViewIds = mutableListOf<String?>()
         val waits = mutableListOf<Long>()
         var nextTapFailsAt = -1 // 第 N 次 tap 失败（0-based 调用序号；-1 = 永不）
         private var tapCount = 0
@@ -49,7 +50,11 @@ class SkillReplayEngineTest {
             tapsByText.add(text)
             return tapByTextOk
         }
-        override fun typeText(text: String): Boolean { typed.add(text); return typeOk }
+        override fun typeText(text: String, viewId: String?): Boolean {
+            typed.add(text)
+            typedViewIds.add(viewId)
+            return typeOk
+        }
         override fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durationMs: Long) = true
         override fun back(): Boolean = true
         override fun openApp(packageName: String): Boolean = true
@@ -63,9 +68,10 @@ class SkillReplayEngineTest {
         text: String? = "OK",
         xy: String? = "10,20",
         atMs: Long = 0L,
+        viewId: String? = null,
     ) = A11ySkillStore.Step(
         kind = kind, packageName = "com.example", text = text,
-        viewId = null, contentDescription = null, xy = xy, atMs = atMs,
+        viewId = viewId, contentDescription = null, xy = xy, atMs = atMs,
     )
 
     private fun saveSkill(
@@ -76,6 +82,18 @@ class SkillReplayEngineTest {
 
     private fun dumpWithLabel(label: String, bounds: String = "100,200-200,300"): String =
         "[id] text=$label desc= cls= bounds=$bounds clickable=true editable=false\n"
+
+    /**
+     * [T-a11y-popup-gate] Dump shape of a real dialog: the app's main window
+     * (largest application window) plus a smaller dialog window carrying the
+     * popup label. Only the dialog window counts for auto-dismissal.
+     */
+    private fun dumpWithDialogLabel(label: String): String = buildString {
+        append("window index=0 type=application bounds=0,0-1080,2400 focused=true active=true\n")
+        append("[form] text=表单 desc= cls= bounds=0,0-1080,2400 clickable=false editable=false\n")
+        append("window index=1 type=application bounds=200,800-880,1400 focused=false active=false\n")
+        append("[dlg] text=$label desc= cls= bounds=400,1000-680,1100 clickable=true editable=false\n")
+    }
 
     // ─── 场景 1：全过清零 ─────────────────────────────────────────────────
 
@@ -161,8 +179,8 @@ class SkillReplayEngineTest {
         val store = store()
         val skill = saveSkill(store, steps = listOf(step(atMs = 0, xy = "5,5")))
         val actor = FakeActor()
-        // 第一次 dump 出现弹窗按钮「以后再说」→ tapByText 关掉；随后干净 dump
-        actor.dumps.add(dumpWithLabel("以后再说"))
+        // 第一次 dump 的 dialog 窗口里出现「以后再说」→ tapByText 关掉；随后干净 dump
+        actor.dumps.add(dumpWithDialogLabel("以后再说"))
         actor.dumps.add(dumpWithLabel("无关内容"))
         val r = SkillReplayEngine(actor, store).replay(store.byId(skill.id)!!)
         assertTrue(r.success)
@@ -170,6 +188,51 @@ class SkillReplayEngineTest {
         assertEquals(listOf("以后再说"), actor.tapsByText)
         // TAP 用了录制的 xy 回退（dump 里没有 text=OK）
         assertEquals(listOf(5 to 5), actor.taps)
+    }
+
+    @Test
+    fun `popup words inside the app main window are never auto-dismissed`() {
+        val store = store()
+        val skill = saveSkill(store, steps = listOf(step(atMs = 0, xy = "5,5")))
+        val actor = FakeActor()
+        // [T-a11y-popup-gate] The 取消 button lives in the app's own
+        // full-screen form (the largest application window) — no dialog window
+        // in the dump, so the popup pre-check must not tap it.
+        actor.dumps.add(
+            "window index=0 type=application bounds=0,0-1080,2400 focused=true active=true\n" +
+                dumpWithLabel("取消"),
+        )
+        actor.dumps.add(dumpWithLabel("无关内容"))
+        val r = SkillReplayEngine(actor, store).replay(store.byId(skill.id)!!)
+        assertTrue(r.success)
+        assertEquals(0, r.popupsDismissed)
+        assertTrue(actor.tapsByText.isEmpty())
+        assertEquals(listOf(5 to 5), actor.taps)
+    }
+
+    @Test
+    fun `input step threads the recorded viewId to the actor`() {
+        val store = store()
+        val skill = saveSkill(
+            store,
+            steps = listOf(step(kind = "INPUT", text = "hello", xy = null, viewId = "com.example:id/email")),
+        )
+        val actor = FakeActor()
+        actor.dumps.add(dumpWithLabel("无关内容"))
+        val r = SkillReplayEngine(actor, store).replay(store.byId(skill.id)!!)
+        assertTrue(r.reason, r.success)
+        // [T-a11y-replay-field-target] The recorder-stored viewId reaches the
+        // actor, which targets the recorded field (ServiceA11yActor's
+        // preference: matching viewId → focused editable → first editable).
+        assertEquals(listOf("hello"), actor.typed)
+        assertEquals(listOf("com.example:id/email"), actor.typedViewIds)
+        // A step recorded without a viewId keeps the legacy first-editable path.
+        val skill2 = saveSkill(store, name = "flow2", steps = listOf(step(kind = "INPUT", text = "hi", xy = null)))
+        val actor2 = FakeActor()
+        actor2.dumps.add(dumpWithLabel("无关内容"))
+        assertTrue(SkillReplayEngine(actor2, store).replay(store.byId(skill2.id)!!).success)
+        assertEquals(listOf("hi"), actor2.typed)
+        assertEquals(listOf<String?>(null), actor2.typedViewIds)
     }
 
     @Test

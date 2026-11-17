@@ -62,17 +62,16 @@ object AgentTools {
         // is wired into the session (main chats only; sub-agents/group chats
         // keep the minis-mcp-cli shell route).
         mcpNativeEnabled: Boolean = false,
-        // [P2-transcribe-audio-gate] transcribe_audio's dispatch branch
-        // (ChatViewModelExecuteToolExt, ProductMediaTools.TRANSCRIBE_AUDIO)
-        // returns notConfigured whenever no provider speech model is
-        // configured, so registering the schema unconditionally handed the
-        // model a tool that can only fail. Gate the injection like
-        // memory/code_graph above. The registry is built without a Context, so
-        // the caller supplies the flag — same shape as visionGroupConfigured:
-        // `hasSpeechModel = providerRepository.resolveVoiceInputEntry() != null`
-        // (the same probe ProviderSpeechRecognitionEngine.isAvailable uses).
-        // Default false: callers that don't pass it (tests, whitelists) simply
-        // don't advertise a transcription tool that cannot run.
+        // [P2-transcribe-audio-gate] → [T-transcribe-unadvertise] This flag
+        // used to gate the transcribe_audio schema injection, but that tool's
+        // dispatch branch (ChatViewModelExecuteToolExt,
+        // ProductMediaTools.TRANSCRIBE_AUDIO) returns notConfigured on EVERY
+        // path — there is no executor behind it — so a speech-model probe
+        // could only ever advertise a tool that cannot run. The injection is
+        // gone; the flag itself is retained because callers in ui/chat
+        // (another workstream) still pass it. Default false: callers that
+        // don't pass it simply don't advertise a transcription tool that
+        // cannot run.
         hasSpeechModel: Boolean = false,
         /** When false, expose only the core set plus [find_tools]. */
         includeLongTail: Boolean = true,
@@ -84,6 +83,17 @@ object AgentTools {
          * browser_use / web_fetch。默认 true 保持历史行为。
          */
         webSearchEnabled: Boolean = true,
+        /**
+         * [T-rule-allowlist-enforce] Per-rule tool whitelist (null/empty =
+         * unrestricted). When set, ONLY the named tools stay in the returned
+         * schema — an unattended session built from this list can declare
+         * nothing outside the rule's allowedTools, and find_tools itself is
+         * dropped unless explicitly whitelisted (a whitelisted run must not be
+         * able to discover + enable tools outside its set). RuleValidation
+         * keeps an empty (all-unknown) allowedTools list empty, so empty here
+         * means unrestricted, preserving the documented semantics.
+         */
+        allowedTools: Set<String>? = null,
     ): List<AgentToolDefinition> {
         val all = buildList {
         add(shellExecuteDefinition())
@@ -143,11 +153,12 @@ object AgentTools {
         add(ProductMediaTools.generateImageDefinition())
         add(ProductMediaTools.generateVideoDefinition())
         add(ProductMediaTools.describeImageDefinition())
-        // [P2-transcribe-audio-gate] Only injected when the caller confirms a
-        // speech model is configured — see the hasSpeechModel KDoc above.
-        if (hasSpeechModel) {
-            add(ProductMediaTools.transcribeAudioDefinition())
-        }
+        // [T-transcribe-unadvertise] transcribe_audio is deliberately NOT
+        // registered: its dispatch branch (ChatViewModelExecuteToolExt) has no
+        // executor behind it and returns notConfigured unconditionally, so any
+        // schema entry could only hand the model a tool that always fails.
+        // ProductMediaTools.transcribeAudioDefinition() and the dispatch branch
+        // stay in place (dead-but-harmless) until the executor is wired.
         add(ProductMediaTools.translateTextDefinition())
         add(SessionLookupTool.searchDefinition())
         add(SessionLookupTool.readDefinition())
@@ -207,8 +218,13 @@ object AgentTools {
         // historical all-tools schema. The active set names every registered
         // tool, so deferred tools stay present here; the Gate still runs so
         // model_only / codemode / hidden can never leak into ANY schema.
+        // [T-rule-allowlist-enforce] The allowlist cut runs LAST on both
+        // return paths so it also drops find_tools unless whitelisted.
+        fun allowlisted(list: List<AgentToolDefinition>): List<AgentToolDefinition> =
+            if (allowedTools.isNullOrEmpty()) list else list.filter { it.name in allowedTools }
+
         if (includeLongTail) {
-            return ToolExposureGate.filterForSchema(all, all.map { it.name }.toSet())
+            return allowlisted(ToolExposureGate.filterForSchema(all, all.map { it.name }.toSet()))
         }
         val alwaysOn = buildSet {
             addAll(
@@ -268,7 +284,7 @@ object AgentTools {
         // find_tools-enabled deferred tool rides enabledToolNames into the
         // schema exactly as before, while codemode / hidden tools can never be
         // declared regardless of how they were enabled.
-        return (
+        return allowlisted(
             ToolExposureGate.filterForSchema(
                 all.filter { it.name in alwaysOn || it.name in enabledToolNames },
                 alwaysOn + enabledToolNames,
@@ -282,8 +298,13 @@ object AgentTools {
      * The main session already has shell_execute for grep; sub-agents get a
      * dedicated grep_source so a source lookup is one turn instead of a
      * file_read paging loop (see SubAgentRunner history-budget pressure).
+     *
+     * [T-rule-allowlist-enforce] Spawn lanes inherit the parent session's
+     * per-rule tool whitelist: when the parent is whitelist-filtered, pass the
+     * same set here so a lane's extras are filtered to it too (null/empty =
+     * unrestricted).
      */
-    fun makeSubAgentExtraTools(): List<AgentToolDefinition> = buildList {
+    fun makeSubAgentExtraTools(allowedTools: Set<String>? = null): List<AgentToolDefinition> = buildList {
         add(GrepSourceTool.definition())
         add(GrepTool.definition())
         add(GlobTool.definition())
@@ -291,6 +312,8 @@ object AgentTools {
         add(WebFetchTool.definition())
         add(CodeGraphTool.definition())
         add(ExecuteCodeTool.definition())
+    }.let { list ->
+        if (allowedTools.isNullOrEmpty()) list else list.filter { it.name in allowedTools }
     }
 
     private fun runSubAgentDefinition(): AgentToolDefinition {

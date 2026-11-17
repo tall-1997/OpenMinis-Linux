@@ -33,7 +33,6 @@ class PersistentShell(
         /** [T-android-shell-death-diagnosability] Head holds proot's pre-dump error line(s); tail shows how output ended. */
         private const val OUTPUT_HEAD_MAX = 1024
         private const val OUTPUT_TAIL_MAX = 2048
-
     }
 
     @Volatile
@@ -268,7 +267,14 @@ class PersistentShell(
         SandboxWorkload.track(p, "shell:$sessionId")
         com.openminis.app.service.ActiveRunRegistry.registerProcess(sessionId, p)
         val activeRun = com.openminis.app.service.ActiveRunContext.current()
-        activeRun?.registerProcess(p) { stop() }
+        // [T-stop-keep-shell] Run teardown (user Stop / retry / queue-inject)
+        // must kill the RUNNING command, not the shell: cwd, env and packages
+        // are session state. The old `{ stop() }` cleanup destroyed the whole
+        // shell and always won the race ahead of [ExecutionCoordinator.stopOne]'s
+        // interrupt, making "kill the command, keep the shell" unreachable from
+        // chat. The cleanup interrupts instead; the pending callback stays armed
+        // so the guest's rc tail completes it with the signal exit + marker.
+        activeRun?.registerProcess(p) { interruptRunningCommand() }
         stdinWriter = BufferedWriter(OutputStreamWriter(p.outputStream, StandardCharsets.UTF_8))
 
         // Start background reader thread
@@ -470,19 +476,19 @@ class PersistentShell(
         lineCallback: ((String) -> Unit)? = null,
         // [T-resource-class-threaded] The budget the CALLER already computed,
         // including the tool's `resource_class`. Re-deriving it here from the
-        // command text alone used the 1-arg classify overload, whose
-        // `resourceClass` defaults to AUTO — so `heavy` was silently dropped,
-        // this layer armed the NORMAL wall, and because the tighter of two
-        // disagreeing layers is what actually fires, `resource_class = heavy`
-        // had no effect on the timeout at all. Two log lines per command
-        // recorded the disagreement ("caller timeout … ignored") from both
-        // sides. Defaulted to null so every existing caller still compiles.
+        // command text alone used the 1-arg classify overload whose AUTO
+        // default silently dropped `heavy` — this layer armed the NORMAL wall,
+        // and since the tighter of two disagreeing layers fires, heavy had no
+        // effect on the timeout at all. Defaulted to null so callers compile.
         callerBudget: ProcessBudget? = null,
     ): Pair<String, Int> {
         ensureStarted()
         // [GH#358] Each command starts with a clean verdict; only THIS command's
         // watchdog branch (or resetAfterTimeout) may set it.
         lastCommandTimedOut = false
+        // [stop=kill] Same hygiene: a Stop that armed the verdict on a prior
+        // command must not label the NEXT command's result.
+        killedByUser = false
 
         val writer = stdinWriter
         if (writer == null || !isAlive) {
@@ -585,9 +591,11 @@ class PersistentShell(
 
                     cont.invokeOnCancellation {
                         beat?.cancel()
-                        if (pendingCallback === cb) pendingCallback = null
-                        // Parent cancel has the same serialization bug as timeout.
-                        stop()
+                        // [T-stop-keep-shell] Parent cancel must NOT destroy the
+                        // shell (the old `stop()` tore down cwd/env/packages and
+                        // raced ahead of stopOne's interrupt). The callback stays
+                        // ARMED: the interrupt kills the command tree, the guest's
+                        // rc tail completes it, serialization holds without teardown.
                     }
 
                     try {
@@ -619,16 +627,12 @@ class PersistentShell(
                 killedByUser = false
                 // [GH#358] Set the internal verdict BEFORE the reset clears the
                 // callback: callers must distinguish this real watchdog timeout
-                // from a user command that merely exited 124. The marker shown to
-                // the model stays the same; the flag is what drives channel
-                // discard and the tool's TIMEOUT status.
+                // from a user command that merely exited 124. The flag drives
+                // channel discard and the tool's TIMEOUT status.
                 lastCommandTimedOut = true
-                // [GH#358] Reset the channel, not just the process: the reader
-                // thread may still hold a pending callback, stdin may still be
-                // buffered, and a half-started replacement must not make
-                // ensureStarted() wait on a stale isStarting flag. Fields reset:
-                // pendingCallback / stdinWriter / process / isStarting /
-                // sourcedOffloadSignature / lastExitCode (logged in the method).
+                // [GH#358] Reset the CHANNEL, not just the process: reader
+                // callback, stdin buffer and a half-started replacement all
+                // hold stale state (resetAfterTimeout logs the fields).
                 resetAfterTimeout()
                 Pair("[Command timed out after ${armed / 1000}s; guest process group killed]", 124)
             } else {
@@ -643,12 +647,10 @@ class PersistentShell(
         }
     }
 
-    /** Apply a full environment snapshot to the running shell. */
     /**
-     * [GH#358] Reclaim the per-session shell channel after a command timeout.
-     *
-     * 中文：命令超时后显式重置挂起回调、stdin、进程、启动标志等状态，
-     * 让下一次 shell_execute 能重建并正常执行，而不是永久排队。
+     * [GH#358] Reclaim the per-session shell channel after a command timeout:
+     * explicitly reset the pending callback, stdin, process and start flags so
+     * the next `shell_execute` rebuilds and runs instead of queueing forever.
      *
      * The reported failure was that one timed-out command permanently wedged
      * that session: all later `shell_execute` calls hung while a parallel
@@ -707,11 +709,10 @@ class PersistentShell(
      * Stop the persistent shell.
      *
      * [T-android-stop-jank] The caller is the Stop button's thread: the old
-     * order did the whole harvest inline — SandboxWorkload.release walks /proc
-     * for the process tree (3 passes), then `waitFor(500ms)` blocked on the
-     * dying process — so a tap on Stop froze the UI for the better part of a
-     * second per live shell. Now the waiting command is completed FIRST (the
-     * UI unblocks at once), the kill signal goes out synchronously, and the
+     * order did the whole harvest inline (a /proc tree walk, then a 500ms
+     * wait on the dying process froze the UI for the better part of a second
+     * per live shell). Now the waiting command completes FIRST (the UI
+     * unblocks at once), the kill signal goes out synchronously, and the
      * expensive reaping runs on a daemon thread. Nothing after the signal
      * needs the caller to wait: the shell object is already unregistered by
      * the coordinator before stop() runs, so no new command can reach it.
@@ -744,10 +745,15 @@ class PersistentShell(
         }
         // 3. Reap off the caller thread: tree kill, registry unregistration and
         //    the exit-code wait. Daemon so an app teardown never blocks on it.
+        // [T-shell-reap-context] Capture the run on the caller thread — the
+        // context is a ThreadLocal, null inside the daemon.
+        val capturedReapRun = com.openminis.app.service.ActiveRunContext.current()
         Thread({
             SandboxWorkload.release(p, kill = true, reason = "shell-stop:$sessionId")
             com.openminis.app.service.ActiveRunRegistry.unregisterProcess(sessionId, p)
-            com.openminis.app.service.ActiveRunContext.current()?.unregisterProcess(p)
+            // [T-shell-reap-context] ThreadLocal — null here; unregister on the
+            // run captured at stop() time instead.
+            capturedReapRun?.unregisterProcess(p)
             val exit = runCatching { p.waitFor(2, java.util.concurrent.TimeUnit.SECONDS) }
                 .getOrDefault(false)
             if (exit) lastExitCode = runCatching { p.exitValue() }.getOrNull()
@@ -761,17 +767,16 @@ class PersistentShell(
 
     /**
      * [stop=kill] Kill the RUNNING foreground command's tree from the host
-     * side while this shell stays alive. The pending callback completes on
-     * its own (guest bash falls through the `__minis_rc=$?` tail, DONE marker
+     * side while this shell stays alive. The pending callback completes on its
+     * own (guest bash falls through the `__minis_rc=$?` tail; the DONE marker
      * echoes the signal exit 137) — no channel reset, cwd/env/packages
-     * survive. Returns true when a command was actually pending.
+     * survive. True when a command was actually pending.
      */
     fun interruptRunningCommand(): Boolean {
         val root = process
         val hadPending = pendingCallback != null
         if (root == null || !hadPending) return false // stop epoch alone gates the next command
-        // Flag BEFORE the kill: the completion must not race ahead of the
-        // marker it is supposed to explain.
+        // Flag BEFORE the kill: the completion must not race the marker.
         killedByUser = true
         val victims = SandboxWorkload.killCommandTree(root, "user-stop")
         Log.w(TAG, "[stop-tool] running command killed by user: victims=${victims.size}")
@@ -781,8 +786,8 @@ class PersistentShell(
     /**
      * Read-and-clear the user-kill verdict for the command that just
      * returned. Only a signal-range exit counts (guest SIGKILL 137, shell
-     * death -1): a command that exited normally in the stop race must not
-     * be labelled, and 124 stays the timeout's own code.
+     * death -1): a normal exit in the stop race is not labelled, and 124
+     * stays the timeout's own code.
      */
     private fun consumeKilledByUser(exitCode: Int): Boolean {
         val flagged = killedByUser

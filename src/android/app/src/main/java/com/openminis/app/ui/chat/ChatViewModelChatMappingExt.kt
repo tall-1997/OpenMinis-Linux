@@ -177,7 +177,25 @@ internal fun ChatViewModel.toChatMessages(
                         // doesn't render in the user bubble (file chips come
                         // from mediaRef parts). The DB row + agentHistory
                         // keep the raw XML so the model still sees paths.
-                        val t = stripAttachedFilesXml(stripSystemReminders(raw)).let {
+                        // [T-reminder-strip-user-honesty] The reminder strip
+                        // used to run on USER rows unconditionally: a user
+                        // PASTING documentation that contains
+                        // <system-reminder> blocks lost them from the bubble
+                        // after reload (a paste that was ONLY such blocks
+                        // rendered as a vanished turn). The strip's real job
+                        // on user rows is hiding LEAKED harness framing —
+                        // which is exactly the leading-marker
+                        // classification — so it now applies to assistant
+                        // rows and harness-note user rows only; a user's own
+                        // pasted reminders are their content and stay.
+                        val reminderStripped = if (entity.role == "assistant" ||
+                            HarnessNoteMarkers.isHarnessNote(raw)
+                        ) {
+                            stripSystemReminders(raw)
+                        } else {
+                            raw
+                        }
+                        val t = stripAttachedFilesXml(reminderStripped).let {
                             // [T-universal-think-tag-history] Last-resort UI
                             // strip: a reasoning tag that leaked into the DB
                             // (unterminated provider stream, tool-loop splice,

@@ -51,6 +51,18 @@ object EncryptedPrefsFactory {
     private val lock = Any()
     private val cache = HashMap<String, SharedPreferences>()
 
+    /**
+     * [T-keystore-degraded-signal] Files whose [open] fell back to the
+     * NON-PERSISTING in-memory store (keystore/keyset failure). Readers of
+     * sensitive stores consult this to distinguish "empty" from "unreadable"
+     * — e.g. the backup secrets collector records an explicit skip instead
+     * of packaging a clean-looking backup with every provider logged out.
+     */
+    private val degradedFiles = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
+    /** True when [fileName]'s store is the non-persisting degraded fallback. */
+    fun isDegraded(fileName: String): Boolean = synchronized(lock) { fileName in degradedFiles }
+
     fun safeCreate(context: Context, fileName: String): SharedPreferences =
         cached(fileName) { open(AndroidOps(context.applicationContext), fileName) }
 
@@ -59,7 +71,10 @@ object EncryptedPrefsFactory {
         synchronized(lock) { cache.getOrPut(fileName, create) }
 
     /** Test hook: forget opened stores. */
-    internal fun resetCacheForTest() = synchronized(lock) { cache.clear() }
+    internal fun resetCacheForTest() = synchronized(lock) {
+        cache.clear()
+        degradedFiles.clear()
+    }
 
     /** Everything [open] needs from the platform; a fake drives it in unit tests. */
     internal interface Ops {
@@ -97,6 +112,9 @@ object EncryptedPrefsFactory {
         attempt("rebuild", Log.ERROR)?.let { return it }
 
         ops.log(Log.ERROR, "Encrypted storage unavailable for $fileName - using a NON-PERSISTING in-memory store")
+        // [T-keystore-degraded-signal] Mark the degraded fallback so store
+        // consumers can tell "empty" from "unreadable".
+        synchronized(lock) { degradedFiles.add(fileName) }
         return ops.inMemory()
     }
 

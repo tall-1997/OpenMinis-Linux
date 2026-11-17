@@ -126,6 +126,19 @@ internal object KatexWebViewPool {
             }
             webView = null
             isReady = false
+            // [T-katex-deferred-reset] The old page's readyDeferred dies with
+            // the WebView. Leaving the stale (possibly completed) deferred in
+            // place made awaitReady() return INSTANTLY against the NEW — not
+            // yet loaded — WebView, so renderMath evaluated before the KaTeX
+            // asset loaded and every formula silently fell back to raw LaTeX.
+            // A fresh deferred is installed (not a cancel: a cancelled
+            // deferred would throw CancellationException through in-flight
+            // awaiters) so anyone awaiting AFTER the release suspends until
+            // the NEW page's onPageFinished completes it. An awaiter that
+            // already captured the old deferred keeps waiting on it and times
+            // out gracefully (render returns null → raw-LaTeX fallback) — the
+            // acceptable cost of a memory-pressure teardown.
+            readyDeferred = CompletableDeferred()
         }
     }
 

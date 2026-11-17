@@ -399,9 +399,13 @@ object GroupChat {
         "结束讨论",
         "结束这场讨论",
         "总结一下",
+        "總結一下", // [T-groupchat-trigger-zh-hant] zh-rTW banner prompt
         "请总结",
+        "請總結",
         "出个结论",
+        "出個結論",
         "收束讨论",
+        "收束討論",
     )
 
     private fun stanceGuide(stance: String): String = when (stance) {

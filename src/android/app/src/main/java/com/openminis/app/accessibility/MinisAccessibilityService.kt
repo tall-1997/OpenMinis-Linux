@@ -50,7 +50,13 @@ class MinisAccessibilityService : AccessibilityService() {
         val xy: String? = null,
     )
 
+    // [T-a11y-ring-o1] ConcurrentLinkedQueue.size() traverses the whole
+    // queue per call, and the cap check ran per event on the MAIN thread —
+    // hundreds of events/sec during scrolling meant ~100k+ node traversals/s
+    // of pure overhead. An AtomicInteger counter gives O(1) capacity checks
+    // with identical oldest-first eviction/order semantics.
     private val eventRing = ConcurrentLinkedQueue<RecordedEvent>()
+    private val eventRingSize = java.util.concurrent.atomic.AtomicInteger()
     private val eventListeners = CopyOnWriteArrayList<(RecordedEvent) -> Unit>()
 
     /**
@@ -159,7 +165,15 @@ class MinisAccessibilityService : AccessibilityService() {
 
     private fun offerToRing(rec: RecordedEvent) {
         eventRing.offer(rec)
-        while (eventRing.size > EVENT_RING_CAP) eventRing.poll()
+        // [T-a11y-ring-o1] O(1) cap check; the bounded-drain loop absorbs
+        // concurrent bursts so the counter can never drift above the cap.
+        if (eventRingSize.incrementAndGet() > EVENT_RING_CAP) {
+            eventRing.poll()
+            eventRingSize.decrementAndGet()
+            while (eventRingSize.get() > EVENT_RING_CAP && eventRing.poll() != null) {
+                eventRingSize.decrementAndGet()
+            }
+        }
     }
 
     override fun onInterrupt() {
@@ -191,6 +205,7 @@ class MinisAccessibilityService : AccessibilityService() {
         super.onDestroy()
         if (_instance === this) _instance = null
         eventRing.clear()
+        eventRingSize.set(0) // [T-a11y-ring-o1] keep the counter in lockstep
         nodeRegistry.clear()
         eventListeners.clear()
         AppLogger.info(TAG, "service destroyed")

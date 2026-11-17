@@ -120,10 +120,16 @@ class BackupHistory private constructor(private val context: Context) {
     @Synchronized
     fun records(): List<Record> {
         cache?.let { return it }
-        val loaded = runCatching {
-            storeFile.takeIf { it.exists() }?.readText()
-                ?.let { JSON.decodeFromString(RECORD_LIST, it) }
-        }.getOrNull() ?: emptyList()
+        val fromDisk = loadRecords(storeFile)
+        if (fromDisk.quarantined) {
+            // [T-backup-decode-honesty] The corrupt file was moved aside, but
+            // this read must NOT cache an empty list as if the history were
+            // authoritative — leave the cache unset so the next read resolves
+            // from disk again (where the file is now gone, i.e. genuinely
+            // empty, and a future write recreates records.json).
+            return emptyList()
+        }
+        val loaded = fromDisk.records
         val cutoff = System.currentTimeMillis() - RETENTION_MS
         val fresh = loaded.filter { it.startedAt >= cutoff }
         // 旧版本把每个百分比都写成一行，受影响的记录打开历史页就卡死。
@@ -242,6 +248,48 @@ class BackupHistory private constructor(private val context: Context) {
 
         private val JSON = Json { ignoreUnknownKeys = true; encodeDefaults = true }
         private val RECORD_LIST = ListSerializer(Record.serializer())
+
+        /** Result of reading the history file off disk. */
+        internal class LoadResult(
+            /** What the file contained; empty when absent or unreadable. */
+            val records: List<Record>,
+            /**
+             * [T-backup-decode-honesty] True when the file existed but its bytes
+             * could not be decoded — the file was moved to `<name>.corrupt` so a
+             * future write recreates it fresh, and the caller must NOT cache the
+             * empty result (the empty list describes a quarantined file, not the
+             * user's history).
+             */
+            val quarantined: Boolean,
+        )
+
+        /**
+         * [T-backup-decode-honesty] Read the history file. A file that exists but
+         * cannot be decoded is NOT treated as "no history": the corrupt bytes are
+         * quarantined next to the original (`records.json.corrupt`) and logged, so
+         * the condition is diagnosable and the next write recreates the file
+         * instead of every future upsert fighting a corrupt blob. Pure over a
+         * [File] so the contract is testable without a Context.
+         */
+        internal fun loadRecords(file: File): LoadResult {
+            if (!file.exists()) return LoadResult(emptyList(), quarantined = false)
+            val decoded = runCatching {
+                JSON.decodeFromString(RECORD_LIST, file.readText())
+            }.getOrNull()
+            if (decoded != null) return LoadResult(decoded, quarantined = false)
+            AppLogger.error(
+                TAG,
+                "[Backup] ${file.name} is unreadable; quarantining as ${file.name}.corrupt",
+            )
+            val corrupt = File(file.parentFile, "${file.name}.corrupt")
+            runCatching {
+                corrupt.delete()
+                if (!file.renameTo(corrupt)) file.delete()
+            }.onFailure {
+                AppLogger.error(TAG, "[Backup] could not quarantine ${file.name}: ${it.message}")
+            }
+            return LoadResult(emptyList(), quarantined = true)
+        }
 
         @Volatile
         private var instance: BackupHistory? = null

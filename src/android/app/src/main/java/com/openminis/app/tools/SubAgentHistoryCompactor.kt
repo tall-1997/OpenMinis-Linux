@@ -11,10 +11,14 @@ import com.openminis.app.data.model.AgentContentPart
  * truncated to a head+tail excerpt while the newest ones are kept verbatim
  * (the model almost always needs the freshest tool output in full).
  *
- * Unlike the older [com.openminis.app.offload] path this does NOT spill the
- * original content to disk: a sub-agent is a short-lived self-contained loop
- * with no offload persistence wired in, so dropping the middle is the correct
- * trade-off — the model can always re-read a file if it truly needs it back.
+ * Unlike the older [com.openminis.app.offload] path this does NOT spill on
+ * its own initiative: the caller may hand in a [compact] `spill` hook (the
+ * sub-agent runner does, when it knows the session) and every stub then says
+ * how to get the folded text back — an embedded spill path when the result
+ * carries one, a freshly written spill file for oversized pathless results,
+ * or the explicit "re-run this tool" instruction. Without a hook the stubs
+ * still name the re-read/re-run recovery instead of dropping the middle
+ * silently.
  */
 object SubAgentHistoryCompactor {
 
@@ -32,10 +36,31 @@ object SubAgentHistoryCompactor {
     private const val TAIL = 500
 
     /**
+     * [T-subagent-history-spill] Size at or above which a stubbed result MUST
+     * carry a recovery line (a spill path when one can be produced, otherwise
+     * the explicit "re-run this tool" instruction). Keep in lockstep with
+     * [ToolResultAging.SPILL_LIMIT_CHARS] / `ToolOutputSpill.LIMIT`: a result
+     * this large was worth persisting when it was fresh, so silently dropping
+     * its middle from the history without saying how to get it back is a
+     * silent loss, not a trim.
+     */
+    const val SPILL_LIMIT_CHARS = 16_000
+
+    /**
      * Returns a compacted copy of [history]. The input list is never mutated;
      * messages that need no change are returned by reference (zero-copy fast path).
+     *
+     * [T-subagent-history-spill] [spill] persists an oversized pathless result
+     * into a recoverable store and returns the guest path the model can
+     * `file_read` (null = nothing could be persisted). It is invoked only for
+     * stubbed results at or above [SPILL_LIMIT_CHARS] that carry no embedded
+     * spill path; deterministic spillers (content-keyed) make the per-turn
+     * re-compaction rewrite the same file instead of accumulating duplicates.
      */
-    fun compact(history: List<com.openminis.app.data.model.LLMMessage>): List<com.openminis.app.data.model.LLMMessage> {
+    fun compact(
+        history: List<com.openminis.app.data.model.LLMMessage>,
+        spill: (name: String, content: String) -> String? = { _, _ -> null },
+    ): List<com.openminis.app.data.model.LLMMessage> {
         // Fast path: nothing large enough to bother with.
         if (estimateChars(history) <= TOTAL_BUDGET) return history
 
@@ -60,7 +85,7 @@ object SubAgentHistoryCompactor {
             val newParts = msg.contentParts.map { part ->
                 if (part is AgentContentPart.ToolResult && part.content.length > PER_RESULT_CAP) {
                     toolResultOrdinal++
-                    part.copy(content = truncateMiddle(part.content, part.name))
+                    part.copy(content = truncateMiddle(part.content, part.name, spill))
                 } else {
                     part
                 }
@@ -70,10 +95,22 @@ object SubAgentHistoryCompactor {
         return out
     }
 
-    private fun truncateMiddle(content: String, toolName: String): String {
+    private fun truncateMiddle(
+        content: String,
+        toolName: String,
+        spill: (name: String, content: String) -> String?,
+    ): String {
         if (content.length <= HEAD + TAIL + 200) return content
         val dropped = content.length - HEAD - TAIL
-        return buildString(HEAD + TAIL + 120) {
+        // [T-subagent-history-spill] Mirror ToolResultAging's recoverable-stub
+        // pattern: a stub must say how to get the folded text back. An
+        // embedded spill path (the unified exit's placeholder, or a workspace
+        // path the result itself carries) is reused as-is; otherwise an
+        // oversized result is spilled now — or, when nothing can be persisted,
+        // the stub admits the only recovery is re-running the tool.
+        val path = ToolOutputSpill.parseGuestPath(content)
+            ?: if (content.length >= SPILL_LIMIT_CHARS) spill(toolName, content) else null
+        return buildString(HEAD + TAIL + 240) {
             append(content, 0, HEAD)
             append("\n\n…[sub-agent history compaction: dropped ")
             append(dropped)
@@ -81,6 +118,11 @@ object SubAgentHistoryCompactor {
             append(toolName)
             append("` output; re-read the file if you need it back]…\n\n")
             append(content.substring(content.length - TAIL))
+            if (path != null) {
+                append("\nfull output: ").append(path)
+            } else if (content.length >= SPILL_LIMIT_CHARS) {
+                append("\nfull content: re-run this tool")
+            }
         }
     }
 

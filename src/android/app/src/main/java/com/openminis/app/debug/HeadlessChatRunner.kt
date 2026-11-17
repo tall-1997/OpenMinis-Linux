@@ -143,8 +143,17 @@ internal object HeadlessChatRunner {
         thinkingLevel: ThinkingLevel? = null,
         wait: Boolean,
         timeoutMs: Long,
+        // [T-rule-allowlist-enforce] Per-session tool whitelist for unattended
+        // automation-rule runs (null/empty = unrestricted). Applied before the
+        // first send; the VM's toolset build + dispatch gate enforce it.
+        allowedTools: Set<String>? = null,
     ): PromptResult = withContext(Dispatchers.Main) {
         val vm = viewModel(context, sessionId)
+        // [T-rule-allowlist-enforce] Unconditional: a reused session must
+        // ADOPT the new rule's whitelist (or clear a stale one) — skipping
+        // the call on null/empty let a previous rule's allowlist leak into
+        // an unrestricted run on the same cached VM.
+        vm.setToolAllowlist(allowedTools)
         // Apply per-call thinking override BEFORE sendMessage so streamMessage
         // picks up the new level. Caller passes null to keep the VM's existing
         // setting (default OFF for a fresh VM, last user-set value otherwise).
@@ -236,9 +245,14 @@ internal object HeadlessChatRunner {
         messageId: String?,
         wait: Boolean,
         timeoutMs: Long,
+        // [T-rule-allowlist-enforce] Same contract as [prompt]; scheduled-task
+        // re-runs dispatch through retry, so the whitelist must survive it.
+        allowedTools: Set<String>? = null,
     ): PromptResult = withContext(Dispatchers.Main) {
         val app = app(context)
         val vm = viewModel(context, sessionId)
+        // [T-rule-allowlist-enforce] Same unconditional contract as prompt().
+        vm.setToolAllowlist(allowedTools)
         val targetMsgId = messageId ?: run {
             app.chatRepository.dao.lastMessageByRole(sessionId, "user")?.id
                 ?: throw RPCException(-32602, "Session has no user messages")

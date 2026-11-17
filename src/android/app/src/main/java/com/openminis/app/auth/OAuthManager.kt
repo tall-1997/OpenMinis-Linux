@@ -47,7 +47,8 @@ abstract class OAuthManager(
          * in the BASE class so every manager inherits it.
          *
          * It used to live in three subclasses only (Claude / Gemini / Kimi), which
-         * left OpenAIOAuthManager, AntigravityOAuthManager and XAIOAuthManager
+         * left OpenAIOAuthManager, XAIOAuthManager and the since-removed
+         * AntigravityOAuthManager scaffolding ([T-antigravity-deadclass-removed])
          * refreshing completely un-locked — and the lock was per-CLASS, so two
          * manager objects for the same account (chat builds one, provider routing
          * builds another) had two locks.

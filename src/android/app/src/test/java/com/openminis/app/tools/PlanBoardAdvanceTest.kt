@@ -139,6 +139,35 @@ class PlanBoardAdvanceTest {
         assertEquals("active", board().first { it.id == "s1" }.status)
     }
 
+    @Test
+    fun `exact title equality wins over substring ambiguity`() = runTest {
+        // [T-plan-advance-unique-match] The narration equals s2's title exactly,
+        // but that title also SUBSTRING-matches s1 ("deploy" ⊂ "deploy stage
+        // two") — the exact-equality branch must pick s2 alone and advance.
+        seedBoard(
+            AgentPlanStore.PlanInput(id = "s1", title = "deploy", status = "active"),
+            AgentPlanStore.PlanInput(id = "s2", title = "deploy stage two", status = "pending"),
+        )
+        val note = reconcile("Deploy Stage Two")
+        assertNotNull(note)
+        assertEquals("done", board().first { it.id == "s1" }.status)
+        assertEquals("active", board().first { it.id == "s2" }.status)
+    }
+
+    @Test
+    fun `a narration quoting several step titles advances nothing`() = runTest {
+        // [T-plan-advance-unique-match] "write code" and "code review" are both
+        // quoted by chance in one narration — two substring matches attribute to
+        // nothing (the furthest-match heuristic could mark the wrong step done
+        // and auto-close a goal prematurely).
+        seedBoard(
+            AgentPlanStore.PlanInput(id = "s1", title = "write code", status = "active"),
+            AgentPlanStore.PlanInput(id = "s2", title = "code review", status = "pending"),
+        )
+        assertNull(reconcile("wrap up write code and prep code review"))
+        assertEquals("active", board().first { it.id == "s1" }.status)
+    }
+
     // ------------------------------------------ rule 2: goal close-out -----
 
     @Test

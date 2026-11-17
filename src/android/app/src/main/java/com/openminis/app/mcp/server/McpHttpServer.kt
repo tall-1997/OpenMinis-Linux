@@ -37,6 +37,13 @@ class McpHttpServer(
     /** App versionName, surfaced in MCP initialize serverInfo.version. */
     private val serverVersion: String = "0.0.0",
     private val onRequestHandled: () -> Unit = {},
+    /**
+     * [T-mcp-accept-recovery] Invoked on the accept thread when the loop gave
+     * up: recovery attempts were exhausted and the server has stopped itself
+     * (running=false, [lastError] set). Lets the manager's status surface show
+     * stopped-with-error instead of a perpetual RUNNING.
+     */
+    private val onSelfStopped: (() -> Unit)? = null,
 ) {
 
     companion object {
@@ -50,6 +57,19 @@ class McpHttpServer(
 
         /** Max header block size before the connection is dropped. */
         private const val MAX_HEADER_BYTES = 64 * 1024
+
+        /** [T-mcp-accept-recovery] Same construction as [start] uses. */
+        private const val BIND_HOST = "127.0.0.1"
+        private const val BACKLOG = 10
+
+        /**
+         * [T-mcp-accept-recovery] One IOException from `accept()` used to break
+         * the loop forever while `running` stayed true — a "running" server that
+         * accepts nothing. The loop now re-binds up to this many times, waiting
+         * this long between attempts, before giving up and stopping itself.
+         */
+        private const val MAX_ACCEPT_RECOVERY_ATTEMPTS = 5
+        private const val ACCEPT_RECOVERY_BACKOFF_MS = 500L
 
         /**
          * [P2-mcp-pool] Worker count. The fixed 4 was small enough that a
@@ -68,6 +88,14 @@ class McpHttpServer(
     private val running = AtomicBoolean(false)
     private var pool: ExecutorService? = null
     private var acceptThread: Thread? = null
+
+    /**
+     * [T-mcp-accept-recovery] Whether the accept loop is still alive. A server
+     * that gave up recovering its listening socket sets this false (and
+     * [lastError]) so status surfaces can tell "running" from "stopped itself".
+     */
+    val isRunning: Boolean
+        get() = running.get()
 
     /**
      * [P2-mcp-pool] Connections accepted but not yet finished — includes both
@@ -96,7 +124,14 @@ class McpHttpServer(
         if (running.get()) return true
         lastBindConflict = false
         return try {
-            val socket = ServerSocket(port, 10, InetAddress.getByName("127.0.0.1"))
+            // [T-mcp-accept-recovery] The INITIAL bind must NOT set
+            // SO_REUSEADDR: on Windows that option allows a silent double-bind
+            // (the server "wins" the bind but another socket keeps the
+            // traffic — client connects time out while status says RUNNING).
+            // A collision on the initial start is a clean BindException the
+            // caller retries with a different port. Only the RECOVERY path
+            // needs the option (re-binding a port this server just owned).
+            val socket = bindServerSocket(port, reuseAddress = false)
             serverSocket = socket
             pool = Executors.newFixedThreadPool(workerCount) { r ->
                 Thread(r, "mcp-server-worker").apply { isDaemon = true }
@@ -104,10 +139,10 @@ class McpHttpServer(
             running.set(true)
             lastError = null
             acceptThread = Thread({
-                acceptLoop(socket)
+                acceptLoop(socket, port)
             }, "mcp-server-accept").apply { isDaemon = true }
             acceptThread!!.start()
-            Log.i(TAG, "MCP server listening on 127.0.0.1:$port")
+            Log.i(TAG, "MCP server listening on $BIND_HOST:$port")
             true
         } catch (e: Exception) {
             lastError = e.message
@@ -130,16 +165,74 @@ class McpHttpServer(
         acceptThread = null
     }
 
-    private fun acceptLoop(socket: ServerSocket) {
+    /** The one place that constructs the listening socket (start + recovery). */
+    private fun bindServerSocket(port: Int, reuseAddress: Boolean): ServerSocket =
+        ServerSocket().apply {
+            // [T-mcp-accept-recovery] SO_REUSEADDR is only wanted on the
+            // RECOVERY path (re-binding a port this server just owned, where
+            // children of the dead listener may sit in TIME_WAIT). On Windows
+            // the option enables silent double-bind — see the start() note.
+            this.reuseAddress = reuseAddress
+            try {
+                bind(java.net.InetSocketAddress(InetAddress.getByName(BIND_HOST), port), BACKLOG)
+            } catch (e: Exception) {
+                // [T-mcp-accept-recovery] A failed bind leaves the impl fd
+                // allocated — close the candidate or the recovery loop leaks
+                // one fd per attempt (bounded at 5, still a leak).
+                runCatching { close() }
+                throw e
+            }
+        }
+
+    /**
+     * [T-mcp-accept-recovery] Test hook: the live listening socket, or null.
+     * Closing it simulates the accept failure the recovery path exists for.
+     */
+    internal fun listeningSocketForTest(): ServerSocket? = serverSocket
+
+    /**
+     * [T-mcp-accept-recovery] Accept loop with bounded recovery.
+     *
+     * The old loop `break`ed on ANY accept failure while `running` stayed true,
+     * leaving a server that reported running but accepted nothing (one
+     * transient IOException from `socket.accept()` was enough — e.g. an fd
+     * limit hiccup). Now: on an accept failure while running, close the dead
+     * socket, wait briefly and re-bind the same port, up to
+     * [MAX_ACCEPT_RECOVERY_ATTEMPTS] times. If every attempt fails, the server
+     * stops itself honestly: running=false, [lastError] recorded, worker pool
+     * left for [stop] to reclaim, and [onSelfStopped] fired so the manager's
+     * status surface reflects the stopped state instead of a perpetual RUNNING.
+     */
+    private fun acceptLoop(socket: ServerSocket, port: Int) {
+        var current = socket
         while (running.get()) {
             val client = try {
-                socket.accept()
+                current.accept()
             } catch (e: Exception) {
-                if (running.get()) {
-                    lastError = e.message
-                    Log.w(TAG, "accept failed: ${e.message}")
+                if (!running.get()) break // stop() closed the socket under us — normal shutdown
+                lastError = e.message
+                Log.w(TAG, "accept failed: ${e.message}")
+                val recovered = recoverAcceptSocket(current, port, e)
+                if (recovered == null) {
+                    if (!running.get()) break // stop() raced the recovery — normal shutdown
+                    val giveUpMessage = "accept loop stopped after $MAX_ACCEPT_RECOVERY_ATTEMPTS " +
+                        "recovery attempts: ${e.message}"
+                    lastError = giveUpMessage
+                    Log.e(TAG, giveUpMessage)
+                    // [T-mcp-accept-recovery] Give-up publication under the same
+                    // monitor stop() holds — a racing stop() closing the OLD
+                    // socket must not orphan the freshly re-bound one (F5 leak).
+                    synchronized(this@McpHttpServer) {
+                        running.set(false)
+                        runCatching { current.close() }
+                        runCatching { serverSocket?.takeIf { it !== current }?.close() }
+                        serverSocket = null
+                    }
+                    onSelfStopped?.let { runCatching { it() } }
+                    break
                 }
-                break
+                current = recovered
+                continue
             }
             // [P2-mcp-pool] Saturation trace: when every worker is busy the
             // unbounded queue grows silently; leave a warning with the depth.
@@ -155,6 +248,59 @@ class McpHttpServer(
                 }
             }
         }
+        // The loop only exits when running went false. If a re-bound socket is
+        // still published (stop() raced the recovery and closed the OLD socket),
+        // reclaim it here so recovery can never leak a listening fd.
+        if (serverSocket === current) {
+            serverSocket = null
+        }
+        runCatching { current.close() }
+    }
+
+    /**
+     * [T-mcp-accept-recovery] Close the failed listening socket and try to
+     * re-bind the same host/port with a short backoff between attempts.
+     * Returns the fresh socket, or null when the attempts are exhausted (or
+     * the server was stopped in the meantime). On the first success the new
+     * socket is published to [serverSocket] so [stop] closes the right one.
+     */
+    private fun recoverAcceptSocket(dead: ServerSocket, port: Int, cause: Exception): ServerSocket? {
+        runCatching { dead.close() }
+        repeat(MAX_ACCEPT_RECOVERY_ATTEMPTS) { attempt ->
+            if (!running.get()) return null
+            try {
+                Thread.sleep(ACCEPT_RECOVERY_BACKOFF_MS)
+                if (!running.get()) return null
+                // [T-mcp-accept-recovery] Recovery RE-binds a port this server
+                // just owned — children of the dead listener may sit in
+                // TIME_WAIT, so SO_REUSEADDR is wanted here (start() keeps it
+                // off, see the double-bind note there).
+                val fresh = bindServerSocket(port, reuseAddress = true)
+                // [T-mcp-accept-recovery] Publish under the instance monitor —
+                // the same one [stop] holds — so a concurrent stop() can never
+                // close the OLD socket while the fresh one stays leaked.
+                synchronized(this@McpHttpServer) {
+                    if (!running.get()) {
+                        runCatching { fresh.close() }
+                        return null
+                    }
+                    serverSocket = fresh
+                }
+                lastError = null
+                Log.i(
+                    TAG,
+                    "accept recovered on attempt ${attempt + 1}/$MAX_ACCEPT_RECOVERY_ATTEMPTS: " +
+                        "re-bound $BIND_HOST:$port (previous failure: ${cause.message})",
+                )
+                return fresh
+            } catch (e: Exception) {
+                Log.w(
+                    TAG,
+                    "accept recovery attempt ${attempt + 1}/$MAX_ACCEPT_RECOVERY_ATTEMPTS failed: ${e.message}",
+                )
+            }
+        }
+        return null
     }
 
     private fun handleConnection(socket: Socket) {

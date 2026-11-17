@@ -107,49 +107,72 @@ class ScheduledTaskManager(private val context: Context) {
      * the run and the next occurrence is armed instead.
      */
     fun rescheduleNext(taskId: String): Boolean {
-        val t = store.get(taskId) ?: return false
-        if (t.repeatMode == ScheduledRepeatMode.ONCE) {
-            // Mark fired ONCE task as disabled — keep row so the user can
-            // see its last result, re-enable if they want to re-run.
-            store.upsert(t.copy(enabled = false))
-            return true
+        // [T-scheduled-atomic-update] Every branch used to read the row with
+        // store.get and write its copy with store.upsert — a plain
+        // read-modify-write that raced [claimRunNow]'s atomic store.update: a
+        // "Run now" claim landing between the get and the upsert was silently
+        // overwritten (runNowSlotMs / fireAtMs / enabled transitions lost).
+        // All decisions now run inside ONE atomic update on the fresh row; the
+        // alarm register stays outside the store lock, driven by the row the
+        // transform decided on. Branch-by-branch semantics are unchanged.
+        var result: Boolean? = null
+        var alarmRow: ScheduledTask? = null
+        store.update(taskId) { cur ->
+            when (cur.repeatMode) {
+                ScheduledRepeatMode.ONCE -> {
+                    // Mark fired ONCE task as disabled — keep row so the user can
+                    // see its last result, re-enable if they want to re-run.
+                    result = true
+                    cur.copy(enabled = false)
+                }
+                ScheduledRepeatMode.INTERVAL -> {
+                    val intervalMs = cur.intervalMinutes * 60_000L
+                    if (intervalMs <= 0L) {
+                        result = false
+                        null
+                    } else {
+                        result = true
+                        val updated = cur.copy(fireAtMs = System.currentTimeMillis() + intervalMs)
+                        alarmRow = updated
+                        updated
+                    }
+                }
+                else -> {
+                    // [T-sched-run-now] A slot "Run now" already fired early must not run
+                    // again from its alarm: the run-now claim recorded the slot
+                    // ([ScheduledTask.runNowSlotMs]); a delivery inside the late window
+                    // (Doze can hold an alarm minutes) is that stale registration.
+                    if (calendarSlotTakenByRunNow(cur, System.currentTimeMillis())) {
+                        AppLogger.info(TAG, "task ${cur.id}: slot already run by Run now — not running")
+                        result = false
+                        alarmRow = cur
+                        null // no store write needed
+                    } else if (cur.nextTriggerMs() == null) {
+                        // [T-scheduled-end-window-autodisable] ScheduledTask's active-window
+                        // contract says repeating tasks "auto-disable once the end date has
+                        // fully passed" — but this branch used to just call registerAlarm,
+                        // whose nextTriggerMs()==null path logs "no next trigger" and gives
+                        // up. The row stayed enabled=true forever: toggle on, no alarm, and
+                        // the list card showed the schedule with an empty next segment.
+                        // Disable in-place (same shape as the ONCE branch) so the row and
+                        // the card agree that the task is finished. Also covers a CUSTOM
+                        // task whose day set drained to empty.
+                        AppLogger.info(
+                            TAG,
+                            "task ${cur.id}: no future slot (end of active window) — disabling",
+                        )
+                        result = false
+                        cur.copy(enabled = false)
+                    } else {
+                        result = true
+                        alarmRow = cur
+                        null // no store write needed
+                    }
+                }
+            }
         }
-        if (t.repeatMode == ScheduledRepeatMode.INTERVAL) {
-            val intervalMs = t.intervalMinutes * 60_000L
-            if (intervalMs <= 0L) return false
-            val updated = t.copy(fireAtMs = System.currentTimeMillis() + intervalMs)
-            store.upsert(updated)
-            registerAlarm(updated)
-            return true
-        }
-        // [T-sched-run-now] A slot "Run now" already fired early must not run
-        // again from its alarm: the run-now claim recorded the slot
-        // ([ScheduledTask.runNowSlotMs]); a delivery inside the late window
-        // (Doze can hold an alarm minutes) is that stale registration.
-        if (calendarSlotTakenByRunNow(t, System.currentTimeMillis())) {
-            AppLogger.info(TAG, "task ${t.id}: slot already run by Run now — not running")
-            registerAlarm(t)
-            return false
-        }
-        // [T-scheduled-end-window-autodisable] ScheduledTask's active-window
-        // contract says repeating tasks "auto-disable once the end date has
-        // fully passed" — but this branch used to just call registerAlarm,
-        // whose nextTriggerMs()==null path logs "no next trigger" and gives
-        // up. The row stayed enabled=true forever: toggle on, no alarm, and
-        // the list card showed the schedule with an empty next segment.
-        // Disable in-place (same shape as the ONCE branch) so the row and
-        // the card agree that the task is finished. Also covers a CUSTOM
-        // task whose day set drained to empty.
-        if (t.nextTriggerMs() == null) {
-            AppLogger.info(
-                TAG,
-                "task ${t.id}: no future slot (end of active window) — disabling",
-            )
-            store.upsert(t.copy(enabled = false))
-            return false
-        }
-        registerAlarm(t)
-        return true
+        alarmRow?.let { registerAlarm(it) }
+        return result == true
     }
 
     /**
@@ -184,21 +207,24 @@ class ScheduledTaskManager(private val context: Context) {
     }
 
     fun markFired(taskId: String, sessionId: String?, resultPreview: String?, ok: Boolean = true) {
-        val t = store.get(taskId) ?: return
+        // [T-scheduled-atomic-update] This used to be get + copy + upsert: a
+        // [claimRunNow] or [rescheduleNext] transition landing between the get
+        // and the upsert was overwritten with the stale copy (lost update).
+        // The run record is now prepended inside the store's atomic update, on
+        // the fresh row.
         val now = System.currentTimeMillis()
-        // [T-android-scheduled-tasks-run-records] Prepend a run record
-        // (newest-first), capped at MAX_RUN_HISTORY. lastResult* are kept in
-        // sync for back-compat but are no longer surfaced in the list UI.
-        val run = ScheduledRun(firedAt = now, sessionId = sessionId, preview = resultPreview, ok = ok)
-        val history = (listOf(run) + t.runHistory).take(ScheduledTask.MAX_RUN_HISTORY)
-        store.upsert(
+        store.update(taskId) { t ->
+            // [T-android-scheduled-tasks-run-records] Prepend a run record
+            // (newest-first), capped at MAX_RUN_HISTORY. lastResult* are kept in
+            // sync for back-compat but are no longer surfaced in the list UI.
+            val run = ScheduledRun(firedAt = now, sessionId = sessionId, preview = resultPreview, ok = ok)
             t.copy(
                 lastFiredAt = now,
                 lastResultPreview = resultPreview,
                 lastResultSessionId = sessionId,
-                runHistory = history,
-            ),
-        )
+                runHistory = (listOf(run) + t.runHistory).take(ScheduledTask.MAX_RUN_HISTORY),
+            )
+        } ?: return
     }
 
     private fun registerAlarm(task: ScheduledTask) {

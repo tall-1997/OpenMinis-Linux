@@ -111,6 +111,10 @@ object McpServerManager {
             authToken = { store.currentToken() },
             serverVersion = serverVersion,
             onRequestHandled = { started?.let { publishState(it) } },
+            // [T-mcp-accept-recovery] When the accept loop exhausts its recovery
+            // attempts the server stops itself; publish that so the status
+            // surface shows stopped-with-error instead of a perpetual RUNNING.
+            onSelfStopped = { started?.let { publishSelfStopped(it) } },
         )
         started = s
         // [T-mcp-port-fallback] The configured port can be squatted by another
@@ -172,6 +176,25 @@ object McpServerManager {
             handledRequests = server.handledRequestCount,
             actualPort = actualPortField,
         )
+    }
+
+    /**
+     * [T-mcp-accept-recovery] The accept loop exhausted its recovery attempts
+     * and the server stopped itself (running=false, lastError set). Publish
+     * ERROR so the settings status line stops claiming RUNNING, and withdraw
+     * the advertised endpoint — nothing listens anymore.
+     */
+    private fun publishSelfStopped(server: McpHttpServer) {
+        synchronized(this) {
+            if (this.server !== server) return // a newer instance owns the state now
+            actualPortField = null
+            context?.let { McpEndpointFile.withdraw(it.filesDir) }
+            _state.value = ServerState(
+                status = Status.ERROR,
+                error = server.lastError ?: "MCP server stopped unexpectedly",
+                handledRequests = server.handledRequestCount,
+            )
+        }
     }
 
     /**

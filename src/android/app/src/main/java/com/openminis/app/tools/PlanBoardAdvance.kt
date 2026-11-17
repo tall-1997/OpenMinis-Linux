@@ -98,10 +98,14 @@ internal object PlanBoardAdvance {
      * Rule 1. The matcher is the REVERSE of the board tool's ref ladder: a
      * step title quoted IN the tool narration (the narration is longer and
      * names the step it works on — "start implementing fix in auth module"
-     * quotes "implement fix"). A narration naming SEVERAL steps attributes to
-     * the FURTHEST one (work progresses forward). Requires an actionable
-     * target: working a later step while an earlier one is active → the
-     * active step is done; nothing active → a named pending step activates.
+     * quotes "implement fix"). Matching is UNIQUE per the class contract:
+     * an exact title equality (trim, ignoreCase) naming exactly one plan wins
+     * immediately; otherwise the narration must substring-match EXACTLY ONE
+     * distinct plan — zero or ≥2 matches attribute to nothing (a short title
+     * quoted by chance in a longer narration can otherwise mark the wrong
+     * step done and auto-close the goal). Requires an actionable target:
+     * working a later step while an earlier one is active → the active step
+     * is done; nothing active → a named pending step activates.
      * Returns the receipt line, or null.
      */
     private fun attributeAdvance(
@@ -111,12 +115,25 @@ internal object PlanBoardAdvance {
         toolTitle: String,
     ): String? {
         if (toolTitle.isBlank()) return null
-        val named = plans.filter {
-            it.title.isNotBlank() && toolTitle.contains(it.title.trim(), ignoreCase = true)
+        val narrated = toolTitle.trim()
+        // [T-plan-advance-unique-match] (1) Exact title equality wins when it
+        // names exactly one plan.
+        // Known limitation (pre-existing, documented 2026-11-17): a
+        // SINGLE-step plan whose active step was already advanced can never be
+        // host-advanced again (target.position <= active.position → no
+        // movement), so the all-done auto-close never fires for one-step
+        // boards — the model must set the step done via agent_plan explicitly.
+        val exact = plans.filter {
+            it.title.isNotBlank() && narrated.equals(it.title.trim(), ignoreCase = true)
         }
-        // Furthest named step: a narration quoting two steps has reached the
-        // later one. A short title quoted by chance loses to position order.
-        val target = named.maxByOrNull { it.position } ?: return null
+        // (2) Else the substring fallback advances ONLY on a unique match;
+        // zero or ambiguous → no advance.
+        val target = if (exact.size == 1) exact[0] else {
+            val substring = plans.filter {
+                it.title.isNotBlank() && narrated.contains(it.title.trim(), ignoreCase = true)
+            }.distinctBy { it.id }
+            if (substring.size == 1) substring[0] else return null
+        }
         val active = plans.firstOrNull { it.status == "active" }
         return when {
             // The narration names the active step itself: no movement.

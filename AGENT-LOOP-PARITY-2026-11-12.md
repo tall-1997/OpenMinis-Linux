@@ -47,8 +47,8 @@ B3 打断不 kill 进程、B5 无完成验证）。全部差距已在**代码层
 
 | 优先级 | 差距 | 用户体感 | 对齐动作 |
 |--------|------|----------|----------|
-| P0-1 | **B3 stop 不杀进程** | 点停止后 build 还在后台烧 CPU/电量，会话显示已停——"打断不了" | finishStoppedRun 内对 currentTool 快照调 JobRegistry.signal(进程组) + LLM 请求 cancel（已有）+ 卡片 CANCELLED（已有）；给工具结果态补 `killed` 语义 |
-| P0-2 | **B5 无完成验证** | 模型自说"完成了"但验收标准没核——交付不可信 | goal 状态机加 host 侧 verifier：turn 结束后按 objective 的显式验收项（文件存在/命令退出码/test 通过/gate）逐项核验；不通过 → 结构化 system-reminder（source=goal-continuation 形态）回灌一轮；通过 → 交付回复（#328 已修时机） |
+| P0-1 | **B3 stop 不杀进程** | 点停止后 build 还在后台烧 CPU/电量，会话显示已停——"打断不了" | finishStoppedRun 内对 currentTool 快照调 JobRegistry.signal(进程组) + LLM 请求 cancel（已有）+ 卡片 CANCELLED（已有）；给工具结果态补 `killed` 语义 → **✅ 已实现（#333；见文末 §8 附录 2026-11-17）** |
+| P0-2 | **B5 无完成验证** | 模型自说"完成了"但验收标准没核——交付不可信 | goal 状态机加 host 侧 verifier：turn 结束后按 objective 的显式验收项（文件存在/命令退出码/test 通过/gate）逐项核验；不通过 → 结构化 system-reminder（source=goal-continuation 形态）回灌一轮；通过 → 交付回复（#328 已修时机） → **✅ 已实现（#333；见文末 §8 附录 2026-11-17）** |
 | P1-1 | **B2 运行中输入框提示缺双态** | 排队提示不在输入框身上（活动 pill 已覆盖工具名/时长/停止） | 运行中 placeholder 切换为「输入将排队，任务结束后发送」——ZCode busyPlaceholder 同款，零空间占用 |
 | P1-2 | **B7 goal-continuation 结构化合成轮** | goal 长任务的续跑驱动不稳（注入式靠 prompt 组装，易被 trim） | goal 续跑改为带 `source=goal-continuation` 标记的结构化 USER 轮（host 生成、ledger 去重、isGoalContinuation 识别函数）——ZCode 正牌形态 |
 
@@ -108,6 +108,46 @@ B4 插话排队边界轮；B6 的 A1 判据 + PostAnchorTail 预算；B7 的 com
 | WorkingMemoryLedger 驱逐再交付 | ✅ | WorkingMemoryLedger.kt + HiddenNote hydration 分支 + ToolTurnExec 双 lane append |
 | fanOutSpawnCalls 单次执行契约 | ✅ | 采纳手机端 #332 executeOnce 单一边界（原子声明 + in-flight join + replay 卡 settle + Python 状态机 CI 门），WorkingMemory 记账在 owner-only producer 内 |
 | live output tail | ✅ 已在（ShellOutputPreview + 默认展开 + 自动跟随——v4 修正） |
-| stop=kill / goal verifier | 未实现 | 路线图第一批剩余（见 §5） |
+| stop=kill / goal verifier | 未实现 → **✅ 已实现**（#333；证据链见文末 §8 附录 2026-11-17） | 路线图第一批剩余（见 §5）→ 已完成 |
 
 集成说明：本分支 rebase 到 fix/spawn-lane-single-execution（#332）之上——#332 的 executeOnce 单一执行边界与本分支的 WorkingMemory 记账互补（owner-only producer 内记账，replay 不重复记账）。走廊不变量：summary + preAnchor(≤20% 窗口) + postAnchor(≤35% 窗口) ≤ 80% 阈值，任何窗口无震荡。
+
+---
+
+## 8. 附录（2026-11-17）：B3 / B5 已实现——上文 §2/§3/§7 对应行至此作废
+
+**本节是补充附录，不改写上文**；上文按 2026-11-12/11-13 时点的实锤保留，作为审计轨迹。
+
+§2 表中的 B3（stop 不杀进程）与 B5（无完成验证）两行、§3 的 P0-1/P0-2、§7 的
+"stop=kill / goal verifier 未实现"行**均已过时**：两项都已落地（#333，
+`fix(agent-loop): 真机四项——stop=kill 进程树 + goal host verifier + 结构化续跑轮 + 输入框双态`）。
+证据链（file:line，2026-11-17 工作树核对）：
+
+**B3 stop = kill 进程树**
+
+- UI 停止 → `cancelStream`：`ui/chat/ChatViewModel.kt:4536` —
+  `capturedRun?.let(com.openminis.app.service.ActiveRunRegistry::stopExact)`
+- 注册表精确停：`service/ActiveRun.kt:216` — `stopExact(run)` → `run.stop()`
+- 协调器停当前命令：`sandbox/ExecutionCoordinator.kt:574/600` — `stopCurrentCommand`
+- 进程树击杀：`sandbox/PersistentShell.kt:776` —
+  `SandboxWorkload.killCommandTree(root, "user-stop")`；实现在 `sandbox/SandboxWorkload.kt:166`
+
+**B5 goal host verifier**
+
+- 验证器：`goal/GoalCompletionVerifier.kt:21` — `verifyCompletion(planStatuses)` +
+  `MAX_REJECTIONS` 连续拒绝上限
+- 状态机接线：`goal/GoalManager.kt:233-262` — `completeByModelVerified`
+  （拒绝计数、达上限后的 forced acceptance 及其理由文案）
+- GoalTool 调用面：`tools/GoalTool.kt:120-124` — 模型声明完成 → host 验证仲裁
+
+**残余差距（截至本附录）**
+
+1. **verifier 验收范围是看板（plan board），按设计如此**：验收输入是 plan board
+   的逐项 done/failed 状态（见 GoalCompletionVerifier 的 "plan board is
+   done/N done" 理由文案），不是 §3 P0-2 原文设想的文件存在/命令退出码级逐项核验。
+   这是范围决策，不是遗漏；board 即验收载体（§5 第一批验收标准中"完成必然对应
+   验收项真实通过"由 board 项承载）。
+2. **shell-keep 优化**在本分支（fix/deep-review-batch）修复中，本附录写作时尚未合入；
+   与 B3/B5 判定无关，合入后无需改本表。
+3. §2 的 B2 / B7 两行 🟡 项（输入框双态、goal-continuation 结构化合成轮）不在本附录
+   范围，仍以原表为准。

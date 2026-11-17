@@ -44,6 +44,11 @@ class JobRegistryTest {
     /**
      * A fake detached process: a daemon thread waits on a latch (when
      * [hold]), then "exits" with [exitCode] — or 137 when it was killed.
+     *
+     * Test knobs for the host-side control plane ([T-job-control-bypass-mutex])
+     * and the shell-lost reconcile ([T-job-shell-lost-reconcile]): see the
+     * @Volatile vars below — all default to the original latch behaviour so
+     * the older cases are untouched.
      */
     private class FakeProcess(
         override val stdoutFile: File,
@@ -59,6 +64,25 @@ class JobRegistryTest {
         @Volatile private var done = false
         @Volatile private var code = exitCode
 
+        /** Non-null: await() returns it AT ONCE while the job is still "running" (shell-lost sentinel). */
+        @Volatile var awaitResult: Int? = null
+
+        /** Host tree probe verdict; null = probe unavailable (the default). */
+        @Volatile var hostAlive: Boolean? = null
+
+        /** Forced kill verdict; null = the original latch-driven behaviour. */
+        @Volatile var killResult: Boolean? = null
+
+        /** Host-side signal verdict; null = host signalling unsupported (falls back to the guest path). */
+        @Volatile var hostSignalResult: Boolean? = null
+
+        /** Numbers the host-side signal path received, in order. */
+        val hostSignals = java.util.Collections.synchronizedList(mutableListOf<Int>())
+
+        /** stdin seams for the host-side input path (regular-file stand-ins). */
+        override var stdinHostFile: File? = null
+        override var stdinGuestPath: String? = null
+
         init {
             Thread({
                 if (hold) release.await()
@@ -69,16 +93,35 @@ class JobRegistryTest {
         }
 
         override fun await(): Int {
-            finished.await(5, TimeUnit.SECONDS)
-            return code
+            // [T-job-shell-lost-reconcile] Poll awaitResult instead of a
+            // one-shot check: the watcher may call await BEFORE the test arms
+            // the knob, and a one-shot check races the arm. The latch wait is
+            // SLICED (200ms) and the loop re-checks awaitResult FIRST on every
+            // wake — a sidecar landing mid-wait must not preempt the
+            // shell-lost verdict (the reconcile adopts the real exit after
+            // markShellLost). The 5s deadline preserves the old timeout.
+            val deadline = System.currentTimeMillis() + 5_000
+            while (true) {
+                awaitResult?.let { return it }
+                if (done) return code
+                val remaining = deadline - System.currentTimeMillis()
+                if (remaining <= 0) return code
+                finished.await(minOf(remaining, 200), TimeUnit.MILLISECONDS)
+            }
         }
 
         override fun kill(): Boolean {
+            killResult?.let { return it }
             if (done) return false
             killed = true
             release.countDown()
             return true
         }
+
+        override fun signalHost(signalNumber: Int): Boolean? =
+            hostSignalResult?.also { hostSignals.add(signalNumber) }
+
+        override fun hostTreeAlive(): Boolean? = hostAlive
 
         override val pollExitCode: Int? get() = if (done) code else null
 
@@ -139,6 +182,23 @@ class JobRegistryTest {
             Thread.sleep(20)
         }
         throw AssertionError("job $jobId did not reach $expected within ${timeoutMs}ms")
+    }
+
+    /**
+     * [T-job-shell-lost-reconcile] Poll until the watcher has entered the
+     * non-terminal shell-lost mode for [jobId] (RUNNING + a shellLost stamp).
+     */
+    private fun awaitShellLost(
+        sessionId: String,
+        jobId: String,
+        timeoutMs: Long = 5_000,
+    ): JobRegistry.Job {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            jobIn(sessionId, jobId)?.let { if (it.shellLostAtMs != null) return it }
+            Thread.sleep(20)
+        }
+        throw AssertionError("job $jobId did not enter the shell-lost mode within ${timeoutMs}ms")
     }
 
     // ------------------------------------------------------ registry cases
@@ -400,5 +460,209 @@ class JobRegistryTest {
     @Test
     fun activeJobPids_emptyRegistryIsEmpty() {
         assertTrue(JobRegistry.activeJobPids().isEmpty())
+    }
+
+    // --------------------------------------- [T-job-kill-graceful] registry side
+
+    @Test
+    fun kill_whenGroupAlreadyGone_reportsAlreadyFinished_neverKilled() {
+        val sp = FakeSpawner(tmp)
+        install(sp)
+        val job = startJob("s1")
+        val fake = sp.processes[0]
+        // The spawner now answers honestly: the group was gone before any
+        // signal went out and there is no exit sidecar (the shell died).
+        fake.killResult = false
+        fake.hostAlive = false
+        val outcome = JobRegistry.kill("s1", job.id)
+        assertTrue(outcome is JobRegistry.KillOutcome.AlreadyFinished)
+        val done = (outcome as JobRegistry.KillOutcome.AlreadyFinished).job
+        // Honest terminal state: provably dead, exit unknowable — NOT KILLED.
+        assertEquals(JobRegistry.JobState.UNKNOWN, done.state)
+        assertEquals(null, done.exitCode)
+        assertFalse(fake.wasKilled)
+        // Terminal: the late watcher wake-up cannot flip it to KILLED either.
+        assertEquals(JobRegistry.JobState.UNKNOWN, jobIn("s1", job.id)!!.state)
+    }
+
+    @Test
+    fun kill_whenGroupGone_butSidecarLanded_adoptsRealExit() {
+        val sp = FakeSpawner(tmp, exitCode = 3)
+        install(sp)
+        val job = startJob("s1")
+        val fake = sp.processes[0]
+        fake.finishNow() // job exited on its own just before the kill
+        awaitState("s1", job.id, JobRegistry.JobState.FAILED)
+        fake.killResult = false
+        fake.hostAlive = false
+        val outcome = JobRegistry.kill("s1", job.id)
+        assertTrue(outcome is JobRegistry.KillOutcome.AlreadyFinished)
+        val done = (outcome as JobRegistry.KillOutcome.AlreadyFinished).job
+        assertEquals(JobRegistry.JobState.FAILED, done.state)
+        assertEquals(3, done.exitCode)
+    }
+
+    @Test
+    fun kill_whenUndeliveredAndTreeStillAlive_reportsKillFailed() {
+        val sp = FakeSpawner(tmp)
+        install(sp)
+        val job = startJob("s1")
+        val fake = sp.processes[0]
+        fake.killResult = false
+        fake.hostAlive = true
+        val outcome = JobRegistry.kill("s1", job.id)
+        assertTrue(outcome is JobRegistry.KillOutcome.KillFailed)
+        assertEquals(JobRegistry.JobState.RUNNING, jobIn("s1", job.id)!!.state)
+        assertFalse(fake.wasKilled)
+    }
+
+    // ------------------------------------ [T-job-control-bypass-mutex] registry side
+
+    @Test
+    fun signal_prefersHostSideDelivery() = kotlinx.coroutines.runBlocking {
+        val sp = FakeSpawner(tmp)
+        install(sp)
+        val job = startJob("s1")
+        val fake = sp.processes[0]
+        fake.hostSignalResult = true
+        assertTrue(JobRegistry.signal("s1", job.id, "TERM"))
+        assertEquals(listOf(15), fake.hostSignals) // Linux SIGTERM
+        // A false verdict is surfaced as a miss, not retried into a fake success.
+        fake.hostSignalResult = false
+        assertFalse(JobRegistry.signal("s1", job.id, "USR1"))
+        assertEquals(listOf(15, 10), fake.hostSignals) // Linux SIGUSR1
+        // Names the host cannot map never reach the host path.
+        fake.hostSignalResult = true
+        assertFalse(JobRegistry.signal("s1", job.id, "NOT-A-SIG"))
+        assertEquals(listOf(15, 10), fake.hostSignals)
+        // Numeric signals pass through as numbers.
+        assertTrue(JobRegistry.signal("s1", job.id, "9"))
+        assertEquals(listOf(15, 10, 9), fake.hostSignals)
+        // A finished job has no live process group to signal at all.
+        fake.finishNow()
+        awaitState("s1", job.id, JobRegistry.JobState.COMPLETED)
+        fake.hostSignalResult = true
+        assertFalse(JobRegistry.signal("s1", job.id, "TERM"))
+        assertEquals(listOf(15, 10, 9), fake.hostSignals)
+    }
+
+    @Test
+    fun writeStdin_appendsHostSide_withoutGuestRoundTrip() = kotlinx.coroutines.runBlocking {
+        val sp = FakeSpawner(tmp)
+        install(sp)
+        val job = startJob("s1")
+        val fake = sp.processes[0]
+        val hostFifo = File(tmp, "fake-job.in") // regular-file stand-in for the fifo
+        fake.stdinHostFile = hostFifo
+        fake.stdinGuestPath = "/var/minis/workspace/tool-spill/jobs/fake.in"
+        assertEquals(
+            "/var/minis/workspace/tool-spill/jobs/fake.in",
+            JobRegistry.writeStdin("s1", job.id, "hello"),
+        )
+        assertEquals("hello", hostFifo.readText())
+        // Appends, never truncates.
+        JobRegistry.writeStdin("s1", job.id, "world")
+        assertEquals("helloworld", hostFifo.readText())
+        // A finished job has no live stdin and nothing is written.
+        fake.finishNow()
+        awaitState("s1", job.id, JobRegistry.JobState.COMPLETED)
+        assertEquals(null, JobRegistry.writeStdin("s1", job.id, "late"))
+        assertEquals("helloworld", hostFifo.readText())
+    }
+
+    @Test
+    fun writeStdin_jobWithoutStdinPipe_returnsNull() = kotlinx.coroutines.runBlocking {
+        val sp = FakeSpawner(tmp)
+        install(sp)
+        val job = startJob("s1")
+        // No stdinGuestPath (fake default) and no host file: refused, no crash.
+        assertEquals(null, JobRegistry.writeStdin("s1", job.id, "x"))
+    }
+
+    // --------------------------------------- [T-job-shell-lost-reconcile]
+
+    @Test
+    fun shellLost_treeStillAlive_keepsRecordRunningAndSpared() {
+        val sp = FakeSpawner(tmp)
+        install(sp)
+        val job = startJob("s1")
+        val fake = sp.processes[0]
+        fake.awaitResult = JobRegistry.SpawnedProcess.SHELL_LOST
+        fake.hostAlive = true
+        val marked = awaitShellLost("s1", job.id)
+        // NOT finished FAILED(-1): RUNNING with the shellLost stamp.
+        assertEquals(JobRegistry.JobState.RUNNING, marked.state)
+        assertEquals(null, marked.exitCode)
+        // The genuinely-running tree keeps its kill-sweep spare.
+        assertEquals(setOf(fake.pid), JobRegistry.activeJobPids())
+        // Repeated reads never finish a live tree.
+        assertEquals(JobRegistry.JobState.RUNNING, jobIn("s1", job.id)!!.state)
+    }
+
+    @Test
+    fun shellLost_treeGone_finishesUnknownWithNullExit() {
+        val sp = FakeSpawner(tmp)
+        install(sp)
+        val job = startJob("s1")
+        val fake = sp.processes[0]
+        fake.awaitResult = JobRegistry.SpawnedProcess.SHELL_LOST
+        fake.hostAlive = false
+        awaitShellLost("s1", job.id)
+        val done = JobRegistry.list("s1").single()
+        // Provably dead, exit unknowable: UNKNOWN(null), not FAILED(-1).
+        assertEquals(JobRegistry.JobState.UNKNOWN, done.state)
+        assertEquals(null, done.exitCode)
+    }
+
+    @Test
+    fun shellLost_sidecarLandedBeforeDeath_adoptsRealExit() {
+        val sp = FakeSpawner(tmp, exitCode = 0)
+        install(sp)
+        val job = startJob("s1")
+        val fake = sp.processes[0]
+        fake.awaitResult = JobRegistry.SpawnedProcess.SHELL_LOST
+        fake.finishNow() // the exit sidecar landed before the shell died
+        // The sidecar probe wins over the shell-lost mode: whether the
+        // watcher marked shell-lost first or reconcile adopted the sidecar
+        // directly (list() reconciles on every read — an inherent race with
+        // the watcher), the record must settle COMPLETED with the REAL exit,
+        // never the old FAILED(-1). The intermediate shell-lost state is
+        // deliberately not asserted — it is order-dependent.
+        val done = awaitState("s1", job.id, JobRegistry.JobState.COMPLETED)
+        assertEquals(0, done.exitCode)
+    }
+
+    @Test
+    fun shellLost_maxAgeFinishesUnknown_evenWhileTreeLives() {
+        val sp = FakeSpawner(tmp)
+        install(sp)
+        val job = startJob("s1")
+        val fake = sp.processes[0]
+        fake.awaitResult = JobRegistry.SpawnedProcess.SHELL_LOST
+        fake.hostAlive = true
+        val marked = awaitShellLost("s1", job.id)
+        assertEquals(JobRegistry.JobState.RUNNING, marked.state)
+        JobRegistry.shellLostMaxAgeMs = 1L
+        Thread.sleep(10) // let the age bound expire
+        val done = JobRegistry.list("s1").single()
+        assertEquals(JobRegistry.JobState.UNKNOWN, done.state)
+        assertEquals(null, done.exitCode)
+    }
+
+    @Test
+    fun shellLost_runningSlotIsHeldUntilTheTreeIsGone() {
+        val sp = FakeSpawner(tmp)
+        install(sp)
+        val jobs = (1..JobRegistry.MAX_RUNNING_PER_SESSION).map { startJob("s1", command = "job $it") }
+        val lost = sp.processes[0]
+        lost.awaitResult = JobRegistry.SpawnedProcess.SHELL_LOST
+        lost.hostAlive = true
+        awaitShellLost("s1", jobs[0].id)
+        // A shell-lost record with a live tree still holds its running slot.
+        assertTrue(JobRegistry.start("s1", "one too many", null) is JobRegistry.StartOutcome.LimitReached)
+        // Once the tree is gone the record finishes UNKNOWN and frees the slot.
+        lost.hostAlive = false
+        awaitState("s1", jobs[0].id, JobRegistry.JobState.UNKNOWN)
+        assertTrue(JobRegistry.start("s1", "fits now", null) is JobRegistry.StartOutcome.Started)
     }
 }
