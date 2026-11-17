@@ -49,129 +49,140 @@ fun ChatViewModel.loadOlderMessages() {
  * [T-android-upbtn-no-scan] The up-button awaits this when its walk
  * reaches the window's oldest edge with history still above — one page
  * per tap keeps each click bounded.
+ *
+ * [T-history-batch-pages] [loadOlderMessages] batches [pages] = 2 probes
+ * into ONE `_messages` publish inside a single mutex critical section:
+ * every publish restarts the flatten pipeline (full O(transcript) rebuild),
+ * so one-page-per-publish painted the transcript in 5-turn segments. The
+ * page cursor advances between probes (`before` re-read from the updated
+ * window), rows accumulate, and the merged result publishes once.
  */
-internal suspend fun ChatViewModel.loadOlderPage(): Boolean {
+internal suspend fun ChatViewModel.loadOlderPage(pages: Int = 1): Boolean {
     if (!claimOlderLoad()) return false
     _isLoadingHistory.value = true
     try {
         var added = false
         timeline.mutationMutex.withLock {
-            val before = timeline.oldestSortOrder
-            if (before == null) return@withLock
-            val hardPageLimit = ChatHistoryWindow.PAGE_ROW_LIMIT
-            val oldestAnchor = withContext(Dispatchers.IO) {
-                chatRepository.dao.loadOlderSortAnchors(sessionId, before, hardPageLimit)
-                    .lastOrNull()?.sortOrder
-            }
-            val start = withContext(Dispatchers.IO) {
-                olderTurnStart(before, ChatHistoryWindow.TURN_PAGE_SIZE)
-            }
-            // [T-load-older-fallback] Turn-aligned paging targets whole
-            // user turns. When the remaining history before the window has
-            // fewer than TURN_PAGE_SIZE user turns (or none at all),
-            // olderTurnStart returns null even though countMessagesBeforeSort
-            // still reports rows — mostly assistant-only trailing messages.
-            // Without a fallback, the pill stays lit but every click just
-            // calls refreshHistoryEdges and returns: visible button, zero
-            // effect. Fall back to a non-turn-aligned load of all remaining
-            // rows instead of freezing at the boundary.
-            val boundedStart = ChatHistoryWindow.boundedOlderStart(start, oldestAnchor, before)
-            val loadStart = if (boundedStart != null) {
-                boundedStart
-            } else {
-                // Turn alignment failed. Do NOT walk all the way to the
-                // session start: that is how one tap re-materialised the
-                // whole transcript the 500-row cold-open cap exists to
-                // keep out of the render window. Take one capped page;
-                // another tap continues from its new edge.
-                val remaining = withContext(Dispatchers.IO) {
-                    chatRepository.dao.countMessagesBeforeSort(sessionId, before)
+            // [T-history-batch-pages] Probe and accumulate up to [pages] pages
+            // INSIDE one mutex critical section, publish once. `before` is
+            // re-read after each page's noteBounds so page 2 starts where
+            // page 1 ended — no gap, no overlap. Every publish restarts the
+            // flatten pipeline (full O(transcript) rebuild), so batching
+            // probes into one publish is what kills the 5-turn segmentation.
+            repeat(maxOf(1, pages)) {
+                val before = timeline.oldestSortOrder
+                if (before == null) return@withLock
+                val hardPageLimit = ChatHistoryWindow.PAGE_ROW_LIMIT
+                val oldestAnchor = withContext(Dispatchers.IO) {
+                    chatRepository.dao.loadOlderSortAnchors(sessionId, before, hardPageLimit)
+                        .lastOrNull()?.sortOrder
                 }
-                if (remaining <= 0) {
-                    refreshHistoryEdges(scheduleTail = false)
+                val start = withContext(Dispatchers.IO) {
+                    olderTurnStart(before, ChatHistoryWindow.TURN_PAGE_SIZE)
+                }
+                // [T-load-older-fallback] Turn-aligned paging targets whole
+                // user turns. When the remaining history before the window has
+                // fewer than TURN_PAGE_SIZE user turns (or none at all),
+                // olderTurnStart returns null even though countMessagesBeforeSort
+                // still reports rows — mostly assistant-only trailing messages.
+                // Without the fallback, the pill stays lit but every click just
+                // calls refreshHistoryEdges and returns: visible button, zero
+                // effect. Fall back to a non-turn-aligned load of all remaining
+                // rows instead of freezing at the boundary.
+                val boundedStart = ChatHistoryWindow.boundedOlderStart(start, oldestAnchor, before)
+                val loadStart = if (boundedStart != null) {
+                    boundedStart
+                } else {
+                    // Turn alignment failed. Do NOT walk all the way to the
+                    // session start: that is how one tap re-materialised the
+                    // whole transcript the 500-row cold-open cap exists to
+                    // keep out of the render window. Take one capped page;
+                    // another tap continues from its new edge.
+                    val remaining = withContext(Dispatchers.IO) {
+                        chatRepository.dao.countMessagesBeforeSort(sessionId, before)
+                    }
+                    if (remaining <= 0) {
+                        return@withLock
+                    }
+                    // One probe of the cold-open cap, newest first. The oldest
+                    // anchor in it is the page start; rows before it stay
+                    // behind the pill.
+                    val anchors = withContext(Dispatchers.IO) {
+                        chatRepository.dao.loadOlderSortAnchors(
+                            sessionId,
+                            before,
+                            hardPageLimit,
+                        )
+                    }
+                    anchors.lastOrNull()?.sortOrder
+                }
+                if (loadStart == null || loadStart >= before) {
+                    // Fallback exhausted every probe but the earlier count
+                    // still saw rows. That contradiction almost always means
+                    // rows were DELETED mid-flight (truncate/retry renumbers
+                    // the tail); the old code hard-fused
+                    // `_hasOlderMessages=false` here, permanently hiding the
+                    // pill even when the DB still had older rows — the
+                    // "部分消息从会话页消失" bug. The DB recount inside
+                    // refreshHistoryEdges is the only authority on the edge.
                     return@withLock
                 }
-                // One probe of the cold-open cap, newest first. The oldest
-                // anchor in it is the page start; rows before it stay
-                // behind the pill.
-                val anchors = withContext(Dispatchers.IO) {
-                    chatRepository.dao.loadOlderSortAnchors(
-                        sessionId,
-                        before,
-                        hardPageLimit,
-                    )
-                }
-                anchors.lastOrNull()?.sortOrder
-            }
-            if (loadStart == null || loadStart >= before) {
-                // Fallback exhausted every probe but the earlier count
-                // still saw rows. That contradiction almost always means
-                // rows were DELETED mid-flight (truncate/retry renumbers
-                // the tail); the old code hard-fused
-                // `_hasOlderMessages=false` here, permanently hiding the
-                // pill even when the DB still had older rows — the
-                // "部分消息从会话页消失" bug. The DB recount inside
-                // refreshHistoryEdges is the only authority on the edge.
-                refreshHistoryEdges(scheduleTail = false)
-                return@withLock
-            }
-            val pageRows = withContext(Dispatchers.IO) {
-                chatRepository.hydrateDisplayRows(
-                    loadSortRange(
-                        SortRange(
-                            loadStart,
-                            if (before == Int.MAX_VALUE) before else before + 1,
+                val pageRows = withContext(Dispatchers.IO) {
+                    chatRepository.hydrateDisplayRows(
+                        loadSortRange(
+                            SortRange(
+                                loadStart,
+                                if (before == Int.MAX_VALUE) before else before + 1,
+                            ),
                         ),
-                    ),
-                )
-            }
-            val rows = pageRows
-            if (rows.isNotEmpty()) {
-                val current = _messages.value
-                // [T-history-batch-pages] Pure-prepend fast path: when the page
-                // sits strictly BEFORE the painted window's oldest bound (no
-                // overlap possible — the cursor excluded painted rows), skip
-                // the O(window × page) containment merge and the per-message
-                // `updated` map entirely. timeline.oldestSortOrder IS the
-                // painted window's oldest bound (noted on every load/publish).
-                val pageMax = rows.maxOfOrNull { it.sortOrder }
-                // Snapshot the mutable property into a local: a smart cast
-                // through the live var is impossible (concurrent mutation).
-                val paintedOldest = timeline.oldestSortOrder
-                val purePrepend = paintedOldest == null ||
-                    (pageMax != null && pageMax < paintedOldest)
-                val older = toChatMessages(rows)
-                if (purePrepend) {
-                    _messages.value = older + current
-                    added = true
-                    timeline.noteBounds(rows)
-                    refreshHistoryEdges(scheduleTail = false)
-                    return@withLock
-                }
-                val known = current.flatMapTo(mutableSetOf()) { it.sourceDbIds }
-                val updated = current.map { message ->
-                    older.firstOrNull { incoming ->
-                        incoming.sourceDbIds.any(message.sourceDbIds::contains)
-                    } ?: message
-                }
-                val fresh = older.filter { message ->
-                    message.sourceDbIds.isEmpty() || message.sourceDbIds.none(known::contains)
-                }
-                if (fresh.size < older.size) {
-                    // Rows in this page are already painted — the cursor
-                    // should have excluded them. Never eat them silently:
-                    // log loudly so a double-splice shows up in the trace.
-                    AppLogger.warning(
-                        ChatViewModel.TAG,
-                        "loadOlder: page [$loadStart,$before) returned ${older.size} rows, " +
-                            "${older.size - fresh.size} already painted (cursor=${timeline.oldestSortOrder})",
                     )
                 }
-                if (fresh.isNotEmpty() || updated != current) {
-                    _messages.value = fresh + updated
-                    added = true
+                val rows = pageRows
+                if (rows.isNotEmpty()) {
+                    val current = _messages.value
+                    val pageMax = rows.maxOfOrNull { it.sortOrder }
+                    // Snapshot the mutable property into a local: a smart cast
+                    // through the live var is impossible (concurrent mutation).
+                    val paintedOldest = timeline.oldestSortOrder
+                    val purePrepend = paintedOldest == null ||
+                        (pageMax != null && pageMax < paintedOldest)
+                    val older = toChatMessages(rows)
+                    if (purePrepend) {
+                        // [T-history-batch-pages] Pure prepend fast path: no
+                        // overlap possible (cursor excluded painted rows), so
+                        // skip the O(window × page) containment merge — just
+                        // accumulate and let the single publish below paint.
+                        _messages.value = older + current
+                        added = true
+                        timeline.noteBounds(rows)
+                        return@withLock
+                    }
+                    val known = current.flatMapTo(mutableSetOf()) { it.sourceDbIds }
+                    val updated = current.map { message ->
+                        older.firstOrNull { incoming ->
+                            incoming.sourceDbIds.any(message.sourceDbIds::contains)
+                        } ?: message
+                    }
+                    val fresh = older.filter { message ->
+                        message.sourceDbIds.isEmpty() || message.sourceDbIds.none(known::contains)
+                    }
+                    if (fresh.size < older.size) {
+                        // Rows in this page are already painted — the cursor
+                        // should have excluded them. Never eat them silently:
+                        // log loudly so a double-splice shows up in the trace.
+                        AppLogger.warning(
+                            ChatViewModel.TAG,
+                            "loadOlder: page [$loadStart,$before) returned ${older.size} rows, " +
+                                "${older.size - fresh.size} already painted (cursor=${timeline.oldestSortOrder})",
+                        )
+                    }
+                    if (fresh.isNotEmpty() || updated != current) {
+                        _messages.value = fresh + updated
+                        added = true
+                    }
+                    timeline.noteBounds(rows)
                 }
-                timeline.noteBounds(rows)
+                refreshHistoryEdges(scheduleTail = false)
             }
             // [T-load-older-no-tail-attach] 不在这里 scheduleTail：
             // 用户刚点“加载更早”正在向上读历史，此时立刻触发

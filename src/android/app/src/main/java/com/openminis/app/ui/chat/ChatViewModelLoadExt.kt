@@ -599,7 +599,10 @@ internal fun ChatViewModel.loadSession() {
         // [T-entry-first-frame] refreshHistoryEdges runs 3 DB COUNT queries
         // and only feeds the has-older/has-newer pill state — move it OFF the
         // pre-first-frame critical path (the pill can appear a beat later).
-        viewModelScope.launch(Dispatchers.IO) { refreshHistoryEdges() }
+        // [T-shell-reap-context] scheduleTail=false: the entry effect's own
+        // ensureSessionTailLoaded owns tail scheduling; two concurrent drains
+        // on different threads raced the non-volatile tailAttachJob read.
+        viewModelScope.launch(Dispatchers.IO) { refreshHistoryEdges(scheduleTail = false) }
 
         // [T-p9-revert-recovery] A staged revert survives process death on
         // disk: re-register the record (the banner comes back) and re-apply

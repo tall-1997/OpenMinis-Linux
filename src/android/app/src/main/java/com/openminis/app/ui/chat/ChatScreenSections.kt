@@ -68,10 +68,8 @@ internal data class HistoryEdgeVisible(
  */
 internal fun olderEdgePrefetchVisible(
     info: androidx.compose.foundation.lazy.LazyListLayoutInfo,
-    hasOlder: Boolean,
     prefetchItems: Int = 12,
 ): Boolean {
-    if (!hasOlder) return false
     if (info.visibleItemsInfo.any { it.key == "__load_older__" }) return true
     val oldestVisible = info.visibleItemsInfo.maxOfOrNull { it.index } ?: return false
     return info.totalItemsCount - oldestVisible <= prefetchItems
@@ -96,7 +94,11 @@ internal suspend fun landJumpTop(
     val rowSize = listState.layoutInfo.visibleItemsInfo
         .firstOrNull { it.key == targetKey }?.size ?: 0
     val vpH = listState.layoutInfo.viewportSize.height
-    val topOffset = rowSize - vpH + listState.layoutInfo.afterContentPadding
+    // [T-upbtn-landing] Scroll-offset origin is the BEFORE-padding edge under
+    // reverseLayout — beforeContentPadding is the calibrated landing inset
+    // (the after padding is the visual-top 8dp gap; both origin/main sites
+    // used before). Restored after the after-variant landed rows 12-40px high.
+    val topOffset = rowSize - vpH + listState.layoutInfo.beforeContentPadding
     trace("$targetKey/top", landIndex, topOffset)
     landReading(targetKey, topOffset)
 }

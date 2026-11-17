@@ -2566,7 +2566,7 @@ fun ChatScreen(
         // `flatItems` asynchronously. Wait for its versioned publish before
         // resolving the index; a missing target keeps the viewport.
         withFrameNanos { }
-        if (flatItems.none { it.key == targetKey } && pagesLoaded >= 0) {
+        if (flatItems.none { it.key == targetKey } && pagesLoaded > 0) {
             ChatScrollController.awaitPublishedVersion(
                 snapshotFlow { flatItemsVersion },
                 requestedFlatVersion = requestedFlatVersion,
@@ -2640,8 +2640,9 @@ fun ChatScreen(
                     // EARLIER messages, the live suffix is built against the full merged list with fromIndex (lookbacks cross the boundary), and dedupe continuity is preserved via
                     // seedKeys. Frozen rows are the same instances every tick, so LazyColumn's key+equals skip path sees ZERO change.
                     //
-                    // Throttle (unchanged): conflate() + sample(80) keeps UI
-                    // publication at ~12fps regardless of token rate.
+                    // Throttle ([T-entry-first-frame]): conflate() + the manual
+                    // gate below keeps UI publication at ~12fps regardless of
+                    // token rate; the first non-empty tick bypasses it.
                     var frozenRows: List<FlatChatItem> = emptyList()
                     var frozenKeys: Set<String> = emptySet()
                     var frozenSplitIdx = -1
@@ -2685,13 +2686,18 @@ fun ChatScreen(
                             val expandedIds = expandedAndActive.first
                             val activeIds = if (showSubAgentBar) expandedAndActive.second else emptySet()
                             val tickStartNs = System.nanoTime()
-                            // [T-entry-first-frame] Manual throttle: streaming ticks
-                            // pace at ~12fps; the FIRST non-empty tick (entry, older-page
-                            // publish) applies immediately — never waits a window.
+                            // [T-entry-first-frame] Manual throttle replacing
+                            // sample(80): streaming ticks pace at ~12fps; the FIRST
+                            // non-empty tick (entry, older-page publish) applies
+                            // immediately. A streaming tick inside the window DELAYS
+                            // to the window end and then applies (sample's staleness
+                            // guarantee: the newest state is never dropped) — a bare
+                            // drop lost the final arg-delta tick before silent tool
+                            // executions, leaving truncated previews on screen.
                             if (!stream.isEmpty() && tickStartNs - lastFlattenNs < 80_000_000L) {
-                                return@collect
+                                delay(80_000_000L - (tickStartNs - lastFlattenNs))
                             }
-                            lastFlattenNs = tickStartNs
+                            lastFlattenNs = System.nanoTime()
                             if (stream.isNotEmpty() && !streamWasActive) {
                                 streamWasActive = true
                                 com.openminis.app.diagnostics.StreamPerfMonitor.turnStart(sessionId)
@@ -3105,9 +3111,12 @@ fun ChatScreen(
                         val info = listState.layoutInfo
                         val visible = info.visibleItemsInfo
                         HistoryEdgeVisible(
-                            olderSentinel = olderEdgePrefetchVisible(
-                                info, viewModel.hasOlderMessages.value,
-                            ),
+                            // [T-history-prefetch] hasOlder is deliberately NOT
+                            // read here — a StateFlow.value read inside
+                            // snapshotFlow is untracked and would not re-trigger
+                            // the predicate when it flips; historyEdgeAction in
+                            // the collect body already gates on hasOlder.
+                            olderSentinel = olderEdgePrefetchVisible(info),
                             // The newer edge is not a sentinel. A gap after the
                             // loaded cursor is attached by the view model.
                             newerSentinel = false,
