@@ -16,12 +16,10 @@ import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 
 /**
- * Small tool-pill + clipboard-format helpers extracted from
+ * Tool-pill + clipboard-format helpers extracted from
  * ChatAssistantMessageUI to keep the file below its architecture-policy
  * line ceiling.
- */
-
-/**
+ *
  * T14: per-card stop affordance shown on running/streaming tool blocks.
  * Mirrors iOS `ToolCapsuleView`'s small red square that appears trailing
  * the tool title when `block.toolStatus == .running`. Tapping it routes to
@@ -33,7 +31,7 @@ import com.openminis.app.R
  * Visual: 14×14 red rounded square (Color 0xFFFF3B30 = iOS systemRed).
  */
 @Composable
-private fun ToolStopButton(
+internal fun ToolStopButton(
     onStop: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
