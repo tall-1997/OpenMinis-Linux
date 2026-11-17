@@ -22,12 +22,12 @@ import kotlinx.coroutines.sync.withLock
 fun ChatViewModel.loadOlderMessages() {
     if (loadingOlderFlag.get()) return
     viewModelScope.launch {
-        // [T-history-batch-pages] Two pages per publish: the flatten pipeline
-        // restarts on EVERY _messages publish and re-runs a full O(transcript)
-        // build, so one-page-per-publish painted the transcript in 5-turn
-        // segments. Batching halves the segment count at the same total IO;
-        // the single-flight flag keeps callers honest.
-        if (loadOlderPage()) loadOlderPage()
+        // [T-history-batch-pages] Two probed pages accumulate into ONE
+        // _messages publish (inside loadOlderPage's critical section) — the
+        // flatten pipeline restarts on EVERY publish and re-runs a full
+        // O(transcript) build, so per-page publishes painted the transcript
+        // in 5-turn segments.
+        loadOlderPage(pages = 2)
     }
 }
 
@@ -64,14 +64,16 @@ internal suspend fun ChatViewModel.loadOlderPage(pages: Int = 1): Boolean {
         var added = false
         timeline.mutationMutex.withLock {
             // [T-history-batch-pages] Probe and accumulate up to [pages] pages
-            // INSIDE one mutex critical section, publish once. `before` is
-            // re-read after each page's noteBounds so page 2 starts where
-            // page 1 ended — no gap, no overlap. Every publish restarts the
-            // flatten pipeline (full O(transcript) rebuild), so batching
-            // probes into one publish is what kills the 5-turn segmentation.
-            repeat(maxOf(1, pages)) {
+            // INSIDE one mutex critical section, publish ONCE at the end.
+            // `before` is re-read after each page's noteBounds so the next
+            // page starts where the previous ended — no gap, no overlap.
+            // Every publish restarts the flatten pipeline (full
+            // O(transcript) rebuild), so batching probes into a single
+            // publish is what kills the 5-turn segmentation.
+            val accumulated = mutableListOf<ChatMessage>()
+            for (page in 0 until maxOf(1, pages)) {
                 val before = timeline.oldestSortOrder
-                if (before == null) return@withLock
+                if (before == null) break
                 val hardPageLimit = ChatHistoryWindow.PAGE_ROW_LIMIT
                 val oldestAnchor = withContext(Dispatchers.IO) {
                     chatRepository.dao.loadOlderSortAnchors(sessionId, before, hardPageLimit)
@@ -101,9 +103,7 @@ internal suspend fun ChatViewModel.loadOlderPage(pages: Int = 1): Boolean {
                     val remaining = withContext(Dispatchers.IO) {
                         chatRepository.dao.countMessagesBeforeSort(sessionId, before)
                     }
-                    if (remaining <= 0) {
-                        return@withLock
-                    }
+                    if (remaining <= 0) break
                     // One probe of the cold-open cap, newest first. The oldest
                     // anchor in it is the page start; rows before it stay
                     // behind the pill.
@@ -123,9 +123,9 @@ internal suspend fun ChatViewModel.loadOlderPage(pages: Int = 1): Boolean {
                     // the tail); the old code hard-fused
                     // `_hasOlderMessages=false` here, permanently hiding the
                     // pill even when the DB still had older rows — the
-                    // "部分消息从会话页消失" bug. The DB recount inside
+                    // "部分消息从会话页消失" bug. The single batch-end
                     // refreshHistoryEdges is the only authority on the edge.
-                    return@withLock
+                    break
                 }
                 val pageRows = withContext(Dispatchers.IO) {
                     chatRepository.hydrateDisplayRows(
@@ -137,52 +137,50 @@ internal suspend fun ChatViewModel.loadOlderPage(pages: Int = 1): Boolean {
                         ),
                     )
                 }
-                val rows = pageRows
-                if (rows.isNotEmpty()) {
-                    val current = _messages.value
-                    val pageMax = rows.maxOfOrNull { it.sortOrder }
-                    // Snapshot the mutable property into a local: a smart cast
-                    // through the live var is impossible (concurrent mutation).
-                    val paintedOldest = timeline.oldestSortOrder
-                    val purePrepend = paintedOldest == null ||
-                        (pageMax != null && pageMax < paintedOldest)
-                    val older = toChatMessages(rows)
-                    if (purePrepend) {
-                        // [T-history-batch-pages] Pure prepend fast path: no
-                        // overlap possible (cursor excluded painted rows), so
-                        // skip the O(window × page) containment merge — just
-                        // accumulate and let the single publish below paint.
-                        _messages.value = older + current
-                        added = true
-                        timeline.noteBounds(rows)
-                        return@withLock
-                    }
-                    val known = current.flatMapTo(mutableSetOf()) { it.sourceDbIds }
-                    val updated = current.map { message ->
-                        older.firstOrNull { incoming ->
-                            incoming.sourceDbIds.any(message.sourceDbIds::contains)
-                        } ?: message
-                    }
-                    val fresh = older.filter { message ->
-                        message.sourceDbIds.isEmpty() || message.sourceDbIds.none(known::contains)
-                    }
-                    if (fresh.size < older.size) {
-                        // Rows in this page are already painted — the cursor
-                        // should have excluded them. Never eat them silently:
-                        // log loudly so a double-splice shows up in the trace.
-                        AppLogger.warning(
-                            ChatViewModel.TAG,
-                            "loadOlder: page [$loadStart,$before) returned ${older.size} rows, " +
-                                "${older.size - fresh.size} already painted (cursor=${timeline.oldestSortOrder})",
-                        )
-                    }
-                    if (fresh.isNotEmpty() || updated != current) {
-                        _messages.value = fresh + updated
-                        added = true
-                    }
-                    timeline.noteBounds(rows)
+                if (pageRows.isEmpty()) break
+                // [T-history-batch-pages] Convert NOW and accumulate ChatMessage
+                // rows: the ui layer must not hold Room entities across the
+                // batch (a MessageEntity reference is an architecture-policy
+                // violation), and noteBoundsSorts advances the window cursor so
+                // the NEXT page probes strictly before this one.
+                accumulated += toChatMessages(pageRows)
+                timeline.noteBoundsSorts(
+                    pageRows.minOf { it.sortOrder },
+                    pageRows.maxOf { it.sortOrder },
+                )
+            }
+            if (accumulated.isNotEmpty()) {
+                val current = _messages.value
+                val older = accumulated
+                // [T-history-batch-pages] The accumulated range [first, before]
+                // includes the painted boundary row (`before + 1` in the last
+                // page range), so the slow merge path dominates and the
+                // `known`-set dedupe absorbs the boundary overlap — the fast
+                // pure-prepend shortcut is intentionally NOT used here: a
+                // cross-VM renumber between paint and page could slip a stale
+                // row through a blind prepend (noted by round-2 review).
+                val known = current.flatMapTo(mutableSetOf()) { it.sourceDbIds }
+                val updated = current.map { message ->
+                    older.firstOrNull { incoming ->
+                        incoming.sourceDbIds.any(message.sourceDbIds::contains)
+                    } ?: message
                 }
-                refreshHistoryEdges(scheduleTail = false)
+                val fresh = older.filter { message ->
+                    message.sourceDbIds.isEmpty() || message.sourceDbIds.none(known::contains)
+                }
+                if (fresh.size < older.size) {
+                    AppLogger.warning(
+                        ChatViewModel.TAG,
+                        "loadOlder: batch returned ${older.size} rows, " +
+                            "${older.size - fresh.size} already painted",
+                    )
+                }
+                if (fresh.isNotEmpty() || updated != current) {
+                    _messages.value = fresh + updated
+                    added = true
+                }
+                // [T-history-batch-pages] Bounds already advanced per page via
+                // noteBoundsSorts (ChatMessage rows carry no sortOrder here).
             }
             // [T-load-older-no-tail-attach] 不在这里 scheduleTail：
             // 用户刚点“加载更早”正在向上读历史，此时立刻触发
@@ -191,6 +189,10 @@ internal suspend fun ChatViewModel.loadOlderPage(pages: Int = 1): Boolean {
             // 被悄悄加载。尾部 gap 由 isStreaming 翻转收集器与
             // ensureSessionTailLoaded 的 queue 机制兜底，不需要
             // 借翻历史的动作来抢跑。
+            // [T-history-batch-pages] ONE refresh for the whole batch — the
+            // only writer of _hasOlderMessages; per-page refreshes inside the
+            // loop were lost on every early exit (return@withLock is a
+            // non-local return through the whole critical section).
             refreshHistoryEdges(scheduleTail = false)
         }
         return added

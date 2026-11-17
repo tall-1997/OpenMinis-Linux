@@ -93,6 +93,19 @@ internal class HistoryWindowController {
     }
 
     /**
+     * [T-history-batch-pages] Sort-order-only variant for callers that hold
+     * already-converted rows (ui layer must not touch Room entities): widen
+     * the window to [minSort]/[maxSort]. Same monotonic contract as
+     * [noteBounds].
+     */
+    fun noteBoundsSorts(minSort: Int, maxSort: Int) {
+        val before = oldestSortOrder to newestSortOrder
+        loadedOldest(minSort)
+        loadedNewest(maxSort)
+        if (before != oldestSortOrder to newestSortOrder) changed()
+    }
+
+    /**
      * Push the newest cursor to [sort], refusing to jump over an unpainted
      * gap (the caller checks the gap separately — see
      * ChatViewModel.notePersistedUiRow).

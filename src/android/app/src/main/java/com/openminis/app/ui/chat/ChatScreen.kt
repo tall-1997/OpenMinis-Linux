@@ -2690,12 +2690,19 @@ fun ChatScreen(
                             // sample(80): streaming ticks pace at ~12fps; the FIRST
                             // non-empty tick (entry, older-page publish) applies
                             // immediately. A streaming tick inside the window DELAYS
-                            // to the window end and then applies (sample's staleness
-                            // guarantee: the newest state is never dropped) — a bare
-                            // drop lost the final arg-delta tick before silent tool
-                            // executions, leaving truncated previews on screen.
-                            if (!stream.isEmpty() && tickStartNs - lastFlattenNs < 80_000_000L) {
-                                delay(80_000_000L - (tickStartNs - lastFlattenNs))
+                            // to the window end and then applies — conflate() replays
+                            // the LATEST tuple on the next iteration, so the newest
+                            // state is never dropped (a bare drop lost the final
+                            // arg-delta tick before silent tool executions, leaving
+                            // truncated previews on screen). The stale captured
+                            // tuple is re-read after the delay via the next
+                            // iteration's state.
+                            if (!stream.isEmpty()) {
+                                // [T-entry-first-frame] remainMs: ns→ms conversion —
+                                // the raw ns value fed to delay() parked the collector
+                                // ~8 h per gated tick (P0 from adversarial round 2).
+                                val remainMs = (80_000_000L - (tickStartNs - lastFlattenNs)) / 1_000_000L
+                                if (remainMs > 0) delay(remainMs)
                             }
                             lastFlattenNs = System.nanoTime()
                             if (stream.isNotEmpty() && !streamWasActive) {

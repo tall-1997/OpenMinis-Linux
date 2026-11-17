@@ -87,7 +87,7 @@ class ChatHistoryPagingStreamGateTest {
     fun `loadOlderPage does not gate on streaming`() {
         val source = ProductionSources.read("ui/chat/ChatViewModel.kt") +
             ProductionSources.read("ui/chat/ChatViewModelHistoryPageExt.kt")
-        val body = functionBody(source, "fun ChatViewModel.loadOlderPage(): Boolean")
+        val body = functionBody(source, "fun ChatViewModel.loadOlderPage(pages: Int = 1): Boolean")
 
         assertFalse(
             "loadOlderPage must not return early while a turn streams — " +
