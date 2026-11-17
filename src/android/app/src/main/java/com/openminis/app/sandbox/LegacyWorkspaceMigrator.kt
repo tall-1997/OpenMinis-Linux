@@ -110,7 +110,10 @@ object LegacyWorkspaceMigrator {
         if (!blocked) {
             prefs.edit()
                 .putBoolean(KEY_DONE_V2, true)
-                .putBoolean(KEY_DONE, true)
+                // [T-dead-residue-cleanup] the write-only KEY_DONE ("legacy_v1_done")
+                // tombstone putBoolean was removed: nothing ever reads it (the v1
+                // gate was replaced by KEY_DONE_V2). The constant stays so the
+                // legacy pref name devices may still carry on disk is documented.
                 .apply()
         }
     }

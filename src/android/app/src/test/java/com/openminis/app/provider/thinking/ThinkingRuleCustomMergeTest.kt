@@ -175,4 +175,52 @@ class ThinkingRuleCustomMergeTest {
         val realTrace = ThinkingRuleResolver.apply(real, ctx("some-model", "inst-A"))
         assertEquals("openai-compatible-default", realTrace.matchedRuleLabel)
     }
+
+    /**
+     * [T-thinking-phase2-emission] The three native vendor formats decode from a
+     * restored backup ([ThinkingRuleCoding]) and the rule editor can hold them, but
+     * this resolver is consulted only by the OpenAI-compatible request builder whose
+     * body cannot express them — native emission lives on the Anthropic/Gemini
+     * builders via ThinkingShapes. A restored rule naming one of the three used to
+     * hit `else -> error(...)` and crash the request builder (the same bug class
+     * [OpenMinis#306] fixed for the editor formats); it must instead degrade to
+     * "matched, emits nothing" so the request still goes out with the vendor's
+     * default shape.
+     */
+    @Test
+    fun `restored native vendor formats skip instead of crashing the request`() {
+        val restoredFormats = listOf(
+            ThinkingWireFormat.AnthropicThinking(AnthropicThinkingStyle.ADAPTIVE),
+            ThinkingWireFormat.AnthropicThinking(AnthropicThinkingStyle.BUDGET_TOKENS),
+            ThinkingWireFormat.GeminiBudget(floor = 128, canDisable = true),
+            ThinkingWireFormat.GeminiThinkingLevel,
+        )
+        for (format in restoredFormats) {
+            ThinkingRuleResolver.setCustomRules(
+                "inst-A",
+                listOf(
+                    ThinkingRule(
+                        kind = ThinkingRule.Kind.CUSTOM,
+                        scope = ThinkingRule.Scope.AllModels,
+                        wireFormat = format,
+                        label = "restored-${format::class.simpleName}",
+                    ),
+                ),
+            )
+            val body = JSONObject()
+            val trace = ThinkingRuleResolver.apply(body, ctx("some-model", "inst-A"))
+            assertTrue(
+                "$format must match the custom rule (it sits above the built-ins)",
+                trace.matchedRuleKind == ThinkingRule.Kind.CUSTOM,
+            )
+            assertTrue(
+                "$format must emit NOTHING on the OpenAI-compatible path: $body",
+                body.length() == 0,
+            )
+            assertTrue(
+                "$format must leave an empty emittedKeys trace",
+                trace.emittedKeys.isEmpty(),
+            )
+        }
+    }
 }

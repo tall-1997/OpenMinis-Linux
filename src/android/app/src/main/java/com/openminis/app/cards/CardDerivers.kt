@@ -1,5 +1,6 @@
 package com.openminis.app.cards
 
+import com.openminis.app.R
 import org.json.JSONObject
 
 /**
@@ -34,8 +35,10 @@ object CardDeriver {
     /** web_search result tail marker ("参考资料"); CJK kept escaped — match pattern. */
     private val CITATION_TAIL_MARKER = "---\u53c2\u8003\u8d44\u6599---"
 
-    /** Display caps so one huge clipboard/SMS body cannot blow up a card. */
-    private const val MAX_FACT_VALUE_CHARS = 300
+    /** Display caps so one huge clipboard/SMS body cannot blow up a card.
+     *  MAX_FACT_VALUE_CHARS is internal: CardTitleParts.changeCard clips
+     *  the undo `was:` old value with it too. */
+    internal const val MAX_FACT_VALUE_CHARS = 300
     private const val MAX_ITEM_TITLE_CHARS = 90
     private const val MAX_LINK_TITLE_CHARS = 90
 
@@ -124,6 +127,7 @@ object CardDeriver {
         if (rows.size < 4) return null // snapshot always yields ≥4 facts
         return ToolCard.Facts(
             title = "Device status",
+            titleResId = R.string.card_title_device_status,
             rows = rows,
             highlight = rows.firstOrNull { it.label == "battery" }?.value,
         )
@@ -141,6 +145,7 @@ object CardDeriver {
             val value = m.groupValues[3].trim().removeSuffix(" (via Shizuku shell)")
             return ToolCard.Facts(
                 title = "Setting",
+                titleResId = R.string.card_title_setting,
                 rows = listOf(ToolCard.FactRow("${m.groupValues[1]}.${m.groupValues[2]}", value)),
                 highlight = value,
             )
@@ -148,6 +153,7 @@ object CardDeriver {
         SETTING_GET_NULL.matchEntire(resultText.trim())?.let { m ->
             return ToolCard.Facts(
                 title = "Setting",
+                titleResId = R.string.card_title_setting,
                 rows = listOf(ToolCard.FactRow("${m.groupValues[1]}.${m.groupValues[2]}", "(not set)")),
             )
         }
@@ -158,7 +164,12 @@ object CardDeriver {
             }
         }
         if (rows.isEmpty() || ns.isBlank()) return null
-        return ToolCard.Facts(title = "Settings · $ns", rows = rows.take(MAX_LIST_ITEMS))
+        return ToolCard.Facts(
+            title = "Settings · $ns",
+            titleResId = R.string.card_title_settings_ns,
+            titleResArg = ns,
+            rows = rows.take(MAX_LIST_ITEMS),
+        )
     }
 
     // ────────────────────────────────────────────────────────────────────────
@@ -173,6 +184,7 @@ object CardDeriver {
         val clipped = clip(value, MAX_FACT_VALUE_CHARS)
         return ToolCard.Facts(
             title = "Clipboard",
+            titleResId = R.string.card_title_clipboard,
             rows = listOf(ToolCard.FactRow("text", clipped)),
             highlight = clipped,
         )
@@ -194,6 +206,8 @@ object CardDeriver {
             argsJson = argsJson,
             valueKey = "percent",
             coerceOld = { it.toIntOrNull()?.let { v -> if (v in 0..100) v else null } },
+            labelResId = R.string.card_title_volume,
+            titleResArg = stream,
         )
     }
 
@@ -218,6 +232,7 @@ object CardDeriver {
                         }
                     },
                     undoKey = "adaptive",
+                    labelResId = R.string.card_title_brightness,
                 )
             else -> {
                 val m = BRIGHTNESS_SET.matchEntire(firstLine) ?: return null
@@ -229,6 +244,7 @@ object CardDeriver {
                     argsJson = argsJson,
                     valueKey = "level",
                     coerceOld = { it.toIntOrNull()?.let { v -> if (v in 0..255) v else null } },
+                    labelResId = R.string.card_title_brightness,
                 )
             }
         }
@@ -248,6 +264,7 @@ object CardDeriver {
             argsJson = argsJson,
             valueKey = "mode",
             coerceOld = { old -> DND_MODES.firstOrNull { it == old.lowercase() } },
+            labelResId = R.string.card_title_dnd,
         )
     }
 
@@ -262,6 +279,7 @@ object CardDeriver {
             argsJson = argsJson,
             valueKey = "mode",
             coerceOld = { old -> listOf("normal", "vibrate", "silent").firstOrNull { it == old.lowercase() } },
+            labelResId = R.string.card_title_sound_mode,
         )
     }
 
@@ -283,42 +301,7 @@ object CardDeriver {
             argsJson = argsJson,
             valueKey = "on",
             coerceOld = { old -> parseOnOff(old) },
-        )
-    }
-
-    private fun toolNameOfLabel(label: String): String = when (label) {
-        "Wi-Fi" -> "wifi_toggle"
-        "Bluetooth" -> "bluetooth_toggle"
-        else -> "mobile_data_toggle"
-    }
-
-    /**
-     * Build a [ToolCard.Change] from the tool-reported new state plus the
-     * F-batch `was: <old>` line. Undoable only when the old value coerces
-     * back into [valueKey]'s JSON type; [undoKey] overrides the argument
-     * name (brightness adaptive mode).
-     */
-    private fun changeCard(
-        label: String,
-        newText: String,
-        resultText: String,
-        toolName: String,
-        argsJson: String,
-        valueKey: String?,
-        coerceOld: (String) -> Any?,
-        undoKey: String? = null,
-    ): ToolCard.Change {
-        val old = parseWasLine(resultText)
-        val coerced = old?.let { coerceOld(it) }
-        val key = undoKey ?: valueKey
-        val undoArgsJson = if (coerced != null && key != null) buildUndoArgs(argsJson, key, coerced) else null
-        return ToolCard.Change(
-            label = label,
-            oldText = old?.let { clip(it, MAX_FACT_VALUE_CHARS) },
-            newText = newText,
-            undoable = undoArgsJson != null,
-            tool = toolName,
-            undoArgsJson = undoArgsJson,
+            labelResId = connectivityLabelRes(label),
         )
     }
 
@@ -334,21 +317,6 @@ object CardDeriver {
             ?.trim()
             ?.takeIf { it.isNotEmpty() }
 
-    /** Merge the original call args with the old value for the undo re-run. */
-    private fun buildUndoArgs(argsJson: String, key: String, oldValue: Any): String? {
-        val obj = runCatching { JSONObject(argsJson) }.getOrNull() ?: return null
-        return try {
-            when (oldValue) {
-                is Int -> obj.put(key, oldValue)
-                is Boolean -> obj.put(key, oldValue)
-                is String -> obj.put(key, oldValue)
-                else -> return null
-            }.toString()
-        } catch (_: Exception) {
-            null
-        }
-    }
-
     // ────────────────────────────────────────────────────────────────────────
     // alarm_set / calendar_add / cronjob → Event
     // ────────────────────────────────────────────────────────────────────────
@@ -357,17 +325,22 @@ object CardDeriver {
         val args = runCatching { JSONObject(argsJson) }.getOrNull() ?: JSONObject()
         val text = firstLineOf(resultText) ?: return null
         ALARM_SET.matchEntire(text)?.let { m ->
-            val label = args.optStringOrNull("label")
+            val label = args.optStringOrNull("label")?.takeIf { it.isNotBlank() }
             return ToolCard.EventCard(
-                title = label?.takeIf { it.isNotBlank() } ?: "Alarm",
+                title = label ?: "Alarm",
+                // [T-card-title-i18n] User-named alarms keep titleResId null —
+                // only the generic fallback title is localized.
+                titleResId = if (label == null) R.string.card_title_alarm else null,
                 timeText = m.groupValues[1],
                 repeat = repeatFromArgs(args),
             )
         }
         TIMER_SET.matchEntire(text)?.let { m ->
             val seconds = m.groupValues[1].toIntOrNull() ?: return null
+            val label = args.optStringOrNull("label")?.takeIf { it.isNotBlank() }
             return ToolCard.EventCard(
-                title = args.optStringOrNull("label")?.takeIf { it.isNotBlank() } ?: "Timer",
+                title = label ?: "Timer",
+                titleResId = if (label == null) R.string.card_title_timer else null,
                 timeText = "in ${formatDuration(seconds)}",
                 repeat = null,
             )
@@ -423,6 +396,7 @@ object CardDeriver {
             if (items.isEmpty()) return null
             return ToolCard.ListCard(
                 title = "Scheduled tasks",
+                titleResId = R.string.card_title_scheduled_tasks,
                 items = items,
                 total = obj.optInt("count", items.size),
             )
@@ -436,18 +410,31 @@ object CardDeriver {
 
     private fun contactsCard(resultText: String): ToolCard? {
         if (resultText.trim() == "No contacts found.") return null
-        val items = resultText.lines().mapNotNull { line ->
+        // [T-card-list-hidden-count] Count BEFORE truncating: total must be
+        // the UNTRUNCATED result size so ListCardBody's hidden math (total −
+        // items.size) can show the "… and N more" line — mirroring how
+        // appListCard folds its tool-emitted more-marker into total. The old
+        // `total = items.size` (post-take) made hidden always 0 and rows 21+
+        // silently vanished.
+        val all = resultText.lines().mapNotNull { line ->
             CONTACT_LINE.matchEntire(line.trim())?.let { m ->
                 ToolCard.CardItem(m.groupValues[1], m.groupValues[2])
             }
-        }.take(MAX_LIST_ITEMS)
+        }
+        val items = all.take(MAX_LIST_ITEMS)
         if (items.isEmpty()) return null
-        return ToolCard.ListCard("Contacts", items, total = items.size)
+        return ToolCard.ListCard(
+            title = "Contacts",
+            titleResId = R.string.card_title_contacts,
+            items = items,
+            total = all.size,
+        )
     }
 
     private fun smsReadCard(resultText: String): ToolCard? {
         if (resultText.trim() == "No messages.") return null
-        val items = resultText.lines().mapNotNull { line ->
+        // [T-card-list-hidden-count] Untruncated count first (see contactsCard).
+        val all = resultText.lines().mapNotNull { line ->
             val trimmed = line.trim()
             val date = trimmed.take(SMS_DATE_LEN)
             if (!DATE_PREFIX.matches(date)) return@mapNotNull null
@@ -464,14 +451,21 @@ object CardDeriver {
                 clip(body, MAX_ITEM_TITLE_CHARS),
                 subtitle = "$date $dir $number".replace("  ", " ").trim(),
             )
-        }.take(MAX_LIST_ITEMS)
+        }
+        val items = all.take(MAX_LIST_ITEMS)
         if (items.isEmpty()) return null
-        return ToolCard.ListCard("Messages", items, total = items.size)
+        return ToolCard.ListCard(
+            title = "Messages",
+            titleResId = R.string.card_title_messages,
+            items = items,
+            total = all.size,
+        )
     }
 
     private fun callLogCard(resultText: String): ToolCard? {
         if (resultText.trim() == "No calls.") return null
-        val items = resultText.lines().mapNotNull { line ->
+        // [T-card-list-hidden-count] Untruncated count first (see contactsCard).
+        val all = resultText.lines().mapNotNull { line ->
             CALL_LOG.matchEntire(line.trim())?.let { m ->
                 val date = m.groupValues[1]
                 val type = m.groupValues[2]
@@ -483,9 +477,15 @@ object CardDeriver {
                     subtitle = "$date · $type · ${dur}s",
                 )
             }
-        }.take(MAX_LIST_ITEMS)
+        }
+        val items = all.take(MAX_LIST_ITEMS)
         if (items.isEmpty()) return null
-        return ToolCard.ListCard("Recent calls", items, total = items.size)
+        return ToolCard.ListCard(
+            title = "Recent calls",
+            titleResId = R.string.card_title_recent_calls,
+            items = items,
+            total = all.size,
+        )
     }
 
     private fun appListCard(resultText: String): ToolCard? {
@@ -501,7 +501,12 @@ object CardDeriver {
             }
         }.take(MAX_LIST_ITEMS)
         if (items.isEmpty()) return null
-        return ToolCard.ListCard("Installed apps", items, total = items.size + hidden)
+        return ToolCard.ListCard(
+            title = "Installed apps",
+            titleResId = R.string.card_title_installed_apps,
+            items = items,
+            total = items.size + hidden,
+        )
     }
 
     // ────────────────────────────────────────────────────────────────────────
@@ -525,7 +530,12 @@ object CardDeriver {
             if (t.startsWith("address: ")) address = t.removePrefix("address: ").trim()
         }
         address?.let { rows.add(ToolCard.FactRow("Address", clip(it, MAX_FACT_VALUE_CHARS))) }
-        return ToolCard.Facts("Location", rows, highlight = "$lat, $lng")
+        return ToolCard.Facts(
+            title = "Location",
+            titleResId = R.string.card_title_location,
+            rows = rows,
+            highlight = "$lat, $lng",
+        )
     }
 
     // ────────────────────────────────────────────────────────────────────────
@@ -570,6 +580,8 @@ object CardDeriver {
         if (items.isEmpty()) return null
         return ToolCard.ListCard(
             title = "Search · ${header.groupValues[1]}",
+            titleResId = R.string.card_title_search,
+            titleResArg = header.groupValues[1],
             items = items,
             total = if (total > 0) total else items.size,
         )
@@ -677,11 +689,9 @@ object CardDeriver {
     }
 
     // ────────────────────────────────────────────────────────────────────────
-    // shared small helpers (pure)
+    // shared small helpers (pure) — clip lives in CardTitleParts.kt so the
+    // Change-card builder there can reuse it
     // ────────────────────────────────────────────────────────────────────────
-
-    private fun clip(s: String, max: Int): String =
-        if (s.length <= max) s else s.take(max - 1).trimEnd() + "…"
 
     /** Trimmed first line — single-statement formats match this, so a
      *  trailing `\nwas: <old>` (F batch) can never break the match. */

@@ -7,7 +7,10 @@ import com.openminis.app.navigation.Routes
  * Parses minis:// deep link URIs into navigation actions.
  *
  * Supported routes (matching iOS):
- *   minis://share                              → open share flow
+ *   minis://share                              → open share flow ([T-deeplink-share-wired]
+ *                                              — lands in a fresh draft composer, the
+ *                                              destination the Android share flow
+ *                                              (ShareReceiverActivity → composer) ends at)
  *   minis://views/alarm                        → open alarm list
  *   minis://open_terminal?init_command=...      → open terminal with command
  *   minis://session/<id>                        → open specific session

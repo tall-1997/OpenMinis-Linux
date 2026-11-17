@@ -15,7 +15,18 @@ import java.util.concurrent.TimeUnit
  */
 object WebFetchTool {
     const val NAME = "web_fetch"
-    private const val MAX_OUTPUT = 8_000
+
+    /**
+     * [T-webfetch-spill] Preview trigger threshold, not a loss point. The old
+     * `htmlToText(raw).take(MAX_OUTPUT)` silently discarded everything past
+     * 8k chars of a fetched page — a plain substring cap with no spill file,
+     * no coverage note and no recovery path, i.e. exactly the silent-loss
+     * shape [ToolOutputSpill] exists to prevent. The threshold still triggers
+     * the bounded preview; the FULL text now lands in the session workspace
+     * (via [ToolOutputSpill.offloadFullOutput]) so the model can `file_read`
+     * the rest.
+     */
+    internal const val MAX_OUTPUT = 8_000
 
     /**
      * [T-bounded-body-read] Never buffer a whole response. `body.string()` reads
@@ -51,7 +62,27 @@ object WebFetchTool {
         propertyOrdering = listOf("tool_title", "url"),
     )
 
-    fun execute(argsJson: String): ToolExecutionResult {
+    /**
+     * Backward-compatible entry (dispatch sites that hold no session yet).
+     * Without session access an oversized converted page cannot be spilled
+     * HERE, so it is handed to the caller in FULL and the unified exit
+     * ([ToolOutputPolicy.apply] → [ToolOutputSpill], which resolves the
+     * session) does the cap + spill — never a silent `take()`.
+     */
+    fun execute(argsJson: String): ToolExecutionResult =
+        execute(argsJson, sessionId = null, context = null)
+
+    /**
+     * [T-webfetch-spill] Session-aware form. When the converted text exceeds
+     * [MAX_OUTPUT], the FULL text is spilled into the session's tool-spill
+     * workspace and the result becomes a head+tail preview plus the spill
+     * path (the [ToolOutputSpill] placeholder shape), mirroring how every
+     * other oversized tool output is handled. When the spill is impossible
+     * (no session, or the write failed), the full text is returned instead of
+     * silently dropped: the unified exit still caps and spills it, so the
+     * model loses nothing quietly.
+     */
+    fun execute(argsJson: String, sessionId: String?, context: android.content.Context?): ToolExecutionResult {
         val toolTitle = try { JSONObject(argsJson).optString("tool_title", NAME) } catch (_: Exception) { NAME }
         return try {
             val url = JSONObject(argsJson).optString("url", "").trim()
@@ -72,18 +103,42 @@ object WebFetchTool {
                     return ToolExecutionResult("HTTP ${resp.code} for $url", false, toolTitle = toolTitle)
                 }
                 // [T-bounded-body-read] Bounded stream read instead of
-                // `body?.string()`: the extraction below only ever keeps the
-                // first MAX_OUTPUT characters, so buffering the whole body (a
-                // 50 MB HTML page) was pure waste — and unbounded memory on a
-                // model-supplied URL.
+                // `body?.string()`: a 50 MB HTML page is still never buffered
+                // whole — the byte cap bounds the worst case by the server,
+                // not by the page.
                 val raw = readBodyBounded(resp.body, MAX_FETCH_BYTES)
-                val text = htmlToText(raw).take(MAX_OUTPUT)
+                val converted = htmlToText(raw)
+                val text = if (converted.length <= MAX_OUTPUT) {
+                    converted
+                } else {
+                    // [T-webfetch-spill] Over the trigger: spill the FULL text
+                    // into the session workspace and preview head+tail + path.
+                    val guestPath = if (context != null && !sessionId.isNullOrBlank()) {
+                        ToolOutputSpill.offloadFullOutput(context, sessionId, NAME, converted)
+                    } else {
+                        null
+                    }
+                    presentOverCap(converted, guestPath)
+                }
                 ToolExecutionResult("URL: $finalUrl\n\n$text", true, toolTitle = toolTitle)
             }
         } catch (e: Exception) {
             ToolExecutionResult("Error fetching URL: ${e.message}", false, toolTitle = toolTitle)
         }
     }
+
+    /**
+     * [T-webfetch-spill] Pure over-cap decision so a plain-JVM test can pin
+     * it: with a spill file the body is the shared [ToolOutputSpill] preview
+     * (placeholder shape, path, head+tail); without one the FULL text is
+     * deferred to the unified exit rather than dropped.
+     */
+    internal fun presentOverCap(converted: String, guestPath: String?): String =
+        if (guestPath != null) {
+            ToolOutputSpill.formatPreview(NAME, guestPath, converted)
+        } else {
+            converted
+        }
 
     internal fun htmlToText(raw: String): String {
         var s = raw

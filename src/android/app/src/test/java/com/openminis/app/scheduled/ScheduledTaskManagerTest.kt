@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -108,5 +109,58 @@ class ScheduledTaskManagerTest {
         assertTrue(after.enabled)
         assertTrue(after.fireAtMs!! > before)
         assertEquals(30L, after.intervalMinutes)
+    }
+
+    // ── [T-scheduled-atomic-update] writers share the store's update() ──
+
+    @Test
+    fun markFiredKeepsTheClaimedSlotAndPrependsHistory() {
+        manager.create(daily("claimed"))
+        val claimed = manager.claimRunNow("claimed")!!
+        manager.markFired("claimed", "sess-1", "done", ok = true)
+        val after = manager.get("claimed")!!
+        // The claim's runNowSlotMs must survive markFired (the lost-update the
+        // atomic rewrite closes: get+upsert overwrote concurrent transitions).
+        assertEquals(claimed.runNowSlotMs, after.runNowSlotMs)
+        assertEquals(1, after.runHistory.size)
+        assertEquals("sess-1", after.runHistory[0].sessionId)
+        assertTrue(after.lastFiredAt != null)
+    }
+
+    @Test
+    fun markFiredRecordsHistoryOnADisabledOnceRow() {
+        manager.create(daily("once").copy(repeatMode = ScheduledRepeatMode.ONCE))
+        assertTrue(manager.rescheduleNext("once"))
+        assertFalse(manager.get("once")!!.enabled)
+        // The run completes AFTER the alarm path disabled the row: markFired
+        // must still append the record to the disabled row.
+        manager.markFired("once", "sess-2", "hello", ok = true)
+        val after = manager.get("once")!!
+        assertFalse(after.enabled)
+        assertEquals(1, after.runHistory.size)
+        assertEquals("sess-2", after.runHistory[0].sessionId)
+    }
+
+    @Test
+    fun rescheduleNextInsideTheLateWindowKeepsTheClaimAndDoesNotRun() {
+        val t = daily("taken")
+        manager.create(t)
+        // A "Run now" claim whose slot is inside the alarm delivery window:
+        // the claim recorded the slot; the stale alarm delivery must be turned
+        // away WITHOUT wiping the claim row (the slot-taken branch writes
+        // nothing under the atomic update).
+        val slot = System.currentTimeMillis()
+        manager.store().upsert(t.copy(runNowSlotMs = slot))
+        assertFalse(manager.rescheduleNext("taken"))
+        val after = manager.get("taken")!!
+        assertEquals(slot, after.runNowSlotMs)
+        assertTrue(after.enabled)
+        assertEquals(0, after.runHistory.size)
+    }
+
+    @Test
+    fun markFiredOnUnknownTaskIsANoOp() {
+        manager.markFired("nope", null, null)
+        assertNull(manager.get("nope"))
     }
 }

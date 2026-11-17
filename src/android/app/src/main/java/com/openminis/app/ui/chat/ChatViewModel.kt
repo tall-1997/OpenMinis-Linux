@@ -1547,6 +1547,20 @@ class ChatViewModel(
     // the four exposure flags plus the plugin store's change stamp.
     private var agentToolsMemo: List<AgentToolDefinition>? = null
     private var agentToolsMemoStamp: Long = Long.MIN_VALUE
+
+    /** [T-rule-allowlist-enforce] Per-session tool whitelist (null/empty = unrestricted). */
+    @Volatile
+    var sessionToolAllowlist: Set<String>? = null
+        private set
+
+    /** Narrow this session's callable toolset to [allowlist] (null/empty clears). */
+    override fun setToolAllowlist(allowlist: Set<String>?) {
+        sessionToolAllowlist = allowlist?.takeIf { it.isNotEmpty() }
+        // The memo stamp hashes the allowlist below; clearing explicitly keeps
+        // a stale allowlisted schema from surviving a later unrestricted call.
+        agentToolsMemo = null
+    }
+
     /** Long-tail tools made available by the current session's find_tools calls. */
     private val enabledLongTailTools = linkedSetOf<String>()
     private var enabledToolsSessionId: String = ""
@@ -1576,7 +1590,10 @@ class ChatViewModel(
             webSearchEnabled = com.openminis.app.tools.WebSearchSettings.toolEnabled(context),
         ) + com.openminis.app.plugins.OnlinePluginStore.toolDefinitions(context) +
             com.openminis.app.plugins.LocalToolPluginStore.agentToolDefinitions(context)
-        val matches = com.openminis.app.tools.FindTools.search(query, all, limit)
+        // [T-rule-allowlist-enforce] A whitelisted session must not DISCOVER or
+        // enable outside its rule — filter the corpus before the search.
+        val searchable = sessionToolAllowlist?.let { allow -> all.filter { it.name in allow } } ?: all
+        val matches = com.openminis.app.tools.FindTools.search(query, searchable, limit)
         enableDiscoveredTools(matches.map { it.definition.name })
         return com.openminis.app.tools.ToolExecutionResult(
             output = com.openminis.app.tools.FindTools.format(matches),
@@ -1608,17 +1625,16 @@ class ChatViewModel(
                 // [GH#298] 关掉 web_search 必须让 memo 失效，否则切换开关后
                 // 本次进程内仍会继续下发旧 schema。
                 (if (com.openminis.app.tools.WebSearchSettings.toolEnabled(context)) 0L else 1L shl 40) xor
-                enabledStamp
+                enabledStamp xor
+                // [T-rule-allowlist-enforce] The allowlist shapes the schema.
+                (sessionToolAllowlist?.hashCode()?.toLong() ?: 0L)
             agentToolsMemo?.takeIf { agentToolsMemoStamp == stamp }?.let { return it }
             val built = AgentTools.makeAgentTools(
                 // [T-android-vision-group / GH#182] The main model's own vision
                 // capability. When false but a Vision Group is configured, read_image
-                // is still exposed and routes through the group (see
-                // executeReadImageTool). Note pre-vision-group Android always passed
-                // the default `true` here, so read_image was already always exposed;
-                // threading the real flag lets a text-only model without a Vision
-                // Group correctly LOSE the tool (iOS parity), while a configured
-                // Vision Group keeps it.
+                // still routes through the group (iOS parity: pre-vision-group Android
+                // always passed `true`; threading the real flag lets a text-only model
+                // without a Vision Group correctly LOSE the tool; a configured one keeps it).
                 supportsImageInput = currentModelHasNativeVision,
                 visionGroupConfigured = com.openminis.app.tools.VisionGroupResolver.isConfigured(
                     providerRepository, context,
@@ -1632,11 +1648,16 @@ class ChatViewModel(
                 hasSpeechModel = providerRepository.resolveVoiceInputEntry() != null,
                 // [GH#298] 与 findAndEnableTools 同一开关。
                 webSearchEnabled = com.openminis.app.tools.WebSearchSettings.toolEnabled(context),
+                allowedTools = sessionToolAllowlist, // [T-rule-allowlist-enforce] Declare only the rule's tools.
             ) + com.openminis.app.plugins.OnlinePluginStore.toolDefinitions(context) +
                 com.openminis.app.plugins.LocalToolPluginStore.agentToolDefinitions(context)
-            agentToolsMemo = built
+            // [T-rule-allowlist-enforce] Plugin tools are appended AFTER makeAgentTools — filter the combined list.
+            val filtered = sessionToolAllowlist?.takeIf { it.isNotEmpty() }
+                ?.let { allow -> built.filter { it.name in allow } }
+                ?: built
+            agentToolsMemo = filtered
             agentToolsMemoStamp = stamp
-            return built
+            return filtered
         }
 
     /**
@@ -1725,93 +1746,9 @@ class ChatViewModel(
     internal val _memoryToolRecords = MutableStateFlow<List<MemoryToolRecord>>(emptyList())
     val memoryToolRecords: StateFlow<List<MemoryToolRecord>> = _memoryToolRecords.asStateFlow()
 
-    /**
-     * Revoke a previously recorded memory_write by removing its entry from
-     * today's or yesterday's daily log on disk, and dropping the row from
-     * [memoryToolRecords] so the SessionMemorySheet reflects the removal.
-     *
-     * Returns the repository result so the UI can show a success / not-found
-     * / I/O error dialog. The original ChatMessage tool block stays in the
-     * conversation history untouched — only the on-disk entry and the
-     * op-log row are mutated.
-     */
-    fun revokeMemoryRecord(record: MemoryToolRecord): com.openminis.app.data.repository.MemoryRepository.EntryMutationResult {
-        val repo = sessionMemoryRepo()
-        val written = record.writtenContent
-            ?: return com.openminis.app.data.repository.MemoryRepository.EntryMutationResult.NotFound
-        val result = repo.revokeEntry(written)
-        if (result is com.openminis.app.data.repository.MemoryRepository.EntryMutationResult.Success) {
-            _memoryToolRecords.value = _memoryToolRecords.value - record
-        }
-        return result
-    }
-
-    /**
-     * T149: revoke every `memory_write` tool block embedded in the supplied
-     * messages. Used when a retry path truncates the conversation — the
-     * deleted assistant turns may have written entries to today's daily
-     * memory log, and leaving them on disk after the conversation rewinds
-     * means user-visible history is gone but the side effects remain.
-     *
-     * We match by the `content` field of the tool args against
-     * [MemoryToolRecord.writtenContent] (which is what `revokeMemoryRecord`
-     * keys on). If multiple records share the same content body — possible
-     * if the agent wrote the same note twice — we revoke them in the
-     * reverse insertion order so the most recent disk write is removed
-     * first; the repository's revokeEntry only removes the first match
-     * each call, so subsequent records may end up NotFound on disk but
-     * still get pulled from the in-memory record list.
-     */
-    internal fun revokeMemoryWritesInDeletedMessages(deletedMessages: List<ChatMessage>) {
-        val deletedContents = mutableListOf<String>()
-        for (msg in deletedMessages) {
-            for (block in msg.toolBlocks) {
-                if (block.kind != "tool_use") continue
-                if (block.toolName != "memory_write") continue
-                val content = try {
-                    JSONObject(block.toolArgs).optString("content", "")
-                } catch (_: Exception) { "" }
-                if (content.isNotBlank()) deletedContents.add(content)
-            }
-        }
-        if (deletedContents.isEmpty()) return
-        Log.i(TAG, "revokeMemoryWritesInDeletedMessages: ${deletedContents.size} write(s) to revoke")
-        for (content in deletedContents.asReversed()) {
-            // Find the latest matching record so revoke targets the most
-            // recent disk entry first. Snapshot value because revoke mutates
-            // the flow.
-            val record = _memoryToolRecords.value.lastOrNull {
-                it.isWrite && it.writtenContent == content
-            } ?: continue
-            val result = revokeMemoryRecord(record)
-            Log.i(TAG, "  revoke result: ${result::class.simpleName}")
-        }
-    }
-
-    /**
-     * Replace the body of a previously recorded memory_write with
-     * [newContent]. Mirrors iOS `MemoryWriteDetailView.replaceEntryInLog`.
-     * On success, also updates the in-memory [MemoryToolRecord] so a
-     * subsequent revoke or revisit sees the new body.
-     */
-    fun replaceMemoryRecord(
-        record: MemoryToolRecord,
-        newContent: String,
-    ): com.openminis.app.data.repository.MemoryRepository.EntryMutationResult {
-        val repo = sessionMemoryRepo()
-        val old = record.writtenContent
-            ?: return com.openminis.app.data.repository.MemoryRepository.EntryMutationResult.NotFound
-        val result = repo.replaceEntryBody(old, newContent)
-        if (result is com.openminis.app.data.repository.MemoryRepository.EntryMutationResult.Success) {
-            _memoryToolRecords.value = _memoryToolRecords.value.map {
-                if (it === record) it.copy(
-                    writtenContent = newContent,
-                    preview = newContent.lines().firstOrNull { line -> line.isNotBlank() }?.take(100) ?: "",
-                ) else it
-            }
-        }
-        return result
-    }
+    // [T-android-split-chat] revokeMemoryRecord / revokeMemoryWritesInDeletedMessages
+    // / replaceMemoryRecord moved verbatim to ChatViewModelParts.kt as extension
+    // functions (architecture ceiling).
 
     // ── Slash commands (mirrors iOS AIChatViewModel) ────────────────────
 
@@ -4492,6 +4429,16 @@ class ChatViewModel(
         job.cancel(CancellationException("Stopped by user"))
         _isStreaming.value = false
         capturedSessionIds.forEach { sid -> ExecutionCoordinator.stopCurrentCommand(sid) }
+        // [T-android-approval-teardown-chat] Same orphaned-notification
+        // contract as AgentForegroundService ACTION_STOP, scoped to the
+        // stopped sessions: the ApprovalGate "survive for later" contract
+        // stays, but the stale tray entries with live Approve/Deny actions
+        // resolve a flow nobody reads after the turn is torn down.
+        capturedSessionIds.forEach { sid ->
+            ApprovalGate.pendingIds(sid).forEach { pendingId ->
+                ApprovalNotifier.cancelApproval(context, pendingId)
+            }
+        }
         if (activeSessionId == stoppedSessionId) {
             SessionActivityTracker.clearToolRunning(com.openminis.app.service.ToolOutcome.Cancelled)
         }

@@ -67,7 +67,16 @@ object AutomationAgentRunner {
         timeoutMs = RUN_TIMEOUT_MS,
         // The gate token comes from the rule's own metadata, normalized
         // exactly like ScheduledTask.newSessionPermissionToken.
-        newSessionPermissionMode = spec.permissionMode,
+        // [T-rule-off-safe-auto] Normalize AT FIRE TIME via the shared
+        // RuleValidation mapping: rules persisted by older builds keep their
+        // raw "OFF" token in spec_json and never pass validate() again —
+        // without this the stored OFF still executed as DENY_ALL.
+        newSessionPermissionMode = RuleValidation.normalizePermissionModeToken(spec.permissionMode),
+        // [T-rule-allowlist-enforce] Thread the rule's tool whitelist into the
+        // unattended session's toolset seam. An empty allowedTools list means
+        // unrestricted (RuleValidation preserves an all-unknown list as empty),
+        // so only a non-empty list becomes a filter.
+        allowedTools = spec.allowedTools.takeIf { it.isNotEmpty() }?.toSet(),
         // Rules always run in a fresh session (no reuse target in v1).
         reuseSession = { null },
         onDispatched = { sessionId ->

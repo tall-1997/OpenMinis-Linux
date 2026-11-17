@@ -19,7 +19,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import okhttp3.Response
 import java.io.IOException
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -97,35 +96,10 @@ internal fun OpenAIProvider.rawStreamMessage(
                 temperature = temperature,
             )
         }
-        // T302: serialize the request body exactly once. Pre-T302 we called
-        // body.toString() three times per request (debug log + OAuth byte
-        // build + non-OAuth RequestBody), each materialising a fresh 30+ MB
-        // string for long agent loops with heavy tool outputs. Stacked, that
-        // pushed memory-tight devices (HONOR PTP-AN00) past the OOM line.
-        // [T-android-mem-probe-trust] Bracket the serialisation itself. The
-        // 2026-08-15 field log recorded `bodyLen=2342987` on the request before
-        // a process death but nothing about its memory cost, so "did building
-        // this body kill us?" could not be answered from the log. We measure
-        // around the call and report the realised length, so an OOM thrown here
-        // now arrives with an attributed stack instead of anonymously.
-        val memBefore = com.openminis.app.diagnostics.MemorySnapshot.capture()
-        val serStartNs = System.nanoTime()
-        val bodyStr = try {
-            body.toString()
-        } catch (t: Throwable) {
-            com.openminis.app.diagnostics.LargeAllocProbe.report(
-                "openai.body.toString", -1, "model=${model.id} messages=${messages.size}",
-                memBefore, serStartNs, failure = t,
-            )
-            throw t
-        }
-        if (bodyStr.length >= com.openminis.app.diagnostics.LargeAllocProbe.NOTABLE_BYTES) {
-            com.openminis.app.diagnostics.LargeAllocProbe.report(
-                "openai.body.toString", bodyStr.length.toLong(),
-                "model=${model.id} messages=${messages.size}",
-                memBefore, serStartNs, failure = null,
-            )
-        }
+        // T302 / [T-android-mem-probe-trust]: serialize the request body
+        // exactly once, bracketed by the allocation probe — implementation
+        // in serializeRequestBodyWithAllocProbe (OpenAIStreamSupport.kt).
+        val bodyStr = serializeRequestBodyWithAllocProbe(body, model.id, messages.size)
         // Per-call headers (x-opencode-session) merge LAST, per call — through
         // the same AcceptHeaderPolicy choke point as the ctor set: OkHttp
         // header() REPLACE would otherwise put a raw per-call Accept back on the wire.
@@ -137,32 +111,11 @@ internal fun OpenAIProvider.rawStreamMessage(
         }
         val startTime = System.currentTimeMillis()
 
-        // T321: request-side diagnostic log. Header *keys* + Authorization
-        // presence (no token values), and a body summary (counts only — never
-        // the message text/images/tool-result bytes).
-        run {
-            val authPresent = request.headers["Authorization"] != null
-            val msgsLen = body.optJSONArray("messages")?.length()
-                ?: body.optJSONArray("input")?.length() ?: 0
-            val toolsLen = body.optJSONArray("tools")?.length() ?: 0
-            val temp = if (body.has("temperature")) body.optDouble("temperature") else null
-            val maxTok = body.optInt("max_completion_tokens", body.optInt("max_tokens", -1))
-            val hasSystem = body.has("instructions") ||
-                (body.optJSONArray("messages")?.let { arr ->
-                    var found = false
-                    for (i in 0 until arr.length()) {
-                        if (arr.optJSONObject(i)?.optString("role") == "system") { found = true; break }
-                    }
-                    found
-                } ?: false)
-            com.openminis.app.logging.AppLogger.info(
-                "OpenAIProvider",
-                "[T321] → REQ url=${request.url} model=${model.id} stream=${body.optBoolean("stream", false)} " +
-                    "headerKeys=${request.headers.names()} authPresent=$authPresent " +
-                    "messages=$msgsLen tools=$toolsLen temp=$temp maxTokens=$maxTok hasSystem=$hasSystem " +
-                    "useResponsesAPI=${!usesChatCompletionsAPI} bodyLen=${bodyStr.length}"
-            )
-        }
+        // T321: request-side diagnostic log — implementation in logT321Request
+        // (OpenAIStreamSupport.kt): header *keys* + Authorization presence
+        // (no token values), and a body summary (counts only — never the
+        // message text/images/tool-result bytes).
+        logT321Request(request, body, model.id, !usesChatCompletionsAPI, bodyStr.length)
 
         // [T-android-ttfb-upload-split / #188] Attach per-call state the trace
         // listener fills in (upload-done timestamp + physical connection) so the
@@ -243,18 +196,9 @@ internal fun OpenAIProvider.rawStreamMessage(
         if (isOAuth && !forceChatCompletions) {
             com.openminis.app.quota.QuotaObservationSink.recordCodexResponse(quotaInstanceId, response.headers)
         }
-        // T321: response-side diagnostic log (status + select header values).
-        run {
-            val rh = response.headers
-            val ct = rh["content-type"] ?: ""
-            val rid = rh["x-request-id"] ?: rh["openai-request-id"] ?: ""
-            val openAiHdrs = rh.names().filter { it.lowercase().startsWith("openai-") }
-            com.openminis.app.logging.AppLogger.info(
-                "OpenAIProvider",
-                "[T321] ← RSP status=${response.code} content-type=$ct x-request-id=$rid " +
-                    "headerKeys=${rh.names()} openAiHeaders=${openAiHdrs.associateWith { rh[it] ?: "" }}"
-            )
-        }
+        // T321: response-side diagnostic log — implementation in
+        // logT321Response (OpenAIStreamSupport.kt).
+        logT321Response(response)
         if (!response.isSuccessful) {
             val errorBody = response.body?.string() ?: ""
             // T321: full error body. [T-llm-error-secret-mask] masked at every
@@ -339,6 +283,12 @@ internal fun OpenAIProvider.rawStreamMessage(
                 val message = choice?.optJSONObject("message")
                 val text = message?.let { m -> m.safeOptString("content") }.orEmpty() // [T-json-null-string]
                 if (text.isNotEmpty()) send(LLMStreamChunk.Text(text))
+                // [T-nonstream-toolcalls] emission — implementation in
+                // emitNonStreamToolCalls (OpenAIStreamSupport.kt): the same
+                // Start/Complete sequence the SSE path produces.
+                message?.optJSONArray("tool_calls")?.let { calls ->
+                    emitNonStreamToolCalls(calls) { send(it) }
+                }
                 json.optJSONObject("usage")?.let {
                     send(LLMStreamChunk.Usage(parseChatCompletionsUsage(it)))
                 }
@@ -389,13 +339,9 @@ internal fun OpenAIProvider.rawStreamMessage(
         }
 
         // Chat Completions: tool calls are streamed as deltas keyed by index.
-        data class ToolCallAccumulator(var id: String = "", var name: String = "", val args: StringBuilder = StringBuilder(), var started: Boolean = false, var lastSentArgsLen: Int = 0)
+        // ToolCallAccumulator / ResponsesToolCallAccumulator moved to
+        // OpenAIStreamSupport.kt (architecture-policy line ceiling).
         val toolCallAccumulators = mutableMapOf<Int, ToolCallAccumulator>()
-        // Responses API: function_call items are keyed by their item_id (fc_…). We store
-        // the call_id separately because the agent loop needs the call_id to correlate
-        // tool results, but the next request must echo back the item_id verbatim — so we
-        // emit a combined "callId|fcId" identifier that splitResponsesAPIIds() unpacks.
-        data class ResponsesToolCallAccumulator(var callId: String = "", var name: String = "", val args: StringBuilder = StringBuilder(), var started: Boolean = false, var lastSentArgsLen: Int = 0)
         val responsesToolCalls = mutableMapOf<String, ResponsesToolCallAccumulator>()
         // One-shot info log the first time the Responses API streams a reasoning
         // delta — confirms the Thinking pipeline is wired up.
@@ -927,7 +873,20 @@ internal fun OpenAIProvider.rawStreamMessage(
                                 // the real first-delta id (tool-card input loss).
                                 acc.id = resolveToolCallId(acc.id, tc.safeOptString("id", ""), idx, acc.started)
                                 tc.optJSONObject("function")?.let { fn ->
-                                    fn.safeOptString("name", "").let { if (it.isNotEmpty()) acc.name = it }
+                                    // [T-tool-name-delta-accumulate] Official OpenAI sends the
+                                    // name WHOLE in the first delta; some relays stream it in
+                                    // FRAGMENTS ("file_" then "read") — the old replace semantics
+                                    // ended with acc.name="read" and an "Unknown tool" dispatch.
+                                    // A delta that strictly extends the accumulator is a
+                                    // cumulative resend (replace); anything else is a continuation
+                                    // fragment (append).
+                                    fn.safeOptString("name", "").takeIf { it.isNotEmpty() }?.let { delta ->
+                                        acc.name = when {
+                                            acc.name.isEmpty() -> delta
+                                            delta.length > acc.name.length && delta.startsWith(acc.name) -> delta
+                                            else -> acc.name + delta
+                                        }
+                                    }
                                     fn.safeOptString("arguments", "").let { if (it.isNotEmpty()) acc.args.append(it) }
                                 }
 

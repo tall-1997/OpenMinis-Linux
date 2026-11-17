@@ -136,7 +136,10 @@ class RuleValidationTest {
         assertEquals("YOLO", ok(base().copy(permissionMode = "yoyo")).permissionMode)
         assertEquals("SAFE_AUTO", ok(base().copy(permissionMode = "whatever")).permissionMode)
         assertEquals("SAFE_AUTO", ok(base().copy(permissionMode = "SAFE_AUTO")).permissionMode)
-        assertEquals("OFF", ok(base().copy(permissionMode = "OFF")).permissionMode)
+        // [T-rule-off-safe-auto] OFF/DENY_ALL execute as SAFE_AUTO in
+        // unattended runs, per the documented AutomationRuleTools contract.
+        assertEquals("SAFE_AUTO", ok(base().copy(permissionMode = "OFF")).permissionMode)
+        assertEquals("SAFE_AUTO", ok(base().copy(permissionMode = "DENY_ALL")).permissionMode)
         // [#31] The legacy "ASK" token normalizes to SAFE_AUTO — the gate
         // behaviour the two-tier era actually meant.
         assertEquals("SAFE_AUTO", ok(base().copy(permissionMode = "ASK")).permissionMode)

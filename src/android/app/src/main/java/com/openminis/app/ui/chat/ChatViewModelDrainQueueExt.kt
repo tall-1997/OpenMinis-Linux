@@ -1,6 +1,7 @@
 package com.openminis.app.ui.chat
 
 import android.util.Log
+import com.openminis.app.R
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.isPureVideoGenerator
@@ -50,16 +51,16 @@ internal suspend fun ChatViewModel.drainQueuedPrompts(
         Log.i(ChatViewModel.TAG, "📨[DRAIN] Draining ${queued.size} queued prompt(s): " +
             queued.joinToString(", ") { "${it.id}=\"${it.text.take(20)}...\"" })
 
-        // Flip isQueued=false on corresponding chat messages so they render as sent.
-        // T189: also clear queuedPromptId so a later retry of this bubble
-        // doesn't try to drop a phantom queue entry (and so the field state
-        // matches what retryFromMessage's truncate path now produces).
+        // [T-android-drain-bubble-bind] Drained bubbles are matched by
+        // queuedPromptId and REPLACED after the row persists (see below).
+        // The old flow flipped isQueued=false in place and then looked the
+        // bubble back up with `it.isQueued` — a lookup that could never
+        // match its own flip, so the persisted row was never bound to a
+        // bubble: the placeholder kept the literal [Pasted#N] marker with
+        // no file chip, sourceDbIds stayed empty, and the history-page tail
+        // attach (which dedupes by sourceDbIds) spliced the DB row in as a
+        // SECOND copy of the same prompt.
         val queuedIds = queued.map { it.id }.toSet()
-        _messages.value = _messages.value.map { m ->
-            if (m.queuedPromptId != null && queuedIds.contains(m.queuedPromptId)) {
-                m.copy(isQueued = false, queuedPromptId = null)
-            } else m
-        }
 
         // Build a combined user message (text + images from all queued prompts).
         // Persist as a single row.
@@ -87,6 +88,24 @@ internal suspend fun ChatViewModel.drainQueuedPrompts(
         }
         prepared.attachedFilesXml?.let { combinedParts.add(AgentContentPart.Text(it)) }
 
+        // [T-android-queue-empty-claims-honest] Same honesty guard as the
+        // mid-loop inject path: a prompt queue claimed empty of content
+        // (blank text + every attachment failed prepare) must not persist an
+        // empty user row — that 400s the next request AND the queued words
+        // would vanish silently. Drop the stale placeholders and tell the
+        // user instead.
+        if (combinedParts.isEmpty()) {
+            Log.w(ChatViewModel.TAG, "📨[DRAIN] ${queued.size} queued prompt(s) produced no content, dropping honestly")
+            withContext(Dispatchers.Main.immediate) {
+                val current = _messages.value
+                _messages.value = current.filterNot { m ->
+                    m.queuedPromptId != null && m.queuedPromptId in queuedIds
+                }
+            }
+            setInlineError(context.getString(R.string.queue_dropped_no_content))
+            continue
+        }
+
         val userText = combinedText.toString()
         // [T-android-paste-mediaref] Same marker handling as the mid-loop
         // inject path above — see the note there for why queued prompts
@@ -103,25 +122,34 @@ internal suspend fun ChatViewModel.drainQueuedPrompts(
             bodyPartsJson = drainPaste?.partsJson,
         )
         val persistedUser = chatRepository.appendMessage(sid, "user", userPartsJson)
-        val queuedUiId = withContext(Dispatchers.Main.immediate) {
-            _messages.value.firstOrNull { it.isQueued && it.content == userText }?.id
-        }
+        // [T-android-drain-bubble-bind] Swap the drained placeholder bubbles
+        // for ONE bubble bound to the persisted row (id = db id,
+        // sourceDbIds set) — the exact shape the mid-loop inject path paints,
+        // so the tail attach dedupes it and retry/edit affordances work.
+        // [T-android-paste-queued-bubble] The persisted row folds each
+        // [Pasted#N] marker into its own Pasted#N.txt mediaRef, so the bound
+        // bubble carries the stripped text plus the tappable file chips a
+        // fresh send gets.
         withContext(Dispatchers.Main.immediate) {
-            notePersistedUiRow(queuedUiId, persistedUser.id)
-            // [T-android-paste-queued-bubble] The persisted row folds each
-            // [Pasted#N] marker into its own Pasted#N.txt mediaRef, so the
-            // live queued bubble must drop the literal marker and carry the
-            // same tappable file chips a fresh send gets — tapping opens
-            // FilePreviewScreen with the full text from disk, no reload needed.
-            if (drainPaste != null && queuedUiId != null) {
-                _messages.value = _messages.value.map { msg ->
-                    if (msg.id == queuedUiId) msg.copy(
-                        content = stripConsumedPasteMarkers(msg.content, drainPaste.consumedIds),
-                        attachmentNames = msg.attachmentNames + drainPaste.uiNames,
-                        attachmentUris = msg.attachmentUris + drainPaste.uiUris,
-                    ) else msg
-                }
-            }
+            val current = _messages.value
+            val drainedIds = current
+                .filter { it.queuedPromptId != null && it.queuedPromptId in queuedIds }
+                .mapTo(mutableSetOf()) { it.id }
+            val bubbleText = drainPaste?.let { stripConsumedPasteMarkers(userText, it.consumedIds) }
+                ?: userText
+            val boundBubble = ChatMessage(
+                id = persistedUser.id,
+                role = "user",
+                content = bubbleText,
+                imageUris = prepared.imageUris,
+                attachmentNames = prepared.attachmentNames + (drainPaste?.uiNames ?: emptyList()),
+                attachmentUris = prepared.nonImageUris + (drainPaste?.uiUris ?: emptyList()),
+                sourceDbIds = listOf(persistedUser.id),
+            )
+            _messages.value = trimLoadedWindow(
+                current.filterNot { it.id in drainedIds } + boundBubble,
+            )
+            notePersistedUiRow(persistedUser.id, persistedUser.id)
         }
 
         appendBoundedHistory(LLMMessage(
@@ -157,6 +185,10 @@ internal suspend fun ChatViewModel.drainQueuedPrompts(
             if (com.openminis.app.service.ActiveRunContext.current()?.isStopped == false) {
                 setInlineError(e.message ?: "Unknown error")
             }
+            // [T-android-queue-atomic-mutation] The prompt was already
+            // claimed and persisted — the drained bubble's placeholder list
+            // entry was replaced by the bound bubble; nothing stale should
+            // remain queued-side. break ends the drain loop cleanly.
             break
         }
     }

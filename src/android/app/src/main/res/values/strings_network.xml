@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Settings > Network. Translations shared with iOS come from its Localizable.xcstrings; locales without one fall back to English. -->
 <resources>
-    <string name="network_title">Network</string>
-    <string name="network_settings_subtitle">Tailscale, proxies and routes</string>
     <string name="network_default_route">Default Route</string>
     <string name="network_default_route_footer">Used by every part of the app set to “Follow Default”. Addresses in your tailnet always go through Tailscale while it is on, whatever the route.</string>
     <string name="network_default_route_covers">The app’s own requests use it too: update checks, skill downloads, voice, weather and images in chats. A provider’s model list, usage and sign-in follow that provider’s route. Mirror speed tests always connect directly, to measure this network itself.</string>
@@ -97,7 +95,6 @@
     <string name="network_entry_note">Minis listens on 127.0.0.1 for its own connections. Other apps on this device can reach that port but cannot use it without a password that changes every time Minis starts.</string>
     <!-- [FEAT-261021-04] Settings > Network section -->
     <string name="network_routing_title">Network Routing</string>
-    <string name="network_container_dns">Shell Container DNS</string>
     <!-- [PAR-261021-01] LLM Providers: only routed ones listed, bulk add -->
     <string name="network_add_providers">Add Providers</string>
     <string name="network_route">Route</string>

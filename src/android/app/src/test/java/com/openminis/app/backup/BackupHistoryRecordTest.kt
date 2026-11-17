@@ -7,6 +7,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 /**
  * [T-android-backup-history] Pins the record model that replaced the transient
@@ -170,4 +171,56 @@ class BackupHistoryRecordTest {
         val e = BackupHistory.SkippedEntry("chats/session-1/files/huge video.mp4", 99_000_000)
         assertEquals("huge video.mp4", e.fileName)
     }
+
+    // -- [T-backup-decode-honesty] Corrupt history quarantine -------------
+
+    /**
+     * A corrupt records.json used to be decoded into an empty list AND CACHED,
+     * so every later upsert fought a corrupt file and the whole history
+     * permanently reported nothing. The unreadable file must instead be moved
+     * to `records.json.corrupt` (a future write recreates it) and the empty
+     * result must not be cached as if it were authoritative.
+     */
+    @Test
+    fun `a corrupt history file is quarantined rather than read as empty`() {
+        val dir = tempDir()
+        val file = File(dir, "records.json")
+        file.writeText("""{"definitely": "not", "a": "record list"}""")
+        val result = BackupHistory.loadRecords(file)
+        assertTrue("unreadable bytes must be flagged as quarantined", result.quarantined)
+        assertTrue("a quarantined read yields no records", result.records.isEmpty())
+        assertFalse("the corrupt file must be gone from its original path", file.exists())
+        assertTrue(
+            "the corrupt bytes must survive next to the original for diagnosis",
+            File(dir, "records.json.corrupt").exists(),
+        )
+        dir.deleteRecursively()
+    }
+
+    @Test
+    fun `an absent history file is not a quarantine`() {
+        val dir = tempDir()
+        val result = BackupHistory.loadRecords(File(dir, "records.json"))
+        assertFalse(result.quarantined)
+        assertTrue(result.records.isEmpty())
+        assertFalse(File(dir, "records.json.corrupt").exists())
+        dir.deleteRecursively()
+    }
+
+    @Test
+    fun `a readable history file decodes without quarantine`() {
+        val dir = tempDir()
+        val file = File(dir, "records.json")
+        val r = record(status = BackupHistory.Status.SUCCEEDED)
+        file.writeText(json.encodeToString(listSer, listOf(r)))
+        val result = BackupHistory.loadRecords(file)
+        assertFalse(result.quarantined)
+        assertEquals(1, result.records.size)
+        assertEquals("abc123", result.records.single().backupId)
+        assertFalse("no sidecar unless the file was unreadable", File(dir, "records.json.corrupt").exists())
+        dir.deleteRecursively()
+    }
+
+    private fun tempDir(): File =
+        File.createTempFile("minisbak-hist", "").apply { delete(); mkdirs() }
 }

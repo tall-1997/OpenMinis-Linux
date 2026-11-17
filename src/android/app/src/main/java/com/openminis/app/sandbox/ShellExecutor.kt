@@ -261,17 +261,28 @@ object ShellExecutor {
                                 }
                             }
                             if (!room || !sink.canRead()) {
-                                // [T-output-cap-vs-backpressure] Two distinct
-                                // brakes downstream, deliberately different:
-                                // the rate brake above (`wait > 0` → delay and
-                                // keep reading) is backpressure; THIS break is
-                                // the output CAP — a terminal condition where
-                                // the read loop ends for this command, the
-                                // guest blocks in write, and the full accepted
-                                // buffer is still returned via
-                                // StreamSink.snapshot(). Not a bug to "fix"
-                                // into a wait.
-                                Log.w(TAG, "output cap hit; stopping read so the guest blocks")
+                                // [T-output-cap-kill] Two distinct brakes
+                                // downstream, deliberately different: the rate
+                                // brake above (`wait > 0` → delay and keep
+                                // reading) is backpressure; THIS is the output
+                                // CAP — terminal, because nothing past it is
+                                // captured anyway (head+tail is the whole
+                                // snapshot). The old behavior only stopped
+                                // READING and let the guest block in write()
+                                // until the full wall fired: a chatty command
+                                // burned its entire 600s budget on a dead-end,
+                                // kept burning CPU, and still came back 124
+                                // with the same truncated head+tail. Kill the
+                                // tree now and return an honest marker with
+                                // the recovery hint — the model can redirect
+                                // to a file and read it back in chunks.
+                                Log.w(TAG, "output cap hit; killing guest process group (output past cap is not captured)")
+                                SandboxWorkload.release(started, kill = true, reason = "oneshot-output-cap")
+                                output.appendLine(
+                                    "\n[Output cap reached; guest process group killed — " +
+                                        "output beyond the cap is not captured. Redirect the command's " +
+                                        "output to a file and read it back in chunks for the rest.]",
+                                )
                                 break
                             }
                             if (wait > 0L) delay(wait)

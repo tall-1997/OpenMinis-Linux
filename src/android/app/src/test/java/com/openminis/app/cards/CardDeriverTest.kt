@@ -1,5 +1,6 @@
 package com.openminis.app.cards
 
+import com.openminis.app.R
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -35,6 +36,10 @@ class CardDeriverTest {
         assertEquals("85% (charging)", card.highlight)
         assertEquals("wifi", card.rows.first { it.label == "network" }.value)
         assertEquals(9, card.rows.size)
+        // [T-card-title-i18n] English fallback stays, res id rides along.
+        assertEquals("Device status", card.title)
+        assertEquals(R.string.card_title_device_status, card.titleResId)
+        assertNull(card.titleResArg)
     }
 
     @Test
@@ -55,6 +60,8 @@ class CardDeriverTest {
         card as ToolCard.Facts
         assertEquals("system.screen_off_timeout", card.rows[0].label)
         assertEquals("30000", card.rows[0].value)
+        assertEquals(R.string.card_title_setting, card.titleResId)
+        assertNull(card.titleResArg)
     }
 
     @Test
@@ -79,7 +86,12 @@ class CardDeriverTest {
             "wifi_on=1\nwifi_scan_always_enabled=1\nbad line without equals",
         )
         assertTrue(card is ToolCard.Facts)
-        assertEquals(2, (card as ToolCard.Facts).rows.size)
+        card as ToolCard.Facts
+        assertEquals(2, card.rows.size)
+        // Parameterized title: res id + the namespace as format argument.
+        assertEquals(R.string.card_title_settings_ns, card.titleResId)
+        assertEquals("global", card.titleResArg)
+        assertEquals("Settings · global", card.title)
     }
 
     // ── clipboard_get ────────────────────────────────────────────────────────
@@ -89,6 +101,7 @@ class CardDeriverTest {
         val card = CardDeriver.derive("clipboard_get", "{}", "hello clipboard") as ToolCard.Facts
         assertEquals("hello clipboard", card.highlight)
         assertEquals("text", card.rows[0].label)
+        assertEquals(R.string.card_title_clipboard, card.titleResId)
     }
 
     @Test
@@ -114,6 +127,9 @@ class CardDeriverTest {
         assertEquals("50", card.oldText)
         assertTrue(card.undoable)
         assertEquals("volume_set", card.tool)
+        // [T-card-title-i18n] Parameterized Change label: res id + stream arg.
+        assertEquals(R.string.card_title_volume, card.labelResId)
+        assertEquals("music", card.titleResArg)
         val undoArgs = org.json.JSONObject(card.undoArgsJson!!)
         assertEquals("music", undoArgs.getString("stream"))
         assertEquals(50, undoArgs.getInt("percent"))
@@ -161,12 +177,14 @@ class CardDeriverTest {
         assertEquals("priority", dnd.newText)
         assertTrue(dnd.undoable)
         assertEquals("off", org.json.JSONObject(dnd.undoArgsJson!!).getString("mode"))
+        assertEquals(R.string.card_title_dnd, dnd.labelResId)
 
         val sound = CardDeriver.derive(
             "sound_mode", """{"mode":"silent"}""", "Ringer mode set to silent.\nwas: normal",
         ) as ToolCard.Change
         assertEquals("silent", sound.newText)
         assertTrue(sound.undoable)
+        assertEquals(R.string.card_title_sound_mode, sound.labelResId)
     }
 
     @Test
@@ -177,6 +195,7 @@ class CardDeriverTest {
         assertEquals("on", on.newText)
         assertTrue(on.undoable)
         assertEquals(false, org.json.JSONObject(on.undoArgsJson!!).getBoolean("on"))
+        assertEquals(R.string.card_title_wifi, on.labelResId)
 
         val withOutput = CardDeriver.derive(
             "wifi_toggle", """{"on":false}""",
@@ -207,6 +226,8 @@ class CardDeriverTest {
         assertEquals("Standup", card.title)
         assertEquals("07:30", card.timeText)
         assertEquals("Mon, Wed, Fri", card.repeat)
+        // User-named events keep the plain title: no res id to override it.
+        assertNull(card.titleResId)
     }
 
     @Test
@@ -217,6 +238,8 @@ class CardDeriverTest {
         assertEquals("Timer", card.title)
         assertEquals("in 1m 30s", card.timeText)
         assertNull(card.repeat)
+        // Generic fallback title IS localized.
+        assertEquals(R.string.card_title_timer, card.titleResId)
     }
 
     @Test
@@ -248,6 +271,7 @@ class CardDeriverTest {
         assertEquals(2, listed.total)
         assertEquals("T1", listed.items[0].title)
         assertTrue(listed.items[1].subtitle!!.contains("disabled"))
+        assertEquals(R.string.card_title_scheduled_tasks, listed.titleResId)
     }
 
     // ── contacts / sms / call log / apps → List ──────────────────────────────
@@ -261,6 +285,7 @@ class CardDeriverTest {
         assertEquals(2, card.total)
         assertEquals("Alice", card.items[0].title)
         assertEquals("+8613800000000", card.items[0].subtitle)
+        assertEquals(R.string.card_title_contacts, card.titleResId)
     }
 
     @Test
@@ -272,6 +297,7 @@ class CardDeriverTest {
         assertEquals(2, card.total)
         assertEquals("hello there", card.items[0].title)
         assertTrue(card.items[0].subtitle!!.contains("+8613800"))
+        assertEquals(R.string.card_title_messages, card.titleResId)
     }
 
     @Test
@@ -283,6 +309,7 @@ class CardDeriverTest {
         assertEquals("Alice +8613800", card.items[0].title)
         assertEquals("10010", card.items[1].title)
         assertTrue(card.items[1].subtitle!!.contains("missed"))
+        assertEquals(R.string.card_title_recent_calls, card.titleResId)
     }
 
     @Test
@@ -293,13 +320,41 @@ class CardDeriverTest {
         ) as ToolCard.ListCard
         assertEquals("com.tencent.mm", card.items[0].subtitle)
         assertEquals(5, card.total)
+        assertEquals(R.string.card_title_installed_apps, card.titleResId)
     }
 
     @Test
     fun listCardsCapAtTwentyItems() {
         val text = (1..25).joinToString("\n") { "Contact $it: +861380000$it" }
         val card = CardDeriver.derive("contacts_search", "{}", text) as ToolCard.ListCard
+        // [T-card-list-hidden-count] total is the UNTRUNCATED count, so
+        // ListCardBody's hidden math (total − items.size) renders the
+        // "… and N more" line instead of silently dropping rows 21+.
         assertEquals(20, card.items.size)
+        assertEquals(25, card.total)
+    }
+
+    @Test
+    fun smsListOverTwentyKeepsUntruncatedTotal() {
+        val card = CardDeriver.derive("sms_read", "{}", smsLines(22)) as ToolCard.ListCard
+        assertEquals(20, card.items.size)
+        // [T-card-list-hidden-count] Untruncated total (see listCardsCapAtTwentyItems).
+        assertEquals(22, card.total)
+    }
+
+    @Test
+    fun callLogOverTwentyKeepsUntruncatedTotal() {
+        val card = CardDeriver.derive("call_log_read", "{}", callLogLines(21)) as ToolCard.ListCard
+        assertEquals(20, card.items.size)
+        assertEquals(21, card.total)
+    }
+
+    @Test
+    fun listTotalsStillExactWhenUnderCap() {
+        // No truncation → total equals items.size, hidden stays 0.
+        val card = CardDeriver.derive("contacts_search", "{}", "Alice: +8613800000000") as ToolCard.ListCard
+        assertEquals(1, card.items.size)
+        assertEquals(1, card.total)
     }
 
     // ── location_get ─────────────────────────────────────────────────────────
@@ -314,6 +369,7 @@ class CardDeriverTest {
         assertEquals("39.904200, 116.407400", card.highlight)
         assertEquals("北京市东城区东长安街", card.rows.first { it.label == "Address" }.value)
         assertEquals("gps", card.rows.first { it.label == "Provider" }.value)
+        assertEquals(R.string.card_title_location, card.titleResId)
     }
 
     // ── web_search / web_fetch / browser_use ─────────────────────────────────
@@ -339,6 +395,9 @@ class CardDeriverTest {
         assertEquals(2, card.items.size) // the trailing citation block must not duplicate entries
         assertEquals("kotlinlang.org", card.items[0].subtitle)
         assertEquals("Kotlin Coroutines Guide", card.items[0].title)
+        // Parameterized search title: res id + engine token as argument.
+        assertEquals(R.string.card_title_search, card.titleResId)
+        assertEquals("ddg", card.titleResArg)
     }
 
     @Test
@@ -442,6 +501,32 @@ class CardDeriverTest {
         assertEquals("a.txt", multi.name)
     }
 
+    // ── [T-card-title-i18n] localized-title plumbing ─────────────────────────
+
+    @Test
+    fun connectivityCardsMapEachToggleLabelToItsTitleRes() {
+        val cases = listOf(
+            Triple("wifi_toggle", "Wi-Fi switched on via Shizuku shell.", R.string.card_title_wifi),
+            Triple("bluetooth_toggle", "Bluetooth switched off via Shizuku shell.", R.string.card_title_bluetooth),
+            Triple("mobile_data_toggle", "Mobile data switched on via Shizuku shell.", R.string.card_title_mobile_data),
+        )
+        cases.forEach { (tool, text, resId) ->
+            val card = CardDeriver.derive(tool, """{"on":true}""", text) as ToolCard.Change
+            assertEquals(resId, card.labelResId)
+            assertNull(card.titleResArg) // toggle labels carry no format argument
+            assertEquals(text.substringBefore(" switched"), card.label)
+        }
+    }
+
+    @Test
+    fun changeCardsWithoutParameterizedLabelsCarryNoResArg() {
+        val card = CardDeriver.derive(
+            "brightness_set", """{"level":10}""", "Brightness set to 10/255.",
+        ) as ToolCard.Change
+        assertEquals(R.string.card_title_brightness, card.labelResId)
+        assertNull(card.titleResArg)
+    }
+
     // ── `was:` line parsing + global guards ──────────────────────────────────
 
     @Test
@@ -505,5 +590,15 @@ class CardDeriverTest {
               Image may be downscaled; use viewport coordinates for actions.
               Scroll position: (0, 120)
         """.trimIndent()
+
+        /** [T-card-list-hidden-count] n SMS lines in the exact sms_read format. */
+        fun smsLines(n: Int): String = (1..n).joinToString("\n") {
+            "2026-10-31 09:%02d <- +8613800: body $it".format(it % 60)
+        }
+
+        /** [T-card-list-hidden-count] n call-log lines in the exact call_log_read format. */
+        fun callLogLines(n: Int): String = (1..n).joinToString("\n") {
+            "2026-10-31 09:%02d in Alice +8613800 45s".format(it % 60)
+        }
     }
 }

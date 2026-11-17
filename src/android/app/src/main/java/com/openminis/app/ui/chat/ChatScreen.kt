@@ -193,46 +193,10 @@ import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.ui.browser.BrowserSheet
 import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.m3Icon
-// iOS ChatColors equivalent
-internal val ToolCheckColor = Color(0xFF34C759) // iOS .green
-internal val ToolErrorColor = Color(0xFFFF3B30) // iOS .red
-internal val ToolCancelColor = Color(0xFFFFCC00) // iOS .yellow
-// Memory tool accent — matches iOS `.pink` on SF Symbols.
-internal val ToolMemoryAccent = Color(0xFFFF2D55)
-// Sparkle gradient colors (iOS uses linear gradient)
-internal val SparkleColor1 = Color(0xFFB8B096) // rgb(0.72, 0.69, 0.59)
-internal val SparkleColor2 = Color(0xFF99998C) // rgb(0.6, 0.6, 0.55)
 
-// T129: cap photo/video and file pickers at 50 items per launch. Above this
-// count Android's PickMultipleVisualMedia silently truncates anyway, but our
-// document picker has no native cap — so we apply the same limit on both
-// sides and toast the user when their selection is trimmed. Mirrors iOS
-// PHPickerConfiguration.selectionLimit = 50.
-private const val ATTACHMENT_PICK_LIMIT = 50
-
-/** One gesture window for "the user just took the viewport": a single 1 s covers a fling settle, and SEND_FOLLOW_GRACE_MS shares it so a just-sent message's transient "not at bottom" read is bypassed. */
-private const val USER_SCROLL_INTERRUPT_MS = 1_000L
-private const val SEND_FOLLOW_GRACE_MS = USER_SCROLL_INTERRUPT_MS
-
-
-/** [T-android-chat-max-content-width] Reading-measure cap for the conversation and composer; 900dp verbatim from iOS maxContentWidth (dp maps 1:1 to pt). widthIn is an upper bound, so narrower windows are unaffected. */
-private val CHAT_MAX_CONTENT_WIDTH = 900.dp
-
-
-
-// [T-android-tool-autoscroll] Combined signal for the streaming auto-follow
-// LaunchedEffect. data class so distinctUntilChanged uses structural equality
-// — any field flip propagates a tick. Per-block (id, kind, status, length)
-// folded into [blockSig] (FNV-1a 64-bit hash) so a RUNNING→SUCCESS flip on a
-// tool block, a new block appearing (id flips), or a kind change all wake the
-// collector even when growth/size/awaiting alone would have stayed equal.
-private data class ScrollFollowKey(
-    val lastIndex: Int,
-    val growth: Long,
-    val toolBlockCount: Int,
-    val awaiting: Boolean,
-    val blockSig: Long,
-)
+// [T-android-split-chat] Shared color/limit constants, ScrollFollowKey and
+// HistoryEdgeVisible moved verbatim to ChatScreenSections.kt (architecture
+// ceiling); private -> internal so the same-package references still resolve.
 
 @OptIn(ExperimentalMaterial3Api::class, kotlinx.coroutines.FlowPreview::class)
 @Composable
@@ -310,10 +274,9 @@ fun ChatScreen(
             mcpRepository = mcpRepository,
         ),
     )
-    // The painted list is one contiguous suffix of the session, not a head+tail
-    // splice. Opening starts on the newest rows. Older pages prepend. Rows after
-    // the loaded cursor are attached automatically, so the tail is not left
-    // behind a second control.
+    // The painted list is one contiguous suffix of the session, not a head+tail splice:
+    // open on the newest rows, older pages prepend, and rows after the loaded cursor
+    // attach automatically (the tail is never left behind a second control).
     // [T-android-tts-scene-announcements] Bind the announcement sink for as
     // long as this screen is composed. The engine binding lives in
     // TextToSpeechManager (speech layer); the ViewModel only sees the
@@ -1900,59 +1863,45 @@ fun ChatScreen(
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                         }
                     } else if (onToggleSidebar != null) {
-                        // [T-android-tablet-sidebar-collapse] The slot the back
-                        // arrow vacates in two-pane becomes the sidebar toggle.
+                        // [T-android-tablet-sidebar-collapse] The slot the back arrow
+                        // vacates in two-pane becomes the sidebar toggle. ONE glyph for
+                        // both states — the list icon, action stated in the content
+                        // description. A directional chevron was tried and is wrong:
+                        // this slot held the back arrow, so a leading chevron reads as
+                        // "go back" (precisely the meaning two-pane removed), and
+                        // swapping the glyph on toggle reads as two different buttons
+                        // rather than one switch; a stable icon whose accessible label
+                        // changes is clearer and honest about what it targets.
                         //
-                        // ONE glyph for both states — the list icon, meaning
-                        // "the session list", with the action stated in the
-                        // content description instead.
+                        // `Menu` rather than `List` (which this first used): List draws
+                        // a bulleted list — dots plus rules — whose ink sat high and
+                        // left in the 24dp box (measured 41x23 px with its mass above
+                        // centre), so it read as a small mark floating above the ⋮ at
+                        // the other end of this same bar. Menu's three full-width bars
+                        // fill the box symmetrically and optically centre against it;
+                        // both glyphs now share a baseline to the pixel, and Menu is
+                        // the conventional sidebar-toggle icon.
                         //
-                        // A directional chevron was tried for the expanded
-                        // state and is wrong here: this is the slot that used
-                        // to hold the back arrow, so a leading chevron reads as
-                        // "go back" — precisely the meaning two-pane removed.
-                        // Swapping the glyph on toggle also makes the control
-                        // look like two different buttons rather than one
-                        // switch. A stable icon whose accessible label changes
-                        // is both clearer and honest about what it targets.
-                        //
-                        // `Menu` rather than `List`, which this first used.
-                        // List draws a bulleted list — dots plus rules — whose
-                        // ink sat high and left in the 24dp box (measured 41x23
-                        // px with its mass above centre), so it read as a small
-                        // mark floating above the ⋮ at the other end of this
-                        // same bar. Menu's three full-width bars fill the box
-                        // symmetrically and optically centre against it; both
-                        // glyphs now share a baseline to the pixel. Menu is
-                        // also the conventional sidebar-toggle icon.
-                        //
-                        // [T-android-split-toggle-align] Two corrections, both
-                        // measured on a Mate Pad against the SESSION LIST's
-                        // toolbar rather than this bar's own ⋮ — the toggle sits
-                        // hard against the pane seam, so the icons it is read
-                        // beside are the list's Schedule/Terminal, not the
-                        // kebab at the far end of this bar. Aligned only to the
-                        // kebab, it measured 8px shorter and 3.5px lower than
-                        // its actual neighbours.
-                        //
-                        // 1. `offset(y = -2.dp)`: this bar is 68dp (see
-                        //    expandedHeight below — sized for the 3-row title
-                        //    and NOT reducible without re-triggering
-                        //    T-topbar-model-row-clip), while the list's bar is
-                        //    M3's default 64dp. A TopAppBar centres its
-                        //    navigation icon in its OWN height, so the 4dp
-                        //    difference put this glyph 2dp below the list's row.
-                        //    Offsetting by half the delta lands it on the list's
-                        //    baseline while leaving the taller bar intact.
-                        //
-                        // 2. `size(28.dp)`: Menu's three bars ink only ~12 of
-                        //    their 24dp viewport (bars at y=6/11/16), where the
-                        //    circular Schedule and boxy Terminal fill ~20 of
-                        //    theirs. At a matched box size Menu therefore reads
-                        //    markedly lighter and smaller. Scaling the box to
-                        //    28dp brings its ink to ~14dp, closing most of the
-                        //    optical gap. The IconButton's 48dp touch target is
-                        //    unchanged, so this is purely visual weight.
+                        // [T-android-split-toggle-align] Two corrections, both measured
+                        // on a Mate Pad against the SESSION LIST's toolbar rather than
+                        // this bar's own ⋮ — the toggle sits hard against the pane
+                        // seam, so the icons it is read beside are the list's
+                        // Schedule/Terminal; aligned only to the kebab it measured 8px
+                        // shorter and 3.5px lower than its actual neighbours.
+                        // 1. `offset(y = -2.dp)`: this bar is 68dp (see expandedHeight
+                        //    below — sized for the 3-row title and NOT reducible
+                        //    without re-triggering T-topbar-model-row-clip) vs the
+                        //    list's M3 default 64dp; a TopAppBar centres its navigation
+                        //    icon in its OWN height, so the 4dp delta put this glyph
+                        //    2dp below the list's row — half the delta lands it on the
+                        //    list's baseline while leaving the taller bar intact.
+                        // 2. `size(28.dp)`: Menu's three bars ink only ~12 of their
+                        //    24dp viewport (bars at y=6/11/16) where the circular
+                        //    Schedule and boxy Terminal fill ~20 of theirs; at a
+                        //    matched box size Menu reads markedly lighter and smaller.
+                        //    28dp brings its ink to ~14dp, closing most of the optical
+                        //    gap; the IconButton's 48dp touch target is unchanged, so
+                        //    this is purely visual weight.
                         IconButton(
                             onClick = onToggleSidebar,
                             modifier = Modifier.offset(y = (-2).dp),
@@ -2311,6 +2260,13 @@ fun ChatScreen(
                 // keeping off the composition thread. Deriving is safe because
                 // `running` is a function of the blocks and the stream, never
                 // of expandedProcessIds, so the published rows carry it.
+                // [T-shared-second-clock] Single writer for the process-card
+                // second clock — every running card reads the one shared nowMs
+                // instead of each keeping its own 1Hz loop (see
+                // ChatProcessCards.kt). Mounted once, here, because every
+                // ProcessSummaryBar composes inside this screen's LazyColumn
+                // rows.
+                SharedSecondClockAnchor()
                 val runningCardKeys = remember(flatItems, foldAiProcess) {
                     if (!foldAiProcess) emptySet<String>()
                     else flatItems
@@ -2321,6 +2277,18 @@ fun ChatScreen(
                 // runningCardKeys as of the previous pass, so a pass can tell
                 // "just settled" from "has been settled for a while".
                 var prevRunningCardKeys by remember(sessionId) { mutableStateOf(emptySet<String>()) }
+                // [T-card-autoclose-pending] Settle-deadline bookkeeping that
+                // OUTLIVES a single effect invocation. The effect below is
+                // keyed on runningCardKeys, which is recomputed (new set
+                // instance, same contents) on every flatItems publication —
+                // ~12fps while streaming — so a `delay(500)` inside it was
+                // cancelled and restarted whenever a second state change
+                // landed inside the settle window, and the card settled
+                // EARLIER never auto-closed at all. The deadline map is a
+                // state holder instead: each pass records deadlines for the
+                // just-settled keys; a separate Unit-keyed closer loop fires
+                // them, immune to effect restarts.
+                var pendingAutoCloseKeys by remember(sessionId) { mutableStateOf(emptyMap<String, Long>()) }
                 LaunchedEffect(runningCardKeys) {
                     // Only ever ADDS a running card the user has not collapsed,
                     // and only DROPS a card once its run has settled. A card
@@ -2337,13 +2305,52 @@ fun ChatScreen(
                     // block gives its own content. A card the user re-opened
                     // by hand during (or after) the window is never closed
                     // here; manualReopenedCards is the "keep open" mark.
+                    // [T-card-autoclose-pending] Record the deadline instead of
+                    // delaying inside this effect (this effect restarts on
+                    // every flatItems publication — see above). A key that is
+                    // running again never keeps a pending deadline: the auto-
+                    // expand above owns it, and the closer below would
+                    // otherwise fight it.
                     val justSettled = prevRunningCardKeys - runningCardKeys
                     prevRunningCardKeys = runningCardKeys
-                    val closable = justSettled.filter { it in expandedProcessIds && it !in manualReopenedCards }
-                    if (closable.isNotEmpty()) {
-                        delay(500)
-                        val stillOpen = closable.filter { it in expandedProcessIds && it !in manualReopenedCards }
-                        if (stillOpen.isNotEmpty()) expandedProcessIds = expandedProcessIds - stillOpen
+                    val newlyPending = justSettled.filter {
+                        it in expandedProcessIds && it !in manualReopenedCards && it !in userCollapsedCards
+                    }
+                    if (newlyPending.isNotEmpty()) {
+                        val deadline = System.currentTimeMillis() + PROCESS_CARD_AUTO_CLOSE_MS
+                        pendingAutoCloseKeys =
+                            (pendingAutoCloseKeys - runningCardKeys) + newlyPending.associate { it to deadline }
+                    } else if (pendingAutoCloseKeys.keys.any { it in runningCardKeys }) {
+                        pendingAutoCloseKeys = pendingAutoCloseKeys - runningCardKeys
+                    }
+                }
+                // [T-card-autoclose-pending] The closer. Unit-keyed so effect
+                // restarts can never cancel a pending close; sleeps until the
+                // nearest deadline (short poll while idle). Every close
+                // re-checks the guards AT FIRE TIME — still open, never
+                // manually re-opened, and actually still settled — mirroring
+                // the card-level pattern: what the user pinned open in the
+                // window, or a card id that started running again, is never
+                // closed here.
+                LaunchedEffect(sessionId) {
+                    while (true) {
+                        val now = System.currentTimeMillis()
+                        val due = pendingAutoCloseKeys.filterValues { it <= now }.keys
+                        if (due.isNotEmpty()) {
+                            pendingAutoCloseKeys = pendingAutoCloseKeys - due
+                            val closable = due.filter {
+                                it in expandedProcessIds &&
+                                    it !in manualReopenedCards &&
+                                    it !in prevRunningCardKeys
+                            }
+                            if (closable.isNotEmpty()) expandedProcessIds = expandedProcessIds - closable
+                        }
+                        val nextDeadline = pendingAutoCloseKeys.values.minOrNull()
+                        delay(
+                            nextDeadline
+                                ?.let { (it - System.currentTimeMillis()).coerceAtLeast(20L) }
+                                ?: PROCESS_CARD_AUTO_CLOSE_IDLE_POLL_MS,
+                        )
                     }
                 }
 
@@ -5594,13 +5601,6 @@ fun ChatScreen(
     }
     } // CompositionLocalProvider
 }
-
-private data class HistoryEdgeVisible(
-    val olderSentinel: Boolean,
-    val newerSentinel: Boolean,
-    val newestEdge: Boolean,
-    val oldestEdge: Boolean,
-)
 
 
 // [T-android-split-chat] Message rows, assistant blocks, tool detail, composer

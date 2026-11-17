@@ -341,6 +341,12 @@ object ScheduledAgentRunner {
      *   kept a per-caller argument so a future per-runner change stays local).
      * @param newSessionPermissionMode tool-gate token for a fresh row
      *   (null = app default), written through [persistNewSessionRow].
+     * @param allowedTools [T-rule-allowlist-enforce] per-rule tool whitelist
+     *   for the unattended session's toolset (null/empty = unrestricted),
+     *   consumed by [com.openminis.app.tools.AgentTools.makeAgentTools] which
+     *   filters the declared schema (incl. find_tools), and enforced again at
+     *   dispatch by [com.openminis.app.ui.chat.ChatViewModel.executeTool] —
+     *   a whitelisted run can neither declare nor call outside its rule.
      * @param reuseSession hook returning an existing session id, or null to
      *   create a fresh row via [createUnattendedSessionRow] on the IO
      *   dispatcher (all runners resolve sessions off-main). When
@@ -381,6 +387,12 @@ object ScheduledAgentRunner {
         maxTurns: Int? = null,
         timeoutMs: Long = RUN_TIMEOUT_MS,
         newSessionPermissionMode: String? = null,
+        // [T-rule-allowlist-enforce] Per-rule tool whitelist for the session
+        // toolset (null/empty = unrestricted). Threaded to
+        // HeadlessChatRunner.prompt, which applies it to the session VM;
+        // enforced twice — the AgentTools.makeAgentTools schema cut and the
+        // ChatViewModel.executeTool dispatch gate.
+        allowedTools: Set<String>? = null,
         reuseSession: suspend (MinisApp) -> String? = { null },
         allowFreshRow: Boolean = true,
         dispatchOverride: (suspend (MinisApp, String) -> HeadlessChatRunner.PromptResult)? = null,
@@ -437,6 +449,9 @@ object ScheduledAgentRunner {
                     thinkingLevel = null,
                     wait = true,
                     timeoutMs = timeoutMs,
+                    // [T-rule-allowlist-enforce] Last hop: the VM's toolset
+                    // build + dispatch gate enforce the rule whitelist.
+                    allowedTools = allowedTools,
                 )
             }
 

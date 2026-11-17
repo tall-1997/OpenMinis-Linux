@@ -51,6 +51,8 @@ internal object AppTools {
     /**
      * Start an activity from the app process. On a background-start
      * SecurityException, retry through the Shizuku shell when available.
+     * Returns the plain "ok"/"ok (via Shizuku shell)" marker on success, or a
+     * device-tool failure string (`Error: …`) the caller must surface verbatim.
      */
     private fun start(context: Context, intent: Intent): String {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -208,7 +210,10 @@ internal object AppTools {
                 }.getOrNull()
             if (intent == null) return DeviceArgs.fail("invalid_args", "no launchable activity for '$pkg' (is it installed?)")
             return try {
-                start(context, intent)
+                // [T-apptools-launch-result] Surface start() failures (e.g. blocked
+                // background start with no Shizuku) instead of reporting success.
+                val started = start(context, intent)
+                if (started.startsWith("Error:")) return started
                 val base = "Launched $pkg."
                 // [T-app-knowledge] When the target app has a knowledge pack, append it once
                 // per session so the model gets the app's UI facts right after the launch.
@@ -256,7 +261,9 @@ internal object AppTools {
                 }
             }
             return try {
-                start(context, intent)
+                // [T-apptools-launch-result] Surface start() failures verbatim.
+                val started = start(context, intent)
+                if (started.startsWith("Error:")) return started
                 "Opened $uri${pkg?.let { " in $it" } ?: ""}."
             } catch (e: ActivityNotFoundException) {
                 DeviceArgs.fail("invalid_args", "no app can open $uri")
@@ -327,7 +334,9 @@ internal object AppTools {
                         }
                     }
                 }
-                start(context, intent)
+                // [T-apptools-launch-result] Surface start() failures verbatim.
+                val started = start(context, intent)
+                if (started.startsWith("Error:")) return started
                 return "Sent intent '$action'${intent.component?.let { " to ${it.flattenToString()}" } ?: ""}."
             } catch (e: ActivityNotFoundException) {
                 return DeviceArgs.fail("invalid_args", "no activity found for '$action': ${e.message}")
@@ -368,12 +377,15 @@ internal object AppTools {
             }
             val pkg = obj.strArg("package")
             return try {
+                // [T-apptools-launch-result] Surface start() failures verbatim.
                 if (pkg != null) {
                     intent.setPackage(pkg)
-                    start(context, intent)
+                    val started = start(context, intent)
+                    if (started.startsWith("Error:")) return started
                     "Shared to $pkg."
                 } else {
-                    start(context, Intent.createChooser(intent, null))
+                    val started = start(context, Intent.createChooser(intent, null))
+                    if (started.startsWith("Error:")) return started
                     "Share sheet opened; the user picks the target app."
                 }
             } catch (e: ActivityNotFoundException) {

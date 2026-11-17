@@ -365,6 +365,11 @@ internal suspend fun ChatViewModel.runOneSubAgentInner(
                     userPrompt = prompt,
                     role = role,
                     roleContext = context,
+                    // [T-subagent-report-spill] Session-keyed spill so a
+                    // >64k sub-agent report keeps a readable full copy at
+                    // /var/minis/workspace/tool-spill/ instead of losing
+                    // its head.
+                    sessionId = activeSessionId,
                     skillsHint = skills,
                     tools = com.openminis.app.tools.DispatchAgentsTool.filterToolsForType(
                         agentType,
@@ -380,7 +385,10 @@ internal suspend fun ChatViewModel.runOneSubAgentInner(
                                 hasSpeechModel = providerRepository.resolveVoiceInputEntry() != null,
                                 // [GH#298] Same web_search master switch.
                                 webSearchEnabled = com.openminis.app.tools.WebSearchSettings.toolEnabled(context),
-                            ) + AgentTools.makeSubAgentExtraTools(),
+                                // [T-rule-allowlist-enforce] Spawned lanes
+                                // inherit the parent session's rule whitelist.
+                                allowedTools = sessionToolAllowlist,
+                            ) + AgentTools.makeSubAgentExtraTools(allowedTools = sessionToolAllowlist),
                             role,
                             context,
                         ),

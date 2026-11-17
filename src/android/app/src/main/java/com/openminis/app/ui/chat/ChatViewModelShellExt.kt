@@ -272,6 +272,8 @@ internal suspend fun ChatViewModel.executeShellCommand(
             toolTitle = toolTitle,
             timedOut = timedOut,
         )
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
     } catch (e: Exception) {
         ToolExecutionResult("Error: ${e.message}", false)
     }
@@ -336,6 +338,8 @@ internal suspend fun ChatViewModel.executeBrowserUseTool(argsJson: String): Tool
             imageFilePath = persistentImagePath,
             imageLinuxPath = linuxImagePath,
         )
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
     } catch (e: Exception) {
         ToolExecutionResult("Error: ${e.message}", false)
     }

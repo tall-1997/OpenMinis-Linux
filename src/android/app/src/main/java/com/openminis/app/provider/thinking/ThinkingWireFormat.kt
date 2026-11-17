@@ -14,10 +14,12 @@ import com.openminis.app.data.model.ThinkingLevel
  * the whole point of the rule registry is that a vendor contract is described ONCE.
  *
  * PHASE 1 SCOPE: models the OpenAI-compatible family only (everything flowing through
- * [com.openminis.app.provider.openai.OpenAIProvider]). Gemini and Anthropic have their
- * own emitters and are deliberately NOT routed here yet — their formats are declared so
- * the vocabulary is complete, but nothing resolves to them on this path. Phase 2 wires
- * them up.
+ * [com.openminis.app.provider.openai.OpenAIProvider]). Gemini and Anthropic emit their
+ * native formats ([AnthropicThinking], [GeminiBudget], [GeminiThinkingLevel]) directly in
+ * their own request builders via the shared ThinkingShapes plumbing — the same
+ * thinkingConfig/budget fields the built-in thinking levels ride — so the rule resolver's
+ * OpenAI-path consult never emits them: a restored backup carrying such a rule degrades
+ * to a logged warning + skip there ([T-thinking-phase2-emission]), it does not crash.
  */
 sealed interface ThinkingWireFormat {
 
@@ -72,7 +74,13 @@ sealed interface ThinkingWireFormat {
      */
     data object QwenDual : ThinkingWireFormat
 
-    // ---- Declared but not yet routed here (Phase 2) ----
+    // ---- Native vendor formats: emitted by their own request builders ----
+    // ([T-thinking-phase2-emission]) These three are NOT expressed on the OpenAI-
+    // compatible body path — the Anthropic request builder emits AnthropicThinking and
+    // the Gemini request builder emits GeminiBudget / GeminiThinkingLevel through the
+    // shared ThinkingShapes plumbing, the same fields the built-in thinking levels ride.
+    // The OpenAI-path rule resolver skips them with a logged warning instead of the old
+    // `error()` crash, because a restored backup can carry a custom rule naming them.
 
     /**
      * Anthropic `thinking:{type:…, budget_tokens:N}`. Claude 4.6+ uses adaptive thinking
@@ -84,7 +92,7 @@ sealed interface ThinkingWireFormat {
      * Gemini `generationConfig.thinkingConfig.thinkingBudget`. [floor] exists because
      * `thinkingBudget: 0` is invalid on models that require thinking (2.5 Pro returns
      * 400 INVALID_ARGUMENT); df8a823d added a 128 floor for unrecognized ids. models.dev
-     * publishes this as `min` per model, so Phase 2 can drive it from data.
+     * publishes this as `min` per model.
      */
     data class GeminiBudget(val floor: Int, val canDisable: Boolean) : ThinkingWireFormat
 

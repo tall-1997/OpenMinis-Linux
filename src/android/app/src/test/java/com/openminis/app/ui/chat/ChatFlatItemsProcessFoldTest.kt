@@ -709,30 +709,41 @@ class ChatFlatItemsProcessFoldTest {
 
     @Test
     fun `card header switches between live collapsed live expanded and settled`() {
+        // [T-process-card-i18n] Labels are now injected (stringResource at
+        // the call site); the zh fixtures below are the labels the zh locale
+        // ships, so the assembled output is byte-identical to the old
+        // hardcoded version.
+        val zh = ProcessCardHeaderLabels(
+            thinking = "思考",
+            tools = "工具",
+            aiProcess = "AI 过程",
+            thinkingNow = "思考中",
+            callingTool = "调用工具",
+        )
         // Running, collapsed: fixed label — the live state belongs to the
         // expanded header, not the collapsed one.
         assertEquals(
             "AI 过程 · 思考 2 · 工具 3 · 12s",
-            processCardHeader(2, 3, running = true, expanded = false, activity = "thinking", activityTitle = "", duration = "12s"),
+            processCardHeader(2, 3, running = true, expanded = false, activity = "thinking", activityTitle = "", duration = "12s", labels = zh),
         )
         assertEquals(
             "AI 过程 · 思考 1 · 工具 4 · 8s",
-            processCardHeader(1, 4, running = true, expanded = false, activity = "tool", activityTitle = "搜索代码", duration = "8s"),
+            processCardHeader(1, 4, running = true, expanded = false, activity = "tool", activityTitle = "搜索代码", duration = "8s", labels = zh),
         )
         // Running, expanded: the steps are on screen, so only the state remains.
         assertEquals(
             "思考中",
-            processCardHeader(2, 3, running = true, expanded = true, activity = "thinking", activityTitle = "", duration = "12s"),
+            processCardHeader(2, 3, running = true, expanded = true, activity = "thinking", activityTitle = "", duration = "12s", labels = zh),
         )
         // Settled (reply text arrived, or the round ended): the check mark.
         assertEquals(
             "思考 2 · 工具 3 · 47s",
-            processCardHeader(2, 3, running = false, expanded = false, activity = "", activityTitle = "", duration = "47s"),
+            processCardHeader(2, 3, running = false, expanded = false, activity = "", activityTitle = "", duration = "47s", labels = zh),
         )
         // No recorded duration omits the suffix rather than printing "0s".
         assertEquals(
             "思考 1 · 工具 2",
-            processCardHeader(1, 2, running = false, expanded = false, activity = "", activityTitle = "", duration = null),
+            processCardHeader(1, 2, running = false, expanded = false, activity = "", activityTitle = "", duration = null, labels = zh),
         )
     }
 

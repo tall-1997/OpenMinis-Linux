@@ -1,6 +1,8 @@
 package com.openminis.app.ui.chat
 
 import android.util.Log
+import kotlin.coroutines.coroutineContext
+import kotlinx.coroutines.isActive
 import com.openminis.app.agent.Level
 import com.openminis.app.data.ToolLimitPrefs
 import com.openminis.app.data.model.AgentContentPart
@@ -342,7 +344,12 @@ internal suspend fun ChatViewModel.finalizePlannedCall(
             val childPrefix = "$id#sub-"
             val childCount = ctx.allToolBlocks.count { it.id.startsWith(childPrefix) }
             val finalContent = if (childCount > 0) {
-                "已分发 $childCount 个子代理，点开各自卡片查看当前运行。"
+                // [T-spawn-content-locale] This text is persisted to the DB
+                // row AND replayed to the model next turn — model-facing
+                // content follows the repo's English-marker convention (cf.
+                // "[killed by user]"), not the UI locale, so it is not a
+                // stringResource.
+                "Dispatched $childCount sub-agent(s); open each card for its current run."
             } else {
                 mergedContent
             }
@@ -350,11 +357,15 @@ internal suspend fun ChatViewModel.finalizePlannedCall(
             // truncated args must not render as a clean success — that
             // silence is the reported bug. Show it with the same weight
             // as the blocked path. Mirrors iOS ConcurrentTools.
+            // [T-stop-status-honesty] A REAL success must not render (and
+            // persist) as CANCELLED just because the user hit Stop in the
+            // same instant — that hides a completed write and offers a
+            // redundant Retry. Failure + stop still maps to CANCELLED.
             val finalStatus = when {
-                activeRun?.isStopped == true -> ToolBlockStatus.CANCELLED
                 result.success && truncationRepairTag != null -> ToolBlockStatus.FAILED
                 result.success -> ToolBlockStatus.SUCCESS
                 result.timedOut -> ToolBlockStatus.TIMEOUT
+                activeRun?.isStopped == true -> ToolBlockStatus.CANCELLED
                 else -> ToolBlockStatus.FAILED
             }
             // [GH#119] Name the truncation and the bytes the tool reported;
@@ -602,37 +613,56 @@ private suspend fun ChatViewModel.fanOutSpawnCalls(
     coroutineScope {
         peers.mapIndexed { peerIdx, peer ->
             async {
-                val peerArgsSha = com.openminis.app.util.Digest.sha256Hex(peer.argsStr)
-                val part = ctx.ledger.executeOnce(
-                    peer.id, peer.name, peerArgsSha,
-                    onReuse = { prior ->
-                        AppLogger.warning(
-                            ChatViewModel.TAG_STREAM,
-                            "[ToolLedger] reused recorded result for replayed spawn id=${peer.id} name=${peer.name}",
+                // [T-tool-turn-throw-isolation] Per-peer isolation: one peer's
+                // unexpected throw used to cancel its sibling asyncs via
+                // structured concurrency, get attributed to spawn call #1 by
+                // the wave-level wrap, and leave the real thrower's block
+                // RUNNING (falling through to phase 3's "result is missing"
+                // fallback). The failure is now THIS peer's failed tool_result
+                // and a FAILED block, exactly like the serial lanes.
+                try {
+                    val peerArgsSha = com.openminis.app.util.Digest.sha256Hex(peer.argsStr)
+                    val part = ctx.ledger.executeOnce(
+                        peer.id, peer.name, peerArgsSha,
+                        onReuse = { prior ->
+                            AppLogger.warning(
+                                ChatViewModel.TAG_STREAM,
+                                "[ToolLedger] reused recorded result for replayed spawn id=${peer.id} name=${peer.name}",
+                            )
+                            settleReplayedCall(ctx, peer.id, prior)
+                        },
+                    ) {
+                        // Owner-only: dispatching a sub-agent wave is the side
+                        // effect. A replay must never reach this line.
+                        val peerResult = executeRunSubAgent(
+                            peer.argsStr,
+                            peer.id,
+                            ctx.allToolBlocks,
+                            ctx.assistantId,
+                            ctx.accumulatedText,
+                            limiter = sem,
+                            parallelWriters = writerCount,
+                            waveIndex = peerIdx,
+                            waveSize = peers.size,
                         )
-                        settleReplayedCall(ctx, peer.id, prior)
-                    },
-                ) {
-                    // Owner-only: dispatching a sub-agent wave is the side
-                    // effect. A replay must never reach this line.
-                    val peerResult = executeRunSubAgent(
-                        peer.argsStr,
-                        peer.id,
-                        ctx.allToolBlocks,
-                        ctx.assistantId,
-                        ctx.accumulatedText,
-                        limiter = sem,
-                        parallelWriters = writerCount,
-                        waveIndex = peerIdx,
-                        waveSize = peers.size,
+                        WorkingMemoryStore.append(
+                            ctx.activeSessionId, ctx.turn, peer.name,
+                            peerArgsSha.take(8), peerResult.output.take(120),
+                        )
+                        finalizePlannedCall(ctx, peer, peerResult)
+                    }
+                    execution.executedParts[peer.id] = part
+                } catch (ce: kotlinx.coroutines.CancellationException) {
+                    if (!coroutineContext.isActive) throw ce
+                    failIsolation(ctx, execution, peer, "timed out: ${ce.message ?: ce.javaClass.simpleName}")
+                } catch (t: Throwable) {
+                    AppLogger.error(
+                        ChatViewModel.TAG_STREAM,
+                        "spawn peer ${peer.name} threw unexpectedly; failing this call only: " +
+                            "${t.javaClass.simpleName}: ${t.message}",
                     )
-                    WorkingMemoryStore.append(
-                        ctx.activeSessionId, ctx.turn, peer.name,
-                        peerArgsSha.take(8), peerResult.output.take(120),
-                    )
-                    finalizePlannedCall(ctx, peer, peerResult)
+                    failIsolation(ctx, execution, peer, t.message ?: t.javaClass.simpleName)
                 }
-                execution.executedParts[peer.id] = part
             }
         }.awaitAll()
     }
@@ -651,6 +681,9 @@ internal suspend fun ChatViewModel.executePlannedToolTurn(
     )
     if (plan.plannedCalls.isEmpty()) return execution
     val laneSemaphore = Semaphore(ToolLimitPrefs.toolCallConcurrency())
+
+    // [T-tool-turn-throw-isolation] Lane isolation lives in ToolTurnIsolation.kt.
+
     coroutineScope {
         var barrierChain: Job? = null
         var spawnFanOutLaunched = false
@@ -661,14 +694,23 @@ internal suspend fun ChatViewModel.executePlannedToolTurn(
                     val prev = barrierChain
                     barrierChain = launch {
                         prev?.join()
-                        fanOutSpawnCalls(ctx, plan.plannedCalls, execution)
+                        isolateLane(
+                            call,
+                            fail = { failIsolation(ctx, execution, call, it) },
+                        ) { fanOutSpawnCalls(ctx, plan.plannedCalls, execution) }
                     }
                 }
                 continue
             }
             if (call.lane == ToolCallLane.BARRIER) {
                 val prev = barrierChain
-                barrierChain = launch { prev?.join(); runPlannedCall(ctx, call, execution.executedParts) }
+                barrierChain = launch {
+                    prev?.join()
+                    isolateLane(
+                        call,
+                        fail = { failIsolation(ctx, execution, call, it) },
+                    ) { runPlannedCall(ctx, call, execution.executedParts) }
+                }
             } else {
                 // Concurrent read: wait for earlier barriers, then take a
                 // semaphore permit. Joining BEFORE acquiring prevents a permit
@@ -676,7 +718,12 @@ internal suspend fun ChatViewModel.executePlannedToolTurn(
                 val prev = barrierChain
                 launch {
                     prev?.join()
-                    laneSemaphore.withPermit { runPlannedCall(ctx, call, execution.executedParts) }
+                    laneSemaphore.withPermit {
+                        isolateLane(
+                            call,
+                            fail = { failIsolation(ctx, execution, call, it) },
+                        ) { runPlannedCall(ctx, call, execution.executedParts) }
+                    }
                 }
             }
         }

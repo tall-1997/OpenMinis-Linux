@@ -91,9 +91,12 @@ check(re.search(r"fun preAnchorTokenBudget\(windowTokens: Int\?\)", walk) is not
       "WalkBack: missing the single pure function preAnchorTokenBudget(windowTokens: Int?)")
 check("PREANCHOR_WINDOW_FRACTION).toInt()" in walk,
       "WalkBack: budget must scale with the window fraction, not a hardcoded ceiling")
-check("coerceAtLeast(PREANCHOR_TOKEN_FLOOR)" in walk and
-      "coerceAtMost(COMPACT_PREANCHOR_TOKEN_BUDGET)" in walk,
-      "WalkBack: budget must apply BOTH the floor and the ceiling through the named constants")
+check("coerceAtMost(COMPACT_PREANCHOR_TOKEN_BUDGET)" in walk and
+      "minOf(PREANCHOR_TOKEN_FLOOR" in walk,
+      "WalkBack: budget must apply BOTH the floor and the ceiling through the named constants — "
+      "[T-budget-floor-fraction-clamp] the floor is clamped to the ≤20% window fraction "
+      "(an 8k floor forced 25% on a 32k window, breaking the ≤80% compact-threshold corridor); "
+      "the fraction itself is the effective floor on small windows")
 check("WalkBack.preAnchorTokenBudget(windowTokens)" in hist,
       "AgentHistoryExt: must delegate to the single pure function, not inline the corridor")
 check("preAnchorBudget = if (windowTokens != null)" not in hist,

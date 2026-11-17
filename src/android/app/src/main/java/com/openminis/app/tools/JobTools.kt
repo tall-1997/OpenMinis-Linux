@@ -43,7 +43,7 @@ object JobTools {
         description = "Run a long shell command as a BACKGROUND job in this session's sandbox without " +
             "blocking the conversation, then poll its output or terminate it. Actions: 'start' " +
             "(command, optional workdir) launches detached and returns a job_id immediately; 'list' " +
-            "shows this session's jobs with state (RUNNING/COMPLETED/FAILED/KILLED) and exit_code; " +
+            "shows this session's jobs with state (RUNNING/COMPLETED/FAILED/KILLED/UNKNOWN) and exit_code; " +
             "'output' (job_id, tail_lines, default 200) returns the tail of the job's stdout+stderr " +
             "accumulated so far; 'input' (job_id, text) appends to a RUNNING job's stdin for interactive " +
             "commands; 'signal' (job_id, signal) delivers a signal (TERM/USR1/INT/...) to its process " +
@@ -192,6 +192,10 @@ object JobTools {
                     if (job.workingDir != null) put("workdir", job.workingDir)
                     put("started_at_ms", job.startedAt)
                     if (job.outputSpillPath != null) put("output", job.outputSpillPath)
+                    // [T-job-shell-lost-reconcile] A RUNNING job whose sandbox
+                    // shell died is reconciled against the host process tree;
+                    // surface the marker so the model can read the state.
+                    job.shellLostAtMs?.let { put("shell_lost_at_ms", it) }
                 },
             )
         }
@@ -224,11 +228,30 @@ object JobTools {
                     append("]")
                     append("\n")
                     append(outcome.tail.ifBlank { "(no output yet)" })
+                    // [T-job-shell-lost-reconcile] RUNNING + shell lost: the
+                    // registry is deciding from the host process tree, and
+                    // the exit code may end up unknown — say so.
+                    if (outcome.job.shellLostAtMs != null &&
+                        outcome.job.state == JobState.RUNNING
+                    ) {
+                        append("\n(sandbox shell died while this job ran; its process tree is " +
+                            "being reconciled host-side — output keeps accumulating only if " +
+                            "the job survived, and the exit code may be unavailable)")
+                    }
                 }
                 ToolExecutionResult(body, true)
             }
             is JobRegistry.OutputOutcome.NoOutputYet -> ToolExecutionResult(
-                "Job ${outcome.job.id} is ${outcome.job.state.name} and has written no output yet.",
+                "Job ${outcome.job.id} is ${outcome.job.state.name} and has written no output yet." +
+                    // [T-job-shell-lost-reconcile]
+                    if (outcome.job.shellLostAtMs != null &&
+                        outcome.job.state == JobState.RUNNING
+                    ) {
+                        " Its sandbox shell died; the job is being reconciled against the " +
+                            "host process tree."
+                    } else {
+                        ""
+                    },
                 true,
             )
             is JobRegistry.OutputOutcome.Ambiguous -> ToolExecutionResult(
@@ -274,10 +297,27 @@ object JobTools {
                 errorCode = ToolErrorCode.INVALID_ARGUMENTS,
             )
         }
+        // [T-job-shell-lost-reconcile] A shell-lost job's reader (the setsid'd
+        // job script) can OUTLIVE the shell — the host-side appendStdin
+        // (O_WRONLY|O_NONBLOCK) delivers to the fifo directly and fails
+        // honestly with ENXIO when the reader is really gone. The old hard
+        // gate here refused ALL input for shell-lost jobs even while the job
+        // tree was alive; the RUNNING pre-check above plus the honest
+        // write-failure below are the correct contract.
         val fifo = JobRegistry.writeStdin(sessionId, ref, text)
-            ?: return notFound(ref)
+            ?: return ToolExecutionResult(
+                "Error: could not deliver input to job ${job.id} — its stdin fifo is gone or " +
+                    "unwritable (the job's reader exited, or the write failed; input may have " +
+                    "been partially delivered). Use action=output to read what it printed.",
+                false,
+                errorCode = ToolErrorCode.EXECUTION_FAILED,
+            )
+        val shellNote = if (job.shellLostAtMs != null) {
+            " (note: the sandbox shell died while this job ran; input was delivered to the " +
+                "surviving job process)"
+        } else ""
         return ToolExecutionResult(
-            "Wrote " + text.length + " bytes to the stdin pipe of job $ref ($fifo).",
+            "Wrote " + text.length + " bytes to the stdin pipe of job $ref ($fifo).$shellNote",
             true,
         )
     }
@@ -342,6 +382,16 @@ object JobTools {
                     put("job_id", outcome.job.id)
                     put("state", JobState.KILLED.name)
                     put("note", "termination signal delivered")
+                    // [T-job-shell-lost-reconcile] The kill went through the
+                    // host-side control path (no session mutex, no sandbox
+                    // shell involved) because this job's shell had died.
+                    if (outcome.job.shellLostAtMs != null) {
+                        put(
+                            "note",
+                            "termination signal delivered host-side — the job's sandbox " +
+                                "shell had already died",
+                        )
+                    }
                 }.toString(),
                 true,
             )

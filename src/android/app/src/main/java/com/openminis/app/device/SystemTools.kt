@@ -424,10 +424,12 @@ internal object SystemTools {
                 return DevicePermission.missingError(DevicePermission.SPECIAL_NOTIFICATION_POLICY)
             }
             val old = dndName(runCatching { nm.currentInterruptionFilter }.getOrNull())
+            // [T-dnd-mode-mapping] FILTER_ALL = all interruptions pass (DND off);
+            // FILTER_NONE = total silence. "off" must map to ALL, "all" to NONE.
             val filter = when (mode) {
                 "priority" -> NotificationManager.INTERRUPTION_FILTER_PRIORITY
                 "alarms" -> NotificationManager.INTERRUPTION_FILTER_ALARMS
-                "all" -> NotificationManager.INTERRUPTION_FILTER_ALL
+                "off" -> NotificationManager.INTERRUPTION_FILTER_ALL
                 else -> NotificationManager.INTERRUPTION_FILTER_NONE
             }
             return runCatching { nm.setInterruptionFilter(filter) }.fold(
@@ -502,7 +504,13 @@ internal object SystemTools {
             }.getOrElse { return DeviceArgs.fail("failed", "could not set brightness: ${it.message}") }
             val old = if (oldLevel >= 0) "$oldLevel" else null
             return if (applied) withWas("Brightness set to $target/255.", old)
-            else "Brightness write was ignored by the system."
+            // [T-device-noeffect-honest] `putInt` returning false means the
+            // system DROPPED the write (low-power / policy override). The old
+            // success-shaped string counted as an effective call downstream
+            // (cards, guard ladders), so a model retrying against a system
+            // that ignores it never tripped the NoEffect stop. An unapplied
+            // write is a failure, honestly reported.
+            else DeviceArgs.fail("failed", "Brightness write was ignored by the system (power save or policy override).")
         }
     }
 

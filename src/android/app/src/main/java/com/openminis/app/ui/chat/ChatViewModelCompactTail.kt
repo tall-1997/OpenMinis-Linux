@@ -29,12 +29,10 @@ internal fun buildDetachedCompactHistory(
     }
     val out = ArrayList<LLMMessage>(tail.size - start + 1)
     val first = tail[start]
-    val firstText = if (first.content.isBlank()) {
-        summaryWrappedText
-    } else {
-        summaryWrappedText + "\n\n" + first.content
-    }
-    out.add(first.copy(content = firstText))
+    // Parts must move with the text: the first tail row is usually a real
+    // user send or tool-result carrier whose contentParts override `content`
+    // on the wire ([T-user-text-prefix-parts-sync]).
+    out.add(prependUserText(first, summaryWrappedText))
     out.addAll(tail.subList(start + 1, tail.size))
     return out
 }

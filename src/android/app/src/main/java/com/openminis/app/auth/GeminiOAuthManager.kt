@@ -14,6 +14,22 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
+/**
+ * [T-gemini-oauth-honesty-doc] Gemini OAuth is **structurally unwired on
+ * Android**: there is no sign-in entry anywhere in the UI (the provider OAuth
+ * block in Settings has no Gemini entry) and [clientSecret] below is a
+ * placeholder — a real token exchange can never complete, so no new account
+ * can ever be created from this app.
+ *
+ * The class is kept deliberately, NOT as dead code to be swept: a backup
+ * restore can still materialise an instance of it (restored OAuth instances
+ * carry stored tokens), and every refresh those instances attempt will fail —
+ * either through [effectiveClientSecret] throwing the actionable
+ * "client secret is not configured" error before anything reaches the wire,
+ * or as an honest INVALID_GRANT/TRANSIENT classification afterwards. That
+ * failure honesty is the contract; removing the class would turn it into a
+ * silent crash instead.
+ */
 class GeminiOAuthManager(context: Context, instanceId: String) : OAuthManager(context, instanceId) {
     companion object {
         private const val TAG = "GeminiOAuth"

@@ -56,7 +56,10 @@ internal object ToolCallLanes {
         ProductMediaTools.DESCRIBE_IMAGE,     // "describe_image"
         ProductMediaTools.GENERATE_IMAGE,     // "generate_image"
         ProductMediaTools.GENERATE_VIDEO,     // "generate_video"
-        ProductMediaTools.TRANSCRIBE_AUDIO,   // "transcribe_audio"
+        // [T-transcribe-unadvertise] transcribe_audio removed from the lanes:
+        // the tool is no longer in the registry (its dispatch branch has no
+        // executor and always returns notConfigured), and the contract test
+        // pins every lane entry to a registry-emitted name.
         ProductMediaTools.TRANSLATE_TEXT,     // "translate_text"
         OcrTool.NAME,                         // "ocr_image"
         ScreenTimeTool.NAME,                  // "get_screen_time"

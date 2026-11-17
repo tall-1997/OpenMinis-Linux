@@ -65,7 +65,6 @@
     <string name="check_update_available_title">Update Available</string>
     <string name="check_update_available_subtitle">%1$s → %2$s</string>
     <string name="check_update_changelog_header">What\'s New</string>
-    <string name="check_update_changelog_empty">No release notes were published for this build.</string>
     <string name="check_update_download_button">Download &amp; Install</string>
     <string name="check_update_downloading">Downloading… %1$d%%</string>
     <string name="check_update_download_failed">Download failed: %1$s</string>
@@ -272,9 +271,6 @@
     <string name="dev_suite_assemble">Assemble</string>
     <string name="dev_suite_start_install">Starting install</string>
     <string name="dev_suite_interrupted">Install was interrupted</string>
-    <string name="builtin_plugin_install">Install</string>
-    <string name="builtin_plugin_retry">Retry</string>
-    <string name="builtin_plugin_open_panel">Panel</string>
 
     <string name="dev_suite_no_space">Not enough storage: about %1$d GB needed, %2$d GB free</string>
     <string name="dev_suite_skipped_dep">Skipped: %1$s did not install</string>
@@ -2435,17 +2431,7 @@
     <string name="settings_character_extras">World book</string>
     <string name="settings_translate">Translate</string>
     <string name="settings_translate_subtitle">Target language, model, bubble switch, and a standalone page</string>
-    <string name="world_book_header">World book</string>
-    <string name="world_book_footer">An entry is injected only when a recent message contains one of its keywords. Tap an entry to remove it. The standing persona file is unchanged.</string>
-    <string name="world_book_name">Name</string>
-    <string name="world_book_keywords">Keywords, comma separated</string>
-    <string name="world_book_content">Text to inject when a keyword matches</string>
-    <string name="world_book_add">Add entry</string>
-    <string name="display_regex_header">Display regex</string>
-    <string name="display_regex_footer">Rewrites the chat bubble only. The stored message and the text sent to the model stay unchanged. Tap a rule to remove it.</string>
     <string name="display_regex_pattern">Pattern</string>
-    <string name="display_regex_replacement">Replacement</string>
-    <string name="display_regex_add">Add rule</string>
     <string name="high_refresh_title">High refresh rate</string>
     <string name="high_refresh_sub">Ask the window for the display\'s highest refresh rate</string>
     <string name="high_refresh_footer">Off returns the window to the system default.</string>
@@ -2884,11 +2870,29 @@
     <string name="card_file_title">File</string>
     <string name="card_file_created">File created</string>
     <string name="card_link_title">Link</string>
+    <string name="card_title_device_status">Device status</string>
+    <string name="card_title_setting">Setting</string>
+    <string name="card_title_settings_ns">Settings · %1$s</string>
+    <string name="card_title_clipboard">Clipboard</string>
+    <string name="card_title_volume">Volume %1$s</string>
+    <string name="card_title_brightness">Brightness</string>
+    <string name="card_title_dnd">Do Not Disturb</string>
+    <string name="card_title_sound_mode">Sound mode</string>
+    <string name="card_title_wifi">Wi-Fi</string>
+    <string name="card_title_bluetooth">Bluetooth</string>
+    <string name="card_title_mobile_data">Mobile data</string>
+    <string name="card_title_alarm">Alarm</string>
+    <string name="card_title_timer">Timer</string>
+    <string name="card_title_scheduled_tasks">Scheduled tasks</string>
+    <string name="card_title_contacts">Contacts</string>
+    <string name="card_title_messages">Messages</string>
+    <string name="card_title_recent_calls">Recent calls</string>
+    <string name="card_title_installed_apps">Installed apps</string>
+    <string name="card_title_location">Location</string>
+    <string name="card_title_search">Search · %1$s</string>
     <string name="quick_panel_input_hint">What should Minis do?</string>
     <string name="quick_send_failed">Couldn\'t start the run. Open Minis and try again.</string>
     <string name="quick_panel_open_session">Open session</string>
-    <string name="quick_panel_images_attached">%1$d image(s) attached</string>
-    <string name="quick_share_image_unsupported">Image shares aren\'t supported in the quick panel yet.</string>
     <string name="quick_panel_running">Running in the background — you\'ll get a notification when it finishes.</string>
     <string name="quick_notify_channel_name">Quick panel results</string>
     <string name="quick_notify_title">Quick prompt finished</string>
@@ -3068,4 +3072,9 @@
     <string name="handsfree_state_speaking">Speaking…</string>
     <string name="handsfree_exit_recognition">Hands-free stopped: speech recognition failed repeatedly. Tap Hands-free to try again.</string>
     <string name="handsfree_exit_tts">Hands-free stopped: replies could not be read aloud. Tap Hands-free to try again.</string>
+    <string name="queue_dropped_no_content">Queued message could not be sent: no readable content (empty text, attachments failed to load).</string>
+    <string name="process_card_thinking">Thinking</string>
+    <string name="process_card_tools">Tools</string>
+    <string name="process_card_ai_process">AI process</string>
+    <string name="process_card_thinking_now">Thinking…</string>
 </resources>

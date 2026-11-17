@@ -85,10 +85,14 @@ class RelayQuotaAdapterTest {
         tokenBody: ByteArray = newApiUserQuotaBody,
         failUsageTransport: Boolean = false,
         failTokenTransport: Boolean = false,
+        failBillingTransport: Boolean = false,
     ): QuotaHttpTransport = object : QuotaHttpTransport {
         override suspend fun get(url: String, bearer: String, headers: Map<String, String>): QuotaHttpResponse {
             if (failUsageTransport && url.endsWith("/v1/usage")) throw java.io.IOException("connection reset")
             if (failTokenTransport && url.endsWith("/api/usage/token")) throw java.io.IOException("token path reset")
+            if (failBillingTransport && url.endsWith("/v1/dashboard/billing/subscription")) {
+                throw java.io.IOException("billing path reset")
+            }
             val status = when {
                 url.endsWith("/v1/usage") -> usageStatus
                 url.endsWith("/api/usage/token") -> tokenStatus
@@ -200,5 +204,120 @@ class RelayQuotaAdapterTest {
         } catch (e: java.io.IOException) {
             assertEquals("token path reset", e.message)
         }
+    }
+
+    // ------------------------------------- end-of-chain classification ----
+
+    @Test
+    fun `all families transport-failing rethrows the transport error, not notFound`() = runTest {
+        // [T-relay-probe-classification] No family said "no balance endpoint
+        // here", so the outage must take the normal short backoff (badResponse
+        // does not disable the endpoint), never park the quota for 24 h as a
+        // missing endpoint.
+        val result = runCatching {
+            RelayQuotaAdapter.fetch(
+                ctx(fakeRelay(failUsageTransport = true, failTokenTransport = true, failBillingTransport = true)),
+            )
+        }
+        val qfe = result.exceptionOrNull() as? QuotaFetchError
+            ?: error("fetch unexpectedly succeeded or threw a foreign type: ${result.exceptionOrNull()}")
+        assertEquals(QuotaError.Kind.badResponse, qfe.kind)
+        assertTrue(
+            "the first transport error is rethrown as is: ${qfe.detail}",
+            qfe.detail.contains("transport:") && qfe.detail.contains("/v1/usage"),
+        )
+    }
+
+    @Test
+    fun `mixed auth and transport failures report the credential rejection`() = runTest {
+        // [T-relay-probe-classification] One family answering 401 among
+        // transport failures still means the credential was refused: the auth
+        // error goes to the refresh gate, not a "no endpoint" summary.
+        val result = runCatching {
+            RelayQuotaAdapter.fetch(
+                ctx(fakeRelay(usageStatus = 401, failTokenTransport = true, billingStatus = 401)),
+            )
+        }
+        val qfe = result.exceptionOrNull() as? QuotaFetchError
+            ?: error("fetch unexpectedly succeeded or threw a foreign type: ${result.exceptionOrNull()}")
+        assertEquals(QuotaError.Kind.unauthorized, qfe.kind)
+        assertEquals("the FIRST auth error is rethrown", "HTTP 401 /v1/usage", qfe.detail)
+    }
+
+    @Test
+    fun `a genuine 404 beside transport failures still reports notFound`() = runTest {
+        // [T-relay-probe-classification] A family that DID answer "no balance
+        // endpoint here" keeps the missing-endpoint classification.
+        val result = runCatching {
+            RelayQuotaAdapter.fetch(
+                ctx(fakeRelay(failUsageTransport = true, failTokenTransport = true)),
+            )
+        }
+        val qfe = result.exceptionOrNull() as? QuotaFetchError
+            ?: error("fetch unexpectedly succeeded or threw a foreign type: ${result.exceptionOrNull()}")
+        assertEquals(QuotaError.Kind.notFound, qfe.kind)
+    }
+
+    // ----------------------------------- parseNewAPI unreadable shapes ----
+
+    private val newApiUnknownWalletBody =
+        (
+            "{\"code\":true,\"data\":{\"name\":\"free\",\"object\":\"token_usage\"," +
+                "\"user_quota\":{\"balance\":\"123\"}}}"
+            ).toByteArray()
+
+    @Test
+    fun `unknown wallet field names do not yield an empty supported pool`() {
+        // [T-relay-newapi-empty-amounts] user_quota present but with field
+        // names this build does not read: no amounts -> the family reports
+        // unsupportedResponse so the probe chain moves on, instead of a
+        // successful empty pool that locks the relay kind hint for a day.
+        val e = runCatching {
+            RelayQuotaAdapter.parseNewAPI(newApiUnknownWalletBody, subject(), "relay.example", 1_000_000L)
+        }.exceptionOrNull()
+        assertTrue("expected QuotaFetchError, got $e", e is QuotaFetchError)
+        assertEquals(QuotaError.Kind.unsupportedResponse, (e as QuotaFetchError).kind)
+    }
+
+    @Test
+    fun `hinted family with an unreadable shape rethrows the unsupported error`() = runTest {
+        try {
+            // The hinted fake must answer 200 with the unreadable shape: a 404 maps to notFound in QuotaHttp.error before parseNewAPI runs.
+            RelayQuotaAdapter.fetch(ctx(fakeRelay(tokenStatus = 200, tokenBody = newApiUnknownWalletBody), hint = RelayKind.newAPI))
+            org.junit.Assert.fail("expected the unsupported error to propagate on a hinted family")
+        } catch (e: QuotaFetchError) {
+            assertEquals(QuotaError.Kind.unsupportedResponse, e.kind)
+        }
+    }
+
+    // ------------------------------------------ wallet negative sentinel --
+
+    @Test
+    fun `negative wallet sentinel is unlimited, not used up`() {
+        // [T-relay-wallet-negative-sentinel] total_available < 0 is the
+        // wallet's "unlimited" marker, mirroring the token-level negative
+        // granted sentinel; it must not render as an overdrawn, used-up
+        // wallet.
+        val body = (
+            "{\"code\":true,\"data\":{\"name\":\"free\",\"object\":\"token_usage\"," +
+                "\"user_quota\":{\"total_available\":-1,\"total_used\":50}}}"
+            ).toByteArray()
+        val snap = RelayQuotaAdapter.parseNewAPI(body, subject(), "relay.example", 1_000_000L)
+        val pool = snap.pools.single()
+        assertTrue(pool.unlimited)
+        assertNull("negative remaining must not render as used up", pool.amounts?.remaining)
+        assertNull(pool.amounts?.used)
+    }
+
+    @Test
+    fun `zero wallet stays a genuinely empty wallet`() {
+        val body = (
+            "{\"code\":true,\"data\":{\"name\":\"free\",\"object\":\"token_usage\"," +
+                "\"user_quota\":{\"total_available\":0,\"total_used\":0}}}"
+            ).toByteArray()
+        val snap = RelayQuotaAdapter.parseNewAPI(body, subject(), "relay.example", 1_000_000L)
+        val pool = snap.pools.single()
+        assertFalse("zero is a real empty wallet, not the sentinel", pool.unlimited)
+        assertEquals(0, pool.amounts?.remaining!!.compareTo(0.toBigDecimal()))
     }
 }

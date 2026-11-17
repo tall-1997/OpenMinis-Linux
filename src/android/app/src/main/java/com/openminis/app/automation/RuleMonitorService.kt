@@ -43,8 +43,16 @@ class RuleMonitorService : Service() {
 
     private var lastBattery: Int? = null
     private var lastCharging: Boolean? = null
-    /** False until the first network callback: the current Wi-Fi is the baseline. */
-    private var wifiSeeded = false
+
+    /**
+     * [T-wifi-trigger-edge] Last known Wi-Fi connected state for edge-triggered
+     * events. onCapabilitiesChanged keeps firing while a network stays connected
+     * (RSSI/signal ticks), so the state — not "a callback arrived" — decides
+     * whether Wifi(true) is emitted; otherwise every tick would re-fire
+     * Wi-Fi rules until the 24h/50 run cap burns out within the hour.
+     */
+    @Volatile
+    private var wifiConnected = false
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
@@ -111,10 +119,10 @@ class RuleMonitorService : Service() {
         else runCatching { getSystemService(WifiManager::class.java).connectionInfo }.getOrNull()
         val ssid = info?.ssid?.trim('"')
             ?.takeIf { it != "<unknown ssid>" && it.isNotEmpty() }
-        if (!wifiSeeded) {
-            wifiSeeded = true
-            return
-        }
+        // [T-wifi-trigger-edge] Emit only on a not-connected → connected
+        // transition; repeat callbacks while connected (RSSI updates) are no-ops.
+        if (wifiConnected) return
+        wifiConnected = true
         AutomationEvents.emit(AutomationEvent.Wifi(true, ssid))
     }
 
@@ -127,8 +135,18 @@ class RuleMonitorService : Service() {
                     onWifi(caps)
 
                 override fun onLost(network: Network) {
-                    wifiSeeded = true
-                    AutomationEvents.emit(AutomationEvent.Wifi(false, null))
+                    // [T-wifi-trigger-edge] Flip the edge state back so a later
+                    // reconnect re-emits. No Wifi(false) event: no rule trigger
+                    // matches connected=false today (RuleEvents.matches), so an
+                    // emit would only be dead traffic.
+                    // [T-wifi-onlost-reseed] A VPN-over-Wi-Fi network carries
+                    // the underlying TRANSPORT_WIFI and matches this request,
+                    // so onLost fires for the VPN on a bounce while the real
+                    // Wi-Fi is still up — a blind flip to false made the next
+                    // RSSI tick of the physical network re-emit Wifi(true) and
+                    // re-fire every rule. Re-seed from the LIVE networks
+                    // (excluding the one just lost), same as the onCreate seed.
+                    reseedWifiState(excluding = network)
                 }
             }
         } else {
@@ -137,11 +155,27 @@ class RuleMonitorService : Service() {
                     onWifi(caps)
 
                 override fun onLost(network: Network) {
-                    wifiSeeded = true
-                    AutomationEvents.emit(AutomationEvent.Wifi(false, null))
+                    // [T-wifi-trigger-edge] See the API-31 onLost comment and
+                    // the [T-wifi-onlost-reseed] rationale above.
+                    reseedWifiState(excluding = network)
                 }
             }
         }
+
+    /**
+     * [T-wifi-onlost-reseed] Recompute the edge state from the currently live
+     * networks, ignoring [excluding] (the network that just reported lost).
+     */
+    private fun reseedWifiState(excluding: Network) {
+        val stillUp = runCatching {
+            val cm = getSystemService(ConnectivityManager::class.java)
+            cm.allNetworks.any { net ->
+                net != excluding &&
+                    cm.getNetworkCapabilities(net)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+            }
+        }.getOrDefault(false)
+        wifiConnected = stillUp
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -173,9 +207,11 @@ class RuleMonitorService : Service() {
         )
         runCatching {
             val cm = getSystemService(ConnectivityManager::class.java)
-            // Already on Wi-Fi: the first callback reports it and is only the
-            // baseline. Not on Wi-Fi: the first callback IS a connect event.
-            wifiSeeded = cm.allNetworks.none {
+            // [T-wifi-trigger-edge] Seed the edge detector with the current
+            // state: already on Wi-Fi means the first callback matches the
+            // baseline (no transition, no event); not on Wi-Fi means the first
+            // callback IS a connect event.
+            wifiConnected = cm.allNetworks.any {
                 cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
             }
             cm.registerNetworkCallback(

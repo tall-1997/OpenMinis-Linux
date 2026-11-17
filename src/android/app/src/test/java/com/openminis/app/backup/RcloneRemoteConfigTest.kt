@@ -226,4 +226,32 @@ class RcloneRemoteConfigTest {
         assertEquals("us-east-1", out["region"])
         assertEquals("AK", out["access_key_id"])
     }
+
+    // MARK: - [T-backup-decode-honesty] stored-config decode
+
+    /**
+     * One corrupt prefs write must not be indistinguishable from "no remotes":
+     * the store's getter returns an empty list either way (the UI must not
+     * crash), but it latches configDecodeFailed on decode failure so the next
+     * backup run refuses to report a success. The latch decision rides on this
+     * pure decode — corrupt bytes must be DETECTABLE, never fatal.
+     */
+    @Test
+    fun `a corrupt stored remote list decodes to null instead of throwing`() {
+        assertNull(RcloneRemoteStore.decodeRemotes("{ not a remote list"))
+        assertNull(RcloneRemoteStore.decodeRemotes("[]garbage"))
+        assertNull(RcloneRemoteStore.decodeRemotes(""))
+    }
+
+    @Test
+    fun `a valid stored remote list decodes with defaults filled in`() {
+        val decoded = RcloneRemoteStore.decodeRemotes(
+            """[{"name":"nas","backend":"webdav","path":"backups"}]"""
+        )
+        assertEquals(1, decoded?.size)
+        assertEquals("nas", decoded?.single()?.name)
+        // Fields added later default rather than vanishing older entries.
+        assertEquals(true, decoded?.single()?.enabled)
+        assertEquals(false, decoded?.single()?.allowInsecureTLS)
+    }
 }

@@ -218,6 +218,23 @@ class SkillManifestTest {
         assertNull(SkillManifest.disclosureNote(selected, emptyList()))
     }
 
+    @Test
+    fun `disclosure note leads with the overflow count and names the unnamed remainder`() {
+        // [T-skills-prompt-overflow-note] A heavy library omits far more skills
+        // than the name budget can list: the COUNT always leads, and when the
+        // name list was truncated by MAX_UNDISCLOSED_NAMES the unnamed
+        // remainder must be spelled out — never a name list that quietly stops.
+        val selected = (1..SkillManifest.MAX_SKILLS_IN_PROMPT).map { skill("s$it") }
+        val omitted = (1..100).map { skill("o$it") }
+        // Name budget: MAX_UNDISCLOSED_NAMES - selected.size.
+        val note = SkillManifest.disclosureNote(selected, omitted) ?: throw AssertionError("note must build")
+        assertTrue(note.contains("100 more skills not shown above: "))
+        assertTrue(note.contains("(+${100 - (200 - SkillManifest.MAX_SKILLS_IN_PROMPT)} more not named)"))
+        assertTrue(note.contains("List /var/minis/skills/ or grep to search all."))
+        // The named run fits the budget exactly, so no remainder marker appears
+        // when everything fits (byte-identical legacy case above pins that).
+    }
+
     // -- The skillsProgressiveLoading switch --
 
     @Test

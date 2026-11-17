@@ -95,11 +95,22 @@ object RelayQuotaAdapter : ProviderQuotaAdapter {
                 )
             }
         }
-        // Every family refused the key -> it is the key (or the relay's policy),
-        // not a missing endpoint. Anything else -> no endpoint found.
+        // [T-relay-probe-classification] Classify the end-of-chain failure
+        // honestly. When NO family reported a genuine "endpoint missing"
+        // signal (a 404 or an unrecognized probe response), "no balance
+        // endpoint" would be a lie that parks the relay's quota for 24 h on a
+        // mere network outage (failureDisablesEndpoint maps notFound there).
+        // A credential rejection keeps the auth error (the refresh gate stops
+        // on it); anything else rethrows the first error as is - badResponse
+        // takes the normal short backoff. A family that DID answer "not a
+        // balance endpoint" still classifies as notFound below.
         val first = errors.firstOrNull()
-        if (first != null && errors.all { it.kind == QuotaError.Kind.unauthorized || it.kind == QuotaError.Kind.forbidden }) {
-            throw first
+        if (first != null &&
+            errors.none { it.kind == QuotaError.Kind.notFound || it.kind == QuotaError.Kind.unsupportedResponse }
+        ) {
+            throw (errors.firstOrNull {
+                it.kind == QuotaError.Kind.unauthorized || it.kind == QuotaError.Kind.forbidden
+            } ?: first)
         }
         val checked = order.joinToString(", ") { it.path }
         throw QuotaFetchError(QuotaError.Kind.notFound, "no balance endpoint on this relay (checked $checked)")
@@ -207,27 +218,43 @@ object RelayQuotaAdapter : ProviderQuotaAdapter {
         // without user_quota keep the token-level shape verbatim.
         val uqAvailable = uq?.dec("total_available")
         val uqUsed = uq?.dec("total_used")
-        return if (uq != null && (uqAvailable != null || uqUsed != null)) {
-            val pool = QuotaPool(
+        val pool = if (uq != null && (uqAvailable != null || uqUsed != null)) {
+            // [T-relay-wallet-negative-sentinel] Mirror the legacy sentinel:
+            // a negative total_available means "unlimited", not an overdrawn
+            // wallet that renders "used up". Zero stays a genuinely empty
+            // wallet.
+            val walletUnlimited = uqAvailable?.let { it.signum() < 0 } ?: false
+            QuotaPool(
                 id = key, subjectId = subjectId, kind = QuotaPool.Kind.allowance, unit = QuotaUnit.Custom("quota"),
                 vendorLabel = "$nameLabel · account",
-                amounts = QuotaAmounts(used = uqUsed, remaining = uqAvailable),
-                unlimited = false, provenance = provenance(RelayKind.newAPI, relayHost), observedAt = now,
+                amounts = if (walletUnlimited) null else QuotaAmounts(used = uqUsed, remaining = uqAvailable),
+                unlimited = walletUnlimited, provenance = provenance(RelayKind.newAPI, relayHost), observedAt = now,
             )
-            snapshot(pool, RelayKind.newAPI, subjectId, relayHost, now)
         } else {
             val granted = d.dec("total_granted")
             val used = d.dec("total_used")
             val available = d.dec("total_available")
             val unlimited = d.bool("unlimited_quota") == true || (granted?.let { it.signum() < 0 } ?: false)
-            val pool = QuotaPool(
+            QuotaPool(
                 id = key, subjectId = subjectId, kind = QuotaPool.Kind.allowance, unit = QuotaUnit.Custom("quota"),
                 vendorLabel = nameLabel,
                 amounts = if (unlimited) QuotaAmounts(used = used) else QuotaAmounts(total = granted, used = used, remaining = available),
                 unlimited = unlimited, provenance = provenance(RelayKind.newAPI, relayHost), observedAt = now,
             )
-            snapshot(pool, RelayKind.newAPI, subjectId, relayHost, now)
         }
+        // [T-relay-newapi-empty-amounts] A wallet or token level whose field
+        // names we do not know parses to amounts with no number at all. That
+        // must not become a successful empty pool (it locks the relay kind
+        // hint for a day and can overwrite good prior data on merge) - report
+        // it like the Sub2API guard does, so the probe chain moves on to the
+        // next family. Like every throw here, a hinted fetch rethrows it via
+        // the probe's catch site.
+        if (pool.amounts?.total == null && pool.amounts?.used == null && pool.amounts?.remaining == null &&
+            !pool.unlimited
+        ) {
+            throw QuotaFetchError(QuotaError.Kind.unsupportedResponse, "New API usage without amounts")
+        }
+        return snapshot(pool, RelayKind.newAPI, subjectId, relayHost, now)
     }
 
     // OpenAI-compatible billing

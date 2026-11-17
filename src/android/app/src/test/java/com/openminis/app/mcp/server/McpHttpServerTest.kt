@@ -376,4 +376,77 @@ class McpHttpServerTest {
             server.stop()
         }
     }
+
+    // ─── [T-mcp-accept-recovery] accept-loop recovery ─────────────────────
+
+    /**
+     * One IOException from `accept()` used to break the loop forever while
+     * `running` stayed true — a "running" server that accepts nothing. The
+     * listening socket dying under the loop must instead be recovered: the
+     * loop re-binds the same port after its backoff and serves again.
+     *
+     * No traffic is sent before the kill: a served connection leaves the
+     * SERVER in TIME_WAIT on this port, which could block the recovery re-bind
+     * on Linux. Refused connect attempts leave no such state.
+     */
+    @Test
+    fun `accept loop recovers after the listening socket dies under it`() {
+        val server = newServer()
+        val port = startOnFreePort(server)
+        try {
+            val body = """{"jsonrpc":"2.0","id":7,"method":"ping"}"""
+
+            // Kill the listening socket; the parked accept() throws and the
+            // recovery path re-binds the same port within its backoff.
+            val killed = server.listeningSocketForTest() ?: error("no listening socket")
+            killed.close()
+
+            var recovered = ""
+            run {
+                repeat(40) {
+                    try {
+                        recovered = post(port, "/mcp", body)
+                    } catch (_: Exception) {
+                        recovered = "" // connection refused while re-binding
+                    }
+                    if (recovered.contains("HTTP/1.1 200 OK")) return@run
+                    Thread.sleep(100)
+                }
+            }
+            assertTrue("expected a round trip after recovery, got [$recovered]", recovered.contains("HTTP/1.1 200 OK"))
+            assertTrue("the server must still be running", server.isRunning)
+        } finally {
+            server.stop()
+        }
+    }
+
+    /**
+     * When recovery cannot re-bind (something else took the port), the server
+     * must stop itself honestly — running=false plus a lastError naming the
+     * give-up — instead of staying "running" and accepting nothing.
+     */
+    @Test
+    fun `accept loop gives up and stops the server when the port cannot be re-bound`() {
+        val server = newServer()
+        val port = startOnFreePort(server)
+        // Kill the listening socket, then occupy its port so every recovery
+        // re-bind attempt fails.
+        server.listeningSocketForTest()?.close()
+        val squatter = ServerSocket(port, 1, java.net.InetAddress.getByName("127.0.0.1"))
+        try {
+            // 5 attempts x 500 ms apart, then a self-stop; poll well past that.
+            val deadline = System.currentTimeMillis() + 15_000
+            while (server.isRunning && System.currentTimeMillis() < deadline) {
+                Thread.sleep(100)
+            }
+            assertFalse("the server must stop itself after exhausted recovery", server.isRunning)
+            assertTrue(
+                "lastError must record the give-up, got ${server.lastError}",
+                server.lastError?.contains("recovery attempts") == true,
+            )
+        } finally {
+            server.stop()
+            squatter.close()
+        }
+    }
 }

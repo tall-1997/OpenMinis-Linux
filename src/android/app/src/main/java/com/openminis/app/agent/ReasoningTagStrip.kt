@@ -174,6 +174,15 @@ object ReasoningTagStrip {
                     }
                 }
                 if (claimed >= 0 && adjacent) {
+                    // Display mode: a PAIRED block is a real reasoning span —
+                    // the existing contract (ReasoningTagDisplayModeTest)
+                    // removes it whole; the [T-display-strip-prose-pair]
+                    // leading-only variant was tried and reverted: it broke
+                    // the pinned nested/mention-pair contract and could not
+                    // distinguish a prose pair from leakage without a fuzzy
+                    // heuristic. The genuine data-loss defect class here is
+                    // the UNTERMINATED open, fixed in the `claimed == null`
+                    // branch below.
                     cursor[h.form] = cur + 1
                     remove += h.start to hits[claimed].end
                     i = claimed + 1

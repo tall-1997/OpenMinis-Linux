@@ -274,12 +274,12 @@ object AppGraph {
      * MinisApp.onCreate. QuotaStore is a process-wide singleton object, so the
      * slot carries the object reference itself — the install marks "started"
      * for readers (agents, minis-config tooling) and guards against a second
-     * start call. Read via [quotaStoreOrNull] or directly through
-     * `QuotaAgentApi.snapshot` once installed.
+     * start call. Read directly through `QuotaAgentApi.snapshot` once
+     * installed. ([T-dead-residue-cleanup] the unused `quotaStoreOrNull`
+     * accessor was removed — zero callers.)
      */
     private val quotaStore = Slot<com.openminis.app.quota.QuotaStore>("quotaStore")
     fun installQuotaStore(store: com.openminis.app.quota.QuotaStore) = quotaStore.install(store)
-    fun quotaStoreOrNull(): com.openminis.app.quota.QuotaStore? = quotaStore.orNull()
 
     /** Env-var source for sandbox shells (was ExecutionCoordinator.envVarRepository). */
     private val executionEnvVarRepository = Slot<EnvVarRepository>("executionEnvVarRepository")
@@ -308,7 +308,8 @@ object AppGraph {
      */
     private val networkRuntime = Slot<androidx.lifecycle.LifecycleObserver>("networkRuntime")
     fun installNetworkRuntime(observer: androidx.lifecycle.LifecycleObserver) = networkRuntime.install(observer)
-    fun networkRuntimeOrNull(): androidx.lifecycle.LifecycleObserver? = networkRuntime.orNull()
+    // [T-dead-residue-cleanup] the unused `networkRuntimeOrNull` accessor was
+    // removed — zero callers; the slot exists for install bookkeeping only.
 
     /** Background nudge for pending config approvals (was ConfigConfirmationGate.backgroundNotifier). */
     private val configConfirmBackgroundNotifier =
