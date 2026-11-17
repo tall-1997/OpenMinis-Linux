@@ -1214,6 +1214,14 @@
     <string name="turn_changes_restore_failed">pemulihan gagal</string>
     <string name="turn_changes_undo_restored">Diundur (%1$s): fail dipulihkan kepada kandungan sebelum giliran ini.</string>
     <string name="turn_changes_undo_deleted">Diundur (%1$s): fail tidak wujud sebelum giliran ini; fail baharu telah dipadam.</string>
+    <string name="turn_changes_summary">%1$d fail · +%2$d / -%3$d</string>
+    <string name="turn_changes_stats">+%1$d / -%2$d</string>
+    <string name="turn_changes_expand">Kembangkan perubahan</string>
+    <string name="turn_changes_collapse">Runtuhkan perubahan</string>
+    <string name="turn_changes_confirm_file_title">Buat asal perubahan fail ini?</string>
+    <string name="turn_changes_confirm_file_message">Pulihkan %1$s kepada kandungan sebelum giliran ini?</string>
+    <string name="turn_changes_confirm_all_title">Kembalikan semua perubahan?</string>
+    <string name="turn_changes_confirm_all_message">Pulihkan %1$d fail kepada keadaan sebelum giliran ini?</string>
     <string name="turn_changes_list_separator">, </string>
     <string name="tool_longpress_copy_details">Salin butiran alat</string>
     <string name="tool_longpress_copied_toast">Butiran alat disalin</string>
@@ -3314,4 +3322,6 @@
     <string name="process_card_tools">Alat</string>
     <string name="process_card_ai_process">Proses AI</string>
     <string name="process_card_thinking_now">Berfikir…</string>
+    <string name="appearance_show_turn_changes_card_title">Kad perubahan giliran</string>
+    <string name="appearance_show_turn_changes_card_subtitle">Memaparkan kad setiap giliran yang menyenaraikan fail yang diubah oleh pembantu, statistik baris dan buat asal satu ketukan. Lalai dimatikan.</string>
 </resources>

@@ -255,7 +255,7 @@ internal sealed class FlatChatItem {
      */
     data class AssistantTurnChanges(
         val messageId: String,
-        val paths: List<String>,
+        val changes: List<TurnChanges.PathChange>,
         private val keySuffix: String = "",
     ) : FlatChatItem() {
         override val key = FlatKeys.of(FlatKeys.KIND_TURN_CHANGES, messageId) + keySuffix
@@ -1065,9 +1065,9 @@ internal fun buildFlatChatItems(
         if (!message.isStreaming &&
             idx == messages.indexOfLast { m -> m.role == "assistant" }
         ) {
-            val changedPaths = TurnChanges.collect(message.toolBlocks).map { it.path }
-            if (changedPaths.isNotEmpty()) {
-                out.add(dedupe(FlatChatItem.AssistantTurnChanges(message.id, changedPaths)))
+            val changes = TurnChanges.collect(message.toolBlocks)
+            if (changes.isNotEmpty()) {
+                out.add(dedupe(FlatChatItem.AssistantTurnChanges(message.id, changes)))
             }
         }
     }

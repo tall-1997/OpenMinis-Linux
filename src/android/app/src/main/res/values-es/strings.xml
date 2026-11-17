@@ -1213,6 +1213,14 @@
     <string name="turn_changes_restore_failed">restauración fallida</string>
     <string name="turn_changes_undo_restored">Deshecho (%1$s): el archivo se restauró a su contenido anterior a este turno.</string>
     <string name="turn_changes_undo_deleted">Deshecho (%1$s): el archivo no existía antes de este turno; se eliminó el archivo recién creado.</string>
+    <string name="turn_changes_summary">%1$d archivos · +%2$d / -%3$d</string>
+    <string name="turn_changes_stats">+%1$d / -%2$d</string>
+    <string name="turn_changes_expand">Expandir cambios</string>
+    <string name="turn_changes_collapse">Contraer cambios</string>
+    <string name="turn_changes_confirm_file_title">¿Deshacer este archivo?</string>
+    <string name="turn_changes_confirm_file_message">¿Restaurar %1$s al contenido anterior a este turno?</string>
+    <string name="turn_changes_confirm_all_title">¿Revertir todos los cambios?</string>
+    <string name="turn_changes_confirm_all_message">¿Restaurar %1$d archivos al estado anterior a este turno?</string>
     <string name="turn_changes_list_separator">, </string>
     <string name="tool_longpress_copy_details">Copiar detalles de la herramienta</string>
     <string name="tool_longpress_copied_toast">Detalles de la herramienta copiados</string>
@@ -3165,4 +3173,6 @@
     <string name="process_card_tools">Herramientas</string>
     <string name="process_card_ai_process">Proceso de IA</string>
     <string name="process_card_thinking_now">Pensando…</string>
+    <string name="appearance_show_turn_changes_card_title">Tarjeta de cambios del turno</string>
+    <string name="appearance_show_turn_changes_card_subtitle">Muestra una tarjeta por turno con los archivos que modificó el asistente, estadísticas de líneas y deshacer con un toque. Desactivada por defecto; la conversación se mantiene limpia sin ella.</string>
 </resources>

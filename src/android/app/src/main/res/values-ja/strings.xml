@@ -1214,6 +1214,14 @@
     <string name="turn_changes_restore_failed">復元に失敗しました</string>
     <string name="turn_changes_undo_restored">元に戻しました（%1$s）：ファイルはターン開始前の内容に復元されました。</string>
     <string name="turn_changes_undo_deleted">元に戻しました（%1$s）：このファイルはターン開始前には存在しなかったため、新規作成分を削除しました。</string>
+    <string name="turn_changes_summary">%1$d ファイル・+%2$d / -%3$d</string>
+    <string name="turn_changes_stats">+%1$d / -%2$d</string>
+    <string name="turn_changes_expand">変更を展開</string>
+    <string name="turn_changes_collapse">変更を折りたたむ</string>
+    <string name="turn_changes_confirm_file_title">このファイルを元に戻しますか？</string>
+    <string name="turn_changes_confirm_file_message">%1$s をこのターンの変更前の内容に戻しますか？</string>
+    <string name="turn_changes_confirm_all_title">すべての変更を取り消しますか？</string>
+    <string name="turn_changes_confirm_all_message">%1$d 個のファイルをこのターンの変更前の状態に戻しますか？</string>
     <string name="turn_changes_list_separator">・</string>
     <string name="tool_longpress_copy_details">ツールの詳細をコピー</string>
     <string name="tool_longpress_copied_toast">ツールの詳細をコピーしました</string>
@@ -3313,4 +3321,6 @@
     <string name="process_card_tools">ツール</string>
     <string name="process_card_ai_process">AI プロセス</string>
     <string name="process_card_thinking_now">思考中…</string>
+    <string name="appearance_show_turn_changes_card_title">ターン変更カード</string>
+    <string name="appearance_show_turn_changes_card_subtitle">アシスタントが変更したファイルを行数統計つきでターンごとに表示し、ワンタップで元に戻せます。デフォルトはオフです。</string>
 </resources>

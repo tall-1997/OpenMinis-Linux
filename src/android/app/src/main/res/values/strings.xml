@@ -1752,6 +1752,14 @@
     <string name="turn_changes_restore_failed">restore failed</string>
     <string name="turn_changes_undo_restored">Undone (%1$s): the file was restored to its content from before this turn.</string>
     <string name="turn_changes_undo_deleted">Undone (%1$s): the file did not exist before this turn; the newly created file was deleted.</string>
+    <string name="turn_changes_summary">%1$d files · +%2$d −%3$d</string>
+    <string name="turn_changes_stats">+%1$d −%2$d</string>
+    <string name="turn_changes_expand">Expand changes</string>
+    <string name="turn_changes_collapse">Collapse changes</string>
+    <string name="turn_changes_confirm_file_title">Undo this file?</string>
+    <string name="turn_changes_confirm_file_message">Restore %1$s to its content from before this turn?</string>
+    <string name="turn_changes_confirm_all_title">Roll back all changes?</string>
+    <string name="turn_changes_confirm_all_message">Restore %1$d files to their state before this turn?</string>
     <string name="turn_changes_list_separator">, </string>
     <string name="tool_longpress_copy_details">Copy tool details</string>
     <string name="tool_longpress_copied_toast">Tool details copied</string>
@@ -3077,4 +3085,6 @@
     <string name="process_card_tools">Tools</string>
     <string name="process_card_ai_process">AI process</string>
     <string name="process_card_thinking_now">Thinking…</string>
+    <string name="appearance_show_turn_changes_card_title">Turn changes card</string>
+    <string name="appearance_show_turn_changes_card_subtitle">Show a per-turn card listing the files the assistant changed, with line stats and one-tap undo. Off by default; the transcript stays clean without it.</string>
 </resources>

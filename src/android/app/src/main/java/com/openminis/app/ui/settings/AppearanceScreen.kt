@@ -212,6 +212,7 @@ fun AppearanceScreen(
     var autoExpandThinking by remember { mutableStateOf(true) }
     var showFullThinking by remember { mutableStateOf(false) }
     var foldAiProcess by remember { mutableStateOf(DEFAULT_FOLD_AI_PROCESS) }
+    var showTurnChangesCard by remember { mutableStateOf(false) }
     // Material You is Android 12+; the row renders disabled below S.
     val monetSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     var dynamicColor by remember { mutableStateOf(false) }
@@ -241,6 +242,7 @@ fun AppearanceScreen(
             autoExpandThinking = p.getBoolean(KEY_AUTO_EXPAND_THINKING, true)
             showFullThinking = p.getBoolean(KEY_SHOW_FULL_THINKING, false)
             foldAiProcess = p.getBoolean(KEY_FOLD_AI_PROCESS, DEFAULT_FOLD_AI_PROCESS)
+            showTurnChangesCard = p.getBoolean(KEY_SHOW_TURN_CHANGES_CARD, false)
             dynamicColor = p.getBoolean(KEY_DYNAMIC_COLOR, false)
             showChatTitle = p.getBoolean(KEY_SHOW_CHAT_TITLE, true)
             autoGrouping = p.getBoolean(KEY_AUTO_GROUPING, true)
@@ -504,17 +506,13 @@ fun AppearanceScreen(
             )
             ShowFullThinkingRow(showFullThinking) { showFullThinking = it; prefs.value.edit().putBoolean(KEY_SHOW_FULL_THINKING, it).apply() }
             SettingsSwitchRow(
-                icon = Icons.Outlined.ViewAgenda,
-                iconColor = tilePurple,
+                icon = Icons.Outlined.ViewAgenda, iconColor = tilePurple,
                 title = stringResource(R.string.appearance_fold_ai_process_title),
                 subtitle = stringResource(R.string.appearance_fold_ai_process_subtitle),
                 checked = foldAiProcess,
-                onCheckedChange = {
-                    foldAiProcess = it
-                    prefs.value.edit().putBoolean(KEY_FOLD_AI_PROCESS, it).apply()
-                },
-                showDivider = false,
+                onCheckedChange = { foldAiProcess = it; prefs.value.edit().putBoolean(KEY_FOLD_AI_PROCESS, it).apply() },
             )
+            ShowTurnChangesCardRow(showTurnChangesCard) { showTurnChangesCard = it; prefs.value.edit().putBoolean(KEY_SHOW_TURN_CHANGES_CARD, it).apply() }
         }
 
         // -- Auto-Focus After Reply --

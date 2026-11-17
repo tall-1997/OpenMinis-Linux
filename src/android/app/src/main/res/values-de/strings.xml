@@ -1213,6 +1213,14 @@
     <string name="turn_changes_restore_failed">Wiederherstellung fehlgeschlagen</string>
     <string name="turn_changes_undo_restored">Rückgängig gemacht (%1$s): Die Datei wurde auf den Inhalt vor diesem Durchgang wiederhergestellt.</string>
     <string name="turn_changes_undo_deleted">Rückgängig gemacht (%1$s): Die Datei existierte vor diesem Durchgang nicht; die neu erstellte Datei wurde gelöscht.</string>
+    <string name="turn_changes_summary">%1$d Dateien · +%2$d / -%3$d</string>
+    <string name="turn_changes_stats">+%1$d / -%2$d</string>
+    <string name="turn_changes_expand">Änderungen aufklappen</string>
+    <string name="turn_changes_collapse">Änderungen zuklappen</string>
+    <string name="turn_changes_confirm_file_title">Datei rückgängig machen?</string>
+    <string name="turn_changes_confirm_file_message">%1$s auf den Inhalt vor diesem Durchlauf zurücksetzen?</string>
+    <string name="turn_changes_confirm_all_title">Alle Änderungen zurücksetzen?</string>
+    <string name="turn_changes_confirm_all_message">%1$d Dateien auf den Stand vor diesem Durchlauf zurücksetzen?</string>
     <string name="turn_changes_list_separator">, </string>
     <string name="tool_longpress_copy_details">Werkzeugdetails kopieren</string>
     <string name="tool_longpress_copied_toast">Werkzeugdetails kopiert</string>
@@ -3165,4 +3173,6 @@
     <string name="process_card_tools">Tools</string>
     <string name="process_card_ai_process">KI-Ablauf</string>
     <string name="process_card_thinking_now">Denkt…</string>
+    <string name="appearance_show_turn_changes_card_title">Änderungskarte pro Runde</string>
+    <string name="appearance_show_turn_changes_card_subtitle">Zeigt pro Runde eine Karte mit den vom Assistenten geänderten Dateien, Zeilenstatistik und Ein-Tipp-Rückgängig. Standardmäßig aus; das Protokoll bleibt ohne sie aufgeräumt.</string>
 </resources>

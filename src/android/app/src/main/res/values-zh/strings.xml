@@ -1573,6 +1573,14 @@
     <string name="turn_changes_restore_failed">恢复失败</string>
     <string name="turn_changes_undo_restored">已撤销（%1$s）：文件已恢复为本轮开始前的内容。</string>
     <string name="turn_changes_undo_deleted">已撤销（%1$s）：该文件在本轮之前不存在，已删除此次新建。</string>
+    <string name="turn_changes_summary">%1$d 个文件 · +%2$d / −%3$d</string>
+    <string name="turn_changes_stats">+%1$d / −%2$d</string>
+    <string name="turn_changes_expand">展开改动</string>
+    <string name="turn_changes_collapse">收起改动</string>
+    <string name="turn_changes_confirm_file_title">撤销此文件改动？</string>
+    <string name="turn_changes_confirm_file_message">将 %1$s 恢复为本轮开始前的内容？</string>
+    <string name="turn_changes_confirm_all_title">回滚本轮全部改动？</string>
+    <string name="turn_changes_confirm_all_message">将 %1$d 个文件恢复到本轮开始前的状态？</string>
     <string name="turn_changes_list_separator">、</string>
     <string name="tool_longpress_copy_details">拷贝工具信息</string>
     <string name="tool_longpress_copied_toast">已拷贝工具信息</string>
@@ -2949,4 +2957,6 @@
     <string name="process_card_tools">工具</string>
     <string name="process_card_ai_process">AI 过程</string>
     <string name="process_card_thinking_now">思考中</string>
+    <string name="appearance_show_turn_changes_card_title">本轮改动卡片</string>
+    <string name="appearance_show_turn_changes_card_subtitle">在对话中显示每轮的改动卡片，列出助手修改的文件、行数统计，并支持一键撤销。默认关闭，保持对话简洁。</string>
 </resources>

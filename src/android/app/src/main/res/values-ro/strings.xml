@@ -1215,6 +1215,14 @@
     <string name="turn_changes_restore_failed">restaurare eșuată</string>
     <string name="turn_changes_undo_restored">Anulat (%1$s): fișierul a fost restaurat la conținutul de dinaintea turei.</string>
     <string name="turn_changes_undo_deleted">Anulat (%1$s): fișierul nu exista înainte de tură; fișierul creat a fost șters.</string>
+    <string name="turn_changes_summary">%1$d fișiere · +%2$d / -%3$d</string>
+    <string name="turn_changes_stats">+%1$d / -%2$d</string>
+    <string name="turn_changes_expand">Extinde modificările</string>
+    <string name="turn_changes_collapse">Restrânge modificările</string>
+    <string name="turn_changes_confirm_file_title">Anulezi modificările acestui fișier?</string>
+    <string name="turn_changes_confirm_file_message">Restaurezi %1$s la conținutul de dinaintea acestei ture?</string>
+    <string name="turn_changes_confirm_all_title">Revii asupra tuturor modificărilor?</string>
+    <string name="turn_changes_confirm_all_message">Restaurezi %1$d fișiere la starea de dinaintea acestei ture?</string>
     <string name="turn_changes_list_separator">, </string>
     <string name="tool_longpress_copy_details">Copiază detaliile instrumentului</string>
     <string name="tool_longpress_copied_toast">Detaliile instrumentului au fost copiate</string>
@@ -3318,4 +3326,6 @@
     <string name="process_card_tools">Instrumente</string>
     <string name="process_card_ai_process">Proces AI</string>
     <string name="process_card_thinking_now">Se gândește…</string>
+    <string name="appearance_show_turn_changes_card_title">Cardul modificărilor turei</string>
+    <string name="appearance_show_turn_changes_card_subtitle">Afișează la fiecare tură un card cu fișierele modificate de asistent, statistici pe linii și anulare dintr-o atingere. Dezactivat în mod implicit.</string>
 </resources>
