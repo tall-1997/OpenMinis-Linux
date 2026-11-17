@@ -71,29 +71,20 @@ object RelayQuotaAdapter : ProviderQuotaAdapter {
             ?: throw QuotaFetchError(QuotaError.Kind.unsupportedResponse, "relay has no usable base URL")
         val errors = mutableListOf<QuotaFetchError>()
 
-        // [T-relay-probe-parallel] When no hint, try sub2api and newAPI in
-        // parallel: both are candidate balance endpoints for relay vendors.
-        // A success on one must not stop probing the other; the user may see
-        // wallet balance from newAPI while sub2api only yields token totals.
+        // [T-relay-probe-first-success] When no hint, probe sub2api then newAPI
+        // in order; the FIRST success returns immediately — no second request to
+        // the other family (halves latency for relays that support both; the
+        // wallet-preference trade-off is deliberately dropped: whichever family
+        // answers first delivers its shape).
         val candidates = if (ctx.relayKindHint != null) {
             listOf(ctx.relayKindHint)
         } else {
             listOf(RelayKind.sub2api, RelayKind.newAPI)
         }
-        var firstSuccess: UpstreamQuotaSnapshot? = null
-        var successKind: RelayKind? = null
         for (kind in candidates) {
             try {
                 val snap = query(kind, root, ctx)
-                if (firstSuccess == null) {
-                    firstSuccess = snap
-                    successKind = kind
-                } else {
-                    // Both succeeded — prefer newAPI wallet data, fall back to sub2api.
-                    if (kind == RelayKind.newAPI) {
-                        return QuotaFetchOutcome(snap, isComplete = true, partialErrors = errors, relayKind = kind)
-                    }
-                }
+                return QuotaFetchOutcome(snap, isComplete = true, partialErrors = errors, relayKind = kind)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: QuotaFetchError) {
@@ -101,8 +92,9 @@ object RelayQuotaAdapter : ProviderQuotaAdapter {
                 errors += e
             } catch (e: Exception) {
                 if (ctx.relayKindHint != null) throw e
-                // [T-relay-probe-parallel] Record transport failure and continue;
-                // do not abort the entire chain before trying remaining families.
+                // [T-relay-probe-first-success] Record transport failure and
+                // continue; do not abort the entire chain before trying
+                // remaining families.
                 errors += QuotaFetchError(
                     QuotaError.Kind.badResponse,
                     "transport: ${e.message ?: e.javaClass.simpleName} at ${kind.path}",
@@ -110,20 +102,16 @@ object RelayQuotaAdapter : ProviderQuotaAdapter {
             }
         }
 
-        firstSuccess?.let { snap ->
-            return QuotaFetchOutcome(snap, isComplete = true, partialErrors = errors, relayKind = successKind)
-        }
-
-        // If both sub2api and newAPI failed, try openAIBilling
+        // Both candidates failed — openAIBilling is the last-resort fallback.
         try {
             val openAIBillingSnap = query(RelayKind.openAIBilling, root, ctx)
             return QuotaFetchOutcome(openAIBillingSnap, isComplete = true, partialErrors = errors, relayKind = RelayKind.openAIBilling)
         } catch (e: QuotaFetchError) {
-            // [T-relay-probe-parallel] QuotaFetchError (e.g. notFound from a 404)
-            // must propagate as-is, not be demoted to badResponse.
+            // [T-relay-probe-first-success] QuotaFetchError (e.g. notFound from a
+            // 404) must propagate as-is, not be demoted to badResponse.
             errors += e
         } catch (e: Exception) {
-            // [T-relay-probe-parallel] Record transport failure and fall through.
+            // [T-relay-probe-first-success] Record transport failure and fall through.
             errors += QuotaFetchError(
                 QuotaError.Kind.badResponse,
                 "openAIBilling transport failure: ${e.message ?: e.javaClass.simpleName}"
