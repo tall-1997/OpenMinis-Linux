@@ -106,18 +106,6 @@ const val KEY_AUTO_EXPAND_THINKING = "chat.autoExpandThinking"  // Boolean, defa
 
 const val KEY_FOLD_AI_PROCESS = "chat.foldAiProcess"
 const val DEFAULT_FOLD_AI_PROCESS = true
-
-/**
- * [T-turn-card-visibility-toggle] Show the per-turn changes card
- * (TurnChangesCard) in the transcript. Default OFF — the transcript stays
- * clean; the card is an opt-in surface for users who want one-tap file
- * undo visible per turn.
- */
-const val KEY_SHOW_TURN_CHANGES_CARD = "chat.showTurnChangesCard"  // Boolean, default false
-
-/** Default OFF — see [KEY_SHOW_TURN_CHANGES_CARD]. */
-fun showTurnChangesCardEnabled(context: Context): Boolean =
-    getAppearancePrefs(context).getBoolean(KEY_SHOW_TURN_CHANGES_CARD, false)
 // [T-composer-mic-toggle] Show the composer's mic button. Default OFF; voice mode re-shows it so hiding never strands the user.
 const val KEY_SHOW_MIC_BUTTON = "chat.showMicButton"
 const val DEFAULT_SHOW_MIC_BUTTON = false
@@ -518,31 +506,13 @@ fun AppearanceScreen(
             )
             ShowFullThinkingRow(showFullThinking) { showFullThinking = it; prefs.value.edit().putBoolean(KEY_SHOW_FULL_THINKING, it).apply() }
             SettingsSwitchRow(
-                icon = Icons.Outlined.ViewAgenda,
-                iconColor = tilePurple,
+                icon = Icons.Outlined.ViewAgenda, iconColor = tilePurple,
                 title = stringResource(R.string.appearance_fold_ai_process_title),
                 subtitle = stringResource(R.string.appearance_fold_ai_process_subtitle),
                 checked = foldAiProcess,
-                onCheckedChange = {
-                    foldAiProcess = it
-                    prefs.value.edit().putBoolean(KEY_FOLD_AI_PROCESS, it).apply()
-                },
-                showDivider = false,
+                onCheckedChange = { foldAiProcess = it; prefs.value.edit().putBoolean(KEY_FOLD_AI_PROCESS, it).apply() },
             )
-            // [T-turn-card-visibility-toggle] Per-turn changes card (file
-            // undo surface) — default OFF, opt-in here.
-            SettingsSwitchRow(
-                icon = Icons.Outlined.History,
-                iconColor = tilePurple,
-                title = stringResource(R.string.appearance_show_turn_changes_card_title),
-                subtitle = stringResource(R.string.appearance_show_turn_changes_card_subtitle),
-                checked = showTurnChangesCard,
-                onCheckedChange = {
-                    showTurnChangesCard = it
-                    prefs.value.edit().putBoolean(KEY_SHOW_TURN_CHANGES_CARD, it).apply()
-                },
-                showDivider = false,
-            )
+            ShowTurnChangesCardRow(showTurnChangesCard) { showTurnChangesCard = it; prefs.value.edit().putBoolean(KEY_SHOW_TURN_CHANGES_CARD, it).apply() }
         }
 
         // -- Auto-Focus After Reply --
