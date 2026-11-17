@@ -69,41 +69,75 @@ object RelayQuotaAdapter : ProviderQuotaAdapter {
     override suspend fun fetch(ctx: QuotaFetchContext): QuotaFetchOutcome {
         val root = root(ctx.descriptor)
             ?: throw QuotaFetchError(QuotaError.Kind.unsupportedResponse, "relay has no usable base URL")
-        val order = ctx.relayKindHint?.let { listOf(it) } ?: RelayKind.entries
         val errors = mutableListOf<QuotaFetchError>()
-        for (kind in order) {
+
+        // [T-relay-probe-parallel] When no hint, try sub2api and newAPI in
+        // parallel: both are candidate balance endpoints for relay vendors.
+        // A success on one must not stop probing the other; the user may see
+        // wallet balance from newAPI while sub2api only yields token totals.
+        val candidates = if (ctx.relayKindHint != null) {
+            listOf(ctx.relayKindHint)
+        } else {
+            listOf(RelayKind.sub2api, RelayKind.newAPI)
+        }
+        var firstSuccess: UpstreamQuotaSnapshot? = null
+        var successKind: RelayKind? = null
+        for (kind in candidates) {
             try {
                 val snap = query(kind, root, ctx)
-                return QuotaFetchOutcome(snap, isComplete = true, partialErrors = errors, relayKind = kind)
+                if (firstSuccess == null) {
+                    firstSuccess = snap
+                    successKind = kind
+                } else {
+                    // Both succeeded — prefer newAPI wallet data, fall back to sub2api.
+                    if (kind == RelayKind.newAPI) {
+                        return QuotaFetchOutcome(snap, isComplete = true, partialErrors = errors, relayKind = kind)
+                    }
+                }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: QuotaFetchError) {
-                // A known type that now refuses is reported as is (key rejected,
-                // rate limited...). While probing, move on to the next family.
                 if (ctx.relayKindHint != null) throw e
                 errors += e
             } catch (e: Exception) {
-                // [T-relay-probe-transport] A transport-level failure on ONE
-                // family (connection reset on /v1/usage while the new-api and
-                // billing endpoints answer 200) must not abort the probe
-                // chain — field report: the user saw an error instead of
-                // their balance. Record and keep probing.
                 if (ctx.relayKindHint != null) throw e
+                // [T-relay-probe-parallel] Record transport failure and continue;
+                // do not abort the entire chain before trying remaining families.
                 errors += QuotaFetchError(
                     QuotaError.Kind.badResponse,
                     "transport: ${e.message ?: e.javaClass.simpleName} at ${kind.path}",
                 )
             }
         }
+
+        firstSuccess?.let { snap ->
+            return QuotaFetchOutcome(snap, isComplete = true, partialErrors = errors, relayKind = successKind)
+        }
+
+        // If both sub2api and newAPI failed, try openAIBilling
+        try {
+            val openAIBillingSnap = query(RelayKind.openAIBilling, root, ctx)
+            return QuotaFetchOutcome(openAIBillingSnap, isComplete = true, partialErrors = errors, relayKind = RelayKind.openAIBilling)
+        } catch (e: QuotaFetchError) {
+            // [T-relay-probe-parallel] QuotaFetchError (e.g. notFound from a 404)
+            // must propagate as-is, not be demoted to badResponse.
+            errors += e
+        } catch (e: Exception) {
+            // [T-relay-probe-parallel] Record transport failure and fall through.
+            errors += QuotaFetchError(
+                QuotaError.Kind.badResponse,
+                "openAIBilling transport failure: ${e.message ?: e.javaClass.simpleName}"
+            )
+        }
+
         // [T-relay-probe-classification] Classify the end-of-chain failure
-        // honestly. When NO family reported a genuine "endpoint missing"
-        // signal (a 404 or an unrecognized probe response), "no balance
-        // endpoint" would be a lie that parks the relay's quota for 24 h on a
-        // mere network outage (failureDisablesEndpoint maps notFound there).
-        // A credential rejection keeps the auth error (the refresh gate stops
-        // on it); anything else rethrows the first error as is - badResponse
-        // takes the normal short backoff. A family that DID answer "not a
-        // balance endpoint" still classifies as notFound below.
+        // honestly. A family that DID answer "not a balance endpoint" (404 or
+        // unrecognized probe response) → notFound (parks relay for 24 h).
+        // A credential rejection → keep the auth error (refresh gate stops on it).
+        // Anything else (pure transport failures) → rethrow the first error,
+        // badResponse takes the normal short backoff instead of lying about
+        // a missing endpoint.
+        val allPaths = (candidates + listOf(RelayKind.openAIBilling)).joinToString(", ") { it.path }
         val first = errors.firstOrNull()
         if (first != null &&
             errors.none { it.kind == QuotaError.Kind.notFound || it.kind == QuotaError.Kind.unsupportedResponse }
@@ -112,8 +146,7 @@ object RelayQuotaAdapter : ProviderQuotaAdapter {
                 it.kind == QuotaError.Kind.unauthorized || it.kind == QuotaError.Kind.forbidden
             } ?: first)
         }
-        val checked = order.joinToString(", ") { it.path }
-        throw QuotaFetchError(QuotaError.Kind.notFound, "no balance endpoint on this relay (checked $checked)")
+        throw QuotaFetchError(QuotaError.Kind.notFound, "no balance endpoint on this relay (checked $allPaths)")
     }
 
     private suspend fun query(kind: RelayKind, root: String, ctx: QuotaFetchContext): UpstreamQuotaSnapshot {
@@ -202,12 +235,6 @@ object RelayQuotaAdapter : ProviderQuotaAdapter {
     fun parseNewAPI(data: ByteArray, subjectId: QuotaSubjectID, relayHost: String, now: Long): UpstreamQuotaSnapshot {
         val o = obj(data, RelayKind.newAPI)
         val d = o.obj("data")
-        val uq = d?.obj("user_quota")
-        if (d == null || (d["total_granted"] == null && d["total_available"] == null && uq == null)) {
-            throw QuotaFetchError(QuotaError.Kind.unsupportedResponse, "no data.total_granted: not New API")
-        }
-        val key = QuotaPoolKey.of(subjectId, "relay")
-        val nameLabel = d.str("name")?.let { "New API · $it" } ?: "New API token quota"
         // [T-relay-newapi-user-quota] Newer New API deployments answer
         // `/api/usage/token` with BOTH token-level totals AND the account
         // wallet (`data.user_quota.total_available`, in the relay's quota
@@ -216,9 +243,22 @@ object RelayQuotaAdapter : ProviderQuotaAdapter {
         // balance lives one level down — the field report's "查询不到对应
         // 余额". Prefer the account wallet when present; older deployments
         // without user_quota keep the token-level shape verbatim.
-        val uqAvailable = uq?.dec("total_available")
-        val uqUsed = uq?.dec("total_used")
-        val pool = if (uq != null && (uqAvailable != null || uqUsed != null)) {
+        // Different deployments use different field names; try common aliases.
+        val uqObj = listOf("user_quota", "wallet", "balance", "account")
+            .mapNotNull { d?.obj(it) }
+            .firstOrNull()
+        if (d == null || (d["total_granted"] == null && d["total_available"] == null && uqObj == null)) {
+            throw QuotaFetchError(QuotaError.Kind.unsupportedResponse, "no data.total_granted: not New API")
+        }
+        val key = QuotaPoolKey.of(subjectId, "relay")
+        val nameLabel = d.str("name")?.let { "New API · $it" } ?: "New API token quota"
+        val uqAvailable = listOf("total_available", "available")
+            .mapNotNull { uqObj?.dec(it) }
+            .firstOrNull()
+        val uqUsed = listOf("total_used", "used", "spent", "consumed")
+            .mapNotNull { uqObj?.dec(it) }
+            .firstOrNull()
+        val pool = if (uqObj != null && (uqAvailable != null || uqUsed != null)) {
             // [T-relay-wallet-negative-sentinel] Mirror the legacy sentinel:
             // a negative total_available means "unlimited", not an overdrawn
             // wallet that renders "used up". Zero stays a genuinely empty
