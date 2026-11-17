@@ -1,10 +1,13 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.tools.PresentTool
+
 /**
  * Pure row-selection predicates and projections for flat chat items,
  * extracted from ChatFlatItems.kt (architecture-policy line ceiling).
  * All referenced types (AssistantBlock / ChatMessage / ToolBlockStatus)
- * live in the same package (ChatModels.kt), so no imports are needed.
+ * live in the same package (ChatModels.kt); PresentTool comes from the tools
+ * package (same import ChatFlatItems.kt uses).
  */
 
 internal fun shouldShowToolUseRow(block: AssistantBlock, showCompletedToolCards: Boolean): Boolean {
@@ -63,7 +66,7 @@ internal fun shouldShowProcessToolRow(
     return shouldShowToolUseRow(block, showCompletedToolCards)
 }
 
-private val IN_FLIGHT_PROCESS_TOOL_STATUSES = setOf(
+internal val IN_FLIGHT_PROCESS_TOOL_STATUSES = setOf(
     ToolBlockStatus.STREAMING,
     ToolBlockStatus.PENDING,
     ToolBlockStatus.RUNNING,
