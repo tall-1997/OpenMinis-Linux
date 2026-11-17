@@ -101,6 +101,8 @@ object RelayQuotaAdapter : ProviderQuotaAdapter {
                 errors += e
             } catch (e: Exception) {
                 if (ctx.relayKindHint != null) throw e
+                // [T-relay-probe-parallel] Record transport failure and continue;
+                // do not abort the entire chain before trying remaining families.
                 errors += QuotaFetchError(
                     QuotaError.Kind.badResponse,
                     "transport: ${e.message ?: e.javaClass.simpleName} at ${kind.path}",
@@ -117,6 +119,7 @@ object RelayQuotaAdapter : ProviderQuotaAdapter {
             val openAIBillingSnap = query(RelayKind.openAIBilling, root, ctx)
             return QuotaFetchOutcome(openAIBillingSnap, isComplete = true, partialErrors = errors, relayKind = RelayKind.openAIBilling)
         } catch (e: Exception) {
+            // [T-relay-probe-parallel] Same: record and fall through, never abort.
             errors += QuotaFetchError(
                 QuotaError.Kind.badResponse,
                 "openAIBilling transport failure: ${e.message ?: e.javaClass.simpleName}"
@@ -134,9 +137,10 @@ object RelayQuotaAdapter : ProviderQuotaAdapter {
         // balance endpoint" still classifies as notFound below.
         val checked = candidates.joinToString(", ") { it.path }
         val first = errors.firstOrNull()
-        if (first != null &&
-            errors.none { it.kind == QuotaError.Kind.notFound || it.kind == QuotaError.Kind.unsupportedResponse }
-        ) {
+        // If there's any notFound or unsupportedResponse, it's a genuine end-of-chain signal
+        if (first != null && errors.none { it.kind == QuotaError.Kind.notFound || it.kind == QuotaError.Kind.unsupportedResponse }) {
+            // No genuine "endpoint missing" signal from any family — rethrow the
+            // first transport error instead of lying about "no balance endpoint".
             throw (errors.firstOrNull {
                 it.kind == QuotaError.Kind.unauthorized || it.kind == QuotaError.Kind.forbidden
             } ?: first)
