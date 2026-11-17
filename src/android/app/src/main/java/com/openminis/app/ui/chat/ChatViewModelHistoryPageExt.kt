@@ -132,7 +132,15 @@ internal suspend fun ChatViewModel.loadOlderPage(pages: Int = 1): Boolean {
                         loadSortRange(
                             SortRange(
                                 loadStart,
-                                if (before == Int.MAX_VALUE) before else before + 1,
+                                // [T-history-batch-pages] The FIRST page keeps the
+                                // inclusive end (`before + 1`) so the painted
+                                // boundary row rides into the known-set dedupe at
+                                // merge time. Pages AFTER the first must NOT
+                                // re-fetch the previous page's minimum row — its
+                                // noteBoundsSorts already made it the new cursor —
+                                // so a blind inclusive end duplicated the internal
+                                // boundary row on screen (round-3 F2).
+                                if (page == 0 || before == Int.MAX_VALUE) before + 1 else before,
                             ),
                         ),
                     )
@@ -142,8 +150,11 @@ internal suspend fun ChatViewModel.loadOlderPage(pages: Int = 1): Boolean {
                 // rows: the ui layer must not hold Room entities across the
                 // batch (a MessageEntity reference is an architecture-policy
                 // violation), and noteBoundsSorts advances the window cursor so
-                // the NEXT page probes strictly before this one.
-                accumulated += toChatMessages(pageRows)
+                // the NEXT page probes strictly before this one. Each page is
+                // OLDER than the previous one — PREPEND so the accumulated list
+                // stays oldest-first (an append painted page 1 ABOVE page 0,
+                // reversing chronology on screen — round-3 F1).
+                accumulated.addAll(0, toChatMessages(pageRows))
                 timeline.noteBoundsSorts(
                     pageRows.minOf { it.sortOrder },
                     pageRows.maxOf { it.sortOrder },
