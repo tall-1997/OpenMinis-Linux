@@ -129,6 +129,8 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.RemoveRedEye
 import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.automirrored.filled.Undo
+import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.ScreenLockPortrait
@@ -328,6 +330,7 @@ private val iconPairs: List<Pair<ImageVector, ImageVector>> = listOf(
     Icons.AutoMirrored.Filled.KeyboardReturn to Icons.AutoMirrored.Outlined.KeyboardReturn,
     Icons.AutoMirrored.Filled.Send to Icons.AutoMirrored.Outlined.Send,
     Icons.AutoMirrored.Filled.Sort to Icons.AutoMirrored.Outlined.Sort,
+    Icons.AutoMirrored.Filled.Undo to Icons.AutoMirrored.Outlined.Undo,
     Icons.AutoMirrored.Filled.VolumeUp to Icons.AutoMirrored.Outlined.VolumeUp,
     Icons.Filled.Accessibility to Icons.Outlined.Accessibility,
     Icons.Filled.Add to Icons.Outlined.Add,

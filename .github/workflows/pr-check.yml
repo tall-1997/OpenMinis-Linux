@@ -54,6 +54,15 @@ jobs:
 
       - name: Restore Android SDK cache
         uses: actions/cache@v4
+        # A corrupt/unrestorable archive must not gate the PR: Install Android
+        # SDK below provisions the full toolchain unconditionally (against a
+        # restored tree sdkmanager no-ops via package.xml), so a failed restore
+        # only costs a fresh download. Empirically: the archive saved
+        # 2026-11-16 16:31 fails every restore with "tar: Cannot utime/change
+        # mode: Operation not permitted" on ~51k files under
+        # /usr/local/lib/android/sdk (runner overlay metadata issue) and failed
+        # 5 consecutive PR runs before any code was compiled.
+        continue-on-error: true
         with:
           # setup-java's `cache: gradle` only covers ~/.gradle — the platform and
           # build-tools were re-downloaded on every PR. Key names both pinned
@@ -80,6 +89,10 @@ jobs:
           # runner user or actions/cache cannot extract into them on a hit, and
           # android-apk.yml already writes to this exact path unprivileged.
           if [ ! -x /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager ]; then
+            # A failed cache restore can leave a partially extracted tree
+            # (content present, modes unrestored): clear it so the mv below
+            # replaces `latest` instead of nesting the new dir inside it.
+            rm -rf /usr/local/lib/android/sdk/cmdline-tools/latest
             curl -fsSL -o /tmp/cmdline-tools.zip \
               "https://dl.google.com/android/repository/commandlinetools-linux-${{ env.ANDROID_CMDLINE_TOOLS }}_latest.zip"
             unzip -q /tmp/cmdline-tools.zip -d /tmp/sdk

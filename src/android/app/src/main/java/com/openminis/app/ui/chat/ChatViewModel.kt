@@ -90,6 +90,8 @@ class ChatViewModel(
     internal val isDraft: Boolean = sessionId.startsWith("__new__")
     /** The real session ID, populated on first message for drafts. */
     internal var realSessionId: String = if (isDraft) "" else sessionId
+    /** [T-tool-undo-replay] Turn-card undo state (reverted "msgId\npath" keys). */
+    internal val toolUndo = ChatToolUndoController(this)
     /** [T-android-tts-scene-announcements] Speech sink for scene announcements, injected by the UI layer; null = no engine bound yet (degrade to silence). */
     @Volatile
     var announcementSink: ((String) -> Unit)? = null
@@ -4418,21 +4420,6 @@ class ChatViewModel(
         }
     }
 
-
-    /**
-     * Unwrap exceptions thrown inside callbackFlow.
-     * callbackFlow wraps internal throws into CancellationException(cause=original).
-     * This extracts the original LLMError if present.
-     */
-
-    internal fun unwrapFlowException(e: Throwable): Throwable {
-        var cause: Throwable? = e
-        while (cause != null) {
-            if (cause is com.openminis.app.data.model.LLMError) return cause
-            cause = cause.cause
-        }
-        return e
-    }
 
     /**
      * Offload candidate descriptor. `msgIdx` and `partIdx` index back into

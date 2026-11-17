@@ -2,57 +2,45 @@ package com.openminis.app.ui.chat
 
 // [T-android-split-chat] Assistant-message + tool-pill + thinking rendering
 // extracted verbatim from ChatScreen.kt: AssistantHeader, BoundsTrackedBlock,
-// InlineErrorBanner, ToolStopButton, formatToolDetailsForClipboard,
+// InlineErrorBanner, ToolCallPill, ThinkingBlock.
 // ToolCallPill, ThinkingBlock. (The legacy AssistantMessageView renderer that
 // also came across was deleted as unreachable dead code — the FlatChatItem
 // path in ChatMessageListSection is the only assistant renderer.)
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenuItem
-import com.openminis.app.R
-import com.openminis.app.cottranslate.CotTranslationPrefs
-import com.openminis.app.cottranslate.OkHttpTranslationHttp
-import com.openminis.app.cottranslate.ReasoningTranslationController
-import com.openminis.app.cottranslate.ThinkingTranslationHandle
-import com.openminis.app.ui.settings.autoExpandThinkingEnabled
-import com.openminis.app.ui.components.MinisMenu
-import androidx.compose.material3.Surface
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -60,45 +48,44 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Replay
-import androidx.compose.material.icons.filled.Terminal
-import androidx.compose.material3.CircularProgressIndicator
-import kotlinx.coroutines.delay
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.openminis.app.R
+import com.openminis.app.cottranslate.CotTranslationPrefs
+import com.openminis.app.cottranslate.OkHttpTranslationHttp
+import com.openminis.app.cottranslate.ReasoningTranslationController
+import com.openminis.app.cottranslate.ThinkingTranslationHandle
+import com.openminis.app.ui.components.MinisMenu
+import com.openminis.app.ui.settings.autoExpandThinkingEnabled
 import com.openminis.app.ui.theme.ChatColors
-import com.openminis.app.ui.theme.m3Icon
-import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.theme.decorLinearSweep
-
+import com.openminis.app.ui.theme.m3Icon
+import kotlinx.coroutines.delay
 @Composable
 internal fun AssistantHeader(speakerName: String? = null, speakerVendor: String? = null) {
     // [T-soul-md] Identity header = icon + SOUL.md-driven `name`.
@@ -235,95 +222,9 @@ internal fun InlineErrorBanner(error: String, onRetry: (() -> Unit)? = null) {
     }
 }
 
-/**
- * T14: per-card stop affordance shown on running/streaming tool blocks.
- * Mirrors iOS `ToolCapsuleView`'s small red square that appears trailing
- * the tool title when `block.toolStatus == .running`. Tapping it routes to
- * the same global `cancelStream()` callback iOS uses for `onStop?()` —
- * iOS also has no per-tool cancellation API; the per-card button is purely
- * an affordance-discoverability win. Resume banner (T13) makes the global
- * cancel UX recoverable.
- *
- * Visual: 14×14 red rounded square (Color 0xFFFF3B30 = iOS systemRed).
- */
-@Composable
-private fun ToolStopButton(
-    onStop: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val label = stringResource(R.string.stop_tool)
-    // Outer Box keeps the *layout* footprint at 18×18 (unchanged capsule width).
-    // The inner clickable Box is 24×24 and overflows the outer bounds equally on
-    // all sides (requiredSize ignores the parent's 18dp constraint), enlarging the
-    // touch target to 24 while the visual 10×10 red square stays identical.
-    Box(
-        modifier = modifier.size(18.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Box(
-            modifier = Modifier
-                .requiredSize(24.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .clickable(
-                    onClickLabel = label,
-                    onClick = onStop,
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(10.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(Color(0xFFFF3B30)),
-            )
-        }
-    }
-}
 
 // ─── Tool Call Capsule (iOS: Capsule(), inline, tool-colored icon + title + duration) ─
 
-/**
- * [T-android-tool-bubble-longpress-menu] Render a tool_use block as a
- * human-readable, paste-back-friendly clipboard string: the tool call
- * (name + id + pretty-printed input JSON) followed by the tool result
- * (char count + status + the result text). Input JSON is pretty-printed
- * when it parses as a JSON object/array; otherwise it's emitted verbatim
- * so a malformed / partial args string still copies usefully.
- */
-internal fun formatToolDetailsForClipboard(block: AssistantBlock): String {
-    val prettyInput = run {
-        val raw = block.toolArgs
-        if (raw.isBlank()) return@run "(none)"
-        try {
-            when (raw.trimStart().firstOrNull()) {
-                '{' -> org.json.JSONObject(raw).toString(2)
-                '[' -> org.json.JSONArray(raw).toString(2)
-                else -> raw
-            }
-        } catch (_: Exception) {
-            raw
-        }
-    }
-    val statusLabel = when (block.toolStatus) {
-        ToolBlockStatus.SUCCESS -> "success"
-        ToolBlockStatus.FAILED -> "error"
-        ToolBlockStatus.TIMEOUT -> "timeout"
-        ToolBlockStatus.CANCELLED -> "cancelled"
-        ToolBlockStatus.RUNNING, ToolBlockStatus.STREAMING, ToolBlockStatus.PENDING -> "running"
-        null -> "unknown"
-    }
-    val resultText = block.content
-    return buildString {
-        append("## Tool Call\n")
-        append("name: ").append(block.toolName).append('\n')
-        append("id: ").append(block.id).append('\n')
-        append("input:\n").append(prettyInput).append('\n')
-        append('\n')
-        append("## Tool Result\n")
-        append("(").append(resultText.length).append(" chars, ").append(statusLabel).append(")\n")
-        if (resultText.isNotEmpty()) append(resultText)
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -865,3 +766,4 @@ internal fun ThinkingBlock(
         }
     }
 }
+
