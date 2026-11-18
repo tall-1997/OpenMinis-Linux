@@ -1043,12 +1043,18 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 val actual = CanceledIoClassification.asTransientStall(unwrapFlowException(e), turnTextSb.isNotEmpty()) ?: unwrapFlowException(e)
                 streamPhase.logFailure(turn, actual)
                 val isRateLimit = actual is com.openminis.app.data.model.LLMError.RateLimited
-                val is5xx = actual is com.openminis.app.data.model.LLMError.ProviderError &&
-                    ChatViewModel.HTTP_5XX_STATUS_RE.containsMatchIn(actual.detail)
+                val is5xx = (actual as? com.openminis.app.data.model.LLMError)?.isCapacityRejection == true
                 val isPermanentCapacity = actual is com.openminis.app.data.model.LLMError.ProviderError &&
-                    (actual.detail.contains("[429]") ||
+                    (actual.httpStatus == 429 ||
                         com.openminis.app.provider.HttpRetryAfter.isPermanentCapacityBody(actual.detail))
-                if (isRateLimit || isPermanentCapacity)
+                // [T-transient-5xx-fallback] A capacity 5xx parks the member too:
+                // measured on token.zlshag.xyz, one deepseek channel returned the
+                // same instant 503 for every payload shape for minutes while its
+                // glm sibling stayed healthy. Without a cooldown the very next
+                // turn re-picked the dead channel and failed again — the
+                // "老是断开" pattern. DEFAULT_COOLDOWN_MS = 30s; Retry-After wins
+                // when the relay sends one.
+                if (isRateLimit || isPermanentCapacity || is5xx)
                     GroupRoutingState.markRoutingCooldownFor(
                         _activeEntryId.value,
                         _selectedGroupId.value,
@@ -1073,9 +1079,18 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 val maxRetries = effectiveMaxRetries()
                 // 429 with another group member: switch endpoints instead of hammering the
                 // same key through 1/2/4/8/16s (inside a typical 60s relay window). Same-provider
-                // retries remain for network/5xx, and for 429 when this is the last candidate.
+                // retries remain for network errors, and for 5xx/429 when this is the last candidate.
+                // [T-transient-5xx-fallback] A relay 5xx is the same kind of capacity verdict:
+                // measured on token.zlshag.xyz, a cooled-down channel answers the identical
+                // instant 503 (<1s) for every payload shape while a sibling model on the same
+                // key streams 200 — 31s of in-place retries cannot heal that, so one quick
+                // attempt absorbs a blip and the rest of the budget goes to switching.
                 val skipSameProviderRetry = (isRateLimit && remainingFallbacks.isNotEmpty()) || isPermanentCapacity
-                val sameProviderBudget = if (isRateLimit) minOf(maxRetries, 1) else maxRetries
+                val sameProviderBudget = when {
+                    isRateLimit -> minOf(maxRetries, 1)
+                    is5xx && remainingFallbacks.isNotEmpty() -> minOf(maxRetries, 1)
+                    else -> maxRetries
+                }
                 if (isTransient && !skipSameProviderRetry && sameProviderBudget > 0 && retryAttempt < sameProviderBudget) {
                     val retryAfter = (actual as? com.openminis.app.data.model.LLMError.RateLimited)?.retryAfterSeconds
                     val delaySec = com.openminis.app.provider.HttpRetryAfter.delaySeconds(

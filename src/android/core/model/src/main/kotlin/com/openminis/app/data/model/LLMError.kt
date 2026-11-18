@@ -115,11 +115,57 @@ sealed class LLMError(message: String, cause: Throwable? = null) : Exception(mes
             is RateLimited, is InvalidApiKey, is ContextLengthExceeded,
             is ContentFiltered -> true
             is Timeout -> true
+            // [T-transient-5xx-fallback] A relay 5xx maps to TransientError
+            // (see mapHttpErrorShared: TRANSIENT_HTTP_STATUSES), but this
+            // branch used to answer `false`, so a dead upstream channel —
+            // "Transient error: [503] Service temporarily unavailable" —
+            // burned all 5 same-provider retries (~31s) and then failed the
+            // turn even when the group had a healthy member. Relay channels
+            // fail independently (measured on token.zlshag.xyz: deepseek
+            // 503 while glm streams), and the ProviderError branch below
+            // already treats `[5\d{2}]` as fallbackable — this closes the gap
+            // for the class 5xx actually lands in. Watchdog stalls carry no
+            // status token, so their resume semantics ([T-stall-resume]) are
+            // untouched.
+            is TransientError -> (httpStatus ?: 0) in 500..599
             is ProviderError ->
-                detail.contains("[429]") ||
-                    Regex("""\[5\d{2}\]""").containsMatchIn(detail)
+                httpStatus == 429 || (httpStatus ?: 0) in 500..599
             else -> false
         }
+
+    /**
+     * [T-relay-5xx-root-cause] HTTP status the error mappers stamp into a
+     * bracketed detail token (`"[503] Service temporarily unavailable"`,
+     * `"[429] ..."`), or null when the failure never carried one (watchdog
+     * stalls, TLS failures, local IO). Single parser so the fallback decision,
+     * the retry budget and the diagnostics all read the same number instead of
+     * three private regex copies drifting apart.
+     *
+     * Measured on a scraping relay (token.zlshag.xyz): a dead upstream channel
+     * answers the *same* instant 503 for plain, +system, +tools and
+     * +tools+stream_options bodies, while a healthy sibling model on the same
+     * key streams 200 — i.e. the status is a channel verdict, not a payload
+     * complaint, and switching members is the only useful reaction.
+     */
+    val httpStatus: Int?
+        get() {
+            val raw = when (this) {
+                is TransientError -> detail
+                is ProviderError -> detail
+                is RateLimited -> detail
+                else -> message.orEmpty()
+            }
+            return STATUS_TOKEN.find(raw)?.groupValues?.getOrNull(1)?.toIntOrNull()
+        }
+
+    /** Provider 5xx / capacity rejection: the channel, not the request, is at fault. */
+    val isCapacityRejection: Boolean
+        get() = (httpStatus ?: 0) in 500..599
+
+    private companion object {
+        /** Bracketed HTTP status the error mappers stamp into `detail`. */
+        private val STATUS_TOKEN = Regex("""\[(\d{3})\]""")
+    }
 
     /** Short user-facing reason shown when a fallback engages. */
     val fallbackReason: String
