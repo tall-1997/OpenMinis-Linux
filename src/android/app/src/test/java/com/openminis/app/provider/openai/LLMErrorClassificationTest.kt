@@ -3,6 +3,7 @@ package com.openminis.app.provider.openai
 import com.openminis.app.data.model.LLMError
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -90,4 +91,81 @@ class LLMErrorClassificationTest {
         assertTrue(err.actionableHint.contains("Check your API key"))
     }
 
+    // [T-transient-5xx-fallback] Relay outages arrive as TransientError, not
+    // ProviderError — see mapHttpErrorShared's TRANSIENT_HTTP_STATUSES. The
+    // fallback predicate only recognised ProviderError 5xx, so a group with a
+    // healthy member still failed the turn after 5 in-place retries.
+    @Test
+    fun `relay 503 transient error engages group fallback`() {
+        val err = LLMError.TransientError("[503] Service temporarily unavailable")
+        assertTrue("503 must keep retrying in place", err.isRetryable)
+        assertTrue(
+            "503 must also reach the group fallback once retries run out",
+            err.isFallbackable,
+        )
+    }
+
+    @Test
+    fun `relay 5xx transient errors engage group fallback`() {
+        listOf("[500] Internal error", "[502] Bad gateway", "[504] Gateway timeout", "[529] Overloaded").forEach { detail ->
+            assertTrue(detail, LLMError.TransientError(detail).isFallbackable)
+        }
+    }
+
+    @Test
+    fun `watchdog stall transient errors keep resume semantics`() {
+        // No HTTP status token: these are produced locally by the TTFB / idle
+        // watchdogs and are resumed from the partial text, never "switched".
+        val firstEvent = LLMError.TransientError("no first event within 45s")
+        val idle = LLMError.TransientError(
+            "stream idle for 90s after first event",
+            stalledAfterFirstEvent = true,
+        )
+        assertFalse(firstEvent.isFallbackable)
+        assertFalse(idle.isFallbackable)
+        assertTrue(firstEvent.isRetryable)
+        assertTrue(idle.isRetryable)
+    }
+
+    @Test
+    fun `4xx status tokens do not fan out across the group`() {
+        assertFalse(LLMError.TransientError("[400] Bad Request").isFallbackable)
+        assertFalse(LLMError.TransientError("[404] Not Found").isFallbackable)
+    }
+
+    @Test
+    fun `provider error 503 keeps falling back`() {
+        assertTrue(LLMError.ProviderError("[503] model not provisioned").isFallbackable)
+    }
+
+    // [T-transient-5xx-fallback] One parser for the bracketed status the
+    // mappers stamp into `detail`; the retry budget, the fallback predicate
+    // and diagnostics all read it.
+    @Test
+    fun `http status token parses from transient and provider details`() {
+        assertEquals(503, LLMError.TransientError("[503] Service temporarily unavailable").httpStatus)
+        assertEquals(429, LLMError.ProviderError("[429] rate limited").httpStatus)
+        assertEquals(429, LLMError.RateLimited(detail = "[429] slow down").httpStatus)
+        assertNull(LLMError.TransientError("no first event within 45s").httpStatus)
+        assertNull(LLMError.DecodingError(IllegalStateException("expected a JSON object body")).httpStatus)
+    }
+
+    @Test
+    fun `capacity rejection covers 5xx but not 429 or local stalls`() {
+        assertTrue(LLMError.TransientError("[503] Service temporarily unavailable").isCapacityRejection)
+        assertTrue(LLMError.TransientError("[502] Bad gateway").isCapacityRejection)
+        assertFalse(LLMError.TransientError("[429] slow down").isCapacityRejection)
+        assertFalse(LLMError.TransientError("stream idle for 90s").isCapacityRejection)
+    }
+
+    @Test
+    fun `capacity rejection prefers switching over a long retry budget`() {
+        // The agent loop caps same-provider retries at 1 when the error is a
+        // capacity 5xx and another group member exists; locally-produced
+        // transients keep the full 1/2/4/8/16s ladder.
+        val relay503 = LLMError.TransientError("[503] Service temporarily unavailable")
+        val stall = LLMError.TransientError("stream idle for 90s after first event", stalledAfterFirstEvent = true)
+        assertTrue(relay503.isCapacityRejection)
+        assertFalse(stall.isCapacityRejection)
+    }
 }

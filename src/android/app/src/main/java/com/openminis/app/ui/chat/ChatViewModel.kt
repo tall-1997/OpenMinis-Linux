@@ -119,7 +119,7 @@ class ChatViewModel(
     }
     companion object {
         internal const val TAG = "ChatViewModel"
-        internal val HTTP_5XX_STATUS_RE = Regex("""\[5\d{2}\]""")
+        // 5xx detection lives on LLMError (`httpStatus` / `isCapacityRejection`).
         // ── [T-android-compact-runaway] Compaction budgets ──────────────
         //
         // Compaction had no ceiling: only the provider readTimeout (10m) and a 1+2+4+8=15
