@@ -1303,9 +1303,6 @@ class ChatViewModel(
     internal val _lastTurnContextTokens = MutableStateFlow(0)
     val lastTurnContextTokens: StateFlow<Int> = _lastTurnContextTokens.asStateFlow()
 
-    /** [T-compaction-cascade] (activeSessionId, usedTokens) feeding the pre-step compaction cascade; null = unknown. */
-    internal var lastKnownContextUsage: Pair<String, Long>? = null
-
     /** [T-cache-hit-rate] Per-turn cache hit rate from the most recent API call (0..1). */
     internal val _lastCacheHitRate = MutableStateFlow(0.0)
     val lastCacheHitRate: StateFlow<Double> = _lastCacheHitRate.asStateFlow()

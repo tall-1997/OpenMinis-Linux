@@ -504,7 +504,9 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     break@agentTurns
                 }
                 // [T-once-notices] committed once; [T-agent-steering + T-toolset-delta] pi turn-boundary injections.
-                // [T-compaction-cascade] prepareRequestHistory: tier-② proactive compact, then tier-① micro-prune.
+                // [T-compaction-cascade] prepareRequestHistory: untrusted-marker
+                // neutralization + tier-① micro-prune (request-time projections).
+                // Compaction itself is owned by inLoopContextCheck / the overflow gates.
                 commitSessionNoticesOnce(goalObjective = requestGoalState?.objective.orEmpty(),
                     goalPrompt = goalMount.prompt, goalCanContinue = goalMount.canContinue)
                 drainSteeringIntoRun(assistantId, accumulatedText, allToolBlocks, uiBatcher) { swapLoopStateToInjectedBubble(it) }
@@ -879,17 +881,13 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                         (effective.cacheReadInputTokens ?: 0) + (effective.cacheCreationInputTokens ?: 0)
                     if (lastContextTokens > 0) {
                         _lastTurnContextTokens.value = lastContextTokens
-                        // [T-compaction-cascade] feed the pre-step cascade (session-keyed).
-                        lastKnownContextUsage = activeSessionId to lastContextTokens.toLong()
-                        // [T-token-usage-calibration] 用真实 usage 校准估算器。
-                        val modelKey = currentModel?.id ?: ""
-                        if (modelKey.isNotEmpty()) {
-                            com.openminis.app.data.TokenUsageCalibration.observe(
-                                modelKey,
-                                estimated = estimateAgentHistoryTokens(),
-                                actual = lastContextTokens,
-                            )
-                        }
+                        // [T-token-usage-calibration][T-calibration-raw] Real usage
+                        // calibrates the estimator (raw sum of the PROJECTED request).
+                        observeCalibratedUsage(
+                            currentModel?.id ?: "",
+                            requestHistory,
+                            lastContextTokens,
+                        )
                         // [T-cache-hit-rate] Per-turn cache hit rate for TokenUsageSheet.
                         val inputTotal = chunk.usage.inputTokens + (chunk.usage.cacheReadInputTokens ?: 0) + 
                             (chunk.usage.cacheCreationInputTokens ?: 0)

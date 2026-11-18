@@ -53,7 +53,11 @@ object MemoryTools {
                 ToolResult("Error: Missing required 'content' parameter", false, toolTitle)
             } else {
                 val result = repository.writeMemory(content, revision)
-                val success = result.startsWith("Memory saved")
+                // [T-memory-dedup-on-write] The write-side dedup's "Skipped: …"
+                // reply is a SUCCESS (the memory exists; nothing was written) —
+                // classifying it as failure made the model see an error-shaped
+                // tool result for a harmless skip and re-retry the write.
+                val success = result.startsWith("Memory saved") || result.startsWith("Skipped")
                 ToolResult(result, success, toolTitle)
             }
         } catch (e: Exception) {

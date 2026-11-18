@@ -29,7 +29,7 @@
     "src/android/app/src/main/java/com/openminis/app/data/repository/BundledAndroidDeviceOpsSkill.kt": 1,
     "src/android/app/src/main/java/com/openminis/app/data/repository/ChatRepository.kt": 1,
     "src/android/app/src/main/java/com/openminis/app/data/repository/MCPRepository.kt": 1,
-    "src/android/app/src/main/java/com/openminis/app/data/repository/MemoryRepository.kt": 13,
+    "src/android/app/src/main/java/com/openminis/app/data/repository/MemoryRepository.kt": 15,
     "src/android/app/src/main/java/com/openminis/app/data/repository/SkillRepository.kt": 1,
     "src/android/app/src/main/java/com/openminis/app/evolution/BeliefMaintenance.kt": 16,
     "src/android/app/src/main/java/com/openminis/app/evolution/CorrectionDetector.kt": 14,
