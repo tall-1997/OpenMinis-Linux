@@ -76,6 +76,23 @@ internal fun AnnotatedString.Builder.appendRecursive(text: String, colors: MdCol
                     } else { append(text[i]); i++ }
                 } else { append(text[i]); i++ }
             }
+            // [T-chatlink-bare-url-autolink] Bare-URL autolink INSIDE emphasis:
+            // `**minis://…txt**` is the field case (glm-5.3 wrapping a file link
+            // in bold). appendRecursive has its own branch list — without this,
+            // the bold body fell to the literal `else` and the URL rendered as
+            // plain bold text with no "url" annotation, dead tap.
+            text.startsWith("minis://", i) || text.startsWith("https://", i) || text.startsWith("http://", i) -> {
+                val end = bareUrlEnd(text, i)
+                if (end > i) {
+                    val url = text.substring(i, end)
+                    val linkStart = length
+                    withStyle(SpanStyle(color = colors.link, textDecoration = TextDecoration.Underline)) {
+                        append(url)
+                    }
+                    addStringAnnotation("url", url, linkStart, length)
+                    i = end
+                } else { append(text[i]); i++ }
+            }
             else -> { append(text[i]); i++ }
         }
     }
