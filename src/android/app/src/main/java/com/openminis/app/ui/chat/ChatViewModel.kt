@@ -1303,6 +1303,9 @@ class ChatViewModel(
     internal val _lastTurnContextTokens = MutableStateFlow(0)
     val lastTurnContextTokens: StateFlow<Int> = _lastTurnContextTokens.asStateFlow()
 
+    /** [T-compaction-cascade] (activeSessionId, usedTokens) feeding the pre-step compaction cascade; null = unknown. */
+    internal var lastKnownContextUsage: Pair<String, Long>? = null
+
     /** [T-cache-hit-rate] Per-turn cache hit rate from the most recent API call (0..1). */
     internal val _lastCacheHitRate = MutableStateFlow(0.0)
     val lastCacheHitRate: StateFlow<Double> = _lastCacheHitRate.asStateFlow()
@@ -2994,26 +2997,6 @@ class ChatViewModel(
         STOP,
     }
 
-    /**
-     * [T-android-auto-compact-inloop] Run [compactAll] with the in-loop flag and
-     * suspend until it settles. Returns whether it actually compacted.
-     *
-     * `compactAll` is fire-and-forget (it launches its own IO coroutine), so the
-     * loop cannot simply call it and continue — the next API call would read the
-     * pre-compaction history and the guard would fire again immediately.
-     */
-    internal suspend fun awaitCompaction(): Boolean =
-        kotlinx.coroutines.suspendCancellableCoroutine { cont ->
-            var resumed = false
-            compactAll(allowDuringProcessing = true) { ok ->
-                // compactAll guarantees exactly one callback, but guard anyway:
-                // resuming a continuation twice throws.
-                if (!resumed) {
-                    resumed = true
-                    if (cont.isActive) cont.resume(ok) { _, _, _ -> }
-                }
-            }
-        }
 
     // T203 part 2: these MUST be declared before `init { loadSession() }` below — launch
     // defaults to Main.immediate and runs the body to its first suspend, which reads `isDraft`;

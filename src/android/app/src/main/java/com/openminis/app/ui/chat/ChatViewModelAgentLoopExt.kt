@@ -417,6 +417,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             return compacted
         }
 
+
         // Error-path / truncation-path recovery: compact AND re-dispatch; true =
         // caller `continue`s, false (cap spent / compaction failed) falls through.
         suspend fun compactAndRetryForOverflow(details: String): Boolean {
@@ -502,17 +503,14 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     loopExitedNormally = true
                     break@agentTurns
                 }
-                // [T-once-notices] committed into the transcript once — never rebuilt.
-                // [T-agent-steering + T-toolset-delta] pi turn-boundary injections, before history build.
+                // [T-once-notices] committed once; [T-agent-steering + T-toolset-delta] pi turn-boundary injections.
+                // [T-compaction-cascade] prepareRequestHistory: tier-② proactive compact, then tier-① micro-prune.
                 commitSessionNoticesOnce(goalObjective = requestGoalState?.objective.orEmpty(),
                     goalPrompt = goalMount.prompt, goalCanContinue = goalMount.canContinue)
                 drainSteeringIntoRun(assistantId, accumulatedText, allToolBlocks, uiBatcher) { swapLoopStateToInjectedBubble(it) }
                 declareToolSetDeltaIfChanged(agentTools)
                 val requestHistory = ToolIdNormalization.normalizeMessages(
-                    effectiveAgentHistory().let { history ->
-                        // [T-stall-resume] One-shot continuation note only.
-                        applyStallNudge(history, stallResumeContext)
-                    }
+                    prepareRequestHistory(stallResumeContext)
                 )
                 // [T-first-event-watchdog][T-routing-strategy-x] First-token budget.
                 val firstEventTimeoutMs = GroupRoutingState.resolveFirstEventTimeoutMs(providerRepository,
@@ -881,6 +879,8 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                         (effective.cacheReadInputTokens ?: 0) + (effective.cacheCreationInputTokens ?: 0)
                     if (lastContextTokens > 0) {
                         _lastTurnContextTokens.value = lastContextTokens
+                        // [T-compaction-cascade] feed the pre-step cascade (session-keyed).
+                        lastKnownContextUsage = activeSessionId to lastContextTokens.toLong()
                         // [T-token-usage-calibration] 用真实 usage 校准估算器。
                         val modelKey = currentModel?.id ?: ""
                         if (modelKey.isNotEmpty()) {

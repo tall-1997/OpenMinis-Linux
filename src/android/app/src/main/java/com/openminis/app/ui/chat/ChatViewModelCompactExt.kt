@@ -499,3 +499,26 @@ private inline fun ChatViewModel.compactAllImpl(
         }
     }
 }
+
+/**
+ * [T-android-auto-compact-inloop] Run [compactAll] with the in-loop flag and
+ * suspend until it settles. Returns whether it actually compacted.
+ *
+ * `compactAll` is fire-and-forget (it launches its own IO coroutine), so the
+ * loop cannot simply call it and continue — the next API call would read the
+ * pre-compaction history and the guard would fire again immediately.
+ * (Extracted from ChatViewModel.kt for the architecture line ceiling; the
+ * [T-compaction-cascade] pre-step tier calls this too.)
+ */
+internal suspend fun ChatViewModel.awaitCompaction(): Boolean =
+    kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+        var resumed = false
+        compactAll(allowDuringProcessing = true) { ok ->
+            // compactAll guarantees exactly one callback, but guard anyway:
+            // resuming a continuation twice throws.
+            if (!resumed) {
+                resumed = true
+                if (cont.isActive) cont.resume(ok) { _, _, _ -> }
+            }
+        }
+    }
