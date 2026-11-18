@@ -217,9 +217,28 @@ private inline fun ChatViewModel.compactAllImpl(
             // [T-compact-preserves-tool-pairs] The marker never moves backward:
             // a reduced retry that covers only the pulled-back prefix must not
             // lower the anchor below what the previous compact already covered.
-            val coveredEndIdx = (sliceStart + coveredCount - 1)
+            var coveredEndIdx = (sliceStart + coveredCount - 1)
                 .coerceIn(sliceStart, sliceAnchor)
                 .coerceAtLeast(effectiveStartIdx)
+            // [T-compact-preserves-tool-pairs] The reduced-retry cut can land
+            // MID-PAIR (coveredEndIdx on a tool_use whose carrier sits at +1,
+            // or on a carrier whose use is at -1) — the marker would open the
+            // next projection on a dangling half. Snap to the pair boundary:
+            // a use row extends to include its carrier (still ≤ sliceAnchor);
+            // a carrier row pulls back to exclude the whole pair (it stays
+            // active and verbatim, never orphaned).
+            if (coveredEndIdx < sliceAnchor &&
+                history[coveredEndIdx].role == LLMMessage.Role.ASSISTANT &&
+                history.getOrNull(coveredEndIdx + 1)?.contentParts?.any { it is AgentContentPart.ToolResult } == true
+            ) {
+                coveredEndIdx += 1
+            }
+            while (coveredEndIdx > sliceStart &&
+                history[coveredEndIdx].role == LLMMessage.Role.USER &&
+                history[coveredEndIdx].contentParts.any { it is AgentContentPart.ToolResult }
+            ) {
+                coveredEndIdx -= 1
+            }
             if (summary.isEmpty()) {
                 withContext(Dispatchers.Main) {
                     appendSystemInfo("Compaction produced no output — try again later.", "compact")
@@ -573,16 +592,17 @@ internal fun preserveToolPairsAtBoundaries(
             history[i].contentParts.any { it is AgentContentPart.ToolResult }
     var s = startIdx
     var a = anchorIdx
+    // Phase 1: shrink the kept tail while it opens on a carrier.
     while (a > s && isToolResultCarrier(a + 1)) a -= 1
+    // Phase 2: shrink the slice start while it opens on a carrier.
     while (s > 0 && isToolResultCarrier(s)) s -= 1
-    // [T-compact-preserves-tool-pairs] Degenerate form (compactBefore with a
-    // single-message window): the anchor walk is blocked at a == s while the
-    // kept tail still opens on a carrier. Pulling `a` back cannot fix that —
-    // instead extend the slice FORWARD across the whole carrier run so use and
-    // results are summarized together and the kept region opens on a
-    // non-carrier. The run is bounded by the carrier predicate's own
-    // bounds-check, so `a` can never pass history's end.
-    if (a == s) {
+    // Phase 3: phase 2 may have moved `s` below `a`, re-opening the kept-tail
+    // carrier case phase 1 already skipped — and the degenerate single-message
+    // form (a == s) blocks the shrink entirely. Either way the only
+    // non-oscillating fix is FORWARD: extend `a` across the whole carrier run
+    // (monotonic, bounded by history.size), so use and results are summarized
+    // together and the kept region opens on a non-carrier.
+    if (isToolResultCarrier(a + 1)) {
         while (isToolResultCarrier(a + 1)) a += 1
     }
     return s to a

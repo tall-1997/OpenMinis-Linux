@@ -256,7 +256,7 @@ class MemoryRepository(private val memoryDir: File) {
         // [T-memory-entry-format-guard] 条目正文不得包含落盘格式的标记行——
         // 该行会让后续 ENTRY_MARK.split 产生幻影条目（去重误判 + 条目计数虚增）。
         if (ENTRY_MARK.containsMatchIn(content)) {
-            return "Error: 条目正文不能包含时间戳标记行（<!-- YYYY-MM-DD HH:mm:ss --> 是落盘格式保留字）。请改写后再写。"
+            return "Error: 条目正文不能包含时间戳标记行（<!-- YYYY-MM-DD HH:mm:ss --> 是落盘格式保留字）。请改写后再写；确需保留示例时，在标记行行首缩进一个空格即可。"
         }
         // [T-memory-dedup-on-write] OpenHarness 式签名去重：与今日日志既有条目
         // 归一化后逐字相同的写入是模型回声（loop 重试 / 报错后原样重写）——

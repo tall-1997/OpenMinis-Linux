@@ -17,9 +17,11 @@ package com.openminis.app.data.instruction
  *    own workspace. Reading both from the session repository records one file
  *    under two keys and drops app-wide edits from the event stream entirely —
  *    the defect this type was extracted to fix.
- *  - With memory turned off for the session the prompt carries no GLOBAL
- *    fragments at all, so none may be recorded. Freezing them would describe
- *    instructions the model never saw.
+ *  - The standing-rule fragments are recorded REGARDLESS of the session's
+ *    memory toggle: rules are instructions, not memory, and inject with memory
+ *    off too ([T-rules-uncoupled-from-memory-toggle]). Freezing them under a
+ *    memory-off flag would describe instructions the model never saw — or,
+ *    after the decoupling, fail to describe the ones it did see.
  */
 object InstructionSnapshotValues {
 
@@ -27,12 +29,10 @@ object InstructionSnapshotValues {
         goalValues: Map<String, String>,
         appGlobalFragment: String?,
         sessionGlobalFragment: String?,
-        memoryEnabled: Boolean,
         projectRulesFragment: String? = null,
     ): Map<String, String> {
         val values = LinkedHashMap<String, String>()
         values.putAll(goalValues)
-        if (!memoryEnabled) return values
         // Absent and blank both mean "not injected". Writing an empty string
         // instead would be read as a removal by InstructionState.sanitizeValues.
         appGlobalFragment?.takeIf { it.isNotBlank() }?.let {

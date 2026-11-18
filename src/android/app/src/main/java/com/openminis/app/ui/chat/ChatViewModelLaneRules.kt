@@ -13,13 +13,16 @@ import com.openminis.app.data.repository.ProjectInstructionStore
  * dispatched worker silently ignored it. The user decision (2026-11-18): all
  * lanes inherit.
  *
- * This mirrors the parent prompt's standing-rules assembly exactly — same
- * three loaders (project AGENTS.md → session GLOBAL.md → app GLOBAL.md), same
- * [InstructionDedupe] narrowest-scope collapse, same enveloped fragments — so
- * a lane sees the SAME rules text the coordinator sees. Not budgeted here:
- * the lanes have no daily block competing for the memory budget, and the
- * rules layers are user-authored (the [MemoryPromptBudget] starvation case
- * the parent prompt already guards is about daily history, not lanes).
+ * This mirrors the parent prompt's standing-rules assembly — same three
+ * loaders (project AGENTS.md → session GLOBAL.md → app GLOBAL.md), same
+ * [InstructionDedupe] narrowest-scope collapse, same enveloped fragments, and
+ * the SAME [MemoryPromptBudget] discipline: an oversized GLOBAL.md is
+ * truncated with the visible rules marker instead of shipping an unbounded
+ * lane system prompt (small-model workers blow their context window before
+ * the coordinator does, so "not budgeted here" was a real defect). The one
+ * deliberate difference is ORDER: the lane's own identity framing reads first
+ * and the inherited rules after (see [laneSystemWithRules]) — workers anchor
+ * on their role before they read the session's constraints.
  *
  * Pure assembly over fingerprint-cached loaders: cheap enough to call at
  * every spawn / every group turn. Null when the session has no rules at all
@@ -50,14 +53,32 @@ internal fun ChatViewModel.sessionRulesForLanes(): String? {
         } else null,
     )
     if (fragments.isEmpty()) return null
-    return fragments.joinToString("\n\n")
+    val allocation = MemoryPromptBudget.allocate(
+        fragments.mapIndexed { i, text ->
+            MemoryPromptBudget.Fragment(
+                key = listOf("project-rules", "session-global", "app-global")[i],
+                text = text,
+                priority = listOf(
+                    MemoryPromptBudget.PRIORITY_PROJECT,
+                    MemoryPromptBudget.PRIORITY_SESSION,
+                    MemoryPromptBudget.PRIORITY_APP,
+                )[i],
+                // Non-truncatable = the binding-rules marker wording when cut
+                // ([T-rules-never-silently-vanish] semantics, same as parent).
+                truncatable = false,
+            )
+        },
+    )
+    return allocation.rendered
 }
 
 /**
  * Prepends the session rules to a lane's own system prompt, or returns the
  * base prompt untouched when the session has no rules. Single choke point for
  * the group-chat / supervisor call sites so the inherited-block framing stays
- * identical across lanes.
+ * identical across lanes. Order: the lane's own identity/role framing FIRST,
+ * inherited rules after — the same direction the sub-agent worker prompt
+ * reads (identity → rules), so every lane gets the same instruction recency.
  */
 internal fun ChatViewModel.laneSystemWithRules(base: String): String =
-    sessionRulesForLanes()?.let { rules -> "$rules\n\n$base" } ?: base
+    sessionRulesForLanes()?.let { rules -> "$base\n\n$rules" } ?: base

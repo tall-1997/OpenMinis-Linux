@@ -886,7 +886,13 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                         if (modelKey.isNotEmpty()) {
                             com.openminis.app.data.TokenUsageCalibration.observe(
                                 modelKey,
-                                estimated = estimateAgentHistoryTokens(),
+                                // [T-compaction-cascade] Same-source calibration:
+                                // actual usage belongs to the PROJECTED request
+                                // (post micro-prune/neutralize), so estimated must
+                                // be the projection's raw estimate — feeding the
+                                // unprojected one dragged the per-model EMA toward
+                                // 1.0 and made the compact gate fire late.
+                                estimated = estimateMessagesTokens(requestHistory),
                                 actual = lastContextTokens,
                             )
                         }

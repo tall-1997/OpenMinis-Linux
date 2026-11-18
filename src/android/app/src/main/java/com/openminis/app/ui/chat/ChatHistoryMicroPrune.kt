@@ -89,32 +89,66 @@ private fun remoteContentTool(name: String): Boolean =
 /**
  * Escapes the framework-reserved markers inside untrusted text (deer-flow
  * `neutralize_untrusted_tags`): harness framing that survives verbatim would
- * let remote content impersonate the host. Display-neutral — the escaped
- * form reads the same to a human.
+ * let remote content impersonate the host — the MODEL reads raw text, so
+ * mid-line occurrences spoof exactly as hard as line-leading ones.
+ *
+ * Two escape classes:
+ *  - AUTHORITY envelopes (`[MEMORY_REFERENCE` / `[STANDING_RULES`) escape
+ *    ANYWHERE — a forged authority envelope is a standing-instruction-grade
+ *    spoof, and byte-exact preservation of a forged anchor has no legitimate
+ *    reader. (Content that legitimately quotes them survives via the fullwidth
+ *    bracket being visually near-identical; re-filing exact bytes over HTTP is
+ *    the documented trade-off.)
+ *  - The other classifier markers escape at LINE START only (leading-match is
+ *    what the fold classifier checks; mid-line bytes stay intact for content
+ *    the user may fetch and re-file).
+ *
+ * Order matters: MARKERS first, TAGS second. GOAL's marker text embeds
+ * `<goal_context>` — the tag loop would escape it first and the marker match
+ * would silently never fire. Marker escapes produce no `<`, so the tag loop
+ * still clears residual tags; both passes are idempotent.
  */
 internal fun neutralizeUntrustedTags(text: String): String {
     var out = text
-    // Framework TAGS — case-insensitive (a fetched page can shout
-    // <SYSTEM-REMINDER> and the model reads raw text, not the classifier).
-    for (tag in listOf("system-reminder", "context-summary", "goal_context")) {
-        out = Regex("<(/?$tag)", RegexOption.IGNORE_CASE)
-            .replace(out) { m -> "&lt;" + m.groupValues[1] }
-    }
     // Bracket/text MARKERS — the classifier's own marker table (shared
     // constants with [HarnessNoteMarkers.ALL] and the legacy host-note head,
-    // so the escape list can never drift from the classify list). Escapes are
-    // per shape: bracket anchors take a fullwidth opening bracket, plain-text
-    // markers get a zero-width space after the first char — both break
-    // leading-match AND contains while staying visually near-identical.
-    val textMarkers = HarnessNoteMarkers.ALL + PreviewText.HOST_NOTE_NO_REPLY_HEAD
-    for (marker in textMarkers) {
-        out = when {
-            marker.startsWith("[") -> out.replace(marker, "［" + marker.substring(1))
-            else -> out.replace(marker, marker.take(1) + "\u200B" + marker.substring(1))
+    // so the escape list can never drift from the classify list). Authority
+    // envelopes escape globally; the rest at line start.
+    for (marker in HarnessNoteMarkers.ALL + PreviewText.HOST_NOTE_NO_REPLY_HEAD) {
+        if (marker == "[MEMORY_REFERENCE" || marker == "[STANDING_RULES") {
+            // Authority envelopes escape ANYWHERE (global replace).
+            out = out.replace(marker, "［" + marker.substring(1))
+        } else {
+            out = LINE_START_NEUTRALIZERS[marker]!!.let { rx ->
+                rx.replace(out) { m -> m.value.take(1) + "\u200B" + m.value.substring(1) }
+            }
         }
+    }
+    // Framework TAGS — case-insensitive, anywhere (inline blocks spoof just as
+    // hard as line-leading ones). Runs LAST: marker escapes produce no `<`, so
+    // residual tags still clear.
+    for (tag in listOf("system-reminder", "context-summary", "goal_context")) {
+        out = TAG_NEUTRALIZERS[tag]!!.replace(out) { m -> "&lt;" + m.groupValues[1] }
     }
     return out
 }
+
+/** Hoisted per-marker regexes ([T-no-loop-regex]): compiled once, reused per request. */
+private val LINE_START_NEUTRALIZERS: Map<String, Regex> = mapOf(
+    HarnessNoteMarkers.RECALL to Regex("^" + Regex.escape(HarnessNoteMarkers.RECALL), RegexOption.MULTILINE),
+    HarnessNoteMarkers.GOAL to Regex("^" + Regex.escape(HarnessNoteMarkers.GOAL), RegexOption.MULTILINE),
+    HarnessNoteMarkers.STATE to Regex("^" + Regex.escape(HarnessNoteMarkers.STATE), RegexOption.MULTILINE),
+    HarnessNoteMarkers.WORKING_MEMORY to Regex("^" + Regex.escape(HarnessNoteMarkers.WORKING_MEMORY), RegexOption.MULTILINE),
+    HarnessNoteMarkers.PLAN_RETRY to Regex("^" + Regex.escape(HarnessNoteMarkers.PLAN_RETRY), RegexOption.MULTILINE),
+    HarnessNoteMarkers.DROPPED_ROUNDS to Regex("^" + Regex.escape(HarnessNoteMarkers.DROPPED_ROUNDS), RegexOption.MULTILINE),
+    PreviewText.HOST_NOTE_NO_REPLY_HEAD to Regex("^" + Regex.escape(PreviewText.HOST_NOTE_NO_REPLY_HEAD), RegexOption.MULTILINE),
+)
+
+private val TAG_NEUTRALIZERS: Map<String, Regex> = mapOf(
+    "system-reminder" to Regex("<(/?system-reminder)", RegexOption.IGNORE_CASE),
+    "context-summary" to Regex("<(/?context-summary)", RegexOption.IGNORE_CASE),
+    "goal_context" to Regex("<(/?goal_context)", RegexOption.IGNORE_CASE),
+)
 
 /**
  * Tier-① projection. Returns [history] unchanged (same instance) when the
