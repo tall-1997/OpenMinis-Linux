@@ -40,6 +40,14 @@ object ToolFailureMemory {
 
     internal const val MAX_ENTRIES = 50
 
+    /** Keys whose values are prose/payload, not a call identity. */
+    private val NON_IDENTITY_KEYS = setOf(
+        "tool_title", "tool_input", "content", "text", "body", "prompt",
+        "value", "data", "old_string", "new_string",
+    )
+
+    private val WHITESPACE = Regex("\\s+")
+
     data class Entry(
         val tool: String,
         val failures: Int,
@@ -78,7 +86,10 @@ object ToolFailureMemory {
         val entry = Entry(
             tool = tool,
             failures = (previous?.failures ?: 0) + 1,
-            lastError = error.take(400),
+            lastError = com.openminis.app.util.TextClip.safeTake(
+                com.openminis.app.util.SecretMasking.mask(error),
+                400,
+            ),
             lastAtMs = nowMs,
             argsExcerpt = argsExcerpt(argsJson),
         )
@@ -126,7 +137,7 @@ object ToolFailureMemory {
             val keys = parsed.keys()
             while (keys.hasNext() && parts.size < 3) {
                 val key = keys.next()
-                if (key == "tool_title") continue
+                if (key in NON_IDENTITY_KEYS) continue
                 val value = parsed.opt(key)
                 val scalar = when (value) {
                     is String -> value
@@ -139,15 +150,17 @@ object ToolFailureMemory {
                 ) {
                     scalar
                 } else {
-                    "$key=" + scalar.take(40)
+                    "$key=" + com.openminis.app.util.TextClip.safeTake(scalar, 40)
                 }
             }
             parts.joinToString(", ")
         } else {
             raw
         }
-        val flat = text.replace(Regex("\\s+"), " ").trim()
-        return if (flat.length <= limit) flat else flat.take(limit) + "…"
+        val flat = com.openminis.app.util.SecretMasking.mask(text)
+            .replace(WHITESPACE, " ")
+            .trim()
+        return com.openminis.app.util.TextClip.safeEllipsize(flat, limit)
     }
 
     /**

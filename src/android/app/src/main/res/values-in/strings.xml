@@ -2538,9 +2538,9 @@
     <string name="code_editor_status_size">%1$d baris · %2$d karakter</string>
     <string name="code_editor_undo">Urungkan</string>
     <string name="code_editor_wrap">Ubah pelipatan baris</string>
-    <string name="compact_progress_fallback">Memadatkan (%1$d/%2$d) dengan model cadangan %3$s… %4$d dtk. Jika gagal, konteks lama dipotong.</string>
+    <string name="compact_progress_fallback">Memadatkan (%1$d/%2$d) dengan model cadangan %3$s… %4$d dtk. Jika gagal, konteks tidak berubah.</string>
     <string name="compact_progress_session">Memadatkan (%1$d/%2$d) dengan model saat ini %3$s… %4$d dtk. Jika gagal, cadangan atau satu percobaan ulang dijalankan.</string>
-    <string name="compact_progress_session_retry">Memadatkan (%1$d/%2$d), mencoba ulang model saat ini %3$s… %4$d dtk. Tidak ada cadangan. Jika gagal, konteks lama dipotong.</string>
+    <string name="compact_progress_session_retry">Memadatkan (%1$d/%2$d), mencoba ulang model saat ini %3$s… %4$d dtk. Tidak ada cadangan. Jika gagal, konteks tidak berubah.</string>
     <string name="composer_expand_editor">Perluas editor</string>
     <string name="config_affects_later">Ini bisa mempengaruhi pemanggilan alat berikutnya.</string>
     <string name="config_reversible">Bisa dibatalkan, tapi layak dilihat sekilas.</string>
@@ -2727,7 +2727,7 @@
     <string name="model_group_models_plain">%1$d model</string>
     <!-- backfill: strings.xml -->
     <string name="model_groups_compact_fallback">Cadangan pemadatan</string>
-    <string name="model_groups_compact_fallback_footer">Model saat ini mencoba sekali. Jika gagal, cadangan mencoba sekali. Tanpa cadangan, model saat ini dicoba ulang sekali. Dua kegagalan memotong konteks lama.</string>
+    <string name="model_groups_compact_fallback_footer">Model saat ini mencoba sekali. Jika gagal, cadangan mencoba sekali. Tanpa cadangan, model saat ini dicoba ulang sekali. Jika pemadatan gagal, konteks tidak berubah.</string>
     <string name="model_groups_default_primary">Utama bawaan</string>
     <string name="model_groups_defaults">Bawaan</string>
     <!-- backfill: strings_settings.xml -->

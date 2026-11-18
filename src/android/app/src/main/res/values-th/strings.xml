@@ -2533,9 +2533,9 @@
     <string name="code_editor_status_size">%1$d บรรทัด · %2$d อักขระ</string>
     <string name="code_editor_undo">เลิกทำ</string>
     <string name="code_editor_wrap">สลับการตัดคำขึ้นบรรทัด</string>
-    <string name="compact_progress_fallback">กำลังบีบอัด (%1$d/%2$d) ด้วยโมเดลสำรอง %3$s… %4$d วินาที ถ้าล้มเหลว บริบทเก่าจะถูกตัดทิ้ง</string>
+    <string name="compact_progress_fallback">กำลังบีบอัด (%1$d/%2$d) ด้วยโมเดลสำรอง %3$s… %4$d วินาที ถ้าล้มเหลว บริบทจะยังคงเดิม</string>
     <string name="compact_progress_session">กำลังบีบอัด (%1$d/%2$d) ด้วยโมเดลปัจจุบัน %3$s… %4$d วินาที ถ้าล้มเหลว จะรันโมเดลสำรองหรือลองใหม่หนึ่งครั้ง</string>
-    <string name="compact_progress_session_retry">กำลังบีบอัด (%1$d/%2$d) ลองโมเดลปัจจุบัน %3$s ใหม่… %4$d วินาที ยังไม่ตั้งโมเดลสำรอง ถ้าล้มเหลว บริบทเก่าจะถูกตัดทิ้ง</string>
+    <string name="compact_progress_session_retry">กำลังบีบอัด (%1$d/%2$d) ลองโมเดลปัจจุบัน %3$s ใหม่… %4$d วินาที ยังไม่ตั้งโมเดลสำรอง ถ้าล้มเหลว บริบทจะยังคงเดิม</string>
     <string name="composer_expand_editor">ขยายตัวแก้ไข</string>
     <string name="config_affects_later">สิ่งนี้อาจมีผลกับการเรียกเครื่องมือครั้งต่อ ๆ ไป</string>
     <string name="config_reversible">ย้อนกลับได้ แต่ควรแวะดูสักหน่อย</string>
@@ -2722,7 +2722,7 @@
     <string name="model_group_models_plain">%1$d โมเดล</string>
     <!-- backfill: strings.xml -->
     <string name="model_groups_compact_fallback">โมเดลสำรองสำหรับบีบอัด</string>
-    <string name="model_groups_compact_fallback_footer">โมเดลปัจจุบันพยายามหนึ่งครั้ง ถ้าล้มเหลวโมเดลสำรองจะพยายามหนึ่งครั้ง ถ้าไม่มีสำรอง จะลองโมเดลปัจจุบันอีกครั้ง พลาดสองครั้งจะตัดบริบทเก่าทิ้ง</string>
+    <string name="model_groups_compact_fallback_footer">โมเดลปัจจุบันพยายามหนึ่งครั้ง ถ้าล้มเหลวโมเดลสำรองจะพยายามหนึ่งครั้ง ถ้าไม่มีสำรอง จะลองโมเดลปัจจุบันอีกครั้ง ถ้าการบีบอัดล้มเหลว บริบทจะยังคงเดิม</string>
     <string name="model_groups_default_primary">โมเดลหลักค่าเริ่มต้น</string>
     <string name="model_groups_defaults">ค่าเริ่มต้น</string>
     <!-- backfill: strings_settings.xml -->

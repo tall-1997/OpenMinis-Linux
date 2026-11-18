@@ -33,6 +33,18 @@ internal object PostAnchorTail {
      */
     internal const val BUDGET_TOKENS: Int = 60_000
 
+    /**
+     * [T-postanchor-notice-reserve] Tokens held back for the notice + digest
+     * that [apply] prepends. The digest is capped at 3,000 chars (~750 tokens
+     * under this estimator); 1,200 leaves room for the count line and a
+     * stalled-message banner. Without this reserve the "budget" was really
+     * budget + notice, breaking the summary+preAnchor+postAnchor corridor.
+     */
+    internal const val NOTICE_RESERVE_TOKENS: Int = 1_200
+
+    /** [T-postanchor-notice-reserve] Base notice cost, used to cap the digest. */
+    private const val NOTICE_BASE_TOKENS: Int = 64
+
     /** [T-compact-window-scaled-budget] postAnchor share of the window. */
     internal const val WINDOW_FRACTION: Double = 0.35
 
@@ -120,6 +132,9 @@ internal object PostAnchorTail {
         // accepted; each older group is kept only while the running total
         // still fits the budget. Everything older than the cutoff is dropped
         // as whole groups — a half-kept round could orphan a tool_use.
+        // [T-postanchor-notice-reserve] Reserve the notice/digest cost so the
+        // kept slice + notice stays inside the declared budget.
+        val effectiveBudget = (budget.budgetTokens - NOTICE_RESERVE_TOKENS).coerceAtLeast(1)
         val costs = IntArray(groups.size) { i ->
             groups[i].sumOf { msg -> budget.estimate(msg) }.coerceAtLeast(0)
         }
@@ -128,7 +143,7 @@ internal object PostAnchorTail {
         var i = groups.size - 2
         while (i >= 0) {
             val next = total + costs[i]
-            if (next > budget.budgetTokens) break
+            if (next > effectiveBudget) break
             total = next
             firstKept = i
             i -= 1
@@ -170,7 +185,31 @@ internal object PostAnchorTail {
         budget: Budget,
     ): String {
         val base = droppedRoundsNotice(droppedRounds, droppedTokens)
-        val digest = runCatching { budget.digest(dropped) }.getOrNull()
+        // [T-postanchor-digest-catch] Catch Exception, not Throwable: a
+        // digest bug must not break assembly, but OOM/cancellation must
+        // propagate instead of being silently converted into "no digest".
+        val digest = try {
+            budget.digest(dropped)
+        } catch (_: Exception) {
+            null
+        }?.takeIf { it.isNotBlank() }
+            // [T-postanchor-notice-reserve] Keep the digest inside the share
+            // reserved for it: a 3k-char digest on a 32k-window tail would
+            // otherwise consume ~7% of the window on its own.
+            ?.let { text ->
+                val maxChars = if (budget.budgetTokens == Int.MAX_VALUE) {
+                    Int.MAX_VALUE
+                } else {
+                    // The share actually reserved for notice+digest.
+                    (NOTICE_RESERVE_TOKENS - NOTICE_BASE_TOKENS)
+                        .coerceAtLeast(0) * 4
+                }
+                if (text.length <= maxChars) {
+                    text
+                } else {
+                    com.openminis.app.util.TextClip.safeTake(text, maxChars) + "…"
+                }
+            }
         return if (digest.isNullOrBlank()) base else base + "\n" + digest
     }
 

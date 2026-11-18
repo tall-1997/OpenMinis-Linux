@@ -2541,9 +2541,9 @@
     <string name="code_editor_status_size">%1$d строк · %2$d символов</string>
     <string name="code_editor_undo">Отменить</string>
     <string name="code_editor_wrap">Переключить перенос строк</string>
-    <string name="compact_progress_fallback">Сжатие (%1$d/%2$d) резервной моделью %3$s… %4$d с. При неудаче старый контекст усекается.</string>
+    <string name="compact_progress_fallback">Сжатие (%1$d/%2$d) резервной моделью %3$s… %4$d с. При неудаче контекст остаётся без изменений.</string>
     <string name="compact_progress_session">Сжатие (%1$d/%2$d) текущей моделью %3$s… %4$d с. При неудаче запускается резервная модель или одна повторная попытка.</string>
-    <string name="compact_progress_session_retry">Сжатие (%1$d/%2$d), повтор текущей модели %3$s… %4$d с. Резервная модель не задана. При неудаче старый контекст усекается.</string>
+    <string name="compact_progress_session_retry">Сжатие (%1$d/%2$d), повтор текущей модели %3$s… %4$d с. Резервная модель не задана. При неудаче контекст остаётся без изменений.</string>
     <string name="composer_expand_editor">Развернуть редактор</string>
     <string name="config_affects_later">Это может повлиять на последующие вызовы инструментов.</string>
     <string name="config_reversible">Обратимо, но стоит взглянуть.</string>
@@ -2730,7 +2730,7 @@
     <string name="model_group_models_plain">%1$d моделей</string>
     <!-- backfill: strings.xml -->
     <string name="model_groups_compact_fallback">Резерв для сжатия</string>
-    <string name="model_groups_compact_fallback_footer">Текущая модель пробует один раз. При неудаче резервная пробует один раз. Без резерва текущая модель пробуется ещё раз. Две неудачи усекают старый контекст.</string>
+    <string name="model_groups_compact_fallback_footer">Текущая модель пробует один раз. При неудаче резервная пробует один раз. Без резерва текущая модель пробуется ещё раз. Если сжатие не удалось, контекст остаётся без изменений.</string>
     <string name="model_groups_default_primary">Основная по умолчанию</string>
     <string name="model_groups_defaults">По умолчанию</string>
     <!-- backfill: strings_settings.xml -->

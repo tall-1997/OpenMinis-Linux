@@ -40,6 +40,13 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
      * measurement; request assembly always uses the budget.
      */
     applyTailBudget: Boolean = true,
+    /**
+     * [T-state-note-reinject] True only for the actual outgoing request.
+     * Measurement builds (gate/Token Usage/context ring) must not mutate VM
+     * delivery state; the request build may re-inject the current state note
+     * when the tail budget evicted it, without writing a new DB row.
+     */
+    forRequest: Boolean = false,
 ): List<LLMMessage> {
     val summary = _compactSummary.value
     val marker = _cachedLatestMarker
@@ -117,7 +124,7 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
                     ChatViewModel.TAG,
                     "[Compact] marker ${marker.id.take(8)} anchor ${anchorId?.take(8) ?: "nil"} " +
                         "evicted from agentHistory(size=${agentHistory.size}) - " +
-                        "summary+tail injection (tail=${DETACHED_TAIL_MESSAGES})",
+                        "summary+tail injection (tailMax=${DETACHED_TAIL_MESSAGES})",
                 )
             }
             return maybeProgressivelyTrimmed(
@@ -283,24 +290,16 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
             digest = DroppedRoundDigest::render,
         )
         val postAnchorOutcome = PostAnchorTail.apply(postAnchorRaw, tailBudget)
-        val postAnchor = postAnchorOutcome.kept
+        var postAnchor = postAnchorOutcome.kept
         if (postAnchorOutcome.droppedRounds > 0) {
-            // [T-working-memory-ledger] The dropped rounds were never
-            // summarized (compact did not fire — the trimmed request sits
-            // under the threshold), so their knowledge lives only in the
-            // WorkingMemory ledger. Flag the hydration ONLY when the ledger
-            // has undelivered lines: flagging unconditionally made every
-            // postAnchor drop fire a hydration, which committed a new USER
-            // note every turn — the model then narrated about each note
-            // instead of working (the prose-fragment loop on device).
-            //
-            // [T-state-hydration-on-drop] The plan/report/job snapshot is a
-            // DIFFERENT recovery signal and must not be gated on the ledger.
-            // A plan update can be evicted while every ledger line was
-            // already delivered; tying the two meant the model kept a stale
-            // plan snapshot and redid finished steps. The snapshot commit is
-            // sha-deduped, so arming it on every drop cannot spam notes.
-            stateHydrationPending = true
+            // [T-state-note-reinject] Only a real request arms delivery state;
+            // gate/Token-Usage measurements must stay side-effect free.
+            if (forRequest) {
+                stateHydrationPending = true
+                evictedStateNote(postAnchorSnap, anchorIdx, postAnchor)?.let { note ->
+                    postAnchor = listOf(note) + postAnchor
+                }
+            }
             AppLogger.info(
                 ChatViewModel.TAG,
                 "[CompactDiag] eAH v2 postAnchor tail budget: kept=${postAnchor.size} " +
@@ -338,12 +337,17 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
                 result.addAll(postAnchor.subList(firstUserOffset + 1, postAnchor.size))
             }
         } else {
-            // Rare: no user message after anchor. Append everything
-            // post-anchor (typically empty) then a standalone summary
-            // user turn. Safe — no later user follows it to break
-            // alternation.
+            // No real user turn after the anchor (autonomous run). The
+            // summary leads the active region as its own user message; the
+            // notice that follows is folded onto it, instead of the summary
+            // being appended to a carrier or folded back into pre-anchor.
+            val summaryMessage = LLMMessage(
+                role = LLMMessage.Role.USER,
+                content = effectiveSummaryWrappedText,
+                contentParts = listOf(AgentContentPart.Text(effectiveSummaryWrappedText)),
+            )
+            result.add(summaryMessage)
             result.addAll(postAnchor)
-            result.add(LLMMessage(role = LLMMessage.Role.USER, content = effectiveSummaryWrappedText))
         }
         // [T-harness-note-fold] Fold harness USER messages into the nearest
         // preceding real user turn, across the whole sequence. Harness notes
@@ -399,24 +403,39 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
 }
 
 /**
- * [T-compact-summary-target] Index of the USER message the compact summary
- * should be prepended to.
- *
- * The postAnchor head is normally the dropped-rounds notice — a harness note.
- * Prepending the summary to THAT message made [foldHarnessNotes] fold the
- * notice (summary included) back into the nearest preceding real user turn,
- * which lives inside the already-summarized pre-anchor region: the active
- * tail then started with no summary at all, and the carrier briefly grew a
- * summary-shaped "user" message. Prefer the first REAL user turn after the
- * notice; fall back to any USER message only when none exists.
+ * [T-state-note-reinject] The committed state note that the tail budget
+ * evicted from this request, or null when it is still visible (or predates
+ * the anchor and is covered by the summary).
  */
-internal fun firstInjectableUserIndex(messages: List<LLMMessage>): Int {
-    val real = messages.indexOfFirst {
-        it.role == LLMMessage.Role.USER && !HarnessNoteMarkers.isUserHarnessNote(it)
-    }
-    if (real >= 0) return real
-    return messages.indexOfFirst { it.role == LLMMessage.Role.USER }
+internal fun evictedStateNote(
+    snapshot: List<LLMMessage>,
+    anchorIdx: Int,
+    kept: List<LLMMessage>,
+): LLMMessage? {
+    if (anchorIdx < 0 || anchorIdx >= snapshot.size) return null
+    if (kept.any { it.content.contains(SessionStateSnapshot.MARKER) }) return null
+    return snapshot.subList(anchorIdx + 1, snapshot.size)
+        .lastOrNull { it.content.contains(SessionStateSnapshot.MARKER) }
 }
+
+/**
+ * [T-compact-summary-target] Index of the USER message the compact summary
+ * should be prepended to, or -1 when none is a real user turn.
+ *
+ * A REAL user turn is TEXT-ONLY: a tool-result carrier carries parts that
+ * override `content` on the wire, and prepending the summary there buries it
+ * mid-round (and, after folding, inside the pre-anchor region). A harness
+ * note is not a user turn either. When only notices/carriers exist the caller
+ * inserts the summary as its own leading user message for the active region.
+ */
+internal fun firstInjectableUserIndex(messages: List<LLMMessage>): Int =
+    messages.indexOfFirst { msg ->
+        msg.role == LLMMessage.Role.USER &&
+            msg.contentParts.none {
+                it is AgentContentPart.ToolResult || it is AgentContentPart.ToolUse
+            } &&
+            !HarnessNoteMarkers.isUserHarnessNote(msg)
+    }
 
 /**
  * [T-harness-note-fold] Fold harness USER messages into the nearest PRECEDING

@@ -2533,9 +2533,9 @@
     <string name="code_editor_status_size">%1$d linhas · %2$d caracteres</string>
     <string name="code_editor_undo">Desfazer</string>
     <string name="code_editor_wrap">Alternar quebra de linha</string>
-    <string name="compact_progress_fallback">Compactando (%1$d/%2$d) com o modelo reserva %3$s… %4$d s. Se falhar, o contexto antigo é truncado.</string>
+    <string name="compact_progress_fallback">Compactando (%1$d/%2$d) com o modelo reserva %3$s… %4$d s. Se falhar, o contexto permanece inalterado.</string>
     <string name="compact_progress_session">Compactando (%1$d/%2$d) com o modelo atual %3$s… %4$d s. Se falhar, o reserva ou uma nova tentativa única roda.</string>
-    <string name="compact_progress_session_retry">Compactando (%1$d/%2$d), tentando o modelo atual %3$s de novo… %4$d s. Sem reserva definida. Se falhar, o contexto antigo é truncado.</string>
+    <string name="compact_progress_session_retry">Compactando (%1$d/%2$d), tentando o modelo atual %3$s de novo… %4$d s. Sem reserva definida. Se falhar, o contexto permanece inalterado.</string>
     <string name="composer_expand_editor">Expandir editor</string>
     <string name="config_affects_later">Isso pode afetar chamadas de ferramentas posteriores.</string>
     <string name="config_reversible">É reversível, mas vale uma olhada rápida.</string>
@@ -2722,7 +2722,7 @@
     <string name="model_group_models_plain">%1$d modelos</string>
     <!-- backfill: strings.xml -->
     <string name="model_groups_compact_fallback">Reserva de compactação</string>
-    <string name="model_groups_compact_fallback_footer">O modelo atual tenta uma vez. Se falhar, o reserva tenta uma vez. Sem reserva, o modelo atual é tentado mais uma vez. Duas falhas truncam o contexto antigo.</string>
+    <string name="model_groups_compact_fallback_footer">O modelo atual tenta uma vez. Se falhar, o reserva tenta uma vez. Sem reserva, o modelo atual é tentado mais uma vez. Se a compactação falhar, o contexto permanece inalterado.</string>
     <string name="model_groups_default_primary">Principal padrão</string>
     <string name="model_groups_defaults">Padrões</string>
     <!-- backfill: strings_settings.xml -->

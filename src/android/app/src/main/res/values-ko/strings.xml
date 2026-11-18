@@ -2532,9 +2532,9 @@
     <string name="code_editor_status_size">%1$d줄 · %2$d자</string>
     <string name="code_editor_undo">실행 취소</string>
     <string name="code_editor_wrap">줄바꿈 전환</string>
-    <string name="compact_progress_fallback">압축 중(%1$d/%2$d), 폴백 모델 %3$s 사용… %4$d초. 실패하면 오래된 컨텍스트가 잘립니다.</string>
+    <string name="compact_progress_fallback">압축 중(%1$d/%2$d), 폴백 모델 %3$s 사용… %4$d초. 실패하면 컨텍스트가 그대로 유지됩니다.</string>
     <string name="compact_progress_session">압축 중(%1$d/%2$d), 현재 모델 %3$s 사용… %4$d초. 실패하면 폴백 또는 1회 재시도가 실행됩니다.</string>
-    <string name="compact_progress_session_retry">압축 중(%1$d/%2$d), 현재 모델 %3$s 재시도… %4$d초. 폴백이 설정되지 않았습니다. 실패하면 오래된 컨텍스트가 잘립니다.</string>
+    <string name="compact_progress_session_retry">압축 중(%1$d/%2$d), 현재 모델 %3$s 재시도… %4$d초. 폴백이 설정되지 않았습니다. 실패하면 컨텍스트가 그대로 유지됩니다.</string>
     <string name="composer_expand_editor">편집기 확장</string>
     <string name="config_affects_later">이 변경은 이후 도구 호출에 영향을 줄 수 있습니다.</string>
     <string name="config_reversible">되돌릴 수 있지만 한 번 살펴볼 가치가 있습니다.</string>
@@ -2721,7 +2721,7 @@
     <string name="model_group_models_plain">모델 %1$d개</string>
     <!-- backfill: strings.xml -->
     <string name="model_groups_compact_fallback">컴팩트 폴백</string>
-    <string name="model_groups_compact_fallback_footer">현재 모델로 한 번 압축을 시도합니다. 실패하면 폴백을 한 번 시도합니다. 폴백이 없으면 현재 모델을 한 번 재시도합니다. 두 번 실패하면 오래된 컨텍스트를 잘라냅니다.</string>
+    <string name="model_groups_compact_fallback_footer">현재 모델로 한 번 압축을 시도합니다. 실패하면 폴백을 한 번 시도합니다. 폴백이 없으면 현재 모델을 한 번 재시도합니다. 압축에 실패해도 컨텍스트는 그대로 유지됩니다.</string>
     <string name="model_groups_default_primary">기본 메인</string>
     <string name="model_groups_defaults">기본값</string>
     <!-- backfill: strings_settings.xml -->

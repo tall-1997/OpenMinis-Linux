@@ -4,6 +4,8 @@
 > 忘了自己刚改过哪个文件；历史上修过很多轮（#327/#331/#335/#337/#339/#363/#366），
 > 症状仍在。本文记录本轮排查的根因、修复与验证口径。
 >
+> **后续对抗复审与二次修复见 [context-memory-adversarial-review-2026-11-19.md](context-memory-adversarial-review-2026-11-19.md)；两文冲突处以复审文为准**（例如压缩失败不再推进锚点、detached 尾按 token 预算、规则层不再受 memory 开关门控）。
+>
 > 结论先说：**不是摘要质量的问题，是"锚点之后、摘要之外"的这块区域被预算直接
 > 丢弃，而紧凑门限测的正是被同一个预算压小后的切片，导致锚点第一次压缩后再也
 > 不前进**。围绕这条主链，另有 6 处静默丢失/误导点一起修了。
@@ -63,11 +65,12 @@ compact 锚点 A ──摘要覆盖 A 之前──►  [ preAnchor(≤20%) ][ po
 | `T-task-anchor-current` | `PromptAnchors.kt`、`ChatViewModelPromptExt.kt` | 锚点优先级：**live window 里最新的实质用户请求** > DB 首条 > 窗口首条。薄跟进（"继续/ok/重试"）不覆盖任务；找不到实质消息时回退上一条。 |
 | `T-task-anchor-edges` | `PromptAnchors.kt` | 超长锚点保留**头 + 尾**（尾 400 字），中间标注 omitted；验收标准不再被截掉。 |
 
-## 四、规则块被预算整块丢弃，合同仍称 BINDING（P1）
+## 四、规则合同与预算实际接纳不一致（P1）
 
-24k 记忆预算下，project/session/app 三个规则块是 `truncatable = false`：
-一旦放不下就**整块丢**，但 `StandingContract` 的布尔来自 dedupe 结果，不是实际
-分配结果。模型被告知"这些规则就在 prompt 里、必须遵守"，实际一个字都没有。
+`f91708e4`（#397）已把 project/session/app 规则块从“整块丢弃”改为可见截断，并修正了
+优先级；但 `StandingContract` 的布尔仍来自 dedupe 结果，而不是**预算实际接纳**的结果，
+而且 memory 关闭时整个装配被跳过、DISABLED 段却声称规则仍然生效。模型仍可能收到
+“规则就在 prompt 里、必须遵守”的错误声明（或相反的 omission 注记）。
 
 ### 修复
 
@@ -78,7 +81,7 @@ compact 锚点 A ──摘要覆盖 A 之前──►  [ preAnchor(≤20%) ][ po
 
 ## 五、工具结果老化：只留头 + 按结果数切并行轮（P1）
 
-`ToolResultAging` 在 30k token 绝对阈值下把"最新 6 条之外"的结果折成 160 字**头部**。
+`ToolResultAging` 在 24k token 绝对阈值下把"最新 6 条之外"的结果折成 160 字**头部**。
 两个问题：
 
 1. 构建/测试日志的关键行在**尾部**（错误、summary、exit），头部通常只是噪声；
@@ -97,7 +100,7 @@ compact 锚点 A ──摘要覆盖 A 之前──►  [ preAnchor(≤20%) ][ po
 
 | 标记 | 落点 | 行为 |
 |---|---|---|
-| `T-state-hydration-on-drop` | `ChatViewModelAgentHistoryExt.kt` | 尾预算一丢轮次就重新武装状态快照（plan/report/jobs），不再依赖 ledger 是否还有未投递行；快照本身 sha 去重，不会每轮刷屏。 |
+| `T-state-hydration-on-drop` | `ChatViewModelAgentHistoryExt.kt` | 尾预算一丢轮次就把**已有的**状态 note 只对本请求重注入（`evictedStateNote`），不清 sha、不写新行；测量路径无副作用，因此不会每轮刷屏。 |
 | `T-drain-prompt-refresh` | `ChatViewModelDrainQueueExt.kt`、`ChatViewModelRunPrompt.kt`（新）、`ChatViewModelAgentLoopExt.kt` | 排队消息是**新的用户轮**：drain / 中途插话时重建系统提示（锚点、日记门控、召回查询全部随之更新），不再复用旧提示。 |
 | `T-recall-delivery-accounting` | `MemoryRecallEngine.kt`、`ChatViewModelPlanContextExt.kt` | `formatAsPromptFragmentWithHits` 返回**实际渲染**的 hit 集合；只把这些标记为已宣布。被 2400 字符上限截掉的命中不再被永久静默。 |
 | `T-recall-cjk-query` / `T-recall-thin-followup` | `ChatViewModelPlanContextExt.kt` | 中文 2 字即可成查询（"部署/回滚"）；"继续/ok"这类薄跟进不算任务，回溯到上一条实质用户消息取查询。 |
@@ -133,7 +136,8 @@ java "-Dorg.gradle.appname=gradlew" -classpath gradle\wrapper\gradle-wrapper.jar
 
 ## 八、明确未做 / 后续
 
-1. **WorkingMemoryStore 未持久化**：进程被杀后未投递的 handover 行仍会丢。
+1. **WorkingMemoryStore 未持久化**：进程被杀后未投递的 handover 行仍会丢；
+   进程内 ledger 已加 LRU 上限（复审后）。
    正确做法是像 `NoticeLedgerStore` 一样按会话落盘（含 delivered 标记）。
 2. **postAnchor 单轮（一次用户输入 + 300 工具轮）时 `splitRounds` 只有一组，
    尾预算直接跳过**：本轮靠门限修复让压缩兜底，但预算本身仍应支持"轮内按

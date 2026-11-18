@@ -2533,9 +2533,9 @@
     <string name="code_editor_status_size">%1$d baris · %2$d aksara</string>
     <string name="code_editor_undo">Buat asal</string>
     <string name="code_editor_wrap">Tukar balut perkataan</string>
-    <string name="compact_progress_fallback">Memampatkan (%1$d/%2$d) dengan model sandaran %3$s… %4$d s. Jika gagal, konteks lama dipotong.</string>
+    <string name="compact_progress_fallback">Memampatkan (%1$d/%2$d) dengan model sandaran %3$s… %4$d s. Jika gagal, konteks tidak berubah.</string>
     <string name="compact_progress_session">Memampatkan (%1$d/%2$d) dengan model semasa %3$s… %4$d s. Jika gagal, sandaran atau satu cubaan semula dijalankan.</string>
-    <string name="compact_progress_session_retry">Memampatkan (%1$d/%2$d), mencuba semula model semasa %3$s… %4$d s. Tiada sandaran. Jika gagal, konteks lama dipotong.</string>
+    <string name="compact_progress_session_retry">Memampatkan (%1$d/%2$d), mencuba semula model semasa %3$s… %4$d s. Tiada sandaran. Jika gagal, konteks tidak berubah.</string>
     <string name="composer_expand_editor">Kembangkan editor</string>
     <string name="config_affects_later">Ini mungkin mempengaruhi panggilan alat seterusnya.</string>
     <string name="config_reversible">Boleh dibatalkan, tetapi berbaloi dilihat sekilas.</string>
@@ -2722,7 +2722,7 @@
     <string name="model_group_models_plain">%1$d model</string>
     <!-- backfill: strings.xml -->
     <string name="model_groups_compact_fallback">Sandaran pemampatan</string>
-    <string name="model_groups_compact_fallback_footer">Model semasa mencuba sekali. Jika gagal, sandaran mencuba sekali. Tanpa sandaran, model semasa dicuba semula sekali. Dua kegagalan memotong konteks lama.</string>
+    <string name="model_groups_compact_fallback_footer">Model semasa mencuba sekali. Jika gagal, sandaran mencuba sekali. Tanpa sandaran, model semasa dicuba semula sekali. Jika pemadatan gagal, konteks tidak berubah.</string>
     <string name="model_groups_default_primary">Utama lalai</string>
     <string name="model_groups_defaults">Lalai</string>
     <!-- backfill: strings_settings.xml -->

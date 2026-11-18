@@ -2533,9 +2533,9 @@
     <string name="code_editor_status_size">%1$d satır · %2$d karakter</string>
     <string name="code_editor_undo">Geri al</string>
     <string name="code_editor_wrap">Satır kaydırmayı değiştir</string>
-    <string name="compact_progress_fallback">Sıkıştırılıyor (%1$d/%2$d), yedek model %3$s… %4$d sn. Başarısız olursa eski bağlam kırpılır.</string>
+    <string name="compact_progress_fallback">Sıkıştırılıyor (%1$d/%2$d), yedek model %3$s… %4$d sn. Başarısız olursa bağlam değişmeden kalır.</string>
     <string name="compact_progress_session">Sıkıştırılıyor (%1$d/%2$d), geçerli model %3$s… %4$d sn. Başarısız olursa yedek veya tek seferlik yeniden deneme çalışır.</string>
-    <string name="compact_progress_session_retry">Sıkıştırılıyor (%1$d/%2$d), geçerli model %3$s yeniden deneniyor… %4$d sn. Yedek yok. Başarısız olursa eski bağlam kırpılır.</string>
+    <string name="compact_progress_session_retry">Sıkıştırılıyor (%1$d/%2$d), geçerli model %3$s yeniden deneniyor… %4$d sn. Yedek yok. Başarısız olursa bağlam değişmeden kalır.</string>
     <string name="composer_expand_editor">Düzenleyiciyi büyüt</string>
     <string name="config_affects_later">Bu, sonraki araç çağrılarını etkileyebilir.</string>
     <string name="config_reversible">Geri alınabilir ama hızlıca göz atmaya değer.</string>
@@ -2722,7 +2722,7 @@
     <string name="model_group_models_plain">%1$d model</string>
     <!-- backfill: strings.xml -->
     <string name="model_groups_compact_fallback">Sıkıştırma yedeği</string>
-    <string name="model_groups_compact_fallback_footer">Geçerli model bir kez dener. Başarısız olursa yedek bir kez dener. Yedek yoksa geçerli model bir kez daha denenir. İki başarısızlık eski bağlamı kırpar.</string>
+    <string name="model_groups_compact_fallback_footer">Geçerli model bir kez dener. Başarısız olursa yedek bir kez dener. Yedek yoksa geçerli model bir kez daha denenir. Sıkıştırma başarısız olursa bağlam değişmeden kalır.</string>
     <string name="model_groups_default_primary">Varsayılan ana model</string>
     <string name="model_groups_defaults">Varsayılanlar</string>
     <!-- backfill: strings_settings.xml -->

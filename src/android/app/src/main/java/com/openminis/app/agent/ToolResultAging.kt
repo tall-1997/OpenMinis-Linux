@@ -170,8 +170,14 @@ object ToolResultAging {
         // 4 of them aged immediately). Extend the window back to the
         // assistant message that owns the oldest kept result, so a round is
         // either entirely verbatim or entirely aged.
-        val keepFromMessage = live[scanned - keep][0]
-        val candidates = live.filter { it[0] < keepFromMessage }
+        // keep == 0 means "fold every eligible result": taking
+        // live[scanned - 0] would be out of bounds, so branch explicitly.
+        val candidates = if (keep == 0) {
+            live
+        } else {
+            val keepFromMessage = live[scanned - keep][0]
+            live.filter { it[0] < keepFromMessage }
+        }
         val byMessage = HashMap<Int, MutableList<Int>>()
         for (slot in candidates) {
             byMessage.getOrPut(slot[0]) { ArrayList(2) } += slot[1]
@@ -221,8 +227,13 @@ object ToolResultAging {
     fun placeholder(toolName: String, content: String, isError: Boolean = false): String {
         val path = READABLE_PATH.find(content)?.value
         val headLimit = if (isError) ERROR_HEADLINE_CHARS else HEADLINE_CHARS
-        val headline = headlineOf(content, headLimit)
-        val tail = if (content.length > headLimit + TAIL_CHARS) tailOf(content, TAIL_CHARS) else ""
+        // [T-age-single-normalization] Collapse whitespace ONCE for both
+        // excerpts: placeholder() runs on every folded result of every
+        // request, and the old head+tail implementation walked the content
+        // twice.
+        val flat = collapseWhitespace(content)
+        val headline = clipHead(flat, headLimit)
+        val tail = if (flat.length > headLimit + TAIL_CHARS) clipTail(flat, TAIL_CHARS) else ""
         return buildString {
             append(MARKER).append(' ').append(toolName.ifBlank { "tool" })
             if (isError) append(" (error)")
@@ -247,11 +258,20 @@ object ToolResultAging {
      * logs put their actionable line last, so a folded result that keeps only
      * the head hides the error it exists to summarize.
      */
-    fun tailOf(content: String, limit: Int = TAIL_CHARS): String {
-        val flat = collapseWhitespace(content)
+    fun tailOf(content: String, limit: Int = TAIL_CHARS): String =
+        clipTail(collapseWhitespace(content), limit)
+
+    /** Head of an ALREADY-normalized string; empty-safe. */
+    private fun clipHead(text: String, limit: Int): String {
+        if (text.length <= limit) return text
+        val cut = if (Character.isHighSurrogate(text[limit - 1])) limit - 1 else limit
+        return text.substring(0, cut) + "…"
+    }
+
+    /** Tail of an ALREADY-normalized string; never starts on a lone low surrogate. */
+    private fun clipTail(flat: String, limit: Int): String {
         if (flat.length <= limit) return flat
         var cut = flat.takeLast(limit)
-        // Never start the excerpt on a lone low surrogate.
         if (cut.first().isLowSurrogate()) cut = cut.drop(1)
         return cut
     }
@@ -260,12 +280,8 @@ object ToolResultAging {
      * First [limit] chars of the original, whitespace-collapsed and
      * surrogate-safe (a lone high surrogate would poison JSON encoding).
      */
-    fun headlineOf(content: String, limit: Int = HEADLINE_CHARS): String {
-        val text = collapseWhitespace(content)
-        if (text.length <= limit) return text
-        val cut = if (Character.isHighSurrogate(text[limit - 1])) limit - 1 else limit
-        return text.substring(0, cut) + "…"
-    }
+    fun headlineOf(content: String, limit: Int = HEADLINE_CHARS): String =
+        clipHead(collapseWhitespace(content), limit)
 
     /**
      * Collapse every whitespace run to one space and trim. Shared by head and

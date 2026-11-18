@@ -74,9 +74,40 @@ class DroppedRoundDigestTest {
         val digest = DroppedRoundDigest.render(dropped)!!
         assertTrue("newest must survive", digest.contains("instruction 59"))
         assertFalse("oldest beyond the cap is summarized, not carried", digest.contains("instruction 0"))
-        assertTrue(digest.contains("older dropped lines"))
+        assertTrue(digest.contains("older dropped messages"))
         val bodyLines = digest.lines().filter { it.startsWith("- user: ") }
         assertTrue(bodyLines.size <= DroppedRoundDigest.MAX_LINES)
+    }
+
+    @Test
+    fun `a long carrier run does not hide an older user instruction`() {
+        // [T-digest-bounded-scan] 96 tool-result carriers would have filled a
+        // 96-message scan budget; the raw budget is now 512 and text-bearing
+        // candidates are counted separately.
+        val dropped = listOf(user("critical instruction")) +
+            (0 until 100).map { resultCarrier("c$it") }
+        val digest = DroppedRoundDigest.render(dropped)!!
+        assertTrue(digest.contains("critical instruction"))
+    }
+
+    @Test
+    fun `all-carrier drops still report the older gap`() {
+        val dropped = listOf(user("old instruction")) +
+            (0 until 600).map { resultCarrier("c$it") }
+        val digest = DroppedRoundDigest.render(dropped)!!
+        assertTrue(digest.contains("older dropped messages"))
+    }
+
+    @Test
+    fun `huge dropped lists are scanned with a hard bound`() {
+        // 2,000 dropped messages: only the newest window is inspected, the
+        // rest is a count. The newest decision still makes it in.
+        val dropped = (1..2_000).map { i -> user("old $i") } +
+            assistant("latest decision after the drop")
+        val digest = DroppedRoundDigest.render(dropped)!!
+        assertTrue(digest.contains("latest decision after the drop"))
+        assertTrue(digest.contains("older dropped messages"))
+        assertTrue(digest.lines().count { it.startsWith("- ") } <= DroppedRoundDigest.MAX_LINES + 1)
     }
 
     @Test

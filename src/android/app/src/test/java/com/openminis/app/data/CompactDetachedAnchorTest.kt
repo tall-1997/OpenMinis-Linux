@@ -3,7 +3,9 @@ package com.openminis.app.data
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.ui.chat.ChatViewModel
+import com.openminis.app.ui.chat.WalkBack
 import com.openminis.app.ui.chat.buildDetachedCompactHistory
+import com.openminis.app.ui.chat.detachedTailSize
 import com.openminis.app.ui.chat.dropOrphanedToolParts
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -84,12 +86,15 @@ class CompactDetachedAnchorTest {
     }
 
     @Test
-    fun `a tail with no user turn still carries the summary`() {
+    fun `a tail with no user turn still carries the summary first`() {
         val h = listOf(asst(1), asst(2))
         val out = buildDetachedCompactHistory("<summary/>", h, tailSize = 60)
+        // [T-detached-tail-pairing] Assistant-only tail: the summary becomes
+        // its own user turn before the paired suffix.
         assertEquals(3, out.size)
-        assertEquals("<summary/>", out.last().content)
-        assertEquals(LLMMessage.Role.USER, out.last().role)
+        assertEquals(LLMMessage.Role.USER, out.first().role)
+        assertEquals("<summary/>", out.first().content)
+        assertEquals("a1", out[1].content)
     }
 
     @Test
@@ -206,6 +211,57 @@ class CompactDetachedAnchorTest {
         val noticeAt = first.indexOf("[detached compact boundary:")
         val closeAt = first.indexOf("</context-summary>")
         assertTrue(noticeAt in 0 until closeAt)
+    }
+
+    @Test
+    fun `detached tail size is token bounded not a fixed count`() {
+        // [T-detached-tail-budget] 60 spill-sized tool results = ~240k tokens.
+        // A 128k-window tail budget (35% = 44.8k) must not keep all 60.
+        val h = (0 until 60).map { i ->
+            LLMMessage(
+                role = LLMMessage.Role.USER,
+                content = "",
+                contentParts = listOf(
+                    AgentContentPart.ToolResult("c$i", "shell_execute", "x".repeat(16_000)),
+                ),
+            )
+        }
+        val size = detachedTailSize(h, 44_800)
+        assertTrue("expected a bounded tail, got $size", size in 1..20)
+        val kept = h.takeLast(size)
+        val tokens = kept.sumOf { WalkBack.estimateMessageTokens(it) }
+        assertTrue("tail tokens=$tokens", tokens <= 44_800)
+    }
+
+    @Test
+    fun `detached tail size always keeps the newest entry`() {
+        val h = (0 until 5).map { i ->
+            LLMMessage(
+                role = LLMMessage.Role.ASSISTANT,
+                content = "",
+                contentParts = listOf(
+                    AgentContentPart.ToolResult("c$i", "shell_execute", "x".repeat(80_000)),
+                ),
+            )
+        }
+        assertEquals(1, detachedTailSize(h, 100))
+    }
+
+    @Test
+    fun `single user autonomous run keeps a bounded legal tail`() {
+        // [T-detached-tail-pairing] One user turn + 300 tool rounds: the old
+        // safeTailStart walked back to the only real user (index 0), shipping
+        // the whole history regardless of tailSize.
+        val h = mutableListOf(user(1))
+        repeat(300) { i ->
+            h.add(useMsg("c$i"))
+            h.add(resultMsg("c$i"))
+        }
+        val out = buildDetachedCompactHistory("<summary/>", h, tailSize = 10)
+        assertTrue("bounded tail, got ${out.size}", out.size <= 12)
+        assertEquals(LLMMessage.Role.USER, out.first().role)
+        val (uses, results) = toolIds(out)
+        assertEquals(uses, results)
     }
 
     @Test

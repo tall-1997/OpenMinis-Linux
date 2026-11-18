@@ -109,14 +109,18 @@ internal object WalkBack {
         var acceptedPriorIdx: Int? = null
         var acceptedUserTextTurns = 0
         var acceptedMessageCount = 0
-        // Prefix sums over the candidate window make the token check O(1) per
-        // iteration instead of re-walking the slice. Only built when a budget
-        // is actually supplied, so the default path stays allocation-free.
-        val tokenPrefix: IntArray? = maxEstimatedTokens?.let { buildTokenPrefix(history, anchorIdx) }
+        // [T-walkback-streaming-budget] Accumulate the candidate slice while
+        // walking left instead of pre-computing a prefix array over the WHOLE
+        // history. The prefix pass was O(anchor) on every request and could
+        // not stop early; a token-heavy tail now aborts after a few messages.
+        var candidateTokens = 0
 
         var i = anchorIdx
         while (i >= 0) {
             val msg = history[i]
+            if (maxEstimatedTokens != null) {
+                candidateTokens += estimateMessageTokens(msg)
+            }
             if (msg.role != LLMMessage.Role.USER) {
                 i -= 1
                 continue
@@ -146,20 +150,16 @@ internal object WalkBack {
             // budget, walkBack returning 0 turns every request). The token
             // estimate covers the same risk the cap guarded against (a few
             // huge tool results), with an actual budget instead of a count.
-            if (tokenPrefix != null && maxEstimatedTokens != null) {
-                // Token cost of the slice [i .. anchorIdx].
-                val candidateTokens = tokenPrefix[anchorIdx + 1] - tokenPrefix[i]
-                if (candidateTokens > maxEstimatedTokens) {
-                    return WalkBackResult(
-                        priorIdx = acceptedPriorIdx,
-                        userTextTurnsFound = acceptedUserTextTurns,
-                        messageCount = acceptedMessageCount,
-                        stopReason = STOP_TOKEN_BUDGET_WOULD_EXCEED,
-                    )
-                }
+            if (maxEstimatedTokens != null && candidateTokens > maxEstimatedTokens) {
+                return WalkBackResult(
+                    priorIdx = acceptedPriorIdx,
+                    userTextTurnsFound = acceptedUserTextTurns,
+                    messageCount = acceptedMessageCount,
+                    stopReason = STOP_TOKEN_BUDGET_WOULD_EXCEED,
+                )
             }
             val candidateMessageCount = anchorIdx - i + 1
-            if (candidateMessageCount > maxMessages && tokenPrefix == null) {
+            if (candidateMessageCount > maxMessages && maxEstimatedTokens == null) {
                 // No token budget supplied → the message count is the only
                 // guard (legacy behaviour preserved for such callers).
                 return WalkBackResult(
@@ -195,15 +195,6 @@ internal object WalkBack {
         )
     }
 
-    /** `prefix[n]` = estimated tokens of `history[0 until n]`, for `n <= anchorIdx + 1`. */
-    private fun buildTokenPrefix(history: List<LLMMessage>, anchorIdx: Int): IntArray {
-        val prefix = IntArray(anchorIdx + 2)
-        for (idx in 0..anchorIdx) {
-            prefix[idx + 1] = prefix[idx] + estimateMessageTokens(history[idx])
-        }
-        return prefix
-    }
-
     /**
      * [T-compact-keep-budget] Coarse per-message token estimate (chars / 4).
      *
@@ -228,7 +219,11 @@ internal object WalkBack {
                     chars += part.content.length
                     if (part.imageData != null) chars += IMAGE_CHARS
                 }
-                is AgentContentPart.ToolUse -> chars += part.input.toString().length
+                is AgentContentPart.ToolUse ->
+                    // [T-token-scan-memo] reuse the same per-object memo as the
+                    // send-path estimator: this runs for every budget pass, and
+                    // input.toString() is a linear copy of multi-KB args.
+                    chars += TokenScanMemo.toolUseInputJson(part.input).length
                 is AgentContentPart.ImageData -> chars += IMAGE_CHARS
             }
         }

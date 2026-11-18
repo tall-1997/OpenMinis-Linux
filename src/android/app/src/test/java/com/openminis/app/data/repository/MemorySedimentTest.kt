@@ -37,6 +37,16 @@ class MemorySedimentTest {
     }
 
     @Test
+    fun summarySecretsAreMaskedBeforePersisting() {
+        // [T-compact-summary-secret-mask] The daily sediment is injected every
+        // session and copied into backups; a credential quoted by the summary
+        // must not survive.
+        val entry = MemorySediment.buildEntry("ran cat .env: token=abcdef12345", 2)!!
+        assertFalse(entry.contains("abcdef12345"))
+        assertTrue(entry.contains("[redacted]"))
+    }
+
+    @Test
     fun entryIsLabelledAndCarriesTheFoldedCount() {
         val entry = MemorySediment.buildEntry("decided to ship on friday", 12)!!
         assertTrue(entry.startsWith(MemorySediment.LABEL))

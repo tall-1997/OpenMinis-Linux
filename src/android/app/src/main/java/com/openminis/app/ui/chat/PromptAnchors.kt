@@ -40,9 +40,15 @@ internal object TaskAnchor {
      * continuation.
      */
     private val THIN_FOLLOW_UPS = setOf(
-        "\u7ee7\u7eed", "\u63a5\u7740", "\u7ee7\u7eed\u505a", "\u63a5\u7740\u505a", "\u7ee7\u7eed\u5427", "\u63a5\u7740\u5427",
-        "\u597d", "\u597d\u7684", "\u55ef", "\u884c", "\u53ef\u4ee5",
-        "ok", "okay", "continue", "go on", "keep going", "carry on",
+        "\u7ee7\u7eed", "\u63a5\u7740", "\u7ee7\u7eed\u505a", "\u63a5\u7740\u505a",
+        "\u7ee7\u7eed\u5427", "\u63a5\u7740\u5427",
+        "\u597d", "\u597d\u7684", "\u55ef", "\u55ef\u55ef", "\u884c", "\u884c\u5427",
+        "\u53ef\u4ee5", "\u6ca1\u95ee\u9898", "\u6536\u5230", "\u660e\u767d", "\u660e\u767d\u4e86",
+        "\u4e86\u89e3", "\u61c2\u4e86", "\u8c22\u8c22", "\u591a\u8c22", "\u611f\u8c22",
+        "\u8f9b\u82e6", "\u8f9b\u82e6\u4e86",
+        "ok", "okay", "sure", "cool", "nice", "great", "hi", "hello", "hey",
+        "no", "yes", "yep", "nope", "thanks", "thank you", "thx",
+        "got it", "understood", "continue", "go on", "keep going", "carry on",
         "retry", "\u91cd\u8bd5", "\u518d\u8bd5\u4e00\u6b21",
     )
 
@@ -50,9 +56,14 @@ internal object TaskAnchor {
     fun isSubstantive(text: String): Boolean {
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return false
-        val normalized = trimmed.lowercase().trimEnd('.', '!', '。', '！')
+        val normalized = trimmed.lowercase().trimEnd('.', '!', '?', '\u3002', '\uff01', '\uff1f')
         if (normalized in THIN_FOLLOW_UPS) return false
-        return trimmed.count { it.isLetterOrDigit() } >= 2
+        // [T-task-anchor-ack] A two-word ASCII acknowledgement ("no", "hi")
+        // must not replace the task. CJK is dense (2 chars can be a task),
+        // so the floors differ.
+        val cjk = trimmed.count { it.code in 0x4E00..0x9FFF }
+        val alnum = trimmed.count { it.isLetterOrDigit() } - cjk
+        return cjk >= 2 || alnum >= 4
     }
 
     /**
@@ -93,7 +104,7 @@ internal object TaskAnchor {
         firstUserInWindow: String?,
         latestUserInWindow: String? = null,
     ): String? {
-        val anchor = latestUserInWindow?.takeIf { it.isNotBlank() }
+        val anchor = latestUserInWindow?.takeIf { it.isNotBlank() && isSubstantive(it) }
             ?: anchorFromDb?.takeIf { it.isNotBlank() }
             ?: firstUserInWindow?.takeIf { it.isNotBlank() }
             ?: return null

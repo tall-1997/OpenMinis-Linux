@@ -2537,9 +2537,9 @@
     <string name="code_editor_status_size">%1$d linii · %2$d caractere</string>
     <string name="code_editor_undo">Anulează</string>
     <string name="code_editor_wrap">Comută împachetarea liniilor</string>
-    <string name="compact_progress_fallback">Se compactează (%1$d/%2$d) cu modelul de rezervă %3$s… %4$d s. Dacă eșuează, contextul vechi este trunchiat.</string>
+    <string name="compact_progress_fallback">Se compactează (%1$d/%2$d) cu modelul de rezervă %3$s… %4$d s. Dacă eșuează, contextul rămâne neschimbat.</string>
     <string name="compact_progress_session">Se compactează (%1$d/%2$d) cu modelul curent %3$s… %4$d s. Dacă eșuează, rulează rezerva sau o singură reîncercare.</string>
-    <string name="compact_progress_session_retry">Se compactează (%1$d/%2$d), se reîncearcă modelul curent %3$s… %4$d s. Fără rezervă setată. Dacă eșuează, contextul vechi este trunchiat.</string>
+    <string name="compact_progress_session_retry">Se compactează (%1$d/%2$d), se reîncearcă modelul curent %3$s… %4$d s. Fără rezervă setată. Dacă eșuează, contextul rămâne neschimbat.</string>
     <string name="composer_expand_editor">Extinde editorul</string>
     <string name="config_affects_later">Poate afecta apelurile de instrumente ulterioare.</string>
     <string name="config_reversible">Reversibil, dar merită o privire rapidă.</string>
@@ -2726,7 +2726,7 @@
     <string name="model_group_models_plain">%1$d modele</string>
     <!-- backfill: strings.xml -->
     <string name="model_groups_compact_fallback">Rezervă de compactare</string>
-    <string name="model_groups_compact_fallback_footer">Modelul curent încearcă o dată. Dacă eșuează, rezerva încearcă o dată. Fără rezervă, modelul curent se reîncearcă o dată. Două eșecuri trunchiază contextul vechi.</string>
+    <string name="model_groups_compact_fallback_footer">Modelul curent încearcă o dată. Dacă eșuează, rezerva încearcă o dată. Fără rezervă, modelul curent se reîncearcă o dată. Dacă compactarea eșuează, contextul rămâne neschimbat.</string>
     <string name="model_groups_default_primary">Principal implicit</string>
     <string name="model_groups_defaults">Implicite</string>
     <!-- backfill: strings_settings.xml -->

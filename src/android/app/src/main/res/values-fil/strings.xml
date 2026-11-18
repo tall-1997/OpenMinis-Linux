@@ -2533,9 +2533,9 @@
     <string name="code_editor_status_size">%1$d linya · %2$d karakter</string>
     <string name="code_editor_undo">I-undo</string>
     <string name="code_editor_wrap">I-toggle ang word wrap</string>
-    <string name="compact_progress_fallback">Nagko-compact (%1$d/%2$d) gamit ang fallback model %3$s… %4$d s. Kapag nabigo, puputulin ang mas lumang context.</string>
+    <string name="compact_progress_fallback">Nagko-compact (%1$d/%2$d) gamit ang fallback model %3$s… %4$d s. Kapag nabigo, hindi mababago ang context.</string>
     <string name="compact_progress_session">Nagko-compact (%1$d/%2$d) gamit ang kasalukuyang model %3$s… %4$d s. Kapag nabigo, tatakbuhin ang fallback o isang retry.</string>
-    <string name="compact_progress_session_retry">Nagko-compact (%1$d/%2$d), sinusubukan muli ang kasalukuyang model %3$s… %4$d s. Walang fallback na nakatakda. Kapag nabigo, puputulin ang mas lumang context.</string>
+    <string name="compact_progress_session_retry">Nagko-compact (%1$d/%2$d), sinusubukan muli ang kasalukuyang model %3$s… %4$d s. Walang fallback na nakatakda. Kapag nabigo, hindi mababago ang context.</string>
     <string name="composer_expand_editor">Palakihin ang editor</string>
     <string name="config_affects_later">Maaaring makaapekto ito sa mga susunod na tool call.</string>
     <string name="config_reversible">Nababawi, pero sulit na tingnan agad.</string>
@@ -2722,7 +2722,7 @@
     <string name="model_group_models_plain">%1$d model</string>
     <!-- backfill: strings.xml -->
     <string name="model_groups_compact_fallback">Compact fallback</string>
-    <string name="model_groups_compact_fallback_footer">Sumusubok nang isang beses ang kasalukuyang model. Kapag nabigo, susubok nang isang beses ang fallback. Kapag walang fallback, isang retry ang kasalukuyang model. Dalawang pagkabigo ay puputol sa mas lumang context.</string>
+    <string name="model_groups_compact_fallback_footer">Sumusubok nang isang beses ang kasalukuyang model. Kapag nabigo, susubok nang isang beses ang fallback. Kapag walang fallback, isang retry ang kasalukuyang model. Kung mabigo ang pag-compact, hindi mababago ang context.</string>
     <string name="model_groups_default_primary">Default primary</string>
     <string name="model_groups_defaults">Defaults</string>
     <!-- backfill: strings_settings.xml -->

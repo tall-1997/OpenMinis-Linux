@@ -101,7 +101,7 @@ private inline fun ChatViewModel.compactAllImpl(
     // 644-657 "walk back through agentHistory looking for dbMessageId
     // AND allRaw.contains" — split across two phases to honor suspend
     // boundaries.
-    val anchorIdx: Int = if (anchorIdxOverride != null) {
+    var anchorIdx: Int = if (anchorIdxOverride != null) {
         // compactBefore() supplied a specific anchor — walk back from
         // there to the closest entry with a dbMessageId (mirrors the
         // tail-walk-back logic but bounded to [0..override]).
@@ -146,6 +146,26 @@ private inline fun ChatViewModel.compactAllImpl(
     if (effectiveStartIdx > anchorIdx) {
         appendSystemInfo(context.getString(R.string.vm_compact_already_compacted), "compact")
         return
+    }
+    // [T-compact-range-cap] Never hand the summarizer a range it cannot
+    // finish within its call budget (detached anchors start at 0 and can span
+    // ~1M tokens). Summarize a bounded prefix; the next attempt continues
+    // from the new anchor, so the active tail is never wiped in one step.
+    // [T-compact-range-cap] Use the SAME live window the gate used (group
+    // contextLimit / live entry), not the currentModel snapshot: if a group
+    // caps at 32K, the summarizer budget and range cap must both be 32K-tier.
+    val compactWindow = effectiveContextWindowTokens()
+        ?: currentModel?.contextWindow
+        ?: 128_000
+    val compactRangeCap = maxCompactRangeTokens(compactWindow)
+    val cappedAnchorIdx = cappedCompactEnd(history, effectiveStartIdx, anchorIdx, compactRangeCap)
+    if (cappedAnchorIdx != anchorIdx) {
+        AppLogger.info(
+            ChatViewModel.TAG,
+            "[Compact] range capped at idx=$cappedAnchorIdx (requested $anchorIdx) — " +
+                "cap=$compactRangeCap tokens per attempt",
+        )
+        anchorIdx = cappedAnchorIdx
     }
     val toCompact = history.subList(effectiveStartIdx, anchorIdx + 1)
     if (toCompact.isEmpty()) {
@@ -197,11 +217,22 @@ private inline fun ChatViewModel.compactAllImpl(
                 stages = stages,
                 timeoutMs = timeoutMs,
             )
-            val summary = outcome.summary
+            // [T-compact-summary-secret-mask] The summary is a model-written
+            // DERIVATIVE of the transcript and is persisted twice (marker row
+            // + daily memory sediment). A `cat .env` or a 401 body quoted in
+            // the summary would otherwise land unmasked in DB/backup/export.
+            val summary = com.openminis.app.util.SecretMasking.mask(outcome.summary)
+            // [T-compact-no-wipe-on-failure] A failed compaction must not
+            // advance the anchor: the fallback text is not a summary of the
+            // range, and marking it compacted is how the whole active tail
+            // disappeared in one step.
+            val coveredCount = coveredCountFor(outcome, toCompact.size) ?: run {
+                AppLogger.info(ChatViewModel.TAG, "[Compact] failed; context kept unchanged")
+                return@launch
+            }
             // [T-compact-reduced-anchor] A reduced retry summarizes only the
             // OLDEST prefix. The marker may advance only that far; the rest
             // of the range stays active and verbatim.
-            val coveredCount = outcome.coveredMessages.coerceIn(1, toCompact.size)
             val coveredEndIdx = (effectiveStartIdx + coveredCount - 1)
                 .coerceIn(effectiveStartIdx, anchorIdx)
             if (summary.isEmpty()) {
@@ -313,7 +344,7 @@ private inline fun ChatViewModel.compactAllImpl(
                 ChatViewModel.TAG,
                 "[CompactMeta] summaryChars=${summary.length} summaryTokens=${summary.length / 4} " +
                     "compacted=${coveredCount} of ${toCompact.size} keepTurns=${ChatViewModel.COMPACT_KEEP_RECENT_USER_TURNS} " +
-                    "detachedTail=${DETACHED_TAIL_MESSAGES} chunks=${marker.summaryChunks?.length ?: 0}",
+                    "detachedTailMax=${DETACHED_TAIL_MESSAGES} chunks=${marker.summaryChunks?.length ?: 0}",
             )
             // [T-memory-sediment] Leave a searchable trace of what this compaction
             // folded away. Gated on the memory toggle, de-duplicated by payload.

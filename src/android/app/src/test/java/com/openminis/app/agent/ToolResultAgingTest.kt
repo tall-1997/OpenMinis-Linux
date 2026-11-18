@@ -187,6 +187,15 @@ class ToolResultAgingTest {
     // -------------------------------------------------------------- content
 
     @Test
+    fun `a result just over the head does not repeat head and tail`() {
+        // [T-age-head-and-tail] 241–320 chars must not render the same span
+        // twice; the tail fragment only appears once it cannot overlap.
+        val body = "a".repeat(150) + "b".repeat(150)
+        val text = ToolResultAging.placeholder("shell_execute", body)
+        assertFalse(text.contains("[tail]"))
+    }
+
+    @Test
     fun `placeholder keeps a readable path so the model can page it back`() {
         val spill = "/var/minis/workspace/tool-spill/tool_abc123.txt"
         val body = "line1\nline2\n" + "q".repeat(6_000) + "\n[full output: $spill]\n"
@@ -311,6 +320,19 @@ class ToolResultAgingTest {
     }
 
     // ------------------------------------------------- round-coherent keep
+
+    @Test
+    fun `keepRecent zero folds every eligible result without crashing`() {
+        // [T-age-zero-keep] keep=0 is the OFF-mode shape; the round-coherent
+        // index must not read live[scanned] out of bounds.
+        val history = listOf(
+            msg(result("a", 4_000)),
+            msg(result("b", 4_000), result("c", 4_000)),
+        )
+        val plan = ToolResultAging.age(history, keepRecent = 0, minChars = 1_200)
+        assertEquals(3, plan.agedCount)
+        assertTrue(contents(plan.messages).all { ToolResultAging.isAged(it) })
+    }
 
     @Test
     fun `keep window never splits one parallel round`() {

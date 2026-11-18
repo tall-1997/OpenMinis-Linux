@@ -121,7 +121,7 @@ internal object ResidentWindow {
      * unmatched. Results waiting at the current message boundary stay in the
      * state when extending further left — an earlier use may still match them.
      */
-    private fun legalBoundaries(history: List<LLMMessage>): BooleanArray {
+    internal fun legalBoundaries(history: List<LLMMessage>): BooleanArray {
         val n = history.size
         val legal = BooleanArray(n + 1)
         val pendingResults = HashMap<String, Int>()

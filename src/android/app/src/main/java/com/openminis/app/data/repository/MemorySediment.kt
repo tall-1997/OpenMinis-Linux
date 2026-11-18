@@ -34,9 +34,12 @@ object MemorySediment {
 
     /** Builds the log entry for one compaction, or null when there is nothing worth keeping. */
     fun buildEntry(summary: String, compactedCount: Int): String? {
-        val trimmed = summary.trim()
+        // [T-compact-summary-secret-mask] The summary is model-written from
+        // the transcript; mask credentials before it becomes a durable daily
+        // memory that is injected every session and copied into backups.
+        val trimmed = com.openminis.app.util.SecretMasking.mask(summary).trim()
         if (trimmed.isEmpty()) return null
-        val excerpt = if (trimmed.length <= MAX_CHARS) trimmed else trimmed.take(MAX_CHARS) + "…"
+        val excerpt = com.openminis.app.util.TextClip.safeEllipsize(trimmed, MAX_CHARS)
         return buildString {
             append(LABEL)
             append(" ")

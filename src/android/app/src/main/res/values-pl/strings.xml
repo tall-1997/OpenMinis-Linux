@@ -2540,9 +2540,9 @@
     <string name="code_editor_status_size">%1$d linii · %2$d znaków</string>
     <string name="code_editor_undo">Cofnij</string>
     <string name="code_editor_wrap">Przełącz zawijanie wierszy</string>
-    <string name="compact_progress_fallback">Kompaktowanie (%1$d/%2$d) modelem zapasowym %3$s… %4$d s. Po niepowodzeniu starszy kontekst zostaje przycięty.</string>
+    <string name="compact_progress_fallback">Kompaktowanie (%1$d/%2$d) modelem zapasowym %3$s… %4$d s. Po niepowodzeniu kontekst pozostaje bez zmian.</string>
     <string name="compact_progress_session">Kompaktowanie (%1$d/%2$d) bieżącym modelem %3$s… %4$d s. Po niepowodzeniu działa zapasowy albo jedna ponowna próba.</string>
-    <string name="compact_progress_session_retry">Kompaktowanie (%1$d/%2$d), ponowna próba bieżącego modelu %3$s… %4$d s. Brak zapasowego. Po niepowodzeniu starszy kontekst zostaje przycięty.</string>
+    <string name="compact_progress_session_retry">Kompaktowanie (%1$d/%2$d), ponowna próba bieżącego modelu %3$s… %4$d s. Brak zapasowego. Po niepowodzeniu kontekst pozostaje bez zmian.</string>
     <string name="composer_expand_editor">Rozwiń edytor</string>
     <string name="config_affects_later">To może wpłynąć na późniejsze wywołania narzędzi.</string>
     <string name="config_reversible">Da się odwrócić, ale warto rzucić okiem.</string>
@@ -2729,7 +2729,7 @@
     <string name="model_group_models_plain">%1$d modeli</string>
     <!-- backfill: strings.xml -->
     <string name="model_groups_compact_fallback">Zapasowe kompaktowanie</string>
-    <string name="model_groups_compact_fallback_footer">Bieżący model próbuje raz. Po niepowodzeniu zapasowy próbuje raz. Bez zapasowego bieżący model jest ponawiany raz. Dwa niepowodzenia przycinają starszy kontekst.</string>
+    <string name="model_groups_compact_fallback_footer">Bieżący model próbuje raz. Po niepowodzeniu zapasowy próbuje raz. Bez zapasowego bieżący model jest ponawiany raz. Jeśli kompresja się nie powiedzie, kontekst pozostaje bez zmian.</string>
     <string name="model_groups_default_primary">Domyślny główny</string>
     <string name="model_groups_defaults">Domyślne</string>
     <!-- backfill: strings_settings.xml -->

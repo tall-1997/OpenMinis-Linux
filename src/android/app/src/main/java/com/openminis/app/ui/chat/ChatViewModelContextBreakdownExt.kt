@@ -168,7 +168,7 @@ internal suspend fun ChatViewModel.buildContextBreakdown(): ContextBreakdown = w
         sections = systemSections,
         historyTokens = estimateAgentHistoryTokens(),
         pendingAttachmentTokens = pendingAttachmentTokens(),
-        usedTokens = contextTokensForPolicy(),
+        usedTokens = contextTokensForDisplay(),
         windowTokens = currentModelContextWindow ?: 0,
         maxOutputTokens = maxOutput,
     )

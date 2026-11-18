@@ -1,7 +1,5 @@
 package com.openminis.app.ui.chat
 
-import java.util.concurrent.ConcurrentHashMap
-
 /**
  * [T-working-memory-ledger] Host-maintained per-session ledger of tool work,
  * rendered ONLY when the postAnchor tail budget evicts rounds that were never
@@ -68,8 +66,18 @@ internal class WorkingMemoryLedger {
                 turn = turn,
                 tool = tool,
                 argsDigest = argsDigest,
-                argsSummary = argsSummary.take(ARGS_SUMMARY_CHARS),
-                resultHead = resultHead.take(RESULT_HEAD_CHARS),
+                argsSummary = com.openminis.app.util.TextClip.safeTake(
+                    argsSummary,
+                    ARGS_SUMMARY_CHARS,
+                ),
+                // [T-working-memory-frame-safe] The line is committed inside
+                // a <system-reminder> frame; raw tool output can contain a
+                // closing tag or newlines that would end the frame early and
+                // leak subsequent lines into user-visible previews.
+                resultHead = com.openminis.app.util.TextClip.safeTake(
+                    WorkingMemoryArgs.oneLine(resultHead),
+                    RESULT_HEAD_CHARS,
+                ),
             ),
         )
         delivered.add(false)
@@ -78,11 +86,27 @@ internal class WorkingMemoryLedger {
             // first (MAX_ENTRIES / 2) entries but keep their count visible.
             val drop = MAX_ENTRIES / 2
             val folded = entries.subList(0, drop)
+            // [T-working-memory-fold-sample] Folding undelivered records must
+            // not reduce them to a bare count: keep a short sample of what
+            // the oldest rounds were about, so the handover still names work.
+            val sample = folded.asReversed().take(FOLD_SAMPLE_ENTRIES)
+                .joinToString(", ") {
+                    val label = it.argsSummary.ifBlank { "no-args" }
+                    "${it.tool}($label)"
+                }
+            val sampleLabel = com.openminis.app.util.TextClip.safeTake(
+                WorkingMemoryArgs.oneLine("sample: $sample"),
+                ARGS_SUMMARY_CHARS,
+            )
             val foldLine = Entry(
                 turn = folded.first().turn,
                 tool = FOLD_TOOL,
                 argsDigest = "rounds ${folded.first().turn}–${folded.last().turn}",
-                argsSummary = "rounds ${folded.first().turn}–${folded.last().turn}",
+                argsSummary = if (sample.isBlank()) {
+                    "rounds ${folded.first().turn}–${folded.last().turn}"
+                } else {
+                    sampleLabel
+                },
                 // Honest wording: compact may never have run, so pointing at a
                 // summary that does not cover these rounds is a false lead.
                 resultHead = "${folded.size} earlier tool rounds folded (records beyond this point)",
@@ -149,6 +173,12 @@ internal class WorkingMemoryLedger {
 
         /** Per-delivery cap: a wall of records invites narration. */
         internal const val MAX_DELIVERY_LINES = 40
+
+        /** [T-working-memory-fold-sample] Identities kept in a fold marker. */
+        internal const val FOLD_SAMPLE_ENTRIES = 3
+
+        /** [T-working-memory-store-bound] Live per-session ledgers kept. */
+        internal const val MAX_LIVE_LEDGERS = 128
     }
 }
 
@@ -188,6 +218,12 @@ internal object WorkingMemoryArgs {
     fun summary(toolName: String, argsJson: String): String {
         val raw = argsJson.trim()
         if (raw.isEmpty()) return ""
+        // [T-working-memory-prose-tools] A memory_write's useful identity is
+        // "it wrote an entry", not the entry body: that body can contain
+        // user-confided facts or credentials, and this line is persisted.
+        if (com.openminis.app.security.ToolAliases.canonical(toolName) == "memory_write") {
+            return "memory entry (${raw.length} chars)"
+        }
         val parsed = runCatching { org.json.JSONObject(raw) }.getOrNull()
         val detail = if (parsed != null) {
             runCatching { resolveToolDetail(toolName, parsed) }.getOrDefault("")
@@ -195,7 +231,12 @@ internal object WorkingMemoryArgs {
         } else {
             raw
         }
-        return oneLine(detail).take(WorkingMemoryLedger.ARGS_SUMMARY_CHARS)
+        // [T-working-memory-secret-mask] This line is PERSISTED into the
+        // transcript, so a command carrying an Authorization header/API key
+        // must not be duplicated there verbatim. Shape-based masking only;
+        // paths and ordinary commands stay readable.
+        return oneLine(com.openminis.app.util.SecretMasking.mask(detail))
+            .let { com.openminis.app.util.TextClip.safeTake(it, WorkingMemoryLedger.ARGS_SUMMARY_CHARS) }
     }
 
     /**
@@ -209,7 +250,9 @@ internal object WorkingMemoryArgs {
         val parts = ArrayList<String>(3)
         while (keys.hasNext() && parts.size < MAX_PAIRS) {
             val key = keys.next()
-            if (key == "tool_title" || key == "tool_input") continue
+            // Identity only: prose/body fields are not a useful one-line
+            // record and may contain user content or secrets.
+            if (key in NON_IDENTITY_KEYS) continue
             val value = json.opt(key)
             val text = when (value) {
                 is String -> value
@@ -217,18 +260,24 @@ internal object WorkingMemoryArgs {
                 else -> continue
             }.trim()
             if (text.isEmpty()) continue
-            parts += "$key=${oneLine(text).take(VALUE_CHARS)}"
+            parts += "$key=" + com.openminis.app.util.TextClip.safeTake(oneLine(text), VALUE_CHARS)
         }
         return parts.joinToString(", ")
     }
 
-    private fun oneLine(text: String): String =
+    internal fun oneLine(text: String): String =
         FRAME_TAG.replace(text, "[tag]")
             .replace(WHITESPACE, " ")
             .trim()
 
     private const val MAX_PAIRS = 3
     private const val VALUE_CHARS = 60
+
+    /** Keys whose values are prose/payload, not a call identity. */
+    private val NON_IDENTITY_KEYS = setOf(
+        "tool_title", "tool_input", "content", "text", "body", "prompt",
+        "value", "data", "old_string", "new_string",
+    )
 }
 
 /**
@@ -240,10 +289,27 @@ internal object WorkingMemoryArgs {
  */
 internal object WorkingMemoryStore {
 
-    private val ledgers = ConcurrentHashMap<String, WorkingMemoryLedger>()
+    /**
+     * [T-working-memory-store-bound] Access-ordered LRU. A process that opens
+     * many sessions (sub-agent hosts, scheduled chats) must not retain one
+     * 600-entry ledger per session forever. Eviction is safe: delivery is
+     * best-effort and a fresh ledger simply records new rounds.
+     */
+    private val ledgers = java.util.Collections.synchronizedMap(
+        object : java.util.LinkedHashMap<String, WorkingMemoryLedger>(16, 0.75f, true) {
+            override fun removeEldestEntry(
+                eldest: MutableMap.MutableEntry<String, WorkingMemoryLedger>,
+            ): Boolean = size > WorkingMemoryLedger.MAX_LIVE_LEDGERS
+        },
+    )
 
     fun ledgerFor(sessionId: String): WorkingMemoryLedger =
-        ledgers.getOrPut(sessionId) { WorkingMemoryLedger() }
+        synchronized(ledgers) {
+            ledgers.getOrPut(sessionId) { WorkingMemoryLedger() }
+        }
+
+    /** Test seam: how many live per-session ledgers the store retains. */
+    internal fun liveLedgerCountForTest(): Int = synchronized(ledgers) { ledgers.size }
 
     fun append(
         sessionId: String,
@@ -265,6 +331,8 @@ internal object WorkingMemoryStore {
 
     /** Test / session-swap seam. */
     fun reset(sessionId: String? = null) {
-        if (sessionId == null) ledgers.clear() else ledgers.remove(sessionId)
+        synchronized(ledgers) {
+            if (sessionId == null) ledgers.clear() else ledgers.remove(sessionId)
+        }
     }
 }

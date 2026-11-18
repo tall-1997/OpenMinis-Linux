@@ -1,6 +1,7 @@
 package com.openminis.app.ui.chat
 
 import com.openminis.app.data.BPETokenizer
+import com.openminis.app.data.ContextPolicy
 import com.openminis.app.data.UsageState
 import com.openminis.app.data.foldToolUse
 import com.openminis.app.data.model.AgentContentPart
@@ -86,16 +87,57 @@ private fun estimateMixedTokens(text: String): Long = TokenScanMemo.mixedTokens(
  * uses the effective slice (not raw `agentHistory`) so compaction — which
  * shrinks exactly this slice — makes the post-compact check pass.
  */
-internal fun ChatViewModel.contextTokensForPolicy(): Int =
+internal enum class PolicyMeasurement { UNBUDGETED, REQUEST }
+
+/**
+ * [T-exhausted-tier-measurement] Which slice the gate weighs for a window:
+ *  - compactable tier → the UN-BUDGETED slice (the tail cap must not hide the
+ *    unsummarized backlog from the compact gate);
+ *  - exhaustedOnly (<32K) → the REAL request (budget + ProgressiveTrim), or
+ *    a 21K-token history that trims to 18K would be declared exhausted and
+ *    stop the turn for no reason.
+ * Pure so the branch is testable without a ViewModel.
+ */
+internal fun policyMeasurementMode(window: Int?, compactPercent: Int): PolicyMeasurement {
+    if (window == null) return PolicyMeasurement.UNBUDGETED
+    return if (ContextPolicy.forContextWindow(window, compactPercent).compactThreshold > 0) {
+        PolicyMeasurement.UNBUDGETED
+    } else {
+        PolicyMeasurement.REQUEST
+    }
+}
+
+internal fun ChatViewModel.contextTokensForPolicy(): Int {
+    val window = effectiveContextWindowTokens()
+    val slice = when (policyMeasurementMode(window, effectiveCompactPercent())) {
+        PolicyMeasurement.UNBUDGETED -> effectiveAgentHistoryUncounted(
+            applyProgressiveTrim = false,
+            applyTailBudget = false,
+        )
+        PolicyMeasurement.REQUEST -> effectiveAgentHistoryUncounted()
+    }
+    return maxOf(
+        _lastTurnContextTokens.value,
+        // [T-compact-gate-one-pass] One estimate, not two: the un-budgeted
+        // slice always dominates the budgeted one (same list minus dropped
+        // rounds), and each estimate serializes every tool argument. The old
+        // three-term form walked the whole history twice per request.
+        estimateMessagesTokens(slice),
+    )
+}
+
+/**
+ * [T-context-display-vs-pressure] What the USER should see as "context used":
+ * the real request projection (provider usage when known, otherwise the
+ * budgeted effective history). The gate deliberately measures the UN-BUDGETED
+ * slice ([contextTokensForPolicy]); showing that number in the ring or the
+ * Token Usage sheet would report e.g. 180k while the outgoing request is
+ * 55k, which reads as a false alarm.
+ */
+internal fun ChatViewModel.contextTokensForDisplay(): Int =
     maxOf(
         _lastTurnContextTokens.value,
         estimateAgentHistoryTokens(),
-        estimateMessagesTokens(
-            effectiveAgentHistoryUncounted(
-                applyProgressiveTrim = false,
-                applyTailBudget = false,
-            ),
-        ),
     )
 
 /**

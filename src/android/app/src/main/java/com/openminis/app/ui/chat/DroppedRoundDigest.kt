@@ -39,6 +39,13 @@ internal object DroppedRoundDigest {
     const val ASSISTANT_CHARS = 240
 
     /**
+     * [T-digest-bounded-scan] Hard bound on RAW messages inspected per render.
+     * Text-bearing candidates are counted separately: a run of 100 tool-result
+     * carriers must not hide an older user instruction behind the scan budget.
+     */
+    const val MAX_SCAN_MESSAGES = 512
+
+    /**
      * @return null when the dropped rounds carry no user/assistant text worth
      *   keeping (e.g. pure tool traffic) — the caller then keeps the plain
      *   count notice.
@@ -48,41 +55,57 @@ internal object DroppedRoundDigest {
         header: String = HEADER,
     ): String? {
         if (dropped.isEmpty()) return null
-        val lines = ArrayList<String>()
-        for (msg in dropped) {
-            when (msg.role) {
-                LLMMessage.Role.USER -> {
-                    if (msg.contentParts.any { it is AgentContentPart.ToolResult }) continue
-                    if (HarnessNoteMarkers.isUserHarnessNote(msg)) continue
-                    val text = textOf(msg)
-                    if (text.isBlank()) continue
-                    lines += "user: " + clip(text, USER_CHARS)
-                }
-                LLMMessage.Role.ASSISTANT -> {
-                    val text = textOf(msg)
-                    if (text.isBlank()) continue
-                    lines += "assistant: " + clip(text, ASSISTANT_CHARS)
-                }
-                else -> Unit
-            }
-        }
-        if (lines.isEmpty()) return null
-        // Keep the NEWEST lines within the caps (the rounds adjacent to the
-        // kept tail are the ones the next step depends on), then emit oldest
-        // first so the digest reads chronologically.
+        // [T-digest-bounded-scan] Walk from the NEWEST dropped message and
+        // stop as soon as the line/char caps are full, with a hard scan
+        // bound. This runs on every request while a drop persists; scanning
+        // all 3,000 dropped rounds to keep 24 lines was pure waste. Older
+        // messages beyond the scan are reported as a count, not read.
         val kept = ArrayDeque<String>()
         var used = 0
-        for (line in lines.asReversed()) {
-            if (kept.size >= MAX_LINES) break
-            if (kept.isNotEmpty() && used + line.length + 1 > MAX_CHARS) break
-            kept.addFirst(line)
-            used += line.length + 1
+        var scanned = 0
+        var i = dropped.lastIndex
+        while (i >= 0 && kept.size < MAX_LINES && scanned < MAX_SCAN_MESSAGES) {
+            scanned++
+            val line = lineFor(dropped[i])
+            if (line != null) {
+                if (kept.isNotEmpty() && used + line.length + 1 > MAX_CHARS) break
+                kept.addFirst(line)
+                used += line.length + 1
+            }
+            i--
         }
+        if (kept.isEmpty()) {
+            // No text in the scanned window. If older messages remain, say so
+            // instead of returning null (which hid the only remaining trace of
+            // the drop); if the whole list was scanned, there is no text at all.
+            return if (i >= 0) {
+                header + "\n- (+${i + 1} older dropped messages)"
+            } else {
+                null
+            }
+        }
+        val omitted = i + 1
         return buildString {
             append(header)
             for (line in kept) append('\n').append("- ").append(line)
-            val omitted = lines.size - kept.size
-            if (omitted > 0) append("\n- (+").append(omitted).append(" older dropped lines)")
+            if (omitted > 0) append("\n- (+").append(omitted).append(" older dropped messages)")
+        }
+    }
+
+    /** One digest line for a text-bearing message, or null to skip it. */
+    private fun lineFor(msg: LLMMessage): String? {
+        return when (msg.role) {
+            LLMMessage.Role.USER -> {
+                if (msg.contentParts.any { it is AgentContentPart.ToolResult }) return null
+                if (HarnessNoteMarkers.isUserHarnessNote(msg)) return null
+                val text = textOf(msg)
+                if (text.isBlank()) null else "user: " + clip(text, USER_CHARS)
+            }
+            LLMMessage.Role.ASSISTANT -> {
+                val text = textOf(msg)
+                if (text.isBlank()) null else "assistant: " + clip(text, ASSISTANT_CHARS)
+            }
+            else -> null
         }
     }
 
@@ -96,10 +119,13 @@ internal object DroppedRoundDigest {
     }
 
     private fun clip(text: String, limit: Int): String {
-        val flat = text.replace(Regex("\\s+"), " ").trim()
+        val flat = text.replace(WHITESPACE, " ").trim()
         if (flat.length <= limit) return flat
         var cut = flat.take(limit)
         if (cut.last().isHighSurrogate()) cut = cut.dropLast(1)
         return "$cut…"
     }
+
+    /** Hoisted: clip() runs up to MAX_SCAN_MESSAGES times per render. */
+    private val WHITESPACE = Regex("\\s+")
 }

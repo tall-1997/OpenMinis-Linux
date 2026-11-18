@@ -2595,9 +2595,9 @@
     <string name="code_editor_status_size">%1$d 行 · %2$d 個字元</string>
     <string name="code_editor_undo">復原</string>
     <string name="code_editor_wrap">切換自動換行</string>
-    <string name="compact_progress_fallback">正在壓縮（%1$d/%2$d），使用備援模型 %3$s… %4$d 秒。若失敗，較早的上下文會被截斷。</string>
+    <string name="compact_progress_fallback">正在壓縮（%1$d/%2$d），使用備援模型 %3$s… %4$d 秒。若失敗，上下文將保持不變。</string>
     <string name="compact_progress_session">正在壓縮（%1$d/%2$d），使用目前模型 %3$s… %4$d 秒。若失敗，會改用備援或一次性重試。</string>
-    <string name="compact_progress_session_retry">正在壓縮（%1$d/%2$d），重試目前模型 %3$s… %4$d 秒。未設定備援。若失敗，較早的上下文會被截斷。</string>
+    <string name="compact_progress_session_retry">正在壓縮（%1$d/%2$d），重試目前模型 %3$s… %4$d 秒。未設定備援。若失敗，上下文將保持不變。</string>
     <string name="composer_expand_editor">展開編輯器</string>
     <string name="config_affects_later">這項變更可能影響之後的工具呼叫。</string>
     <string name="config_reversible">可以還原，但值得先看一眼。</string>
@@ -2762,7 +2762,7 @@
     <string name="model_group_models_plain">%1$d 個模型</string>
     <!-- backfill: strings.xml -->
     <string name="model_groups_compact_fallback">壓縮備援</string>
-    <string name="model_groups_compact_fallback_footer">目前模型先壓一次。失敗後備援模型再壓一次；未設定備援則用目前模型再試一次。兩次都失敗就截斷較早的上下文。</string>
+    <string name="model_groups_compact_fallback_footer">目前模型先壓一次。失敗後備援模型再壓一次；未設定備援則用目前模型再試一次。兩次都失敗也保持上下文不變。</string>
     <string name="model_groups_default_primary">預設主模型</string>
     <string name="model_groups_defaults">預設值</string>
     <!-- backfill: strings_settings.xml -->

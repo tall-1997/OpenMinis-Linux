@@ -366,34 +366,42 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     // against exactly those dates, so a day the budget drops lands in the TOC
     // instead of vanishing — the root fix for "the model only remembers two
     // days".
-    val memoryAssembly = if (memoryOn) {
-        com.openminis.app.data.repository.MemoryAssembly.assemble(
-            standing = listOfNotNull(
-                projectRulesFragment?.let {
-                    com.openminis.app.data.repository.MemoryPromptBudget.Fragment(
-                        "project-rules", it,
-                        com.openminis.app.data.repository.MemoryPromptBudget.PRIORITY_PROJECT,
-                        truncatable = false,
-                    )
-                },
-                sessionGlobal?.let {
-                    com.openminis.app.data.repository.MemoryPromptBudget.Fragment(
-                        "session-global", it,
-                        com.openminis.app.data.repository.MemoryPromptBudget.PRIORITY_SESSION,
-                        truncatable = false,
-                    )
-                },
-                standingGlobal?.let {
-                    com.openminis.app.data.repository.MemoryPromptBudget.Fragment(
-                        "app-global", it,
-                        com.openminis.app.data.repository.MemoryPromptBudget.PRIORITY_APP,
-                        truncatable = true,
-                    )
-                },
-            ),
-            daily = dailyFragments,
-            header = com.openminis.app.data.repository.MemoryAssembly.DAILY_BLOCK_HEADER,
-        ) { excludeDates ->
+    // [T-rules-independent-of-memory] The assembly ALWAYS runs: the three
+    // standing-rule blocks are instructions, not memory (same contract as
+    // SOUL.md / learned prefs). Only the diary side (daily window + TOC) is
+    // gated by the session memory toggle. Without this, the DISABLED section
+    // could claim "rules still bind every turn" while the only injection path
+    // was switched off.
+    val memoryAssembly = com.openminis.app.data.repository.MemoryAssembly.assemble(
+        standing = listOfNotNull(
+            projectRulesFragment?.let {
+                com.openminis.app.data.repository.MemoryPromptBudget.Fragment(
+                    "project-rules", it,
+                    com.openminis.app.data.repository.MemoryPromptBudget.PRIORITY_PROJECT,
+                    truncatable = false,
+                )
+            },
+            sessionGlobal?.let {
+                com.openminis.app.data.repository.MemoryPromptBudget.Fragment(
+                    "session-global", it,
+                    com.openminis.app.data.repository.MemoryPromptBudget.PRIORITY_SESSION,
+                    truncatable = false,
+                )
+            },
+            standingGlobal?.let {
+                com.openminis.app.data.repository.MemoryPromptBudget.Fragment(
+                    "app-global", it,
+                    com.openminis.app.data.repository.MemoryPromptBudget.PRIORITY_APP,
+                    truncatable = true,
+                )
+            },
+        ),
+        daily = if (memoryOn) dailyFragments else emptyList(),
+        header = com.openminis.app.data.repository.MemoryAssembly.DAILY_BLOCK_HEADER,
+    ) { excludeDates ->
+        if (!memoryOn) {
+            null
+        } else {
             val toc = com.openminis.app.data.repository.MemoryIndex.fragment(
                 sessionDir = com.openminis.app.sandbox.SessionWorkspace
                     .memoryDir(context.filesDir, memorySessionId),
@@ -409,11 +417,11 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
                 .joinToString("\n")
                 .takeIf { it.isNotBlank() }
         }
-    } else null
+    }
     // [T-memory-prompt-budget] One budget for the whole memory block, admitted
     // narrowest-scope-first, so a long GLOBAL.md can never displace this chat's
-    // own rules. Null when memory is off or nothing was admitted.
-    val memoryAllocation = memoryAssembly?.allocation
+    // own rules.
+    val memoryAllocation = memoryAssembly.allocation
     // [GH#357] Split the block: standing rules stay in the byte-stable head,
     // while the daily-log window (+TOC) moves to the dynamic tail. A single
     // memory_write rewrites a daily log, and before this split that was a
@@ -447,7 +455,7 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
             "personaChars=${identitySection.length} " +
             "worldBookChars=${worldBookFragment.length} " +
             "projectRulesChars=${projectRulesFragment?.length ?: 0} " +
-            "memoryBudget=${memoryAllocation?.describe() ?: "off"} " +
+            "memoryBudget=${memoryAllocation.describe()} " +
             // [T-daily-recall-gate] D2 honesty: how many older daily files the
             // gate/budget kept out of this build, and their full-text chars —
             // the kept= list above lists only what was truly injected.
@@ -465,7 +473,7 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     // present and binding is a lie the model then acts on.
     val standingRules = standingRuleContract(
         keptInstructionKeys,
-        memoryAllocation?.included?.mapTo(HashSet()) { it.key }.orEmpty(),
+        memoryAllocation.included.mapTo(HashSet()) { it.key },
     )
     val dynamicTail = assembleDynamicTail(
         worldBookFragment = worldBookFragment,

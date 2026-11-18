@@ -2532,9 +2532,9 @@
     <string name="code_editor_status_size">%1$d 行 · %2$d 文字</string>
     <string name="code_editor_undo">元に戻す</string>
     <string name="code_editor_wrap">折り返しを切り替え</string>
-    <string name="compact_progress_fallback">圧縮中 (%1$d/%2$d)、フォールバックモデル %3$s を使用中… %4$d 秒。失敗した場合は古いコンテキストを切り詰めます。</string>
+    <string name="compact_progress_fallback">圧縮中 (%1$d/%2$d)、フォールバックモデル %3$s を使用中… %4$d 秒。失敗した場合もコンテキストは変更されません。</string>
     <string name="compact_progress_session">圧縮中 (%1$d/%2$d)、現在のモデル %3$s を使用中… %4$d 秒。失敗した場合はフォールバックまたは 1 回だけの再試行を実行します。</string>
-    <string name="compact_progress_session_retry">圧縮中 (%1$d/%2$d)、現在のモデル %3$s を再試行中… %4$d 秒。フォールバックは未設定です。失敗した場合は古いコンテキストを切り詰めます。</string>
+    <string name="compact_progress_session_retry">圧縮中 (%1$d/%2$d)、現在のモデル %3$s を再試行中… %4$d 秒。フォールバックは未設定です。失敗した場合もコンテキストは変更されません。</string>
     <string name="composer_expand_editor">エディタを広げる</string>
     <string name="config_affects_later">この変更は、これ以降のツール呼び出しに影響する可能性があります。</string>
     <string name="config_reversible">元に戻せますが、一度確認しておく価値があります。</string>
@@ -2721,7 +2721,7 @@
     <string name="model_group_models_plain">%1$d 個のモデル</string>
     <!-- backfill: strings.xml -->
     <string name="model_groups_compact_fallback">コンパクトフォールバック</string>
-    <string name="model_groups_compact_fallback_footer">現在のモデルで 1 回圧縮を試みます。失敗したらフォールバックを 1 回試します。フォールバックがなければ現在のモデルを 1 回再試行します。2 回失敗すると古いコンテキストを切り詰めます。</string>
+    <string name="model_groups_compact_fallback_footer">現在のモデルで 1 回圧縮を試みます。失敗したらフォールバックを 1 回試します。フォールバックがなければ現在のモデルを 1 回再試行します。圧縮に失敗してもコンテキストは変更されません。</string>
     <string name="model_groups_default_primary">デフォルトのメイン</string>
     <string name="model_groups_defaults">デフォルト</string>
     <!-- backfill: strings_settings.xml -->

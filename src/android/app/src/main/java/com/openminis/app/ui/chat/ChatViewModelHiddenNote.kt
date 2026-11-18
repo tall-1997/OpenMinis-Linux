@@ -129,6 +129,24 @@ internal suspend fun ChatViewModel.commitSessionNoticesOnce(
     }
 }
 
+/**
+ * [T-hidden-note-secret-mask] The framing choke point every host note passes
+ * through: mask credentials BEFORE persisting. Producers (ledger/failure)
+ * already mask, but recall/goal/state/plan notes can carry user-confided text
+ * from memory files. Masking here is the defense-in-depth layer that keeps the
+ * chat DB (and therefore export/backup) clean.
+ */
+internal fun frameHiddenNote(text: String): String {
+    // [T-hidden-note-frame-safe] memory_write can store a tool output that
+    // contains `</system-reminder>`; without neutralization the frame closes
+    // early and the rest of the note becomes raw user speech.
+    val safe = text.replace(FRAME_TAGS, "[tag]")
+    return "<system-reminder>\n" + com.openminis.app.util.SecretMasking.mask(safe) + "\n</system-reminder>"
+}
+
+/** Opening/closing harness frame tags, with optional attributes. */
+private val FRAME_TAGS = Regex("</?(?:system-reminder|context-summary)(?:\\s[^>]*)?>", RegexOption.IGNORE_CASE)
+
 internal suspend fun ChatViewModel.commitHiddenUserNote(text: String) {
     if (text.isBlank()) return
     // [T-hidden-user-note] Harness framing, not user speech: Z-Code delivers
@@ -140,7 +158,7 @@ internal suspend fun ChatViewModel.commitHiddenUserNote(text: String) {
     // `<system-reminder>` blocks) leaked the bookkeeping line into user
     // bubbles, and echo-prone models repeated it. The framing must stay
     // strip-clean end to end.
-    val framed = "<system-reminder>\n$text\n</system-reminder>"
+    val framed = frameHiddenNote(text)
     appendBoundedHistory(
         LLMMessage(
             role = LLMMessage.Role.USER,

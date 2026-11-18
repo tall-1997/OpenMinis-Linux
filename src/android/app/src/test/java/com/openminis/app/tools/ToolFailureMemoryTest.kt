@@ -2,6 +2,7 @@ package com.openminis.app.tools
 
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -118,6 +119,34 @@ class ToolFailureMemoryTest {
         assertTrue(excerpt.length <= 141)
         assertTrue(!excerpt.contains("\n"))
         assertTrue(ToolFailureMemory.argsExcerpt("not json\nrest").startsWith("not json rest"))
+    }
+
+    @Test
+    fun argsExcerptMasksCredentials() {
+        val excerpt = ToolFailureMemory.argsExcerpt(
+            """{"command":"curl -H 'Authorization: opaque-token-123' https://x?token=abcdef123&id=42"}""",
+        )
+        assertTrue(!excerpt.contains("opaque-token-123"))
+        assertTrue(!excerpt.contains("abcdef123"))
+        assertTrue(excerpt.contains("[redacted]"))
+        assertTrue("URL tail survives masking", excerpt.contains("id=42"))
+    }
+
+    @Test
+    fun argsExcerptNeverSplitsASurrogatePair() {
+        val excerpt = ToolFailureMemory.argsExcerpt("""{"command":"${"x".repeat(139)}😀"}""")
+        assertTrue(excerpt.isNotEmpty())
+        assertTrue(!Character.isHighSurrogate(excerpt.last()))
+    }
+
+    @Test
+    fun failedErrorTextIsMaskedBeforePersistingAndReplay() {
+        val error = "HTTP 401: Authorization: opaque-token-123 at https://x?token=abcdef123"
+        repeat(2) { ToolFailureMemory.recordFailure(ledger, "shell_execute", "{}", error, now) }
+        assertFalse(ledger.readText().contains("opaque-token-123"))
+        assertFalse(ledger.readText().contains("abcdef123"))
+        val entry = ToolFailureMemory.lookup(ledger, "shell_execute", "{}", now)!!
+        assertFalse(ToolFailureMemory.refusalText(entry).contains("opaque-token-123"))
     }
 
     @Test

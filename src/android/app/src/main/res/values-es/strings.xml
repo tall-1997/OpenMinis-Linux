@@ -2470,9 +2470,9 @@
     <string name="code_editor_status_size">%1$d líneas · %2$d caracteres</string>
     <string name="code_editor_undo">Deshacer</string>
     <string name="code_editor_wrap">Alternar ajuste de línea</string>
-    <string name="compact_progress_fallback">Compactando (%1$d/%2$d) con el modelo de respaldo %3$s… %4$d s. Si falla, el contexto antiguo se trunca.</string>
+    <string name="compact_progress_fallback">Compactando (%1$d/%2$d) con el modelo de respaldo %3$s… %4$d s. Si falla, el contexto no cambia.</string>
     <string name="compact_progress_session">Compactando (%1$d/%2$d) con el modelo actual %3$s… %4$d s. Si falla, se ejecuta el respaldo o un reintento único.</string>
-    <string name="compact_progress_session_retry">Compactando (%1$d/%2$d), reintentando el modelo actual %3$s… %4$d s. Sin respaldo establecido. Si falla, el contexto antiguo se trunca.</string>
+    <string name="compact_progress_session_retry">Compactando (%1$d/%2$d), reintentando el modelo actual %3$s… %4$d s. Sin respaldo establecido. Si falla, el contexto no cambia.</string>
     <string name="composer_expand_editor">Expandir editor</string>
     <string name="config_affects_later">Esto puede afectar a llamadas de herramientas posteriores.</string>
     <string name="config_reversible">Es reversible, pero merece un vistazo rápido.</string>
@@ -2642,7 +2642,7 @@
     <string name="model_group_detail_routing_fallback_footer">Cuando este grupo esté seleccionado en el chat, prueba los miembros en el orden de abajo. Nunca salta a otro grupo. Los relays suelen cobrar los modelos de forma distinta: pon primero los más baratos.</string>
     <string name="model_group_detail_routing_load_balance_footer">Reparte las sesiones nuevas solo entre miembros de este grupo. No cambia a otro grupo.</string>
     <string name="model_groups_compact_fallback">Respaldo de compactación</string>
-    <string name="model_groups_compact_fallback_footer">El modelo actual lo intenta una vez. Si falla, el respaldo lo intenta una vez. Sin respaldo, el modelo actual se reintenta una vez. Dos fallos truncan el contexto antiguo.</string>
+    <string name="model_groups_compact_fallback_footer">El modelo actual lo intenta una vez. Si falla, el respaldo lo intenta una vez. Sin respaldo, el modelo actual se reintenta una vez. Si la compactación falla, el contexto no cambia.</string>
     <string name="model_groups_default_primary">Principal por defecto</string>
     <string name="model_groups_defaults">Predeterminados</string>
     <string name="model_groups_slot_groups">Grupos</string>
