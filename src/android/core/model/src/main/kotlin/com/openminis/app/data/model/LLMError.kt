@@ -116,17 +116,12 @@ sealed class LLMError(message: String, cause: Throwable? = null) : Exception(mes
             is ContentFiltered -> true
             is Timeout -> true
             // [T-transient-5xx-fallback] A relay 5xx maps to TransientError
-            // (see mapHttpErrorShared: TRANSIENT_HTTP_STATUSES), but this
-            // branch used to answer `false`, so a dead upstream channel —
-            // "Transient error: [503] Service temporarily unavailable" —
-            // burned all 5 same-provider retries (~31s) and then failed the
-            // turn even when the group had a healthy member. Relay channels
-            // fail independently (measured on token.zlshag.xyz: deepseek
-            // 503 while glm streams), and the ProviderError branch below
-            // already treats `[5\d{2}]` as fallbackable — this closes the gap
-            // for the class 5xx actually lands in. Watchdog stalls carry no
-            // status token, so their resume semantics ([T-stall-resume]) are
-            // untouched.
+            // (TRANSIENT_HTTP_STATUSES in mapHttpErrorShared) and used to
+            // answer `false` here — a dead channel burned all 5 same-provider
+            // retries (~31s) then failed the turn with a healthy member in the
+            // group. Channels fail independently (measured: deepseek 503 while
+            // glm streams), so 5xx routes to the group fallback too. Watchdog
+            // stalls carry no status token; resume semantics are untouched.
             is TransientError -> (httpStatus ?: 0) in 500..599
             is ProviderError ->
                 httpStatus == 429 || (httpStatus ?: 0) in 500..599
