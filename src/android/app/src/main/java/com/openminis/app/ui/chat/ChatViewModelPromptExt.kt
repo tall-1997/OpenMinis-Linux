@@ -168,7 +168,8 @@ Memory system (currently ENABLED):
         """
 
 Memory system (currently DISABLED):
-- The user has turned OFF memory injection and memory tools for this session. GLOBAL.md and recent daily logs are NOT included in this prompt, and the memory_write / memory_get tools are NOT available — do not attempt to call them.
+- The user has turned OFF memory injection and memory tools for this session. Recent daily logs and automatic recall are NOT included in this prompt, and the memory_write / memory_get tools are NOT available — do not attempt to call them.
+- The STANDING RULES (project rules / session GLOBAL.md / app GLOBAL.md blocks above) are NOT affected by this toggle: rules are instructions, not memory, and they still bind every turn.
 - If the user asks why earlier memories aren't visible, or asks you to save something, tell them memory is currently disabled and point them at the /memory slash command or [Settings → Memory](minis://settings/memory) to re-enable it.
 - SOUL.md (personality / identity) is unaffected by this toggle; the persona section above still applies."""
     }
@@ -307,40 +308,35 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     // enabled-MCP disclosure, injected right after the skills fragment.
     mcpRepository?.reloadFromDisk()
     val mcpFragment = mcpRepository?.mcpPromptFragment(activeSessionId)
-    // [T-memory-toggle-gates-injection-and-tools-android] Skip loading
-    // GLOBAL.md + recent daily logs entirely when the user has turned
-    // memory off for this session. Cheaper (no disk read) and — more
-    // importantly — keeps the model from seeing stale persistent state
-    // it can't tell the user how to manage. Skills and SOUL.md are
-    // intentionally NOT gated by this toggle: skills are part of the
-    // tool surface and SOUL.md is part of identity, both orthogonal
-    // to the memory feature.
-    val sessionMem = if (memoryOn) sessionMemoryRepo() else null
+    // [T-rules-uncoupled-from-memory-toggle] The three RULES layers
+    // (project AGENTS.md, session GLOBAL.md, app GLOBAL.md) are standing
+    // instructions, not memory: they inject regardless of the session's
+    // memory toggle, exactly like SOUL.md and learned prefs (whose own KDoc
+    // already declares "not gated by the session memory toggle — they are
+    // standing instructions"). Only the DIARY side (daily-log injection,
+    // recall, memory tools) follows the toggle — turning memory off must not
+    // silently silence the rules the user wrote for this chat.
+    val sessionMem = sessionMemoryRepo()
     val memorySessionId = com.openminis.app.sandbox.ExecutionCoordinator.ownerSessionId(
         realSessionId.ifEmpty { sessionId },
     )
     // [T-memory-project-rules] Project-scoped rules (AGENTS.md / AGENTS.override.md
     // in the project workspace) — the layer codex's agents_md.rs provides and this
     // app previously lacked. Unfiled sessions simply have none.
-    val projectResolved = if (memoryOn) {
-        com.openminis.app.data.repository.ProjectInstructionStore
-            .resolve(context.filesDir, memorySessionId)
-    } else null
+    val projectResolved = com.openminis.app.data.repository.ProjectInstructionStore
+        .resolve(context.filesDir, memorySessionId)
     // [T-memory-instruction-dedupe] Bodies first, fragments second: rules copied
     // verbatim across scopes are rendered once, kept as the narrowest scope. DSH
     // does the same ("identical trimmed content renders once"); without it the
     // model receives the same orders twice, from two different authorities.
-    val keptInstructionKeys = if (memoryOn) {
+    val keptInstructionKeys =
         com.openminis.app.data.repository.InstructionDedupe.firstSeen(
             listOf(
                 "project-rules" to projectResolved?.content,
-                "session-global" to sessionMem?.loadGlobalMemoryBody(sessionScoped = true),
+                "session-global" to sessionMem.loadGlobalMemoryBody(sessionScoped = true),
                 "app-global" to memoryRepository?.loadGlobalMemoryBody(sessionScoped = false),
             ),
         )
-    } else {
-        emptySet()
-    }
     val standingGlobal = if ("app-global" in keptInstructionKeys) {
         memoryRepository?.loadGlobalMemoryFragment(sessionScoped = false)
     } else null
@@ -358,7 +354,9 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     // A fold too short to query (liveRecallInput null) falls back to the
     // DIAG_TASK_KEYWORDS vocabulary inside the gate.
     val dailyRecallQuery = if (memoryOn) liveRecallInput()?.query else null
-    val dailyInjection = sessionMem?.loadRecentDailyFragments(dailyRecallQuery)
+    val dailyInjection = if (memoryOn) {
+        sessionMem.loadRecentDailyFragments(dailyRecallQuery)
+    } else null
     val dailyFragments = dailyInjection?.fragments.orEmpty()
     residentDailyFiles = dailyFragments.flatMap { listOf(it.date, "${it.date}.md") }.toSet()
     // [T-memory-window] Two-pass assembly: the per-day verbatim window and

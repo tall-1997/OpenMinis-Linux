@@ -55,9 +55,19 @@ internal object HarnessNoteMarkers {
      */
     val MEMORY_ENVELOPE = com.openminis.app.data.authority.MemoryAuthority.ENVELOPE_PREFIX
 
+    /**
+     * [T-standing-rules-envelope] The user-authored standing-rules envelope —
+     * the same shared-constant contract as [MEMORY_ENVELOPE]. Standing-rules
+     * fragments ride the system prompt today and never reach this classifier,
+     * but the marker table reads the producer's constants so a future commit
+     * path cannot reintroduce the two-subsystem drift.
+     */
+    val STANDING_RULES_ENVELOPE = com.openminis.app.data.authority.MemoryAuthority.STANDING_RULES_PREFIX
+
     /** All markers that identify a harness-generated USER message. */
     val ALL: List<String> = listOf(
-        RECALL, GOAL, STATE, WORKING_MEMORY, PLAN_RETRY, DROPPED_ROUNDS, MEMORY_ENVELOPE,
+        RECALL, GOAL, STATE, WORKING_MEMORY, PLAN_RETRY, DROPPED_ROUNDS,
+        MEMORY_ENVELOPE, STANDING_RULES_ENVELOPE,
     )
 
     private const val REMINDER_OPEN = "<system-reminder>"

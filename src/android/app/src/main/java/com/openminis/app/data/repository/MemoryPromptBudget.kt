@@ -31,10 +31,23 @@ object MemoryPromptBudget {
 
     internal const val TRUNCATION_MARKER = "\n… [memory budget: truncated]"
 
+    /**
+     * [T-rules-never-silently-vanish] Marker for a cut BINDING rules block
+     * (project/session/app globals, learned prefs). Distinct from
+     * [TRUNCATION_MARKER] so the model can tell that the missing tail is
+     * standing RULES it is expected to follow, not ambient history.
+     */
+    internal const val RULES_TRUNCATION_MARKER =
+        "\n… [standing rules truncated by memory budget — the tail of this rules block did not fit]"
+
     // Narrowest scope first: a rule that governs this chat outranks a rule that
     // governs every chat in the project, which outranks ambient history.
-    internal const val PRIORITY_PROJECT = 10
-    internal const val PRIORITY_SESSION = 20
+    // [T-rules-never-silently-vanish] SESSION must sort below PROJECT: with the
+    // old numbers (project 10 < session 20) a long project AGENTS.md was
+    // admitted first and could push THIS chat's own rules out of the budget
+    // entirely — the documented intent said the opposite.
+    internal const val PRIORITY_SESSION = 10
+    internal const val PRIORITY_PROJECT = 20
     internal const val PRIORITY_APP = 30
     internal const val PRIORITY_LEARNED = 40
     internal const val PRIORITY_DAILY = 50
@@ -47,7 +60,13 @@ object MemoryPromptBudget {
         val text: String,
         /** Lower wins. */
         val priority: Int,
-        /** Whether a too-large fragment may be truncated rather than dropped. */
+        /**
+         * Selects the truncation marker wording when the fragment must be cut:
+         * true → ambient-history marker ([TRUNCATION_MARKER]); false → the
+         * binding-rules marker ([RULES_TRUNCATION_MARKER]). Either way the
+         * fragment is truncated rather than silently dropped whenever a
+         * meaningful head fits ([T-rules-never-silently-vanish]).
+         */
         val truncatable: Boolean,
     )
 
@@ -92,11 +111,21 @@ object MemoryPromptBudget {
                     admitted += fragment.key
                     used += fragment.text.length
                 }
-                fragment.truncatable -> {
-                    // Reserve room for the marker so the accounting stays honest.
-                    val head = remaining - TRUNCATION_MARKER.length
+                // [T-rules-never-silently-vanish] A fragment that does not fit
+                // is truncated with a VISIBLE marker whenever a meaningful head
+                // fits — for BOTH flag values. The old non-truncatable path
+                // dropped the block wholesale with zero model-visible trace:
+                // the user's session rules vanished from the prompt while every
+                // other layer (and the ledger) behaved as if they were there.
+                // A cut rules head + explicit marker is strictly better than a
+                // silent 100% loss; the marker wording distinguishes binding
+                // rules from ambient history.
+                else -> {
+                    val marker =
+                        if (fragment.truncatable) TRUNCATION_MARKER else RULES_TRUNCATION_MARKER
+                    val head = remaining - marker.length
                     if (head >= MIN_TRUNCATED_CHARS) {
-                        val cut = fragment.text.take(head) + TRUNCATION_MARKER
+                        val cut = fragment.text.take(head) + marker
                         replacement[fragment.key] = fragment.copy(text = cut)
                         admitted += fragment.key
                         truncated += fragment.key
@@ -105,7 +134,6 @@ object MemoryPromptBudget {
                         dropped += fragment.key
                     }
                 }
-                else -> dropped += fragment.key
             }
         }
 

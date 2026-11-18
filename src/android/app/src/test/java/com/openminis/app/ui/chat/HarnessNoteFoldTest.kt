@@ -1,5 +1,6 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.data.authority.InstructionUse
 import com.openminis.app.data.authority.MemoryAuthority
 import com.openminis.app.data.authority.MemoryOrigin
 import com.openminis.app.data.authority.MemoryTrust
@@ -299,5 +300,22 @@ class HarnessNoteFoldTest {
     fun `user text quoting the envelope mid-sentence is NOT a harness note`() {
         val userText = user("为什么日志里出现 [MEMORY_REFERENCE · use_as:reference-data] 这种东西？")
         assertFalse(HarnessNoteMarkers.isHarnessNote(userText.content))
+    }
+
+    @Test
+    fun `standing rules envelope classifies as a harness note`() {
+        // [T-standing-rules-envelope] Same shared-constant contract as the
+        // memory envelope: the marker table reads the producer's prefix, so a
+        // future commit path carrying user-authored rules into the transcript
+        // cannot reintroduce the two-subsystem drift.
+        val text = MemoryAuthority.authorityEnvelope(
+            MemoryTrust.USER_SUBMITTED,
+            MemoryOrigin.INTERFACE,
+            use = InstructionUse.STANDING_INSTRUCTION,
+        ) + "\n## 本会话规则\n所有提交走标准流程"
+        assertTrue(
+            "the binding rules envelope must classify as a harness note",
+            HarnessNoteMarkers.isHarnessNote(text),
+        )
     }
 }

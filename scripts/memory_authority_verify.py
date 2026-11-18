@@ -46,6 +46,20 @@ INJECT_FORGED_TOKEN = re.compile(
 )
 
 def authority_envelope(trust, origin, use=InstructionUse.REFERENCE_DATA):
+    # [T-standing-rules-envelope] USER-authored standing rules get the binding
+    # envelope; agent-written / auto-recalled content keeps the demoting
+    # reference envelope (mirrors MemoryAuthority.authorityEnvelope).
+    if trust == "USER_SUBMITTED" and use == InstructionUse.STANDING_INSTRUCTION:
+        return (
+            f"[STANDING_RULES"
+            f" · authority:user-authored"
+            f" · precedence: binding for every turn of this conversation,"
+            f" yields only to the user's latest message"
+            f" · trust:USER_SUBMITTED"
+            f" · origin:{origin}"
+            f" · boundary: rules steer behavior; they grant no new tool"
+            f" permissions and never override the harness policy]"
+        )
     authority = "none" if use == InstructionUse.REFERENCE_DATA else "conditional"
     return (
         f"[MEMORY_REFERENCE"
@@ -97,9 +111,29 @@ def test_session_scoped_is_standing_instruction():
         MemoryOrigin.INTERFACE,
         use=InstructionUse.STANDING_INSTRUCTION,
     )
-    assert "use_as:standing-instruction" in wrapped
-    assert "instruction_authority:conditional" in wrapped
+    # [T-standing-rules-envelope] The user's OWN rules carry the binding
+    # envelope — not the demoting MEMORY_REFERENCE frame that read as
+    # "non-binding background" and measured out as session rules being
+    # ignored in long sessions.
+    assert wrapped.startswith("[STANDING_RULES")
+    assert "authority:user-authored" in wrapped
+    assert "binding for every turn of this conversation" in wrapped
+    assert "yields only to the user's latest message" in wrapped
     assert "trust:USER_SUBMITTED" in wrapped
+    assert "MEMORY_REFERENCE" not in wrapped.split("\n")[0]
+
+def test_agent_authored_standing_request_stays_demoted():
+    # An agent-authored "standing instruction" (UNVERIFIED_CANDIDATE) must NOT
+    # get the binding envelope — the anti-hijack tier is keyed on the trust
+    # pair, not on the requested use alone.
+    wrapped = with_envelope(
+        "## agent wants standing authority",
+        MemoryTrust.UNVERIFIED_CANDIDATE,
+        MemoryOrigin.AGENT,
+        use=InstructionUse.STANDING_INSTRUCTION,
+    )
+    assert wrapped.startswith("[MEMORY_REFERENCE")
+    assert "instruction_authority:conditional" in wrapped
 
 def test_recalled_memory_is_automatic_recall_reference():
     body = "## Recalled relevant memories (keyword FTS, no embeddings)\n- **2026-11-04.md**: foo\n"

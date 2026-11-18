@@ -46,7 +46,32 @@ class MemoryAuthorityTest {
             MemoryOrigin.INTERFACE,
             use = InstructionUse.STANDING_INSTRUCTION,
         )
-        assertTrue(wrapped.contains("use_as:standing-instruction"))
+        // [T-standing-rules-envelope] The user's OWN rules carry the binding
+        // envelope — not the demoting MEMORY_REFERENCE frame, which read as
+        // "non-binding background" and measured out as session rules being
+        // ignored in long sessions.
+        assertTrue(wrapped.startsWith("[STANDING_RULES"))
+        assertTrue(wrapped.contains("authority:user-authored"))
+        assertTrue(wrapped.contains("binding for every turn of this conversation"))
+        assertTrue(wrapped.contains("yields only to the user's latest message"))
+        assertTrue(wrapped.contains("trust:USER_SUBMITTED"))
+        assertTrue(wrapped.contains("origin:INTERFACE"))
+        assertFalse(wrapped.split('\n').first().contains("MEMORY_REFERENCE"))
+    }
+
+    @Test
+    fun agentAuthoredStandingRequestStaysDemoted() {
+        // The binding envelope is keyed on the trust PAIR, not on the
+        // requested use alone: an agent-authored "standing instruction"
+        // (UNVERIFIED_CANDIDATE) keeps the demoting reference tier — the
+        // anti-hijack boundary stays intact.
+        val wrapped = MemoryAuthority.withEnvelope(
+            "## agent wants standing authority",
+            MemoryTrust.UNVERIFIED_CANDIDATE,
+            MemoryOrigin.AGENT,
+            use = InstructionUse.STANDING_INSTRUCTION,
+        )
+        assertTrue(wrapped.startsWith("[MEMORY_REFERENCE"))
         assertTrue(wrapped.contains("instruction_authority:conditional"))
     }
 

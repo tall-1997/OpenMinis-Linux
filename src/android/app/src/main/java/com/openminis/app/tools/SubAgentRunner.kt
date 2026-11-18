@@ -114,6 +114,12 @@ object SubAgentRunner {
         // instead of being reinterpreted as "use some default".
         firstEventTimeoutMs: Long,
         streamIdleTimeoutMs: Long,
+        // [T-lanes-inherit-session-rules] The parent conversation's standing
+        // rules (project/session/app, enveloped), injected into the worker's
+        // system prompt so dispatched lanes obey the same session rules the
+        // coordinator does. Null = the session has no rules; the worker prompt
+        // is then byte-identical to before.
+        sessionRules: String? = null,
     ): ToolExecutionResult {
         val briefed = SubAgentBrief.wrap(userPrompt, kind = kind, role = role, writePaths = writePaths)
         // Defensive: duplicate tool names reach providers as duplicate schemas
@@ -143,7 +149,10 @@ object SubAgentRunner {
         // explicit), bounded only by ABSOLUTE_MAX_TURNS as a runaway guard —
         // there is no longer a low global settings clamp here.
         val turns = maxTurns.coerceIn(1, ABSOLUTE_MAX_TURNS)
-        val system = workerSystemPrompt(modelDisplayName, role, skillsHint, kind, writePaths, turns, roleContext)
+        val system = workerSystemPrompt(
+            modelDisplayName, role, skillsHint, kind, writePaths, turns, roleContext,
+            sessionRules = sessionRules,
+        )
         val report = StringBuilder()
         val timeline = StringBuilder()
         var warned = false
@@ -689,6 +698,7 @@ object SubAgentRunner {
         writePaths: List<String>,
         turns: Int,
         roleContext: Context? = null,
+        sessionRules: String? = null,
     ): String {
         val catalog = roleContext?.let { CollabRoles.byName(it, role) } ?: CollabRoles.byName(role)
         val roleLine = when {
@@ -699,6 +709,10 @@ object SubAgentRunner {
         val skillsLine = skillsHint?.trim()?.takeIf { it.isNotEmpty() }?.let {
             "Read these skills first (file_read `/var/minis/skills/<id>/SKILL.md`): $it\n"
         } ?: ""
+        // [T-lanes-inherit-session-rules] The parent session's standing rules
+        // ride the worker prompt right under the identity line — dispatched
+        // lanes obey the session rules the coordinator obeys.
+        val rulesLine = inheritedRulesLine(sessionRules) ?: ""
         val kindLine = "Kind: $kind.\n"
         // [T-write-guard-fail-closed] Same three states as the brief: usable
         // prefixes only get listed, the poison state is spelled out as a write
@@ -720,7 +734,7 @@ object SubAgentRunner {
             "- Use tools immediately. Prefer file_read / grep_source / file_edit / file_write / shell_execute."
         }
         return """You are a sub-agent ($kind), not the session coordinator. Model: $modelDisplayName.
-${roleLine}${skillsLine}${kindLine}${writeLine}You cannot see the parent conversation. The user prompt is a self-contained brief with ## Task / ## Expected result / ## Constraints / ## Workflow / ## Collaboration.
+${rulesLine}${roleLine}${skillsLine}${kindLine}${writeLine}You cannot see the parent conversation. The user prompt is a self-contained brief with ## Task / ## Expected result / ## Constraints / ## Workflow / ## Collaboration.
 
 Turn budget: you have $turns turns. A <budget_warning> will be injected as you approach the limit — treat it as a hard signal to wrap up. Handing in a partial report is far better than running dry mid-task; if forced to stop, lead with confirmed findings, then list unverified leftovers.
 
@@ -735,3 +749,15 @@ $toolLine
 """
     }
 }
+
+/**
+ * [T-lanes-inherit-session-rules] Pure framing for the inherited standing-rules
+ * block so tests can pin the lane contract: null / blank → no block (the worker
+ * prompt stays byte-identical to the pre-inheritance shape); text → the rules
+ * ride under a header that names the parent-conversation authority.
+ */
+internal fun inheritedRulesLine(sessionRules: String?): String? =
+    sessionRules?.trim()?.takeIf { it.isNotEmpty() }?.let {
+        "Standing rules inherited from the parent conversation (they bind this lane):\n$it\n\n"
+    }
+

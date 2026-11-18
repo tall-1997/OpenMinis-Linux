@@ -393,13 +393,6 @@ internal fun ChatTopBarActions(
                             expanded = showChatMenu.value,
                             onDismissRequest = { showChatMenu.value = false },
                         ) {
-                            // [T-android-memory-enabled-minisconfig] Gate the
-                            // "Memories in Session" item below on the session's
-                            // live memoryEnabled — when memory is off the entry
-                            // disappears, consistent with the per-session gating
-                            // of the memory_get / memory_write tools and the
-                            // system-prompt injection.
-                            val menuMemoryEnabled by viewModel.memoryEnabled.collectAsStateWithLifecycle()
                             val sessionPerm by viewModel.permissionMode.collectAsStateWithLifecycle()
                             // [P0-6] 快捷：三个高频入口置顶。宽窗口（≥600dp）它们
                             // 已是顶栏直接图标（shouldShowTopBarQuickActions），
@@ -557,7 +550,12 @@ internal fun ChatTopBarActions(
                                 },
                             )
                             // Session Memory (iOS parity)
-                            if (memoryRepository != null && menuMemoryEnabled) {
+                            // [T-rules-uncoupled-from-memory-toggle] The sheet
+                            // carries the session RULES editor (GLOBAL.md) —
+                            // rules inject regardless of the memory toggle now,
+                            // so the entry must stay reachable with memory off
+                            // or the user could not edit what still binds.
+                            if (memoryRepository != null) {
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.session_memory_title)) },
                                     onClick = {

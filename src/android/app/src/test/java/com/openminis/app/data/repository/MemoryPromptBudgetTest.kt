@@ -43,10 +43,51 @@ class MemoryPromptBudgetTest {
     }
 
     @Test
-    fun nonTruncatableFragmentIsDroppedRatherThanMangled() {
+    fun oversizedRulesBlockIsTruncatedWithTheRulesMarkerNotDropped() {
+        // [T-rules-never-silently-vanish] The old non-truncatable path dropped
+        // an oversized rules block wholesale with zero model-visible trace —
+        // the user's session rules vanished from the prompt while every other
+        // layer behaved as if they were there. Now the head ships with an
+        // explicit rules-cut marker.
         val result = MemoryPromptBudget.allocate(
             listOf(fragment("session-global", 5_000, MemoryPromptBudget.PRIORITY_SESSION)),
             budgetChars = 1_000,
+        )
+        assertEquals(listOf("session-global"), result.included.map { it.key })
+        assertTrue(
+            "rules cut must carry the rules marker",
+            result.included.single().text.endsWith(MemoryPromptBudget.RULES_TRUNCATION_MARKER),
+        )
+        assertEquals(listOf("session-global"), result.truncatedKeys)
+        assertTrue("never exceed the budget", result.usedChars <= 1_000)
+    }
+
+    @Test
+    fun hugeProjectRulesCanNeverEvictSessionRules() {
+        // [T-rules-never-silently-vanish] Narrowest scope first: the session's
+        // own rules are admitted BEFORE the project's, so a long project
+        // AGENTS.md truncates (visibly) instead of displacing this chat's
+        // rules — the documented intent the old priority numbers inverted.
+        val result = MemoryPromptBudget.allocate(
+            listOf(
+                fragment("project-rules", 20_000, MemoryPromptBudget.PRIORITY_PROJECT),
+                fragment("session-global", 600, MemoryPromptBudget.PRIORITY_SESSION),
+            ),
+            budgetChars = 2_000,
+        )
+        val keys = result.included.map { it.key }
+        assertTrue("session rules must survive a crowded project file", "session-global" in keys)
+        assertTrue("project rules are cut, not vanished", "project-rules" in result.truncatedKeys)
+        assertTrue(result.included.first { it.key == "project-rules" }.text.endsWith(MemoryPromptBudget.RULES_TRUNCATION_MARKER))
+    }
+
+    @Test
+    fun dropOnlyHappensWhenEvenAMeaningfulHeadDoesNotFit() {
+        val result = MemoryPromptBudget.allocate(
+            listOf(fragment("session-global", 5_000, MemoryPromptBudget.PRIORITY_SESSION)),
+            // 100 chars leave a head below MIN_TRUNCATED_CHARS even after the
+            // marker reservation — the one case where dropping is honest.
+            budgetChars = 100,
         )
         assertTrue(result.included.isEmpty())
         assertEquals(listOf("session-global"), result.droppedKeys)

@@ -370,6 +370,10 @@ internal suspend fun ChatViewModel.runOneSubAgentInner(
                     // /var/minis/workspace/tool-spill/ instead of losing
                     // its head.
                     sessionId = activeSessionId,
+                    // [T-lanes-inherit-session-rules] The session's standing
+                    // rules ride the worker prompt — dispatched lanes obey the
+                    // session rules the coordinator obeys.
+                    sessionRules = sessionRulesForLanes(),
                     skillsHint = skills,
                     tools = com.openminis.app.tools.DispatchAgentsTool.filterToolsForType(
                         agentType,
