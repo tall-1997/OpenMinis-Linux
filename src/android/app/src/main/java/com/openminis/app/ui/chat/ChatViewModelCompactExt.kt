@@ -4,6 +4,8 @@ import android.util.Log
 import androidx.lifecycle.viewModelScope
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.data.db.CompactMarkerEntity
+import com.openminis.app.data.model.AgentContentPart
+import com.openminis.app.data.model.LLMMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -147,7 +149,10 @@ private inline fun ChatViewModel.compactAllImpl(
         appendSystemInfo(context.getString(R.string.vm_compact_already_compacted), "compact")
         return
     }
-    val toCompact = history.subList(effectiveStartIdx, anchorIdx + 1)
+    // [T-compact-preserves-tool-pairs] Boundaries must never split a
+    // tool_use/tool_result pair — a dangling half 400s the next request.
+    val (sliceStart, sliceAnchor) = preserveToolPairsAtBoundaries(history, effectiveStartIdx, anchorIdx)
+    val toCompact = history.subList(sliceStart, sliceAnchor + 1)
     if (toCompact.isEmpty()) {
         appendSystemInfo(context.getString(R.string.vm_compact_nothing_to_compact), "compact")
         return
@@ -202,8 +207,8 @@ private inline fun ChatViewModel.compactAllImpl(
             // OLDEST prefix. The marker may advance only that far; the rest
             // of the range stays active and verbatim.
             val coveredCount = outcome.coveredMessages.coerceIn(1, toCompact.size)
-            val coveredEndIdx = (effectiveStartIdx + coveredCount - 1)
-                .coerceIn(effectiveStartIdx, anchorIdx)
+            val coveredEndIdx = (sliceStart + coveredCount - 1)
+                .coerceIn(sliceStart, sliceAnchor)
             if (summary.isEmpty()) {
                 withContext(Dispatchers.Main) {
                     appendSystemInfo("Compaction produced no output — try again later.", "compact")
@@ -238,14 +243,14 @@ private inline fun ChatViewModel.compactAllImpl(
                 var i = coveredEndIdx
                 // Never walk back past the start of the range: an anchor
                 // before it would mark already-active messages as compacted.
-                while (i >= effectiveStartIdx) {
+                while (i >= sliceStart) {
                     val id = history[i].dbMessageId
                     if (!id.isNullOrEmpty() && id in rawDbIds) break
                     i -= 1
                 }
                 i
             }
-            if (verifiedAnchorIdx < effectiveStartIdx) {
+            if (verifiedAnchorIdx < sliceStart) {
                 Log.w(ChatViewModel.TAG, "[Compact] No agentHistory entry in the covered range has a DB-persisted dbMessageId; aborting")
                 withContext(Dispatchers.Main) {
                     appendSystemInfo("Compact failed: could not anchor to a persisted message.", "compact")
@@ -522,3 +527,39 @@ internal suspend fun ChatViewModel.awaitCompaction(): Boolean =
             }
         }
     }
+
+/**
+ * [T-compact-preserves-tool-pairs] Adjusts the compact boundaries so a
+ * tool_use/tool_result pair is never split across them (OpenHarness
+ * `_split_preserving_tool_pairs`, dsh `selectCompactableRange`):
+ *
+ *  - Kept-tail start (anchorIdx+1): if the kept region would OPEN on a
+ *    tool_result carrier, its paired tool_use is inside the summarized range
+ *    and the next request carries a dangling tool_result — providers
+ *    (Anthropic schema-first) reject that conversation shape outright. Pull
+ *    the anchor back until the kept region opens on a non-carrier, so the
+ *    pair stays kept together.
+ *  - Slice start (startIdx): if the summarized range would OPEN on a
+ *    tool_result carrier, its tool_use lives in the PREVIOUS summary — pull
+ *    the start back so the whole pair is summarized together instead of the
+ *    result alone.
+ *
+ * Both walks only ever move the boundary outward past whole pair halves;
+ * the returned range is never empty (start ≤ anchor preserved by the first
+ * walk's `a > s` condition). Pure — safe to unit test.
+ */
+internal fun preserveToolPairsAtBoundaries(
+    history: List<LLMMessage>,
+    startIdx: Int,
+    anchorIdx: Int,
+): Pair<Int, Int> {
+    fun isToolResultCarrier(i: Int): Boolean =
+        i in history.indices &&
+            history[i].role == LLMMessage.Role.USER &&
+            history[i].contentParts.any { it is AgentContentPart.ToolResult }
+    var s = startIdx
+    var a = anchorIdx
+    while (a > s && isToolResultCarrier(a + 1)) a -= 1
+    while (s > 0 && isToolResultCarrier(s)) s -= 1
+    return s to a
+}

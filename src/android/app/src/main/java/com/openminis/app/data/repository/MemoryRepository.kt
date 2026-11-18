@@ -253,6 +253,17 @@ class MemoryRepository(private val memoryDir: File) {
         if (entryCount >= MAX_DAILY_ENTRIES) {
             return "Error: 今日记忆已达上限（$MAX_DAILY_ENTRIES 条）。旧的按日归档，明日自动开始新日志；请精简而不是继续追加。"
         }
+        // [T-memory-dedup-on-write] OpenHarness 式签名去重：与今日日志既有条目
+        // 归一化后逐字相同的写入是模型回声（loop 重试 / 报错后原样重写）——
+        // 再落一份会让召回命中双份。归一化折叠空白，防尾随格式漂移绕过。
+        val normalizedNew = content.trim().replace(Regex("\\s+"), " ")
+        val duplicate = existing.isNotBlank() && ENTRY_MARK.split(existing).any { seg ->
+            seg.trim().replace(Regex("\\s+"), " ") == normalizedNew
+        }
+        if (duplicate) {
+            Log.i(TAG, "Memory dedup: identical entry already in $fileName — skipped")
+            return "Skipped: 今日日志已存在逐字相同的条目（写入侧去重），未重复追加。"
+        }
         val newContent = entry + existing
 
         return try {

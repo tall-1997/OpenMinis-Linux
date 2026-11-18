@@ -879,8 +879,6 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                         (effective.cacheReadInputTokens ?: 0) + (effective.cacheCreationInputTokens ?: 0)
                     if (lastContextTokens > 0) {
                         _lastTurnContextTokens.value = lastContextTokens
-                        // [T-compaction-cascade] feed the pre-step cascade (session-keyed).
-                        lastKnownContextUsage = activeSessionId to lastContextTokens.toLong()
                         // [T-token-usage-calibration] 用真实 usage 校准估算器。
                         val modelKey = currentModel?.id ?: ""
                         if (modelKey.isNotEmpty()) {
