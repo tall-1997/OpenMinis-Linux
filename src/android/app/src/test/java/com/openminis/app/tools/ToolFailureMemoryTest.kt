@@ -87,6 +87,44 @@ class ToolFailureMemoryTest {
         )
     }
 
+    // ── near-argument clustering ──────────────────────────────────────────
+
+    @Test
+    fun `a near-identical call is refused after the shape failed twice`() {
+        val original = """{"command":"cargo build --release"}"""
+        repeat(2) { ToolFailureMemory.recordFailure(ledger, "shell_execute", original, "linker error", now) }
+        val near = """{"command":"cargo build --release --offline"}"""
+        val entry = ToolFailureMemory.lookup(ledger, "shell_execute", near, now)
+        assertNotNull(entry)
+        assertTrue(entry!!.nearMatch)
+        val text = ToolFailureMemory.refusalText(entry, ToolFailureMemory.argsExcerpt(near))
+        assertTrue(text.contains("very close"))
+        assertTrue(text.contains("--offline"))
+    }
+
+    @Test
+    fun `a different file in the same directory is not the same shape`() {
+        repeat(2) {
+            ToolFailureMemory.recordFailure(
+                ledger, "file_read", """{"path":"/src/A.kt"}""", "not found", now,
+            )
+        }
+        assertNull(ToolFailureMemory.lookup(ledger, "file_read", """{"path":"/src/B.kt"}""", now))
+        // A path-prefix-only change is the same file.
+        assertNotNull(ToolFailureMemory.lookup(ledger, "file_read", """{"path":"./src/A.kt"}""", now))
+    }
+
+    @Test
+    fun `a success clears the near cluster too`() {
+        val original = """{"command":"make test"}"""
+        repeat(2) { ToolFailureMemory.recordFailure(ledger, "shell_execute", original, "boom", now) }
+        val near = """{"command":"./make test"}"""
+        assertNotNull(ToolFailureMemory.lookup(ledger, "shell_execute", near, now))
+        ToolFailureMemory.clear(ledger, "shell_execute", near)
+        assertNull(ToolFailureMemory.lookup(ledger, "shell_execute", near, now))
+        assertNull(ToolFailureMemory.lookup(ledger, "shell_execute", original, now))
+    }
+
     @Test
     fun refusalExplainsWhatFailedAndHowToProceed() {
         repeat(2) { ToolFailureMemory.recordFailure(ledger, "shell_execute", "{}", "exit 137", now) }

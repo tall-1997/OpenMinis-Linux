@@ -26,7 +26,11 @@ internal suspend fun ChatViewModel.ensureSessionScopedNotices() {
     if (sid == noticesSessionId) return
     noticesSessionId = sid
     val filesDir = context.filesDir
-    val saved = withContext(Dispatchers.IO) { NoticeLedgerStore.load(filesDir, sid) }
+    val saved = withContext(Dispatchers.IO) {
+        NoticeLedgerStore.load(filesDir, sid).also {
+            WorkingMemoryStore.preload(sid, filesDir)
+        }
+    }
     announcedRecallKeys.clear()
     announcedRecallKeys.addAll(saved.recallKeys)
     goalAnnouncedSha = saved.goalSha
@@ -83,8 +87,13 @@ internal suspend fun ChatViewModel.commitSessionNoticesOnce(
         // work that no plan/report snapshot covers (raw tool rounds). The
         // ledger's one-line records of undelivered rounds ride the same
         // hydration: delivered once into the transcript, then carried by it.
-        WorkingMemoryStore.renderUndelivered(activeSessionId)?.let { note ->
-            commitHiddenUserNote(note)
+        val note = WorkingMemoryStore.renderUndelivered(activeSessionId, context.filesDir)
+        if (note != null) {
+            if (commitHiddenUserNote(note)) {
+                WorkingMemoryStore.ackDelivered(activeSessionId, context.filesDir)
+            } else {
+                WorkingMemoryStore.undoDelivery(activeSessionId, context.filesDir)
+            }
             ledgerDirty = true
         }
     }
@@ -147,8 +156,8 @@ internal fun frameHiddenNote(text: String): String {
 /** Opening/closing harness frame tags, with optional attributes. */
 private val FRAME_TAGS = Regex("</?(?:system-reminder|context-summary)(?:\\s[^>]*)?>", RegexOption.IGNORE_CASE)
 
-internal suspend fun ChatViewModel.commitHiddenUserNote(text: String) {
-    if (text.isBlank()) return
+internal suspend fun ChatViewModel.commitHiddenUserNote(text: String): Boolean {
+    if (text.isBlank()) return false
     // [T-hidden-user-note] Harness framing, not user speech: Z-Code delivers
     // recalled memory / objective as a `<system-reminder>` notice so the model
     // does not treat it as a request to answer. The no-reply contract lives in
@@ -171,10 +180,11 @@ internal suspend fun ChatViewModel.commitHiddenUserNote(text: String) {
     val partsJson = """[{"type":"text","value":${escapeJson(framed)}}]"""
     val persisted = withContext(Dispatchers.IO) {
         runCatching { chatRepository.appendMessage(sid, "user", partsJson) }.getOrNull()
-    } ?: return
+    } ?: return false
     withContext(Dispatchers.Main.immediate) {
         notePersistedUiRow(null, persisted.id)
     }
+    return true
 }
 
 // NOTE: the per-note no-reply head (HOST_NOTE_NO_REPLY_HEAD) that #339

@@ -40,6 +40,12 @@ object ToolFailureMemory {
 
     internal const val MAX_ENTRIES = 50
 
+    /** [T-known-failure-near] Jaccard threshold for "same call shape". */
+    internal const val NEAR_THRESHOLD = 0.75
+
+    /** Cap for the persisted canonical token source. */
+    private const val CANONICAL_CHARS = 400
+
     /** Keys whose values are prose/payload, not a call identity. */
     private val NON_IDENTITY_KEYS = setOf(
         "tool_title", "tool_input", "content", "text", "body", "prompt",
@@ -55,6 +61,12 @@ object ToolFailureMemory {
         val lastAtMs: Long,
         /** [T-known-failure-readable] Bounded argument identity for the refusal. */
         val argsExcerpt: String = "",
+        /** [T-known-failure-near] Token-normalized arguments for clustering. */
+        val argsCanonical: String = "",
+        /** [T-known-failure-near] Path/number-normalized error, for same-cause. */
+        val errorClass: String = "",
+        /** Transient: matched a near (not exact) call. Never persisted. */
+        val nearMatch: Boolean = false,
     )
 
     /** Stable identity of one call: tool name plus its exact arguments. */
@@ -72,17 +84,44 @@ object ToolFailureMemory {
         )
 
     fun lookup(file: File, tool: String, argsJson: String, nowMs: Long): Entry? {
-        val entry = readAll(file)[fingerprint(tool, argsJson)] ?: return null
-        if (entry.failures < MIN_FAILURES) return null
-        if (nowMs - entry.lastAtMs > WINDOW_MS) return null
-        return entry
+        val all = readAll(file)
+        val exact = all[fingerprint(tool, argsJson)]
+        if (exact != null && armed(exact, nowMs)) return exact
+        // [T-known-failure-near] The exact key misses when the model changes a
+        // flag/path slightly. A same-tool, same-error-class cluster with high
+        // argument similarity is the same rake; block it and say WHY.
+        val canonical = canonicalArgs(tool, argsJson)
+        val near = all.values.firstOrNull { e ->
+            e.tool == tool && armed(e, nowMs) &&
+                e.errorClass.isNotBlank() && e.errorClass == errorClass(e.lastError) &&
+                similarity(e.argsCanonical.ifBlank { e.argsExcerpt }, canonical) >= NEAR_THRESHOLD
+        } ?: return null
+        return near.copy(nearMatch = true)
     }
 
-    /** Records one failure; returns the entry as stored. */
+    private fun armed(entry: Entry, nowMs: Long): Boolean =
+        entry.failures >= MIN_FAILURES && nowMs - entry.lastAtMs <= WINDOW_MS
+
+    /** [T-known-failure-near] Records one failure; returns the entry as stored. */
     fun recordFailure(file: File, tool: String, argsJson: String, error: String, nowMs: Long): Entry {
         val key = fingerprint(tool, argsJson)
         val all = readAll(file).toMutableMap()
-        val previous = all[key]
+        val canonical = canonicalArgs(tool, argsJson)
+        val errorKey = errorClass(error)
+        val exact = all[key]
+        // Cluster into a near entry when the exact key is new but the same
+        // call shape already failed with the same error class.
+        val nearKey = if (exact == null) {
+            all.entries.firstOrNull { (_, e) ->
+                e.tool == tool && e.errorClass.isNotBlank() &&
+                    e.errorClass == errorKey &&
+                    similarity(e.argsCanonical.ifBlank { e.argsExcerpt }, canonical) >= NEAR_THRESHOLD
+            }?.key
+        } else {
+            null
+        }
+        val storeKey = if (exact != null) key else (nearKey ?: key)
+        val previous = all[storeKey]
         val entry = Entry(
             tool = tool,
             failures = (previous?.failures ?: 0) + 1,
@@ -92,8 +131,10 @@ object ToolFailureMemory {
             ),
             lastAtMs = nowMs,
             argsExcerpt = argsExcerpt(argsJson),
+            argsCanonical = canonical,
+            errorClass = errorKey,
         )
-        all[key] = entry
+        all[storeKey] = entry
         writeAll(file, all)
         return entry
     }
@@ -102,14 +143,44 @@ object ToolFailureMemory {
     fun clear(file: File, tool: String, argsJson: String) {
         val key = fingerprint(tool, argsJson)
         val all = readAll(file)
-        if (!all.containsKey(key)) return
-        writeAll(file, all - key)
+        if (!all.containsKey(key)) {
+            // [T-known-failure-near] A near variant succeeding proves the
+            // clustered failure is stale; drop the similar cluster too.
+            val canonical = canonicalArgs(tool, argsJson)
+            val stale = all.filterValues { e ->
+                e.tool == tool &&
+                    similarity(e.argsCanonical.ifBlank { e.argsExcerpt }, canonical) >= NEAR_THRESHOLD
+            }.keys
+            if (stale.isNotEmpty()) writeAll(file, all - stale)
+            return
+        }
+        val canonical = canonicalArgs(tool, argsJson)
+        val stale = all.filterValues { e ->
+            e.tool == tool &&
+                similarity(e.argsCanonical.ifBlank { e.argsExcerpt }, canonical) >= NEAR_THRESHOLD
+        }.keys
+        writeAll(file, all - stale - key)
     }
 
     /** The refusal the model receives instead of a second identical attempt. */
-    fun refusalText(entry: Entry): String = buildString {
+    fun refusalText(entry: Entry, currentArgsExcerpt: String? = null): String = buildString {
         append("[known-failure] ")
         append(entry.tool)
+        if (entry.nearMatch) {
+            append(" with arguments very close to a call that already failed ")
+            append(entry.failures)
+            append(" time(s) in this session; not running it again.\n")
+            if (entry.argsExcerpt.isNotBlank()) {
+                append("Previous call: ").append(entry.argsExcerpt).append('\n')
+            }
+            if (!currentArgsExcerpt.isNullOrBlank()) {
+                append("This call: ").append(currentArgsExcerpt).append('\n')
+            }
+            append("The small difference did not change the failure cause. Change the approach, ")
+            append("not just a flag/path.\nLast error: ")
+            append(entry.lastError)
+            return@buildString
+        }
         if (entry.argsExcerpt.isNotBlank()) {
             append("(").append(entry.argsExcerpt).append(")")
         }
@@ -163,6 +234,80 @@ object ToolFailureMemory {
         return com.openminis.app.util.TextClip.safeEllipsize(flat, limit)
     }
 
+    // ── near-match clustering ─────────────────────────────────────────────
+
+    /**
+     * [T-known-failure-near] Token-normalized identity of the arguments. Path
+     * prefixes, punctuation, numbers and case are normalized, so
+     * `/src/Main.kt` and `./src/Main.kt` share a cluster while `A.kt` and
+     * `B.kt` do not. Secrets are masked FIRST so the persisted token set
+     * cannot carry a credential.
+     */
+    internal fun canonicalArgs(tool: String, argsJson: String): String {
+        val raw = argsJson.trim()
+        if (raw.isEmpty()) return ""
+        val masked = com.openminis.app.util.SecretMasking.mask(raw)
+        val parsed = runCatching { org.json.JSONObject(masked) }.getOrNull()
+        val source = if (parsed != null) {
+            val parts = ArrayList<String>()
+            val keys = parsed.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                if (key in NON_IDENTITY_KEYS) continue
+                val value = parsed.opt(key)
+                val scalar = when (value) {
+                    is String -> value
+                    is Number, is Boolean -> value.toString()
+                    else -> continue
+                }.trim()
+                if (scalar.isEmpty()) continue
+                parts += "$key=$scalar"
+            }
+            parts.joinToString(" ")
+        } else {
+            masked
+        }
+        return tokens(
+            "tool=$tool " + com.openminis.app.util.TextClip.safeTake(source, CANONICAL_CHARS),
+        ).joinToString(" ")
+    }
+
+    /** Jaccard similarity of the normalized token sets. */
+    internal fun similarity(a: String, b: String): Double {
+        val left = tokens(a)
+        val right = tokens(b)
+        if (left.isEmpty() && right.isEmpty()) return 1.0
+        if (left.isEmpty() || right.isEmpty()) return 0.0
+        val inter = left.count { it in right }
+        val union = left.size + right.size - inter
+        return if (union == 0) 0.0 else inter.toDouble() / union
+    }
+
+    private fun tokens(text: String): Set<String> =
+        TOKEN.split(text.lowercase())
+            .asSequence()
+            .filter { it.isNotEmpty() }
+            .toSet()
+
+    private val TOKEN = Regex("[^a-z0-9_]+")
+
+    /**
+     * [T-known-failure-near] The failure cause, normalized so paths, ids and
+     * numbers do not prevent a cluster from matching. Only same-cause near
+     * calls are refused; a new error starts a fresh record.
+     */
+    internal fun errorClass(error: String): String {
+        val masked = com.openminis.app.util.SecretMasking.mask(error).lowercase()
+        return masked
+            .replace(Regex("[\"'][^\"']*[\"']"), "*")
+            .replace(Regex("/[^\\s:]+"), "*")
+            .replace(Regex("\\b[0-9a-f]{6,}\\b"), "#")
+            .replace(Regex("\\b\\d+\\b"), "#")
+            .replace(WHITESPACE, " ")
+            .trim()
+            .take(180)
+    }
+
     /**
      * Gate used by tool dispatch: null means "not blocked, proceed".
      * Never throws — an unreadable ledger must not break dispatch.
@@ -176,7 +321,7 @@ object ToolFailureMemory {
     ): ToolExecutionResult? = runCatching {
         val entry = lookup(ledgerFile(context, sessionId), tool, argsJson, nowMs) ?: return null
         ToolExecutionResult(
-            output = refusalText(entry),
+            output = refusalText(entry, argsExcerpt(argsJson)),
             success = false,
             errorCode = ToolErrorCode.EXECUTION_FAILED,
             recoveryHint = "Do not repeat this call. Diagnose why it failed, then change the arguments.",
@@ -218,6 +363,8 @@ object ToolFailureMemory {
                     lastError = obj.optString("lastError"),
                     lastAtMs = obj.optLong("lastAtMs"),
                     argsExcerpt = obj.optString("argsExcerpt"),
+                    argsCanonical = obj.optString("argsCanonical"),
+                    errorClass = obj.optString("errorClass"),
                 )
             }
             out
@@ -237,7 +384,9 @@ object ToolFailureMemory {
                     .put("failures", entry.failures)
                     .put("lastError", entry.lastError)
                     .put("lastAtMs", entry.lastAtMs)
-                    .put("argsExcerpt", entry.argsExcerpt),
+                    .put("argsExcerpt", entry.argsExcerpt)
+                    .put("argsCanonical", entry.argsCanonical)
+                    .put("errorClass", entry.errorClass),
             )
         }
         file.parentFile?.mkdirs()

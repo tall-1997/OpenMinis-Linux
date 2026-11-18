@@ -573,6 +573,7 @@ private suspend fun ChatViewModel.runPlannedCall(
             // hash-only line made the handover unusable and the work repeated.
             argsSummary = WorkingMemoryArgs.summary(call.name, call.argsStr),
             resultHead = result.output.take(120),
+            filesDir = context.filesDir,
         )
         finalizePlannedCall(ctx, call, result)
     }
@@ -659,6 +660,7 @@ private suspend fun ChatViewModel.fanOutSpawnCalls(
                             argsDigest = peerArgsSha.take(8),
                             argsSummary = WorkingMemoryArgs.summary(peer.name, peer.argsStr),
                             resultHead = peerResult.output.take(120),
+                            filesDir = context.filesDir,
                         )
                         finalizePlannedCall(ctx, peer, peerResult)
                     }

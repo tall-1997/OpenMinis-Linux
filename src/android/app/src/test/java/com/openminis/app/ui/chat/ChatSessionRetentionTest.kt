@@ -40,4 +40,19 @@ class ChatSessionRetentionTest {
         SessionWorkspace.deleteEntire(files, "s1")
         assertFalse(ChatSessionRetention.isRetained(files, "s1"))
     }
+
+    @Test
+    fun clearDropsUndeliveredWorkingMemoryButCompactKeepsIt() {
+        val files = tmp.newFolder("files")
+        WorkingMemoryStore.reset()
+        WorkingMemoryStore.append("s-clear", 1, "t", "d", "args", "ok", filesDir = files)
+        WorkingMemoryStore.append("s-compact", 1, "t", "d", "args", "ok", filesDir = files)
+
+        ChatSessionRetention.markExplicitlyEmptied(files, "s-clear", "clear")
+        assertFalse(WorkingMemoryStore.fileForTest(files, "s-clear").exists())
+
+        ChatSessionRetention.markExplicitlyEmptied(files, "s-compact", "compact")
+        assertTrue(WorkingMemoryStore.fileForTest(files, "s-compact").isFile)
+        WorkingMemoryStore.reset()
+    }
 }

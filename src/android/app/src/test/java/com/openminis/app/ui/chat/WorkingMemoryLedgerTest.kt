@@ -233,4 +233,126 @@ class WorkingMemoryLedgerTest {
         val line = l.renderUndelivered()!!.lines().first { it.contains("shell_execute") }
         assertFalse(Character.isHighSurrogate(line.last()))
     }
+
+    // ── durable handover log ──────────────────────────────────────────────
+
+    private fun tempDir(): java.io.File =
+        java.nio.file.Files.createTempDirectory("wm-ledger").toFile()
+
+    @Test
+    fun `undelivered rounds survive a process kill`() {
+        val dir = tempDir()
+        val sid = "persist-1"
+        try {
+            WorkingMemoryStore.reset()
+            WorkingMemoryStore.append(
+                sid, 7, "file_edit", "abcd1234", "/src/Main.kt", "written",
+                filesDir = dir,
+            )
+            assertTrue(WorkingMemoryStore.hasUndelivered(sid, dir))
+
+            WorkingMemoryStore.reset() // process death: in-memory state gone
+            assertTrue("log must reload", WorkingMemoryStore.hasUndelivered(sid, dir))
+            val note = WorkingMemoryStore.renderUndelivered(sid, dir)!!
+            assertTrue(note.contains("/src/Main.kt"))
+            // Render alone must not delete the log: the caller acks only after
+            // the transcript commit succeeds.
+            assertTrue(WorkingMemoryStore.fileForTest(dir, sid).isFile)
+            WorkingMemoryStore.ackDelivered(sid, dir)
+            assertFalse("ack removes delivered log", WorkingMemoryStore.fileForTest(dir, sid).isFile)
+
+            // Delivered rows are removed from the log: a second restart must
+            // not announce the same work again.
+            WorkingMemoryStore.reset()
+            assertFalse(WorkingMemoryStore.hasUndelivered(sid, dir))
+            assertFalse(WorkingMemoryStore.fileForTest(dir, sid).exists())
+        } finally {
+            WorkingMemoryStore.reset()
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `a failed transcript commit makes the records deliverable again`() {
+        val dir = tempDir()
+        val sid = "persist-undo"
+        try {
+            WorkingMemoryStore.reset()
+            WorkingMemoryStore.append(sid, 1, "a", "a1", "first", "ok", filesDir = dir)
+            val first = WorkingMemoryStore.renderUndelivered(sid, dir)!!
+            assertTrue(first.contains("first"))
+            WorkingMemoryStore.undoDelivery(sid, dir)
+            assertTrue(WorkingMemoryStore.hasUndelivered(sid, dir))
+            assertTrue(WorkingMemoryStore.renderUndelivered(sid, dir)!!.contains("first"))
+        } finally {
+            WorkingMemoryStore.reset()
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `a restart delivers only records added after the last handover`() {
+        val dir = tempDir()
+        val sid = "persist-2"
+        try {
+            WorkingMemoryStore.reset()
+            WorkingMemoryStore.append(sid, 1, "a", "a1", "first", "ok", filesDir = dir)
+            WorkingMemoryStore.append(sid, 2, "b", "b1", "second", "ok", filesDir = dir)
+            assertTrue(WorkingMemoryStore.renderUndelivered(sid, dir)!!.contains("first"))
+            WorkingMemoryStore.ackDelivered(sid, dir)
+
+            WorkingMemoryStore.append(sid, 3, "c", "c1", "third", "ok", filesDir = dir)
+            WorkingMemoryStore.reset()
+            val note = WorkingMemoryStore.renderUndelivered(sid, dir)!!
+            assertTrue(note.contains("third"))
+            assertFalse("already delivered must not repeat", note.contains("first"))
+            assertFalse(note.contains("second"))
+        } finally {
+            WorkingMemoryStore.reset()
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `a fold rewrites the durable log instead of replaying stale lines`() {
+        val dir = tempDir()
+        val sid = "persist-fold"
+        try {
+            WorkingMemoryStore.reset()
+            repeat(WorkingMemoryLedger.MAX_ENTRIES + 1) { i ->
+                WorkingMemoryStore.append(
+                    sid, i, "shell_execute", "d$i", "cmd$i", "ok",
+                    filesDir = dir,
+                )
+            }
+            WorkingMemoryStore.reset()
+            val durable = WorkingMemoryStore.fileForTest(dir, sid).readText()
+            assertTrue("fold marker is persisted", durable.contains("earlier tool rounds folded"))
+            assertFalse("old lines must not survive the rewrite", durable.contains("\"argsSummary\":\"cmd0\""))
+            val note = WorkingMemoryStore.renderUndelivered(sid, dir)!!
+            assertTrue(note.contains("cmd600"))
+        } finally {
+            WorkingMemoryStore.reset()
+            dir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `a corrupt durable log is ignored and replaced on the next append`() {
+        val dir = tempDir()
+        val sid = "persist-corrupt"
+        try {
+            WorkingMemoryStore.reset()
+            val f = WorkingMemoryStore.fileForTest(dir, sid)
+            f.parentFile?.mkdirs()
+            f.writeText("not-json\n{}\n", Charsets.UTF_8)
+            assertFalse(WorkingMemoryStore.hasUndelivered(sid, dir))
+            WorkingMemoryStore.append(sid, 1, "t", "d", "args", "ok", filesDir = dir)
+            WorkingMemoryStore.reset()
+            assertTrue(WorkingMemoryStore.hasUndelivered(sid, dir))
+        } finally {
+            WorkingMemoryStore.reset()
+            dir.deleteRecursively()
+        }
+    }
 }

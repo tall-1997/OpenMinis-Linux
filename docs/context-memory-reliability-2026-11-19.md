@@ -134,17 +134,17 @@ java "-Dorg.gradle.appname=gradlew" -classpath gradle\wrapper\gradle-wrapper.jar
 门禁：`python scripts/ci/check_architecture_policy.py`、`check_cjk_literals.py`、
 `check_announced_tools.py`、`check_string_refs.py`、`check_new_untranslated.py`。
 
-## 八、明确未做 / 后续
+## 八、后续补齐（已完成，见 followups 文档）
 
-1. **WorkingMemoryStore 未持久化**：进程被杀后未投递的 handover 行仍会丢；
-   进程内 ledger 已加 LRU 上限（复审后）。
-   正确做法是像 `NoticeLedgerStore` 一样按会话落盘（含 delivered 标记）。
-2. **postAnchor 单轮（一次用户输入 + 300 工具轮）时 `splitRounds` 只有一组，
-   尾预算直接跳过**：本轮靠门限修复让压缩兜底，但预算本身仍应支持"轮内按
-   assistant 步切分"。属结构性后续。
-3. **`ToolFailureMemory` 记录仍按"工具+精确参数"哈希索引**：文案已可读，
-   但失败记录本身没有语义检索能力（换一个近似参数就重新踩坑），后续可接
-   项目经验库/失败模式聚类。
+1. **WorkingMemoryStore 已补落盘**：每会话 `working-memory/<sid>.jsonl` 追加写，
+   投递并 commit 成功后 ack 删除；剩余窗口是“commit 成功但 ack 前进程崩溃”会重复投递一次
+   （见 [followups](context-memory-followups-2026-11-19.md)）。
+2. **postAnchor 单轮（一次用户输入 + 300 工具轮）已补轮内切分**：
+   `splitRounds` 在 assistant 步边界再分组，且未配对 tool_use 时不切；
+   单用户 300 步也能被尾预算裁剪（见 followups）。
+3. **`ToolFailureMemory` 已补近似参数聚类**：exact fingerprint 快路径之外，
+   同工具 + 同错误类 + 参数 token Jaccard ≥0.75 的记录会合并/拒绝，并说明 previous/this call；
+   后续可把启发式相似度替换成经验库向量检索（见 followups）。
 4. **未做向量召回**：与 #228 结论一致，无后端且关键词+时效已够用。
 5. **未改 summary prompt 的 500 字/消息截断**：摘要质量不是本轮根因；若后续
    出现"摘要漏掉关键路径"，再单独评估。

@@ -274,4 +274,32 @@ class PostAnchorTailTest {
         assertEquals(2, groups[0].size)
         assertEquals(1, groups[1].size)
     }
+
+    @Test
+    fun `one user turn with many tool steps is split and bounded`() {
+        // [T-postanchor-intra-round-split] The old splitRounds returned ONE
+        // group for this exact shape, so apply() skipped the budget and the
+        // whole 300-step round was shipped.
+        val messages = ArrayList<LLMMessage>()
+        messages += userText("do 100 things")
+        repeat(100) { messages += toolRound(it, resultChars = 1_000) }
+        assertEquals(100, PostAnchorTail.splitRounds(messages).size)
+
+        val result = PostAnchorTail.apply(
+            messages,
+            PostAnchorTail.Budget(4_000, WalkBack::estimateMessageTokens),
+        )
+        assertTrue("budget must drop old steps", result.droppedRounds > 0)
+        assertTrue(result.kept.size < messages.size)
+        assertTrue(result.kept.first().content.startsWith("[context window: "))
+        val keptUseIds = result.kept.flatMap { it.contentParts }
+            .filterIsInstance<AgentContentPart.ToolUse>().map { it.id }.toSet()
+        val keptResultIds = result.kept.flatMap { it.contentParts }
+            .filterIsInstance<AgentContentPart.ToolResult>().map { it.id }.toSet()
+        assertEquals(keptUseIds, keptResultIds)
+        assertTrue(
+            "newest step is always kept",
+            result.kept.any { it.contentParts.any { p -> p is AgentContentPart.ToolUse && p.id == "call_99" } },
+        )
+    }
 }

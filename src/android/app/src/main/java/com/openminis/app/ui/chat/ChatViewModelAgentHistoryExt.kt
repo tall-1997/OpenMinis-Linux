@@ -567,7 +567,7 @@ internal fun ChatViewModel.progressivelyTrimmed(list: List<LLMMessage>): List<LL
         // USER note every turn — the model narrated about each note instead
         // of working (the prose-fragment loop on device). The snapshot path
         // is sha-deduped; the ledger path has undelivered lines to give.
-        if (WorkingMemoryStore.hasUndelivered(activeSessionId)) {
+        if (WorkingMemoryStore.hasUndelivered(activeSessionId, context.filesDir)) {
             stateHydrationPending = true
         }
         AppLogger.info(

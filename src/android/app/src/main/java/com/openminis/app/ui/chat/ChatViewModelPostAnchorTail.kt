@@ -214,26 +214,57 @@ internal object PostAnchorTail {
     }
 
     /**
-     * Split into chronological rounds. A new round starts at a USER message
-     * that does NOT carry a tool result (tool results are persisted as
-     * USER-role messages — see [WalkBack.bounded]'s orphan-toolcall note);
-     * everything before the first such boundary forms group 0, which may be
-     * the tail of the pre-anchor round (assistant tool_use first).
+     * Split into budget groups. A new group starts at:
+     *  - a USER message that does NOT carry a tool result (a new round), or
+     *  - an ASSISTANT message after the group already contains an assistant
+     *    (a new tool STEP inside one round).
+     *
+     * [T-postanchor-intra-round-split] The second boundary is what makes a
+     * single user turn + 300 tool rounds budgetable at all. The old code
+     * returned ONE group for that shape, so `apply` skipped the budget and
+     * shipped all 300 steps. A step starts on its assistant tool_use and
+     * carries the following tool_result carrier(s), so a pair is never split;
+     * the round's user text rides the first step's group.
      */
     internal fun splitRounds(messages: List<LLMMessage>): List<List<LLMMessage>> {
         if (messages.isEmpty()) return emptyList()
         val groups = ArrayList<ArrayList<LLMMessage>>()
         var current = ArrayList<LLMMessage>()
         groups.add(current)
+        var currentHasAssistant = false
         for (msg in messages) {
             val startsRound = msg.role == LLMMessage.Role.USER &&
                 msg.contentParts.none { it is AgentContentPart.ToolResult }
-            if (startsRound && current.isNotEmpty()) {
+            val startsStep = msg.role == LLMMessage.Role.ASSISTANT &&
+                currentHasAssistant && !hasPendingToolUse(current)
+            if ((startsRound || startsStep) && current.isNotEmpty()) {
                 current = ArrayList()
                 groups.add(current)
+                currentHasAssistant = false
             }
             current.add(msg)
+            if (msg.role == LLMMessage.Role.ASSISTANT) currentHasAssistant = true
         }
         return groups
+    }
+
+    /**
+     * [T-postanchor-intra-round-split] True while a tool_use in [group] has no
+     * matching tool_result yet. Splitting there would orphan the call; wait
+     * until the result carrier has landed in the same group.
+     */
+    private fun hasPendingToolUse(group: List<LLMMessage>): Boolean {
+        val results = HashSet<String>()
+        for (m in group) {
+            for (p in m.contentParts) {
+                if (p is AgentContentPart.ToolResult && p.id.isNotEmpty()) results.add(p.id)
+            }
+        }
+        for (m in group) {
+            for (p in m.contentParts) {
+                if (p is AgentContentPart.ToolUse && p.id.isNotEmpty() && p.id !in results) return true
+            }
+        }
+        return false
     }
 }

@@ -3,6 +3,7 @@
 > 对象：`0e62a881`（PR #398，长跑失忆根因修复）。
 > 方式：三名独立只读审查员 + 维护者自审，按「逻辑/边界、异常处理、性能、未接线、破坏原功能、用户体验、报告真实性、硬编码上限」八个维度逐项核对；
 > 所有修复均带回归测试（VM 内会话切换路径除外，见 §七），并在本地全量单测 + 门禁复验。
+> 三项后续补齐见 [context-memory-followups-2026-11-19.md](context-memory-followups-2026-11-19.md)。
 > 结论：**两轮共发现 27 个真实问题（其中 8 个 P0/P1 级），已全部修复；另有 5 项确认为设计取舍并记录在案**。
 
 ## 一、P0/P1：会直接造成上下文丢失或回合误停
@@ -73,9 +74,9 @@
 
 ## 六、明确保留的取舍（不是遗漏）
 
-1. **WorkingMemoryStore 进程内**：进程被杀后未投递的 handover 会丢；持久化需要与 NoticeLedger 同构的落盘 + 跨重启去重，单独任务。
+1. **WorkingMemoryStore 落盘已补**（见 [followups](context-memory-followups-2026-11-19.md)）：JSONL 按会话追加写、commit 后 ack、失败 undo；剩余取舍是 commit 成功但 ack 前崩溃会重复一次。
 2. **状态快照是追加而非原地替换**：每次状态**变化**会新增一条隐藏 USER 行（被逐出只做 request-only 重注入，不新增）；原地替换需要删除/重写 transcript 行，风险高于收益，保留追加 + sha 去重。
-3. **single-user-turn 的 postAnchor 只有一组**：尾预算在该形状下跳过；现在由“去蒙蔽门限 + 压缩范围 cap”兜底，预算本身支持轮内切分是后续结构项。
+3. **single-user-turn 的 postAnchor 已补轮内切分**：`splitRounds` 在 assistant 步边界再分组（有未配对 tool_use 时不切），单用户 300 步也能被尾预算裁剪；见 [followups](context-memory-followups-2026-11-19.md)。
 4. **summary prompt 仍按 500 字/消息截断**：本轮根因不在摘要质量；若出现“摘要漏关键路径”再单独评估。
 5. **历史已落盘的隐藏 note 不做追溯清洗**：新的写入已掩码；旧数据只能靠备份/导出侧另行处理。
 
