@@ -365,7 +365,9 @@ private suspend fun ChatViewModel.runSupervisorSession(
         val text = WritePathGuard.withPaths(listOf(WritePathGuard.NO_WRITE)) {
             speakModel(
                 provider = supervisorProvider,
-                system = system,
+                // [T-lanes-inherit-session-rules] The supervisor is a session
+                // lane: the session's standing rules ride its prompt.
+                system = laneSystemWithRules(system),
                 user = user,
                 tools = SupervisorSeats.supervisorTools(supervisorBaseTools(supervisorEntry)),
                 toolGate = null,
@@ -406,6 +408,9 @@ private suspend fun ChatViewModel.runSupervisorSession(
                 // [T-subagent-report-spill] Session-keyed spill for oversized
                 // worker reports (see SubAgentRun wiring note).
                 sessionId = sessionId,
+                // [T-lanes-inherit-session-rules] Supervisor workers inherit the
+                // session rules too — same lane contract as spawn_agent.
+                sessionRules = sessionRulesForLanes(),
                 skillsHint = null,
                 tools = SupervisorSeats.workerTools(supervisorBaseTools(workerEntry)),
                 maxTokens = (workerEntry.model.maxOutputTokens ?: 4096).coerceIn(256, 8192),

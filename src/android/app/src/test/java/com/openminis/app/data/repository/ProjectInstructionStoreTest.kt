@@ -85,8 +85,11 @@ class ProjectInstructionStoreTest {
         projectFile(ProjectInstructionStore.PROJECT_RULES_FILE).writeText("use tabs\n")
         ProjectInstructionStore.clearCacheForTest()
         val fragment = ProjectInstructionStore.fragment(filesDir, sessionId)!!
-        assertTrue(fragment.startsWith("[MEMORY_REFERENCE"))
-        assertTrue(fragment.contains("instruction_authority:conditional"))
+        // [T-standing-rules-envelope] Project rules are USER-authored standing
+        // instructions, so they carry the binding STANDING_RULES envelope —
+        // not the demoting MEMORY_REFERENCE frame.
+        assertTrue(fragment.startsWith("[STANDING_RULES"))
+        assertTrue(fragment.contains("authority:user-authored"))
         assertTrue(fragment.contains("defer to the user's latest message"))
         assertTrue(fragment.contains("use tabs"))
     }
