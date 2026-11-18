@@ -73,4 +73,45 @@ class ToolJsonRepairTest {
         val args = JSONObject()
         assertTrue(ToolJsonRepair.repair("nope", args, "garbage", tools).isEmpty())
     }
+
+    // ── [T-preflight-field-alias] model-habit field names ─────────────────
+
+    @Test
+    fun `file_path alias is renamed onto the required path field`() {
+        // The Claude Code habit: a complete, well-formed payload that the
+        // required-field check would otherwise reject as an "invalid tool call".
+        val args = JSONObject("""{"file_path":"/tmp/a.txt","content":"x"}""")
+        val repairs = ToolJsonRepair.repair("file_write", args, null, tools)
+        assertTrue("expected an alias rename, got $repairs", repairs.contains("alias:file_path->path"))
+        assertEquals("/tmp/a.txt", args.optString("path"))
+        assertFalse("the variant key must be consumed, not duplicated", args.has("file_path"))
+        assertEquals("x", args.optString("content"))
+    }
+
+    @Test
+    fun `alias rename never steals a sibling that is a schema field`() {
+        // A tool whose schema really carries both `path` and `file_path` keeps
+        // its own vocabulary — the executor may read the variant directly.
+        val dual = AgentToolDefinition(
+            name = "dual_tool",
+            description = "Both fields",
+            parameters = mapOf(
+                "path" to param("Canonical path"),
+                "file_path" to param("Alternate path"),
+            ),
+            required = listOf("path"),
+        )
+        val args = JSONObject("""{"file_path":"/tmp/b"}""")
+        val repairs = ToolJsonRepair.repair("dual_tool", args, null, listOf(dual))
+        assertTrue("schema-field siblings must not be renamed: $repairs", repairs.isEmpty())
+        assertEquals("/tmp/b", args.optString("file_path"))
+        assertFalse(args.has("path"))
+    }
+
+    @Test
+    fun `unrelated sibling keys are not renamed`() {
+        val args = JSONObject("""{"file":"/tmp/c"}""")
+        val repairs = ToolJsonRepair.repair("file_write", args, null, tools)
+        assertTrue("`file` is not an enumerated alias: $repairs", repairs.isEmpty())
+    }
 }

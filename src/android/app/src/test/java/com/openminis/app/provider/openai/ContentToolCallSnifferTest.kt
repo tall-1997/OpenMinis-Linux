@@ -106,4 +106,30 @@ class ContentToolCallSnifferTest {
         val payload = """{"name":"shell_exec","arguments":{}}"""
         assertEquals(payload, texts(s.feed(payload)))
     }
+
+    @Test
+    fun `unparseable arguments string carries the raw payload for repair`() {
+        val s = sniffer()
+        // A payload that is not a JSON object at all fails BOTH parsers
+        // (Android's strict org.json and the json.org reference
+        // implementation used by the unit-test classpath — which, unlike
+        // Android's, also accepts single quotes and unquoted keys). The
+        // sniffer must NOT substitute a silent `{}` — it parks the exact
+        // bytes so ToolJsonRepair / preflight can attempt closure repair or
+        // report the precise "parameter stream incomplete" rejection
+        // (GH#61/#83/#146; previously every recovered call from such a
+        // gateway surfaced as a generic "Blocked invalid tool call").
+        val out = s.feed("""{"name":"shell_execute","arguments":"not json at all"}""")
+        val call = calls(out).single()
+        assertEquals("shell_execute", call.name)
+        assertEquals("{}", call.args.toString())
+        assertEquals("not json at all", call.rawArgs)
+    }
+
+    @Test
+    fun `well-formed arguments carry no raw payload`() {
+        val s = sniffer()
+        val out = s.feed("""{"name":"file_read","arguments":{"path":"/tmp/a"}}""")
+        assertEquals(null, calls(out).single().rawArgs)
+    }
 }

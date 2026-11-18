@@ -379,7 +379,7 @@ internal fun OpenAIProvider.rawStreamMessage(
                         }
                         send(LLMStreamChunk.ToolUseStart(id, em.name))
                         send(LLMStreamChunk.ToolInputDelta(id, em.args.toString()))
-                        send(LLMStreamChunk.ToolCallComplete(id, em.name, em.args))
+                        send(LLMStreamChunk.ToolCallComplete(id, em.name, em.args, rawArgs = em.rawArgs))
                     }
                 }
             }

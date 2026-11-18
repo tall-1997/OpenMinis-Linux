@@ -40,6 +40,43 @@ object ToolJsonRepair {
     const val INVALID_JSON_MARKER = "invalid-json-unrepaired"
 
     /**
+     * [T-preflight-field-alias] Enumerated parameter-name variants models
+     * emit from their training habits — the Claude Code `file_path` for
+     * `path`, the shell `cmd` for `command`, the search `query` for
+     * `pattern` … The fuzzy step below only catches edit-distance-1 typos;
+     * a variant like `file_path` (distance 6 from `path`) slips past it, so
+     * a complete, well-formed payload from the model was rejected by the
+     * required-field check as an "invalid tool call" — the user-visible
+     * failure behind frequent tool-blocking on file tools.
+     *
+     * The rename is deliberately conservative: it fires only when the
+     * canonical field is one of the tool's REQUIRED fields, is absent, and a
+     * sibling key holds one of the enumerated variants — and never when the
+     * sibling is itself a schema field of this tool (a tool that really has
+     * both `path` and `file_path` keeps its own vocabulary; the executor
+     * reads the canonical name, so the renamed value is exactly what it
+     * expects).
+     */
+    private val REQUIRED_FIELD_ALIASES: Map<String, Set<String>> = mapOf(
+        // path family — the Claude Code habit (`file_path`) is the dominant one.
+        "path" to setOf("file_path", "filepath"),
+        // shell family.
+        "command" to setOf("cmd", "shell", "bash"),
+        // text bodies.
+        "content" to setOf("text", "message", "body"),
+        "text" to setOf("content", "message", "body"),
+        // search family.
+        "pattern" to setOf("query", "regex", "search", "term"),
+        "query" to setOf("search", "keyword", "q"),
+        "url" to setOf("link", "uri"),
+        "code" to setOf("script", "source", "program"),
+        "action" to setOf("op", "operation"),
+        "name" to setOf("tool", "tool_name", "title"),
+        "title" to setOf("name"),
+        "question" to setOf("prompt", "query"),
+    )
+
+    /**
      * Mutates [args] in-place and returns the list of repair strategy tags
      * that fired (empty when nothing changed). Caller is responsible for
      * logging the tags at WARNING level when non-empty.
@@ -105,6 +142,24 @@ object ToolJsonRepair {
             args.put(field, args.opt(candidate))
             args.remove(candidate)
             repairs.add("fuzzy:$candidate->$field")
+        }
+
+        // Strategy 4: enumerated alias rename for missing required fields
+        // (see REQUIRED_FIELD_ALIASES). Catches the model-habit field names
+        // (`file_path`, `cmd`, `query` …) that edit-distance-1 fuzzy matching
+        // can never reach: the fuzzy step above is a typo-catcher, this one
+        // names the habit-vocabulary remaps explicitly. Same sibling guard
+        // as the fuzzy step (never steal a recognized schema field).
+        for (field in toolDef.required) {
+            if (args.has(field)) continue
+            val aliases = REQUIRED_FIELD_ALIASES[field] ?: continue
+            val keys = args.keys().asSequence().toList()
+            val candidate = keys.firstOrNull { key ->
+                key !in schemaFields && key in aliases
+            } ?: continue
+            args.put(field, args.opt(candidate))
+            args.remove(candidate)
+            repairs.add("alias:$candidate->$field")
         }
 
         return repairs
