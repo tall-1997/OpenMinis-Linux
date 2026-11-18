@@ -158,6 +158,13 @@ jobs:
       - name: ThinkingLevel displayName UI ratchet
         run: python3 scripts/ci/check_thinking_displayname_ui.py
 
+      # [T-standing-rules-not-memory] Standing rules (session menu), the
+      # app-wide GLOBAL.md block and AGENTS.md are contracts, not memory: the
+      # memory toggle must never gate them again (field report "会话级规则失效"
+      # — the rules displayed as active but never reached the prompt).
+      - name: Standing rules are not memory-gated
+        run: python3 scripts/ci/check_standing_rules_not_memory.py
+
       # [T-arch-ratchet] UI review report P2-2: oversized files are on a
       # one-way diet. Baseline ceilings never rise; new files cap at 800
       # lines. Runs on every event (tree state, not diff state).
