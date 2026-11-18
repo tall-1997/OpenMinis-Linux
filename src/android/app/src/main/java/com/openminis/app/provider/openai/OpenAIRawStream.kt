@@ -270,15 +270,7 @@ internal fun OpenAIProvider.rawStreamMessage(
             !bodyLooksLikeSse
         ) {
             try {
-                // [T-fullbodyjson-bom-and-empty] readText() over an
-                // InputStreamReader keeps a leading UTF-8 BOM as a real
-                // U+FEFF char; JSONObject() rejects it (BOM is not JSON
-                // whitespace) so relays that prepend one broke every
-                // non-streaming answer with an opaque DecodingError whose
-                // excerpt rendered blank. Strip it at the read boundary —
-                // FullBodyJson re-defends centrally for Anthropic/Gemini.
                 val raw = pushback?.reader()?.readText().orEmpty()
-                    .trimStart('\uFEFF')
                 // [T-nonstream-json-default] Parse moves to Dispatchers.Default;
                 // FullBodyJson also wraps the raw JSONException (defense shared
                 // with the Anthropic/Gemini non-streaming paths).
