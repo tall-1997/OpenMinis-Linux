@@ -40,7 +40,10 @@ internal fun ChatViewModel.estimateAgentHistoryTokens(): Int {
  * level decision can estimate the UNTRIMMED payload with the exact same
  * arithmetic, calibration included).
  */
-internal fun ChatViewModel.estimateMessagesTokens(messages: List<LLMMessage>): Int {
+internal fun ChatViewModel.estimateMessagesTokens(
+    messages: List<LLMMessage>,
+    calibrated: Boolean = true,
+): Int {
     var total = 0L
     for (msg in messages) {
         total += estimateMixedTokens(msg.content)
@@ -54,11 +57,16 @@ internal fun ChatViewModel.estimateMessagesTokens(messages: List<LLMMessage>): I
         }
     }
     // [T-token-usage-calibration] 按模型维度用真实 usage 校准原始估算。
+    // calibrated=false feeds the RAW sum to TokenUsageCalibration.observe —
+    // observe(actual / (scale·raw)) has the fixed point √r, not r, so the
+    // calibration loop must see the same scale-free shape it divides by.
+    // ([T-calibration-raw], round-3 adversarial finding.)
+    val raw = total.toInt()
     val modelKey = currentModel?.id ?: ""
-    return if (modelKey.isNotEmpty()) {
-        com.openminis.app.data.TokenUsageCalibration.estimate(modelKey, total.toInt())
+    return if (calibrated && modelKey.isNotEmpty()) {
+        com.openminis.app.data.TokenUsageCalibration.estimate(modelKey, raw)
     } else {
-        total.toInt()
+        raw
     }
 }
 
@@ -305,3 +313,25 @@ internal fun ChatViewModel.countPartTokens(part: AgentContentPart): Int = when (
     }
     is AgentContentPart.ImageData -> BPETokenizer.countImageTokens(part.data)
 }
+
+/**
+ * [T-token-usage-calibration][T-compaction-cascade][T-calibration-raw] Feeds
+ * the per-model calibration EMA from a completed stream turn. The estimated
+ * side is the RAW (scale-free) sum of the PROJECTED request history — the
+ * actual usage belongs to the projected shape (micro-prune + neutralize),
+ * and feeding the calibrated form instead has the EMA fixed point at sqrt(r),
+ * not r (CJK sessions under-report ~40%).
+ */
+internal fun ChatViewModel.observeCalibratedUsage(
+    modelKey: String,
+    requestHistory: List<LLMMessage>,
+    actualTokens: Int,
+) {
+    if (modelKey.isEmpty() || actualTokens <= 0) return
+    com.openminis.app.data.TokenUsageCalibration.observe(
+        modelKey,
+        estimated = estimateMessagesTokens(requestHistory, calibrated = false),
+        actual = actualTokens,
+    )
+}
+

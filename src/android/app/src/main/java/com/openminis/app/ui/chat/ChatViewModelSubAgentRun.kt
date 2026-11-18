@@ -374,6 +374,9 @@ internal suspend fun ChatViewModel.runOneSubAgentInner(
                     // rules ride the worker prompt — dispatched lanes obey the
                     // session rules the coordinator obeys.
                     sessionRules = sessionRulesForLanes(),
+                    // [T-untrusted-tag-neutralization] Same projection as the
+                    // parent request — explore lanes browse remote pages too.
+                    historySanitizer = { neutralizeRemoteToolResults(it) },
                     skillsHint = skills,
                     tools = com.openminis.app.tools.DispatchAgentsTool.filterToolsForType(
                         agentType,

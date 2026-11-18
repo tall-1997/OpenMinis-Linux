@@ -411,6 +411,7 @@ private suspend fun ChatViewModel.runSupervisorSession(
                 // [T-lanes-inherit-session-rules] Supervisor workers inherit the
                 // session rules too — same lane contract as spawn_agent.
                 sessionRules = sessionRulesForLanes(),
+                historySanitizer = { neutralizeRemoteToolResults(it) },
                 skillsHint = null,
                 tools = SupervisorSeats.workerTools(supervisorBaseTools(workerEntry)),
                 maxTokens = (workerEntry.model.maxOutputTokens ?: 4096).coerceIn(256, 8192),

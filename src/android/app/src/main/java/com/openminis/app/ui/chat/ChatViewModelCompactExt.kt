@@ -221,23 +221,18 @@ private inline fun ChatViewModel.compactAllImpl(
                 .coerceIn(sliceStart, sliceAnchor)
                 .coerceAtLeast(effectiveStartIdx)
             // [T-compact-preserves-tool-pairs] The reduced-retry cut can land
-            // MID-PAIR (coveredEndIdx on a tool_use whose carrier sits at +1,
-            // or on a carrier whose use is at -1) — the marker would open the
-            // next projection on a dangling half. Snap to the pair boundary:
-            // a use row extends to include its carrier (still ≤ sliceAnchor);
-            // a carrier row pulls back to exclude the whole pair (it stays
-            // active and verbatim, never orphaned).
-            if (coveredEndIdx < sliceAnchor &&
+            // MID-PAIR: coveredEndIdx on a tool_use whose carrier sits at +1
+            // would open the next projection on a dangling half. FORWARD-snap:
+            // extend to include the carrier (still ≤ sliceAnchor; monotonic ≥
+            // effectiveStartIdx holds — the snap only ever increases). A
+            // carrier row at coveredEndIdx needs NO snap: both halves are
+            // inside the summarized range, and the next projection starts
+            // AFTER the whole pair.
+            while (coveredEndIdx < sliceAnchor &&
                 history[coveredEndIdx].role == LLMMessage.Role.ASSISTANT &&
                 history.getOrNull(coveredEndIdx + 1)?.contentParts?.any { it is AgentContentPart.ToolResult } == true
             ) {
                 coveredEndIdx += 1
-            }
-            while (coveredEndIdx > sliceStart &&
-                history[coveredEndIdx].role == LLMMessage.Role.USER &&
-                history[coveredEndIdx].contentParts.any { it is AgentContentPart.ToolResult }
-            ) {
-                coveredEndIdx -= 1
             }
             if (summary.isEmpty()) {
                 withContext(Dispatchers.Main) {

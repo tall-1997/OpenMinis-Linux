@@ -37,7 +37,12 @@ import com.openminis.app.security.ToolAliases
  *    "real or calibrated floor" number the compaction gate itself uses, so a
  *    freshly-resumed session (no usage report yet) is still covered.
  */
-internal const val MICRO_PRUNE_KEEP_RECENT = 4
+/**
+ * 6 = ToolResultAging's keep window: the two cheap layers must preserve the
+ * SAME newest-results set, or aging's deliberately-kept work products get
+ * slimmed by the layer that runs after it (round-3 adversarial finding).
+ */
+internal const val MICRO_PRUNE_KEEP_RECENT = 6
 internal const val MICRO_PRUNE_HEAD_CHARS = 400
 internal const val MICRO_PRUNE_TAIL_CHARS = 400
 
@@ -165,10 +170,13 @@ internal fun microPruneOldToolResults(
     keepRecent: Int = MICRO_PRUNE_KEEP_RECENT,
     headChars: Int = MICRO_PRUNE_HEAD_CHARS,
     tailChars: Int = MICRO_PRUNE_TAIL_CHARS,
-    triggerRatio: Double = MICRO_TRIGGER_FRACTION_OF_COMPACT * 0.75,
+    triggerTokens: Long = 0L,
 ): List<LLMMessage> {
     if (windowTokens <= 0 || usedTokens <= 0) return history
-    if (usedTokens < (windowTokens * triggerRatio).toLong()) return history
+    // triggerTokens <= 0 = the policy declines auto-compaction for this window
+    // (small-window tier) — the cheap tier declines with it.
+    if (triggerTokens <= 0) return history
+    if (usedTokens < triggerTokens) return history
     // Index the prunable carriers newest-first; the newest [keepRecent] stay verbatim.
     val carrierIndexes = history.withIndex()
         .filter { (_, msg) -> msg.role == LLMMessage.Role.USER && hasPrunableResult(msg) }
@@ -192,7 +200,12 @@ private fun hasPrunableResult(msg: LLMMessage): Boolean =
 private fun pruneToolResultParts(msg: LLMMessage, headChars: Int, tailChars: Int): LLMMessage {
     var changed = false
     val newParts = msg.contentParts.map { part ->
-        if (part is AgentContentPart.ToolResult && prunableTool(part.name)) {
+        // isError results stay verbatim (ToolResultAging's own rule: the
+        // message IS the diagnostic — slimming it destroys the failure trace).
+        if (part is AgentContentPart.ToolResult &&
+            prunableTool(part.name) &&
+            !part.isError
+        ) {
             val slimmed = slimText(part.content, headChars, tailChars)
             if (slimmed != part.content) {
                 changed = true
@@ -235,10 +248,28 @@ private fun slimText(content: String, headChars: Int, tailChars: Int): String {
  * authority: it fires at the operator's compact percent and zeroes the stale
  * reading after compacting, which also re-arms this pipeline's trigger.
  */
+/**
+ * [T-threshold-formula-family] The prune trigger in TOKENS, derived from the
+ * SAME gate the in-loop compaction uses ([ContextPolicy.forContextWindow] with
+ * the operator's compact percent) times [MICRO_TRIGGER_FRACTION_OF_COMPACT] —
+ * the cheap tier always fires before the LLM compaction, including the 32-64K
+ * window tier whose compact threshold is ABSOLUTE (window minus 15k), where a
+ * plain ratio would fire after it. 0 = the policy declines auto-compaction for
+ * this window; the cheap tier declines with it.
+ */
+internal fun ChatViewModel.pruneTriggerTokens(): Long {
+    val win = effectiveContextWindowTokens()?.toLong() ?: return 0L
+    if (win <= 0) return 0L
+    val policy = com.openminis.app.data.ContextPolicy.forContextWindow(
+        win.toInt(), effectiveCompactPercent(),
+    )
+    return (policy.compactThreshold * MICRO_TRIGGER_FRACTION_OF_COMPACT).toLong()
+}
+
 internal fun ChatViewModel.prepareRequestHistory(stallResumeContext: String?): List<LLMMessage> {
     val win = effectiveContextWindowTokens()?.toLong() ?: 0L
     val pressure = contextTokensForPolicy().toLong()
-    val triggerRatio = effectiveCompactPercent() / 100.0 * MICRO_TRIGGER_FRACTION_OF_COMPACT
+    val triggerTokens = pruneTriggerTokens()
     return effectiveAgentHistory()
         .let { applyStallNudge(it, stallResumeContext) }
         .let { history -> neutralizeRemoteToolResults(history) }
@@ -247,7 +278,7 @@ internal fun ChatViewModel.prepareRequestHistory(stallResumeContext: String?): L
                 history = history,
                 usedTokens = pressure,
                 windowTokens = win,
-                triggerRatio = triggerRatio,
+                triggerTokens = triggerTokens,
             )
         }
 }

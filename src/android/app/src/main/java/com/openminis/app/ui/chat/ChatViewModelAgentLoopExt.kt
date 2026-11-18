@@ -881,21 +881,13 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                         (effective.cacheReadInputTokens ?: 0) + (effective.cacheCreationInputTokens ?: 0)
                     if (lastContextTokens > 0) {
                         _lastTurnContextTokens.value = lastContextTokens
-                        // [T-token-usage-calibration] 用真实 usage 校准估算器。
-                        val modelKey = currentModel?.id ?: ""
-                        if (modelKey.isNotEmpty()) {
-                            com.openminis.app.data.TokenUsageCalibration.observe(
-                                modelKey,
-                                // [T-compaction-cascade] Same-source calibration:
-                                // actual usage belongs to the PROJECTED request
-                                // (post micro-prune/neutralize), so estimated must
-                                // be the projection's raw estimate — feeding the
-                                // unprojected one dragged the per-model EMA toward
-                                // 1.0 and made the compact gate fire late.
-                                estimated = estimateMessagesTokens(requestHistory),
-                                actual = lastContextTokens,
-                            )
-                        }
+                        // [T-token-usage-calibration][T-calibration-raw] Real usage
+                        // calibrates the estimator (raw sum of the PROJECTED request).
+                        observeCalibratedUsage(
+                            currentModel?.id ?: "",
+                            requestHistory,
+                            lastContextTokens,
+                        )
                         // [T-cache-hit-rate] Per-turn cache hit rate for TokenUsageSheet.
                         val inputTotal = chunk.usage.inputTokens + (chunk.usage.cacheReadInputTokens ?: 0) + 
                             (chunk.usage.cacheCreationInputTokens ?: 0)

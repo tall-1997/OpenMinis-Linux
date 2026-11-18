@@ -53,23 +53,48 @@ internal fun ChatViewModel.sessionRulesForLanes(): String? {
         } else null,
     )
     if (fragments.isEmpty()) return null
-    val allocation = MemoryPromptBudget.allocate(
-        fragments.mapIndexed { i, text ->
-            MemoryPromptBudget.Fragment(
-                key = listOf("project-rules", "session-global", "app-global")[i],
-                text = text,
-                priority = listOf(
-                    MemoryPromptBudget.PRIORITY_PROJECT,
-                    MemoryPromptBudget.PRIORITY_SESSION,
-                    MemoryPromptBudget.PRIORITY_APP,
-                )[i],
-                // Non-truncatable = the binding-rules marker wording when cut
-                // ([T-rules-never-silently-vanish] semantics, same as parent).
-                truncatable = false,
-            )
-        },
-    )
-    return allocation.rendered
+    // [T-lanes-inherit-session-rules] Explicit key/priority per layer — the
+    // round-3 adversarial catch: mapIndexed keyed by POSITION, so a missing
+    // front layer (no project AGENTS.md — the default session shape) shifted
+    // every later layer's identity, and the budget then starved the session's
+    // OWN rules in favor of the app-global file.
+    val budgeted = mutableListOf<MemoryPromptBudget.Fragment>()
+    if ("project-rules" in kept) {
+        budgeted += MemoryPromptBudget.Fragment(
+            "project-rules",
+            ProjectInstructionStore.fragment(context.filesDir, memorySessionId) ?: "",
+            MemoryPromptBudget.PRIORITY_PROJECT,
+            truncatable = false,
+        )
+    }
+    if ("session-global" in kept) {
+        budgeted += MemoryPromptBudget.Fragment(
+            "session-global",
+            sessionMem.loadGlobalMemoryFragment(sessionScoped = true) ?: "",
+            MemoryPromptBudget.PRIORITY_SESSION,
+            truncatable = false,
+        )
+    }
+    if ("app-global" in kept) {
+        budgeted += MemoryPromptBudget.Fragment(
+            "app-global",
+            memoryRepository?.loadGlobalMemoryFragment(sessionScoped = false) ?: "",
+            MemoryPromptBudget.PRIORITY_APP,
+            // Same flag as the parent path's app-global layer — the truncation
+            // marker wording must not differ between coordinator and lane.
+            truncatable = true,
+        )
+    }
+    budgeted.removeAll { it.text.isBlank() }
+    if (budgeted.isEmpty()) return null
+    val allocation = MemoryPromptBudget.allocate(budgeted)
+    // [T-rules-never-silently-vanish] Same honesty as the parent prompt: a
+    // layer the budget dropped wholesale is NAMED to the lane (workers cannot
+    // ask the user what they never saw).
+    val omitted = allocation.droppedKeys.takeIf { it.isNotEmpty() }
+        ?.let { "\n… [standing rules omitted by memory budget: " + it.joinToString(", ") + "]" }
+        ?: ""
+    return (allocation.rendered ?: "") + omitted
 }
 
 /**

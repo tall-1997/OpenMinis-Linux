@@ -421,7 +421,8 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     }
     // [T-memory-prompt-budget] One budget for the whole memory block, admitted
     // narrowest-scope-first, so a long GLOBAL.md can never displace this chat's
-    // own rules. Null when memory is off or nothing was admitted.
+    // own rules. Non-null whenever any layer was admitted — INCLUDING with the
+    // memory toggle off ([T-rules-uncoupled-from-memory-toggle]).
     val memoryAllocation = memoryAssembly?.allocation
     // [GH#357] Split the block: standing rules stay in the byte-stable head,
     // while the daily-log window (+TOC) moves to the dynamic tail. A single

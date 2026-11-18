@@ -44,15 +44,15 @@ class ChatHistoryMicroPruneTest {
     @Test
     fun `under the trigger the history passes through untouched`() {
         val history = historyWith(8)
-        assertSame(history, microPruneOldToolResults(history, underTrigger, 100_000))
-        assertSame(history, microPruneOldToolResults(history, 0, 100_000))
-        assertSame(history, microPruneOldToolResults(history, overTrigger, 0))
+        assertSame(history, microPruneOldToolResults(history, underTrigger, 100_000, triggerTokens = 60_000))
+        assertSame(history, microPruneOldToolResults(history, 0, 100_000, triggerTokens = 60_000))
+        assertSame(history, microPruneOldToolResults(history, overTrigger, 0, triggerTokens = 60_000))
     }
 
     @Test
     fun `over the trigger old results slim and recent stay verbatim`() {
         val history = historyWith(8)
-        val pruned = microPruneOldToolResults(history, overTrigger, 100_000)
+        val pruned = microPruneOldToolResults(history, overTrigger, 100_000, triggerTokens = 60_000)
         // The newest MICRO_PRUNE_KEEP_RECENT (4) carriers stay verbatim.
         for (i in 0 until 8 - MICRO_PRUNE_KEEP_RECENT) {
             val tr = pruned[i].contentParts.filterIsInstance<AgentContentPart.ToolResult>().single()
@@ -70,7 +70,7 @@ class ChatHistoryMicroPruneTest {
     @Test
     fun `non prunable tools are never slimmed`() {
         val history = historyWith(8, tool = "file_read")
-        val pruned = microPruneOldToolResults(history, overTrigger, 100_000)
+        val pruned = microPruneOldToolResults(history, overTrigger, 100_000, triggerTokens = 60_000)
         for (msg in pruned) {
             val tr = msg.contentParts.filterIsInstance<AgentContentPart.ToolResult>().single()
             assertFalse("file_read anchors edit read-state — never slimmed", tr.content.contains("micro-pruned"))
@@ -80,7 +80,7 @@ class ChatHistoryMicroPruneTest {
     @Test
     fun `history alias reaches the same verdict as the canonical name`() {
         val history = historyWith(8, tool = "shell_exec")
-        val pruned = microPruneOldToolResults(history, overTrigger, 100_000)
+        val pruned = microPruneOldToolResults(history, overTrigger, 100_000, triggerTokens = 60_000)
         val slimmed = pruned[0].contentParts.filterIsInstance<AgentContentPart.ToolResult>().single()
         assertTrue("shell_exec → shell_execute via ToolAliases", slimmed.content.contains("micro-pruned"))
     }
@@ -88,8 +88,8 @@ class ChatHistoryMicroPruneTest {
     @Test
     fun `projection is idempotent`() {
         val history = historyWith(8)
-        val once = microPruneOldToolResults(history, overTrigger, 100_000)
-        val twice = microPruneOldToolResults(once, overTrigger, 100_000)
+        val once = microPruneOldToolResults(history, overTrigger, 100_000, triggerTokens = 60_000)
+        val twice = microPruneOldToolResults(once, overTrigger, 100_000, triggerTokens = 60_000)
         assertEquals(once, twice)
     }
 
@@ -100,7 +100,7 @@ class ChatHistoryMicroPruneTest {
             toolCarrier("c0", "shell_execute", "tiny output"),
             toolCarrier("c1", "shell_execute", "tiny output 2"),
         )
-        val pruned = microPruneOldToolResults(history, overTrigger, 100_000)
+        val pruned = microPruneOldToolResults(history, overTrigger, 100_000, triggerTokens = 60_000)
         val tr = pruned[1].contentParts.filterIsInstance<AgentContentPart.ToolResult>().single()
         assertEquals("tiny output", tr.content)
     }
@@ -108,13 +108,15 @@ class ChatHistoryMicroPruneTest {
     @Test
     fun `derived trigger follows the compact percent`() {
         // [T-threshold-formula-family] The prune trigger derives from the
-        // operator's compact percent (0.75 default × 0.8 fraction = 0.60), so
-        // the cheap tier always fires BEFORE the compaction gate. The default
-        // triggerRatio therefore gates at 60% of the window: 59_999 under it,
-        // 60_000 at it.
+        // operator's compact percent (0.75 default × 0.8 fraction = 0.60 →
+        // 60_000 tokens on a 100k window), so the cheap tier always fires
+        // BEFORE the compaction gate: 59_999 under it, 60_000 at it.
         val history = historyWith(8)
-        assertSame(history, microPruneOldToolResults(history, 59_999, 100_000))
-        assertTrue(microPruneOldToolResults(history, 60_000, 100_000) !== history)
+        assertSame(history, microPruneOldToolResults(history, 59_999, 100_000, triggerTokens = 60_000))
+        assertTrue(microPruneOldToolResults(history, 60_000, 100_000, triggerTokens = 60_000) !== history)
+        // triggerTokens = 0 → the policy declines auto-compaction for this
+        // window tier — the cheap tier declines with it.
+        assertSame(history, microPruneOldToolResults(history, 90_000, 100_000, triggerTokens = 0))
     }
 
     @Test
@@ -160,7 +162,7 @@ class ChatHistoryMicroPruneTest {
         // canonical("grep_source") = "grep": the whitelist member must be the
         // canonical name or the alias path never matches (dead-entry regression).
         val history = historyWith(8, tool = "grep_source")
-        val pruned = microPruneOldToolResults(history, overTrigger, 100_000)
+        val pruned = microPruneOldToolResults(history, overTrigger, 100_000, triggerTokens = 60_000)
         val slimmed = pruned[0].contentParts.filterIsInstance<AgentContentPart.ToolResult>().single()
         assertTrue("grep_source output must be slimmed", slimmed.content.contains("micro-pruned"))
     }
