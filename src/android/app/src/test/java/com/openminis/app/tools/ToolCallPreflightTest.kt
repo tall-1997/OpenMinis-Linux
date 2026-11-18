@@ -272,4 +272,16 @@ class ToolCallPreflightTest {
         val outcome = finalize("no_args_tool", "{}")
         assertTrue("must be ready, got $outcome", outcome is ToolCallPreflight.Outcome.Ready)
     }
+
+    @Test
+    fun `file_read with the model habit name file_path is repaired and ready`() {
+        // A complete, well-formed payload under the Claude Code field name
+        // must execute after the alias rename — previously the required-field
+        // check rejected it as "Blocked invalid tool call".
+        val outcome = finalize("file_read", """{"file_path":"/tmp/a"}""")
+        assertTrue("must be ready, got $outcome", outcome is ToolCallPreflight.Outcome.Ready)
+        outcome as ToolCallPreflight.Outcome.Ready
+        assertEquals("/tmp/a", outcome.args.optString("path"))
+        assertTrue(outcome.repairs.contains("alias:file_path->path"))
+    }
 }

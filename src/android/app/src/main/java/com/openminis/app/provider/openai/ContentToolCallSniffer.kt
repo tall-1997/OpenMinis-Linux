@@ -34,7 +34,23 @@ internal class ContentToolCallSniffer(
 
     sealed class Emission {
         data class Text(val text: String) : Emission()
-        data class Call(val name: String, val args: JSONObject) : Emission()
+
+        /**
+         * [GH#61/#83/#146] [rawArgs] is non-null when the recovered call's
+         * `arguments`/`parameters` string failed the strict JSON parse. The
+         * SSE and non-stream paths park the exact bytes on
+         * [LLMStreamChunk.ToolCallComplete.rawArgs] so
+         * [com.openminis.app.provider.ToolJsonRepair] can attempt closure
+         * repair; this sniffer used to substitute a silent `{}`, which turned
+         * every recovered call from such a gateway into a generic
+         * "Blocked invalid tool call" rejection. Same contract here: null
+         * means "parsed successfully" (including a genuine empty object).
+         */
+        data class Call(
+            val name: String,
+            val args: JSONObject,
+            val rawArgs: String? = null,
+        ) : Emission()
     }
 
     private val buffer = StringBuilder()
@@ -85,7 +101,7 @@ internal class ContentToolCallSniffer(
         buffer.setLength(0)
         sniffing = false
         emittedAnything = true
-        return calls.map { Emission.Call(it.first, it.second) }
+        return calls.map { Emission.Call(it.name, it.args, it.rawArgs) }
     }
 
     private fun flushAsText(): List<Emission> {
@@ -125,13 +141,16 @@ internal class ContentToolCallSniffer(
         )
     }
 
+    /** A recovered call: name, parsed (or empty) args, and the raw payload on parse failure. */
+    private data class CallData(val name: String, val args: JSONObject, val rawArgs: String?)
+
     /**
-     * Extract (name, args) pairs from either the OpenAI `tool_calls` wrapper or
+     * Extract calls from either the OpenAI `tool_calls` wrapper or
      * a bare `{"name":…,"arguments":…}` object. Returns null when the shape is
      * not a call to an ADVERTISED tool, which makes the caller release the
      * buffered text untouched.
      */
-    private fun extractCalls(obj: JSONObject): List<Pair<String, JSONObject>>? {
+    private fun extractCalls(obj: JSONObject): List<CallData>? {
         if (toolNames.isEmpty()) return null
 
         obj.optJSONArray("tool_calls")?.let { arr -> return parseToolCallsArray(arr) }
@@ -143,11 +162,11 @@ internal class ContentToolCallSniffer(
         if (name.isEmpty() || name !in toolNames) return null
         val hasArgs = obj.has("arguments") || obj.has("parameters")
         if (!hasArgs) return null
-        return listOf(name to argsOf(obj))
+        return listOf(callDataOf(name, obj))
     }
 
-    private fun parseToolCallsArray(arr: JSONArray): List<Pair<String, JSONObject>>? {
-        val out = mutableListOf<Pair<String, JSONObject>>()
+    private fun parseToolCallsArray(arr: JSONArray): List<CallData>? {
+        val out = mutableListOf<CallData>()
         for (i in 0 until arr.length()) {
             val tc = arr.optJSONObject(i) ?: continue
             val fn = tc.optJSONObject("function") ?: tc
@@ -155,25 +174,39 @@ internal class ContentToolCallSniffer(
             if (name.isEmpty() || name !in toolNames) continue
             val hasArgs = fn.has("arguments") || fn.has("parameters")
             if (!hasArgs) continue
-            out.add(name to argsOf(fn))
+            out.add(callDataOf(name, fn))
         }
         return out.ifEmpty { null }
     }
 
-    private fun parseToolCallObject(obj: JSONObject): List<Pair<String, JSONObject>>? {
+    private fun parseToolCallObject(obj: JSONObject): List<CallData>? {
         val fn = obj.optJSONObject("function") ?: obj
         val name = fn.optString("name", "")
         if (name.isEmpty() || name !in toolNames) return null
         if (!fn.has("arguments") && !fn.has("parameters")) return null
-        return listOf(name to argsOf(fn))
+        return listOf(callDataOf(name, fn))
     }
 
-    private fun argsOf(obj: JSONObject): JSONObject {
+    /**
+     * [GH#61/#83/#146] Parse the `arguments`/`parameters` payload exactly the
+     * way the SSE and non-stream paths do: a strict-parse failure must never
+     * substitute a silent `{}`. Carry the raw string on the [CallData] so the
+     * downstream [com.openminis.app.provider.ToolJsonRepair] gets the exact
+     * bytes and preflight can either repair or report the precise
+     * "parameter stream incomplete" rejection — instead of the generic
+     * empty-arguments one that reads as "invalid tool call" to the user.
+     */
+    private fun callDataOf(name: String, obj: JSONObject): CallData {
         val raw = obj.opt("arguments") ?: obj.opt("parameters")
         return when (raw) {
-            is JSONObject -> raw
-            is String -> runCatching { JSONObject(raw) }.getOrElse { JSONObject() }
-            else -> JSONObject()
+            is JSONObject -> CallData(name, raw, null)
+            is String -> runCatching { JSONObject(raw) }.fold(
+                onSuccess = { CallData(name, it, null) },
+                onFailure = {
+                    CallData(name, JSONObject(), raw.takeIf { s -> s.isNotBlank() })
+                },
+            )
+            else -> CallData(name, JSONObject(), null)
         }
     }
 }
