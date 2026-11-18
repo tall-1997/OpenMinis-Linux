@@ -85,6 +85,27 @@ class CompactToolPairGuardTest {
     }
 
     @Test
+    fun `degenerate single-message window extends forward across the carrier run`() {
+        // startIdx == anchorIdx and the kept tail opens on a result: pulling
+        // the anchor back is blocked (a > s fails), so the slice extends
+        // FORWARD through the whole carrier run — use and results summarized
+        // together, kept region opens on a non-carrier.
+        val history = listOf(
+            userText("old"),
+            assistantToolUse("u0"), userToolResult("u0"),
+            assistantToolUse("u1"), userToolResult("u1"),
+            userText("next"),
+        )
+        // startIdx == anchorIdx == 1 (the tool_use of pair0): kept tail = [res0,
+        // use1, res1, next] — opens on a result. The forward extension walks the
+        // carrier run (a=2, res0 joins the summarized slice); the kept region
+        // then opens on use1, whose own result res1 is also kept — no dangling.
+        val (s, a) = preserveToolPairsAtBoundaries(history, 1, 1)
+        assertEquals(1, s)
+        assertEquals(2, a)
+    }
+
+    @Test
     fun `anchor walk never empties the range`() {
         // Everything is tool carriers: the anchor walk stops at start (a > s
         // condition) — the range can never become empty.

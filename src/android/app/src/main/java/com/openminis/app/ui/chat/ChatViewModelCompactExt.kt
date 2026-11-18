@@ -152,6 +152,13 @@ private inline fun ChatViewModel.compactAllImpl(
     // [T-compact-preserves-tool-pairs] Boundaries must never split a
     // tool_use/tool_result pair — a dangling half 400s the next request.
     val (sliceStart, sliceAnchor) = preserveToolPairsAtBoundaries(history, effectiveStartIdx, anchorIdx)
+    if (sliceAnchor < effectiveStartIdx) {
+        // The pair walks dragged the anchor below the previous marker's start:
+        // honoring it would move the marker BACKWARD and re-compact already
+        // covered turns. Abort — the in-loop guard retries on fresh data.
+        appendSystemInfo(context.getString(R.string.vm_compact_already_compacted), "compact")
+        return
+    }
     val toCompact = history.subList(sliceStart, sliceAnchor + 1)
     if (toCompact.isEmpty()) {
         appendSystemInfo(context.getString(R.string.vm_compact_nothing_to_compact), "compact")
@@ -207,8 +214,12 @@ private inline fun ChatViewModel.compactAllImpl(
             // OLDEST prefix. The marker may advance only that far; the rest
             // of the range stays active and verbatim.
             val coveredCount = outcome.coveredMessages.coerceIn(1, toCompact.size)
+            // [T-compact-preserves-tool-pairs] The marker never moves backward:
+            // a reduced retry that covers only the pulled-back prefix must not
+            // lower the anchor below what the previous compact already covered.
             val coveredEndIdx = (sliceStart + coveredCount - 1)
                 .coerceIn(sliceStart, sliceAnchor)
+                .coerceAtLeast(effectiveStartIdx)
             if (summary.isEmpty()) {
                 withContext(Dispatchers.Main) {
                     appendSystemInfo("Compaction produced no output — try again later.", "compact")
@@ -243,14 +254,17 @@ private inline fun ChatViewModel.compactAllImpl(
                 var i = coveredEndIdx
                 // Never walk back past the start of the range: an anchor
                 // before it would mark already-active messages as compacted.
-                while (i >= sliceStart) {
+                // Marker floor: never anchor below the previous compact start
+                // ([T-compact-preserves-tool-pairs] the pair walk may have pulled
+                // sliceStart below it — the MARKER must still advance monotonically).
+                while (i >= effectiveStartIdx) {
                     val id = history[i].dbMessageId
                     if (!id.isNullOrEmpty() && id in rawDbIds) break
                     i -= 1
                 }
                 i
             }
-            if (verifiedAnchorIdx < sliceStart) {
+            if (verifiedAnchorIdx < effectiveStartIdx) {
                 Log.w(ChatViewModel.TAG, "[Compact] No agentHistory entry in the covered range has a DB-persisted dbMessageId; aborting")
                 withContext(Dispatchers.Main) {
                     appendSystemInfo("Compact failed: could not anchor to a persisted message.", "compact")
@@ -561,5 +575,15 @@ internal fun preserveToolPairsAtBoundaries(
     var a = anchorIdx
     while (a > s && isToolResultCarrier(a + 1)) a -= 1
     while (s > 0 && isToolResultCarrier(s)) s -= 1
+    // [T-compact-preserves-tool-pairs] Degenerate form (compactBefore with a
+    // single-message window): the anchor walk is blocked at a == s while the
+    // kept tail still opens on a carrier. Pulling `a` back cannot fix that —
+    // instead extend the slice FORWARD across the whole carrier run so use and
+    // results are summarized together and the kept region opens on a
+    // non-carrier. The run is bounded by the carrier predicate's own
+    // bounds-check, so `a` can never pass history's end.
+    if (a == s) {
+        while (isToolResultCarrier(a + 1)) a += 1
+    }
     return s to a
 }

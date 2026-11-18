@@ -253,12 +253,17 @@ class MemoryRepository(private val memoryDir: File) {
         if (entryCount >= MAX_DAILY_ENTRIES) {
             return "Error: 今日记忆已达上限（$MAX_DAILY_ENTRIES 条）。旧的按日归档，明日自动开始新日志；请精简而不是继续追加。"
         }
+        // [T-memory-entry-format-guard] 条目正文不得包含落盘格式的标记行——
+        // 该行会让后续 ENTRY_MARK.split 产生幻影条目（去重误判 + 条目计数虚增）。
+        if (ENTRY_MARK.containsMatchIn(content)) {
+            return "Error: 条目正文不能包含时间戳标记行（<!-- YYYY-MM-DD HH:mm:ss --> 是落盘格式保留字）。请改写后再写。"
+        }
         // [T-memory-dedup-on-write] OpenHarness 式签名去重：与今日日志既有条目
         // 归一化后逐字相同的写入是模型回声（loop 重试 / 报错后原样重写）——
-        // 再落一份会让召回命中双份。归一化折叠空白，防尾随格式漂移绕过。
-        val normalizedNew = content.trim().replace(Regex("\\s+"), " ")
+        // 再落一份会让召回命中双份。归一化仅折叠行尾空白与空行（保留行首缩进，防代码类条目误判）。
+        val normalizedNew = content.lines().joinToString("\n") { it.trimEnd() }.trim()
         val duplicate = existing.isNotBlank() && ENTRY_MARK.split(existing).any { seg ->
-            seg.trim().replace(Regex("\\s+"), " ") == normalizedNew
+            seg.trim().lines().joinToString("\n") { it.trimEnd() }.trim() == normalizedNew
         }
         if (duplicate) {
             Log.i(TAG, "Memory dedup: identical entry already in $fileName — skipped")

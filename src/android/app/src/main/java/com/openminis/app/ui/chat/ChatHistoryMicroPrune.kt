@@ -2,6 +2,7 @@ package com.openminis.app.ui.chat
 
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
+import com.openminis.app.data.repository.PreviewText
 import com.openminis.app.security.ToolAliases
 
 /**
@@ -25,7 +26,10 @@ import com.openminis.app.security.ToolAliases
  *    carriers stay VERBATIM; older ones are slimmed to head + marker + tail.
  *  - Whitelist: only tools whose output is re-runnable/re-fetchable
  *    ([MICRO_PRUNABLE_TOOLS], matched through [ToolAliases.canonical]).
- *    file_read is deliberately EXCLUDED — its output anchors edit read-state.
+ *    file_read is deliberately EXCLUDED — its verbatim content is what the
+ *    model crafts file_edit old_string/new_string against (the on-disk
+ *    read cache is fingerprint-based, but losing the text still degrades
+ *    edit quality); ToolResultAging covers its bulk separately.
  *  - Structure: tool_use/tool_result pairing is never touched — only the
  *    text `content` of a prunable ToolResult part is replaced, so every
  *    provider still sees a balanced conversation. Idempotent.
@@ -56,7 +60,7 @@ internal val MICRO_PRUNABLE_TOOLS: Set<String> = setOf(
     "web_search",
     "browser_use",
     "execute_code",
-    "grep_source",
+    "grep",
 )
 
 private fun prunableTool(name: String): Boolean =
@@ -76,6 +80,7 @@ internal val REMOTE_CONTENT_TOOLS: Set<String> = setOf(
     "web_search",
     "browser_use",
     "mcp",
+    "ssh_exec",
 )
 
 private fun remoteContentTool(name: String): Boolean =
@@ -89,13 +94,24 @@ private fun remoteContentTool(name: String): Boolean =
  */
 internal fun neutralizeUntrustedTags(text: String): String {
     var out = text
+    // Framework TAGS — case-insensitive (a fetched page can shout
+    // <SYSTEM-REMINDER> and the model reads raw text, not the classifier).
     for (tag in listOf("system-reminder", "context-summary", "goal_context")) {
-        out = out.replace("<$tag", "&lt;$tag").replace("</$tag", "&lt;/$tag")
+        out = Regex("<(/?$tag)", RegexOption.IGNORE_CASE)
+            .replace(out) { m -> "&lt;" + m.groupValues[1] }
     }
-    for (anchor in listOf("[MEMORY_REFERENCE", "[STANDING_RULES")) {
-        // Fullwidth opening bracket: breaks both the leading-match classifier
-        // and substring checks while staying visually identical to a human.
-        out = out.replace(anchor, "［" + anchor.substring(1))
+    // Bracket/text MARKERS — the classifier's own marker table (shared
+    // constants with [HarnessNoteMarkers.ALL] and the legacy host-note head,
+    // so the escape list can never drift from the classify list). Escapes are
+    // per shape: bracket anchors take a fullwidth opening bracket, plain-text
+    // markers get a zero-width space after the first char — both break
+    // leading-match AND contains while staying visually near-identical.
+    val textMarkers = HarnessNoteMarkers.ALL + PreviewText.HOST_NOTE_NO_REPLY_HEAD
+    for (marker in textMarkers) {
+        out = when {
+            marker.startsWith("[") -> out.replace(marker, "［" + marker.substring(1))
+            else -> out.replace(marker, marker.take(1) + "\u200B" + marker.substring(1))
+        }
     }
     return out
 }

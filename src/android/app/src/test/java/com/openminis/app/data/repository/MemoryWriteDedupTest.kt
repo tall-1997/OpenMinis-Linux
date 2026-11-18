@@ -27,11 +27,14 @@ class MemoryWriteDedupTest {
     }
 
     @Test
-    fun `whitespace drift does not bypass the dedup`() {
+    fun `trailing whitespace drift does not bypass the dedup`() {
         val repo = repo()
         assertTrue(repo.writeMemory("A/B 测试结论：方案一更好").startsWith("Memory saved"))
-        val drifted = "A/B  测试结论：方案一更好\n\n"
-        assertTrue("whitespace-normalized duplicate must be skipped", repo.writeMemory(drifted).startsWith("Skipped"))
+        // Line-preserving normalization keeps interior spacing (two code
+        // variants must NOT merge) but trailing blank-line drift is still
+        // the same entry.
+        val drifted = "A/B 测试结论：方案一更好\n\n"
+        assertTrue("trailing-drift duplicate must be skipped", repo.writeMemory(drifted).startsWith("Skipped"))
     }
 
     @Test

@@ -504,7 +504,9 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     break@agentTurns
                 }
                 // [T-once-notices] committed once; [T-agent-steering + T-toolset-delta] pi turn-boundary injections.
-                // [T-compaction-cascade] prepareRequestHistory: tier-② proactive compact, then tier-① micro-prune.
+                // [T-compaction-cascade] prepareRequestHistory: untrusted-marker
+                // neutralization + tier-① micro-prune (request-time projections).
+                // Compaction itself is owned by inLoopContextCheck / the overflow gates.
                 commitSessionNoticesOnce(goalObjective = requestGoalState?.objective.orEmpty(),
                     goalPrompt = goalMount.prompt, goalCanContinue = goalMount.canContinue)
                 drainSteeringIntoRun(assistantId, accumulatedText, allToolBlocks, uiBatcher) { swapLoopStateToInjectedBubble(it) }
