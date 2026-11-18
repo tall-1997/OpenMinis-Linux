@@ -29,6 +29,17 @@ import kotlinx.coroutines.flow.first
  */
 internal fun ChatViewModel.effectiveAgentHistoryUncounted(
     applyProgressiveTrim: Boolean = true,
+    /**
+     * [T-compact-gate-unblinded] When false, the postAnchor tail budget is
+     * NOT applied. The compact gate must weigh the un-budgeted slice: the
+     * tail budget caps the measurable request at preAnchor(20%) +
+     * postAnchor(35%) ≈ 55% of the window, so with a marker in play the
+     * 75% threshold could never fire again. The marker then froze while the
+     * unsummarized postAnchor kept growing, and every request silently
+     * dropped rounds the summary does not cover. This switch exists only for
+     * measurement; request assembly always uses the budget.
+     */
+    applyTailBudget: Boolean = true,
 ): List<LLMMessage> {
     val summary = _compactSummary.value
     val marker = _cachedLatestMarker
@@ -110,7 +121,13 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
                 )
             }
             return maybeProgressivelyTrimmed(
-                foldHarnessNotes(detachedCompactHistory(effectiveSummaryWrappedText)),
+                foldHarnessNotes(
+                    // [T-compact-gate-unblinded] The gate's measurement must
+                    // see what the summary does NOT cover (the whole resident
+                    // tail), otherwise detached mode silently persists.
+                    if (applyTailBudget) detachedCompactHistory(effectiveSummaryWrappedText)
+                    else agentHistory.toList(),
+                ),
                 applyProgressiveTrim,
             )
         }
@@ -254,14 +271,16 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
         // [T-budget-floor-fraction-clamp] The old 8k floor overrode the 35%
         // share on windows <~23k (20k window → 8k = 40%); the fraction itself
         // is the floor now, same clamp policy as preAnchorTokenBudget.
-        val postAnchorBudget = if (windowTokens != null) {
-            minOf(PostAnchorTail.BUDGET_TOKENS, (windowTokens * 0.35).toInt())
-        } else {
-            PostAnchorTail.BUDGET_TOKENS
-        }
+        val postAnchorBudget = PostAnchorTail.budgetTokensForWindow(windowTokens, applyTailBudget)
         val tailBudget = PostAnchorTail.Budget(
             budgetTokens = postAnchorBudget,
             estimate = WalkBack::estimateMessageTokens,
+            // [T-postanchor-dropped-digest] The summary predates every
+            // post-anchor round, so it cannot stand in for them. Preserve the
+            // dropped user instructions / assistant decisions as bounded
+            // excerpts in the SAME request; the tool ledger stays the
+            // structured record for tool calls.
+            digest = DroppedRoundDigest::render,
         )
         val postAnchorOutcome = PostAnchorTail.apply(postAnchorRaw, tailBudget)
         val postAnchor = postAnchorOutcome.kept
@@ -274,9 +293,14 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
             // postAnchor drop fire a hydration, which committed a new USER
             // note every turn — the model then narrated about each note
             // instead of working (the prose-fragment loop on device).
-            if (WorkingMemoryStore.hasUndelivered(activeSessionId)) {
-                stateHydrationPending = true
-            }
+            //
+            // [T-state-hydration-on-drop] The plan/report/job snapshot is a
+            // DIFFERENT recovery signal and must not be gated on the ledger.
+            // A plan update can be evicted while every ledger line was
+            // already delivered; tying the two meant the model kept a stale
+            // plan snapshot and redid finished steps. The snapshot commit is
+            // sha-deduped, so arming it on every drop cannot spam notes.
+            stateHydrationPending = true
             AppLogger.info(
                 ChatViewModel.TAG,
                 "[CompactDiag] eAH v2 postAnchor tail budget: kept=${postAnchor.size} " +
@@ -295,7 +319,7 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
             else "userTextWalkBack(N=$keepN)"
         AppLogger.info(ChatViewModel.TAG, "[CompactDiag] eAH v2 slice: priorIdx=$priorIdx anchorIdx=$anchorIdx agentHistory.size=${agentHistory.size} → preAnchorRaw=$preAnchorRawCount preAnchorSent=${preAnchorPruned.size} postAnchor=${postAnchor.size} summaryChars=${summary.length} priorIdxSource=$priorIdxSource markerId=${marker.id.take(8)}")
 
-        val firstUserOffset = postAnchor.indexOfFirst { it.role == LLMMessage.Role.USER }
+        val firstUserOffset = firstInjectableUserIndex(postAnchor)
         if (firstUserOffset >= 0) {
             if (firstUserOffset > 0) {
                 result.addAll(postAnchor.subList(0, firstUserOffset))
@@ -372,6 +396,26 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
 
     Log.w(ChatViewModel.TAG, "[Compact] effectiveAgentHistory: marker ${marker.id.take(8)} unresolvable in agentHistory (size=${agentHistory.size}); returning full history")
     return agentHistory.toList()
+}
+
+/**
+ * [T-compact-summary-target] Index of the USER message the compact summary
+ * should be prepended to.
+ *
+ * The postAnchor head is normally the dropped-rounds notice — a harness note.
+ * Prepending the summary to THAT message made [foldHarnessNotes] fold the
+ * notice (summary included) back into the nearest preceding real user turn,
+ * which lives inside the already-summarized pre-anchor region: the active
+ * tail then started with no summary at all, and the carrier briefly grew a
+ * summary-shaped "user" message. Prefer the first REAL user turn after the
+ * notice; fall back to any USER message only when none exists.
+ */
+internal fun firstInjectableUserIndex(messages: List<LLMMessage>): Int {
+    val real = messages.indexOfFirst {
+        it.role == LLMMessage.Role.USER && !HarnessNoteMarkers.isUserHarnessNote(it)
+    }
+    if (real >= 0) return real
+    return messages.indexOfFirst { it.role == LLMMessage.Role.USER }
 }
 
 /**

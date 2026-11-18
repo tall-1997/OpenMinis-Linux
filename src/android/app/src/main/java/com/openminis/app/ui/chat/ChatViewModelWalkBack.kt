@@ -211,18 +211,32 @@ internal object WalkBack {
      * (`approxTokens = chars / 4`) and that `CompactAttempt.maxOutFor` uses, so
      * the budget decision and the reported context size cannot disagree by
      * using two different rulers.
+     *
+     * [T-budget-ruler-complete] Tool-call ARGUMENTS and image payloads are
+     * part of the request too. Leaving them out let a 12-call build round
+     * (huge `file_write` / `file_edit` inputs) count as ~12 tokens against a
+     * 60k budget, so the "budgeted" request could still blow a 128k window.
+     * Arguments are serialized here exactly as the wire does; images use the
+     * same 1,500-token weight as `estimateMessagesTokens`.
      */
     fun estimateMessageTokens(msg: LLMMessage): Int {
         var chars = msg.content.length
         for (part in msg.contentParts) {
             when (part) {
                 is AgentContentPart.Text -> chars += part.text.length
-                is AgentContentPart.ToolResult -> chars += part.content.length
-                else -> Unit
+                is AgentContentPart.ToolResult -> {
+                    chars += part.content.length
+                    if (part.imageData != null) chars += IMAGE_CHARS
+                }
+                is AgentContentPart.ToolUse -> chars += part.input.toString().length
+                is AgentContentPart.ImageData -> chars += IMAGE_CHARS
             }
         }
         return (chars / 4).coerceAtLeast(1)
     }
+
+    /** Same image weight as ChatViewModel.estimateMessagesTokens (1,500 tok). */
+    private const val IMAGE_CHARS = 6_000
 }
 
 internal fun ChatViewModel.walkBackUserTurnsBounded(

@@ -16,6 +16,10 @@ internal fun buildDetachedCompactHistory(
     summaryWrappedText: String,
     history: List<LLMMessage>,
     tailSize: Int,
+    /** Bounded excerpt builder for the most recent dropped messages. */
+    digest: ((List<LLMMessage>) -> String?)? = { dropped ->
+        DroppedRoundDigest.render(dropped, DETACHED_DIGEST_HEADER)
+    },
 ): List<LLMMessage> {
     if (history.isEmpty()) {
         return listOf(LLMMessage(role = LLMMessage.Role.USER, content = summaryWrappedText))
@@ -23,18 +27,63 @@ internal fun buildDetachedCompactHistory(
     val rawCut = (history.size - tailSize).coerceAtLeast(0)
     val cut = safeTailStart(history, rawCut)
     val tail = history.subList(cut, history.size).toList()
+    // [T-detached-drop-truth] The gap is NOT silently swallowed: the old
+    // code kept the newest 60 and said nothing, so 3,000+ messages vanished
+    // with no signal. The notice lives INSIDE the <context-summary> envelope
+    // (so HarnessNoteMarkers still classifies the first tail message as a
+    // real user turn) and carries a bounded digest of the newest dropped
+    // messages, which are the ones the next step actually depends on.
+    val wrapped = if (cut > 0) {
+        injectDetachedNotice(summaryWrappedText, cut, history, cut, digest)
+    } else {
+        summaryWrappedText
+    }
     val start = tail.indexOfFirst { it.role == LLMMessage.Role.USER }
     if (start < 0) {
-        return tail + LLMMessage(role = LLMMessage.Role.USER, content = summaryWrappedText)
+        return tail + LLMMessage(role = LLMMessage.Role.USER, content = wrapped)
     }
     val out = ArrayList<LLMMessage>(tail.size - start + 1)
     val first = tail[start]
     // Parts must move with the text: the first tail row is usually a real
     // user send or tool-result carrier whose contentParts override `content`
     // on the wire ([T-user-text-prefix-parts-sync]).
-    out.add(prependUserText(first, summaryWrappedText))
+    out.add(prependUserText(first, wrapped))
     out.addAll(tail.subList(start + 1, tail.size))
     return out
+}
+
+/** How many of the newest dropped messages the detached digest inspects. */
+private const val DETACHED_DIGEST_WINDOW = 40
+
+private const val DETACHED_DIGEST_HEADER =
+    "Most recent dropped messages (excerpts; some may predate the summary boundary):"
+
+/**
+ * Put the detached-drop notice inside the summary envelope. Inserting before
+ * `</context-summary>` keeps the whole block classified as background context
+ * (the fold and previews strip that envelope); appending after it would make
+ * the first real user turn look like a harness note and reorder it.
+ */
+internal fun injectDetachedNotice(
+    summaryWrappedText: String,
+    droppedCount: Int,
+    history: List<LLMMessage>,
+    cut: Int,
+    digest: ((List<LLMMessage>) -> String?)?,
+): String {
+    val from = (cut - DETACHED_DIGEST_WINDOW).coerceAtLeast(0)
+    val digestText = digest?.invoke(history.subList(from, cut))
+        ?.takeIf { it.isNotBlank() }
+    val notice = buildString {
+        append("\n\n[detached compact boundary: ").append(droppedCount)
+        append(" earlier messages are not in this request. The summary may not cover all ")
+        append("of them; re-read a file or re-run a specific tool if you need exact output.]")
+        if (digestText != null) append('\n').append(digestText)
+    }
+    val close = summaryWrappedText.lastIndexOf("</context-summary>")
+    if (close < 0) return summaryWrappedText + notice
+    return summaryWrappedText.substring(0, close) + notice + "\n" +
+        summaryWrappedText.substring(close)
 }
 
 /**

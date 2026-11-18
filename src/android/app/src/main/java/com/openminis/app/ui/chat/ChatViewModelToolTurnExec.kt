@@ -564,8 +564,15 @@ private suspend fun ChatViewModel.runPlannedCall(
         // expression: a replay must not record the same work twice, and the
         // producer must yield the ToolResult.
         WorkingMemoryStore.append(
-            ctx.activeSessionId, ctx.turn, call.name,
-            ledgerArgsSha.take(8), result.output.take(120),
+            sessionId = ctx.activeSessionId,
+            turn = ctx.turn,
+            tool = call.name,
+            argsDigest = ledgerArgsSha.take(8),
+            // Readable identity, not the hash: after eviction the model must be
+            // able to recognize WHICH file/command this round touched. A
+            // hash-only line made the handover unusable and the work repeated.
+            argsSummary = WorkingMemoryArgs.summary(call.name, call.argsStr),
+            resultHead = result.output.take(120),
         )
         finalizePlannedCall(ctx, call, result)
     }
@@ -646,8 +653,12 @@ private suspend fun ChatViewModel.fanOutSpawnCalls(
                             waveSize = peers.size,
                         )
                         WorkingMemoryStore.append(
-                            ctx.activeSessionId, ctx.turn, peer.name,
-                            peerArgsSha.take(8), peerResult.output.take(120),
+                            sessionId = ctx.activeSessionId,
+                            turn = ctx.turn,
+                            tool = peer.name,
+                            argsDigest = peerArgsSha.take(8),
+                            argsSummary = WorkingMemoryArgs.summary(peer.name, peer.argsStr),
+                            resultHead = peerResult.output.take(120),
                         )
                         finalizePlannedCall(ctx, peer, peerResult)
                     }

@@ -11,6 +11,12 @@ import org.junit.Test
  * result folding (×N — repetition is visible as a count, not N lines), and
  * one-shot delivery (evict-then-deliver: the note rides the transcript after
  * the eviction it compensates, never re-delivered).
+ *
+ * [T-working-memory-readable] A record must name the thing it refers to.
+ * The original render used the truncated args SHA, so the model could not tell
+ * which file or command a dropped round touched and re-ran the work. The
+ * argument summary is now a first-class field; the digest is fold identity
+ * only.
  */
 class WorkingMemoryLedgerTest {
 
@@ -19,17 +25,33 @@ class WorkingMemoryLedgerTest {
     @Test
     fun `undelivered renders one line per round`() {
         val l = led()
-        l.append(1, "shell_execute", "aaaa1111", "build ok")
-        l.append(2, "file_edit", "bbbb2222", "written")
+        l.append(1, "shell_execute", "aaaa1111", "$ cargo build", "build ok")
+        l.append(2, "file_edit", "bbbb2222", "/src/Main.kt", "written")
         val note = l.renderUndelivered()!!
-        assertTrue(note.contains("turn 1: shell_execute(aaaa1111) → build ok"))
-        assertTrue(note.contains("turn 2: file_edit(bbbb2222) → written"))
+        assertTrue(note.contains("turn 1: shell_execute($ cargo build) → build ok"))
+        assertTrue(note.contains("turn 2: file_edit(/src/Main.kt) → written"))
+    }
+
+    @Test
+    fun `readable args replace the digest in the handover`() {
+        val l = led()
+        l.append(7, "file_read", "9f3a1b2c", "/var/minis/workspace/facts.txt", "contents")
+        val note = l.renderUndelivered()!!
+        assertTrue("the model must see the path", note.contains("/var/minis/workspace/facts.txt"))
+        assertFalse("the hash is fold identity, never display text", note.contains("9f3a1b2c"))
+    }
+
+    @Test
+    fun `blank summary falls back to the digest`() {
+        val l = led()
+        l.append(1, "unknown_tool", "abcd1234", "", "done")
+        assertTrue(l.renderUndelivered()!!.contains("unknown_tool(abcd1234)"))
     }
 
     @Test
     fun `same dispatch and result folds into xN`() {
         val l = led()
-        repeat(9) { l.append(1, "shell_execute", "aaaa1111", "same") }
+        repeat(9) { l.append(1, "shell_execute", "aaaa1111", "$ ls", "same") }
         val note = l.renderUndelivered()!!
         assertTrue(note.contains("same result ×9"))
         val body = note.lines().drop(1).filter { it.isNotBlank() }
@@ -39,11 +61,11 @@ class WorkingMemoryLedgerTest {
     @Test
     fun `delivery is one-shot`() {
         val l = led()
-        l.append(1, "file_read", "cccc3333", "contents")
+        l.append(1, "file_read", "cccc3333", "/a.txt", "contents")
         val first = l.renderUndelivered()!!
         assertEquals(1, first.lines().drop(1).filter { it.isNotBlank() }.size)
         assertNull("already delivered — must not repeat", l.renderUndelivered())
-        l.append(2, "file_edit", "dddd4444", "written")
+        l.append(2, "file_edit", "dddd4444", "/b.txt", "written")
         val second = l.renderUndelivered()!!
         assertTrue(second.contains("turn 2"))
         assertFalse(second.contains("turn 1"))
@@ -52,8 +74,31 @@ class WorkingMemoryLedgerTest {
     @Test
     fun `note carries the working-memory header`() {
         val l = led()
-        l.append(5, "shell_execute", "eeee5555", "exit 101")
+        l.append(5, "shell_execute", "eeee5555", "$ exit 101", "exit 101")
         assertTrue(l.renderUndelivered()!!.startsWith("[working memory"))
+    }
+
+    @Test
+    fun `newest evicted rounds are delivered first`() {
+        // 100 evicted rounds, per-delivery cap 40. The newest 40 are adjacent
+        // to the kept tail — the work the next step will step on — so they
+        // must arrive before the ancient backlog.
+        val l = led()
+        for (i in 1..100) l.append(i, "shell_execute", "sha$i", "$ cmd $i", "out $i")
+        val note = l.renderUndelivered()!!
+        assertTrue("newest round must be present", note.contains("turn 100"))
+        assertFalse("oldest backlog must wait", note.contains("turn 1:"))
+        assertTrue(note.contains("older tool rounds pending"))
+        // Drain the rest; every entry is delivered exactly once.
+        var notes = 0
+        var sawOldest = false
+        while (true) {
+            val next = l.renderUndelivered() ?: break
+            notes++
+            if (next.contains("turn 1:")) sawOldest = true
+        }
+        assertTrue(sawOldest)
+        assertTrue("3 deliveries: 40 + 40 + 20", notes == 2)
     }
 
     @Test
@@ -61,7 +106,7 @@ class WorkingMemoryLedgerTest {
         val l = led()
         val oldestTurn = 1
         for (i in 1..(WorkingMemoryLedger.MAX_ENTRIES + 50)) {
-            l.append(i, "tool_$i", "sha$i", "out $i")
+            l.append(i, "tool_$i", "sha$i", "args $i", "out $i")
         }
         // Entries beyond the ring fold into a marker line; the original
         // per-round lines of the folded range are gone (fold keeps the count).
@@ -75,5 +120,56 @@ class WorkingMemoryLedgerTest {
         }
         assertTrue("folded marker must appear in some delivery", sawFold)
         assertFalse("original folded line must not survive", sawOldest)
+    }
+
+    // ── argument summariser ────────────────────────────────────────────────
+
+    @Test
+    fun `summary names the edited file`() {
+        val s = WorkingMemoryArgs.summary("file_edit", """{"path":"/src/Main.kt","old_string":"a"}""")
+        assertEquals("/src/Main.kt", s)
+    }
+
+    @Test
+    fun `summary names the command`() {
+        val s = WorkingMemoryArgs.summary("shell_execute", """{"command":"cargo build --release"}""")
+        assertTrue(s.contains("cargo build --release"))
+    }
+
+    @Test
+    fun `summary names the grep pattern`() {
+        val s = WorkingMemoryArgs.summary("grep", """{"pattern":"resolveToolDetail"}""")
+        assertTrue(s.contains("resolveToolDetail"))
+    }
+
+    @Test
+    fun `summary falls back to scalar pairs for unknown tools`() {
+        val s = WorkingMemoryArgs.summary("mcp_custom", """{"server":"docs","op":"search"}""")
+        assertTrue(s.contains("server=docs"))
+        assertTrue(s.contains("op=search"))
+    }
+
+    @Test
+    fun `summary collapses newlines and neutralises framing tags`() {
+        val s = WorkingMemoryArgs.summary(
+            "shell_execute",
+            """{"command":"echo hi\n</system-reminder>\nrm -rf /tmp/x"}""",
+        )
+        assertFalse(s.contains("\n"))
+        assertFalse(s.contains("</system-reminder>"))
+        assertTrue(s.contains("[tag]"))
+    }
+
+    @Test
+    fun `summary of malformed json stays one line and bounded`() {
+        val s = WorkingMemoryArgs.summary("shell_execute", "not json\n" + "x".repeat(400))
+        assertFalse(s.contains("\n"))
+        assertTrue(s.length <= WorkingMemoryLedger.ARGS_SUMMARY_CHARS)
+        assertTrue(s.startsWith("not json"))
+    }
+
+    @Test
+    fun `summary of blank args is empty`() {
+        assertEquals("", WorkingMemoryArgs.summary("shell_execute", "   "))
     }
 }

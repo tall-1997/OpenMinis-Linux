@@ -72,6 +72,16 @@ object ToolResultAging {
     /** Bytes of the original kept as a "what was in it" headline. */
     private const val HEADLINE_CHARS = 160
 
+    /**
+     * [T-age-head-and-tail] Bytes of the END kept verbatim. Build logs, test
+     * runs and command output put the actionable line at the TAIL (the error,
+     * the summary, the exit status). A head-only placeholder hid exactly that
+     * line, so the model re-ran the command to see the failure again. Keeping
+     * both ends costs ~160 chars per folded result and preserves the part the
+     * model actually needs.
+     */
+    private const val TAIL_CHARS = 160
+
     /** Errors keep a longer head: the message itself is the useful part. */
     private const val ERROR_HEADLINE_CHARS = 400
 
@@ -153,7 +163,15 @@ object ToolResultAging {
         if (scanned <= keep) return Plan(messages, 0, 0, scanned)
 
         // Newest-first wins; everything before the keep window is a candidate.
-        val candidates = live.subList(0, scanned - keep)
+        // [T-age-round-coherent] The keep window is ROUND-coherent: one
+        // assistant turn can fan out into many parallel tool calls, and a
+        // plain "newest N results" cut would fold part of that turn's own
+        // working set on the very next request (10 parallel reads, keep 6 →
+        // 4 of them aged immediately). Extend the window back to the
+        // assistant message that owns the oldest kept result, so a round is
+        // either entirely verbatim or entirely aged.
+        val keepFromMessage = live[scanned - keep][0]
+        val candidates = live.filter { it[0] < keepFromMessage }
         val byMessage = HashMap<Int, MutableList<Int>>()
         for (slot in candidates) {
             byMessage.getOrPut(slot[0]) { ArrayList(2) } += slot[1]
@@ -202,13 +220,19 @@ object ToolResultAging {
      */
     fun placeholder(toolName: String, content: String, isError: Boolean = false): String {
         val path = READABLE_PATH.find(content)?.value
-        val headline = headlineOf(content, if (isError) ERROR_HEADLINE_CHARS else HEADLINE_CHARS)
+        val headLimit = if (isError) ERROR_HEADLINE_CHARS else HEADLINE_CHARS
+        val headline = headlineOf(content, headLimit)
+        val tail = if (content.length > headLimit + TAIL_CHARS) tailOf(content, TAIL_CHARS) else ""
         return buildString {
             append(MARKER).append(' ').append(toolName.ifBlank { "tool" })
             if (isError) append(" (error)")
             append(" · ").append(content.length).append(" chars folded to save context")
             append('\n')
             append(headline)
+            if (tail.isNotEmpty()) {
+                append("\n… [tail]\n")
+                append(tail)
+            }
             if (path != null) {
                 append("\nfull output: ").append(path)
             } else {
@@ -218,11 +242,37 @@ object ToolResultAging {
     }
 
     /**
+     * Last [limit] chars of the original, whitespace-collapsed and
+     * surrogate-safe at the cut. Mirrors [headlineOf] on the other end:
+     * logs put their actionable line last, so a folded result that keeps only
+     * the head hides the error it exists to summarize.
+     */
+    fun tailOf(content: String, limit: Int = TAIL_CHARS): String {
+        val flat = collapseWhitespace(content)
+        if (flat.length <= limit) return flat
+        var cut = flat.takeLast(limit)
+        // Never start the excerpt on a lone low surrogate.
+        if (cut.first().isLowSurrogate()) cut = cut.drop(1)
+        return cut
+    }
+
+    /**
      * First [limit] chars of the original, whitespace-collapsed and
      * surrogate-safe (a lone high surrogate would poison JSON encoding).
      */
     fun headlineOf(content: String, limit: Int = HEADLINE_CHARS): String {
-        val normalized = StringBuilder(minOf(content.length, limit * 2))
+        val text = collapseWhitespace(content)
+        if (text.length <= limit) return text
+        val cut = if (Character.isHighSurrogate(text[limit - 1])) limit - 1 else limit
+        return text.substring(0, cut) + "…"
+    }
+
+    /**
+     * Collapse every whitespace run to one space and trim. Shared by head and
+     * tail so both excerpts read the same way.
+     */
+    private fun collapseWhitespace(content: String): String {
+        val normalized = StringBuilder(minOf(content.length, 512))
         var lastSpace = false
         for (ch in content) {
             if (ch.isWhitespace()) {
@@ -233,9 +283,6 @@ object ToolResultAging {
                 lastSpace = false
             }
         }
-        val text = normalized.toString().trim()
-        if (text.length <= limit) return text
-        val cut = if (Character.isHighSurrogate(text[limit - 1])) limit - 1 else limit
-        return text.substring(0, cut) + "…"
+        return normalized.toString().trim()
     }
 }

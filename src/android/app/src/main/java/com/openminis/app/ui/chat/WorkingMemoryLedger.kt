@@ -28,16 +28,51 @@ internal class WorkingMemoryLedger {
     data class Entry(
         val turn: Int,
         val tool: String,
+        /**
+         * Opaque identity used ONLY for folding (same dispatch = same work).
+         * Never render this to the model: a SHA prefix cannot tell it which
+         * file or command was touched, so a hash-only handover reads as
+         * "something happened" and the model repeats the work.
+         */
         val argsDigest: String,
+        /**
+         * Human-readable argument summary (path / command / query), produced
+         * by [WorkingMemoryArgs]. This is the field that makes the handover
+         * actionable.
+         */
+        val argsSummary: String,
         val resultHead: String,
     )
 
     private val entries = ArrayList<Entry>()
-    private var delivered = 0
+
+    /**
+     * [T-working-memory-newest-first] Per-entry delivery flags. A cursor
+     * cannot express "the newest 40 were delivered" once more entries are
+     * appended (the delivered region stops being the tail), and the newest
+     * evicted rounds are exactly the ones the next step must not redo, so
+     * delivery takes the newest undelivered entries first.
+     */
+    private val delivered = ArrayList<Boolean>()
 
     @Synchronized
-    fun append(turn: Int, tool: String, argsDigest: String, resultHead: String) {
-        entries.add(Entry(turn, tool, argsDigest, resultHead.take(RESULT_HEAD_CHARS)))
+    fun append(
+        turn: Int,
+        tool: String,
+        argsDigest: String,
+        argsSummary: String,
+        resultHead: String,
+    ) {
+        entries.add(
+            Entry(
+                turn = turn,
+                tool = tool,
+                argsDigest = argsDigest,
+                argsSummary = argsSummary.take(ARGS_SUMMARY_CHARS),
+                resultHead = resultHead.take(RESULT_HEAD_CHARS),
+            ),
+        )
+        delivered.add(false)
         if (entries.size > MAX_ENTRIES) {
             // Fold the oldest run of entries into one marker line: drop the
             // first (MAX_ENTRIES / 2) entries but keep their count visible.
@@ -47,17 +82,15 @@ internal class WorkingMemoryLedger {
                 turn = folded.first().turn,
                 tool = FOLD_TOOL,
                 argsDigest = "rounds ${folded.first().turn}–${folded.last().turn}",
-                resultHead = "${folded.size} earlier tool rounds folded (see summary)",
+                argsSummary = "rounds ${folded.first().turn}–${folded.last().turn}",
+                // Honest wording: compact may never have run, so pointing at a
+                // summary that does not cover these rounds is a false lead.
+                resultHead = "${folded.size} earlier tool rounds folded (records beyond this point)",
             )
             entries.subList(0, drop).clear()
+            delivered.subList(0, drop).clear()
             entries.add(0, foldLine)
-            // The fold line REPLACES the dropped range at the head. The fold
-            // line itself is UNDELIVERED (its count must reach the
-            // transcript). If the delivered cursor sat inside the dropped
-            // range, the pointer moves to 0 (fold line); if it sat past the
-            // range, the surviving entries shifted left by [drop] and the
-            // fold line adds +1.
-            delivered = if (delivered < drop) 0 else delivered - drop + 1
+            delivered.add(0, false)
         }
     }
 
@@ -68,19 +101,19 @@ internal class WorkingMemoryLedger {
      */
     @Synchronized
     fun renderUndelivered(): String? {
-        if (delivered >= entries.size) return null
-        val pending = entries.subList(delivered, entries.size)
-        if (pending.isEmpty()) return null
+        val undeliveredIndices = entries.indices.filter { !delivered[it] }
+        if (undeliveredIndices.isEmpty()) return null
         // Cap the handover: a 400-line wall invites the model to narrate about
-        // it instead of working. Deliver from the HEAD of the undelivered
-        // range (chronological order — the fold marker and earliest context
-        // go first); the remainder stays undelivered for the next eviction.
-        val take = minOf(MAX_DELIVERY_LINES, pending.size)
-        val delivering = pending.subList(0, take)
+        // it instead of working. Deliver the NEWEST entries first — the
+        // rounds just evicted sit next to the kept tail and are what the next
+        // step must not redo; the remainder rides the next eviction.
+        val chosen = undeliveredIndices.takeLast(minOf(MAX_DELIVERY_LINES, undeliveredIndices.size))
+        val delivering = chosen.map { entries[it] }
         val lines = ArrayList<String>(delivering.size)
         var i = 0
         while (i < delivering.size) {
             val e = delivering[i]
+            val label = e.argsSummary.ifBlank { e.argsDigest }
             var run = 1
             while (i + run < delivering.size &&
                 delivering[i + run].tool == e.tool &&
@@ -88,36 +121,114 @@ internal class WorkingMemoryLedger {
                 delivering[i + run].resultHead == e.resultHead
             ) run++
             lines += if (run == 1) {
-                "turn ${e.turn}: ${e.tool}(${e.argsDigest}) → ${e.resultHead}"
+                "turn ${e.turn}: ${e.tool}($label) → ${e.resultHead}"
             } else {
-                "turns ${e.turn}–${pending[i + run - 1].turn}: ${e.tool}(${e.argsDigest}) → same result ×$run"
+                "turns ${e.turn}–${delivering[i + run - 1].turn}: ${e.tool}($label) → same result ×$run"
             }
             i += run
         }
-        // Advance by what was ACTUALLY delivered (capped), not by everything
-        // pending — the rest rides the next eviction.
-        delivered += delivering.size
+        for (idx in chosen) delivered[idx] = true
         val body = lines.joinToString("\n")
-        val omitted = pending.size - delivering.size
-        val head = if (omitted > 0) "($omitted more tool rounds pending — delivered on later evictions)\n" else ""
+        val remaining = undeliveredIndices.size - chosen.size
+        val head = if (remaining > 0) "($remaining older tool rounds pending — delivered on later evictions)\n" else ""
         return "[working memory — one-line record of tool rounds no longer in context]\n$head$body"
     }
 
     @Synchronized
     fun size(): Int = entries.size
 
-    /** True when undelivered entries exist (delivered < entries.size). */
+    /** True when undelivered entries exist. */
     @Synchronized
-    fun hasUndelivered(): Boolean = delivered < entries.size
+    fun hasUndelivered(): Boolean = delivered.any { !it }
 
     internal companion object {
         internal const val RESULT_HEAD_CHARS = 120
+        internal const val ARGS_SUMMARY_CHARS = 120
         internal const val MAX_ENTRIES = 600
         internal const val FOLD_TOOL = "earlier-rounds"
 
         /** Per-delivery cap: a wall of records invites narration. */
         internal const val MAX_DELIVERY_LINES = 40
     }
+}
+
+/**
+ * Human-readable argument summary for a working-memory record.
+ *
+ * WHY this exists: the ledger used to render the truncated SHA-256 of the
+ * arguments. After an eviction the model saw `file_edit(9f3a1b2c)` and
+ * `shell_execute(4d2e8f01)` — it could not tell which file or command the
+ * record referred to, so it re-ran the work instead of using the handover.
+ * A ledger line is only worth its tokens when it names the thing that was
+ * touched.
+ *
+ * Reuses [resolveToolDetail] (the same path/command/query extraction the tool
+ * cards show) so there is ONE definition of "what a tool call was about".
+ * Falls back to compact `key=value` pairs for tools the card resolver does not
+ * cover (MCP/online tools), and never returns a multi-line string: the note is
+ * delivered inside a `<system-reminder>` frame.
+ *
+ * Pure: org.json + string ops only, pinned by WorkingMemoryLedgerTest.
+ */
+internal object WorkingMemoryArgs {
+
+    /** Framing tags that must never appear inside a committed host note. */
+    private val FRAME_TAG = Regex(
+        "</?(?:system-reminder|context-summary)(?:\\s[^>]*)?>",
+        RegexOption.IGNORE_CASE,
+    )
+
+    private val WHITESPACE = Regex("\\s+")
+
+    /**
+     * @return a one-line, frame-safe summary; empty only when [argsJson] is
+     *   blank or carries no readable value at all (then the caller may fall
+     *   back to the digest).
+     */
+    fun summary(toolName: String, argsJson: String): String {
+        val raw = argsJson.trim()
+        if (raw.isEmpty()) return ""
+        val parsed = runCatching { org.json.JSONObject(raw) }.getOrNull()
+        val detail = if (parsed != null) {
+            runCatching { resolveToolDetail(toolName, parsed) }.getOrDefault("")
+                .ifBlank { scalarPairs(parsed) }
+        } else {
+            raw
+        }
+        return oneLine(detail).take(WorkingMemoryLedger.ARGS_SUMMARY_CHARS)
+    }
+
+    /**
+     * Generic fallback for tool schemas the card resolver does not know:
+     * the first three scalar arguments, `key=value`, each value capped.
+     * Long prose fields and the display-only `tool_title` are skipped so the
+     * line stays an identity, not a story.
+     */
+    private fun scalarPairs(json: org.json.JSONObject): String {
+        val keys = json.keys()
+        val parts = ArrayList<String>(3)
+        while (keys.hasNext() && parts.size < MAX_PAIRS) {
+            val key = keys.next()
+            if (key == "tool_title" || key == "tool_input") continue
+            val value = json.opt(key)
+            val text = when (value) {
+                is String -> value
+                is Number, is Boolean -> value.toString()
+                else -> continue
+            }.trim()
+            if (text.isEmpty()) continue
+            parts += "$key=${oneLine(text).take(VALUE_CHARS)}"
+        }
+        return parts.joinToString(", ")
+    }
+
+    private fun oneLine(text: String): String =
+        FRAME_TAG.replace(text, "[tag]")
+            .replace(WHITESPACE, " ")
+            .trim()
+
+    private const val MAX_PAIRS = 3
+    private const val VALUE_CHARS = 60
 }
 
 /**
@@ -134,8 +245,15 @@ internal object WorkingMemoryStore {
     fun ledgerFor(sessionId: String): WorkingMemoryLedger =
         ledgers.getOrPut(sessionId) { WorkingMemoryLedger() }
 
-    fun append(sessionId: String, turn: Int, tool: String, argsDigest: String, resultHead: String) {
-        ledgerFor(sessionId).append(turn, tool, argsDigest, resultHead)
+    fun append(
+        sessionId: String,
+        turn: Int,
+        tool: String,
+        argsDigest: String,
+        argsSummary: String,
+        resultHead: String,
+    ) {
+        ledgerFor(sessionId).append(turn, tool, argsDigest, argsSummary, resultHead)
     }
 
     fun renderUndelivered(sessionId: String): String? =

@@ -98,6 +98,29 @@ class ToolFailureMemoryTest {
     }
 
     @Test
+    fun refusalNamesTheArgumentsThatWereBlocked() {
+        // [T-known-failure-readable] "these exact arguments" without naming
+        // them left the model unable to change the right field.
+        val args = """{"command":"cargo build --release","cwd":"/src"}"""
+        repeat(2) { ToolFailureMemory.recordFailure(ledger, "shell_execute", args, "OOM", now) }
+        val entry = ToolFailureMemory.lookup(ledger, "shell_execute", args, now)!!
+        val text = ToolFailureMemory.refusalText(entry)
+        assertTrue(text.contains("cargo build --release"))
+        val excerpt = ToolFailureMemory.argsExcerpt(args)
+        assertTrue(excerpt.contains("cargo build --release"))
+        assertTrue(excerpt.contains("cwd=/src"))
+    }
+
+    @Test
+    fun argsExcerptIsOneLineAndBounded() {
+        val long = "x".repeat(500)
+        val excerpt = ToolFailureMemory.argsExcerpt("""{"path":"/a/$long"}""")
+        assertTrue(excerpt.length <= 141)
+        assertTrue(!excerpt.contains("\n"))
+        assertTrue(ToolFailureMemory.argsExcerpt("not json\nrest").startsWith("not json rest"))
+    }
+
+    @Test
     fun aCorruptLedgerIsTreatedAsEmpty() {
         ledger.writeText("{ not json")
         assertNull(ToolFailureMemory.lookup(ledger, "shell_execute", "{}", now))

@@ -501,9 +501,22 @@ class MemoryRecallEngine(
             .sortedByDescending { it.lastModified() }
     }
 
-    /** Format the hit list as a system-prompt fragment (mirrors XINCODE format). */
-    fun formatAsPromptFragment(hits: List<RecallHit>): String {
-        if (hits.isEmpty()) return ""
+    /** [T-recall-delivery-accounting] Rendered fragment plus exactly the hits it carries. */
+    data class RenderedFragment(
+        val text: String,
+        val included: List<RecallHit>,
+    )
+
+    /**
+     * Format the hit list as a system-prompt fragment (mirrors XINCODE format).
+     *
+     * [T-recall-delivery-accounting] Callers must mark only [included] hits as
+     * delivered: the fragment stops at [MAX_FRAGMENT_CHARS], and marking the
+     * whole candidate list permanently suppressed every hit cut by the cap —
+     * a memory never shown could never be announced again.
+     */
+    fun formatAsPromptFragmentWithHits(hits: List<RecallHit>): RenderedFragment {
+        if (hits.isEmpty()) return RenderedFragment("", emptyList())
         val included = ArrayList<RecallHit>(hits.size)
         val body = buildString {
             append("## Recalled relevant memories\n")
@@ -522,13 +535,18 @@ class MemoryRecallEngine(
         // hit: acceptRecall() rewrites the whole JSON file on each call, so a
         // 4-hit build cost four synchronous rewrites on the prompt path.
         acceptRecallBatch(included.map { it.source to it.line })
-        return MemoryAuthority.withEnvelope(
+        val text = MemoryAuthority.withEnvelope(
             body,
             MemoryTrust.UNVERIFIED_CANDIDATE,
             MemoryOrigin.AUTOMATIC_RECALL,
             use = InstructionUse.REFERENCE_DATA,
         )
+        return RenderedFragment(text, included)
     }
+
+    /** String-only projection for callers that do not track delivery. */
+    fun formatAsPromptFragment(hits: List<RecallHit>): String =
+        formatAsPromptFragmentWithHits(hits).text
 
     // ── [T-memory-recall-anti-nag] cross-turn injection dedupe ─────────────
 

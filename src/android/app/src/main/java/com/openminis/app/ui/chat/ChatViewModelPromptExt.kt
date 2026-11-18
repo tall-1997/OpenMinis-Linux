@@ -3,11 +3,6 @@ package com.openminis.app.ui.chat
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.repository.MultiAgentSettings
 import com.openminis.app.logging.AppLogger
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * The plain system prompt for every request-side caller (send / retry / resume /
@@ -358,7 +353,13 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         sessionMem.loadRecentDailyFragments(dailyRecallQuery)
     } else null
     val dailyFragments = dailyInjection?.fragments.orEmpty()
-    residentDailyFiles = dailyFragments.flatMap { listOf(it.date, "${it.date}.md") }.toSet()
+    // [T-publish-gate-purity] The Token Usage sheet builds this prompt too,
+    // with publishStablePrefix=false. The resident-file set drives recall
+    // suppression for the IN-FLIGHT run; a measurement build must not rewrite
+    // it from newer memory state. Publish it only on a real send build.
+    if (publishStablePrefix) {
+        residentDailyFiles = dailyFragments.flatMap { listOf(it.date, "${it.date}.md") }.toSet()
+    }
     // [T-memory-window] Two-pass assembly: the per-day verbatim window and
     // the MemoryIndex TOC together cover every diary day exactly once. Pass 1
     // finds which days the budget admits verbatim; pass 2 rebuilds the TOC
@@ -458,6 +459,14 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     // [#25] Capture the assembled tail in a local so the context-usage
     // breakdown can publish the exact string appended below (the call is
     // pure, so hoisting it out of buildString changes nothing).
+    // [T-standing-contract-budget-truth] The contract must describe what the
+    // BUDGET actually admitted, not what dedupe found on disk. A rule block
+    // dropped by MemoryPromptBudget is absent from the prompt; claiming it is
+    // present and binding is a lie the model then acts on.
+    val standingRules = standingRuleContract(
+        keptInstructionKeys,
+        memoryAllocation?.included?.mapTo(HashSet()) { it.key }.orEmpty(),
+    )
     val dynamicTail = assembleDynamicTail(
         worldBookFragment = worldBookFragment,
         learnedPrefsFragment = learnedPrefsFragment,
@@ -467,10 +476,12 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
             com.openminis.app.agent.SoulStore.cachedMetadata.value.name,
             // [T-standing-contract-rules-line] Assert binding-ness ONLY for the
             // rule blocks this build actually injected (dedupe may have kept
-            // just the narrowest scope; a disabled memory gate injects none).
-            hasSessionRules = "session-global" in keptInstructionKeys,
-            hasGlobalRules = "app-global" in keptInstructionKeys,
-            hasProjectRules = "project-rules" in keptInstructionKeys,
+            // just the narrowest scope; a disabled memory gate injects none;
+            // the budget may have dropped a kept block).
+            hasSessionRules = standingRules.hasSessionRules,
+            hasGlobalRules = standingRules.hasGlobalRules,
+            hasProjectRules = standingRules.hasProjectRules,
+            omittedRules = standingRules.omittedBlocks,
         ),
         taskAnchor = taskAnchorFragment(),
         // [T-daily-memory-window] The transient block (recent daily logs + TOC
@@ -519,12 +530,36 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     )
     // [T-context-assembly-preview] 每次组装落快照：构成明细+全文，
     // 调试"模型实际收到了什么"直接看 offloads/context-assembly/latest.md。
-    com.openminis.app.agent.ContextAssemblySnapshot.capture(
-        prompt,
-        sessionId,
-        context,
-    )
+    // [T-publish-gate-purity] Only a real send build writes the snapshot; a
+    // sheet measurement must not overwrite the file the next diagnosis reads.
+    if (publishStablePrefix) {
+        com.openminis.app.agent.ContextAssemblySnapshot.capture(
+            prompt,
+            sessionId,
+            context,
+        )
+    }
     return prompt to sections
+}
+
+internal fun ChatViewModel.taskAnchorFragment(): String? {
+    // [T-task-anchor-current] The live window's newest substantive user turn
+    // beats the session's first message: a task the user replaced must not
+    // keep steering the run. Queue placeholders and host notes are not user
+    // requests, so they never become the anchor.
+    val latest = _messages.value.asReversed().firstOrNull { message ->
+        message.role == "user" &&
+            !message.isQueued &&
+            message.content.isNotBlank() &&
+            !HarnessNoteMarkers.isHarnessNote(message.content) &&
+            TaskAnchor.isSubstantive(message.content)
+    }?.content
+    return TaskAnchor.fragment(
+        anchorFromDb = _taskAnchorText.value,
+        firstUserInWindow = _messages.value
+            .firstOrNull { it.role == "user" && it.content.isNotBlank() }?.content,
+        latestUserInWindow = latest,
+    )
 }
 
 /**
@@ -538,136 +573,6 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
  * non-empty — that is WorldBook.injection's contract — so it is appended
  * verbatim rather than through the "\n\n" separator the other fragments use.
  */
-/**
- * [T-task-anchor] The session's original task, re-injected every turn in
- * the dynamic tail. Long autonomous runs window their history: the task
- * description lives at the very head of the conversation and falls out of
- * `_messages` once the tail cap covers it, so the model literally cannot
- * see what it set out to do mid-run. The DB-backed copy (`_taskAnchorText`)
- * is read once per session (immune to the UI window); new sessions fall
- * back to the in-memory list, where the opening turn is still resident.
- */
-internal object TaskAnchor {
-    const val MAX_CHARS = 1200
-
-    const val HEADER =
-        "Session task anchor (the session's original task, from its first user " +
-            "message; re-read this if long tool loops made you lose track — it still " +
-            "applies until the user completes it or replaces it):"
-
-    /**
-     * Extract the first `"type":"text"` element's `value` from a raw
-     * `parts_json` array. The message body has no dedicated column — it
-     * lives inside this JSON — so the DAO hands over the raw array and
-     * this does the extraction. Non-text parts (toolResult/toolUse) are
-     * skipped; a malformed array or no text element returns null.
-     * kotlinx.serialization, not org.json: this must stay testable on the
-     * pure JVM (the unit-test classpath only has the android.jar stub).
-     */
-    fun firstUserTextFromParts(partsJson: String?): String? {
-        if (partsJson.isNullOrBlank()) return null
-        val el = runCatching { Json.parseToJsonElement(partsJson) }.getOrNull() ?: return null
-        val arr = el as? JsonArray ?: return null
-        for (item in arr) {
-            val o = item as? JsonObject ?: continue
-            if (o["type"]?.jsonPrimitive?.contentOrNull != "text") continue
-            val v = o["value"]?.jsonPrimitive?.contentOrNull
-            if (!v.isNullOrBlank()) return v
-        }
-        return null
-    }
-
-    /** Pure decision core: DB copy wins, in-memory window is the fallback, blank is nothing. */
-    fun fragment(anchorFromDb: String?, firstUserInWindow: String?): String? {
-        val anchor = anchorFromDb?.takeIf { it.isNotBlank() }
-            ?: firstUserInWindow?.takeIf { it.isNotBlank() }
-            ?: return null
-        val clipped = if (anchor.length > MAX_CHARS) {
-            var cut = anchor.take(MAX_CHARS)
-            // Trim a dangling high surrogate so the cut never splits a code point.
-            if (cut.last().isHighSurrogate()) cut = cut.dropLast(1)
-            cut + "…"
-        } else {
-            anchor
-        }
-        return HEADER + "\n" + clipped
-    }
-}
-
-/**
- * [T-standing-contract-recency] Per-turn re-assertion of the standing
- * contract (persona + standing-rules authority) in the dynamic tail.
- * Measured on 2026-11-14 via the context-assembly snapshot of a 17k-record
- * session: the persona sits at char 0 of an ~87k-char system prompt and the
- * standing-rules block ~180 lines above the conversation start — after
- * folding, the effective distance from both to the action point is the
- * whole transcript. The head envelope already says STANDING; nothing at
- * recency position re-asserted it, which is exactly the drift window.
- * TaskAnchor proves tail re-assertion works for the task; this gives the
- * persona and the standing rules the same treatment.
- *
- * [T-persona-stack-once] update: the once-only rule governs conversation
- * TURNS (personaHistorySteering stays dead); the dynamic tail is the
- * per-request system-prompt suffix — user content untouched, cache safe.
- *
- * Pure string logic, no Android imports — must stay testable on the pure
- * JVM (same constraint as TaskAnchor).
- */
-internal object StandingContract {
-    const val MAX_CHARS = 700
-
-    /**
-     * [T-standing-contract-rules-line] Lists ONLY the rule blocks actually
-     * present in this build (project AGENTS.md / session GLOBAL.md /
-     * app-global GLOBAL.md) — asserting binding-ness for blocks that were
-     * never injected is noise the model reads as pointing at nothing. Null
-     * when none exist: the caller then skips the rules line entirely.
-     */
-    fun rulesLine(hasSession: Boolean, hasGlobal: Boolean, hasProject: Boolean): String? {
-        val blocks = buildList {
-            if (hasSession) add("Session-scoped standing rules")
-            if (hasGlobal) add("Global standing rules (GLOBAL.md)")
-            if (hasProject) add("Project rules (AGENTS.md)")
-        }
-        if (blocks.isEmpty()) return null
-        val listed = blocks.joinToString(", the ", prefix = "the ", postfix = " blocks in this prompt")
-        return "Standing-rules reminder: $listed are BINDING instructions — " +
-            "re-read them before starting any multi-step or destructive action; " +
-            "the user's latest message still wins any conflict."
-    }
-
-    fun personalityLine(soulName: String?): String {
-        val who = soulName?.trim()?.takeUnless { it.isEmpty() }
-        val subject = if (who != null) "the configured persona '$who'" else "the configured persona"
-        return "Persona reminder (SOUL.md): stay in $subject for every " +
-            "reply this session — its voice, greeting ritual, address style, and stance — " +
-            "even after long compactions, topic changes, or tool-heavy stretches. " +
-            "This reminder never expires mid-session."
-    }
-
-    fun block(
-        soulName: String?,
-        hasSessionRules: Boolean = false,
-        hasGlobalRules: Boolean = false,
-        hasProjectRules: Boolean = false,
-        maxChars: Int = MAX_CHARS,
-    ): String {
-        val lines = buildList {
-            add(personalityLine(soulName))
-            rulesLine(hasSessionRules, hasGlobalRules, hasProjectRules)?.let { add(it) }
-        }
-        val block = lines.joinToString("\n\n")
-        if (block.length <= maxChars) return block
-        return block.take(maxChars).trimEnd() + "…"
-    }
-}
-
-internal fun ChatViewModel.taskAnchorFragment(): String? = TaskAnchor.fragment(
-    anchorFromDb = _taskAnchorText.value,
-    firstUserInWindow = _messages.value
-        .firstOrNull { it.role == "user" && it.content.isNotBlank() }?.content,
-)
-
 internal fun assembleDynamicTail(
     worldBookFragment: String,
     learnedPrefsFragment: String?,

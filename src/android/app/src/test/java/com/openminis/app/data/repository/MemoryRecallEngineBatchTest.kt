@@ -77,4 +77,23 @@ class MemoryRecallEngineBatchTest {
         assertFalse("a 2-gram of two function chars is noise", keywords.contains("我们"))
         assertTrue("content 2-grams must survive", keywords.contains("记忆"))
     }
+
+    // ── [T-recall-delivery-accounting] ─────────────────────────────────────
+
+    @Test
+    fun fragmentReportsExactlyTheHitsItRendered() {
+        val engine = engine()
+        val hits = (1..20).map { i -> hit("2026-11-${(i % 9) + 1}.md", "line-$i " + "x".repeat(300)) }
+        val rendered = engine.formatAsPromptFragmentWithHits(hits)
+        assertTrue("the cap must cut the list", rendered.included.size < hits.size)
+        assertTrue(rendered.text.contains("line-1"))
+        val last = hits.last()
+        assertTrue(
+            "a hit cut by the cap must not be reported as delivered",
+            rendered.included.none { it.line == last.line },
+        )
+        // The included list is the only set a caller may mark as announced.
+        val includedKeys = rendered.included.map { "${it.day}:${it.line}" }.toSet()
+        assertTrue("${last.day}:${last.line}" !in includedKeys)
+    }
 }

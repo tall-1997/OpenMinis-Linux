@@ -32,7 +32,10 @@ class PersonaStackOnceTest {
         // decision, not a silent literal.
         assertFalse(prompt.contains("personalityReminder = null"))
         assertTrue(prompt.contains("personalityReminder = StandingContract.block("))
-        assertTrue(prompt.contains("internal object StandingContract"))
+        // The contract lives in PromptAnchors.kt (extracted verbatim to keep
+        // ChatViewModelPromptExt under the architecture cap).
+        val anchors = ProductionSources.read("ui/chat/PromptAnchors.kt")
+        assertTrue(anchors.contains("internal object StandingContract"))
     }
 
     @Test

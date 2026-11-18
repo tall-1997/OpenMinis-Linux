@@ -335,17 +335,6 @@ class ChatViewModel(
             return chosen.sortedBy { it.first }.map { it.third }
         }
 
-        /**
-         * [T-compact-reduced-retry] Newest slice of a failed compaction range
-         * for the last-resort reduced retry. `null` for small ranges — a
-         * 5-message "transcript" does not need slicing, it just needs the
-         * truncation fallback.
-         */
-        internal fun reducedCompactRetryInput(messages: List<LLMMessage>): List<LLMMessage>? {
-            if (messages.size < 12) return null
-            return messages.takeLast((messages.size * 3 / 5).coerceAtLeast(8))
-        }
-
         /** Floor for the dynamic wall-clock timeout. */
         internal const val COMPACT_TIMEOUT_BASE_MS = 90_000L
 
