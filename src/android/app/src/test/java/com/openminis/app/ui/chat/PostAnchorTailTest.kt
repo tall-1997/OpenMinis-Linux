@@ -172,14 +172,13 @@ class PostAnchorTailTest {
         val notice = result.notice!!
         assertEquals(LLMMessage.Role.USER, notice.role)
         assertTrue(
-            "notice text must match the spec",
+            "notice text must state the real coverage contract",
             notice.content.startsWith("[context window: ") &&
-                notice.content.contains(" older tool rounds dropped (≈") &&
-                notice.content.contains(" tokens) — the summary above covers them; " +
-                    "re-run a specific tool if you need fresh output]"),
+                notice.content.contains(" older rounds dropped (≈") &&
+                notice.content.contains(" tokens) — the earlier summary does NOT cover them; "),
         )
         // N must be the real dropped-round count.
-        assertTrue(notice.content.contains(" ${result.droppedRounds} older tool rounds dropped"))
+        assertTrue(notice.content.contains(" ${result.droppedRounds} older rounds dropped"))
         // K must be the real dropped-token estimate.
         assertTrue(notice.content.contains("(≈${result.droppedTokens} tokens)"))
         // The notice is the FIRST element of the kept slice.
@@ -191,6 +190,50 @@ class PostAnchorTailTest {
         val input = postAnchor(3)
         val result = PostAnchorTail.apply(input, budget)
         assertFalse(result.hasNotice)
+    }
+
+    // ── 4b. dropped-rounds digest ───────────────────────────────────────────
+
+    @Test
+    fun digestIsAppendedToTheCountNotice() {
+        val input = postAnchor(5, resultChars = { 6000 })
+        val withDigest = PostAnchorTail.Budget(
+            budgetTokens = 4_000,
+            estimate = WalkBack::estimateMessageTokens,
+            digest = { "DIGEST-BODY" },
+        )
+        val result = PostAnchorTail.apply(input, withDigest)
+        assertTrue(result.hasNotice)
+        assertTrue(result.notice!!.content.contains("DIGEST-BODY"))
+    }
+
+    @Test
+    fun digestFailureDegradesToCountNotice() {
+        val input = postAnchor(5, resultChars = { 6000 })
+        val throwing = PostAnchorTail.Budget(
+            budgetTokens = 4_000,
+            estimate = WalkBack::estimateMessageTokens,
+            digest = { error("boom") },
+        )
+        val result = PostAnchorTail.apply(input, throwing)
+        assertTrue(result.hasNotice)
+        assertTrue(result.notice!!.content.contains(" older rounds dropped "))
+    }
+
+    @Test
+    fun digestReceivesExactlyTheDroppedRounds() {
+        val input = postAnchor(5, resultChars = { 6000 })
+        var seen: List<LLMMessage>? = null
+        val capture = PostAnchorTail.Budget(
+            budgetTokens = 4_000,
+            estimate = WalkBack::estimateMessageTokens,
+            digest = { dropped -> seen = dropped; null },
+        )
+        val result = PostAnchorTail.apply(input, capture)
+        val dropped = seen!!
+        assertEquals(result.droppedMessages, dropped.size)
+        assertTrue("oldest dropped round body is present", dropped.any { it.content == "round 0" })
+        assertFalse("newest kept round must not be dropped", dropped.any { it.content == "round 4" })
     }
 
     // ── 5. round splitting (lead-in group before the first user round) ──────

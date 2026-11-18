@@ -175,4 +175,44 @@ class CompactDetachedAnchorTest {
         }
         assertTrue("summary text must follow the tool_result on the carrier", textIdx > toolIdx)
     }
+
+    @Test
+    fun `detached cut states the real gap and digests the newest dropped rounds`() {
+        // [T-detached-drop-truth] 400 entries, tail 60 → 340 dropped. The old
+        // path said nothing at all; the notice must name the gap and carry
+        // excerpts of the newest dropped messages (the ones next to the tail).
+        val h = history(200)
+        val out = buildDetachedCompactHistory("<summary/>", h, tailSize = 60)
+        val first = out.first().content
+        assertTrue(
+            "gap must be stated: $first",
+            first.contains("[detached compact boundary: 340 earlier messages are not in this request."),
+        )
+        assertTrue(first.contains("Most recent dropped messages"))
+        assertTrue("digest keeps real user text", first.contains("u170"))
+        assertTrue(first.contains("summary may not cover all"))
+    }
+
+    @Test
+    fun `detached notice lives inside the summary envelope`() {
+        // The first tail row is a REAL user turn. Appending the notice after
+        // </context-summary> would make HarnessNoteMarkers classify that turn
+        // as a host note and fold it backwards; the notice must stay inside
+        // the background-context envelope.
+        val h = history(200)
+        val wrapped = "<context-summary>\nS\n</context-summary>"
+        val out = buildDetachedCompactHistory(wrapped, h, tailSize = 60)
+        val first = out.first().content
+        val noticeAt = first.indexOf("[detached compact boundary:")
+        val closeAt = first.indexOf("</context-summary>")
+        assertTrue(noticeAt in 0 until closeAt)
+    }
+
+    @Test
+    fun `a fully retained history has no detached notice`() {
+        val h = listOf(user(1), asst(1), user(2))
+        val out = buildDetachedCompactHistory("<summary/>", h, tailSize = 60)
+        assertTrue(out.first().content.startsWith("<summary/>"))
+        assertTrue(!out.first().content.contains("[detached compact boundary:"))
+    }
 }

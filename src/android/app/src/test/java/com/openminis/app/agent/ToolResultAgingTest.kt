@@ -309,4 +309,60 @@ class ToolResultAgingTest {
         assertEquals(2, balanced.agedCount)
         assertEquals(5, aggressive.agedCount)
     }
+
+    // ------------------------------------------------- round-coherent keep
+
+    @Test
+    fun `keep window never splits one parallel round`() {
+        // One assistant turn fanned out into 3 calls. keepRecent = 1 would
+        // fold b1/b2 and keep b3; the round-coherent rule keeps the whole
+        // round (a round is the model's working set), and folds only the
+        // earlier round.
+        val history = listOf(
+            msg(result("a", 4_000)),
+            msg(result("b1", 4_000), result("b2", 4_000), result("b3", 4_000)),
+            msg(result("c1", 4_000), result("c2", 4_000)),
+        )
+        val plan = ToolResultAging.age(history, keepRecent = 1, minChars = 1_200)
+        val all = contents(plan.messages)
+        // a and the whole b round fold (4); the newest c round stays verbatim.
+        assertEquals(4, plan.agedCount)
+        assertTrue(ToolResultAging.isAged(all[0]))
+        assertTrue(ToolResultAging.isAged(all[1]))
+        assertTrue(ToolResultAging.isAged(all[2]))
+        assertTrue(ToolResultAging.isAged(all[3]))
+        assertEquals("x".repeat(4_000), all[4])
+        assertEquals("x".repeat(4_000), all[5])
+    }
+
+    @Test
+    fun `parallel round larger than the keep window survives whole`() {
+        val history = listOf(
+            msg(result("old", 4_000)),
+            msg(*(1..8).map { result("p$it", 4_000) }.toTypedArray()),
+        )
+        val plan = ToolResultAging.age(history, keepRecent = 6, minChars = 1_200)
+        assertEquals(1, plan.agedCount)
+        assertTrue(ToolResultAging.isAged(contents(plan.messages)[0]))
+        for (i in 1..8) assertEquals("x".repeat(4_000), contents(plan.messages)[i])
+    }
+
+    // ----------------------------------------------------- head + tail keep
+
+    @Test
+    fun `placeholder keeps the tail where diagnostics live`() {
+        val body = "compile start\n" + "x".repeat(6_000) + "\nERROR: FooTest failed at line 42\n"
+        val text = ToolResultAging.placeholder("shell_execute", body)
+        assertTrue("head kept", text.contains("compile start"))
+        assertTrue("tail kept", text.contains("ERROR: FooTest failed at line 42"))
+        assertTrue(text.contains("[tail]"))
+        assertTrue("still subtractive", text.length < body.length)
+    }
+
+    @Test
+    fun `tail excerpt is whitespace collapsed and surrogate safe`() {
+        assertEquals("a b c", ToolResultAging.tailOf("a  b\t\nc"))
+        val cut = ToolResultAging.tailOf("z".repeat(10) + "😘".repeat(200), limit = 5)
+        assertFalse("must not start on a lone low surrogate", Character.isLowSurrogate(cut.first()))
+    }
 }

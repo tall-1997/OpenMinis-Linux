@@ -191,12 +191,19 @@ private inline fun ChatViewModel.compactAllImpl(
         var timedOut = false
         try {
             val existing = _compactSummary.value
-            val summary = runTwoShotCompact(
+            val outcome = runTwoShotCompact(
                 messages = toCompact,
                 previousSummary = existing,
                 stages = stages,
                 timeoutMs = timeoutMs,
             )
+            val summary = outcome.summary
+            // [T-compact-reduced-anchor] A reduced retry summarizes only the
+            // OLDEST prefix. The marker may advance only that far; the rest
+            // of the range stays active and verbatim.
+            val coveredCount = outcome.coveredMessages.coerceIn(1, toCompact.size)
+            val coveredEndIdx = (effectiveStartIdx + coveredCount - 1)
+                .coerceIn(effectiveStartIdx, anchorIdx)
             if (summary.isEmpty()) {
                 withContext(Dispatchers.Main) {
                     appendSystemInfo("Compaction produced no output — try again later.", "compact")
@@ -226,28 +233,31 @@ private inline fun ChatViewModel.compactAllImpl(
             }
             val verifiedAnchorIdx: Int = if (rawDbIds.isEmpty()) {
                 // DB read failed; trust the in-memory walk-back result.
-                anchorIdx
+                coveredEndIdx
             } else {
-                var i = anchorIdx
-                while (i >= 0) {
+                var i = coveredEndIdx
+                // Never walk back past the start of the range: an anchor
+                // before it would mark already-active messages as compacted.
+                while (i >= effectiveStartIdx) {
                     val id = history[i].dbMessageId
                     if (!id.isNullOrEmpty() && id in rawDbIds) break
                     i -= 1
                 }
                 i
             }
-            if (verifiedAnchorIdx < 0) {
-                Log.w(ChatViewModel.TAG, "[Compact] No agentHistory entry has a DB-persisted dbMessageId; aborting")
+            if (verifiedAnchorIdx < effectiveStartIdx) {
+                Log.w(ChatViewModel.TAG, "[Compact] No agentHistory entry in the covered range has a DB-persisted dbMessageId; aborting")
                 withContext(Dispatchers.Main) {
                     appendSystemInfo("Compact failed: could not anchor to a persisted message.", "compact")
                 }
                 return@launch
             }
-            if (verifiedAnchorIdx != anchorIdx) {
+            if (verifiedAnchorIdx != coveredEndIdx) {
                 AppLogger.warning(
                     ChatViewModel.TAG,
-                    "[Compact] anchor walked back from idx=$anchorIdx to idx=$verifiedAnchorIdx " +
-                        "(closest with id in rawDbIds). Unsynced tail entries will fall on the active side of the divider.",
+                    "[Compact] anchor walked back within the covered prefix " +
+                        "from idx=$coveredEndIdx to idx=$verifiedAnchorIdx; " +
+                        "messages after it stay active.",
                 )
             }
             val lastCompactedDbId = history[verifiedAnchorIdx].dbMessageId
@@ -263,7 +273,7 @@ private inline fun ChatViewModel.compactAllImpl(
                 sessionId = sid,
                 summary = summary,
                 firstKeptSortOrder = Int.MAX_VALUE,   // legacy field; v2 ignores
-                compactedCount = toCompact.size,
+                compactedCount = coveredCount,
                 createdAt = System.currentTimeMillis(),
                 uiBoundarySortOrder = null,
                 boundaryMessageId = null,
@@ -302,7 +312,7 @@ private inline fun ChatViewModel.compactAllImpl(
             AppLogger.info(
                 ChatViewModel.TAG,
                 "[CompactMeta] summaryChars=${summary.length} summaryTokens=${summary.length / 4} " +
-                    "compacted=${toCompact.size} keepTurns=${ChatViewModel.COMPACT_KEEP_RECENT_USER_TURNS} " +
+                    "compacted=${coveredCount} of ${toCompact.size} keepTurns=${ChatViewModel.COMPACT_KEEP_RECENT_USER_TURNS} " +
                     "detachedTail=${DETACHED_TAIL_MESSAGES} chunks=${marker.summaryChunks?.length ?: 0}",
             )
             // [T-memory-sediment] Leave a searchable trace of what this compaction
@@ -310,7 +320,11 @@ private inline fun ChatViewModel.compactAllImpl(
             if (_memoryEnabled.value) {
                 runCatching {
                     val written = com.openminis.app.data.repository.MemorySediment
-                        .recordCompaction(sessionMemoryRepo(), summary, toCompact.size)
+                        .recordCompaction(
+                            sessionMemoryRepo(),
+                            summary,
+                            coveredCount,
+                        )
                     if (written != null) {
                         AppLogger.info(ChatViewModel.TAG, "[CompactMeta] sediment: $written")
                     }

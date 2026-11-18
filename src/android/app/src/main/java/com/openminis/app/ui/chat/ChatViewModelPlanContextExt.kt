@@ -38,11 +38,13 @@ internal fun ChatViewModel.newRecallReminder(): String? {
     if (hits.isEmpty()) return null
     val fresh = recallFreshHits(hits, announcedRecallKeys) { "${it.day}:${it.line}" }
     if (fresh.isEmpty()) return null
-    // Mark delivered only after the fragment actually rendered: a blank render
-    // (envelope budget) must not burn the lines out of the session.
-    val fragment = engine.formatAsPromptFragment(fresh).takeIf { it.isNotBlank() } ?: return null
-    announcedRecallKeys.addAll(hits.map { "${it.day}:${it.line}" })
-    return fragment
+    // Mark delivered only what actually rendered: a hit cut by the fragment
+    // cap was never shown, so burning it out of the session is permanent
+    // suppression of a memory the model never received.
+    val rendered = engine.formatAsPromptFragmentWithHits(fresh)
+    if (rendered.text.isBlank()) return null
+    announcedRecallKeys.addAll(rendered.included.map { "${it.day}:${it.line}" })
+    return rendered.text
 }
 
 /**
@@ -73,8 +75,16 @@ internal fun ChatViewModel.liveRecallInput(): LiveRecallInput? {
     // is the latest real user text only. Folding in the assistant tail made
     // the model's own restatement of an old task keep hitting that task's
     // daily log, so the log was injected again and the run resumed it.
+    //
+    // [T-recall-thin-followup] A bare follow-up ("继续" / "continue" / "ok")
+    // names no topic. Treating it as the query selected nothing (too short)
+    // or, worse, matched every daily log. Walk back to the newest user turn
+    // that actually names a task; its memories are what "continue" refers to.
     val lastUser = _messages.value.lastOrNull { message ->
-        message.role == "user" && !message.isQueued && memoryRecallQuery(message.content) != null
+        message.role == "user" &&
+            !message.isQueued &&
+            TaskAnchor.isSubstantive(message.content) &&
+            memoryRecallQuery(message.content) != null
     } ?: return null
     val query = memoryRecallQuery(lastUser.content) ?: return null
     return LiveRecallInput(query, lastUser.id)
@@ -98,7 +108,11 @@ internal fun memoryRecallQuery(userText: String): String? {
     val stripped = userText
         .replace(Regex("<system-reminder>[\\s\\S]*?</system-reminder>"), "")
         .trim()
-    if (stripped.length < MIN_QUERY_CHARS) return null
+    // [T-recall-cjk-query] Chinese has no spaces: a complete instruction can
+    // be two characters ("部署", "回滚"). The old flat 4-char floor rejected
+    // those as "no query". Latin still needs 4 characters to mean anything.
+    val floor = if (stripped.any { it.code in 0x4E00..0x9FFF }) MIN_CJK_QUERY_CHARS else MIN_QUERY_CHARS
+    if (stripped.length < floor) return null
     return stripped
 }
 
@@ -150,3 +164,6 @@ internal fun ChatViewModel.prefetchSemanticRecall() {
 private const val ASSISTANT_TAIL_CHARS = 400
 
 private const val MIN_QUERY_CHARS = 4
+
+/** [T-recall-cjk-query] A 2-character CJK verb can be a complete request. */
+private const val MIN_CJK_QUERY_CHARS = 2

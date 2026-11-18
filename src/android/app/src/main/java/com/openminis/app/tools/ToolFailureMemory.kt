@@ -45,6 +45,8 @@ object ToolFailureMemory {
         val failures: Int,
         val lastError: String,
         val lastAtMs: Long,
+        /** [T-known-failure-readable] Bounded argument identity for the refusal. */
+        val argsExcerpt: String = "",
     )
 
     /** Stable identity of one call: tool name plus its exact arguments. */
@@ -78,6 +80,7 @@ object ToolFailureMemory {
             failures = (previous?.failures ?: 0) + 1,
             lastError = error.take(400),
             lastAtMs = nowMs,
+            argsExcerpt = argsExcerpt(argsJson),
         )
         all[key] = entry
         writeAll(file, all)
@@ -96,12 +99,55 @@ object ToolFailureMemory {
     fun refusalText(entry: Entry): String = buildString {
         append("[known-failure] ")
         append(entry.tool)
+        if (entry.argsExcerpt.isNotBlank()) {
+            append("(").append(entry.argsExcerpt).append(")")
+        }
         append(" with these exact arguments already failed ")
         append(entry.failures)
         append(" time(s) in this session; not running it again.\nLast error: ")
         append(entry.lastError)
         append("\nChange the arguments or the approach. If the environment has changed, a call ")
         append("with different arguments will run normally.")
+    }
+
+    /**
+     * [T-known-failure-readable] A short identity for the refused call. The
+     * refusal used to say "these exact arguments" without naming them, so the
+     * model knew it was blocked but not WHAT it had passed — it could neither
+     * recognize the command nor change the right field. Keeps the first three
+     * scalar arguments (path/command/query/...) and never returns multi-line.
+     */
+    internal fun argsExcerpt(argsJson: String, limit: Int = 140): String {
+        val raw = argsJson.trim()
+        if (raw.isEmpty()) return ""
+        val parsed = runCatching { org.json.JSONObject(raw) }.getOrNull()
+        val text = if (parsed != null) {
+            val parts = ArrayList<String>(3)
+            val keys = parsed.keys()
+            while (keys.hasNext() && parts.size < 3) {
+                val key = keys.next()
+                if (key == "tool_title") continue
+                val value = parsed.opt(key)
+                val scalar = when (value) {
+                    is String -> value
+                    is Number, is Boolean -> value.toString()
+                    else -> continue
+                }.trim()
+                if (scalar.isEmpty()) continue
+                parts += if (key == "path" || key == "command" || key == "pattern" ||
+                    key == "query" || key == "url"
+                ) {
+                    scalar
+                } else {
+                    "$key=" + scalar.take(40)
+                }
+            }
+            parts.joinToString(", ")
+        } else {
+            raw
+        }
+        val flat = text.replace(Regex("\\s+"), " ").trim()
+        return if (flat.length <= limit) flat else flat.take(limit) + "…"
     }
 
     /**
@@ -158,6 +204,7 @@ object ToolFailureMemory {
                     failures = obj.optInt("failures"),
                     lastError = obj.optString("lastError"),
                     lastAtMs = obj.optLong("lastAtMs"),
+                    argsExcerpt = obj.optString("argsExcerpt"),
                 )
             }
             out
@@ -176,7 +223,8 @@ object ToolFailureMemory {
                     .put("tool", entry.tool)
                     .put("failures", entry.failures)
                     .put("lastError", entry.lastError)
-                    .put("lastAtMs", entry.lastAtMs),
+                    .put("lastAtMs", entry.lastAtMs)
+                    .put("argsExcerpt", entry.argsExcerpt),
             )
         }
         file.parentFile?.mkdirs()

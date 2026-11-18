@@ -8,12 +8,26 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 
+/**
+ * [T-compact-reduced-anchor] What a compaction pass actually covered.
+ *
+ * [coveredMessages] is the number of LEADING range messages the returned
+ * summary describes. A full pass covers the whole range; a reduced pass
+ * covers only the prefix it was given, and the caller must place the marker
+ * anchor at that boundary — otherwise messages the summary never saw are
+ * marked as compacted and disappear from context forever.
+ */
+internal data class CompactOutcome(
+    val summary: String,
+    val coveredMessages: Int,
+)
+
 internal suspend fun ChatViewModel.runTwoShotCompact(
     messages: List<LLMMessage>,
     previousSummary: String?,
     stages: List<ChatViewModel.CompactAttempt>,
     timeoutMs: Long,
-): String {
+): CompactOutcome {
     val existing = previousSummary
     if (stages.isEmpty()) {
         throw IllegalStateException("No LLM provider available for compaction")
@@ -33,7 +47,7 @@ internal suspend fun ChatViewModel.runTwoShotCompact(
     // same broken endpoint and the fallback models never saw it. A
     // smaller request rescues a size failure; a different provider
     // rescues an outage; the reduced pass needs both.
-    val reduced = ChatViewModel.reducedCompactRetryInput(messages)
+    val reduced = reducedCompactRetryInput(messages)
     val passes = buildList {
         add(messages to false)
         if (reduced != null) add(reduced to true)
@@ -95,7 +109,9 @@ internal suspend fun ChatViewModel.runTwoShotCompact(
                             "[Compact] reduced-input retry succeeded via ${stage.label} (${text.length} chars)",
                         )
                     }
-                    return text
+                    // [T-compact-reduced-anchor] The marker may only advance
+                    // over the prefix this pass actually summarized.
+                    return CompactOutcome(text, input.size)
                 }
                 lastError = IllegalStateException(
                     if (text.isEmpty()) "empty compact summary from ${stage.label}"
@@ -125,6 +141,11 @@ internal suspend fun ChatViewModel.runTwoShotCompact(
             "compact",
         )
     }
-    return existing?.takeIf { it.isNotBlank() }
-        ?: "Earlier conversation was truncated after compaction failed. Recent turns remain below."
+    return CompactOutcome(
+        summary = existing?.takeIf { it.isNotBlank() }
+            ?: "Earlier conversation was truncated after compaction failed. Recent turns remain below.",
+        // Truncation intentionally discards the whole range (the historic
+        // last-resort behavior); the anchor still advances over all of it.
+        coveredMessages = messages.size,
+    )
 }

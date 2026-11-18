@@ -2,6 +2,7 @@ package com.openminis.app.data
 
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.ui.chat.ChatViewModel
+import com.openminis.app.ui.chat.reducedCompactRetryInput
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -69,25 +70,26 @@ class CompactResilienceTest {
     @Test
     fun `small ranges skip the reduced retry`() {
         val small = (1..8).map { user("m$it") }
-        assertNull(ChatViewModel.reducedCompactRetryInput(small))
+        assertNull(reducedCompactRetryInput(small))
     }
 
     @Test
-    fun `large ranges retry on the newest three fifths`() {
+    fun `large ranges retry on the oldest three fifths`() {
         val big = (1..100).map { user("m$it") }
-        val reduced = ChatViewModel.reducedCompactRetryInput(big)
+        val reduced = reducedCompactRetryInput(big)
         assertNotNull(reduced)
         assertEquals(60, reduced!!.size)
-        // Keeps the tail, not the head: the most recent turns are what a
-        // continuing conversation can actually build on.
-        assertEquals("m41", reduced.first().content)
-        assertEquals("m100", reduced.last().content)
+        // [T-compact-reduced-anchor] The summarized part must be a PREFIX of
+        // the range: the marker only advances over what the summary covers,
+        // and the newest turns stay active verbatim.
+        assertEquals("m1", reduced.first().content)
+        assertEquals("m60", reduced.last().content)
     }
 
     @Test
     fun `reduced retry never drops below the floor`() {
         val twelve = (1..12).map { user("m$it") }
-        val reduced = ChatViewModel.reducedCompactRetryInput(twelve)
+        val reduced = reducedCompactRetryInput(twelve)
         assertNotNull(reduced)
         assertEquals(8, reduced!!.size)
     }

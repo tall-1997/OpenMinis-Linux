@@ -7,10 +7,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * [T-task-anchor] Pure checks for the session task anchor. The anchor is
- * re-injected every turn in the dynamic tail so the model can re-read the
- * session's original task after long tool loops; the DB copy wins over the
- * in-memory window, and the cut never splits a surrogate pair.
+ * [T-task-anchor][T-task-anchor-current] Pure checks for the task anchor. The
+ * anchor is re-injected every turn in the dynamic tail so the model can
+ * re-read the CURRENT task after long tool loops. Precedence is latest
+ * substantive user turn > first persisted message > first message in the
+ * window; thin follow-ups ("continue") never replace the task.
  */
 class TaskAnchorTest {
 
@@ -58,7 +59,7 @@ class TaskAnchorTest {
     }
 
     @Test
-    fun `db copy wins over in-memory window`() {
+    fun `db copy wins when no newer task is visible`() {
         val out = TaskAnchor.fragment(
             anchorFromDb = "build the login flow",
             firstUserInWindow = "a later message that is not the task",
@@ -66,6 +67,27 @@ class TaskAnchorTest {
         assertTrue(out!!.startsWith(TaskAnchor.HEADER))
         assertTrue(out.contains("build the login flow"))
         assertFalse(out.contains("a later message"))
+    }
+
+    @Test
+    fun `latest substantive task replaces the first message`() {
+        val out = TaskAnchor.fragment(
+            anchorFromDb = "migrate module A",
+            firstUserInWindow = "migrate module A",
+            latestUserInWindow = "stop; write the release notes",
+        )!!
+        assertTrue(out.contains("stop; write the release notes"))
+        assertFalse("the replaced task must not keep steering", out.contains("migrate module A"))
+    }
+
+    @Test
+    fun `thin follow-ups are not task descriptions`() {
+        assertFalse(TaskAnchor.isSubstantive("继续"))
+        assertFalse(TaskAnchor.isSubstantive("continue"))
+        assertFalse(TaskAnchor.isSubstantive("ok!"))
+        assertFalse(TaskAnchor.isSubstantive("   "))
+        assertTrue(TaskAnchor.isSubstantive("实现登录重试"))
+        assertTrue(TaskAnchor.isSubstantive("fix the login retry"))
     }
 
     @Test
@@ -87,13 +109,14 @@ class TaskAnchorTest {
     }
 
     @Test
-    fun `long anchor clipped to cap with ellipsis`() {
-        val long = "x".repeat(TaskAnchor.MAX_CHARS + 500)
+    fun `long anchor keeps both edges and labels the omission`() {
+        val long = "HEAD-" + "x".repeat(TaskAnchor.MAX_CHARS) + "-TAIL-REQUIREMENT"
         val out = TaskAnchor.fragment(anchorFromDb = long, firstUserInWindow = null)!!
         val body = out.removePrefix(TaskAnchor.HEADER + "\n")
-        assertTrue(body.endsWith("…"))
-        // Body = 1200 code units + the ellipsis, no more.
-        assertEquals(TaskAnchor.MAX_CHARS + 1, body.length)
+        assertTrue("opening kept", body.startsWith("HEAD-"))
+        assertTrue("closing kept", body.endsWith("-TAIL-REQUIREMENT"))
+        assertTrue("omission is labelled", body.contains(TaskAnchor.OMISSION))
+        assertEquals(TaskAnchor.MAX_CHARS, body.length)
     }
 
     @Test
@@ -106,17 +129,23 @@ class TaskAnchorTest {
 
     @Test
     fun `clip never splits a surrogate pair`() {
-        // Leading ASCII shifts the pairs by one: the 1200-unit cut lands
-        // between the last pair's halves, so the dangling high is trimmed.
+        // Leading ASCII shifts the pairs by one; both cut points must trim
+        // dangling halves rather than emit a lone surrogate.
         val emoji = "x" + "😀".repeat(600)
         assertEquals(1201, emoji.length)
         val out = TaskAnchor.fragment(anchorFromDb = emoji, firstUserInWindow = null)!!
         val body = out.removePrefix(TaskAnchor.HEADER + "\n")
-        // The dangling high surrogate was trimmed: no lone surrogate remains.
-        assertFalse(Character.isHighSurrogate(body[body.length - 2]))
-        assertFalse(Character.isLowSurrogate(body.last()))
-        // Whole code points only.
-        assertTrue(body.dropLast(1).codePointCount(0, body.dropLast(1).length) >= 598)
+        for (i in body.indices) {
+            if (Character.isHighSurrogate(body[i])) {
+                assertTrue("high surrogate at $i must be paired", i + 1 < body.length)
+                assertTrue(Character.isLowSurrogate(body[i + 1]))
+            }
+            if (Character.isLowSurrogate(body[i])) {
+                assertTrue("low surrogate at $i must be paired", i > 0)
+                assertTrue(Character.isHighSurrogate(body[i - 1]))
+            }
+        }
+        assertTrue(body.codePointCount(0, body.length) > 500)
     }
 
     @Test

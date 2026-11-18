@@ -69,21 +69,33 @@ private fun estimateMixedTokens(text: String): Long = TokenScanMemo.mixedTokens(
  * stale-but-real reading always wins.
  *
  * [T-android-inloop-compact-truthful-gate] The third term is the compact
- * gate's floor: the effective slice WITHOUT ProgressiveTrim. ProgressiveTrim
- * strips thinking and stubs old tool outputs but never drops messages, so a
- * 992-entry pile-up weighed ~270k tokens in memory while this function read
- * the trimmed ~41k — the 80% compact threshold never fired and the loop kept
- * re-assembling 900 stale tool rounds every turn. The floor uses the
- * UNTRIMMED effective slice (not raw `agentHistory`) on purpose: compaction
- * moves the marker forward, which shrinks exactly that slice, so the
- * post-compact check passes and the gate cannot thrash against a raw list
- * that stays over-threshold until ResidentWindow evicts it.
+ * gate's floor: the effective slice WITHOUT ProgressiveTrim and WITHOUT the
+ * postAnchor tail budget. ProgressiveTrim strips thinking and stubs old tool
+ * outputs but never drops messages, so a 992-entry pile-up weighed ~270k
+ * tokens in memory while this function read the trimmed ~41k — the 80%
+ * compact threshold never fired and the loop kept re-assembling 900 stale
+ * tool rounds every turn.
+ *
+ * [T-compact-gate-unblinded] The tail budget is disabled for this term too.
+ * That budget caps the measurable request at preAnchor (≤20%) + postAnchor
+ * (≤35%) ≈ 55% of the window, so measuring the budgeted slice made the
+ * threshold unreachable after the first compact: the marker froze, and every
+ * later request silently dropped post-anchor rounds that the summary does not
+ * cover. Measuring the UN-BUDGETED slice makes the gate fire again, which
+ * moves the marker forward and turns those drops into a summary. The floor
+ * uses the effective slice (not raw `agentHistory`) so compaction — which
+ * shrinks exactly this slice — makes the post-compact check pass.
  */
 internal fun ChatViewModel.contextTokensForPolicy(): Int =
     maxOf(
         _lastTurnContextTokens.value,
         estimateAgentHistoryTokens(),
-        estimateMessagesTokens(effectiveAgentHistoryUncounted(applyProgressiveTrim = false)),
+        estimateMessagesTokens(
+            effectiveAgentHistoryUncounted(
+                applyProgressiveTrim = false,
+                applyTailBudget = false,
+            ),
+        ),
     )
 
 /**

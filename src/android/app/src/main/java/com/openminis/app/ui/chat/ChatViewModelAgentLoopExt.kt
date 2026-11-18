@@ -212,9 +212,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         toolCallRawArgs.clear()
         _canResume.value = false
     }
-    // [T-android-persona-switch-rebuild] RUN-scoped: mid-run model adoption
-    // rebuilds it (persona keys on providerInstanceId). A per-turn var would
-    // reset to the send-time snapshot every turn.
+    // RUN-scoped: rebuilt on model adoption and on queued-turn injection.
     var activeSystemPrompt = systemPrompt
     agentTurns@ for (turn in 0 until maxTurns) {
         currentCoroutineContext().ensureActive()
@@ -1267,6 +1265,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             val handled = drainQueueIntoStandaloneTurn(assistantId, accumulatedText, allToolBlocks, uiBatcher)
             if (handled != null) {
                 swapLoopStateToInjectedBubble(handled)
+                activeSystemPrompt = refreshRunPromptForInjectedTurn(activeSystemPrompt)
                 continue
             }
             // null = queue drained concurrently / no content — the normal
@@ -1858,6 +1857,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             val handled = drainQueueIntoStandaloneTurn(assistantId, accumulatedText, allToolBlocks, uiBatcher)
             if (handled != null) {
                 swapLoopStateToInjectedBubble(handled)
+                activeSystemPrompt = refreshRunPromptForInjectedTurn(activeSystemPrompt)
                 continue
             }
             // null = empty-after-build / drain rejected; fall through to normal next-turn dispatch so the queue doesn't pin the loop.

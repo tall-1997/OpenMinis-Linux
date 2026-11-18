@@ -167,9 +167,19 @@ internal suspend fun ChatViewModel.drainQueuedPrompts(
             if (groupChatEnabled.value && !provider.model.isPureVideoGenerator) {
                 runGroupChat(provider, closing = false)
             } else {
+            // [T-drain-prompt-refresh] The queued prompt is a NEW user turn,
+            // but `systemPrompt` was built before it existed. Everything
+            // keyed to "the latest user message" — the task anchor, the
+            // daily-memory gate, recall — was therefore frozen on the
+            // previous turn. Rebuild now that the row is persisted and the
+            // bubble is bound; fall back to the old prompt only if the build
+            // fails.
+            val drainedPrompt = withContext(Dispatchers.IO) {
+                runCatching { buildSystemPrompt() }.getOrNull()
+            } ?: systemPrompt
             runAgentLoop(
                 provider = provider,
-                systemPrompt = systemPrompt,
+                systemPrompt = drainedPrompt,
                 fallbackProviders = fallbackProviders,
                 fallbackStrategy = fallbackStrategy,
             )
