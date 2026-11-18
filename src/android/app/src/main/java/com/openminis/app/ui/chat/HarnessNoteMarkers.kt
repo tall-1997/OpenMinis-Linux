@@ -41,8 +41,24 @@ internal object HarnessNoteMarkers {
     /** Assembly artifact of PostAnchorTail.apply — a USER notice inserted mid-list on every dropping request. */
     val DROPPED_ROUNDS = "[context window: "
 
+    /**
+     * [T-harness-note-envelope] Authority envelope that PREFIXES every injected
+     * memory fragment ([com.openminis.app.data.authority.MemoryAuthority.
+     * authorityEnvelope]) — so a recall note's text is
+     * `[MEMORY_REFERENCE · use_as:… ]\n## Recalled relevant memories…`.
+     * The leading-match rule below strips framing first and then needs the
+     * remainder to START with a marker; without this entry the remainder starts
+     * with the ENVELOPE, so every recall / 7-day fragment / project-instruction
+     * note answered "not a harness note": the raw `<system-reminder>` markup
+     * rendered in the user bubble and the fold stopped folding it. The constant
+     * is shared with the producer so the two cannot drift again.
+     */
+    val MEMORY_ENVELOPE = com.openminis.app.data.authority.MemoryAuthority.ENVELOPE_PREFIX
+
     /** All markers that identify a harness-generated USER message. */
-    val ALL: List<String> = listOf(RECALL, GOAL, STATE, WORKING_MEMORY, PLAN_RETRY, DROPPED_ROUNDS)
+    val ALL: List<String> = listOf(
+        RECALL, GOAL, STATE, WORKING_MEMORY, PLAN_RETRY, DROPPED_ROUNDS, MEMORY_ENVELOPE,
+    )
 
     private const val REMINDER_OPEN = "<system-reminder>"
     private const val SUMMARY_OPEN = "<context-summary>"

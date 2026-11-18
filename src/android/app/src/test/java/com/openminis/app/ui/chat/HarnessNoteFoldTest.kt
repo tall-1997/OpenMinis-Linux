@@ -1,8 +1,12 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.data.authority.MemoryAuthority
+import com.openminis.app.data.authority.MemoryOrigin
+import com.openminis.app.data.authority.MemoryTrust
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -249,5 +253,51 @@ class HarnessNoteFoldTest {
         )
         assertTrue(folded[0].content.contains(HarnessNoteMarkers.RECALL))
         assertTrue(folded[0].content.contains("do the task"))
+    }
+
+    /**
+     * [T-harness-note-envelope] Field regression (screenshot: a user bubble
+     * rendered the raw `<system-reminder>` block quoting SOUL.md lines).
+     *
+     * Since 2026-11-04 every injected memory fragment is wrapped in the
+     * `[MEMORY_REFERENCE · … ]` authority envelope, so its inner text starts
+     * with the ENVELOPE and only then the `## Recalled relevant memories`
+     * marker. The 2026-11-17 leading-match tightening stripped the framing and
+     * required a marker first — the envelope was not in ALL, so the note read
+     * as real user speech: display stopped stripping it and the fold stopped
+     * folding it.
+     */
+    @Test
+    fun `envelope-prefixed recall note is recognized as a harness note`() {
+        val note = framedNote(
+            MemoryAuthority.authorityEnvelope(
+                MemoryTrust.UNVERIFIED_CANDIDATE,
+                MemoryOrigin.AUTOMATIC_RECALL,
+            ) + "\n## Recalled relevant memories\n- **SOUL.md**: stay in character",
+        )
+        assertTrue(
+            "an authority envelope must classify as a harness note",
+            HarnessNoteMarkers.isHarnessNote(note.content),
+        )
+    }
+
+    @Test
+    fun `envelope-prefixed recall note folds onto the following real turn`() {
+        val note = framedNote(
+            MemoryAuthority.authorityEnvelope(
+                MemoryTrust.UNVERIFIED_CANDIDATE,
+                MemoryOrigin.AUTOMATIC_RECALL,
+            ) + "\n## Recalled relevant memories\n- **SOUL.md**: stay in character",
+        )
+        val folded = foldHarnessNotes(listOf(note, user("do the task")))
+        assertEquals(1, folded.size)
+        assertTrue(folded[0].content.contains(MemoryAuthority.ENVELOPE_PREFIX))
+        assertTrue(folded[0].content.contains("do the task"))
+    }
+
+    @Test
+    fun `user text quoting the envelope mid-sentence is NOT a harness note`() {
+        val userText = user("为什么日志里出现 [MEMORY_REFERENCE · use_as:reference-data] 这种东西？")
+        assertFalse(HarnessNoteMarkers.isHarnessNote(userText.content))
     }
 }
