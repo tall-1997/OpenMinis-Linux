@@ -138,6 +138,32 @@ internal fun parseInline(text: String, colors: MdColors): AnnotatedString {
                         } else { append(text[i]); i++ }
                     } else { append(text[i]); i++ }
                 }
+                // [T-chatlink-bare-url-autolink] Bare URL autolink: `minis://…`,
+                // `https://…`, `http://…` appearing as plain text (no [text](url)
+                // wrapper). Field evidence (screenshot 368.jpg): GLM-5.3 emitted
+                // the file link as `**minis://attachments/uploads/susu…txt**` —
+                // the bold branch consumed it, painted bold dark text with NO
+                // "url" annotation, and the tap died before ChatLinkResolver ever
+                // ran. The same text in `[label](url)` form always worked, which
+                // is why older chats looked fine. GFM autolink semantics, adapted:
+                // the URL run starts at a known scheme and ends at the first
+                // whitespace / CJK punctuation / closing bracket that is not part
+                // of balanced parens. Matched AFTER code/bold so inline code and
+                // emphasis keep their own styling; inside bold it still links
+                // (appendRecursive re-enters this parser with the emphasis
+                // stripped, so **<url>** renders a bold link — the field case).
+                text.startsWith("minis://", i) || text.startsWith("https://", i) || text.startsWith("http://", i) -> {
+                    val end = bareUrlEnd(text, i)
+                    if (end > i) {
+                        val url = text.substring(i, end)
+                        val linkStart = length
+                        withStyle(SpanStyle(color = colors.link, textDecoration = TextDecoration.Underline)) {
+                            append(url)
+                        }
+                        addStringAnnotation("url", url, linkStart, length)
+                        i = end
+                    } else { append(text[i]); i++ }
+                }
                 // Italic: *text* or _text_ (single delimiter, not followed by same)
                 (text[i] == '*' || text[i] == '_') && i + 1 < text.length && text[i + 1] != text[i] && text[i + 1] != ' ' -> {
                     val delim = text[i]
@@ -157,5 +183,56 @@ internal fun parseInline(text: String, colors: MdColors): AnnotatedString {
             }
         }
     }
+}
+
+/**
+ * [T-chatlink-bare-url-autolink] End offset of a bare URL run starting at
+ * [start] (which is verified to begin with a scheme by the caller). GFM-style
+ * termination: whitespace ends the run; a `)` only ends it when the URL's
+ * paren count is balanced (so Wikipedia-style `/Path_(disambiguation)` stays
+ * intact); CJK full-width punctuation and common trailing markdown punctuation
+ * (`。，；：、！？）」』"'"…`, `.,;:!?]}`) are trimmed off the tail after the
+ * scan, so a sentence like "见 https://x/a.txt。" links only the URL.
+ */
+internal fun bareUrlEnd(text: String, start: Int): Int {
+    var i = start
+    var parenDepth = 0
+    var lastSafe = start
+    while (i < text.length) {
+        val c = text[i]
+        when {
+            // Whitespace and CJK full-width space end the run: a URL never
+            // contains them, and GLM regularly follows one with "。然后…" on
+            // the same line.
+            c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\u3000' -> break
+            c == '(' -> { parenDepth++; i++ }
+            c == ')' ->
+                if (parenDepth > 0) { parenDepth--; i++ } else break
+            // Any other non-ASCII character outside the URL-safe set ends the
+            // run: CJK full-width punctuation terminates, but CJK ideographs /
+            // letters continue (relay filenames are commonly Chinese).
+            c.code >= 0x80 && !isUrlSafeNonAscii(c) -> break
+            else -> i++
+        }
+        lastSafe = i
+    }
+    // Trim ASCII trailing punctuation that grammatically closes a sentence
+    // (the CJK cases were already excluded by the non-ASCII gate above).
+    val trailing = ".,;:!?]}>\"'"
+    var end = lastSafe
+    while (end > start && text[end - 1] in trailing) end--
+    return end
+}
+
+/** Non-ASCII characters that may legitimately appear inside a URL path. */
+private fun isUrlSafeNonAscii(c: Char): Boolean = !isCjkPunct(c)
+
+/** CJK full-width punctuation that grammatically terminates a URL run. */
+private fun isCjkPunct(c: Char): Boolean = when (c) {
+    '。', '，', '；', '：', '、', '！', '？', '（', '）', '「', '」', '『', '』',
+    '《', '》', '“', '”', '‘', '’', '…', '～', '—', '–', '·', '\u3000',
+    '【', '】', '〔', '〕', '〈', '〉',
+    -> true
+    else -> false
 }
 
