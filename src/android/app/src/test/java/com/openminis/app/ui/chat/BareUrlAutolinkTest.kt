@@ -33,7 +33,7 @@ class BareUrlAutolinkTest {
 
     private fun urlsOf(text: String): List<String> {
         val s = parseInline(text, testColors())
-        return s.getAnnotations(0, 0, s.length)
+        return s.getStringAnnotations(0, 0, s.length)
             .filter { it.tag == "url" }
             .map { it.data }
     }
