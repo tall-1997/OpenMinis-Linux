@@ -104,6 +104,20 @@ object ChatLinkResolver {
                         lookup(linuxPath)
                     }
                     .firstOrNull { it != null && it.exists() }
+                    // [T-chatlink-cross-project-fallback] The session-scoped
+                    // view missed, but a `minis://attachments/...` link is
+                    // still a sandbox path the model PRODUCED — before giving
+                    // up, sweep every project tree for the same relative path
+                    // under its shared subdirs. Root cause of the dead taps:
+                    // the writing session and the tapping session bind
+                    // /var/minis to DIFFERENT host dirs (per-project
+                    // minis-workspaces/<folder>), so the session-scoped lookup
+                    // resolves to a host file that does not exist there and
+                    // resolve() silently degraded to Web → ERR_UNKNOWN_URL_SCHEME.
+                    // Sweep is read-only, stays inside filesDir, and requires
+                    // an exact subdir match — it cannot widen into another
+                    // session's private tree.
+                    ?: sweepProjectTrees(stripped, context)
                     // Nothing existed — hand back the primary candidate so the
                     // caller's own exists() check reports against the path the
                     // user actually meant, and diagnostics stay readable.
@@ -196,12 +210,42 @@ object ChatLinkResolver {
         return candidates
     }
 
-    /** Fire a system intent so MainActivity's BROWSABLE filter picks the deep link up. */
+    /**
+     * Fire a system intent so MainActivity's BROWSABLE filter picks the deep link up.
+     */
     fun dispatchDeepLink(context: Context, originalUrl: String) {
         val intent = Intent(Intent.ACTION_VIEW, originalUrl.toUri()).apply {
             setPackage(context.packageName)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         runCatching { context.startActivity(intent) }
+    }
+
+    /**
+     * [T-chatlink-cross-project-fallback] Last-resort sweep for a session-scoped
+     * miss: look for the same relative path under every project's shared subdirs
+     * (`minis-workspaces/<folder>/<subdir>/<rest>`). A model that writes into its
+     * own `/var/minis/attachments` emits `minis://attachments/...`; the host dir
+     * that path maps to depends on the TAPPING session's project binding, so a
+     * file produced in another project resolves to a non-existent host path and
+     * the tap died. The sweep is scoped to [SessionWorkspace.SHARED_SUBDIRS],
+     * requires an exact relative-path match, and never crosses into
+     * `minis-sessions/<other>` — it only reads project trees already on disk.
+     * Returns null when [context] is absent (no filesystem to sweep) or nothing
+     * matched.
+     */
+    internal fun sweepProjectTrees(strippedPath: String, context: Context?): File? {
+        if (context == null) return null
+        val firstSegment = strippedPath.trimStart('/').substringBefore('/')
+        if (firstSegment !in com.openminis.app.sandbox.SessionWorkspace.SHARED_SUBDIRS) return null
+        val rest = strippedPath.trimStart('/').removePrefix(firstSegment).trimStart('/')
+        if (rest.isEmpty()) return null
+        val projectsRoot = File(context.filesDir, com.openminis.app.sandbox.SessionWorkspace.WORKSPACES_DIR)
+        val listing = projectsRoot.listFiles() ?: return null
+        for (project in listing) {
+            val candidate = File(File(project, firstSegment), rest)
+            if (candidate.isFile && candidate.exists()) return candidate
+        }
+        return null
     }
 }
