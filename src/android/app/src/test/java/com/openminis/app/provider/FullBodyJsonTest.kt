@@ -64,7 +64,7 @@ class FullBodyJsonTest {
             FullBodyJson.parse("   \r\n  ", "test label")
             fail("expected DecodingError")
         } catch (e: LLMError.DecodingError) {
-            assertTrue(e.message.orEmpty(), e.message.orEmpty().contains("empty body (6 bytes after trim)"))
+            assertTrue(e.message.orEmpty(), e.message.orEmpty().contains("empty body (7 bytes after trim)"))
         }
     }
 
