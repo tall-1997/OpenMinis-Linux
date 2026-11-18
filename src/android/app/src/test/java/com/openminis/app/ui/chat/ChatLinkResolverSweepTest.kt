@@ -1,7 +1,6 @@
 package com.openminis.app.ui.chat
 
 import androidx.test.core.app.ApplicationProvider
-import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.openminis.app.sandbox.SessionWorkspace
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
