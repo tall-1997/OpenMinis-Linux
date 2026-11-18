@@ -54,6 +54,18 @@ enum class InstructionUse {
 object MemoryAuthority {
 
     /**
+     * [T-harness-note-envelope] First token of every injected memory fragment
+     * ([authorityEnvelope]). Exposed as a constant because a SECOND consumer
+     * classifies those fragments: [com.openminis.app.ui.chat.HarnessNoteMarkers]
+     * decides whether a USER-role message is host-generated. When the two
+     * drifted (envelope added 2026-11-04, classifier tightened to leading-match
+     * 2026-11-17 without learning the header) every recall note stopped being
+     * recognized: its raw `<system-reminder>` markup rendered in the user
+     * bubble and the fold stopped folding it. One constant, two readers.
+     */
+    const val ENVELOPE_PREFIX = "[MEMORY_REFERENCE"
+
+    /**
      * A tag an agent could forge to launder its own memory as user
      * memory, or to claim a provenance it does not have. Mirrors dsh
      * `sanitizeTags`: `/^(?:trust:|origin:|window:|project:|source:user-interface$)/iu`.
@@ -100,7 +112,7 @@ object MemoryAuthority {
         origin: MemoryOrigin,
         use: InstructionUse = InstructionUse.REFERENCE_DATA,
     ): String = buildString {
-        append("[MEMORY_REFERENCE")
+        append(ENVELOPE_PREFIX)
         append(" · use_as:")
         append(use.name.lowercase().replace('_','-'))
         append(" · instruction_authority:")
