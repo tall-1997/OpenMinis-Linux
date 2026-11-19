@@ -3324,4 +3324,19 @@
     <string name="process_card_thinking_now">Réflexion…</string>
     <string name="appearance_show_turn_changes_card_title">Carte des modifications du tour</string>
     <string name="appearance_show_turn_changes_card_subtitle">Affiche à chaque tour une carte listant les fichiers modifiés par l\'assistant, avec statistiques de lignes et annulation en un geste. Désactivée par défaut.</string>
+    <string name="vm_compact_retry_cooldown">La dernière compaction a échoué. Réessayez dans %1$d s.</string>
+    <string name="guard_stop_section">Garde-fou des boucles</string>
+    <string name="guard_stop_title">Arrêt en cas de répétition</string>
+    <string name="guard_stop_on">Peut arrêter la session</string>
+    <string name="guard_stop_off">N\'arrête jamais la session</string>
+    <string name="guard_stop_footer">Quand il est actif, le garde-fou arrête la session dès que la même action se répète trop souvent. Quand il est inactif, il se contente de rappeler au modèle, utile pendant une longue attente comme une compilation.</string>
+    <string name="token_usage_section_memory">Mémoire</string>
+    <string name="token_usage_memory_lines">Lignes livrées</string>
+    <string name="token_usage_memory_shown">Nombre d\'affichages</string>
+    <string name="modeldetail_section_context_budget">Budget de contexte</string>
+    <string name="modeldetail_context_budget_footer">Part de la conversation récente conservée par la compaction. Automatique suit la fenêtre du modèle ; une valeur personnalisée ne s\'applique qu\'à ce modèle.</string>
+    <string name="modeldetail_tail_budget_custom">Budget final personnalisé</string>
+    <string name="modeldetail_tail_budget">Budget final</string>
+    <string name="modeldetail_tail_budget_state_auto">Automatique (s\'adapte à la fenêtre, jusqu\'à 60k)</string>
+    <string name="modeldetail_tail_budget_state_specific">Personnalisé pour ce modèle</string>
 </resources>

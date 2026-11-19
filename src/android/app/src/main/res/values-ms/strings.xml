@@ -3324,4 +3324,19 @@
     <string name="process_card_thinking_now">Berfikir…</string>
     <string name="appearance_show_turn_changes_card_title">Kad perubahan giliran</string>
     <string name="appearance_show_turn_changes_card_subtitle">Memaparkan kad setiap giliran yang menyenaraikan fail yang diubah oleh pembantu, statistik baris dan buat asal satu ketukan. Lalai dimatikan.</string>
+    <string name="vm_compact_retry_cooldown">Pemadatan terakhir gagal. Anda boleh cuba lagi dalam %1$d s.</string>
+    <string name="guard_stop_section">Pengawal gelung</string>
+    <string name="guard_stop_title">Henti apabila berulang</string>
+    <string name="guard_stop_on">Boleh menghentikan sesi</string>
+    <string name="guard_stop_off">Tidak pernah menghentikan sesi</string>
+    <string name="guard_stop_footer">Apabila hidup, pengawal menghentikan sesi selepas tindakan sama berulang terlalu kerap. Apabila mati, ia hanya mengingatkan model, berguna semasa menunggu lama seperti binaan.</string>
+    <string name="token_usage_section_memory">Memori</string>
+    <string name="token_usage_memory_lines">Baris dihantar</string>
+    <string name="token_usage_memory_shown">Bilangan dipaparkan</string>
+    <string name="modeldetail_section_context_budget">Bajet konteks</string>
+    <string name="modeldetail_context_budget_footer">Berapa banyak perbualan terkini yang kekal selepas pemadatan. Automatik mengikut tetingkap model; nilai tersuai hanya untuk model ini.</string>
+    <string name="modeldetail_tail_budget_custom">Bajet ekor tersuai</string>
+    <string name="modeldetail_tail_budget">Bajet ekor</string>
+    <string name="modeldetail_tail_budget_state_auto">Automatik (mengikut tetingkap, sehingga 60k)</string>
+    <string name="modeldetail_tail_budget_state_specific">Khusus untuk model ini</string>
 </resources>

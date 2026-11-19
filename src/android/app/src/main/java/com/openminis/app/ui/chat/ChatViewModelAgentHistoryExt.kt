@@ -283,7 +283,10 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
         // [T-budget-floor-fraction-clamp] The old 8k floor overrode the 35%
         // share on windows <~23k (20k window → 8k = 40%); the fraction itself
         // is the floor now, same clamp policy as preAnchorTokenBudget.
-        val postAnchorBudget = PostAnchorTail.budgetTokensForWindow(windowTokens, applyTailBudget)
+        // [T-harness-config-resolve] One resolution per assembly; the per-model
+        // override (Model detail -> Context budget) reaches every consumer below.
+        val harness = activeHarnessConfig()
+        val postAnchorBudget = PostAnchorTail.budgetTokensForWindow(windowTokens, applyTailBudget, harness)
         val tailBudget = PostAnchorTail.Budget(
             budgetTokens = postAnchorBudget,
             estimate = WalkBack::estimateMessageTokens,
@@ -292,7 +295,10 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
             // dropped user instructions / assistant decisions as bounded
             // excerpts in the SAME request; the tool ledger stays the
             // structured record for tool calls.
-            digest = DroppedRoundDigest::render,
+            digest = { dropped -> DroppedRoundDigest.render(dropped, config = harness) },
+            // [T-harness-config-resolve] The reserve/digest caps come from the
+            // same resolution as the token budget above.
+            config = harness,
         )
         val postAnchorOutcome = PostAnchorTail.apply(postAnchorRaw, tailBudget)
         var postAnchor = postAnchorOutcome.kept

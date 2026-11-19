@@ -219,8 +219,14 @@ private inline fun ChatViewModel.compactAllImpl(
             "[Compact] retry suppressed: last attempt failed and nothing advanced " +
                 "(cooldown=${CompactionTransaction.FAILURE_COOLDOWN_MS / 1000}s)",
         )
+        // [T-compaction-cooldown-message] NOT the "already running" string: the
+        // previous attempt FAILED and nothing is in flight, so telling the user to
+        // wait for a running job would describe a job that does not exist.
         appendSystemInfo(
-            text = context.getString(R.string.vm_compact_already_running),
+            text = context.getString(
+                R.string.vm_compact_retry_cooldown,
+                (CompactionTransaction.FAILURE_COOLDOWN_MS / 1000L).toInt(),
+            ),
             iconKind = "compact",
         )
         _isCompacting.value = false

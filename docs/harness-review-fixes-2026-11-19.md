@@ -82,15 +82,26 @@
 - 门禁全绿：architecture（1531 文件；`ChatViewModel` 4613/4613、`MemoryRecallEngine` 789/800）、CJK（95 文件/807 字面量）、announced tools（23）、schema drift（23 版本）、string refs、工具执行契约、标题/预算契约、instruction state 14/14
 - 兼容性抽查：`budgetTokensForWindow` 对 null/32k/128k/200k 仍为 60000/11200/44800/60000（`PostAnchorBudgetTest` + CI 契约脚本双重钉住）；`LoopGuard` 默认行为逐分支等价；`WalkBack`/`ResidentWindow` 切点不变
 
-## 四、未修复项（明确记录，不假装已修）
+## 四、补齐轮（用户要求 1+2+3+5，本轮已全部落地）
 
-1. **journal 记录的是图片预算前的历史**（A2）：修复点在生产装配顺序（`applyRequestImageBudget` 之后才写 journal），需要动行数已到顶的 loop 文件；当前 journal 无生产读取方，风险为未来对拍失真。已在代码注释标注。
-2. **压缩冷却的用户文案**：现在走 `vm_compaction_failed` + "wait Ns before retrying"，中英混排在部分语言下不理想；正确做法是新增 `vm_compact_retry_cooldown` 字符串并补 17 个语种翻译（未做）。
-3. **`MemoryUsageLedger` 的 UI 展示**：只加了诊断日志，没有设置页入口。
-4. **`LoopGuard.stopEnabled` 的 UI 开关**：seam 就位，无入口。
-5. **`repairToolPairing` 仍是独立 fold**：身份归一化已同源，但 fold 本身没有并到 `ToolPairingCore`。
+第一轮报告里我列了 5 项"明确未修"。用户要求补齐其中 4 项（第 4 项检测到行为正确，保持不动），本轮全部完成：
 
----
+| # | 之前的状态 | 本轮如何补齐 | 验证 |
+|---|---|---|---|
+| 1 | journal 记录的是图片预算**之前**的历史 | 新增 `ChatViewModel.finalizeRequestHistory(turn, history)`：先 `applyRequestImageBudget`，再 `recordRequestJournal`，并把同一份列表交给 `streamMessage`。为了让 `ChatViewModelAgentLoopExt` 保持在 1895 行上限内，循环体由 4 行压到 3 行（块注释合并为一行） | 新增 drift 测试 `theJournalRecordsTheFinalImageBudgetedHistory`：断言"预算调用位置 < journal 写入位置"，且循环走 finalizer |
+| 2 | 压缩冷却复用了"压缩正在进行中"文案，中英混排 | 新增 `vm_compact_retry_cooldown`（15 个新字符串之一），换成 `getString(R.string.vm_compact_retry_cooldown, 30)`；同时补上"上一轮失败、本次没有作业在跑"的注释 | drift 测试 `theCompactionCooldownUsesItsOwnMessage`：分支内必须出现新串、不得出现旧串 |
+| 3 | usage ledger 只有日志、`stopEnabled` 只有 seam | (a) `ToolUsageSheet` 新增"记忆"区块：读**本会话自己**的 ledger 文件显示"已投递行数 / 展示次数"（`MemoryUsageLedger.summaryFor`，不碰请求路径缓存）；(b) 新增 `GuardPrefs`（默认开启，带 revision 供 Compose 重算）+ `ActionGuard` 创建 `LoopGuard` 时读取 + 工具限制设置页新增开关 | 单测 `HarnessConfigStoreTest`/`GuardPrefsTest`；drift 测试 `theLoopGuardHonoursTheSettingsSwitch`、`thePerModelBudgetIsResolvedAndPersisted`；全量 6946 通过 |
+| 5 | `HarnessConfigStore` 被删（无写入方、跨会话串值、主线程读盘） | 重写为**按模型条目**存储 + 模型详情页"上下文预算"区块（自定义尾部预算 8k–60k，步进 2k）+ **显式传参**：装配处 `activeHarnessConfig()` 解析一次，传给 `budgetTokensForWindow` / `PostAnchorTail.Budget.config` / `DroppedRoundDigest.render` / `ContextSaverRuntime.age` / `detachedTailSizeForWindow`。没有全局可变量，因此不存在串会话 | `HarnessConfigStoreTest`（8 条：缺省、隔离、删除、坏 JSON、越界校验、round-trip、路径清洗、空 id）；`PostAnchorBudgetTest` 新增"自定义值覆盖窗口缩放且不超上限"与"Budget 携带自己的 config" |
+
+### 补齐时对既有约束的处理
+
+- `ChatViewModel.kt` 增加了 3 行会破 4613 上限 → 把 aging 与 detached 两个装配调用抽到 `ChatViewModelHarnessExt.kt`，并**下调** architecture 基线到 4611（门禁只收紧，不上调）。
+- `ContextSaverRuntime.age` / `DroppedRoundDigest.render` 原本是 `public`，而 `HarnessConfig` 是 `internal` → 两者改 `internal`（调用方都在本模块内），否则无法把配置传进去。
+- 15 个新字符串 × 17 个语言目录全部补齐，`check_new_untranslated.py` 通过（含"翻译值不得等于英文"的假翻译检测）。
+
+## 五、仍然未做（唯一一项）
+
+- `repairToolPairing` 仍是独立的配对 fold（第 4 项）。行为正确、有 `CompactToolPairingTest` 等覆盖，身份归一化已与 `ToolPairingCore` 同源；把"修补"并进 `legalCuts` 属于重构，风险大于收益，按用户决定不动。
 
 ## 五、第二轮审查的 8 条次生问题与修复（本轮实际结果）
 

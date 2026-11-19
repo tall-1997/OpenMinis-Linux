@@ -88,7 +88,12 @@ object ContextSaverRuntime {
      * @param reportedTokens input tokens reported by the previous API call.
      * @return the history to send; the input instance when nothing folded.
      */
-    fun age(history: List<LLMMessage>, windowTokens: Int, reportedTokens: Int): List<LLMMessage> {
+    internal fun age(
+        history: List<LLMMessage>,
+        windowTokens: Int,
+        reportedTokens: Int,
+        config: HarnessConfig = HarnessConfig.current(),
+    ): List<LLMMessage> {
         val mode = modeOverride ?: ContextSaverPrefs.mode()
         if (mode == ContextSaverPrefs.Mode.OFF) {
             publish(Stats(mode = mode.id))
@@ -96,7 +101,7 @@ object ContextSaverRuntime {
         }
         // [T-harness-config] Both numbers are policy, not constants: a per-session
         // override must be able to move the ceiling and the ruler together.
-        val config = HarnessConfig.current()
+        // [T-harness-config-resolve] Resolved by the caller for this model.
         val trigger = ContextSaverPrefs.triggerTokens(mode, windowTokens)
         val floorTokens = (ToolResultAging.totalChars(history) / config.agingCharsPerToken).toInt()
         // [T-absolute-age-ceiling] Three ways in: the API reported a big request,

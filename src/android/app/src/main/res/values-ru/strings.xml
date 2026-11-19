@@ -3332,4 +3332,19 @@
     <string name="process_card_thinking_now">Размышляет…</string>
     <string name="appearance_show_turn_changes_card_title">Карточка изменений хода</string>
     <string name="appearance_show_turn_changes_card_subtitle">Показывает в каждом ходе карточку изменённых ассистентом файлов со статистикой строк и отменой в одно касание. По умолчанию выключено.</string>
+    <string name="vm_compact_retry_cooldown">Последнее сжатие не удалось. Повторить можно через %1$d с.</string>
+    <string name="guard_stop_section">Защита от циклов</string>
+    <string name="guard_stop_title">Останавливать при повторах</string>
+    <string name="guard_stop_on">Может остановить сеанс</string>
+    <string name="guard_stop_off">Никогда не останавливает сеанс</string>
+    <string name="guard_stop_footer">Если включено, защита останавливает сеанс, когда одно и то же действие повторяется слишком часто. Если выключено, она только напоминает модели - полезно при долгом ожидании, например сборки.</string>
+    <string name="token_usage_section_memory">Память</string>
+    <string name="token_usage_memory_lines">Передано строк</string>
+    <string name="token_usage_memory_shown">Показов</string>
+    <string name="modeldetail_section_context_budget">Бюджет контекста</string>
+    <string name="modeldetail_context_budget_footer">Сколько последних сообщений переживёт сжатие. Автоматически подстраивается под окно модели; своё значение действует только для этой модели.</string>
+    <string name="modeldetail_tail_budget_custom">Свой бюджет хвоста</string>
+    <string name="modeldetail_tail_budget">Бюджет хвоста</string>
+    <string name="modeldetail_tail_budget_state_auto">Автоматически (по окну модели, до 60k)</string>
+    <string name="modeldetail_tail_budget_state_specific">Только для этой модели</string>
 </resources>

@@ -2788,7 +2788,7 @@ class ChatViewModel(
             } else msg
         }
         // [T-tool-result-aging] Fold tool output the model already consumed.
-        return ContextSaverRuntime.age(cleaned, currentModelContextWindow ?: 0, _lastTurnContextTokens.value)
+        return agedHistoryForRequest(cleaned)
     }
 
     // dropOrphanedToolParts lives in ChatViewModelHistoryExt.kt
@@ -2827,9 +2827,7 @@ class ChatViewModel(
      * slice, which is the only part that requires a resolvable anchor.
      */
     internal fun detachedCompactHistory(summaryWrappedText: String): List<LLMMessage> {
-        val history = agentHistorySnapshot()
-        val tailSize = detachedTailSizeForWindow(history, effectiveContextWindowTokens())
-        return buildDetachedCompactHistory(summaryWrappedText, history, tailSize)
+        return detachedCompactHistoryWithHarness(summaryWrappedText)
     }
 
     internal suspend fun splitCompactHalves(

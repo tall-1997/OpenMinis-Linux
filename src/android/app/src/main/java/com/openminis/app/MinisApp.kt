@@ -190,6 +190,7 @@ class MinisApp : Application(), ImageLoaderFactory {
 
         // The pre-send context check and the in-chat opt-in read this with no Activity context.
         com.openminis.app.data.AutoCompactPrefs.prime(this)
+        com.openminis.app.data.GuardPrefs.prime(this)  // [T-guard-stop-policy] loop-guard stop switch
         // [GH#221] Per-provider custom request headers are read by
         // ProviderFactory.create() from call sites without a Context.
         com.openminis.app.provider.ProviderHeaderStore.prime(this)

@@ -50,9 +50,10 @@ internal object DroppedRoundDigest {
      *   keeping (e.g. pure tool traffic) — the caller then keeps the plain
      *   count notice.
      */
-    fun render(
+    internal fun render(
         dropped: List<LLMMessage>,
         header: String = HEADER,
+        config: com.openminis.app.agent.HarnessConfig = com.openminis.app.agent.HarnessConfig.current(),
     ): String? {
         if (dropped.isEmpty()) return null
         // [T-digest-bounded-scan] Walk from the NEWEST dropped message and
@@ -64,7 +65,7 @@ internal object DroppedRoundDigest {
         // per-session override must be able to change how much of the dropped
         // tail the digest may carry. Defaults are byte-identical to the
         // documented constants above.
-        val config = com.openminis.app.agent.HarnessConfig.current()
+        // [T-harness-config-resolve] Resolved by the caller for this model.
         val kept = ArrayDeque<String>()
         var used = 0
         var scanned = 0

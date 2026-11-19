@@ -3324,4 +3324,19 @@
     <string name="process_card_thinking_now">กำลังคิด…</string>
     <string name="appearance_show_turn_changes_card_title">การ์ดการเปลี่ยนแปลงของรอบ</string>
     <string name="appearance_show_turn_changes_card_subtitle">แสดงการ์ดรายไฟล์ที่ผู้ช่วยแก้ไขในแต่ละรอบ พร้อมสถิติบรรทัดและการเลิกทำแตะเดียว ปิดอยู่ตามค่าเริ่มต้น</string>
+    <string name="vm_compact_retry_cooldown">การบีบอัดครั้งล่าสุดล้มเหลว ลองใหม่ได้ใน %1$d วินาที</string>
+    <string name="guard_stop_section">ตัวป้องกันลูป</string>
+    <string name="guard_stop_title">หยุดเมื่อทำซ้ำ</string>
+    <string name="guard_stop_on">หยุดเซสชันได้</string>
+    <string name="guard_stop_off">ไม่หยุดเซสชัน</string>
+    <string name="guard_stop_footer">เมื่อเปิด ตัวป้องกันจะหยุดเซสชันเมื่อการกระทำเดิมซ้ำบ่อยเกินไป เมื่อปิดจะเพียงเตือนโมเดล เหมาะกับการรอนาน เช่น การบิลด์</string>
+    <string name="token_usage_section_memory">ความจำ</string>
+    <string name="token_usage_memory_lines">บรรทัดที่ส่ง</string>
+    <string name="token_usage_memory_shown">จำนวนครั้งที่แสดง</string>
+    <string name="modeldetail_section_context_budget">งบประมาณคอนเท็กซ์</string>
+    <string name="modeldetail_context_budget_footer">ปริมาณบทสนทนาล่าสุดที่คงอยู่หลังการบีบอัด โหมดอัตโนมัติปรับตามหน้าต่างของโมเดล ค่าที่กำหนดเองใช้กับโมเดลนี้เท่านั้น</string>
+    <string name="modeldetail_tail_budget_custom">งบประมาณท้ายที่กำหนดเอง</string>
+    <string name="modeldetail_tail_budget">งบประมาณท้าย</string>
+    <string name="modeldetail_tail_budget_state_auto">อัตโนมัติ (ปรับตามหน้าต่าง สูงสุด 60k)</string>
+    <string name="modeldetail_tail_budget_state_specific">เฉพาะโมเดลนี้</string>
 </resources>

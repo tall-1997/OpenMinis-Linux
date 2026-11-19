@@ -1,6 +1,7 @@
 package com.openminis.app.data
 
 import com.openminis.app.ProductionSources
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -101,4 +102,51 @@ class HarnessWiringTest {
         assertTrue("the result must be journaled after dispatch", seam.contains("recordToolResultJournal("))
         assertTrue("the dispatch must go through the receipt seam", turn.contains("dispatchWithReceipt("))
     }
+    
+    @Test
+    fun theJournalRecordsTheFinalImageBudgetedHistory() {
+        // [T-session-journal-final] The digest sequence must describe the request
+        // that actually left the device, so the image budget is applied FIRST.
+        val journal = src("ui/chat/ChatViewModelJournalExt.kt")
+        val fn = journal.substringAfter("fun ChatViewModel.finalizeRequestHistory")
+        val budgetAt = fn.indexOf("applyRequestImageBudget(history)")
+        val recordAt = fn.indexOf("recordRequestJournal(turn, it)")
+        assertTrue("image budget must run before the journal write", budgetAt >= 0 && recordAt > budgetAt)
+        val loop = src("ui/chat/ChatViewModelAgentLoopExt.kt")
+        assertTrue("the loop must journal through the finalizer", loop.contains("finalizeRequestHistory(turn,"))
+    }
+    
+    @Test
+    fun theCompactionCooldownUsesItsOwnMessage() {
+        // [T-compaction-cooldown-message] A suppressed retry means the previous
+        // attempt FAILED and nothing is running: saying "already in progress"
+        // described a job that does not exist.
+        val ext = src("ui/chat/ChatViewModelCompactExt.kt")
+        val branch = ext.substringAfter("retry suppressed").take(1500)
+        assertTrue("new cooldown message missing: " + branch.take(200), branch.contains("vm_compact_retry_cooldown"))
+        assertFalse("already-running string leaked into the cooldown branch", branch.contains("vm_compact_already_running"))
+    }
+    
+    @Test
+    fun theLoopGuardHonoursTheSettingsSwitch() {
+        // [T-guard-stop-policy] A switch with no reader is a dead toggle.
+        val guard = src("guard/ActionGuard.kt")
+        assertTrue(guard.contains("GuardPrefs.stopEnabled()"))
+        val screen = src("ui/settings/ToolLimitsSettingsScreen.kt")
+        assertTrue(screen.contains("GuardPrefs.setStopEnabled("))
+    }
+    
+    @Test
+    fun thePerModelBudgetIsResolvedAndPersisted() {
+        // [T-harness-config-resolve] Resolution per assembly + a real writer, or
+        // the knob is unreachable exactly like the deleted first attempt.
+        val history = src("ui/chat/ChatViewModelAgentHistoryExt.kt")
+        assertTrue(history.contains("val harness = activeHarnessConfig()"))
+        assertTrue(history.contains("budgetTokensForWindow(windowTokens, applyTailBudget, harness)"))
+        val screen = src("ui/settings/ModelEntryDetailScreen.kt")
+        assertTrue(screen.contains("HarnessConfigStore.save("))
+        val sheet = src("ui/chat/TokenUsageSheet.kt")
+        assertTrue(sheet.contains("memoryUsageSummary()"))
+    }
 }
+

@@ -3324,4 +3324,19 @@
     <string name="process_card_thinking_now">Düşünüyor…</string>
     <string name="appearance_show_turn_changes_card_title">Tur değişiklik kartı</string>
     <string name="appearance_show_turn_changes_card_subtitle">Asistanın değiştirdiği dosyaları her tur için satır istatistikleri ve tek dokunuşla geri alma ile gösterir. Varsayılan olarak kapalıdır.</string>
+    <string name="vm_compact_retry_cooldown">Son sıkıştırma başarısız oldu. %1$d sn sonra yeniden deneyebilirsiniz.</string>
+    <string name="guard_stop_section">Döngü koruması</string>
+    <string name="guard_stop_title">Tekrarda durdur</string>
+    <string name="guard_stop_on">Oturumu durdurabilir</string>
+    <string name="guard_stop_off">Oturumu asla durdurmaz</string>
+    <string name="guard_stop_footer">Açıkken koruma, aynı eylem çok sık tekrarlandığında oturumu durdurur. Kapalıyken yalnızca modeli uyarır; derleme gibi uzun beklemelerde işe yarar.</string>
+    <string name="token_usage_section_memory">Bellek</string>
+    <string name="token_usage_memory_lines">Teslim edilen satırlar</string>
+    <string name="token_usage_memory_shown">Gösterim sayısı</string>
+    <string name="modeldetail_section_context_budget">Bağlam bütçesi</string>
+    <string name="modeldetail_context_budget_footer">Son konuşmanın ne kadarı sıkıştırmadan sonra kalır. Otomatik, modelin penceresine göre ölçeklenir; özel değer yalnızca bu model için geçerlidir.</string>
+    <string name="modeldetail_tail_budget_custom">Özel kuyruk bütçesi</string>
+    <string name="modeldetail_tail_budget">Kuyruk bütçesi</string>
+    <string name="modeldetail_tail_budget_state_auto">Otomatik (pencereye göre, en çok 60k)</string>
+    <string name="modeldetail_tail_budget_state_specific">Bu modele özel</string>
 </resources>

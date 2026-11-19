@@ -3323,4 +3323,19 @@
     <string name="process_card_thinking_now">생각 중…</string>
     <string name="appearance_show_turn_changes_card_title">턴 변경 카드</string>
     <string name="appearance_show_turn_changes_card_subtitle">어시스턴트가 변경한 파일을 턴마다 표시하고, 줄 수 통계와 원터치 실행 취소를 제공합니다. 기본값은 꺼짐입니다.</string>
+    <string name="vm_compact_retry_cooldown">마지막 압축에 실패했습니다. %1$d초 후에 다시 시도할 수 있습니다.</string>
+    <string name="guard_stop_section">루프 가드</string>
+    <string name="guard_stop_title">반복 시 중지</string>
+    <string name="guard_stop_on">세션을 중지할 수 있음</string>
+    <string name="guard_stop_off">세션을 중지하지 않음</string>
+    <string name="guard_stop_footer">켜면 같은 작업이 너무 자주 반복될 때 세션을 중지합니다. 끄면 모델에 알림만 하며, 빌드 같은 긴 대기에 유용합니다.</string>
+    <string name="token_usage_section_memory">메모리</string>
+    <string name="token_usage_memory_lines">전달된 줄</string>
+    <string name="token_usage_memory_shown">표시 횟수</string>
+    <string name="modeldetail_section_context_budget">컨텍스트 예산</string>
+    <string name="modeldetail_context_budget_footer">압축 후 남는 최근 대화의 양입니다. 자동은 모델 윈도에 맞춰 조정되고, 사용자 지정 값은 이 모델에만 적용됩니다.</string>
+    <string name="modeldetail_tail_budget_custom">사용자 지정 꼬리 예산</string>
+    <string name="modeldetail_tail_budget">꼬리 예산</string>
+    <string name="modeldetail_tail_budget_state_auto">자동(윈도에 맞춰 조정, 최대 60k)</string>
+    <string name="modeldetail_tail_budget_state_specific">이 모델 전용</string>
 </resources>

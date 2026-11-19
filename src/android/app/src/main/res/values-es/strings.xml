@@ -3175,4 +3175,19 @@
     <string name="process_card_thinking_now">Pensando…</string>
     <string name="appearance_show_turn_changes_card_title">Tarjeta de cambios del turno</string>
     <string name="appearance_show_turn_changes_card_subtitle">Muestra una tarjeta por turno con los archivos que modificó el asistente, estadísticas de líneas y deshacer con un toque. Desactivada por defecto; la conversación se mantiene limpia sin ella.</string>
+    <string name="vm_compact_retry_cooldown">La última compactación falló. Puedes reintentar en %1$d s.</string>
+    <string name="guard_stop_section">Freno de bucles</string>
+    <string name="guard_stop_title">Detener si se repite</string>
+    <string name="guard_stop_on">Puede detener la sesión</string>
+    <string name="guard_stop_off">Nunca detiene la sesión</string>
+    <string name="guard_stop_footer">Si está activo, el freno detiene la sesión cuando la misma acción se repite demasiadas veces. Si está desactivado, solo avisa al modelo, útil en esperas largas como una compilación.</string>
+    <string name="token_usage_section_memory">Memoria</string>
+    <string name="token_usage_memory_lines">Líneas entregadas</string>
+    <string name="token_usage_memory_shown">Veces mostradas</string>
+    <string name="modeldetail_section_context_budget">Presupuesto de contexto</string>
+    <string name="modeldetail_context_budget_footer">Cuánto de la conversación reciente sobrevive a la compactación. Automático escala con la ventana del modelo; un valor propio solo se aplica a este modelo.</string>
+    <string name="modeldetail_tail_budget_custom">Presupuesto final propio</string>
+    <string name="modeldetail_tail_budget">Presupuesto final</string>
+    <string name="modeldetail_tail_budget_state_auto">Automático (escala con la ventana, hasta 60k)</string>
+    <string name="modeldetail_tail_budget_state_specific">Propio de este modelo</string>
 </resources>

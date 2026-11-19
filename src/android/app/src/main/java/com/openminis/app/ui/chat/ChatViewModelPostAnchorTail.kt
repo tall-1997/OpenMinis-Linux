@@ -58,13 +58,17 @@ internal object PostAnchorTail {
      * again after the first compact (the capped request sits below the
      * threshold forever while the unsummarized region keeps growing).
      */
-    internal fun budgetTokensForWindow(windowTokens: Int?, applyTailBudget: Boolean = true): Int {
+    internal fun budgetTokensForWindow(
+        windowTokens: Int?,
+        applyTailBudget: Boolean = true,
+        config: com.openminis.app.agent.HarnessConfig = com.openminis.app.agent.HarnessConfig.current(),
+    ): Int {
         if (!applyTailBudget) return Int.MAX_VALUE
         // [T-harness-config] The numbers live in one validated object so a
         // per-session override can change them without editing call sites. The
         // defaults are byte-identical to the constants above (asserted by the
         // tool-title/budget contract gate).
-        return com.openminis.app.agent.HarnessConfig.current().postAnchorBudgetFor(windowTokens)
+        return config.postAnchorBudgetFor(windowTokens)
     }
 
 
@@ -81,6 +85,8 @@ internal object PostAnchorTail {
          * plain count notice (pure tool traffic with nothing to excerpt).
          */
         val digest: (dropped: List<LLMMessage>) -> String? = { null },
+        /** [T-harness-config-resolve] The budget numbers for THIS model. */
+        val config: com.openminis.app.agent.HarnessConfig = com.openminis.app.agent.HarnessConfig.DEFAULT,
     )
 
     internal data class Result(
@@ -141,7 +147,8 @@ internal object PostAnchorTail {
         // [T-harness-config] The SAME reserve object the detached tail
         // subtracts. Reading the constant here made the two paths disagree
         // whenever a config override set a different reserve.
-        val config = com.openminis.app.agent.HarnessConfig.current()
+        // [T-harness-config-resolve] Resolved by the caller for this model.
+        val config = budget.config
         val effectiveBudget = config.effectiveTailBudget(budget.budgetTokens)
         val costs = IntArray(groups.size) { i ->
             groups[i].sumOf { msg -> budget.estimate(msg) }.coerceAtLeast(0)
@@ -212,7 +219,7 @@ internal object PostAnchorTail {
                     // notice+digest, taken from the same object the budget
                     // above subtracted, so an override cannot make the two
                     // disagree.
-                    (com.openminis.app.agent.HarnessConfig.current()
+                    (budget.config
                         .let { it.noticeReserveTokens - it.noticeBaseTokens })
                         .coerceAtLeast(0) * 4
                 }

@@ -1,5 +1,6 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.agent.HarnessConfig
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 import org.junit.Assert.assertEquals
@@ -225,4 +226,28 @@ class PostAnchorBudgetTest {
         val real = user("keep going")
         assertTrue(firstInjectableUserIndex(listOf(state, real)) == 1)
     }
+    
+    @Test
+    fun aPerModelOverrideReplacesTheWindowScalingButStaysInsideTheCeiling() {
+        // [T-harness-config-store] The knob the model detail screen writes: a
+        // custom tail budget wins over the window share, and can never exceed the
+        // shipped ceiling (32k window: 11200 by scaling, 20000 by override).
+        val custom = HarnessConfig.DEFAULT.copy(postAnchorBudgetTokens = 20_000)
+        assertEquals(11_200, PostAnchorTail.budgetTokensForWindow(32_000, true, HarnessConfig.DEFAULT))
+        assertEquals(11_200, PostAnchorTail.budgetTokensForWindow(32_000, true, custom))
+        assertEquals(20_000, PostAnchorTail.budgetTokensForWindow(128_000, true, custom))
+    }
+    
+    @Test
+    fun theBudgetCarriesTheConfigItWasBuiltWith() {
+        val custom = HarnessConfig.DEFAULT.copy(noticeReserveTokens = 900)
+        val budget = PostAnchorTail.Budget(
+            budgetTokens = 10_000,
+            estimate = WalkBack::estimateMessageTokens,
+            config = custom,
+        )
+        // effectiveTailBudget is what the kept slice actually gets: reserve-aware.
+        assertEquals(10_000 - 900, budget.config.effectiveTailBudget(budget.budgetTokens))
+    }
 }
+

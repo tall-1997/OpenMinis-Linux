@@ -45,9 +45,12 @@ internal fun detachedTailSize(
  * [T-detached-tail-budget] Tail size for the production budget: 35% of the
  * window minus the notice+digest reserve, same accounting as postAnchor.
  */
-internal fun detachedTailSizeForWindow(history: List<LLMMessage>, windowTokens: Int?): Int {
-    val config = com.openminis.app.agent.HarnessConfig.current()
-    val budget = PostAnchorTail.budgetTokensForWindow(windowTokens)
+internal fun detachedTailSizeForWindow(
+    history: List<LLMMessage>,
+    windowTokens: Int?,
+    config: com.openminis.app.agent.HarnessConfig = com.openminis.app.agent.HarnessConfig.current(),
+): Int {
+    val budget = PostAnchorTail.budgetTokensForWindow(windowTokens, config = config)
     // [T-harness-config] Read the SAME reserve object the postAnchor path
     // subtracts, so a config override cannot make the two paths disagree about
     // how much room the notice+digest may take.
@@ -69,9 +72,8 @@ internal fun buildDetachedCompactHistory(
     history: List<LLMMessage>,
     tailSize: Int,
     /** Bounded excerpt builder for the most recent dropped messages. */
-    digest: ((List<LLMMessage>) -> String?)? = { dropped ->
-        DroppedRoundDigest.render(dropped, DETACHED_DIGEST_HEADER)
-    },
+    digest: ((List<LLMMessage>) -> String?)? = null,
+    config: com.openminis.app.agent.HarnessConfig = com.openminis.app.agent.HarnessConfig.current(),
 ): List<LLMMessage> {
     if (history.isEmpty()) {
         return listOf(LLMMessage(role = LLMMessage.Role.USER, content = summaryWrappedText))
@@ -91,8 +93,11 @@ internal fun buildDetachedCompactHistory(
     // with no signal. The notice lives INSIDE the <context-summary> envelope
     // and carries a bounded digest of the newest dropped messages, which are
     // the ones the next step actually depends on.
+    val effectiveDigest = digest ?: { dropped ->
+        DroppedRoundDigest.render(dropped, DETACHED_DIGEST_HEADER, config)
+    }
     val wrapped = if (cut > 0) {
-        injectDetachedNotice(summaryWrappedText, cut, history, cut, digest)
+        injectDetachedNotice(summaryWrappedText, cut, history, cut, effectiveDigest)
     } else {
         summaryWrappedText
     }

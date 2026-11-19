@@ -3324,4 +3324,19 @@
     <string name="process_card_thinking_now">Nag-iisip…</string>
     <string name="appearance_show_turn_changes_card_title">Kard ng mga pagbabago sa turn</string>
     <string name="appearance_show_turn_changes_card_subtitle">Nagpapakita ng kada-turn na kard na naglilista ng mga binago ng assistant na file, may line stats at one-tap undo. Nakasara bilang default.</string>
+    <string name="vm_compact_retry_cooldown">Nabigo ang huling compaction. Maaari mong subukan muli sa %1$d s.</string>
+    <string name="guard_stop_section">Pigil sa loop</string>
+    <string name="guard_stop_title">Huminto sa paulit-ulit</string>
+    <string name="guard_stop_on">Maaaring ihinto ang session</string>
+    <string name="guard_stop_off">Hindi kailanman ihihinto ang session</string>
+    <string name="guard_stop_footer">Kapag naka-on, ihihinto ng pigil ang session kapag masyadong madalas umulit ang parehong aksyon. Kapag naka-off, pagpapaalala lang sa modelo, kapaki-pakinabang sa mahabang paghihintay tulad ng build.</string>
+    <string name="token_usage_section_memory">Memorya</string>
+    <string name="token_usage_memory_lines">Mga linyang naipadala</string>
+    <string name="token_usage_memory_shown">Bilang ng pagpapakita</string>
+    <string name="modeldetail_section_context_budget">Badyet sa konteksto</string>
+    <string name="modeldetail_context_budget_footer">Gaano karami ng kamakailang usapan ang natitira pagkatapos ng compaction. Awtomatiko ay umaayon sa window ng modelo; ang custom na halaga ay para lang sa modelong ito.</string>
+    <string name="modeldetail_tail_budget_custom">Sariling badyet sa dulo</string>
+    <string name="modeldetail_tail_budget">Badyet sa dulo</string>
+    <string name="modeldetail_tail_budget_state_auto">Awtomatiko (umaayon sa window, hanggang 60k)</string>
+    <string name="modeldetail_tail_budget_state_specific">Sarili para sa modelong ito</string>
 </resources>

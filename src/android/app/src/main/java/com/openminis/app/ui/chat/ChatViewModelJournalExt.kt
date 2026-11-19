@@ -16,6 +16,22 @@ import com.openminis.app.data.model.LLMMessage
  * Contract: never throws, never blocks the turn, never influences the request.
  * A journal failure must be invisible to the model and the user.
  */
+/**
+ * [T-session-journal-final] Apply the image budget, then journal the list that
+ * is actually sent.
+ *
+ * WHY: the journal used to record the history BEFORE `applyRequestImageBudget`
+ * replaced oversized images with placeholders, so in any multi-image session
+ * the digest sequence described a request that never left the device — a
+ * post-mortem would report a divergence at the first trimmed image and blame
+ * request assembly for it. The journal's whole contract is "what the model
+ * saw", so it must be written after the last rewrite.
+ */
+internal fun ChatViewModel.finalizeRequestHistory(
+    turn: Int,
+    history: List<LLMMessage>,
+): List<LLMMessage> = applyRequestImageBudget(history).also { recordRequestJournal(turn, it) }
+
 internal fun ChatViewModel.recordRequestJournal(
     turn: Int,
     history: List<LLMMessage>,

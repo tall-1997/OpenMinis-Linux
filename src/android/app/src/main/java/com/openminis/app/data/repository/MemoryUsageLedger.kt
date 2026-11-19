@@ -57,6 +57,33 @@ internal object MemoryUsageLedger {
         save(memoryDir)
     }
 
+    /**
+     * [T-memory-usage-ui] Read the delivered-line counters from ONE session's
+     * file, without touching the request-path cache.
+     *
+     * The sheet needs a number for the open chat only; [snapshot] is the global
+     * cache primed by whichever request ran last, which can belong to another
+     * session. Reading the file keeps the two apart and stays a pure read.
+     */
+    fun summaryFor(memoryDir: java.io.File?): Pair<Int, Int> {
+        if (memoryDir == null) return 0 to 0
+        val target = runCatching { file(memoryDir) }.getOrNull() ?: return 0 to 0
+        if (!target.isFile) return 0 to 0
+        val obj = runCatching { JSONObject(target.readText(Charsets.UTF_8)) }.getOrNull()
+            ?: return 0 to 0
+        var lines = 0
+        var shown = 0
+        val keys = obj.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val count = obj.optInt(key, 0)
+            if (count <= 0) continue
+            lines += 1
+            shown += count
+        }
+        return lines to shown
+    }
+
     /** Delivery count for one line, 0 when it was never shown. */
     fun countOf(day: String, line: String): Int = counts[keyOf(day, line)] ?: 0
 

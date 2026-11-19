@@ -3323,4 +3323,19 @@
     <string name="process_card_thinking_now">思考中…</string>
     <string name="appearance_show_turn_changes_card_title">ターン変更カード</string>
     <string name="appearance_show_turn_changes_card_subtitle">アシスタントが変更したファイルを行数統計つきでターンごとに表示し、ワンタップで元に戻せます。デフォルトはオフです。</string>
+    <string name="vm_compact_retry_cooldown">前回の圧縮に失敗しました。%1$d 秒後に再試行できます。</string>
+    <string name="guard_stop_section">ループガード</string>
+    <string name="guard_stop_title">繰り返し時に停止</string>
+    <string name="guard_stop_on">セッションを停止できる</string>
+    <string name="guard_stop_off">セッションを停止しない</string>
+    <string name="guard_stop_footer">オンの場合、同じ操作が繰り返されるとセッションを停止します。オフの場合、モデルへの注意のみを行い、ビルド待ちなどの長い待機に適しています。</string>
+    <string name="token_usage_section_memory">メモリ</string>
+    <string name="token_usage_memory_lines">配信された行</string>
+    <string name="token_usage_memory_shown">表示回数</string>
+    <string name="modeldetail_section_context_budget">コンテキスト予算</string>
+    <string name="modeldetail_context_budget_footer">圧縮後に残す直近の会話量。自動はモデルのウィンドウに合わせて調整され、カスタム値はこのモデルだけに適用されます。</string>
+    <string name="modeldetail_tail_budget_custom">カスタム末尾予算</string>
+    <string name="modeldetail_tail_budget">末尾予算</string>
+    <string name="modeldetail_tail_budget_state_auto">自動（ウィンドウに合わせて調整、最大60k）</string>
+    <string name="modeldetail_tail_budget_state_specific">このモデル専用</string>
 </resources>

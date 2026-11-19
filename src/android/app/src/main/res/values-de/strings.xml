@@ -3175,4 +3175,19 @@
     <string name="process_card_thinking_now">Denkt…</string>
     <string name="appearance_show_turn_changes_card_title">Änderungskarte pro Runde</string>
     <string name="appearance_show_turn_changes_card_subtitle">Zeigt pro Runde eine Karte mit den vom Assistenten geänderten Dateien, Zeilenstatistik und Ein-Tipp-Rückgängig. Standardmäßig aus; das Protokoll bleibt ohne sie aufgeräumt.</string>
+    <string name="vm_compact_retry_cooldown">Die letzte Komprimierung ist fehlgeschlagen. Erneut versuchen in %1$d s.</string>
+    <string name="guard_stop_section">Schleifenbremse</string>
+    <string name="guard_stop_title">Bei Wiederholungen stoppen</string>
+    <string name="guard_stop_on">Darf die Sitzung stoppen</string>
+    <string name="guard_stop_off">Stoppt die Sitzung nie</string>
+    <string name="guard_stop_footer">Wenn aktiv, stoppt die Bremse die Sitzung, sobald sich dieselbe Aktion zu oft wiederholt. Wenn aus, erinnert sie das Modell nur - hilfreich bei langen Wartezeiten wie einem Build.</string>
+    <string name="token_usage_section_memory">Gedächtnis</string>
+    <string name="token_usage_memory_lines">Gelieferte Zeilen</string>
+    <string name="token_usage_memory_shown">Anzahl Anzeigen</string>
+    <string name="modeldetail_section_context_budget">Kontextbudget</string>
+    <string name="modeldetail_context_budget_footer">Wie viel aktuelle Unterhaltung die Komprimierung überlebt. Automatisch richtet sich nach dem Fenster des Modells; ein eigener Wert gilt nur für dieses Modell.</string>
+    <string name="modeldetail_tail_budget_custom">Eigenes Restbudget</string>
+    <string name="modeldetail_tail_budget">Restbudget</string>
+    <string name="modeldetail_tail_budget_state_auto">Automatisch (skaliert mit dem Fenster, bis 60k)</string>
+    <string name="modeldetail_tail_budget_state_specific">Eigen für dieses Modell</string>
 </resources>

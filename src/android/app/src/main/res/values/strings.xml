@@ -3087,4 +3087,19 @@
     <string name="process_card_thinking_now">Thinking…</string>
     <string name="appearance_show_turn_changes_card_title">Turn changes card</string>
     <string name="appearance_show_turn_changes_card_subtitle">Show a per-turn card listing the files the assistant changed, with line stats and one-tap undo. Off by default; the transcript stays clean without it.</string>
+    <string name="vm_compact_retry_cooldown">The last compaction failed. You can retry in %1$d s.</string>
+    <string name="guard_stop_section">Loop guard</string>
+    <string name="guard_stop_title">Stop on repeated actions</string>
+    <string name="guard_stop_on">The guard may stop the session</string>
+    <string name="guard_stop_off">Never stops the session</string>
+    <string name="guard_stop_footer">When on, the guard stops the session once the same action repeats too often. When off it only reminds the model, which helps during long waits such as a build.</string>
+    <string name="token_usage_section_memory">Memory</string>
+    <string name="token_usage_memory_lines">Lines delivered</string>
+    <string name="token_usage_memory_shown">Times shown</string>
+    <string name="modeldetail_section_context_budget">Context budget</string>
+    <string name="modeldetail_context_budget_footer">How much recent conversation survives compaction. Automatic scales with the model window; a custom value applies to this model only.</string>
+    <string name="modeldetail_tail_budget_custom">Custom tail budget</string>
+    <string name="modeldetail_tail_budget">Tail budget</string>
+    <string name="modeldetail_tail_budget_state_auto">Automatic (scales with the window, up to 60k)</string>
+    <string name="modeldetail_tail_budget_state_specific">Custom for this model</string>
 </resources>

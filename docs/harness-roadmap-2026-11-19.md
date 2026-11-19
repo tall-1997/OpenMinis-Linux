@@ -437,8 +437,9 @@ G5 消除本轮两个 P0 的同一根因。三件都是只读或纯函数级别�
 |5.1|`TimeContextGate` + `applyRequestClockNote`|关键词快路径 +间隔；请求装配期注入，带 elapsed|
 |5.2|`TimeContextGate.alreadyStamped` / `markStamped`|值不变不追加（关键词路径也不重复），reset清理|
 |6.1|`HarnessConfig` + `HarnessConfigTest`|默认值逐项钉住；非法组合构造即抛|
-|6.2|`HarnessConfig`（窗口自适应）+ 复审后的处置|**未交付「用户可调 + 持久化」**：复审发现该 store 没有任何生产写入方（不可达）、且进程级 override 会跨会话串值、还在主线程读盘，故整体删除；每模型的差异由 `postAnchorBudgetFor(window)` 自然提供。用户可调阈值需要设置页入口后再做|
-|6.3|`LoopGuard.stopEnabled` + `ActionGuard`判定"是否真的停止"|策略开关就位（默认硬边界保持不变）；**生产无 UI 入口**，属 seam，不是可用功能|
+|6.2|按模型条目持久化的 `HarnessConfigStore` + 模型详情页「上下文预算」+ 装配处显式传参|自定义尾部预算 8k–60k（步进 2k）只对当前模型生效，默认自动按窗口缩放；无全局可变量，已接线到 postAnchor/detached/digest/aging 四条路径|
+|6.3|`GuardPrefs` + `ActionGuard` 读取 + 工具限制设置页开关|默认保持硬边界；关闭后最后一档降级为提醒。开关有 UI 入口与持久化，不再是 seam|
+|6.3b|`TokenUsageSheet`「记忆」区块|显示本会话已投递的记忆行数与展示次数（读会话自己的 ledger 文件）|
 |G12|`TitleNotInModelInputTest`|断言标题路径不写 `agentHistory`，只经 `_sessionTitle`发布|
 
 已知取舍（是明确选择，不是遗漏）：

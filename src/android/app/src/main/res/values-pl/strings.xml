@@ -3331,4 +3331,19 @@
     <string name="process_card_thinking_now">Myślenie…</string>
     <string name="appearance_show_turn_changes_card_title">Karta zmian tury</string>
     <string name="appearance_show_turn_changes_card_subtitle">Pokazuje w każdej turze kartę plików zmienionych przez asystenta, ze statystyką linii i jednym dotknięciem cofania. Domyślnie wyłączona.</string>
+    <string name="vm_compact_retry_cooldown">Ostatnia kompresja nie powiodła się. Ponów próbę za %1$d s.</string>
+    <string name="guard_stop_section">Strażnik pętli</string>
+    <string name="guard_stop_title">Zatrzymaj przy powtórzeniach</string>
+    <string name="guard_stop_on">Może zatrzymać sesję</string>
+    <string name="guard_stop_off">Nigdy nie zatrzymuje sesji</string>
+    <string name="guard_stop_footer">Gdy włączone, strażnik zatrzymuje sesję, gdy ta sama czynność powtarza się zbyt często. Gdy wyłączone, tylko przypomina modelowi, co pomaga podczas długiego oczekiwania, np. na kompilację.</string>
+    <string name="token_usage_section_memory">Pamięć</string>
+    <string name="token_usage_memory_lines">Dostarczone wiersze</string>
+    <string name="token_usage_memory_shown">Liczba wyświetleń</string>
+    <string name="modeldetail_section_context_budget">Budżet kontekstu</string>
+    <string name="modeldetail_context_budget_footer">Ile ostatniej rozmowy przetrwa kompresję. Automatyczny skaluje się do okna modelu; własna wartość dotyczy tylko tego modelu.</string>
+    <string name="modeldetail_tail_budget_custom">Własny budżet końcówki</string>
+    <string name="modeldetail_tail_budget">Budżet końcówki</string>
+    <string name="modeldetail_tail_budget_state_auto">Automatyczny (skaluje się z oknem, do 60k)</string>
+    <string name="modeldetail_tail_budget_state_specific">Własny dla tego modelu</string>
 </resources>

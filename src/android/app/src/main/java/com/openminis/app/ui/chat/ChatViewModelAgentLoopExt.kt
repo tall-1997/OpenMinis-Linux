@@ -510,10 +510,10 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     goalPrompt = goalMount.prompt, goalCanContinue = goalMount.canContinue)
                 drainSteeringIntoRun(assistantId, accumulatedText, allToolBlocks, uiBatcher) { swapLoopStateToInjectedBubble(it) }
                 declareToolSetDeltaIfChanged(agentTools)
-                val requestHistory = ToolIdNormalization.normalizeMessages(
-                    // [T-stall-resume] One-shot continuation note only.
-                    effectiveAgentHistory().let { applyStallNudge(it, stallResumeContext) },
-                ).also { recordRequestJournal(turn, it) }   // [T-session-journal] shadow log
+                // [T-session-journal-final] Journal what is actually sent (post image budget).
+                val requestHistory = finalizeRequestHistory(turn, ToolIdNormalization.normalizeMessages(
+                    effectiveAgentHistory().let { applyStallNudge(it, stallResumeContext) }, // [T-stall-resume]
+                ))
                 // [T-first-event-watchdog][T-routing-strategy-x] First-token budget.
                 val firstEventTimeoutMs = GroupRoutingState.resolveFirstEventTimeoutMs(providerRepository,
                     _selectedGroupId.value,
@@ -529,7 +529,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 )
                 streamPhase.startAttempt()
                 currentProvider.streamMessage(
-                    applyRequestImageBudget(requestHistory),
+                    requestHistory,
                     turnSystemPrompt, dynamicMaxTokens(currentProvider, lastContextTokens),
                     temperature = samplingTemperature(_activeEntryId.value),
                     tools = agentTools,

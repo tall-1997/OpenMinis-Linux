@@ -3329,4 +3329,19 @@
     <string name="process_card_thinking_now">Berpikir…</string>
     <string name="appearance_show_turn_changes_card_title">Kartu perubahan giliran</string>
     <string name="appearance_show_turn_changes_card_subtitle">Menampilkan kartu per giliran yang mencantumkan file yang diubah asisten, statistik baris, dan undo satu ketukan. Nonaktif secara default.</string>
+    <string name="vm_compact_retry_cooldown">Kompresi terakhir gagal. Anda dapat mencoba lagi dalam %1$d s.</string>
+    <string name="guard_stop_section">Pengaman perulangan</string>
+    <string name="guard_stop_title">Berhenti saat berulang</string>
+    <string name="guard_stop_on">Dapat menghentikan sesi</string>
+    <string name="guard_stop_off">Tidak pernah menghentikan sesi</string>
+    <string name="guard_stop_footer">Jika aktif, pengaman menghentikan sesi setelah tindakan yang sama berulang terlalu sering. Jika nonaktif, pengaman hanya mengingatkan model, berguna saat menunggu lama seperti proses build.</string>
+    <string name="token_usage_section_memory">Memori</string>
+    <string name="token_usage_memory_lines">Baris terkirim</string>
+    <string name="token_usage_memory_shown">Jumlah tampil</string>
+    <string name="modeldetail_section_context_budget">Anggaran konteks</string>
+    <string name="modeldetail_context_budget_footer">Seberapa banyak percakapan terbaru yang bertahan setelah kompresi. Otomatis mengikuti jendela model; nilai khusus hanya berlaku untuk model ini.</string>
+    <string name="modeldetail_tail_budget_custom">Anggaran ekor khusus</string>
+    <string name="modeldetail_tail_budget">Anggaran ekor</string>
+    <string name="modeldetail_tail_budget_state_auto">Otomatis (mengikuti jendela, maksimal 60k)</string>
+    <string name="modeldetail_tail_budget_state_specific">Khusus untuk model ini</string>
 </resources>

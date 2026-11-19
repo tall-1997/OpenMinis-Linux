@@ -3328,4 +3328,19 @@
     <string name="process_card_thinking_now">Se gândește…</string>
     <string name="appearance_show_turn_changes_card_title">Cardul modificărilor turei</string>
     <string name="appearance_show_turn_changes_card_subtitle">Afișează la fiecare tură un card cu fișierele modificate de asistent, statistici pe linii și anulare dintr-o atingere. Dezactivat în mod implicit.</string>
+    <string name="vm_compact_retry_cooldown">Ultima compactare a eșuat. Puteți reîncerca în %1$d s.</string>
+    <string name="guard_stop_section">Protecție bucle</string>
+    <string name="guard_stop_title">Oprește la repetări</string>
+    <string name="guard_stop_on">Poate opri sesiunea</string>
+    <string name="guard_stop_off">Nu oprește niciodată sesiunea</string>
+    <string name="guard_stop_footer">Când este activ, protecția oprește sesiunea după ce aceeași acțiune se repetă prea des. Când este inactiv, doar îi reamintește modelului, util la așteptări lungi precum o compilare.</string>
+    <string name="token_usage_section_memory">Memorie</string>
+    <string name="token_usage_memory_lines">Linii livrate</string>
+    <string name="token_usage_memory_shown">Număr afișări</string>
+    <string name="modeldetail_section_context_budget">Buget de context</string>
+    <string name="modeldetail_context_budget_footer">Cât din conversația recentă supraviețuiește compactării. Automat se adaptează ferestrei modelului; o valoare personalizată se aplică doar acestui model.</string>
+    <string name="modeldetail_tail_budget_custom">Buget final personalizat</string>
+    <string name="modeldetail_tail_budget">Buget final</string>
+    <string name="modeldetail_tail_budget_state_auto">Automat (se adaptează ferestrei, până la 60k)</string>
+    <string name="modeldetail_tail_budget_state_specific">Personalizat pentru acest model</string>
 </resources>
