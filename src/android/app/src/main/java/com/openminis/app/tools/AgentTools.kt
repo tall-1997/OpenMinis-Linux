@@ -488,7 +488,7 @@ background=true detaches the wave: this call returns a dispatch_id at once inste
         parameters = mapOf(
             "tool_title" to AgentToolParam("string", "A concise 5-10 word summary of what this tool call does, shown to the user. Use the same language as the user."),
             "content" to AgentToolParam("string", "Concise Markdown for the memory entry."),
-            "revision" to AgentToolParam("string", "Optional daily log revision from memory_get; a stale revision returns MEMORY_CONFLICT."),
+            "revision" to AgentToolParam("string", "Optional. Pass the CURRENT day's log revision (reported at the end of memory_get as `YYYY-MM-DD:hash`) to make the write conflict-safe. A revision minted for another day is rejected as a rollover, not a conflict; omit it to create today's log."),
             "importance" to AgentToolParam("string", "Default normal: keep durable preferences, key decisions and user-requested permanent notes out of lifecycle management. Low: eligible for recovery-only archive after 60 days without use.", enumValues = listOf("normal", "low")),
             "pinned" to AgentToolParam("boolean", "True when the user asks to keep this note fixed; a pinned entry never expires or auto-archives."),
             "ttl_days" to AgentToolParam("integer", "Optional, only for unpinned low-importance entries (1–3650). After this many days, the note stops appearing automatically and can be explicitly queried/restored."),
