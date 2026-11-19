@@ -51,6 +51,28 @@ class PostAnchorBudgetTest {
         assertEquals(history, result.kept)
     }
 
+    @Test
+    fun `an unbounded budget does not scan any round`() {
+        val history = listOf(user("old"), user("new"))
+        val result = PostAnchorTail.apply(
+            history,
+            PostAnchorTail.Budget(Int.MAX_VALUE, estimate = { error("must not estimate an uncapped tail") }),
+        )
+        assertTrue(result.kept === history)
+    }
+
+    @Test
+    fun `large round totals cannot wrap around the budget`() {
+        val history = listOf(user("oldest"), user("old"), user("new"))
+        val result = PostAnchorTail.apply(
+            history,
+            PostAnchorTail.Budget(1_000, estimate = { Int.MAX_VALUE / 2 + 10 }),
+        )
+        assertEquals(2, result.droppedRounds)
+        assertEquals(Int.MAX_VALUE, result.droppedTokens)
+        assertEquals(history.last(), result.kept.last())
+    }
+
     // ── estimator completeness ────────────────────────────────────────────
 
     @Test

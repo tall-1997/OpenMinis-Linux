@@ -42,7 +42,7 @@ internal fun ChatViewModel.claimPromptQueue(): List<QueuedPrompt>? {
  */
 internal suspend fun ChatViewModel.drainQueuedPrompts(
     provider: LLMProvider,
-    systemPrompt: String?,
+    systemPrompt: MemoryDeliveryPrompt?,
     fallbackProviders: List<ChatViewModel.FallbackCandidate>,
     fallbackStrategy: com.openminis.app.data.model.FallbackStrategy,
 ) {
@@ -174,9 +174,7 @@ internal suspend fun ChatViewModel.drainQueuedPrompts(
             // previous turn. Rebuild now that the row is persisted and the
             // bubble is bound; fall back to the old prompt only if the build
             // fails.
-            val drainedPrompt = withContext(Dispatchers.IO) {
-                runCatching { buildSystemPrompt() }.getOrNull()
-            } ?: systemPrompt
+            val drainedPrompt = refreshRunPromptForInjectedTurn(systemPrompt)
             runAgentLoop(
                 provider = provider,
                 systemPrompt = drainedPrompt,

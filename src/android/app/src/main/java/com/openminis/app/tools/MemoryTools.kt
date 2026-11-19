@@ -2,6 +2,8 @@ package com.openminis.app.tools
 
 import com.openminis.app.data.authority.MemoryAuthority
 import com.openminis.app.data.authority.MemoryOrigin
+import com.openminis.app.data.repository.MemoryEntryOrigin
+import com.openminis.app.data.repository.MemoryLifecycle
 import com.openminis.app.data.repository.MemoryRepository
 import org.json.JSONObject
 
@@ -52,7 +54,26 @@ object MemoryTools {
             if (content.isBlank()) {
                 ToolResult("Error: Missing required 'content' parameter", false, toolTitle)
             } else {
-                val result = repository.writeMemory(content, revision)
+                val importance = obj.optString("importance", "normal")
+                if (importance !in setOf("normal", "low")) {
+                    return ToolResult("Error: importance must be normal or low", false, toolTitle)
+                }
+                val pinned = if (!obj.has("pinned")) false else obj.opt("pinned") as? Boolean
+                    ?: return ToolResult("Error: pinned must be a boolean", false, toolTitle)
+                val low = importance == "low" && !pinned && origin == MemoryOrigin.AGENT
+                val ttl = if (!obj.has("ttl_days")) null else {
+                    val days = when (val value = obj.opt("ttl_days")) {
+                        is Number -> value.toString().toIntOrNull()
+                        else -> null
+                    }
+                    if (!low || days == null || days !in 1..MemoryLifecycle.MAX_TTL_DAYS) {
+                        return ToolResult("Error: ttl_days must be an integer from 1 to ${MemoryLifecycle.MAX_TTL_DAYS} on an unpinned low-importance agent memory", false, toolTitle)
+                    }
+                    days
+                }
+                val result = if (origin == MemoryOrigin.AGENT) {
+                    repository.writeHostMemory(content, revision, MemoryEntryOrigin.MEMORY_WRITE, ttl, autoArchive = low, pin = pinned)
+                } else repository.writeMemory(content, revision)
                 // [T-memory-dedup-on-write] The write-side dedup's "Skipped: …"
                 // reply is a SUCCESS (the memory exists; nothing was written) —
                 // classifying it as failure made the model see an error-shaped
@@ -82,6 +103,25 @@ object MemoryTools {
             val keywords = obj.optString("keywords", "")
             val scope = obj.optString("scope", "all")
             val toolTitle = obj.optString("tool_title", "memory_get")
+            when (val action = obj.optString("action", "search")) {
+                "restore" -> {
+                    if (origin == MemoryOrigin.AUTOMATIC_RECALL || scope != "archive") {
+                        return ToolResult("Error: restore requires explicit archive access", false, toolTitle)
+                    }
+                    val entryId = obj.optString("entry_id")
+                    val restored = repository.restoreArchivedMemory(entryId)
+                    return if (restored) ToolResult("Memory restored: $entryId", true, toolTitle)
+                    else ToolResult("Error: No expired or archived entry with that ID in this scope", false, toolTitle)
+                }
+                "search" -> Unit
+                else -> return ToolResult("Error: Unknown memory_get action '$action'", false, toolTitle)
+            }
+            if (scope == "archive") {
+                if (origin == MemoryOrigin.AUTOMATIC_RECALL) {
+                    return ToolResult("Error: archive search requires explicit access", false, toolTitle)
+                }
+                return ToolResult(repository.getMemory(keywords, scope), true, toolTitle)
+            }
 
             if (scope == "evolution") {
                 val engine = com.openminis.app.di.AppGraph.evolutionEngineOrNull()

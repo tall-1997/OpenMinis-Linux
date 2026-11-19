@@ -128,7 +128,8 @@ class GeminiProvider(
         val finishReason = extractFinishReason(json)
         val usage = extractUsage(json)
         val mediaAttachments = extractInlineMedia(json)
-        LLMResponse(text, finishReason ?: "end_turn", usage, mediaAttachments)
+        // Compaction must distinguish a genuine STOP from a response with no terminal signal.
+        LLMResponse(text, finishReason, usage, mediaAttachments)
     }
 
     override fun streamMessageClamped(
@@ -192,10 +193,8 @@ class GeminiProvider(
                 val json = try { JSONObject(payload) } catch (_: Exception) { continue }
 
                 // [T-gemini-block-reason] A safety/region-blocked request has NO
-                // `candidates` — only `promptFeedback.blockReason`. Without this
-                // branch the stream ended as Finished("end_turn") with no text,
-                // which failOnSilentEmptyCompletion accepts (a stop reason was
-                // seen) and the user got a silent empty reply with no hint.
+                // `candidates` — only `promptFeedback.blockReason`. Preserve the
+                // server's block reason instead of treating it as an empty reply.
                 json.optJSONObject("promptFeedback")?.safeOptString("blockReason", "")?.takeIf { it.isNotEmpty() }?.let { reason ->
                     throw LLMError.DecodingError(
                         IllegalStateException("Gemini blocked the request: $reason"),
@@ -236,7 +235,8 @@ class GeminiProvider(
                     drain.terminal()
                 }
             }
-            send(LLMStreamChunk.Finished(lastFinishReason ?: "end_turn"))
+            // EOF (or a relay's [DONE]) does not supply a Gemini finishReason.
+            send(LLMStreamChunk.Finished(lastFinishReason))
         } catch (e: Exception) {
             // [T-android-stop-cancels-socket] User Stop is a normal exit.
             if (e is kotlinx.coroutines.CancellationException) throw e
@@ -314,7 +314,7 @@ class GeminiProvider(
                                 // [T-android-gemini3-thoughtsig / #179] No signature
                                 // to replay → downgrade to a text summary rather than
                                 // send a bare functionCall (which gemini-3.x 400s on).
-                                val argsDesc = part.input.toString().let {
+                                val argsDesc = part.inputJson.let {
                                     if (it.length > 500) it.take(500) + "…" else it
                                 }
                                 parts.put(JSONObject().put("text", "[Called ${part.name} with: $argsDesc]"))

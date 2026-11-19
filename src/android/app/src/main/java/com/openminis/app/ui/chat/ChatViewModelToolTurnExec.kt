@@ -10,7 +10,6 @@ import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.repository.MultiAgentSettings
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.plugins.LocalToolPluginStore
-import com.openminis.app.security.ToolAliases
 import com.openminis.app.service.SessionActivityTracker
 import com.openminis.app.service.ToolOutcome
 import com.openminis.app.tools.SubAgentKind
@@ -19,6 +18,11 @@ import com.openminis.app.tools.ToolCallLanes
 import com.openminis.app.tools.ToolCallPreflight
 import com.openminis.app.tools.ToolExecutionResult
 import com.openminis.app.tools.ToolOutputSpill
+import com.openminis.app.tools.ToolReceiptScope
+import com.openminis.app.tools.isReceiptAdvisory
+import com.openminis.app.tools.isReceiptPolling
+import com.openminis.app.tools.needsToolReceipt
+import com.openminis.app.util.Digest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -81,7 +85,11 @@ internal class ToolTurnContext(
     val toolCallRawArgs: MutableMap<String, String>,
     /** [T-tool-execution-ledger] Run-scoped: a replayed call reuses its result. */
     val ledger: ToolExecutionLedger,
-)
+    val receiptUserTurnId: String? = null,
+    receiptAfterResultId: String? = null,
+) {
+    val receiptScope = ToolReceiptScope.userTurn(activeSessionId, receiptUserTurnId)?.afterTranscript(receiptAfterResultId)
+}
 
 /**
  * One tool call that survived phase-1 preflight, carrying everything its
@@ -104,6 +112,7 @@ internal data class PlannedToolCall(
 internal class ToolTurnPlan(
     val plannedCalls: List<PlannedToolCall>,
     val refusedParts: Map<String, AgentContentPart.ToolResult>,
+    val repairedArgsById: Map<String, String>,
 )
 
 /** Phase-2 output: per-id executed parts, keyed by call id for phase-3 assembly. */
@@ -126,6 +135,7 @@ internal suspend fun ChatViewModel.preflightToolTurn(
     val activeRun = com.openminis.app.service.ActiveRunContext.current()
     val plannedCalls = mutableListOf<PlannedToolCall>()
     val refusedParts = LinkedHashMap<String, AgentContentPart.ToolResult>()
+    val repairedArgsById = LinkedHashMap<String, String>()
     for ((id, name, args) in toolCalls) {
         currentCoroutineContext().ensureActive()
         activeRun?.associateSession(ctx.activeSessionId)
@@ -179,6 +189,7 @@ internal suspend fun ChatViewModel.preflightToolTurn(
         }
         val truncationRepairTag = (preflight as ToolCallPreflight.Outcome.Ready).truncationRepairTag
         val argsStr = preflight.argsStr
+        repairedArgsById[id] = argsStr
         val paramsMap = parseToolParams(argsStr)
         // [T-android-duplicate-toolcall-replay] Refuse a replayed
         // ToolCallComplete (same raw id + name + serialized args as a call
@@ -188,11 +199,9 @@ internal suspend fun ChatViewModel.preflightToolTurn(
         // tool_use/tool_result pairing stays balanced. Not recorded in the
         // loop detector — a transport replay is not model behavior.
         if (id in ctx.replayRenamedIds) {
-            val duplicateMsg = "Error: duplicate tool call ignored. This exact call " +
-                "(same id, name, and arguments) was already dispatched earlier in this " +
-                "turn and its result is already available above. The duplicate was not " +
-                "executed. Continue with the recorded result."
-            AppLogger.warning(ChatViewModel.TAG_STREAM, "[ToolReplay] refused duplicate dispatch id=$id name=$name args=${argsStr.take(200)}")
+            val duplicateMsg = "Error: replayed tool call ignored. This copy was not sent. " +
+                "Use the original result if it exists; otherwise verify delivery before repeating the operation."
+            AppLogger.warning(ChatViewModel.TAG_STREAM, "[ToolReplay] refused duplicate dispatch id=$id name=$name")
             val dupIdx = ctx.allToolBlocks.indexOfFirst { it.id == id }
             if (dupIdx >= 0) {
                 val elapsedDup = System.currentTimeMillis() - ctx.allToolBlocks[dupIdx].startTimeMs
@@ -258,7 +267,7 @@ internal suspend fun ChatViewModel.preflightToolTurn(
         // [T-parallel-tool-calls] Lane assignment. Local command-template
         // plugins materialize into shell commands, so they inherit the
         // barrier lane. Unknown names default to BARRIER (conservative).
-        val canonicalName = ToolAliases.canonical(name)
+        val canonicalName = receiptDispatchName(name)
         val isLocalTool = LocalToolPluginStore.find(context, canonicalName) != null
         plannedCalls.add(PlannedToolCall(
             id = id,
@@ -267,10 +276,10 @@ internal suspend fun ChatViewModel.preflightToolTurn(
             argsStr = argsStr,
             paramsMap = paramsMap,
             truncationRepairTag = truncationRepairTag,
-            lane = ToolCallLanes.laneFor(canonicalName, isLocalTool),
+            lane = ToolCallLanes.laneFor(canonicalName, isLocalTool, argsStr),
         ))
     }
-    return ToolTurnPlan(plannedCalls, refusedParts)
+    return ToolTurnPlan(plannedCalls, refusedParts, repairedArgsById)
 }
 
 /**
@@ -336,7 +345,9 @@ internal suspend fun ChatViewModel.finalizePlannedCall(
             // to be longer than the head-trimmed result, leaving the completed
             // card showing an out-of-order tail. For shell_execute the result
             // is authoritative — use it whenever it says anything.
+            val deliveryNotice = result.isReceiptAdvisory() || result.notSent || (!result.success && result.receiptProof != null)
             val mergedContent = when {
+                deliveryNotice -> result.output
                 name == "shell_execute" && resultContent.isNotBlank() -> resultContent
                 existingContent.length > resultContent.length -> existingContent
                 else -> resultContent
@@ -453,6 +464,7 @@ internal suspend fun ChatViewModel.finalizePlannedCall(
         imageData = result.imageData,
         imageMimeType = result.imageMimeType,
         imageLinuxPath = result.imageLinuxPath,
+        receiptProof = result.receiptProof,
     )
 }
 
@@ -511,19 +523,12 @@ private suspend fun ChatViewModel.runPlannedCall(
     ctx: ToolTurnContext,
     call: PlannedToolCall,
     executedParts: ConcurrentHashMap<String, AgentContentPart.ToolResult>,
+    spawnDispatch: SpawnDispatchOptions? = null,
 ) {
     currentCoroutineContext().ensureActive()
-    val ledgerArgsSha = com.openminis.app.util.Digest.sha256Hex(call.argsStr)
-    val part = ctx.ledger.executeOnce(
-        call.id, call.name, ledgerArgsSha,
-        onReuse = { prior ->
-            AppLogger.warning(
-                ChatViewModel.TAG_STREAM,
-                "[ToolLedger] reused recorded result for replayed call id=${call.id} name=${call.name}",
-            )
-            settleReplayedCall(ctx, call.id, prior)
-        },
-    ) {
+    val ledgerArgsSha = Digest.sha256Hex(call.argsStr)
+    // Protected calls always check the durable turn key, not the provider-ID cache.
+    val produce: suspend () -> AgentContentPart.ToolResult = {
         // Owner-only: everything below has a side effect and must run once.
         // [T-tool-title-single-source GH#344] The status bar shows the same
         // concrete title as the card: model title / args summary / friendly
@@ -546,17 +551,22 @@ private suspend fun ChatViewModel.runPlannedCall(
         withContext(Dispatchers.Main) {
             updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, ctx.allToolBlocks.toList())
         }
-        Log.d("ToolChain[VM]", "[turn=${ctx.turn}] executeTool START name=${call.name} args=${call.argsStr.take(200)}")
-        val result = executeTool(call.name, call.argsStr, call.id, ctx.allToolBlocks, ctx.assistantId, ctx.accumulatedText)
+        Log.d("ToolChain[VM]", "[turn=${ctx.turn}] executeTool START name=${call.name}")
+        val result = executeTool(
+            call.name, call.argsStr, call.id, ctx.allToolBlocks, ctx.assistantId, ctx.accumulatedText,
+            receiptScope = ctx.receiptScope, spawnDispatch = spawnDispatch,
+        )
         // [T-known-failure] Feed the outcome back into the failure ledger the
         // dispatch gate reads: a success clears the record, a failure arms it
         // for the next identical call. Fire-and-forget; never affects the
         // result the model sees.
-        com.openminis.app.tools.ToolFailureMemory.recordOutcome(
-            context, activeSessionId, call.name, call.argsStr, result.success, result.output,
-        )
+        if (!result.isReceiptAdvisory() && !result.notSent && !isReceiptPolling(call.canonicalName, call.argsStr)) {
+            com.openminis.app.tools.ToolFailureMemory.recordOutcome(
+                context, ctx.activeSessionId, call.name, call.argsStr, result.success, result.output,
+            )
+        }
         currentCoroutineContext().ensureActive()
-        Log.d("ToolChain[VM]", "[turn=${ctx.turn}] executeTool END name=${call.name} success=${result.success} title=${result.toolTitle} outputLen=${result.output.length} output=${result.output.take(200)}")
+        Log.d("ToolChain[VM]", "[turn=${ctx.turn}] executeTool END name=${call.name} success=${result.success} outputLen=${result.output.length}")
         // [T-working-memory-ledger] Host-side one-line record of this round
         // for the evict-then-deliver handover (the tail budget drops
         // unsummarized rounds; this line is what gets delivered in their
@@ -575,6 +585,15 @@ private suspend fun ChatViewModel.runPlannedCall(
             resultHead = result.output.take(120),
         )
         finalizePlannedCall(ctx, call, result)
+    }
+    val part = if (needsToolReceipt(call.canonicalName, call.argsStr) || isReceiptPolling(call.canonicalName, call.argsStr)) {
+        produce()
+    } else {
+        ctx.ledger.executeOnce(
+            call.id, call.name, "$ledgerArgsSha:${ctx.receiptScope?.parentSha.orEmpty()}",
+            onReuse = { prior -> settleReplayedCall(ctx, call.id, prior) },
+            produce = produce,
+        )
     }
     executedParts[call.id] = part
 }
@@ -610,11 +629,11 @@ private suspend fun ChatViewModel.fanOutSpawnCalls(
     // launching a second sub-agent wave. [T-working-memory-ledger] The
     // owner-only producer also records one WorkingMemory line — replays are
     // NOT recorded again (the same work was logged when it first ran).
-    val peers = plannedCalls.filter { SubAgentKind.isSpawnTool(it.name) }
+    val peers = plannedCalls.filter { SubAgentKind.isSpawnTool(it.canonicalName) }
     val cap = MultiAgentSettings.clampConcurrent(multiAgentSettings.maxConcurrent.value)
     val sem = Semaphore(cap)
     val writerCount = peers.sumOf { peer ->
-        parseSubAgentBatch(peer.argsStr, ToolLimitPrefs.subagentMaxTurns())
+        parseSubAgentBatch(spawnDispatchArgs(peer.canonicalName, peer.argsStr), ToolLimitPrefs.subagentMaxTurns())
             .count { spawn -> SubAgentKind.canWrite(spawn.kind) }
     }
     coroutineScope {
@@ -628,41 +647,12 @@ private suspend fun ChatViewModel.fanOutSpawnCalls(
                 // fallback). The failure is now THIS peer's failed tool_result
                 // and a FAILED block, exactly like the serial lanes.
                 try {
-                    val peerArgsSha = com.openminis.app.util.Digest.sha256Hex(peer.argsStr)
-                    val part = ctx.ledger.executeOnce(
-                        peer.id, peer.name, peerArgsSha,
-                        onReuse = { prior ->
-                            AppLogger.warning(
-                                ChatViewModel.TAG_STREAM,
-                                "[ToolLedger] reused recorded result for replayed spawn id=${peer.id} name=${peer.name}",
-                            )
-                            settleReplayedCall(ctx, peer.id, prior)
-                        },
-                    ) {
-                        // Owner-only: dispatching a sub-agent wave is the side
-                        // effect. A replay must never reach this line.
-                        val peerResult = executeRunSubAgent(
-                            peer.argsStr,
-                            peer.id,
-                            ctx.allToolBlocks,
-                            ctx.assistantId,
-                            ctx.accumulatedText,
-                            limiter = sem,
-                            parallelWriters = writerCount,
-                            waveIndex = peerIdx,
-                            waveSize = peers.size,
-                        )
-                        WorkingMemoryStore.append(
-                            sessionId = ctx.activeSessionId,
-                            turn = ctx.turn,
-                            tool = peer.name,
-                            argsDigest = peerArgsSha.take(8),
-                            argsSummary = WorkingMemoryArgs.summary(peer.name, peer.argsStr),
-                            resultHead = peerResult.output.take(120),
-                        )
-                        finalizePlannedCall(ctx, peer, peerResult)
-                    }
-                    execution.executedParts[peer.id] = part
+                    runPlannedCall(ctx, peer, execution.executedParts, SpawnDispatchOptions(
+                        limiter = sem,
+                        parallelWriters = writerCount,
+                        waveIndex = peerIdx,
+                        waveSize = peers.size,
+                    ))
                 } catch (ce: kotlinx.coroutines.CancellationException) {
                     if (!coroutineContext.isActive) throw ce
                     failIsolation(ctx, execution, peer, "timed out: ${ce.message ?: ce.javaClass.simpleName}")
@@ -699,7 +689,7 @@ internal suspend fun ChatViewModel.executePlannedToolTurn(
         var barrierChain: Job? = null
         var spawnFanOutLaunched = false
         for (call in plan.plannedCalls) {
-            if (SubAgentKind.isSpawnTool(call.name)) {
+            if (SubAgentKind.isSpawnTool(call.canonicalName)) {
                 if (!spawnFanOutLaunched) {
                     spawnFanOutLaunched = true
                     val prev = barrierChain

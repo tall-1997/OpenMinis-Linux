@@ -1,26 +1,14 @@
 package com.openminis.app.ui.chat
 
-import com.openminis.app.data.BPETokenizer
+import com.openminis.app.data.ContextTokenEstimate
+import com.openminis.app.data.ContextTokenMeter
+import com.openminis.app.data.model.ContextUsage
+import com.openminis.app.provider.api.ChatRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-// [#25] Context-usage breakdown — "what is the next request made of".
-//
-// TokenUsageSheet's Context section shows the current session's prompt
-// composition (per-block token estimates + the existing totals) — the
-// breakdown was merged into that sheet from the former standalone
-// ContextUsageSheet. This file owns the data side only:
-//   - [ContextBreakdownMath] is a pure, JVM-testable core (estimation basis
-//     matches countPartTokens: BPETokenizer.countTokens for text);
-//   - [buildContextBreakdown] wires it to the ChatViewModel's existing
-//     capabilities (buildSystemPrompt / PromptParts / estimate* / policy
-//     totals) — nothing here re-implements prompt assembly or estimation.
-//
-// Accuracy note: every number is a ROUGH estimate (±10%). The system-prompt
-// sections use BPETokenizer.countTokens (countPartTokens's text basis),
-// while the history block reuses estimateAgentHistoryTokens (TokenScanMemo
-// mixed scan + per-model calibration). The sheet states the tolerance to
-// the user.
+// The per-block composition uses the shared raw ruler. The context total and
+// output allowance use the projected request and can have a measured prefix.
 
 /** Semantic blocks of the next request payload, in the order the UI shows them. */
 internal enum class ContextBlockKey {
@@ -54,23 +42,18 @@ internal data class ContextBlock(
     val share: Float,
 )
 
-/**
- * The full breakdown snapshot the sheet renders. [usedTokens] /
- * [windowTokens] / [maxOutputTokens] come from the existing policy values
- * (contextTokensForPolicy / currentModelContextWindow / dynamicMaxTokens)
- * and are displayed independently of the per-block sum.
- */
+/** Block estimates describe the composition; the input total and allowance describe the request. */
 internal data class ContextBreakdown(
     val blocks: List<ContextBlock>,
-    /** Sum of all block estimates — self-consistent by construction. */
     val totalTokens: Int,
-    /** Existing "real or floor" reading: contextTokensForPolicy(). */
     val usedTokens: Int,
-    /** Model context window in tokens; 0 = unknown. */
     val windowTokens: Int,
-    /** Max output tokens that still fit the window (dynamicMaxTokens); 0 = unknown. */
     val maxOutputTokens: Int,
-)
+    val measuredPrefixTokens: Int? = null,
+) {
+    val contextUsage: ContextUsage
+        get() = ContextUsage(usedTokens.toLong(), windowTokens.toLong(), measuredPrefixTokens?.toLong())
+}
 
 /**
  * Pure core of the breakdown. Takes pre-computed texts/numbers so the JVM
@@ -85,15 +68,27 @@ internal object ContextBreakdownMath {
      */
     const val ESTIMATE_TOLERANCE = 0.10f
 
-    /** Estimation basis shared with countPartTokens (text branch): BPE heuristic. */
-    fun sectionTokens(text: String): Int = BPETokenizer.countTokens(text)
+    fun sectionTokens(text: String): Int = ContextTokenMeter.rawTextTokens(text)
 
-    /**
-     * Build the breakdown. Blank/zero contributors are dropped so the panel
-     * never shows a 0-token row for something that is not injected at all.
-     * [totalTokens] is exactly the sum of the emitted blocks, so the sheet's
-     * per-block percentages always add up to 100%.
-     */
+    fun forRequest(
+        sections: List<Pair<ContextBlockKey, String>>,
+        request: ChatRequest,
+        estimate: ContextTokenEstimate,
+        windowTokens: Int,
+        maxOutputTokens: Int,
+        pendingAttachmentTokens: Int,
+    ): ContextBreakdown = build(
+        sections = sections,
+        historyTokens = ContextTokenMeter.rawRequestTokens(request.messages, imageParts = request.imageParts),
+        pendingAttachmentTokens = pendingAttachmentTokens,
+        usedTokens = estimate.tokens,
+        windowTokens = windowTokens,
+        maxOutputTokens = maxOutputTokens,
+        toolSchemaTokens = ContextTokenMeter.rawRequestTokens(emptyList(), tools = request.tools),
+        measuredPrefixTokens = estimate.measuredPrefixTokens,
+    )
+
+    /** Blank/zero contributors do not produce rows. Pending attachments are not projected input yet. */
     fun build(
         sections: List<Pair<ContextBlockKey, String>>,
         historyTokens: Int,
@@ -101,83 +96,78 @@ internal object ContextBreakdownMath {
         usedTokens: Int,
         windowTokens: Int,
         maxOutputTokens: Int,
+        toolSchemaTokens: Int = 0,
+        measuredPrefixTokens: Int? = null,
     ): ContextBreakdown {
         val blocks = buildList {
+            var remainingToolTokens = toolSchemaTokens
             for ((key, text) in sections) {
-                // Whitespace-only fragments are absent injections, not content:
-                // the heuristic estimator would still charge them a token or
-                // two, so drop them before measuring.
-                if (text.isBlank()) continue
-                val tokens = sectionTokens(text)
+                val textTokens = if (text.isBlank()) 0 else sectionTokens(text)
+                val tokens = if (key == ContextBlockKey.SYSTEM_TOOLS) {
+                    val tools = remainingToolTokens
+                    remainingToolTokens = 0
+                    (textTokens.toLong() + tools).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                } else textTokens
                 if (tokens > 0) add(ContextBlock(key, tokens, 0f))
             }
+            if (remainingToolTokens > 0) add(0, ContextBlock(ContextBlockKey.SYSTEM_TOOLS, remainingToolTokens, 0f))
             if (historyTokens > 0) add(ContextBlock(ContextBlockKey.HISTORY, historyTokens, 0f))
             if (pendingAttachmentTokens > 0) {
                 add(ContextBlock(ContextBlockKey.PENDING_ATTACHMENTS, pendingAttachmentTokens, 0f))
             }
         }
-        val total = blocks.sumOf { it.tokens }
-        val resolved = if (total > 0) {
-            blocks.map { it.copy(share = it.tokens.toFloat() / total) }
-        } else {
-            blocks
-        }
+        val total = blocks.sumOf { it.tokens.toLong() }
         return ContextBreakdown(
-            blocks = resolved,
-            totalTokens = total,
+            blocks = if (total > 0) blocks.map { it.copy(share = it.tokens.toFloat() / total) } else blocks,
+            totalTokens = total.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
             usedTokens = usedTokens,
             windowTokens = windowTokens,
             maxOutputTokens = maxOutputTokens,
+            measuredPrefixTokens = measuredPrefixTokens,
         )
     }
 }
 
-/**
- * Compute the full breakdown for the sheet. Runs the existing assembly once
- * on IO (buildSystemPrompt does disk reads — the request path runs the same
- * work per request), then estimates each block:
- *   - system sections come from [buildSystemPromptWithSections]'s RETURN
- *     value — the sections of the exact build this call just ran
- *     ([T-context-breakdown-race]; the old global lastSystemSections
- *     registry let a concurrent session's build bleed into this session's
- *     numbers, and served stale sections after a failed build);
- *   - goal/plan: nothing is appended per request; those notices live in HISTORY;
- *   - history reuses estimateAgentHistoryTokens (effective/compacted window);
- *   - pending attachments count images at the same flat 1,500 the history
- *     estimator uses. Document attachments are NOT byte-read here — that is
- *     the OOM exposure ChatViewModelAttachmentExt deliberately avoids; they
- *     start counting once they ride the history as text parts.
- */
+/** Read-only projection on IO. Do not publish a prompt breakpoint, recall delivery or media spill. */
 internal suspend fun ChatViewModel.buildContextBreakdown(): ContextBreakdown = withContext(Dispatchers.IO) {
-    // One assembly pass; its sections ARE this breakdown's system blocks —
-    // no shared registry between build and read.
-    // Measurement only — must NOT republish the stable-prefix boundary:
-    // the in-flight run loop still consumes the value from ITS build.
-    val systemSections = buildSystemPromptWithSections(publishStablePrefix = false).second
-
-    // [T-no-repeated-injection] Nothing is appended per request any more:
-    // goal/recall/plan notices are committed once into HISTORY, and the plan
-    // report/lanes/jobs live in tool results. Counting them here again would
-    // report tokens the request does not carry (and double-count the history).
-
-    val maxOutput = currentProvider?.let { dynamicMaxTokens(it, _lastTurnContextTokens.value) }
-        ?: currentModelMaxOutputTokens
-        ?: 0
-
-    ContextBreakdownMath.build(
-        sections = systemSections,
-        historyTokens = estimateAgentHistoryTokens(),
-        pendingAttachmentTokens = pendingAttachmentTokens(),
-        usedTokens = contextTokensForPolicy(),
-        windowTokens = currentModelContextWindow ?: 0,
-        maxOutputTokens = maxOutput,
+    val provider = currentProvider
+    val assembly = assembleSystemPrompt(publishStablePrefix = false)
+    val tools = agentTools
+    val pendingImages = attachments.value.count { it.isImage } * ContextTokenMeter.IMAGE_TOKENS
+    if (provider == null) {
+        val request = ChatRequest(effectiveAgentHistoryUncounted(), assembly.delivery.prompt, maxTokens = 0, tools = tools)
+        return@withContext ContextBreakdownMath.forRequest(
+            assembly.sections, request, ContextTokenEstimate(ContextTokenMeter.rawRequestTokens(request)),
+            currentModelContextWindow ?: 0, currentModelMaxOutputTokens ?: 0, pendingImages,
+        )
+    }
+    val projected = projectChatRequest(provider, assembly.delivery, agentHistorySnapshot(), tools, requestThinkingLevel(provider))
+    ContextBreakdownMath.forRequest(
+        sections = projectedContextSections(assembly.sections, assembly.delivery, projected.prompt),
+        request = projected.request,
+        estimate = projected.estimate,
+        windowTokens = projected.window,
+        maxOutputTokens = dynamicMaxTokens(provider, projected.estimate.tokens, projected.window),
+        pendingAttachmentTokens = pendingImages,
     )
 }
 
-/**
- * Rough token estimate for composer attachments not yet in history. Images
- * use the same flat 1,500 the history estimator assigns to
- * AgentContentPart.ImageData; documents stay 0 (see the KDoc above).
- */
-private fun ChatViewModel.pendingAttachmentTokens(): Int =
-    attachments.value.count { it.isImage } * 1_500
+/** Projection may prepend a provider identity and replace the dynamic tail. */
+internal fun projectedContextSections(
+    sections: List<Pair<ContextBlockKey, String>>,
+    assembled: MemoryDeliveryPrompt,
+    projected: MemoryDeliveryPrompt?,
+): List<Pair<ContextBlockKey, String>> {
+    if (projected == null) return emptyList()
+    if (projected.prompt == assembled.prompt) return sections
+    val before = assembled.stablePrefixLen
+    val after = projected.stablePrefixLen
+    if (before !in 0..assembled.prompt.length || after !in before..projected.prompt.length ||
+        !projected.prompt.regionMatches(after - before, assembled.prompt, 0, before)
+    ) return listOf(ContextBlockKey.SYSTEM_TOOLS to projected.prompt)
+
+    val addedHead = projected.prompt.substring(0, after - before)
+    return sections.filterNot { it.first == ContextBlockKey.RUNTIME_TAIL }.map { (key, text) ->
+        key to if (key == ContextBlockKey.SYSTEM_TOOLS) addedHead + text else text
+    } + (ContextBlockKey.RUNTIME_TAIL to projected.prompt.substring(after))
+}

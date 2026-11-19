@@ -48,6 +48,7 @@ class SchemaMigrationDriftTest {
         "AuditMigrations.kt",
         "MemoryEmbeddingMigrations.kt",
         "ThinkingDormancyMigrations.kt",
+        "CompactAssetMigrations.kt",
     )
     private val dbDir = resolveRepoFile(
         "src/main/java/com/openminis/app/data/db",

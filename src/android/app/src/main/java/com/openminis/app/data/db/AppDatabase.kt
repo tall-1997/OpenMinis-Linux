@@ -26,7 +26,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         AuditEntryEntity::class,
         MemoryEmbeddingEntity::class,
     ],
-    version = 34, // keep DatabaseVersionGuard.CODE_DB_VERSION in lockstep; 34 = sessions.dormant_thinking_override (P2 1-8), 33 = memory_embeddings (#27)
+    version = 35, // 35 = compact_markers.assets_json; keep DatabaseVersionGuard.CODE_DB_VERSION in lockstep
     // [T-android-downgrade-compat] Kept ON so MigrationTestHelper and CI can
     // validate migrations against the committed schema json. The chain now
     // runs 12-34 complete. 13.json and 17.json were never exported by a

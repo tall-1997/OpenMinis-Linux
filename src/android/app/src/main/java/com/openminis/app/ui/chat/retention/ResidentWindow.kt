@@ -28,9 +28,8 @@ internal object ResidentWindow {
      * size each message exactly once per pass instead of re-serializing the
      * whole remaining suffix at every candidate cut.
      *
-     * [AgentContentPart.ToolUse.input] is the only part whose size requires
-     * *serializing* (a `JSONObject` has no cached length), which is why the
-     * old `byteCut` — `bytesOf(subList(cut, size))` inside the candidate
+     * [AgentContentPart.ToolUse.inputJson] reuses a published snapshot and
+     * serializes only live inputs. The old `byteCut` called `bytesOf` inside the
      * loop — re-stringified every tool input O(candidates) times. On a
      * session with a multi-megabyte tool argument that stalled the main
      * thread for seconds during `loadSession`'s history rebuild and ANR'd
@@ -47,7 +46,7 @@ internal object ResidentWindow {
                     is AgentContentPart.Text -> part.text.length.toLong() * 2
                     is AgentContentPart.ToolResult ->
                         part.content.length.toLong() * 2 + (part.imageData?.size?.toLong() ?: 0L)
-                    is AgentContentPart.ToolUse -> part.input.toString().length.toLong() * 2
+                    is AgentContentPart.ToolUse -> part.inputJson.length.toLong() * 2
                     is AgentContentPart.ImageData -> part.data.size.toLong()
                 }
             }

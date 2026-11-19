@@ -5,10 +5,11 @@ import android.util.Log
 import com.openminis.app.R
 import com.openminis.app.data.db.MessageEntity
 import com.openminis.app.data.model.AgentContentPart
+import com.openminis.app.data.model.ContextUsageAnchor
 import com.openminis.app.data.model.LLMMessage
+import com.openminis.app.data.model.ModelAttributionSnapshot
 import com.openminis.app.logging.AppLogger
-import com.openminis.app.provider.NonFiniteJson
-import org.json.JSONObject
+import java.io.File
 
 // [T-android-split-chat-mapping] DB row → UI/LLM mapping extracted verbatim
 // from ChatViewModel.kt (mechanical split, zero behavior change). Member
@@ -403,17 +404,30 @@ internal fun ChatViewModel.toChatMessages(
  * remains the complete transcript; no operation may parse the whole session
  * merely to continue, retry, edit, or delete it.
  */
-internal fun ChatViewModel.toLLMMessage(entity: MessageEntity): LLMMessage {
+internal fun ChatViewModel.toLLMMessage(entity: MessageEntity): LLMMessage = mapStoredLLMMessage(
+    entity,
+    mediaFile = { File(mediaStore.mediaBaseDir, it) },
+    imagePlaceholder = { visionPlaceholderFor(it) },
+)
+
+internal fun mapStoredLLMMessage(
+    entity: MessageEntity,
+    mediaFile: (relativePath: String) -> File,
+    imagePlaceholder: (linuxPath: String?) -> String? = { null },
+): LLMMessage {
     val r = if (entity.role == "user") LLMMessage.Role.USER else LLMMessage.Role.ASSISTANT
     val contentParts = mutableListOf<AgentContentPart>()
     val imageParts = mutableListOf<LLMMessage.ImagePart>()
     var textContent = ""
+    var validParts = true
+    var isHostGenerated = false
 
     try {
         val array = org.json.JSONArray(entity.partsJson)
         for (i in 0 until array.length()) {
             val obj = array.getJSONObject(i)
             when (obj.optString("type")) {
+                "receiptOrigin" -> isHostGenerated = isHostGenerated || obj.opt("value") == "host"
                 "text" -> {
                     val value = obj.optString("value", "")
                     // [T-android-retry-attachment-loss] The persisted
@@ -433,27 +447,10 @@ internal fun ChatViewModel.toLLMMessage(entity: MessageEntity): LLMMessage {
                     }
                 }
                 "toolUse" -> {
-                    val v = obj.getJSONObject("value")
-                    val inputStr = v.optString("input", "{}")
-                    val inputJson = NonFiniteJson.parseOrNull(inputStr) ?: JSONObject()
-                    contentParts.add(AgentContentPart.ToolUse(
-                        id = v.optString("toolUseId", ""),
-                        name = v.optString("name", ""),
-                        input = inputJson,
-                        // [T-android-gemini3-thoughtsig / #179] Restore the
-                        // persisted Gemini 3.x signature so a reloaded session
-                        // replays it (else the next gemini-3 turn 400s).
-                        thoughtSignature = v.optString("thoughtSignature", "").ifEmpty { null },
-                    ))
+                    contentParts.add(readTranscriptToolUse(obj.getJSONObject("value")))
                 }
                 "toolResult" -> {
-                    val v = obj.getJSONObject("value")
-                    contentParts.add(AgentContentPart.ToolResult(
-                        id = v.optString("toolUseId", ""),
-                        name = v.optString("name", ""),
-                        content = v.optString("output", ""),
-                        isError = !v.optBoolean("success", true),
-                    ))
+                    contentParts.add(readTranscriptToolResult(obj.getJSONObject("value")))
                 }
                 "mediaRef" -> {
                     // T128: load persisted user-message images so the model
@@ -484,7 +481,7 @@ internal fun ChatViewModel.toLLMMessage(entity: MessageEntity): LLMMessage {
                     // block is recoverable, failing to build the request is
                     // not.
                     if (PastedMedia.isPastedRef(mime, v.optString("originalFileName", null))) {
-                        val pf = java.io.File(mediaStore.mediaBaseDir, rel)
+                        val pf = mediaFile(rel)
                         val body = try {
                             if (pf.exists()) pf.readText(Charsets.UTF_8) else null
                         } catch (e: Exception) {
@@ -516,7 +513,7 @@ internal fun ChatViewModel.toLLMMessage(entity: MessageEntity): LLMMessage {
                         continue
                     }
                     if (!mime.startsWith("image/")) continue
-                    val file = java.io.File(mediaStore.mediaBaseDir, rel)
+                    val file = mediaFile(rel)
                     if (!file.exists()) continue
                     val bytes = try { file.readBytes() } catch (_: Exception) { continue }
                     val restoredPath = v.optString("linuxPath", "").ifEmpty { null }
@@ -525,13 +522,14 @@ internal fun ChatViewModel.toLLMMessage(entity: MessageEntity): LLMMessage {
                     // with a Vision Group configured gets steered to read_image
                     // on subsequent turns after a session reload (not the bare
                     // "can't see it" literal).
-                    val restoredPlaceholder = visionPlaceholderFor(restoredPath)
+                    val restoredPlaceholder = imagePlaceholder(restoredPath)
                     imageParts.add(LLMMessage.ImagePart(bytes, mime, linuxPath = restoredPath, noVisionPlaceholder = restoredPlaceholder))
                     contentParts.add(AgentContentPart.ImageData(bytes, mime, linuxPath = restoredPath, noVisionPlaceholder = restoredPlaceholder))
                 }
             }
         }
     } catch (_: Exception) {
+        validParts = false
         textContent = entity.partsJson
         contentParts.add(AgentContentPart.Text(entity.partsJson))
     }
@@ -543,7 +541,18 @@ internal fun ChatViewModel.toLLMMessage(entity: MessageEntity): LLMMessage {
         contentParts = contentParts,
         dbMessageId = entity.id,
         reasoningContent = entity.reasoningContent,
+        contextUsageAnchor = if (validParts && contentParts.isNotEmpty()) readAssistantContextUsageAnchor(entity) else null,
+        isHostGenerated = isHostGenerated,
     )
+}
+
+internal fun readAssistantContextUsageAnchor(entity: MessageEntity): ContextUsageAnchor? {
+    if (entity.role != "assistant") return null
+    val modelId = entity.modelId ?: return null
+    val providerType = entity.providerType ?: return null
+    val instanceId = entity.providerInstanceId ?: return null
+    val snapshot = ModelAttributionSnapshot(modelId, entity.modelDisplayName ?: modelId, providerType, instanceId)
+    return readContextUsageAnchor(entity.tokenUsage, snapshot)
 }
 
 /**

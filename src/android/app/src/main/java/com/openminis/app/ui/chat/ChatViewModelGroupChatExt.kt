@@ -18,6 +18,7 @@ import com.openminis.app.tools.GroupChat
 import com.openminis.app.tools.SubAgentKind
 import com.openminis.app.tools.ToolCallPreflight
 import com.openminis.app.tools.ToolExecutionResult
+import com.openminis.app.tools.ToolReceiptScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
@@ -39,7 +40,13 @@ internal suspend fun ChatViewModel.runGroupChat(provider: LLMProvider, closing: 
     if (closing) groupChatCloseRequested = true
     if (groupChatAnchorPending) anchorGroupRound()
     val analyzing = context.getString(com.openminis.app.R.string.group_chat_analyzing)
-    val userText = _messages.value.lastOrNull { it.role == "user" && !it.isQueued }?.content.orEmpty()
+    val user = _messages.value.lastOrNull { it.role == "user" && !it.isQueued }
+    val userText = user?.content.orEmpty()
+    // A reopen or a re-stream of the same user row must not create a new group tool identity.
+    val persistedUserId = agentHistorySnapshot().lastOrNull(::receiptUserRow)?.dbMessageId
+        ?.takeIf { it == user?.sourceDbIds?.singleOrNull() }
+    val receiptScope = ToolReceiptScope.userTurn(activeSessionId, persistedUserId)
+    val receiptNotice = if (!closing) pendingToolReceiptNotice(activeSessionId) else null
     val closingNow = closing || GroupChat.isCloseRequest(userText)
     val prior = if (closingNow) closeRecord() else groupTranscript()
     if (closingNow && prior.isEmpty()) {
@@ -48,6 +55,7 @@ internal suspend fun ChatViewModel.runGroupChat(provider: LLMProvider, closing: 
         return
     }
     if (!closing && userText.isBlank()) return
+    if (receiptNotice != null && !closingNow) publishGroupNotice(receiptNotice)
 
     val config = providerRepository.config.value
     val mainEntry = _activeEntryId.value?.let { id -> config.modelEntries.find { it.id == id } }
@@ -131,7 +139,7 @@ internal suspend fun ChatViewModel.runGroupChat(provider: LLMProvider, closing: 
             )
             if (answer.isNotBlank()) spoken += GroupChat.Line(hostName, answer)
         } else if (member != null) {
-            spoken += speakMembers(listOf(member), analyzing) {
+            spoken += speakMembers(listOf(member), analyzing, receiptScope, receiptNotice, receiptStage = 0) {
                 GroupChat.directPrompt(it.name, userText, GroupChat.transcript(spoken), contextText)
             }
         }
@@ -172,7 +180,7 @@ internal suspend fun ChatViewModel.runGroupChat(provider: LLMProvider, closing: 
         }
         for ((index, member) in speakers.withIndex()) {
             if (groupChatCloseRequested) break
-            spoken += speakMembers(listOf(member), analyzing, bubbleIds = queueIds) {
+            spoken += speakMembers(listOf(member), analyzing, receiptScope, receiptNotice, receiptStage = 1, bubbleIds = queueIds) {
                 GroupChat.opinionPrompt(
                     it.name,
                     GroupChat.stance(index),
@@ -195,7 +203,10 @@ internal suspend fun ChatViewModel.runGroupChat(provider: LLMProvider, closing: 
             val before = spoken.size
             for (member in speakers) {
                 if (groupChatCloseRequested) break
-                spoken += speakMembers(listOf(member), analyzing, allowPass = true, bubbleIds = debateIds) { m ->
+                spoken += speakMembers(
+                    listOf(member), analyzing, receiptScope, receiptNotice, receiptStage = 1 + debateRound,
+                    allowPass = true, bubbleIds = debateIds,
+                ) { m ->
                     GroupChat.replyPrompt(m.name, userText, GroupChat.transcript(spoken).takeLast(8000))
                 }
             }
@@ -308,6 +319,7 @@ private data class GroupMember(
     // [GH#221] Owning provider instance — resolves the per-instance user headers
     // and the OpenCode conversation header for this speaker's requests.
     val instanceId: String? = null,
+    val entryId: String? = null,
 )
 
 private fun ChatViewModel.idleGroupProvider(): LLMProvider? {
@@ -346,6 +358,7 @@ private fun ChatViewModel.groupMembers(
                 forcedThinkingCeilingFor(entry),
             ),
             instanceId = entry.providerInstanceId,
+            entryId = entry.id,
         )
     }
 }
@@ -378,6 +391,9 @@ internal fun ChatViewModel.clearHostOpening() {
 private suspend fun ChatViewModel.speakMembers(
     members: List<GroupMember>,
     analyzing: String,
+    receiptScope: ToolReceiptScope?,
+    receiptNotice: String?,
+    receiptStage: Int,
     deferBubble: Boolean = false,
     allowPass: Boolean = false,
     bubbleIds: Map<String, String>? = null,
@@ -392,7 +408,8 @@ private suspend fun ChatViewModel.speakMembers(
                 speaker = member.name,
                 snapshot = member.snapshot,
                 provider = member.provider,
-                system = laneSystemWithRules(GroupChat.memberSystem(member.name)),
+                system = laneSystemWithRules(listOfNotNull(GroupChat.memberSystem(member.name), receiptNotice).joinToString("\n\n")),
+                receiptScope = member.entryId?.let { receiptScope?.lane("group-member", it)?.step("discussion", receiptStage) },
                 user = promptFor(member),
                 tools = groupTools(member.provider),
                 placeholder = analyzing,
@@ -445,6 +462,7 @@ private suspend fun ChatViewModel.speakVisible(
     bubbleId: String? = null,
     // [GH#221] Per-instance user headers + OpenCode session header.
     extraHeaders: Map<String, String> = emptyMap(),
+    receiptScope: ToolReceiptScope? = null,
 ): String {
     if (groupChatCloseRequested && allowPass) return ""
     // [T-routing-strategy-x] Group-level first-token budget, same resolver as the main agent loop.
@@ -462,6 +480,7 @@ private suspend fun ChatViewModel.speakVisible(
             stopWhenClosing = allowPass, maxTokens = maxTokens,
             firstTokenTimeoutMs = groupFirstTokenMs,
             extraHeaders = extraHeaders,
+            receiptScope = receiptScope,
         ) { block ->
             showGroupStatus(id, speaker, vendor, block)
         }

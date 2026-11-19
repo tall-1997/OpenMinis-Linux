@@ -67,4 +67,6 @@ data class CompactMarkerEntity(
     @ColumnInfo(name = "summary_chunks") val summaryChunks: String? = null,
     /** Set when summary_chunks itself exceeded the inline cap. Migration 19 only adds the column. */
     @ColumnInfo(name = "summary_ref") val summaryRef: String? = null,
+    /** Bounded references to assets in the verified compacted range. */
+    @ColumnInfo(name = "assets_json") val assetsJson: String? = null,
 )

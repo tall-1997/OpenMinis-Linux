@@ -11,6 +11,7 @@ import com.openminis.app.terminal.MinisUrlMarker
 import com.openminis.app.tools.MemoryTools
 import com.openminis.app.tools.SubAgentLane
 import com.openminis.app.tools.ToolExecutionResult
+import com.openminis.app.tools.ToolReceiptDispatch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -63,16 +64,32 @@ internal suspend fun ChatViewModel.executeShellCommand(
     toolBlocks: MutableList<AssistantBlock>,
     assistantId: String,
     currentText: String,
+    // [T-receipt-not-sent-cancel] Null only for callers with no receipt claim
+    // (no-receipt tools). Present for real dispatches: the countdown window can
+    // then prove not_sent on cancellation.
+    delivery: ToolReceiptDispatch.Delivery? = null,
 ): ToolExecutionResult {
+    // [T-receipt-not-sent-parse] execute() returning means the command WAS
+    // submitted; a later exception (preview/URL broker) must not erase the
+    // delivery evidence and strand the receipt as a permanent UNKNOWN.
+    var executed = false
     return try {
-        val args = JSONObject(argsJson)
+        // [T-receipt-not-sent-parse] A malformed payload never reached the shell;
+        // aligned with McpNativeTool's defensive parse so the receipt ledger does
+        // not record a false "delivery pending" for a call that was never sent.
+        val args = runCatching { JSONObject(argsJson) }.getOrElse {
+            return ToolExecutionResult(
+                "Error: invalid shell arguments: ${it.message}", false,
+                toolTitle = "shell_execute", notSent = true,
+            )
+        }
         var command = args.optString("command", "")
         val resourceClass = when (args.optString("resource_class", "auto")) {
             "auto", "" -> if (com.openminis.app.sandbox.SandboxResourceGate.isHeavy(command))
                 com.openminis.app.sandbox.SandboxResourceGate.ResourceClass.HEAVY
                 else com.openminis.app.sandbox.SandboxResourceGate.ResourceClass.AUTO
             "heavy" -> com.openminis.app.sandbox.SandboxResourceGate.ResourceClass.HEAVY
-            else -> return ToolExecutionResult("Error: resource_class must be auto or heavy", false)
+            else -> return ToolExecutionResult("Error: resource_class must be auto or heavy", false, notSent = true)
         }
         val timeoutSec = com.openminis.app.data.ToolLimitPrefs.resolveShellTimeoutSec(
             if (args.has("timeout")) args.optInt("timeout") else null,
@@ -81,7 +98,7 @@ internal suspend fun ChatViewModel.executeShellCommand(
         val toolTitle = args.optString("tool_title", "shell_execute")
 
         if (command.isBlank()) {
-            return ToolExecutionResult("Error: 'command' is required", false, toolTitle = toolTitle)
+            return ToolExecutionResult("Error: 'command' is required", false, toolTitle = toolTitle, notSent = true)
         }
         val mounted = com.openminis.app.security.SecurityGateHolder.gate.sdcardMounted?.invoke() ?: true
         command = com.openminis.app.security.GuestMountPolicy.rewriteCompound(command, mounted)
@@ -109,29 +126,40 @@ internal suspend fun ChatViewModel.executeShellCommand(
         // Delay execution: block the agent flow without occupying the shell,
         // allowing other concurrent tasks to use it during the wait period.
         if (delaySec > 0) {
-            for (remaining in delaySec downTo 1) {
-                // [port-upstream-1.16 / FIX-261025-05] The countdown itself
-                // bails out the moment the session is stopped.
-                if (ExecutionCoordinator.stoppedSince(dispatchSessionId, stopEpoch)) {
-                    return ToolExecutionResult(
-                        ExecutionCoordinator.NOT_STARTED_OUTPUT, false, toolTitle = toolTitle,
-                    )
+            // [T-receipt-not-sent-cancel] A stop that CANCELS this coroutine
+            // (not just a stop-epoch bump, which the loop polls below) throws
+            // out of delay(). During the countdown nothing was submitted, so
+            // the receipt can settle not_sent on disk before cancellation
+            // propagates — otherwise the ledger keeps a false UNKNOWN that
+            // blocks retrying the same command after restart.
+            try {
+                for (remaining in delaySec downTo 1) {
+                    // [port-upstream-1.16 / FIX-261025-05] The countdown itself
+                    // bails out the moment the session is stopped.
+                    if (ExecutionCoordinator.stoppedSince(dispatchSessionId, stopEpoch)) {
+                        return ToolExecutionResult(
+                            ExecutionCoordinator.NOT_STARTED_OUTPUT, false, toolTitle = toolTitle, notSent = true,
+                        )
+                    }
+                    val idx = toolBlocks.indexOfFirst { it.id == toolId }
+                    if (idx >= 0) {
+                        val mm = remaining / 60
+                        val ss = remaining % 60
+                        val countdown = if (mm > 0) String.format("%d:%02d", mm, ss) else "${ss}s"
+                        toolBlocks[idx] = toolBlocks[idx].copy(content = "⏳ Waiting $countdown before executing...")
+                        withContext(Dispatchers.Main) {
+                            updateAssistantMessage(assistantId, currentText, true, toolBlocks)
+                        }
+                    }
+                    kotlinx.coroutines.delay(1000)
                 }
                 val idx = toolBlocks.indexOfFirst { it.id == toolId }
                 if (idx >= 0) {
-                    val mm = remaining / 60
-                    val ss = remaining % 60
-                    val countdown = if (mm > 0) String.format("%d:%02d", mm, ss) else "${ss}s"
-                    toolBlocks[idx] = toolBlocks[idx].copy(content = "⏳ Waiting $countdown before executing...")
-                    withContext(Dispatchers.Main) {
-                        updateAssistantMessage(assistantId, currentText, true, toolBlocks)
-                    }
+                    toolBlocks[idx] = toolBlocks[idx].copy(content = "")
                 }
-                kotlinx.coroutines.delay(1000)
-            }
-            val idx = toolBlocks.indexOfFirst { it.id == toolId }
-            if (idx >= 0) {
-                toolBlocks[idx] = toolBlocks[idx].copy(content = "")
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                delivery?.notSent()
+                throw e
             }
         }
 
@@ -140,7 +168,8 @@ internal suspend fun ChatViewModel.executeShellCommand(
         // resolves to the persisted id once `ensureSession()` has run, so
         // every shell runs in a directory that survives VM recreation.
         android.util.Log.w("ShellExecDiag",
-            "executeShell dispatch=$dispatchSessionId rawSessionId=$sessionId realSessionId=$realSessionId isDraft=$isDraft cmd=${command.take(120).replace('\n', ' ')}")
+            "executeShell dispatch=$dispatchSessionId rawSessionId=$sessionId realSessionId=$realSessionId isDraft=$isDraft " +
+                com.openminis.app.util.LogRedaction.command(command))
 
         // [T-bash-on-demand] Detect busybox-ash-incompatible bash syntax and,
         // if found, transparently install + switch to bash. Install time is
@@ -151,8 +180,7 @@ internal suspend fun ChatViewModel.executeShellCommand(
         BashismDetector.ensureLoaded(context)
         val bashism = BashismDetector.detect(command)
         var bashReminder: String? = null
-        val originalCommand = command
-        var bashScript: String? = null   // set when we bash-wrapped; enables M5 self-heal retry
+        var usedBashWrapper = false
         if (bashism.needsBash) {
             val executor = OnDemandBash.Executor { c, t ->
                 ExecutionCoordinator.execute(sessionId = dispatchSessionId, command = c, timeout = t).exitCode
@@ -166,7 +194,7 @@ internal suspend fun ChatViewModel.executeShellCommand(
                         // bash that vanished after our cache check (M5) so we
                         // can self-heal below instead of failing.
                         command = wrapForBash(command)
-                        bashScript = originalCommand // remember for self-heal retry
+                        usedBashWrapper = true
                     }
                     // T1-only (script invokes bash itself) → run as-is under sh.
                 }
@@ -184,7 +212,8 @@ internal suspend fun ChatViewModel.executeShellCommand(
                 updateAssistantMessage(assistantId, currentText, true, toolBlocks)
             }
         }
-        var result = try {
+        // [T-receipt-not-sent-parse] see the flag declaration above the try.
+        val result = try {
             ExecutionCoordinator.execute(
             sessionId = dispatchSessionId,
             command = command,
@@ -210,24 +239,14 @@ internal suspend fun ChatViewModel.executeShellCommand(
         } finally {
             preview.cancel()
         }
+        executed = true
 
-        // [T-bash-on-demand] M5 self-heal: our bash wrapper returns sentinel
-        // 119 when bash vanished (user apk del'd) after we cached it
-        // available. Re-probe + reinstall once and rerun THIS command under
-        // bash inline, so it still succeeds instead of failing.
-        // Accept both the raw sentinel (119) and the wait(2)-encoded status
-        // (119 << 8 = 30464) the coordinator may surface.
+        // The user's script can legitimately return the same exit code as
+        // the wrapper. Invalidate the interpreter cache, but never run the
+        // command again based only on that ambiguous status.
         if ((result.exitCode == BASH_MISSING_SENTINEL ||
-                result.exitCode == (BASH_MISSING_SENTINEL shl 8)) && bashScript != null) {
+                result.exitCode == (BASH_MISSING_SENTINEL shl 8)) && usedBashWrapper) {
             OnDemandBash.markDisappeared()
-            val executor = OnDemandBash.Executor { c, t ->
-                ExecutionCoordinator.execute(sessionId = dispatchSessionId, command = c, timeout = t).exitCode
-            }
-            val healed = OnDemandBash.ensureBash(context, executor)
-            command = if (healed is OnDemandBash.Outcome.Available) wrapForBash(bashScript!!) else bashScript!!
-            result = ExecutionCoordinator.execute(
-                sessionId = dispatchSessionId, command = command, timeout = timeoutSec * 1000L,
-                resourceClass = resourceClass)
         }
 
         // Also scrub markers from the aggregated one-shot output and
@@ -266,16 +285,28 @@ internal suspend fun ChatViewModel.executeShellCommand(
             if (result.exitCode != 0 || bashism.hasSilent) "$redactedOut\n\n$rem" else redactedOut
         } ?: redactedOut
 
+        // [T-receipt-user-kill] A command the USER killed is a proven-ended
+        // delivery as well: the host performed the kill and head-labels the
+        // output. Without this the receipt stays UNKNOWN forever (UNKNOWN is
+        // never evicted) and the model reads "delivery pending" for a command
+        // the user watched die.
+        val killedByUser = output.startsWith(com.openminis.app.sandbox.ShellStopKill.KILLED_BY_USER_MARKER)
+
         ToolExecutionResult(
             output = withReminder,
-            success = result.exitCode == 0,
+            success = result.completed && result.exitCode == 0 && !timedOut,
             toolTitle = toolTitle,
             timedOut = timedOut,
+            notSent = result.notStarted,
+            // An executed command that the watchdog killed is a proven-ended
+            // delivery (the timeout fact stays in timedOut/output); only a
+            // dispatch that never reached the shell stays unsettled.
+            deliveryAccepted = result.completed || timedOut || killedByUser,
         )
     } catch (e: kotlinx.coroutines.CancellationException) {
         throw e
     } catch (e: Exception) {
-        ToolExecutionResult("Error: ${e.message}", false)
+        ToolExecutionResult("Error: ${e.message}", false, deliveryAccepted = executed)
     }
 }
 
@@ -402,7 +433,7 @@ internal fun ChatViewModel.executeMemoryWriteTool(argsJson: String): ToolExecuti
     val repo = sessionMemoryRepo()
     if (!_memoryEnabled.value) {
         val msg = "Memory writes are disabled for this session (user toggled /memory off). Reads remain available."
-        return ToolExecutionResult(msg, false, toolTitle = "Memory (disabled)")
+        return ToolExecutionResult(msg, false, toolTitle = "Memory (disabled)", notSent = true)
     }
     val result = MemoryTools.executeMemoryWrite(argsJson, repo)
     // Record for SessionMemorySheet
@@ -416,7 +447,10 @@ internal fun ChatViewModel.executeMemoryWriteTool(argsJson: String): ToolExecuti
         output = result.output,
         writtenContent = content,
     )
-    return ToolExecutionResult(result.output, result.success, toolTitle = result.toolTitle)
+    // The executor ran to a terminal answer (quota refusal, MEMORY_CONFLICT,
+    // or success). Settle the receipt either way so a proven-ended failure
+    // does not stay pending; the output text carries the real reason.
+    return ToolExecutionResult(result.output, result.success, toolTitle = result.toolTitle, deliveryAccepted = true)
 }
 
 internal fun ChatViewModel.executeMemoryGetTool(argsJson: String): ToolExecutionResult {
@@ -432,5 +466,7 @@ internal fun ChatViewModel.executeMemoryGetTool(argsJson: String): ToolExecution
         output = result.output,
         keywords = keywords,
     )
-    return ToolExecutionResult(result.output, result.success, toolTitle = result.toolTitle)
+    // Same terminal contract as executeMemoryWriteTool: restore/search answers
+    // settle; search results are receipt-exempt anyway.
+    return ToolExecutionResult(result.output, result.success, toolTitle = result.toolTitle, deliveryAccepted = true)
 }

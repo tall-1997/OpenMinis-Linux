@@ -26,8 +26,9 @@ import com.openminis.app.provider.LLMProvider
  */
 internal suspend fun ChatViewModel.runAgentLoop(
     provider: LLMProvider,
-    systemPrompt: String?,
+    systemPrompt: MemoryDeliveryPrompt?,
     fallbackProviders: List<ChatViewModel.FallbackCandidate> = emptyList(),
+    skipInitialCompaction: Boolean = false,
     fallbackStrategy: FallbackStrategy = FallbackStrategy.default,
     goalExecutionRun: Boolean = false,
     overrideAssistantId: String? = null,
@@ -45,6 +46,7 @@ internal suspend fun ChatViewModel.runAgentLoop(
             fallbackStrategy = fallbackStrategy,
             goalExecutionRun = goalExecutionRun,
             overrideAssistantId = overrideAssistantId,
+            skipInitialCompaction = skipInitialCompaction,
         )
     } finally {
         // Non-suspending by design — this may run in a cancelled coroutine.

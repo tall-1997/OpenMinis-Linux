@@ -31,14 +31,15 @@ data class TokenStats(
 /**
  * Current context-window usage, for the session-menu ring.
  *
- * @param usedTokens  tokens occupied by the current conversation (persisted
- *                    usage sum + live estimate for the in-flight request).
- * @param windowTokens the model's effective context window. 0 ⇒ unknown,
- *                    in which case the ring renders as "unknown / ?".
+ * @param usedTokens estimated total input for the current request context.
+ * @param windowTokens the model's effective context window. 0 means unknown.
+ * @param measuredPrefixTokens actual input tokens for the verified prefix of
+ * the request, or null when the total is based entirely on estimation.
  */
 data class ContextUsage(
     val usedTokens: Long = 0L,
     val windowTokens: Long = 0L,
+    val measuredPrefixTokens: Long? = null,
 ) {
     /** 0.0..1.0; returns 0 when the window is unknown. */
     val ratio: Float

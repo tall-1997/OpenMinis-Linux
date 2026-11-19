@@ -52,6 +52,7 @@ object McpNativeTool {
         context: Context,
         sessionId: String,
         repo: MCPRepository?,
+        onCompleted: suspend (ToolExecutionResult) -> Unit = {},
     ): ToolExecutionResult = withContext(Dispatchers.IO) {
         if (repo == null) {
             return@withContext ToolExecutionResult(
@@ -59,6 +60,7 @@ object McpNativeTool {
                 false,
                 errorCode = ToolErrorCode.UNSUPPORTED,
                 toolTitle = NAME,
+                notSent = true,
             )
         }
         val args = runCatching { JSONObject(argsJson) }.getOrNull()
@@ -66,7 +68,7 @@ object McpNativeTool {
         val action = args.optString("action", "").trim()
         val server = args.optString("server", "").trim()
         val tool = args.optString("tool", "").trim()
-        when (action) {
+        val result = when (action) {
             "servers" -> ToolExecutionResult(
                 McpNativeBridge.serversOverview(repo, sessionId),
                 true,
@@ -87,49 +89,54 @@ object McpNativeTool {
             "call" -> {
                 if (server.isEmpty()) return@withContext invalid("'server' is required for action=call")
                 if (tool.isEmpty()) return@withContext invalid("'tool' is required for action=call")
-                val arguments = when (val raw = args.opt("arguments")) {
-                    null, JSONObject.NULL -> JSONObject()
-                    is JSONObject -> raw
-                    is String -> runCatching { JSONObject(raw) }.getOrElse {
-                        return@withContext invalid("'arguments' must be a JSON object, got an unparseable string")
-                    }
-                    else -> return@withContext invalid("'arguments' must be a JSON object")
-                }
+                val arguments = mcpCallArguments(args.opt("arguments"))
+                    ?: return@withContext invalid("'arguments' must be a JSON object")
                 try {
                     val outcome = McpNativeBridge.callTool(context, repo, sessionId, server, tool, arguments)
-                    if (outcome.isError) {
-                        ToolExecutionResult(
-                            outcome.text,
-                            false,
-                            errorCode = ToolErrorCode.EXECUTION_FAILED,
-                            recoveryHint = "The MCP server reported this tool call as failed. Check the arguments against action=tools schema.",
-                            toolTitle = "mcp call:$server/$tool",
-                        )
-                    } else {
-                        ToolExecutionResult(outcome.text, true, toolTitle = "mcp call:$server/$tool")
-                    }
+                    // A matching tools/call response proves delivery even on business failure.
+                    val completed = ToolExecutionResult(
+                        outcome.text,
+                        !outcome.isError,
+                        errorCode = ToolErrorCode.EXECUTION_FAILED.takeIf { outcome.isError },
+                        toolTitle = "mcp call:$server/$tool",
+                        deliveryAccepted = true,
+                    )
+                    onCompleted(completed)
+                    completed
                 } catch (e: McpJsonRpc.McpError) {
                     failure(e, "mcp call:$server/$tool")
                 }
             }
             "resources" -> {
                 if (server.isEmpty()) return@withContext invalid("'server' is required for action=resources")
-                wrapServerSupport(server) {
-                    McpNativeBridge.listResources(context, repo, sessionId, server)
+                try {
+                    wrapServerSupport(server) {
+                        McpNativeBridge.listResources(context, repo, sessionId, server)
+                    }
+                } catch (e: McpJsonRpc.McpError) {
+                    failure(e, "mcp:$server")
                 }
             }
             "read_resource" -> {
                 val uri = args.optString("uri").trim()
                 if (server.isEmpty()) return@withContext invalid("'server' is required for action=read_resource")
                 if (uri.isEmpty()) return@withContext invalid("'uri' is required for action=read_resource")
-                wrapServerSupport(server) {
-                    McpNativeBridge.readResource(context, repo, sessionId, server, uri)
+                try {
+                    wrapServerSupport(server) {
+                        McpNativeBridge.readResource(context, repo, sessionId, server, uri)
+                    }
+                } catch (e: McpJsonRpc.McpError) {
+                    failure(e, "mcp:$server")
                 }
             }
             "prompts" -> {
                 if (server.isEmpty()) return@withContext invalid("'server' is required for action=prompts")
-                wrapServerSupport(server) {
-                    McpNativeBridge.listPrompts(context, repo, sessionId, server)
+                try {
+                    wrapServerSupport(server) {
+                        McpNativeBridge.listPrompts(context, repo, sessionId, server)
+                    }
+                } catch (e: McpJsonRpc.McpError) {
+                    failure(e, "mcp:$server")
                 }
             }
             "get_prompt" -> {
@@ -141,12 +148,21 @@ object McpNativeTool {
                     is String -> runCatching { JSONObject(raw) }.getOrDefault(JSONObject())
                     else -> JSONObject()
                 }
-                wrapServerSupport(server) {
-                    McpNativeBridge.getPrompt(context, repo, sessionId, server, name, pargs)
+                try {
+                    wrapServerSupport(server) {
+                        McpNativeBridge.getPrompt(context, repo, sessionId, server, name, pargs)
+                    }
+                } catch (e: McpJsonRpc.McpError) {
+                    failure(e, "mcp:$server")
                 }
             }
             else -> invalid("'action' must be one of: servers, tools, call, resources, read_resource, prompts, get_prompt (got '${action}')")
         }
+        // tools/call already uses the same preview with MCP's byte ceiling;
+        // list/resource/prompt responses can also overflow the character limit.
+        if (result.output.length <= ToolOutputSpill.LIMIT) result else result.copy(
+            output = ToolOutputPolicy.apply(result.output, "mcp-$action", context, sessionId, NAME),
+        )
     }
 
     /**
@@ -178,10 +194,20 @@ object McpNativeTool {
         errorCode = ToolErrorCode.INVALID_ARGUMENTS,
         recoveryHint = "Example: {\"action\":\"call\",\"server\":\"git\",\"tool\":\"get_diff\",\"arguments\":{}}",
         toolTitle = NAME,
+        notSent = true,
     )
 
+    /**
+     * Typed transport failure → receipt facts. The receipt must settle on
+     * proven-ended outcomes: a server answer (auth/server/JSON-RPC error) is a
+     * delivered business failure; CONNECT_FAILED marks connect-phase failures
+     * the transport can prove never reached the server; read-phase timeouts,
+     * protocol garbage, and generic IO stay delivery-uncertain.
+     */
     fun failure(e: McpJsonRpc.McpError, title: String): ToolExecutionResult {
         val (code, hint) = when (e.code) {
+            "CONNECT_FAILED" -> ToolErrorCode.NETWORK_ERROR to
+                "Could not connect to the server. Check its url/command in Settings → MCP; for stdio servers make sure the sandbox has booted (run any shell command first)."
             McpJsonRpc.McpError.CONNECTION_ERROR -> ToolErrorCode.NETWORK_ERROR to
                 "Server unreachable. Check its url/command in Settings → MCP; for stdio servers make sure the sandbox has booted (run any shell command first)."
             McpJsonRpc.McpError.TIMEOUT -> ToolErrorCode.TIMEOUT to
@@ -194,12 +220,21 @@ object McpNativeTool {
                 "Enable the tool in Settings → MCP, or pick another tool."
             else -> ToolErrorCode.EXECUTION_FAILED to null
         }
+        // Only a PARSED server response proves delivery: auth rejections, HTTP
+        // 5xx, and RPC_* JSON-RPC errors. PROTOCOL_ERROR covers both "sent, no
+        // reply" and "reply was malformed" and stays delivery-uncertain, as do
+        // generic IO failures.
+        val serverAnswered = code == ToolErrorCode.AUTH_REQUIRED ||
+            e.code == McpJsonRpc.McpError.SERVER_ERROR || e.code.startsWith("RPC_")
         return ToolExecutionResult(
             e.message ?: e.code,
             false,
             errorCode = code,
             recoveryHint = hint,
             toolTitle = title,
+            timedOut = code == ToolErrorCode.TIMEOUT,
+            notSent = e.code in setOf("CONNECT_FAILED", "NOT_FOUND", "TOOL_DISABLED", "NOT_INITIALIZED"),
+            deliveryAccepted = serverAnswered,
         )
     }
 }

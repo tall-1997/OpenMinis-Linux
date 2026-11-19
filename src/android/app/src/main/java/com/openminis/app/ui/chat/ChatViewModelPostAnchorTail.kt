@@ -55,8 +55,7 @@ internal object PostAnchorTail {
     /** Estimated-token budget for the kept postAnchor tail. */
     internal data class Budget(
         val budgetTokens: Int,
-        /** Per-message estimator; production passes [WalkBack.estimateMessageTokens]. */
-        val estimate: (LLMMessage) -> Int,
+        val estimate: (LLMMessage) -> Int = WalkBack::estimateMessageTokens,
         /**
          * [T-postanchor-dropped-digest] Optional bounded excerpt of the rounds
          * being dropped. The summary sits BEFORE the anchor, so it cannot
@@ -108,7 +107,7 @@ internal object PostAnchorTail {
      * sessions under budget are byte-identical to the previous behavior.
      */
     fun apply(postAnchor: List<LLMMessage>, budget: Budget): Result {
-        if (postAnchor.isEmpty() || budget.budgetTokens <= 0) {
+        if (postAnchor.isEmpty() || budget.budgetTokens <= 0 || budget.budgetTokens == Int.MAX_VALUE) {
             return Result(postAnchor, 0, 0, 0)
         }
         val groups = splitRounds(postAnchor)
@@ -120,8 +119,8 @@ internal object PostAnchorTail {
         // accepted; each older group is kept only while the running total
         // still fits the budget. Everything older than the cutoff is dropped
         // as whole groups — a half-kept round could orphan a tool_use.
-        val costs = IntArray(groups.size) { i ->
-            groups[i].sumOf { msg -> budget.estimate(msg) }.coerceAtLeast(0)
+        val costs = LongArray(groups.size) { i ->
+            groups[i].sumOf { msg -> budget.estimate(msg).coerceAtLeast(0).toLong() }
         }
         var total = costs[groups.size - 1]
         var firstKept = groups.size - 1
@@ -138,14 +137,15 @@ internal object PostAnchorTail {
             return Result(postAnchor, 0, 0, 0)
         }
         var droppedMessages = 0
-        var droppedTokens = 0
+        var droppedTokens = 0L
         val dropped = ArrayList<LLMMessage>()
         for (g in 0 until droppedRounds) {
             droppedMessages += groups[g].size
             droppedTokens += costs[g]
             dropped.addAll(groups[g])
         }
-        val noticeText = buildNotice(droppedRounds, droppedTokens, dropped, budget)
+        val noticeTokens = droppedTokens.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        val noticeText = buildNotice(droppedRounds, noticeTokens, dropped, budget)
         val keptMessages = ArrayList<LLMMessage>(postAnchor.size - droppedMessages + 1)
         keptMessages.add(LLMMessage(
             role = LLMMessage.Role.USER,
@@ -155,7 +155,7 @@ internal object PostAnchorTail {
         for (g in firstKept until groups.size) {
             keptMessages.addAll(groups[g])
         }
-        return Result(keptMessages, droppedRounds, droppedMessages, droppedTokens)
+        return Result(keptMessages, droppedRounds, droppedMessages, noticeTokens)
     }
 
     /**

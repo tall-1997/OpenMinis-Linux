@@ -68,6 +68,14 @@ class ToolOutputPolicyTest {
     }
 
     @Test
+    fun redactionPreservesUnchangedJsonAndTextAfterAJsonPrefix() {
+        val unchanged = "{ \"a\": [1, 2] }\n"
+        assertEquals(unchanged, ToolOutputPolicy.redactWith(unchanged, sensitive))
+        val log = "{ \"start\": true }\nkey=${sensitive.single()}\nend"
+        assertEquals("{ \"start\": true }\nkey=[REDACTED]\nend", ToolOutputPolicy.redactWith(log, sensitive))
+    }
+
+    @Test
     fun belowThresholdNoSpill() {
         val text = "a".repeat(ToolOutputSpill.LIMIT - 1)
         val out = ToolOutputPolicy.apply(text, "test1")
@@ -77,16 +85,11 @@ class ToolOutputPolicyTest {
 
     @Test
     fun overThresholdIsCappedToHeadTailPreview() {
-        val text = "a".repeat(25_000)
+        val half = ToolOutputSpill.PREVIEW_BODY_CHARS / 2
+        val text = "a".repeat(half) + "m".repeat(25_000) + "b".repeat(half)
         val out = ToolOutputPolicy.apply(text, "test2")
-        // The preview is header-first ("[tool-output-spill] … produced N chars"),
-        // so the head slice is not at index 0 — it follows the header line.
-        assert(out.startsWith("[tool-output-spill]")) { "header must lead, got: ${out.take(80)}" }
-        assert(out.contains("a".repeat(ToolOutputSpill.HEAD))) { "head slice missing" }
-        assert(out.endsWith("a".repeat(ToolOutputSpill.TAIL))) { "Should end with tail" }
-        assert(out.contains("[tool-output-spill]")) { "Should carry the spill header" }
-        assert(out.contains("chars omitted")) { "Should say how much was omitted" }
-        assert(out.length < 25_000) { "Result should be shorter than full text" }
+        assertTrue(out.startsWith("[tool-output-spill]"))
+        assertEquals("a".repeat(half) + "\n\n…(25000 chars omitted)…\n\n" + "b".repeat(half), ToolOutputSpill.previewBody(out))
     }
 
     /**

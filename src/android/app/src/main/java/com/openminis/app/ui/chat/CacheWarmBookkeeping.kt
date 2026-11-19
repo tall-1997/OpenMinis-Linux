@@ -255,12 +255,21 @@ object PromptCacheWarmCoordinator {
         usage: LLMUsage?,
         isBusy: () -> Boolean,
         nowMs: Long = System.currentTimeMillis(),
+        replayable: Boolean = true,
     ) {
         val modelId = provider.model.id
         val instanceId = SamplingIdentity.of(provider)
         val providerTypeRaw = SamplingIdentity.providerTypeOf(provider)
         val ttlMs = PromptCacheWarmer.promptCacheTtlMs(providerTypeRaw)
         ledger.recordRequest(instanceId, modelId, ttlMs, nowMs)
+        if (!replayable) {
+            synchronized(lock) {
+                warmJob?.cancel()
+                warmJob = null
+                pending = null
+            }
+            return
+        }
         val promptTokens = usage?.let { u ->
             u.inputTokens + (u.cacheReadInputTokens ?: 0) + (u.cacheCreationInputTokens ?: 0)
         } ?: 0

@@ -1,0 +1,213 @@
+package com.openminis.app.tools
+
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+
+private val receiptExemptObservations = setOf(
+    "file_read", "list_dir", "grep", "glob", "read_image", "get_screen_time", "search_sessions", "read_session",
+)
+
+/** Match MemoryTools' search default; only a known search may use the read-only fast paths. */
+internal fun memoryGetIsSearch(args: String): Boolean = try {
+    JSONObject(args).optString("action", "search") == "search"
+} catch (_: Exception) {
+    false
+} catch (_: StackOverflowError) {
+    false
+}
+
+/** Polling may consume a read cursor or mark a report seen. It never re-runs the work. */
+internal fun isReceiptPolling(canonical: String, args: String): Boolean = when (canonical) {
+    "agent_terminal" -> parseReceiptArgs(args)?.optString("action")?.trim()?.lowercase() in setOf("read", "list")
+    "check_agent" -> parseReceiptArgs(args)?.optString("op", "status")?.ifBlank { "status" } in
+        setOf("status", "list", "await", "collect")
+    else -> false
+}
+
+/** Scheduling in a concurrent lane does not prove that a tool is read-only. */
+internal fun needsToolReceipt(canonical: String, args: String): Boolean = when (canonical) {
+    "memory_get" -> !memoryGetIsSearch(args)
+    else -> canonical !in receiptExemptObservations && !isReceiptPolling(canonical, args)
+}
+
+internal const val TOOL_RECEIPT_NOTICE = "[tool-receipt]"
+
+internal fun ToolExecutionResult.isReceiptAdvisory(): Boolean =
+    errorCode == ToolErrorCode.RECEIPT_UNCONFIRMED || errorCode == ToolErrorCode.RECEIPT_BLOCKED
+
+internal fun ToolExecutionResult.withNotSentNotice(): ToolExecutionResult = if (isReceiptAdvisory()) this else copy(
+    output = "$TOOL_RECEIPT_NOTICE Tool not sent. $output", success = false,
+    receiptProof = null, notSent = true, deliveryAccepted = false,
+)
+
+internal fun toolReceiptMissingAnchor() = ToolExecutionResult(
+    "$TOOL_RECEIPT_NOTICE Tool not sent: no stable call identity for this turn.",
+    false, errorCode = ToolErrorCode.RECEIPT_BLOCKED, notSent = true,
+)
+
+/** Execution boundary shared by turn, spawn, script, and detached-lane callers. */
+internal class ToolReceiptDispatch(private val store: ToolReceiptStore) {
+    suspend fun run(
+        key: ToolReceiptKey,
+        callId: String,
+        authorize: suspend () -> ToolExecutionResult?,
+        dispatch: suspend (Delivery) -> ToolExecutionResult,
+    ): ToolExecutionResult {
+        val prepared = withContext(Dispatchers.IO) { store.prepare(key) }
+        if (prepared != ToolReceiptDecision.Ready) return refusal(prepared)
+        authorize()?.let { return it.withNotSentNotice() } // The ledger never stores grants.
+        val owner = currentCoroutineContext()
+        owner.ensureActive()
+        // Do not lose the claim to prompt cancellation on the IO dispatcher hop. If
+        // cancelled before entering the adapter, the host can still prove not_sent.
+        val claim = withContext(NonCancellable) {
+            withContext(Dispatchers.IO) {
+                owner.ensureActive()
+                store.claim(key, callId)
+            }
+        }
+        if (claim !is ToolReceiptDecision.Claimed) return refusal(claim)
+        val delivery = Delivery(store, key, claim)
+        if (!owner.isActive) {
+            delivery.notSent()
+            owner.ensureActive()
+        }
+        val result = try {
+            dispatch(delivery)
+        } catch (e: CancellationException) {
+            owner.ensureActive() // Preserve real run cancellation.
+            return pendingResult(delivery.state, ToolExecutionResult("", false, timedOut = e is TimeoutCancellationException),
+                resultRecorded = delivery.localCompletionRecorded)
+        } catch (e: Exception) {
+            // [P3-3 final] A swallowed adapter exception must stay attributable:
+            // the pending receipt is the ledger's state, but "why pending" needs
+            // the original failure logged where the dispatch happened.
+            com.openminis.app.logging.AppLogger.error(
+                "ToolReceiptDispatch",
+                "receipted dispatch failed, staying pending: ${e.javaClass.simpleName}: ${e.message}",
+            )
+            return pendingResult(delivery.state, resultRecorded = delivery.localCompletionRecorded)
+        }
+        return when (delivery.state) {
+            ToolReceiptState.UNKNOWN -> pendingResult(delivery.state, result)
+            ToolReceiptState.NOT_SENT -> result.withNotSentNotice()
+            ToolReceiptState.ACCEPTED -> {
+                if (!delivery.covers(result)) {
+                    return pendingResult(delivery.state, result, resultRecorded = delivery.localCompletionRecorded)
+                }
+                if (result.success) result.copy(receiptProof = claim.proof) else result.copy(
+                    output = "$TOOL_RECEIPT_NOTICE The tool accepted the call, but did not report success. " +
+                        "Do not repeat it automatically.\n${result.output}",
+                    recoveryHint = NO_REPEAT,
+                    receiptProof = claim.proof,
+                )
+            }
+        }
+    }
+
+    /** Only the dispatch adapter may supply evidence; no inference from generic success or output text. */
+    internal class Delivery(
+        private val store: ToolReceiptStore,
+        val key: ToolReceiptKey,
+        private val claim: ToolReceiptDecision.Claimed,
+    ) {
+        val instanceSha: String get() = claim.instanceSha
+        var state: ToolReceiptState = ToolReceiptState.UNKNOWN
+            private set
+
+        private var terminalSuccess: Boolean? = null
+        var localCompletionRecorded = false
+            private set
+
+        suspend fun accepted() = settle(ToolReceiptState.ACCEPTED)
+        suspend fun notSent() = settle(ToolReceiptState.NOT_SENT)
+
+        /** Called at the adapter return, before output rendering or other fallible post-processing. */
+        suspend fun completed(result: ToolExecutionResult): ToolExecutionResult {
+            if (result.notSent) {
+                notSent()
+            } else if (state != ToolReceiptState.NOT_SENT && result.isTerminalEvidence() &&
+                (terminalSuccess == null || terminalSuccess == result.success)
+            ) {
+                terminalSuccess = result.success
+                if (key.scope.localResults) {
+                    if (!localCompletionRecorded) {
+                        localCompletionRecorded = withContext(NonCancellable + Dispatchers.IO) {
+                            store.completeLocal(key, claim, result.success)
+                        }
+                    }
+                    if (localCompletionRecorded) state = ToolReceiptState.ACCEPTED else accepted()
+                } else accepted()
+            }
+            return result
+        }
+
+        fun covers(result: ToolExecutionResult): Boolean =
+            terminalSuccess == result.success && result.isTerminalEvidence() &&
+                (!key.scope.localResults || localCompletionRecorded)
+
+        /**
+         * A proven-ended outcome settles: the adapter answered, or the host
+         * marked a terminal delivery (executed timeout / business failure /
+         * sandbox failure). An uncertain timeout WITHOUT that marker — e.g. a
+         * remote reply that never arrived — still stays pending.
+         */
+        private fun ToolExecutionResult.isTerminalEvidence(): Boolean = !notSent && !isReceiptAdvisory() &&
+            (deliveryAccepted || (success && errorCode == null && !timedOut))
+
+        private suspend fun settle(next: ToolReceiptState) {
+            if (state != ToolReceiptState.UNKNOWN) return
+            // Keep the live evidence even if settlement I/O fails. On-disk UNKNOWN still
+            // blocks replay; a real result carrying the proof can settle it after reopen.
+            state = next
+            withContext(NonCancellable + Dispatchers.IO) { store.settle(key, claim, next) }
+        }
+    }
+
+    private fun refusal(decision: ToolReceiptDecision): ToolExecutionResult = when (decision) {
+        is ToolReceiptDecision.AlreadySent -> pendingResult(decision.state, resultRecorded = decision.resultRecorded, duplicate = true)
+        ToolReceiptDecision.UnprovenBatch -> blocked("No verified result establishes a new tool batch.")
+        ToolReceiptDecision.Full -> blocked("The receipt store is full; existing delivery records were kept.")
+        else -> blocked("The receipt checkpoint could not be verified.")
+    }
+
+    private fun blocked(reason: String) = ToolExecutionResult(
+        "$TOOL_RECEIPT_NOTICE Tool not sent. $reason", false, errorCode = ToolErrorCode.RECEIPT_BLOCKED, notSent = true,
+    )
+
+    private fun pendingResult(
+        state: ToolReceiptState,
+        original: ToolExecutionResult? = null,
+        resultRecorded: Boolean = false,
+        duplicate: Boolean = false,
+    ): ToolExecutionResult {
+        val status = when (state) {
+            ToolReceiptState.UNKNOWN -> "Delivery is pending confirmation. It may already have occurred."
+            ToolReceiptState.ACCEPTED -> if (resultRecorded) {
+                "This call was accepted and its completion was recorded."
+            } else {
+                "This call was accepted, but a completed result could not be verified."
+            }
+            ToolReceiptState.NOT_SENT -> return blocked("The adapter did not start this call.")
+        }
+        val attempt = if (duplicate) " This attempt was not sent." else ""
+        val output = "$TOOL_RECEIPT_NOTICE $status$attempt Do not repeat the operation automatically." +
+            if (original?.output.isNullOrBlank()) "" else "\n${original?.output}"
+        return (original ?: ToolExecutionResult(output, false)).copy(
+            output = output, success = false, errorCode = ToolErrorCode.RECEIPT_UNCONFIRMED,
+            recoveryHint = NO_REPEAT, receiptProof = null, deliveryAccepted = false,
+            notSent = duplicate,
+        )
+    }
+
+    private companion object {
+        const val NO_REPEAT = "Verify independently; do not repeat an operation whose delivery is uncertain or already accepted."
+    }
+}

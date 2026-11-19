@@ -73,11 +73,13 @@ fun ChatViewModel.resume() {
                     role = LLMMessage.Role.USER,
                     content = reminder,
                     contentParts = parts,
+                    isHostGenerated = true,
                 )
             )
-            launch(Dispatchers.IO) {
-                val partsJson = """[{"type":"text","value":${escapeJson(reminder)}}]"""
-                val persisted = chatRepository.appendMessage(activeSessionId, "user", partsJson)
+            val sid = activeSessionId
+            withContext(Dispatchers.IO) {
+                val partsJson = hostReminderPartsJson(escapeJson(reminder))
+                val persisted = chatRepository.appendMessage(sid, "user", partsJson)
                 withContext(Dispatchers.Main.immediate) {
                     notePersistedUiRow(null, persisted.id)
                 }
@@ -87,8 +89,7 @@ fun ChatViewModel.resume() {
         // [P0-5] Prompt assembly does disk I/O (skills/MCP reloads, memory
         // fragments) — keep it off the main dispatcher. All inputs are
         // StateFlow reads / pure helpers; written fields are @Volatile.
-        val baseSystemPrompt = withContext(Dispatchers.Default) { buildSystemPrompt() }
-        val systemPrompt = wrapSystemPromptForOAuth(provider, baseSystemPrompt)
+        val systemPrompt = withContext(Dispatchers.IO) { buildMemoryDeliveryPrompt() }
 
         AppLogger.info(ChatViewModel.TAG_STREAM, "resume _isStreaming=true (sid=$activeSessionId)")
         _isStreaming.value = true

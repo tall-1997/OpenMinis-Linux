@@ -319,18 +319,25 @@ object SshTool {
             }
             if (r.stdout.isEmpty() && r.stderr.isEmpty()) appendLine("(no output)")
         }
-        return if (r.timedOut) {
-            ToolExecutionResult(
+        return when {
+            r.timedOut -> ToolExecutionResult(
                 body,
                 false,
                 errorCode = ToolErrorCode.TIMEOUT,
-                recoveryHint = "Partial output above. The remote command may still be running; raise 'timeout' (max ${MAX_TIMEOUT_S}s) or re-run with nohup/& for long jobs.",
+                recoveryHint = "The remote command may still be running. Verify remotely before repeating it.",
                 toolTitle = title,
                 timedOut = true,
             )
-        } else {
-            // Non-zero exit is DATA, not failure — same contract as shell_execute.
-            ToolExecutionResult(body, true, toolTitle = title)
+            // JSch returns -1 when no exit status arrived. Channel EOF alone
+            // does not distinguish completed execution from a lost connection.
+            r.exitCode < 0 -> ToolExecutionResult(
+                "SSH closed without a remote exit status.\n$body",
+                false,
+                errorCode = ToolErrorCode.NETWORK_ERROR,
+                recoveryHint = "Verify remotely before repeating this command.",
+                toolTitle = title,
+            )
+            else -> ToolExecutionResult(body, true, toolTitle = title)
         }
     }
 

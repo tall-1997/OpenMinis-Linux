@@ -270,8 +270,9 @@ object FileReadTool {
             }
 
             // T123: per-session resolver — see FileWriteTool for rationale.
-            val file = identityFile(context, path)
-                ?: PRootKernel.resolveSessionHostPath(sessionId, path, context)
+            val resolvedPath = ToolOutputSpill.normalizeGuestPath(path) ?: path
+            val file = identityFile(context, resolvedPath)
+                ?: PRootKernel.resolveSessionHostPath(sessionId, resolvedPath, context)
                 ?: return ToolExecutionResult(
                     "Error: Cannot resolve path: $path${guestNamespaceHint(path)}",
                     false,
@@ -372,7 +373,7 @@ object FileReadTool {
                 if (direction == "tail") {
                     // tail asks for the END of the file; take() returned the
                     // start of the tail window instead — the opposite.
-                    content = content.takeLast(maxLength)
+                    content = ToolOutputTruncator.sliceTail(content, maxLength)
                     // Drop a leading partial line so the first line is whole.
                     val firstNewline = content.indexOf('\n')
                     if (firstNewline in 0 until content.length - 1) {
@@ -382,7 +383,7 @@ object FileReadTool {
                     // No next_offset for tail: paging forward from the end of
                     // the file is meaningless.
                 } else {
-                    content = content.take(maxLength)
+                    content = ToolOutputTruncator.sliceHead(content, maxLength)
                     // Back off to the last complete line, so the next page does
                     // not re-read or split a line.
                     val lastNewline = content.lastIndexOf('\n')

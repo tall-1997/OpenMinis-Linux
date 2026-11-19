@@ -285,6 +285,17 @@ class SshToolTest {
     }
 
     @Test
+    fun execChannelCloseWithoutExitStatusIsUnconfirmed() {
+        fake.execResult = SshExecResult(-1, "partial", "", false, 5, "u@h:22")
+        val r = route("""{"action":"exec","host":"web","command":"echo hi"}""")
+        assertFalse(r.success)
+        assertFalse(r.timedOut)
+        assertFalse(r.notSent)
+        assertEquals(ToolErrorCode.NETWORK_ERROR, r.errorCode)
+        assertTrue(r.output.contains("partial"))
+    }
+
+    @Test
     fun execEmptyOutputMarker() {
         fake.execResult = SshExecResult(0, "", "", false, 5, "u@h:22")
         val r = route("""{"action":"exec","host":"web","command":"true"}""")

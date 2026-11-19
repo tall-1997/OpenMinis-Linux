@@ -60,6 +60,21 @@ class MemoryCenterStatsTest {
     }
 
     @Test
+    fun deliveredEntriesAreCountedAcrossBothScopes() {
+        val now = 1_798_200_000_000L
+        for (dir in listOf(sharedMemory(), File(session("s1"), "memory"))) {
+            val repository = MemoryRepository(dir) { now }
+            repository.writeHostMemory("delivered", origin = MemoryEntryOrigin.MEMORY_WRITE, autoArchive = false)
+            repository.writeHostMemory("not delivered", origin = MemoryEntryOrigin.MEMORY_WRITE, autoArchive = true)
+            val source = repository.todayFileName()
+            val entry = MemoryLifecycle.read(dir, source)!!.managed().single { it.body == "delivered" }
+            MemoryLifecycle.recordDelivery(setOf(entry.ref), "user-one", now + 1)
+            MemoryLifecycle.recordDelivery(setOf(entry.ref), "user-two", now + 2)
+        }
+        assertEquals(2, MemoryCenterStats.collect(filesDir).recalled)
+    }
+
+    @Test
     fun blockedRepeatsComeFromTheFailureLedger() {
         File(session("s1"), MemoryCenterStats.FAILURE_LEDGER)
             .writeText("""{"f1":{"tool":"shell_execute"},"f2":{"tool":"shell_execute"}}""")

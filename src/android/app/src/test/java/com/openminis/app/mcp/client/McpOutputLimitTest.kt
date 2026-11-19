@@ -2,6 +2,7 @@ package com.openminis.app.mcp.client
 
 import com.openminis.app.tools.SpillPlan
 import com.openminis.app.tools.ToolOutputSpill
+import com.openminis.app.tools.ToolOutputTruncator
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -10,174 +11,130 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * JVM tests for the MCP output limit — port of pi `mcp/src/output-limit.ts`.
- * Pins: short output untouched, long output middle-cut with the token-estimate
- * warning and the full-output pointer, CJK/emoji boundary safety, image blocks
- * preserved, save-failure honesty, and the single-mechanism contract (the
- * bounded preview is recognized by ToolOutputSpill as already offloaded).
- */
 class McpOutputLimitTest {
-
     private val guestPath = "/var/minis/workspace/tool-spill/mcp-srv-tool.txt"
+    private val half = ToolOutputSpill.PREVIEW_BODY_CHARS / 2
 
     @Test
-    fun `short output passes through untouched and never calls the saver`() {
-        var saverCalled = false
-        val out = McpOutputLimit.limit(
-            serverName = "srv",
-            toolName = "tool",
-            combinedText = "hello world",
-            saveOutput = { saverCalled = true; guestPath },
-        )
+    fun `text at the shared character threshold passes through without writing`() {
+        val text = "a".repeat(ToolOutputSpill.LIMIT)
+        val out = McpOutputLimit.limit("srv", "tool", text, saveOutput = { error("saver ran early") })
         assertFalse(out.truncated)
         assertNull(out.fullOutputPath)
-        assertEquals("hello world", out.text)
-        assertFalse("saver must only run past the limit", saverCalled)
+        assertEquals(text, out.text)
     }
 
     @Test
-    fun `long output is middle cut with warning line and full-output pointer`() {
-        val text = "A".repeat(30_000)
-        val out = McpOutputLimit.limit("srv", "tool", text, saveOutput = { guestPath })
+    fun `above the shared threshold and below the byte ceiling saves the entire text and shows a short preview`() {
+        val text = "A".repeat(half) + "B".repeat(ToolOutputSpill.LIMIT + 1 - 2 * half) + "C".repeat(half)
+        var saved: String? = null
+        val out = McpOutputLimit.limit("srv", "tool", text, saveOutput = { saved = it; guestPath })
+        assertEquals(text, saved)
         assertTrue(out.truncated)
         assertEquals(guestPath, out.fullOutputPath)
-        assertTrue("placeholder prefix for the shared spill gate", out.text.startsWith("[tool-output-spill]"))
-        assertTrue(
-            "intro names server and tool and the original byte size",
-            out.text.startsWith("[tool-output-spill] mcp 'srv' tool 'tool' produced 30000 bytes."),
-        )
-        // Token estimate = ceil(bytes / 4) — pi output-limit.ts.
-        assertTrue(out.text.contains("Warning: truncated output (original token count: 7500)"))
+        assertTrue(out.text.startsWith("[tool-output-spill] mcp 'srv' tool 'tool' produced 16001 chars."))
+        assertTrue(out.text.contains("Warning: truncated output (original token count: 4001)"))
         assertTrue(out.text.contains("Total output lines: 1"))
-        assertTrue(out.text.contains("…9520 chars truncated…"))
-        assertTrue(out.text.contains("[Full output: $guestPath (read it with offset/limit)]"))
-        // Head and tail of the original survive the cut.
-        assertTrue(out.text.contains("A".repeat(256)))
-        assertTrue("result must stay bounded", out.text.length < 30_000)
-    }
-
-    @Test
-    fun `save failure is admitted instead of pointing at a missing file`() {
-        val out = McpOutputLimit.limit(
-            "srv", "tool", "B".repeat(30_000),
-            saveOutput = { throw IllegalStateException("disk full") },
-        )
-        assertTrue(out.truncated)
-        assertNull(out.fullOutputPath)
-        assertTrue(out.text.startsWith("[tool-output-spill]"))
-        assertTrue(out.text.contains("[Could not save the full output: disk full]"))
-        assertFalse(out.text.contains("[Full output:"))
-    }
-
-    @Test
-    fun `no saver wired still bounds the preview without a pointer`() {
-        val out = McpOutputLimit.limit("srv", "tool", "C".repeat(30_000), saveOutput = null)
-        assertTrue(out.truncated)
-        assertNull(out.fullOutputPath)
-        assertTrue(out.text.startsWith("[tool-output-spill]"))
-        assertTrue(out.text.contains("could not be saved"))
-        assertFalse(out.text.contains("[Full output:"))
-        assertTrue(out.text.contains("…"))
-    }
-
-    @Test
-    fun `token estimate is byte based for CJK output`() {
-        val text = "\u4F60".repeat(10_000) // 30000 UTF-8 bytes
-        val out = McpOutputLimit.limit("srv", "tool", text, saveOutput = { guestPath })
-        assertTrue(out.text.contains("Warning: truncated output (original token count: 7500)"))
-        // 3413 CJK chars per half — exact boundary-safe result from the truncator.
-        assertTrue(out.text.contains("\u4F60".repeat(3413) + "…3174 chars truncated…" + "\u4F60".repeat(3413)))
-    }
-
-    @Test
-    fun `emoji output keeps surrogate pairs intact`() {
-        val text = "\uD83D\uDE00".repeat(6_000) // 24000 bytes
-        val out = McpOutputLimit.limit("srv", "tool", text, saveOutput = { guestPath })
-        assertTrue(out.truncated)
-        assertTrue(out.text.contains("\uD83D\uDE00".repeat(2560) + "…880 chars truncated…" + "\uD83D\uDE00".repeat(2560)))
-        assertFalse(out.text.contains("\uFFFD"))
-    }
-
-    @Test
-    fun `preserved blocks follow the truncated text like pi image blocks`() {
-        val placeholder = "[image image/png, 10 b64 chars — not inlined]"
-        val out = McpOutputLimit.limit(
-            "srv", "tool", "D".repeat(30_000),
-            preservedBlocks = listOf(placeholder),
-            saveOutput = { guestPath },
-        )
-        assertTrue(out.text.endsWith(placeholder))
-    }
-
-    // ── integration with McpJsonRpc.formatCallResult ─────────────────────────
-
-    @Test
-    fun `formatCallResult bounds big text and keeps the image placeholder outside the cut`() {
-        val result = JSONObject()
-            .put("isError", false)
-            .put(
-                "content",
-                JSONArray()
-                    .put(JSONObject().put("type", "text").put("text", "A".repeat(30_000)))
-                    .put(JSONObject().put("type", "image").put("mimeType", "image/png").put("data", "0123456789")),
-            )
-        val outcome = McpJsonRpc.formatCallResult(
-            result,
-            McpJsonRpc.McpResultContext("srv", "tool") { guestPath },
-        )
-        assertFalse(outcome.isError)
-        assertTrue(outcome.text.startsWith("[tool-output-spill] mcp 'srv' tool 'tool'"))
-        assertTrue(outcome.text.contains("…9520 chars truncated…"))
-        assertTrue(outcome.text.endsWith("[image image/png, 10 b64 chars — not inlined]"))
-    }
-
-    @Test
-    fun `formatCallResult also bounds the structuredContent fallback`() {
-        val result = JSONObject()
-            .put(
-                "structuredContent",
-                JSONObject().put("blob", "S".repeat(30_000)),
-            )
-        val outcome = McpJsonRpc.formatCallResult(
-            result,
-            McpJsonRpc.McpResultContext("srv", "tool") { guestPath },
-        )
-        assertTrue(outcome.text.startsWith("[tool-output-spill]"))
-        assertTrue(outcome.text.contains("chars truncated"))
-    }
-
-    @Test
-    fun `legacy formatCallResult without context is unchanged`() {
-        val result = JSONObject()
-            .put(
-                "content",
-                JSONArray()
-                    .put(JSONObject().put("type", "text").put("text", "plain"))
-                    .put(JSONObject().put("type", "image").put("mimeType", "image/png").put("data", "0123456789")),
-            )
-        val outcome = McpJsonRpc.formatCallResult(result)
-        assertEquals("plain\n[image image/png, 10 b64 chars — not inlined]", outcome.text)
-    }
-
-    // ── single-mechanism contract with ToolOutputSpill ────────────────────────
-
-    @Test
-    fun `a bounded MCP preview is recognized as already offloaded downstream`() {
-        val out = McpOutputLimit.limit("srv", "tool", "E".repeat(30_000), saveOutput = { guestPath })
-        // The downstream ToolOutputSpill pass must NOT re-spill this preview:
-        // the MCP layer is the single writer of the spill file.
+        assertTrue(out.text.contains("…(13001 chars omitted)…"))
+        assertTrue(ToolOutputSpill.previewBody(out.text).startsWith("A".repeat(half)))
+        assertTrue(out.text.endsWith("C".repeat(half)))
+        assertTrue(out.text.length < 3_500)
         assertEquals(SpillPlan.PASSTHROUGH, ToolOutputSpill.planFor(out.text, hasSession = true, sourcePath = null))
-        // And the UI link resolver finds the guest path inside the preview.
         assertEquals(guestPath, ToolOutputSpill.parseGuestPath(out.text))
     }
 
     @Test
-    fun `a save-failed preview is still recognized as offloaded`() {
-        val out = McpOutputLimit.limit(
-            "srv", "tool", "F".repeat(30_000),
-            saveOutput = { throw java.io.IOException("no space") },
+    fun `failed absent or invalid save cannot advertise a path`() {
+        val savers = listOf<((String) -> String?)?>(
+            { throw IllegalStateException("disk full") },
+            null,
+            { "/var/minis/workspace/not-a-spill.txt" },
+            { null },
         )
-        assertEquals(SpillPlan.PASSTHROUGH, ToolOutputSpill.planFor(out.text, hasSession = true, sourcePath = null))
+        for (save in savers) {
+            val out = McpOutputLimit.limit("srv", "tool", "B".repeat(30_000), saveOutput = save)
+            assertTrue(out.truncated)
+            assertNull(out.fullOutputPath)
+            assertNull(ToolOutputSpill.parseGuestPath(out.text))
+            assertFalse(out.text.contains("minis://workspace"))
+            assertTrue(out.text.contains("could not be saved"))
+            assertTrue(out.text.length < 3_500)
+        }
+    }
+
+    @Test
+    fun `byte ceiling still spills CJK text below the shared character threshold`() {
+        val text = "\u4F60".repeat(10_000)
+        val out = McpOutputLimit.limit("srv", "tool", text, saveOutput = { guestPath })
+        assertTrue(out.truncated)
+        assertTrue(out.text.contains("Warning: truncated output (original token count: 7500)"))
+        assertEquals("\u4F60".repeat(half) + "\n\n…(7000 chars omitted)…\n\n" + "\u4F60".repeat(half),
+            ToolOutputSpill.previewBody(out.text))
+        assertTrue(ToolOutputTruncator.utf8ByteLength(out.text) < McpOutputLimit.MCP_OUTPUT_MAX_BYTES)
+    }
+
+    @Test
+    fun `emoji output never splits a pair at either preview boundary`() {
+        val emoji = "\uD83D\uDE00"
+        val text = "H".repeat(half - 1) + emoji + emoji.repeat(6_000) + "T".repeat(half - 1)
+        val out = McpOutputLimit.limit("srv", "tool", text, saveOutput = { guestPath })
+        assertTrue(out.truncated)
+        assertEquals(out.text, out.text.toByteArray(Charsets.UTF_8).toString(Charsets.UTF_8))
+        val body = ToolOutputSpill.previewBody(out.text)
+        assertTrue(body.startsWith("H".repeat(half - 1) + "\n"))
+        assertTrue(body.endsWith("\n" + "T".repeat(half - 1)))
+    }
+
+    @Test
+    fun `formatCallResult bounds text and keeps error status and the whole image description`() {
+        val text = "begin\n" + "A".repeat(30_000) + "\nerror detail"
+        val media = "[image image/png, 10 b64 chars — not inlined]"
+        val result = JSONObject()
+            .put("isError", true)
+            .put(
+                "content",
+                JSONArray()
+                    .put(JSONObject().put("type", "text").put("text", text))
+                    .put(JSONObject().put("type", "image").put("mimeType", "image/png").put("data", "0123456789")),
+            )
+        var saved: String? = null
+        val outcome = McpJsonRpc.formatCallResult(result, McpJsonRpc.McpResultContext("srv", "tool") {
+            saved = it
+            guestPath
+        })
+        assertTrue(outcome.isError)
+        assertTrue(outcome.text.startsWith("[tool-output-spill] mcp 'srv' tool 'tool'"))
+        assertTrue(outcome.text.contains("error detail"))
+        assertTrue(outcome.text.endsWith(media))
+        assertEquals("$text\n$media", saved)
+    }
+
+    @Test
+    fun `formatCallResult also bounds the structuredContent fallback`() {
+        val result = JSONObject().put("structuredContent", JSONObject().put("blob", "S".repeat(30_000)))
+        val outcome = McpJsonRpc.formatCallResult(result, McpJsonRpc.McpResultContext("srv", "tool") { guestPath })
+        assertEquals(guestPath, ToolOutputSpill.parseGuestPath(outcome.text))
+        assertTrue(outcome.text.contains("chars omitted"))
+    }
+
+    @Test
+    fun `legacy formatting without context is unchanged`() {
+        val result = JSONObject().put("content", JSONArray()
+            .put(JSONObject().put("type", "text").put("text", "plain"))
+            .put(JSONObject().put("type", "image").put("mimeType", "image/png").put("data", "0123456789")))
+        assertEquals("plain\n[image image/png, 10 b64 chars — not inlined]", McpJsonRpc.formatCallResult(result).text)
+    }
+
+    @Test
+    fun `too many media descriptions still produce one bounded envelope and are saved in full`() {
+        val media = "[image image/png, 10 b64 chars — not inlined]"
+        val descriptions = List(1_000) { media }
+        var saved: String? = null
+        val out = McpOutputLimit.limit("srv", "tool", "small", descriptions) { saved = it; guestPath }
+        assertTrue(out.truncated)
+        assertEquals("small\n" + descriptions.joinToString("\n"), saved)
+        assertTrue(out.text.contains("\n$media\n"))
+        assertTrue(out.text.contains("more MCP media descriptions omitted"))
+        assertTrue(out.text.length < ToolOutputSpill.LIMIT)
     }
 }

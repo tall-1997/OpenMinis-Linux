@@ -5,6 +5,10 @@ import com.openminis.app.data.authority.InstructionUse
 import com.openminis.app.data.authority.MemoryAuthority
 import com.openminis.app.data.authority.MemoryTrust
 import com.openminis.app.data.authority.MemoryOrigin
+import com.openminis.app.data.memory.MemoryEmbeddingIndexer
+import com.openminis.app.data.memory.MemoryEmbeddingSupport
+import com.openminis.app.util.IsoTime
+import com.openminis.app.evolution.LearnedPrefsStore
 import android.util.Log
 import java.io.File
 import java.time.LocalDate
@@ -20,51 +24,9 @@ import kotlinx.coroutines.launch
 /**
  * Lightweight memory recall engine (port of XINCODE `MemoryRecall.kt`).
  *
- * Unlike XINCODE we do NOT depend on an embedding / vector service — the
- * sandbox has no LLM backend wired for embeddings. Instead this engine does
- * keyword FTS over the DAILY MEMORY LOGS (every `YYYY-MM-DD.md`) and scores
- * candidates with a compact BM25:
- *
- *   score = 2.0 * bm25(kw tokens)  +  0.5 * recency  +  0.2 * headline
- *
- * [T-android-memory-recall-r2] Two structural fixes over the original raw
- * sum (`kwHits + recency + recallBonus`), which let generic GLOBAL rules
- * outscore on-topic diary entries:
- *
- *  1. **GLOBAL.md is not a recall candidate.** Its full text is injected
- *     verbatim into the system prompt on EVERY turn (MemoryFragmentBuilder),
- *     so recalling it is pure duplication that consumed the whole budget:
- *     the sidecar showed the same three GLOBAL lines injected 20–30 times
- *     while diary entries never surfaced. Recall now serves what is NOT
- *     already standing context — the dated logs from both scopes.
- *  2. **Scoring is IDF-weighted and length-normalised.** The old raw hit
- *     count let high-frequency 2-grams ("什么", "问题") match generic rule
- *     lines for every query, and long lines accumulate more substring hits
- *     than short ones. BM25's idf + length normalisation fixes both; the
- *     recall-count bonus is REMOVED from the score (it was a positive
- *     feedback loop — injected → scored higher → re-injected) and survives
- *     only as displayed metadata (`RecallHit.recallCount`).
- *
- * ## Hygiene
- * HTML comment ranges (`<!-- … -->`), separator-only and punctuation-only
- * lines are skipped, so template scaffolding never becomes a "memory".
- *
- * ## Aging (M3-1 "后半" / MemoryDecay)
- * Entries not recalled for > [ARCHIVE_AFTER_DAYS] days are still returned by
- * keyword match but flagged with `archived=true`; the caller can choose to
- * surface them with a faded style or omit them from auto-injection.
- *
- * ## Limits
- * At most [RECALL_LIMIT] entries are returned per query; a single file
- * contributes at most [CANDIDATE_LIMIT] candidate lines and at most
- * [MAX_HITS_PER_FILE] of the final picks, so one dense file cannot fill the
- * budget with near-duplicates.
- *
- * ## Thread safety
- * The recall-count map is a ConcurrentHashMap; all reads/writes are atomic.
- * The engine itself is stateless across calls except for the recall-count
- * cache (which is in-memory only and resets on process death — a reasonable
- * trade-off vs. adding a Room entity for what is effectively a soft signal).
+ * Keyword recall ranks the active diary by BM25, recency and headline, not
+ * by delivery count. Optional semantic recall fills remaining slots. Both
+ * revalidate the current Markdown visibility and never search GLOBAL or SOUL.
  */
 class MemoryRecallEngine(
     private val memoryDirProvider: () -> File,
@@ -86,7 +48,8 @@ class MemoryRecallEngine(
      * bookkeeping); the plain [recall] / [recallForPrompt] functions never
      * consult it, so a wired support cannot perturb the keyword path.
      */
-    private val embeddingSupport: com.openminis.app.data.memory.MemoryEmbeddingSupport? = null,
+    private val embeddingSupport: MemoryEmbeddingSupport? = null,
+    private val clock: () -> Long = System::currentTimeMillis,
 ) {
 
     companion object {
@@ -97,8 +60,8 @@ class MemoryRecallEngine(
         /** Per-file cap on the FINAL picks (diversity across sources). */
         internal const val MAX_HITS_PER_FILE = 2
         private const val RECENCY_WINDOW_DAYS = 30L
-        private const val ARCHIVE_AFTER_DAYS = 90L
         private const val RECALL_COUNTS_FILE = ".recall-counts.json"
+        private val protectedSources = setOf(MemoryRepository.GLOBAL_FILE, "SOUL.md", "PERSONA.md", "AGENTS.md", LearnedPrefsStore.FILE_NAME)
         // BM25 parameters (standard defaults) for the keyword score.
         private const val BM25_K1 = 1.2
         private const val BM25_B = 0.75
@@ -188,24 +151,13 @@ class MemoryRecallEngine(
 
     // ── [T-memory-embedding-wiring] semantic prefetch cache ────────────────
 
-    /**
-     * Guards [prefetched] / [prefetchInFlight]. The cache is a single
-     * (query → hits) slot on purpose — the same O(1) trade-off as [memo]:
-     * a new turn's query naturally misses, nothing to evict.
-     */
+    private data class PrefetchKey(val query: String, val turnId: String?, val version: Long)
+    private class PrefetchAttempt(val key: PrefetchKey)
+    private data class PrefetchResult(val key: PrefetchKey, val hits: List<RecallHit>, val completedAt: Long)
+
     private val prefetchLock = Any()
-
-    /**
-     * The prefetched hybrid result for the latest [prefetchSemantic] query.
-     * Consumed (read + cleared) by [recallForPromptCached] when the query
-     * matches, so each prefetch serves exactly one prompt render.
-     */
-    @Volatile
-    private var prefetched: Pair<String, List<RecallHit>>? = null
-
-    /** Query whose prefetch job is currently running; blocks duplicate launches. */
-    @Volatile
-    private var prefetchInFlight: String? = null
+    @Volatile private var prefetched: PrefetchResult? = null
+    private var prefetchInFlight: PrefetchAttempt? = null
 
     data class RecallHit(
         val source: String,      // "GLOBAL.md" or "2026-09-18.md"
@@ -216,7 +168,16 @@ class MemoryRecallEngine(
         val archived: Boolean,
         /** [T-memory-recall-explain] Score breakdown (keywords / recency / recall) for callers that want to surface *why* an entry matched. */
         val scoreDetail: String = "",
-    )
+        /** Null on externally constructed hits; real scan results always carry their scope. */
+        val directory: File? = null,
+        val entryId: String? = null,
+        val restoredAt: Long? = null,
+    ) {
+        internal val ref: MemoryEntryRef? get() = directory?.let { dir -> entryId?.let { MemoryEntryRef(dir, source, it) } }
+        internal val announcementKey: String get() = "v2:" + com.openminis.app.util.Digest.sha256Hex(
+            "$directory\u0000$source\u0000${entryId ?: line}\u0000$restoredAt",
+        )
+    }
 
     /**
      * Extract query keywords from the latest user message(s).
@@ -266,7 +227,7 @@ class MemoryRecallEngine(
      */
     private fun clipForPrompt(line: String): String {
         val safe = MemoryAuthority.stripForgedTag(line)
-        return if (safe.length <= MAX_HIT_CHARS) safe else safe.take(MAX_HIT_CHARS) + "…"
+        return if (safe.length <= MAX_HIT_CHARS) safe else memoryTextPrefix(safe, MAX_HIT_CHARS) + "…"
     }
 
     /**
@@ -275,31 +236,36 @@ class MemoryRecallEngine(
      * normalisation), and return the top [RECALL_LIMIT] picks with a
      * per-file diversity cap.
      */
-    fun recall(query: String): List<RecallHit> {
+    fun recall(query: String): List<RecallHit> = recallAt(query, clock())
+
+    private fun recallAt(query: String, now: Long): List<RecallHit> {
         val keywords = extractKeywords(query)
         if (keywords.isEmpty()) return emptyList()
-        // [T-memory-recall-memo] Prompt assembly can run more than once for the
-        // same user message (retry, model fallback, queue drain). The file scan is
-        // the expensive part, so the last (query -> hits) pair is reused when the
-        // query is byte-identical. Single-entry on purpose: memory usage stays O(1)
-        // and a changed message naturally misses the memo.
-        memo?.let { (memoedQuery, memoedHits) -> if (memoedQuery == query) return memoedHits }
+        // An active diary can change at a TTL/idle boundary with no Markdown edit.
+        // Retain the existing single-query memo only for scopes with no lifecycle data.
+        val memoEligible = !MemoryLifecycle.hasMetadata(memoryDirProvider()) &&
+            sharedDirProvider?.invoke()?.let { !MemoryLifecycle.hasMetadata(it) } != false
+        if (memoEligible) memo?.let { (lastQuery, hits) ->
+            if (lastQuery == query && currentRecallHits(hits, now).size == hits.size) return hits
+        }
 
-        val today = LocalDate.now()
+        val today = LocalDate.parse(IsoTime.formatLocalDate(now))
 
         // ── pass 1: collect candidate lines (hygiene-filtered) ─────────────
-        // [T-memory-recall-hygiene] HTML comment ranges, separator-only and
-        // punctuation-only lines are template scaffolding, not memories.
-        class Raw(val file: String, val line: String, val day: String, val isHeadline: Boolean, val kwTokens: List<String>)
+        class Raw(
+            val file: String, val directory: File, val line: String, val day: String,
+            val isHeadline: Boolean, val kwTokens: List<String>, val entry: MemoryLifecycle.Managed?,
+        )
         val raws = mutableListOf<Raw>()
 
-        for (file in scanMemoryFiles()) {
+        for ((file, view) in scanMemoryFiles(now)) {
             val relName = file.name
-            val lines = runCatching { file.readLines() }.getOrNull() ?: continue
+            val directory = file.parentFile ?: continue
+            val lines = view.lines()
             val dayStr = dayKeyOf(relName)
             var inHtmlComment = false
 
-            for (line in lines) {
+            for ((line, entry) in lines) {
                 val trimmed = line.trim()
                 if (trimmed.isEmpty()) continue
                 if (inHtmlComment) {
@@ -318,7 +284,7 @@ class MemoryRecallEngine(
                 // Headline / bullet / section lines are higher signal than body prose.
                 val isHeadline = trimmed.startsWith("#") || trimmed.startsWith("-") ||
                     trimmed.startsWith("*") || trimmed.startsWith(">")
-                raws.add(Raw(relName, trimmed, dayStr, isHeadline, kwTokens))
+                raws.add(Raw(relName, directory, trimmed, dayStr, isHeadline, kwTokens, entry))
             }
         }
         if (raws.isEmpty()) return emptyList()
@@ -352,7 +318,6 @@ class MemoryRecallEngine(
             return count
         }
 
-        val cutoff = today.minusDays(ARCHIVE_AFTER_DAYS)
         val scored = pool.map { r ->
             val lenNorm = BM25_B * (1.0 - r.line.length / avgLen.coerceAtLeast(1.0))
             var kw = 0.0
@@ -372,19 +337,19 @@ class MemoryRecallEngine(
                 (if (r.isHeadline) HEADLINE_BONUS else 0.0)
             // [T-memory-recall-explain] Human-readable breakdown for callers
             // that surface *why* an entry matched (Settings → Memory debug).
-            val rcKey = "${r.day}:${r.line}"
-            val rc = recallCounts.getOrPut(rcKey) { AtomicInteger(0) }
+            val rc = r.entry?.state?.usage ?: recallCounts["${r.day}:${r.line}"]?.get() ?: 0
             val detail = "bm25=${"%.2f".format(kw)} recency=${"%.2f".format(recency)}"
             RecallHit(
                 source = r.file,
                 line = r.line,
                 day = r.day,
                 score = score,
-                recallCount = rc.get(),
-                // Aging (M3-1 后半): old entries stay searchable, flagged for
-                // the caller to fade. Undated lines are never archived.
-                archived = entryDay?.isBefore(cutoff) == true,
+                recallCount = rc,
+                archived = false,
                 scoreDetail = detail,
+                directory = r.directory.canonicalFile,
+                entryId = r.entry?.ref?.id,
+                restoredAt = r.entry?.state?.restoredAt,
             )
         }
 
@@ -443,6 +408,7 @@ class MemoryRecallEngine(
 
     fun loadRecallCounts() {
         val file = recallCountsFile()
+        if (!file.isFile) return
         val text = readTextResilient(file, TAG) ?: return
         try {
             val obj = org.json.JSONObject(text)
@@ -475,30 +441,40 @@ class MemoryRecallEngine(
     internal fun recallCountsSnapshot(): Map<String, Int> =
         recallCounts.entries.associate { it.key to it.value.get() }.toSortedMap()
 
-    private fun scanMemoryFiles(): List<File> {
-        // [T-android-memory-recall-r2] GLOBAL.md (BOTH scopes) is never a
-        // recall candidate: its full text rides in the system prompt every
-        // turn, so recalling it is pure duplication that used to consume the
-        // whole budget. Recall serves the dated logs — content that is NOT
-        // already standing context.
-        val isSearchable = { f: File -> f.isFile && f.extension == "md" && f.name != MemoryRepository.GLOBAL_FILE }
-        val memoryDir = memoryDirProvider()
-        val session = if (memoryDir.isDirectory) {
-            memoryDir.listFiles()?.filter(isSearchable).orEmpty()
-        } else {
-            emptyList()
+    private fun scanMemoryFiles(now: Long): Sequence<Pair<File, MemoryLifecycle.View>> = sequence {
+        val visibleNames = HashSet<String>()
+        // Like the TOC, only a visible session copy shadows the shared one.
+        for (directory in listOfNotNull(memoryDirProvider(), sharedDirProvider?.invoke())) {
+            val files = directory.listFiles().orEmpty().sortedByDescending { it.lastModified() }
+            for (file in files) {
+                if (!file.isFile || !isRecallSource(file.name) || file.name in visibleNames) continue
+                val view = MemoryLifecycle.read(directory, file.name)?.active(now) ?: continue
+                if (view.hasVisibleText()) {
+                    visibleNames.add(file.name)
+                    yield(file to view)
+                }
+            }
         }
-        // [T-memory-shared-recall] Shared scope: same filename means the session
-        // copy wins, because that is the one the verbatim window shows.
-        val sharedDir = sharedDirProvider?.invoke()
-        val shared = if (sharedDir != null && sharedDir.isDirectory) {
-            sharedDir.listFiles()?.filter(isSearchable).orEmpty()
-        } else {
-            emptyList()
+    }
+
+    private fun isRecallSource(name: String): Boolean = name.endsWith(".md") && name !in protectedSources
+
+    private fun currentRecallHits(hits: List<RecallHit>, now: Long = clock()): List<RecallHit> {
+        val lines = HashMap<Pair<File, String>, List<MemoryLifecycle.OwnedLine>>()
+        return hits.filter { hit ->
+            val dir = hit.directory ?: return@filter true // Pure rendering callers can supply fixture hits.
+            lines.getOrPut(dir to hit.source) { activeLines(dir, hit.source, now) }.any { (line, entry) ->
+                entry?.ref?.id == hit.entryId && entry?.state?.restoredAt == hit.restoredAt && matchesRecallLine(line, hit.line)
+            }
         }
-        val sessionNames = session.mapTo(HashSet()) { it.name }
-        return (session + shared.filter { it.name !in sessionNames })
-            .sortedByDescending { it.lastModified() }
+    }
+
+    private fun activeLines(dir: File, source: String, now: Long): List<MemoryLifecycle.OwnedLine> =
+        MemoryLifecycle.read(dir, source)?.active(now)?.lines().orEmpty()
+
+    private fun matchesRecallLine(actual: String, hit: String): Boolean {
+        val text = actual.trim()
+        return text == hit || memoryTextPrefix(text, MemoryEmbeddingIndexer.MAX_LINE_CHARS) == hit
     }
 
     /** [T-recall-delivery-accounting] Rendered fragment plus exactly the hits it carries. */
@@ -515,26 +491,21 @@ class MemoryRecallEngine(
      * whole candidate list permanently suppressed every hit cut by the cap —
      * a memory never shown could never be announced again.
      */
-    fun formatAsPromptFragmentWithHits(hits: List<RecallHit>): RenderedFragment {
+    fun formatAsPromptFragmentWithHits(hits: List<RecallHit>, now: Long = clock()): RenderedFragment {
         if (hits.isEmpty()) return RenderedFragment("", emptyList())
         val included = ArrayList<RecallHit>(hits.size)
         val body = buildString {
             append("## Recalled relevant memories\n")
-            for (hit in hits) {
-                // [T-memory-recall-caps] Budget the whole fragment, not just one
-                // hit: a single enormous diary line used to be able to fill the
-                // block on its own. `length` is this StringBuilder's size.
-                if (length >= MAX_FRAGMENT_CHARS) break
-                if (hit.archived) append("[archived] ")
-                append("- **${hit.source}**: ${clipForPrompt(hit.line)}")
-                appendLine()
+            for (hit in currentRecallHits(hits, now)) {
+                val snippet = clipForPrompt(hit.line)
+                if (snippet.isBlank()) continue
+                val row = "- **${hit.source}**: $snippet\n"
+                if (length + row.length > MAX_FRAGMENT_CHARS) break
+                append(row)
                 included += hit
             }
         }
-        // [T-memory-recall-io] One sidecar write per prompt build, not one per
-        // hit: acceptRecall() rewrites the whole JSON file on each call, so a
-        // 4-hit build cost four synchronous rewrites on the prompt path.
-        acceptRecallBatch(included.map { it.source to it.line })
+        if (included.isEmpty()) return RenderedFragment("", emptyList())
         val text = MemoryAuthority.withEnvelope(
             body,
             MemoryTrust.UNVERIFIED_CANDIDATE,
@@ -654,98 +625,102 @@ class MemoryRecallEngine(
             support.semanticHits(query, RECALL_LIMIT, fileScopes.map { it.absolutePath })
         }.getOrNull().orEmpty()
         runCatching { support.backfillAsync(fileScopes) }
-        return if (semantic.isEmpty()) {
-            fts
-        } else {
-            SemanticRecallFusion.merge(
-                fts = fts,
-                semantic = semantic,
-                limit = RECALL_LIMIT,
-                perFileCap = MAX_HITS_PER_FILE,
-                archiveCutoff = LocalDate.now().minusDays(ARCHIVE_AFTER_DAYS),
-                dayKeyOf = { dayKeyOf(it) },
-            )
+        val eligible = resolveSemanticHits(semantic, fileScopes)
+        val activeFts = currentRecallHits(fts)
+        val candidates = eligible.associateBy { it.source to it.line }
+        return SemanticRecallFusion.merge(
+            fts = activeFts,
+            semantic = eligible,
+            limit = RECALL_LIMIT,
+            perFileCap = MAX_HITS_PER_FILE,
+            archiveCutoff = null,
+            dayKeyOf = { dayKeyOf(it) },
+        ).map { hit ->
+            if (hit.directory != null) hit else {
+                val candidate = candidates[hit.source to hit.line]
+                val dir = candidate?.scope?.let(::File)
+                val owner = dir?.let { activeLines(it, hit.source, clock()).firstOrNull { line -> matchesRecallLine(line.text, hit.line) }?.entry }
+                hit.copy(directory = dir, entryId = owner?.ref?.id, recallCount = owner?.state?.usage ?: 0, restoredAt = owner?.state?.restoredAt)
+            }
+        }.let { currentRecallHits(it) }
+    }
+
+    private fun resolveSemanticHits(
+        hits: List<MemoryEmbeddingSupport.SemanticHit>,
+        scopes: List<File>,
+    ): List<MemoryEmbeddingSupport.SemanticHit> {
+        val dirs = scopes.mapNotNull { runCatching { it.canonicalFile }.getOrNull() }
+        val now = clock()
+        val views = HashMap<String, Pair<File, List<MemoryLifecycle.OwnedLine>>?>()
+        return hits.mapNotNull { hit ->
+            if (!isRecallSource(hit.source)) return@mapNotNull null
+            val (dir, eligible) = views.getOrPut(hit.source) {
+                dirs.firstNotNullOfOrNull { scope ->
+                    val view = MemoryLifecycle.read(scope, hit.source)?.active(now) ?: return@firstNotNullOfOrNull null
+                    if (view.hasVisibleText()) scope to view.lines() else null
+                }
+            } ?: return@mapNotNull null
+            if (hit.scope != null && hit.scope != dir.path) return@mapNotNull null
+            if (eligible.none { matchesRecallLine(it.text, hit.line) }) return@mapNotNull null
+            MemoryEmbeddingSupport.SemanticHit(hit.source, hit.line, hit.score, dir.path)
         }
     }
 
-    /**
-     * [T-memory-embedding-wiring] Fire-and-forget semantic prefetch for the
-     * send pipeline. `newRecallReminder` renders synchronously (kept off the main
-     * is a plain lambda) and must never block on network, so the SEND path
-     * instead calls this as early as possible with the SAME query the render
-     * will build; the hybrid result lands in a one-slot cache that
-     * [recallForPromptCached] consumes. The render stays byte-for-byte
-     * synchronous and zero-network whether or not the prefetch won the race.
-     *
-     * Contract:
-     *  - Launches the work onto [prefetchScope]; returns immediately. Every
-     *    failure inside the job is swallowed (logged at debug) — a dead or
-     *    unconfigured embeddings endpoint must never surface through this path.
-     *  - No-op (zero cost, zero allocation on the hot path) when no embedding
-     *    support is wired — the default engine keeps its exact pre-#27 shape.
-     *  - Skips when the same query is already cached or already in flight, so
-     *    a duplicated send does not issue a second embeddings request.
-     *
-     * Query identity is load-bearing: the caller MUST build the query exactly
-     * like the render does (see [recallForPromptCached]).
-     */
-    fun prefetchSemantic(query: String) {
-        if (embeddingSupport == null) return
+    /** Real requests may prefetch; repeated projections only read the bounded result. */
+    fun prefetchSemantic(query: String, turnId: String? = null) {
+        startPrefetch(query, turnId)
+    }
+
+    private fun startPrefetch(query: String, turnId: String?): kotlinx.coroutines.Job? {
+        if (embeddingSupport == null || query.isBlank()) return null
+        val key = PrefetchKey(query, turnId, MemoryLifecycle.recallGeneration())
+        val attempt = synchronized(prefetchLock) {
+            if (prefetchInFlight?.key == key || recentPrefetch(key, clock()) != null) return null
+            PrefetchAttempt(key).also { prefetchInFlight = it }
+        }
+        return prefetchScope.launch { fillPrefetch(attempt) }
+    }
+
+    private fun recentPrefetch(key: PrefetchKey, now: Long): PrefetchResult? = prefetched?.takeIf {
+        // Failed/empty lookups may be retried on the next real turn, on a content/index change,
+        // or after a short backoff in a long-running turn. No preview starts that retry.
+        val lifetime = if (it.hits.isEmpty()) 5_000L else 30_000L
+        it.key == key && now - it.completedAt in 0 until lifetime
+    }
+
+    private suspend fun fillPrefetch(attempt: PrefetchAttempt) {
+        val hits = runCatching { recallHybridUnaccounted(attempt.key.query) }
+            .onFailure { Log.d(TAG, "semantic prefetch failed silently: ${it.message}") }.getOrNull().orEmpty()
         synchronized(prefetchLock) {
-            if (query.isBlank() || prefetched?.first == query || prefetchInFlight == query) return
-            prefetchInFlight = query
-        }
-        prefetchScope.launch {
-            fillPrefetch(query)
-        }
-    }
-
-    /**
-     * The prefetch body, shared by [prefetchSemantic]'s job and the test seam.
-     * Runs the full hybrid recall (FTS + semantic + anti-nag streak) and — on
-     * success only — parks the result in the one-slot cache. Silent on failure:
-     * the cache stays empty and [recallForPromptCached] degrades to the plain
-     * keyword path.
-     */
-    private suspend fun fillPrefetch(query: String) {
-        // BARE form (no streak accounting): the result may never be consumed
-        // — the render can win the race and degrade to keyword FTS, whose own
-        // applyStreakFilter call is the one that counts. Accounting at both
-        // ends would double-count and shorten the anti-nag window.
-        val hits = runCatching { recallHybridUnaccounted(query) }
-            .onFailure { Log.d(TAG, "semantic prefetch failed silently: ${it.message}") }
-            .getOrNull()
-        synchronized(prefetchLock) {
-            if (prefetchInFlight == query) prefetchInFlight = null
-            if (hits != null) prefetched = query to hits
+            // An older completion must not clobber a more recent request or keep a stale generation.
+            if (prefetchInFlight !== attempt) return
+            prefetchInFlight = null
+            if (MemoryLifecycle.recallGeneration() == attempt.key.version) {
+                prefetched = PrefetchResult(attempt.key, hits, clock())
+            }
         }
     }
 
-    /**
-     * [T-memory-embedding-wiring] The prompt-path entry point: return the
-     * prefetched hybrid result when [query] matches it exactly (and consume
-     * the slot), otherwise degrade synchronously to [recallForPrompt] — pure
-     * FTS, zero network, byte-identical to the pre-wiring path.
-     *
-     * Byte-equivalence red line: with no embedding support wired (the default)
-     * nothing ever fills the cache, so this function IS [recallForPrompt].
-     * With support wired but the prefetch not finished (or lost the race), the
-     * first render of a turn simply gets keyword hits — the same result the
-     * pre-#27 app produced.
-     */
+    /** Legacy caller that consumes its one-shot prefetch. Production request previews do not use it. */
     fun recallForPromptCached(query: String): List<RecallHit> {
+        val key = PrefetchKey(query, null, MemoryLifecycle.recallGeneration())
         val hit = synchronized(prefetchLock) {
-            prefetched?.takeIf { it.first == query }?.also { prefetched = null }
+            recentPrefetch(key, clock())?.also { prefetched = null }
         }
-        // The cached result was computed WITHOUT streak accounting (see
-        // [fillPrefetch]) — apply it exactly once, here, where the hits are
-        // actually delivered. A cache miss degrades to [recallForPrompt],
-        // which does its own accounting.
-        return if (hit != null) applyStreakFilter(hit.second) else recallForPrompt(query)
+        return if (hit != null) applyStreakFilter(currentRecallHits(hit.hits)) else recallForPrompt(query)
     }
 
-    /** [T-memory-embedding-wiring] Test seam: drive the prefetch body synchronously. */
-    internal suspend fun prefetchSemanticForTest(query: String) {
-        fillPrefetch(query)
+    /** Dispatch/preview read: do not consume prefetch, start network, or advance anti-nag counters. */
+    internal fun recallCandidatesForDelivery(query: String, now: Long, turnId: String? = null): List<RecallHit> {
+        val key = PrefetchKey(query, turnId, MemoryLifecycle.recallGeneration())
+        val snapshot = recentPrefetch(key, now)?.hits ?: return recallAt(query, now)
+        val active = currentRecallHits(snapshot, now)
+        return if (active.size == snapshot.size && active.isNotEmpty() && key.version == MemoryLifecycle.recallGeneration()) active
+        else recallAt(query, now)
+    }
+
+    /** Await the same scheduling/dedup path as a real request. */
+    internal suspend fun prefetchSemanticForTest(query: String, turnId: String? = null) {
+        startPrefetch(query, turnId)?.join()
     }
 }

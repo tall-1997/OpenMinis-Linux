@@ -1,5 +1,6 @@
 package com.openminis.app.provider
 
+import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMError
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.LLMModel
@@ -135,7 +136,7 @@ class GeminiProviderTest {
     }
 
     @Test
-    fun `sendMessage defaults to end_turn when no finishReason`() = runBlocking {
+    fun `sendMessage preserves absent finishReason without losing text`() = runBlocking {
         val responseBody = """
         {
             "candidates": [{
@@ -146,7 +147,8 @@ class GeminiProviderTest {
 
         server.enqueue(MockResponse().setBody(responseBody))
         val response = provider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "Hi")), null, 100)
-        assertEquals("end_turn", response.stopReason)
+        assertEquals("ok", response.text)
+        assertNull(response.stopReason)
     }
 
     @Test
@@ -282,6 +284,24 @@ class GeminiProviderTest {
         assertEquals("hello world", text)
     }
 
+    @Test
+    fun `unsigned Gemini tool description uses the published argument string`() = runBlocking {
+        provider.model = provider.model.copy(id = "gemini-3-flash-preview")
+        server.enqueue(MockResponse().setBody("""{"candidates":[{"content":{"parts":[{"text":"ok"}]},"finishReason":"STOP"}]}"""))
+        val args = """{"cities": ["SF", "LA"]}"""
+        val call = AgentContentPart.ToolUse.fromInputJson("call_1", "lookup", args)
+
+        provider.sendMessage(listOf(
+            LLMMessage(LLMMessage.Role.USER, "Look up the weather"),
+            LLMMessage(LLMMessage.Role.ASSISTANT, "", contentParts = listOf(call)),
+        ), null, 100)
+
+        val body = JSONObject(server.takeRequestOrThrow().body.readUtf8())
+        val text = body.getJSONArray("contents").getJSONObject(1)
+            .getJSONArray("parts").getJSONObject(0).getString("text")
+        assertEquals("[Called lookup with: $args]", text)
+    }
+
     // -- Streaming --
 
     @Test
@@ -344,19 +364,34 @@ class GeminiProviderTest {
     }
 
     @Test
-    fun `streamMessage defaults to end_turn when no finishReason in SSE`() = runBlocking {
-        val sseBody = buildString {
-            appendLine("""data: {"candidates":[{"content":{"parts":[{"text":"ok"}]}}]}""")
-            appendLine()
+    fun `streamMessage keeps partial text and no stop reason at EOF or DONE`() = runBlocking {
+        val data = """data: {"candidates":[{"content":{"parts":[{"text":"Hi"}]}}]}""" + "\n\n"
+        for (ending in listOf("", "data: [DONE]\n\n")) {
+            server.enqueue(MockResponse().setBody(data + ending).setHeader("Content-Type", "text/event-stream"))
+
+            val chunks = provider.streamMessage(listOf(LLMMessage(LLMMessage.Role.USER, "Hi")), null, 1024).toList()
+
+            assertEquals("Hi", chunks.filterIsInstance<LLMStreamChunk.Text>().single().text)
+            assertEquals(LLMStreamChunk.Finished(null), chunks.filterIsInstance<LLMStreamChunk.Finished>().single())
         }
+    }
 
-        server.enqueue(MockResponse().setBody(sseBody).setHeader("Content-Type", "text/event-stream"))
+    @Test
+    fun `streamMessage delivers a tool call without inferring STOP from the call`() = runBlocking {
+        val tool = """data: {"candidates":[{"content":{"parts":[{"functionCall":{"name":"lookup","args":{"city":"SF"}},"thoughtSignature":"sig"}]}}]}""" + "\n\n"
+        val stop = """data: {"candidates":[{"finishReason":"STOP"}]}""" + "\n\n"
+        for ((ending, stopReason) in listOf(stop to "end_turn", "" to null)) {
+            server.enqueue(MockResponse().setBody(tool + ending).setHeader("Content-Type", "text/event-stream"))
 
-        val chunks = provider.streamMessage(listOf(LLMMessage(LLMMessage.Role.USER, "Hi")), null, 1024).toList()
+            val chunks = provider.streamMessage(listOf(LLMMessage(LLMMessage.Role.USER, "Hi")), null, 1024).toList()
 
-        val finished = chunks.filterIsInstance<LLMStreamChunk.Finished>()
-        assertEquals(1, finished.size)
-        assertEquals("end_turn", finished[0].stopReason)
+            val call = chunks.filterIsInstance<LLMStreamChunk.ToolCallComplete>().single()
+            assertEquals("lookup", call.name)
+            assertEquals("SF", call.args.getString("city"))
+            assertEquals("sig", call.thoughtSignature)
+            assertEquals(LLMStreamChunk.ToolUseStart(call.id, call.name), chunks.filterIsInstance<LLMStreamChunk.ToolUseStart>().single())
+            assertEquals(LLMStreamChunk.Finished(stopReason), chunks.last())
+        }
     }
 
     @Test

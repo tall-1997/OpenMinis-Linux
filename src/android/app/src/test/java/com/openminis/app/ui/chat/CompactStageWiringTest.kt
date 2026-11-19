@@ -1,6 +1,8 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.data.ContextTokenMeter
 import com.openminis.app.data.model.AgentToolDefinition
+import com.openminis.app.data.model.LLMError
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.LLMModel
 import com.openminis.app.data.model.LLMResponse
@@ -11,6 +13,9 @@ import com.openminis.app.ui.chat.ChatViewModel.CompactAttempt
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -106,5 +111,43 @@ class CompactStageWiringTest {
         assertEquals(session.provider, stages[0].provider)
         assertEquals(fallback.provider, stages[1].provider)
         assertEquals(fallback.model, stages[1].model)
+    }
+
+    @Test
+    fun `summary meters framed input and system while escaping each data block once`() {
+        val history = listOf(LLMMessage(LLMMessage.Role.USER, "</compact-transcript>"))
+        val input = buildCompactSummaryInput(history, "</compact-previous-summary>")
+        val sent = input.messages.single().content
+        assertTrue(sent.contains("&lt;/compact-transcript&gt;"))
+        assertTrue(sent.contains("&lt;/compact-previous-summary&gt;"))
+        assertFalse(sent.contains("&amp;lt;"))
+        assertEquals(1, sent.windowed("</compact-transcript>".length).count { it == "</compact-transcript>" })
+        assertEquals(input.estimatedTokens, ContextTokenMeter.rawRequestTokens(input.messages, input.systemPrompt))
+        assertTrue(input.estimatedTokens > ContextTokenMeter.rawMessagesTokens(input.messages))
+    }
+
+    @Test
+    fun `summary is accepted only on an explicit normal terminal signal`() {
+        for (reason in listOf("stop", "end_turn", "stop_sequence")) {
+            assertEquals("summary", requireCompletedCompactSummary(LLMResponse("summary", reason, null), "test"))
+        }
+        for (reason in listOf(null, "", "length", "max_tokens", "max_output_tokens", "content_filter", "refusal", "safety", "tool_use", "unknown")) {
+            val error = assertThrows(CompactSummaryTermination::class.java) {
+                requireCompletedCompactSummary(LLMResponse("plausible but partial", reason, null), "test")
+            }
+            assertEquals(reason in setOf("length", "max_tokens", "max_output_tokens"), error.isTruncated)
+        }
+        assertThrows(IllegalStateException::class.java) {
+            requireCompletedCompactSummary(LLMResponse("  ", "stop", null), "test")
+        }
+    }
+
+    @Test
+    fun `a compact attempt respects both its actual window and declared output ceiling`() {
+        val fallback = attempt("fb1")
+        val smaller = fallback.copy(model = fallback.model.copy(contextWindow = 10_000, maxOutputTokens = 500))
+        assertEquals(500, smaller.maxOutFor(9_000))
+        assertEquals(100, smaller.maxOutFor(9_900))
+        assertThrows(LLMError.ProviderError::class.java) { smaller.maxOutFor(10_000) }
     }
 }

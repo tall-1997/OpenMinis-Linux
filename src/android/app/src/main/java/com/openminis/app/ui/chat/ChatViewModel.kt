@@ -131,9 +131,6 @@ class ChatViewModel(
         internal const val COMPACT_SEGMENT_MIN_TOKENS = 8_000
         internal const val COMPACT_SEGMENT_MAX_TOKENS = 32_000
 
-        internal fun estimateCompactTokens(text: String): Int =
-            (text.length / 4).coerceAtLeast(1)
-
         internal fun compactSegmentTokenBudget(contextWindow: Int): Int =
             (contextWindow / 5).coerceIn(COMPACT_SEGMENT_MIN_TOKENS, COMPACT_SEGMENT_MAX_TOKENS)
 
@@ -197,12 +194,6 @@ class ChatViewModel(
             return terms.any { t -> t in lower }
         }
 
-        /** [T-compact-chunk-pool] Newest chunks kept in the rolling pool. */
-        internal val SUMMARY_CHUNK_POOL_MAX = 8
-
-        /** Per-chunk cap; a runaway summary must not fill the pool. */
-        internal const val SUMMARY_CHUNK_MAX_CHARS = 4_000
-
         /** Keep both the opening context and the operationally important tail. */
         internal fun preserveSummaryEdges(text: String, maxChars: Int): String {
             if (text.length <= maxChars) return text
@@ -210,129 +201,6 @@ class ChatViewModel(
             val tailSize = maxChars / 3
             val headSize = maxChars - tailSize - 1
             return text.take(headSize) + "…" + text.takeLast(tailSize)
-        }
-
-        /** Chunks injected per turn after retrieval. */
-        internal const val SUMMARY_CHUNK_TOP_K = 3
-
-        // [P1-18] parseSummaryChunks removed: zero production callers — the
-        // read path goes through selectSummaryChunks (relevance-ranked) and
-        // the pool writer through appendSummaryChunk, both of which parse via
-        // parseSummaryChunkRecords. The text-only projection existed only for
-        // its unit test.
-
-        /** (text, epochMs) pairs, oldest first. */
-        private fun parseSummaryChunkRecords(json: String?): List<Pair<String, Long>> {
-            if (json.isNullOrBlank()) return emptyList()
-            return runCatching {
-                val arr = org.json.JSONArray(json)
-                val out = ArrayList<Pair<String, Long>>(arr.length())
-                for (i in 0 until arr.length()) {
-                    val o = arr.optJSONObject(i) ?: continue
-                    val t = o.optString("t").takeIf { it.isNotBlank() } ?: continue
-                    out.add(t to o.optLong("a", 0L))
-                }
-                out
-            }.getOrDefault(emptyList())
-        }
-
-        /**
-         * [T-compact-chunk-pool] Rolling pool update on a successful compact:
-         * keep the newest [SUMMARY_CHUNK_POOL_MAX] chunks (each capped), each
-         * stored as a per-compaction snapshot so earlier material can still be
-         * retrieved by keyword later. Pure function, testable.
-         */
-        internal fun appendSummaryChunk(existingJson: String?, newSummary: String): String {
-            val capped = preserveSummaryEdges(newSummary, SUMMARY_CHUNK_MAX_CHARS)
-            val kept = parseSummaryChunkRecords(existingJson)
-                .filter { it.first.isNotBlank() }
-                .toMutableList()
-            kept.add(capped to System.currentTimeMillis())
-            val trimmed = if (kept.size > SUMMARY_CHUNK_POOL_MAX) {
-                kept.subList(kept.size - SUMMARY_CHUNK_POOL_MAX, kept.size).toList()
-            } else {
-                kept
-            }
-            return runCatching {
-                val arr = org.json.JSONArray()
-                for ((t, a) in trimmed) {
-                    arr.put(org.json.JSONObject().put("t", t).put("a", a))
-                }
-                arr.toString()
-            }.getOrElse { "[]" }
-        }
-
-        /**
-         * [T-compact-chunk-pool] Tokenize a query into comparable units:
-         * ASCII word runs plus CJK bigrams (a Chinese sentence has no spaces,
-         * and a single-gram match is far too noisy). Pure function.
-         */
-        internal fun summaryQueryTerms(query: String): Set<String> {
-            val terms = LinkedHashSet<String>()
-            val lower = query.lowercase()
-            val ascii = StringBuilder()
-            fun flushAscii() {
-                if (ascii.length >= 2) terms.add(ascii.toString())
-                ascii.setLength(0)
-            }
-            var cjkRun = StringBuilder()
-            fun flushCjk() {
-                val run = cjkRun.toString()
-                if (run.length >= 2) {
-                    for (i in 0..run.length - 2) terms.add(run.substring(i, i + 2))
-                } else if (run.length == 1) {
-                    terms.add(run)
-                }
-                cjkRun.setLength(0)
-            }
-            for (c in lower) {
-                when {
-                    c.code < 128 && (c.isLetterOrDigit()) -> ascii.append(c)
-                    c.code in 0x4E00..0x9FFF -> {
-                        flushAscii()
-                        cjkRun.append(c)
-                    }
-                    else -> {
-                        flushAscii()
-                        flushCjk()
-                    }
-                }
-            }
-            flushAscii()
-            flushCjk()
-            return terms
-        }
-
-        /**
-         * [T-compact-chunk-pool] Retrieve the chunks that match the current
-         * instruction, newest-first relevance, then re-sorted chronologically
-         * for injection. Falls back to the most recent chunk when the query
-         * shares no terms with any of them (the tail is what a conversation
-         * most plausibly continues from). Pure function, testable.
-         */
-        internal fun selectSummaryChunks(chunksJson: String?, query: String, topK: Int = SUMMARY_CHUNK_TOP_K): List<String> {
-            val chunks = parseSummaryChunkRecords(chunksJson)
-            if (chunks.isEmpty()) return emptyList()
-            if (chunks.size == 1) return listOf(chunks[0].first)
-            val terms = summaryQueryTerms(query)
-            if (terms.isEmpty()) return listOf(chunks.last().first)
-            val scored = chunks.mapIndexed { idx, (text, at) ->
-                val lower = text.lowercase()
-                var score = 0
-                for (t in terms) {
-                    if (t in lower) score += if (t.length >= 2) 2 else 1
-                }
-                Triple(idx, score, text)
-            }
-            val hits = scored.filter { it.second > 0 }
-                .sortedByDescending { it.second }
-                .take(topK)
-            val chosen = if (hits.isNotEmpty()) {
-                hits
-            } else {
-                listOf(Triple(chunks.lastIndex, 0, chunks.last().first))
-            }
-            return chosen.sortedBy { it.first }.map { it.third }
         }
 
         /** Floor for the dynamic wall-clock timeout. */
@@ -1515,6 +1383,11 @@ class ChatViewModel(
             // duplicate "Google" / "Gemini" / "Google Gemini" sections.
             providerTypeRaw = instance?.providerType?.name ?: "",
             providerInstanceId = entry?.providerInstanceId,
+            // [T-anchor-route-guard] The calibration key includes the actual
+            // route; a snapshot without it can never match a settled anchor.
+            contextRouteId = currentProvider?.let {
+                com.openminis.app.provider.ProviderFactory.requestAttribution(it).contextRouteId
+            },
         )
     }
 
@@ -2611,38 +2484,9 @@ class ChatViewModel(
         compactAll()
     }
 
-    /**
-     * Public entrypoint for "compact up through this message" (mirrors iOS
-     * AIChatViewModel.compactBefore). The chat list's long-press menu and
-     * the debug RPC `chat.compact.before` route through here.
-     *
-     * @param dbMessageId the DB message id to use as the new marker's
-     *   anchor. agentHistory range to compact = `[prevAnchor+1, anchorIdx]`
-     *   where anchorIdx is the agentHistory position of this id.
-     * @param includesBoundary accepted for ABI compatibility with iOS, but
-     *   in v2 the anchor IS the caller-supplied message regardless — the
-     *   flag is logged and ignored. (iOS made the same simplification.)
-     *
-     * If the id can't be resolved to an agentHistory entry, this falls
-     * back to compactAll() behaviour so the user's gesture isn't lost.
-     */
+    /** v2 treats the requested persisted id as an inclusive upper bound. */
     override fun compactBefore(dbMessageId: String, includesBoundary: Boolean) {
-        AppLogger.info(
-            TAG,
-            "[Compact] compactBefore() id=${dbMessageId.take(8)} includesBoundary=$includesBoundary " +
-                "(v2: includesBoundary ignored — caller-supplied id becomes the anchor)",
-        )
-        val history = agentHistory.toList()
-        val idx = history.indexOfLast { it.dbMessageId == dbMessageId }
-        if (idx < 0) {
-            AppLogger.warning(
-                TAG,
-                "[Compact] compactBefore: id=${dbMessageId.take(8)} not in agentHistory — falling back to compactAll()",
-            )
-            compactAll(anchorIdxOverride = null)
-            return
-        }
-        compactAll(anchorIdxOverride = idx)
+        compactAll(throughId = dbMessageId)
     }
 
     /**
@@ -2799,55 +2643,6 @@ class ChatViewModel(
     @Volatile
     internal var _cachedLatestMarker: com.openminis.app.data.db.CompactMarkerEntity? = null
 
-    /**
-     * [T-compact-detached-anchor] True when the latest v2 marker's anchor
-     * message is no longer inside the bounded `agentHistory` window — the
-     * session outgrew [MAX_AGENT_HISTORY_MESSAGES] (or the window moved past
-     * the anchor). The summary text itself is still perfectly usable, so the
-     * read side must degrade to "summary + recent tail" instead of dropping
-     * the summary and sending the full history on every turn. Detected once
-     * per session load so the condition is not re-probed (and re-logged) on
-     * every single LLM call.
-     */
-    @Volatile
-    internal var _compactMarkerDetached = false
-
-    /**
-     * Tail size handed to the model when a marker's anchor has been evicted:
-     * summary + the newest [DETACHED_TAIL_MESSAGES] entries verbatim. Sized
-     * to keep the "most recent user turns + their tool round-trips" warm
-     * without re-introducing the full history the summary exists to replace.
-     */
-    internal val DETACHED_TAIL_MESSAGES = 60
-
-    /**
-     * Assemble the outgoing history for a DETACHED marker: the summary is
-     * inlined as a `<context-summary>` text prefix on the first user message
-     * of the tail (same role-alternation-safe technique the v2 branch uses),
-     * followed by the tail verbatim. Mirrors
-     * [effectiveAgentHistoryUncounted]'s v2 path minus the anchor-based
-     * slice, which is the only part that requires a resolvable anchor.
-     */
-    internal fun detachedCompactHistory(summaryWrappedText: String): List<LLMMessage> =
-        buildDetachedCompactHistory(
-            summaryWrappedText = summaryWrappedText,
-            history = agentHistorySnapshot(),
-            tailSize = DETACHED_TAIL_MESSAGES,
-        )
-
-    internal suspend fun splitCompactHalves(
-        messages: List<LLMMessage>,
-        previousSummary: String?,
-        depth: Int,
-    ): String {
-        val mid = messages.size / 2
-        val firstHalf = messages.subList(0, mid).toList()
-        val secondHalf = messages.subList(mid, messages.size).toList()
-        val summary1 = generateCompactSummaryWithSplitting(firstHalf, previousSummary, depth + 1)
-        val summary2 = generateCompactSummaryWithSplitting(secondHalf, null, depth + 1)
-        return summary1 + "\n\n" + summary2
-    }
-
     internal data class CompactAttempt(
         val kind: String,
         val label: String,
@@ -2861,69 +2656,7 @@ class ChatViewModel(
          * `x-opencode-session` rejects a summarisation call without it).
          */
         val instanceId: String? = null,
-    ) {
-        fun maxOutFor(userMessage: String): Int {
-            val estimatedInput = userMessage.length / 4
-            val window = model.contextWindow?.takeIf { it > 0 } ?: 128_000
-            // [GH#74] Budget against the model that will ACTUALLY serve this
-            // stage: its remaining headroom (window - input) AND its own output
-            // ceiling. The old formula ignored maxOutputTokens, so a stage whose
-            // declared ceiling was 4K asked for 8K and relied on the upstream to
-            // clamp or reject.
-            val declaredCeiling = model.maxOutputTokens?.takeIf { it > 0 }?.coerceAtMost(8192) ?: 8192
-            return maxOf(1024, minOf(declaredCeiling, window - estimatedInput))
-        }
-    }
-
-    @Volatile
-    internal var compactLeafAttempt: CompactAttempt? = null
-
-    /** Two-shot compact: one leaf call per stage, no in-stage split fan-out. */
-    @Volatile
-    internal var compactAllowSplit = false
-
-    /**
-     * Should a failed summary attempt be retried by splitting the input in half?
-     *
-     * Ported from iOS `isSegmentRetryableError`
-     * (AIChatViewModel+Compaction.swift:1010, T-compact-segment-retry-any-error).
-     *
-     * Everything EXCEPT the two cases where a smaller request cannot help:
-     *   - cancellation — the user (or a session switch) stopped the work, so a
-     *     retry would fight that and immediately throw again;
-     *   - network/offline — the request never reached a model, so payload size
-     *     is irrelevant and splitting just doubles the failed round-trips.
-     *
-     * This deliberately REPLACES the old substring allow-list on the split
-     * path (the iOS `isContextTooLargeError` port, removed once
-     * T-compact-segment-retry-any-error made it dead code). That list tried to
-     * enumerate how every provider words an
-     * over-length refusal and was provably incomplete — OpenMinis#133's
-     * `[context_length_exceeded] Your input exceeds the context window of this
-     * model` slipped past several variants — and every miss silently disabled
-     * splitting, so compaction failed outright instead of retrying smaller.
-     *
-     * Splitting on an unclassified error is still the default, for that reason:
-     * a summary built from halves beats no summary, so the burden of proof is
-     * on NOT retrying.
-     *
-     * [T-android-compact-runaway] What changed is that "unclassified" no longer
-     * means "everything". Splitting only helps when the failure was caused by
-     * the SIZE of the request, and two error classes are known not to be:
-     *
-     *   - [LLMError.RateLimited] (429). The model is refusing on quota, not on
-     *     length. Halving turns one rejected call into two rejected calls, each
-     *     still subject to the provider's backoff — this is the exact shape
-     *     that turned a single failure into ~15 sequential slow calls and the
-     *     15-20 minute apparent hang users reported.
-     *   - [LLMError.TransientError] (5xx / upstream). A server-side fault is
-     *     independent of payload; retrying smaller just multiplies the outage.
-     *
-     * Both are better served by failing fast and letting the user retry the
-     * whole compaction once conditions change.
-     */
-    internal fun isSegmentRetryableError(error: Throwable): Boolean =
-        shouldSplitOnError(error)
+    )
 
     /** What the pre-send context check decided. Mirrors iOS's send() branch. */
     internal enum class PreSendContextAction {
@@ -3604,7 +3337,6 @@ class ChatViewModel(
         agentHistory.clear()
         _error.value = null
         _cachedLatestMarker = null
-        _compactMarkerDetached = false
         toolLoopDetector.reset()
         _canResume.value = false
         _attachments.value = emptyList()

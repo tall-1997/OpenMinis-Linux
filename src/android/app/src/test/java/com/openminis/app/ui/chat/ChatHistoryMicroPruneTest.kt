@@ -1,7 +1,11 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.agent.ToolResultAging
+import com.openminis.app.agent.ToolResultProjection
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
+import com.openminis.app.tools.ToolOutputSpill
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
@@ -53,7 +57,7 @@ class ChatHistoryMicroPruneTest {
     fun `over the trigger old results slim and recent stay verbatim`() {
         val history = historyWith(8)
         val pruned = microPruneOldToolResults(history, overTrigger, 100_000, triggerTokens = 60_000)
-        // The newest MICRO_PRUNE_KEEP_RECENT (4) carriers stay verbatim.
+        // Here each carrier holds one result; the newest six stay verbatim.
         for (i in 0 until 8 - MICRO_PRUNE_KEEP_RECENT) {
             val tr = pruned[i].contentParts.filterIsInstance<AgentContentPart.ToolResult>().single()
             assertTrue("old result must be slimmed", tr.content.contains("micro-pruned"))
@@ -84,6 +88,69 @@ class ChatHistoryMicroPruneTest {
         val slimmed = pruned[0].contentParts.filterIsInstance<AgentContentPart.ToolResult>().single()
         assertTrue("shell_exec → shell_execute via ToolAliases", slimmed.content.contains("micro-pruned"))
     }
+
+    @Test
+    fun `both tiers protect the same parallel round across separate carriers`() {
+        val previous = toolCarrier("old", "shell_execute", bigResult('o'))
+        val owner = LLMMessage(
+            role = LLMMessage.Role.ASSISTANT,
+            content = "",
+            contentParts = listOf(
+                AgentContentPart.ToolUse("p1", "shell_execute", JSONObject()),
+                AgentContentPart.ToolUse("p2", "shell_execute", JSONObject()),
+                AgentContentPart.ToolUse("p3|fc_3", "file_read", JSONObject()),
+            ),
+        )
+        val first = toolCarrier("p1", "shell_execute", bigResult('a'))
+        val second = toolCarrier("p2", "shell_execute", bigResult('b'))
+        // A non-whitelisted newest result still counts; the owner protects its siblings.
+        val third = toolCarrier("p3", "file_read", bigResult('c'))
+        val history = listOf(previous, owner, first, second, third)
+        val aged = ToolResultAging.age(history, keepRecent = 1).messages
+        val pruned = microPruneOldToolResults(history, overTrigger, 100_000, keepRecent = 1, triggerTokens = 60_000)
+        assertEquals(1, ToolResultProjection.protectedSuffixStart(history, 1))
+        for (projected in listOf(aged, pruned)) {
+            for (i in 1..4) assertSame(history[i], projected[i])
+            assertTrue(resultOf(projected[0]).content.length < resultOf(previous).content.length)
+            assertEquals(resultOf(previous).id, resultOf(projected[0]).id)
+            assertEquals(bigResult('o'), resultOf(history[0]).content)
+        }
+        val agedThenPruned = microPruneOldToolResults(aged, overTrigger, 100_000, keepRecent = 1, triggerTokens = 60_000)
+        assertSame(aged, agedThenPruned)
+        assertSame(pruned, ToolResultAging.age(pruned, keepRecent = 1).messages)
+    }
+
+    @Test
+    fun `images and errors stay verbatim even outside the protected suffix`() {
+        val error = resultOf(toolCarrier("e", "shell_execute", bigResult('e'))).copy(isError = true)
+        val image = resultOf(toolCarrier("i", "execute_code", bigResult('i'))).copy(imageMimeType = "image/png")
+        val path = resultOf(toolCarrier("p", "shell_execute", bigResult('p'))).copy(imageLinuxPath = "/image.png")
+        val history = listOf(LLMMessage(role = LLMMessage.Role.USER, content = "", contentParts = listOf(error, image, path)))
+        assertSame(history, microPruneOldToolResults(history, overTrigger, 100_000, keepRecent = 0, triggerTokens = 60_000))
+    }
+
+    @Test
+    fun `micro prune shares the verified recovery policy and cuts only at Unicode boundaries`() {
+        val path = "/var/minis/workspace/tool-spill/web-fetch.txt"
+        val emoji = "\uD83D\uDE00"
+        val body = "x".repeat(399) + emoji + "m".repeat(20_000) + emoji + "y".repeat(399)
+        val preview = ToolOutputSpill.formatPreview("web_fetch", path, body)
+        val history = listOf(toolCarrier("link", "web_fetch", preview))
+        fun prune(verifiedPaths: Set<String>) = resultOf(microPruneOldToolResults(
+            history, overTrigger, 100_000, keepRecent = 0, triggerTokens = 60_000, verifiedSpillPaths = verifiedPaths,
+        ).single()).content
+        val linked = prune(setOf(path))
+        assertTrue(linked.contains("full output: $path"))
+        assertTrue(linked.contains("page with file_read"))
+        assertEquals(linked, linked.toByteArray(Charsets.UTF_8).toString(Charsets.UTF_8))
+        val unavailable = prune(emptySet())
+        assertFalse(unavailable.contains(path))
+        assertFalse(unavailable.contains("re-run"))
+        assertTrue(unavailable.contains("no verified recovery path"))
+        assertEquals(preview, resultOf(history.single()).content)
+    }
+
+    private fun resultOf(message: LLMMessage) = message.contentParts.single() as AgentContentPart.ToolResult
 
     @Test
     fun `projection is idempotent`() {

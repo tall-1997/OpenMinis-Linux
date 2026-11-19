@@ -1,6 +1,9 @@
 package com.openminis.app.tools
 
+import com.openminis.app.data.ContextTokenMeter
 import com.openminis.app.data.model.AgentContentPart
+import com.openminis.app.data.model.AgentToolDefinition
+import com.openminis.app.data.model.LLMMessage
 
 /**
  * Sliding-window compaction for a sub-agent's turn history.
@@ -25,8 +28,8 @@ object SubAgentHistoryCompactor {
     /** Chars of an individual tool result allowed to survive verbatim. */
     private const val PER_RESULT_CAP = 12_000
 
-    /** Approximate total chars budget for the whole history before compaction kicks in. */
-    private const val TOTAL_BUDGET = 120_000
+    /** Request pressure before folding; 30k tokens preserves the old ASCII baseline. */
+    private const val TOTAL_BUDGET_TOKENS = 30_000
 
     /** How many of the most recent tool results are always left untouched. */
     private const val KEEP_FRESH = 4
@@ -58,41 +61,39 @@ object SubAgentHistoryCompactor {
      * re-compaction rewrite the same file instead of accumulating duplicates.
      */
     fun compact(
-        history: List<com.openminis.app.data.model.LLMMessage>,
+        history: List<LLMMessage>,
+        systemPrompt: String? = null,
+        tools: List<AgentToolDefinition> = emptyList(),
         spill: (name: String, content: String) -> String? = { _, _ -> null },
-    ): List<com.openminis.app.data.model.LLMMessage> {
-        // Fast path: nothing large enough to bother with.
-        if (estimateChars(history) <= TOTAL_BUDGET) return history
+    ): List<LLMMessage> {
+        if (ContextTokenMeter.rawRequestTokens(history, systemPrompt, tools) <= TOTAL_BUDGET_TOKENS) return history
 
         // Collect indices of tool-result messages (USER role carrying ToolResult parts).
         val toolResultIndices = history.indices.filter { idx ->
             val m = history[idx]
-            m.role == com.openminis.app.data.model.LLMMessage.Role.USER &&
+            m.role == LLMMessage.Role.USER &&
                 m.contentParts.any { it is AgentContentPart.ToolResult }
         }
+        if (toolResultIndices.size <= KEEP_FRESH) return history
         val freshSet = toolResultIndices.takeLast(KEEP_FRESH).toHashSet()
 
-        var toolResultOrdinal = 0
-        val out = ArrayList<com.openminis.app.data.model.LLMMessage>(history.size)
+        var out: MutableList<LLMMessage>? = null
         for ((idx, msg) in history.withIndex()) {
             if (idx in freshSet ||
-                msg.role != com.openminis.app.data.model.LLMMessage.Role.USER ||
-                msg.contentParts.none { it is AgentContentPart.ToolResult }
-            ) {
-                out.add(msg)
-                continue
-            }
+                msg.role != LLMMessage.Role.USER ||
+                msg.contentParts.none { it is AgentContentPart.ToolResult && it.content.length > PER_RESULT_CAP }
+            ) continue
             val newParts = msg.contentParts.map { part ->
                 if (part is AgentContentPart.ToolResult && part.content.length > PER_RESULT_CAP) {
-                    toolResultOrdinal++
                     part.copy(content = truncateMiddle(part.content, part.name, spill))
                 } else {
                     part
                 }
             }
-            out.add(msg.copy(contentParts = newParts))
+            val updated = out ?: history.toMutableList().also { out = it }
+            updated[idx] = msg.copy(contentParts = newParts)
         }
-        return out
+        return out ?: history
     }
 
     private fun truncateMiddle(
@@ -124,17 +125,5 @@ object SubAgentHistoryCompactor {
                 append("\nfull content: re-run this tool")
             }
         }
-    }
-
-    private fun estimateChars(history: List<com.openminis.app.data.model.LLMMessage>): Int {
-        var total = 0
-        for (m in history) {
-            total += m.content.length
-            for (p in m.contentParts) {
-                if (p is AgentContentPart.ToolResult) total += p.content.length
-                if (p is AgentContentPart.Text) total += p.text.length
-            }
-        }
-        return total
     }
 }

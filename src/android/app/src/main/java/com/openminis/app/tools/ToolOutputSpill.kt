@@ -1,63 +1,52 @@
 package com.openminis.app.tools
 
 import android.content.Context
+import com.openminis.app.sandbox.SessionWorkspace
 import com.openminis.app.security.ToolAliases
+import com.openminis.app.security.tokenizeCommand
+import com.openminis.app.ssh.SshWorkspaceBindings
 import org.json.JSONObject
 import java.io.File
+import java.io.IOException
 import java.util.UUID
 
-/**
- * Spill oversized tool results out of the LLM context into the session
- * workspace. Inspired by long-running Android agents that otherwise freeze
- * Compose and blow the context window when `shell_execute` dumps megabytes.
- *
- * The UI still shows a short tail; the model gets a preview plus a guest
- * path it can `file_read` if it actually needs more.
- *
- * [T-tool-output-single-mechanism] This is THE oversized-output mechanism:
- * it resolves the spill directory PER SESSION through
- * `SessionWorkspace.hostDir(filesDir, sessionId, "workspace")`, i.e. the HOST
- * path the app process can actually write, and hands the model the matching
- * GUEST path. [ToolOutputPolicy] used to carry a second, parallel copy of this
- * logic writing to `ToolOutputPolicy.workspaceRoot = "/var/minis/workspace/…"`
- * — a GUEST path the app process cannot write, whose write therefore always
- * failed, after which `apply()` returned the text UNCAPPED (defeating the whole
- * limit). That duplicate is gone; ToolOutputPolicy now redacts and delegates
- * here, so one threshold, one preview format and one working path remain.
- */
+/** Spill oversized tool text into the same session workspace that file_read sees. */
 object ToolOutputSpill {
-    /** The single oversized-output threshold (chars). */
     const val LIMIT = 16_000
-    const val HEAD = 6_000
-    const val TAIL = 4_000
+    const val PREVIEW_BODY_CHARS = 3_000
 
-    /**
-     * [T-tool-output-offload-loop GH#343] Every marker this object (and
-     * ProgressiveTrim's L2 stub, which writes through here) puts at the start
-     * of a bounded placeholder. A result that already starts with one has
-     * ALREADY been offloaded: re-spilling it produces a placeholder pointing
-     * at a copy of a placeholder, and the model that asked for the content
-     * never receives it — the observed ping-pong loop.
-     */
-    private val PLACEHOLDER_PREFIXES = listOf(
-        "[tool-output-spill]",
-        "[tool output offloaded to save context",
-        "[tool output trimmed for context",
-    )
+    // Explicit readback gets a larger page; ordinary previews (even on failure) stay short.
+    private const val READBACK_BODY_CHARS = 10_000
+    private const val READBACK_HEAD_CHARS = 6_000
+    private const val MAX_LABEL_CHARS = 120
 
-    fun isOffloadPlaceholder(content: String): Boolean =
-        PLACEHOLDER_PREFIXES.any { content.startsWith(it) }
+    private const val SPILL_DIR = "tool-spill"
+    private const val GUEST_PREFIX = "/var/minis/workspace/$SPILL_DIR/"
+    private const val MARKER = "[tool-output-spill]"
+    private const val LEGACY_OFFLOADED_MARKER = "[tool output offloaded to save context"
+    private const val LEGACY_TRIMMED_MARKER = "[tool output trimmed for context"
 
-    /**
-     * [T-tool-output-offload-loop GH#343] True when [guestPath] points INTO the
-     * spill directory — i.e. the model is trying to read back an offload file
-     * it was handed. Offloading that read a second time is never useful: the
-     * content is already the bounded payload the first pass decided the model
-     * may have, and the new placeholder would just point at another copy.
-     */
-    fun isSpillGuestPath(guestPath: String?): Boolean {
-        val p = guestPath?.trim().orEmpty()
-        return p.startsWith("/var/minis/workspace/tool-spill/")
+    fun isOffloadPlaceholder(content: String): Boolean = envelopeStart(content) >= 0
+
+    private fun envelopeStart(content: String): Int {
+        if (content.startsWith(MARKER) || content.startsWith(LEGACY_OFFLOADED_MARKER) ||
+            content.startsWith(LEGACY_TRIMMED_MARKER)
+        ) return 0
+        // Older web_fetch results prefixed the shared envelope with the final URL.
+        if (content.startsWith("URL: ")) {
+            val lineEnd = content.take(MAX_HEADER_CHARS).indexOf('\n')
+            if (lineEnd >= 0 && content.startsWith("\n$MARKER", lineEnd + 1)) return lineEnd + 2
+        }
+        return -1
+    }
+
+    fun isSpillGuestPath(guestPath: String?): Boolean = spillName(guestPath?.trim()) != null
+
+    private fun spillName(guestPath: String?): String? {
+        if (guestPath == null || !guestPath.startsWith(GUEST_PREFIX)) return null
+        return guestPath.substring(GUEST_PREFIX.length).takeIf {
+            it != "." && it != ".." && NAME.matches(it)
+        }
     }
 
     fun maybeSpill(
@@ -66,377 +55,396 @@ object ToolOutputSpill {
         toolName: String,
         toolId: String,
         output: String,
-        /**
-         * [T-tool-output-offload-loop GH#343] For `file_read`, the guest path it
-         * read; for a shell `cat/head/tail … tool-spill/…`, that spill path.
-         * When the source is already a spill file, the read-back must not spawn
-         * another spill (see [alreadySpilledPreview]).
-         */
         sourcePath: String? = null,
     ): String {
-        // [T-tool-output-offload-loop GH#343] The decision is a pure function so
-        // it is pinned by a JVM test, and it is applied to the ORIGINAL tool
-        // output — never to an already-capped preview (the old execution-entry
-        // pre-cap made every chat-path output < LIMIT here, so no spill file was
-        // ever written; see ChatViewModelExecuteToolExt).
-        return when (planFor(output, sessionId.isNotBlank(), sourcePath)) {
-            SpillPlan.PASSTHROUGH -> output
-            SpillPlan.ALREADY_SPILLED -> alreadySpilledPreview(toolName, sourcePath!!, output)
-            SpillPlan.CAPPED -> cappedPreview(toolName, output)
-            SpillPlan.WRITE -> {
-                val dir = spillDir(context, sessionId)
-                if (dir == null) {
-                    // [T-tool-output-single-mechanism] CAPPED even when the spill
-                    // cannot happen. Returning the raw text here is what let a
-                    // megabyte tool result reach the model intact.
-                    cappedPreview(toolName, output)
-                } else {
-                    writeSpill(dir, toolName, toolId, output)
-                }
-            }
-        }
+        if (output.length <= LIMIT) return output
+        // SSH-bound chats explicitly refuse local file_read. A locally writable
+        // file does not make it a recoverable result in that chat.
+        if (!canReadInChat(context, sessionId)) return cappedPreview(toolName, output)
+        return maybeSpill(context.filesDir, sessionId, toolName, toolId, output, sourcePath)
     }
 
-    /**
-     * [T-mcp-output-limit] Persist the FULL text of an over-limit MCP result
-     * into the session tool-spill workspace and return the guest path the
-     * model can `file_read` back. Same directory and naming discipline as
-     * [writeSpill] (unique file, atomic write), but it does NOT wrap the body
-     * in a preview — the caller (McpOutputLimit) owns the preview wording.
-     * Null when there is nowhere to write or the write failed.
-     */
-    fun offloadFullOutput(context: Context, sessionId: String, nameKey: String, content: String): String? {
-        if (sessionId.isBlank()) return null
-        val dir = spillDir(context, sessionId) ?: return null
-        return offloadFullOutput(dir, nameKey, content)
-    }
-
-    /** Dir-based overload so a plain-JVM test can exercise the raw path. */
-    internal fun offloadFullOutput(dir: File, nameKey: String, content: String): String? {
-        return try {
-            val file = uniqueSpillFile(dir, nameKey)
-            if (AtomicFileWrite.write(file, content) == null) {
-                // Claimed but not written: drop the empty placeholder file.
-                runCatching { file.delete() }
-                null
+    /** Dir-based entry uses the same session layout as the Android entry. */
+    internal fun maybeSpill(
+        filesDir: File,
+        sessionId: String,
+        toolName: String,
+        toolId: String,
+        output: String,
+        sourcePath: String? = null,
+    ): String = when (planFor(output, sessionId.isNotBlank(), sourcePath)) {
+        SpillPlan.PASSTHROUGH -> output
+        SpillPlan.ALREADY_SPILLED -> {
+            val guestPath = sourcePath!!.trim()
+            if (hostFile(filesDir, sessionId, guestPath) != null) {
+                alreadySpilledPreview(toolName, guestPath, output)
             } else {
-                "/var/minis/workspace/tool-spill/${file.name}"
+                cappedPreview(toolName, output)
             }
+        }
+        SpillPlan.CAPPED -> cappedPreview(toolName, output)
+        SpillPlan.WRITE -> formatPreview(toolName, offloadInSession(filesDir, sessionId, toolId, output), output)
+    }
+
+    /** Persist the exact text, returning a path only after a verified write in this session. */
+    fun offloadFullOutput(context: Context, sessionId: String, nameKey: String, content: String): String? =
+        if (canReadInChat(context, sessionId)) offloadInSession(context.filesDir, sessionId, nameKey, content) else null
+
+    internal fun canReadInChat(context: Context, sessionId: String): Boolean {
+        val owner = SessionWorkspace.ownerSessionId(sessionId)
+        return SessionWorkspace.isSafeId(owner) && runCatching {
+            SshWorkspaceBindings.forContext(context).hostIdFor(owner) == null
+        }.getOrDefault(false)
+    }
+
+    private fun offloadInSession(filesDir: File, sessionId: String, nameKey: String, content: String): String? {
+        val dir = spillDir(filesDir, sessionId, create = true) ?: return null
+        val guestPath = offloadFullOutput(dir, nameKey, content) ?: return null
+        // Resolution can change for a filed session falling back to its private
+        // workspace. A successful write alone does not prove the guest can read it.
+        val pathInSession = hostFile(filesDir, sessionId, guestPath)
+        return guestPath.takeIf { pathInSession == File(dir, guestPath.substringAfterLast('/')) }
+    }
+
+    /** [AtomicFileWrite] reads the entire file back and checks it against [content]. */
+    internal fun offloadFullOutput(dir: File, nameKey: String, content: String): String? {
+        val file = try {
+            uniqueSpillFile(dir, nameKey)
         } catch (_: Exception) {
-            null
-        }
-    }
-
-    private fun spillDir(context: Context, sessionId: String): File? {
-        val dir = File(
-            com.openminis.app.sandbox.SessionWorkspace.hostDir(context.filesDir, sessionId, "workspace"),
-            "tool-spill",
-        )
-        return if (dir.mkdirs() || dir.isDirectory) dir else null
-    }
-
-    /**
-     * [GH#343] Write one spill file into [dir] and return the bounded preview.
-     * Internal so a plain-JVM test can exercise raw → spill → readback without
-     * a Context (the production dir comes from [spillDir]).
-     *
-     * 中文：文件名绝不能只由 toolId 决定 —— 群聊/主管曾传 ""，子代理传
-     * parentSession，两种情况下同一会话（甚至同一文件夹内多个会话共享的
-     * workspace）里的所有调用都会写同一个 `tool.txt` / `<parentSession>.txt`，
-     * 后一次调用静默覆盖前一次，模型随后 `file_read` 读到的可能是别的调用的
-     * 内容。唯一名由 [uniqueSpillFile] 负责；落盘走 [AtomicFileWrite]，避免
-     * 并发写与崩溃留下半截文件。
-     */
-    internal fun writeSpill(dir: File, toolName: String, toolId: String, output: String): String {
-        val file = uniqueSpillFile(dir, toolId)
-        return try {
-            // [F1 GH#343] 原子写：临时文件 + rename（同目录），并做短写/回读校验。
-            // 旧实现直接 file.writeText，两个 lane 并发写同一名字时内容会交错，
-            // 进程被杀也会留下半截 spill。
-            if (AtomicFileWrite.write(file, output) == null) {
-                // 名字已原子占位（createNewFile）但内容没写成：删掉空占位，
-                // 免得模型 file_read 到一个 0 字节的"完整输出"。
-                runCatching { file.delete() }
-                return cappedPreview(toolName, output)
-            }
-            formatPreview(
-                toolName = toolName,
-                guestPath = "/var/minis/workspace/tool-spill/${file.name}",
-                output = output,
-            )
-        } catch (_: Exception) {
-            runCatching { file.delete() }
-            cappedPreview(toolName, output)
-        }
-    }
-
-    /**
-     * [F1 GH#343] 为一次 spill 原子地"占住"一个不会覆盖别人内容的文件名。
-     *
-     * - toolId 非空且 `createNewFile()` 成功 → 保持 `<safeId>.txt`（既有回读
-     *   路径/测试不变）。
-     * - toolId 为空（群聊/主管旧调用点、任何无 id 的调用）→ 永远走
-     *   `<base>-<短UUID>.txt`。
-     * - 同 id 已被占用（并行 lane / 文件夹内多会话共享 workspace / provider
-     *   复用 call id）→ 同样追加短 UUID，绝不覆盖已有 spill。
-     *
-     * 中文：判断"是否已存在"必须用 `createNewFile()` 的原子语义，而不是
-     * `exists()` + `writeText()` —— 后者在并发下两个线程可以同时看到"不存在"
-     * 然后写同一个文件。这里是防御层：即使调用点又把 id 传空/传重，也只多一个
-     * 文件名，不会让两个调用互相覆盖。短 UUID 是 8 位十六进制，满足
-     * [SAFE_ID_RE]/[GUEST_PATH] 的字符集，回读时 [parseGuestPath] 仍能命中。
-     */
-    internal fun uniqueSpillFile(dir: File, toolId: String): File {
-        val safeId = SAFE_ID_RE.replace(toolId, "_").trim('_').ifBlank { "tool" }
-        if (toolId.isNotBlank()) {
-            val direct = File(dir, "$safeId.txt")
-            if (claim(direct)) return direct
-        }
-        repeat(8) {
-            val candidate = File(dir, "$safeId-${shortUid()}.txt")
-            if (claim(candidate)) return candidate
-        }
-        // 8 次随机都撞上（实际不可能）也不再覆盖：用单调时间戳兜底。
-        val fallback = File(dir, "$safeId-${System.nanoTime().toString(16)}.txt")
-        claim(fallback)
-        return fallback
-    }
-
-    /** [F1 GH#343] Atomically reserve [file] iff it does not exist yet. */
-    private fun claim(file: File): Boolean =
-        try {
-            file.createNewFile()
-        } catch (_: Exception) {
-            false
-        }
-
-    /** [F1 GH#343] 8 位十六进制随机后缀；每次调用都不同。 */
-    private fun shortUid(): String =
-        UUID.randomUUID().toString().replace("-", "").take(8)
-
-    /**
-     * [T-tool-output-offload-loop GH#343] Pure decision for one result body.
-     *
-     * 中文：raw → spill → readback 不能成环 —— 已落盘的占位符和从 spill 目录
-     * 读回的内容都必须原样/受限返回，不能再次落盘。
-     */
-    /** [T-spill-passthrough-bound] Hard ceiling for a marker-trusted passthrough. */
-    private const val MAX_PASSTHROUGH_CHARS = 64_000
-
-    internal fun planFor(output: String, hasSession: Boolean, sourcePath: String?): SpillPlan {
-        if (output.length <= LIMIT) return SpillPlan.PASSTHROUGH
-        // Never wrap a placeholder in another placeholder (idempotency).
-        // [T-spill-passthrough-bound] The marker check is tool-emitted, but a
-        // model can AUTHOR the literal marker into file content and read it
-        // back — bound the passthrough at the sub-agent report budget (64k)
-        // so an authored marker can never blow the context window unbounded.
-        if (isOffloadPlaceholder(output) && output.length <= MAX_PASSTHROUGH_CHARS) {
-            return SpillPlan.PASSTHROUGH
-        }
-        // Reading a spill file back must answer from the existing file.
-        if (isSpillGuestPath(sourcePath)) return SpillPlan.ALREADY_SPILLED
-        // Nowhere to hang the file — still cap, the model just gets no path.
-        if (!hasSession) return SpillPlan.CAPPED
-        return SpillPlan.WRITE
-    }
-
-    /**
-     * [T-tool-output-offload-loop GH#343] Resolve the read-back source for a
-     * tool call. Covers every spelling that can read a spill file:
-     *  - `file_read` with the guest spill path (absolute or workspace-relative);
-     *  - `shell_execute`/`env_exec`/`su_exec` running a read program
-     *    (`cat`, `head`, `tail`, `sed`, `grep`, …) against `tool-spill/…`.
-     *
-     * 中文：#343 的去环不能只修 file_read —— 模型拿到 guest 路径后经常直接
-     * `cat /var/minis/workspace/tool-spill/x.txt`，shell 路径同样必须命中。
-     */
-    fun sourcePathForTool(rawToolName: String, argsJson: String): String? {
-        val canonical = ToolAliases.canonical(rawToolName)
-        // Cheap gate first: only these tools can read a spill file, so the
-        // args parse below is skipped for every other tool result.
-        if (canonical != "file_read" && canonical != "shell_execute" &&
-            canonical != "env_exec" && canonical != "su_exec"
-        ) {
             return null
         }
-        val args = runCatching { JSONObject(argsJson) }.getOrNull() ?: return null
-        return when (canonical) {
-            "file_read" -> {
-                val raw = args.optString("path", "").trim()
-                val guest = if (raw.startsWith("tool-spill/")) "/var/minis/workspace/$raw" else raw
-                guest.takeIf { isSpillGuestPath(it) }
+        try {
+            val temp = File.createTempFile(".minis-spill-", ".minis-tmp", dir)
+            try {
+                if (AtomicFileWrite.write(file, content, temp = temp) != null && file.isFile && file.canRead()) {
+                    return "$GUEST_PREFIX${file.name}"
+                }
+            } finally {
+                runCatching { temp.delete() }
             }
-            "shell_execute", "env_exec", "su_exec" ->
-                commandSpillReadPath(args.optString("command", ""))
-            else -> null
+        } catch (_: Exception) {
+            // Fall through to removing only this call's reserved file.
         }
+        runCatching { file.delete() }
+        return null
     }
 
-    /** [GH#343] A read program against a tool-spill path, or null. */
-    internal fun commandSpillReadPath(command: String): String? {
-        val trimmed = command.trim()
-        if (trimmed.isEmpty() || !trimmed.contains("tool-spill/")) return null
-        var verb = trimmed.substringBefore(' ').substringAfterLast('/')
-        if (verb == "busybox") {
-            verb = trimmed.substringAfter(' ', "").substringBefore(' ').substringAfterLast('/')
-        }
-        if (verb !in SPILL_READ_VERBS) return null
-        val match = SPILL_REF_IN_COMMAND.find(trimmed) ?: return null
-        return "/var/minis/workspace/tool-spill/${match.groupValues[1]}"
-    }
-
-    /** [GH#343] Command verbs that READ their file operand. */
-    private val SPILL_READ_VERBS = setOf(
-        "cat", "head", "tail", "sed", "awk", "grep", "less", "more",
-        "nl", "wc", "od", "xxd", "strings",
-    )
-
-    /** Matches absolute and workspace-relative spill references in a command. */
-    private val SPILL_REF_IN_COMMAND = Regex("(?:/var/minis/workspace/)?tool-spill/([A-Za-z0-9._-]+)")
-
-    /**
-     * Bounded preview with NO spill file: the model is told the truth (the full
-     * output is gone) instead of silently receiving an uncapped dump.
-     */
-    fun cappedPreview(toolName: String, output: String): String =
-        formatPreview(toolName, guestPath = null, output = output)
-
-    /**
-     * [guestPath] is null when the full text could NOT be persisted, in which
-     * case the preview says so instead of pointing at a file that does not exist.
-     *
-     * [T-mcp-output-limit] carries the two pi lines the preview was missing:
-     * the original size as a token estimate (bytes/4) and the total line count
-     * (pi `mcp/src/output-limit.ts` warning line). The head/tail slices are
-     * taken through [ToolOutputTruncator.sliceHead]/[sliceTail] — the shared
-     * surrogate-safe slicers — instead of ToolOutputPolicy.safeSubstring.
-     * Not byte-identical to the old safeSubstring previews (review P2-11):
-     * same clamping, and identical at the head edge, but sliceTail drops an
-     * orphaned LEADING low surrogate whole while safeSubstring EXTENDED the
-     * window one code unit backwards to keep the pair — so a tail window that
-     * starts mid-pair keeps one code unit FEWER here. That one-unit
-     * difference is deliberate and pinned: spill output keeps its shipped
-     * shape (a placeholder-parsing consumer may rely on it), so the KDoc
-     * documents the edge instead of changing either slicer. Boundary
-     * behaviour is pinned by ToolOutputSpillPreviewBoundaryTest.
-     */
-    fun formatPreview(toolName: String, guestPath: String?, output: String): String {
-        val head = ToolOutputTruncator.sliceHead(output, HEAD)
-        val tail = if (output.length > HEAD + TAIL)
-            ToolOutputTruncator.sliceTail(output, TAIL) else ""
-        return buildString {
-            append("[tool-output-spill] $toolName produced ${output.length} chars.\n")
-            append(truncationStatsLine(output))
-            if (guestPath != null) {
-                append("Full output saved to $guestPath — use file_read if you need more.\n")
-                append("Open in app: minis://workspace/tool-spill/${guestPath.substringAfterLast('/')}\n\n")
-            } else {
-                append("Full output could not be saved to the session workspace, ")
-                append("so only this bounded preview is available.\n\n")
-            }
-            append(head)
-            if (tail.isNotEmpty()) {
-                append("\n\n…(${output.length - head.length - tail.length} chars omitted)…\n\n")
-                append(tail)
-            }
-        }
-    }
-
-    /**
-     * [T-tool-output-offload-loop GH#343] Bounded answer for a READ-BACK of an
-     * existing spill file. It must not create a new spill: the file it names
-     * already holds the same bytes, so a second hop only burns disk and hands
-     * the model a path chain it can never finish walking. The model is told
-     * the read was already at an offload target and how to page the rest
-     * (`file_read` offset/limit, or a shell range read).
-     */
-    fun alreadySpilledPreview(toolName: String, guestPath: String, output: String): String {
-        val head = ToolOutputTruncator.sliceHead(output, HEAD)
-        val tail = if (output.length > HEAD + TAIL)
-            ToolOutputTruncator.sliceTail(output, TAIL) else ""
-        return buildString {
-            append("[tool-output-spill] $toolName returned ${output.length} chars from $guestPath, ")
-            append("which is already an offloaded tool-output file — it is NOT being offloaded again.\n")
-            append(truncationStatsLine(output))
-            append("Page it with file_read offset/limit (or a shell range read) instead of re-reading it whole.\n\n")
-            append(head)
-            if (tail.isNotEmpty()) {
-                append("\n\n…(${output.length - head.length - tail.length} chars omitted)…\n\n")
-                append(tail)
-            }
-        }
-    }
-
-    /**
-     * [T-mcp-output-limit] The pi warning line shared by both previews: the
-     * original size as a token estimate (UTF-8 bytes / 4, pi output-limit.ts)
-     * and the total line count.
-     */
-    private fun truncationStatsLine(output: String): String =
-        "Warning: truncated output (original token count: " +
-            "${(ToolOutputTruncator.utf8ByteLength(output) + 3) / 4})\n" +
-            "Total output lines: ${ToolOutputTruncator.totalLines(output)}\n"
-
-    /** [T-hoisted-regex] Constant pattern, compiled once instead of per call. */
-    private val SAFE_ID_RE = Regex("[^A-Za-z0-9._-]")
-
-    private val GUEST_PATH = Regex("/var/minis/workspace/tool-spill/([A-Za-z0-9._-]+)")
-
-    fun parseGuestPath(content: String): String? {
-        val m = GUEST_PATH.find(content) ?: return null
-        return "/var/minis/workspace/tool-spill/${m.groupValues[1]}"
-    }
-
-    fun hostFile(context: Context, sessionId: String, guestPath: String): File? {
-        val name = parseGuestPath(guestPath)?.substringAfterLast('/') ?: return null
-        if (sessionId.isBlank() || name.isBlank()) return null
-        val file = File(
-            com.openminis.app.sandbox.SessionWorkspace.hostDir(context.filesDir, sessionId, "workspace"),
-            "tool-spill/$name",
-        )
-        return file.takeIf { it.isFile }
-    }
-
-    /**
-     * [T-wave-e-progressive-reclaim] Offload an OLD oversized tool output
-     * during progressive context trimming (ProgressiveTrim L2): write the
-     * FULL text into the session's tool-spill workspace and return the guest
-     * path the model can `file_read` back, or null when there is nowhere to
-     * write (the trim stub then says the text is gone instead of pointing at
-     * a nonexistent file).
-     *
-     * Same directory as the live-spill path, but keyed by the RESULT id so
-     * re-trims of the same row overwrite their own file instead of the one a
-     * fresh spill wrote.
-     */
-    fun offloadForTrim(
-        context: Context,
-        sessionId: String,
-        toolId: String,
-        content: String,
-    ): String? {
-        if (sessionId.isBlank()) return null
-        val safeId = SAFE_ID_RE.replace(toolId, "_").ifBlank { "tool" }
-        val dir = File(
-            com.openminis.app.sandbox.SessionWorkspace.hostDir(context.filesDir, sessionId, "workspace"),
-            "tool-spill",
-        )
-        if (!dir.mkdirs() && !dir.isDirectory) return null
-        val file = File(dir, "trim-$safeId.txt")
+    private fun spillDir(filesDir: File, sessionId: String, create: Boolean): File? {
+        if (!SessionWorkspace.isSafeId(SessionWorkspace.ownerSessionId(sessionId))) return null
         return try {
-            // [F1 GH#343] 与 writeSpill 一样走原子写：trim 文件也会被并发 trim /
-            // 其它会话读到，半截内容比"没有文件"更糟（模型会把它当完整正文）。
-            if (AtomicFileWrite.write(file, content) == null) return null
-            "/var/minis/workspace/tool-spill/${file.name}"
+            val workspace = SessionWorkspace.hostDir(filesDir, sessionId, "workspace")
+            val dir = File(workspace, SPILL_DIR)
+            // Do not publish through a spill directory redirected out of its workspace.
+            if (dir.canonicalFile != File(workspace.canonicalFile, SPILL_DIR) ||
+                !SessionWorkspace.staysInside(filesDir, dir) ||
+                !SessionWorkspace.acceptsResolved(filesDir, sessionId, dir)
+            ) return null
+            dir.takeIf { it.isDirectory || (create && (it.mkdirs() || it.isDirectory)) }
         } catch (_: Exception) {
             null
         }
+    }
+
+    internal fun writeSpill(dir: File, toolName: String, toolId: String, output: String): String =
+        formatPreview(toolName, offloadFullOutput(dir, toolId, output), output)
+
+    /** Reserve a unique file without an exists-then-write race. */
+    internal fun uniqueSpillFile(dir: File, toolId: String): File {
+        val safeId = safeId(toolId)
+        if (toolId.isNotBlank()) {
+            val direct = File(dir, "$safeId.txt")
+            if (direct.createNewFile()) return direct
+        }
+        repeat(8) {
+            val suffix = UUID.randomUUID().toString().take(8)
+            val candidate = File(dir, "$safeId-$suffix.txt")
+            if (candidate.createNewFile()) return candidate
+        }
+        throw IOException("Could not reserve a spill file")
+    }
+
+    private fun safeId(id: String): String =
+        SAFE_ID_RE.replace(id, "_").trim('_').take(200).ifBlank { "tool" }
+
+    /** Decide on the raw result, before rendering a preview. */
+    internal fun planFor(output: String, hasSession: Boolean, sourcePath: String?): SpillPlan {
+        if (output.length <= LIMIT) return SpillPlan.PASSTHROUGH
+        // Historical envelopes still parse on read. Newly rendered previews fit
+        // under LIMIT, so a marker prefix alone must not bypass the output cap.
+        if (hasSession && isSpillGuestPath(sourcePath)) return SpillPlan.ALREADY_SPILLED
+        return if (hasSession) SpillPlan.WRITE else SpillPlan.CAPPED
+    }
+
+    /** Resolve a readback source without changing tool dispatch or permissions. */
+    fun sourcePathForTool(rawToolName: String, argsJson: String): String? {
+        val canonical = ToolAliases.canonical(rawToolName)
+        if (canonical != "file_read" && canonical !in SHELL_TOOLS) return null
+        val args = runCatching { JSONObject(argsJson) }.getOrNull() ?: return null
+        return if (canonical == "file_read") {
+            normalizeGuestPath(args.optString("path", ""))
+        } else {
+            commandSpillReadPath(args.optString("command", ""))
+        }
+    }
+
+    internal fun normalizeGuestPath(path: String): String? {
+        val raw = path.trim().removePrefix("./")
+        val guest = if (raw.startsWith("$SPILL_DIR/")) "/var/minis/workspace/$raw" else raw
+        return guest.takeIf { isSpillGuestPath(it) }
+    }
+
+    /** Read one literal spill operand, optionally followed by an stdin-only range filter. */
+    internal fun commandSpillReadPath(command: String): String? {
+        val trimmed = command.trim()
+        if (!trimmed.contains("$SPILL_DIR/") || trimmed.any { it in NON_RANGE_SYNTAX }) return null
+        val stages = trimmed.split('|', limit = 2)
+        val (verb, args) = readCommand(stages.first()) ?: return null
+        if (verb !in SPILL_READ_VERBS) return null
+        val path = args.lastOrNull()?.let(::normalizeGuestPath) ?: return null
+        val options = args.dropLast(1)
+        if (verb == "cat" && !options.all { it == "--" || CAT_OPTION.matches(it) }) return null
+        if (verb in RANGE_READERS && !rangeOptionsOnly(options)) return null
+        if (options.any { normalizeGuestPath(it) != null }) return null
+        if (stages.size > 1) {
+            val (filter, filterArgs) = readCommand(stages[1]) ?: return null
+            if (verb != "cat" && verb !in RANGE_READERS) return null
+            if (filter !in RANGE_READERS || !rangeOptionsOnly(filterArgs)) return null
+        }
+        return path
+    }
+
+    private fun readCommand(stage: String): Pair<String, List<String>>? {
+        val words = tokenizeCommand(stage)
+        val first = words.firstOrNull()?.substringAfterLast('/') ?: return null
+        val verbIndex = if (first == "busybox") 1 else 0
+        val verb = words.getOrNull(verbIndex)?.substringAfterLast('/') ?: return null
+        return verb to words.subList(verbIndex + 1, words.size)
+    }
+
+    private fun rangeOptionsOnly(args: List<String>): Boolean {
+        var i = 0
+        while (i < args.size) {
+            val arg = args[i++]
+            when {
+                arg == "--" -> return i == args.size
+                arg in RANGE_VALUE_OPTIONS -> if (!RANGE_AMOUNT.matches(args.getOrNull(i++) ?: return false)) return false
+                !RANGE_OPTION.matches(arg) -> return false
+            }
+        }
+        return true
+    }
+
+    private val SHELL_TOOLS = setOf("shell_execute", "env_exec", "su_exec")
+    private val LOG_TOOLS = SHELL_TOOLS + setOf("execute_code", "execute_code_js", "ssh_exec", "agent_terminal", "sub_agent_report")
+    private val RANGE_READERS = setOf("head", "tail")
+    private val SPILL_READ_VERBS = RANGE_READERS + setOf("cat", "sed", "awk", "grep", "less", "more", "nl", "wc", "od", "xxd", "strings")
+    private val RANGE_VALUE_OPTIONS = setOf("-n", "-c", "--lines", "--bytes")
+    private val RANGE_AMOUNT = Regex("[+-]?\\d+[A-Za-z]*")
+    private val RANGE_OPTION = Regex("(?:--[a-z-]+(?:=[+-]?\\d+[A-Za-z]*)?|-[A-Za-z0-9][A-Za-z0-9+-]*)")
+    private val CAT_OPTION = Regex("--?[A-Za-z][A-Za-z-]*")
+    private const val NON_RANGE_SYNTAX = ";&<>\r\n\$`#"
+    private const val FILENAME = "[A-Za-z0-9._-]{1,255}"
+    private val SAFE_ID_RE = Regex("[^A-Za-z0-9._-]")
+    private val NAME = Regex(FILENAME)
+    private val GUEST_PATH = Regex("""$GUEST_PREFIX$FILENAME(?=$|[\s"'\])`,;])""")
+
+    fun cappedPreview(toolName: String, output: String): String = formatPreview(toolName, guestPath = null, output)
+
+    /** [guestPath] must come from a verified write in the calling session. */
+    internal fun formatPreview(toolName: String, guestPath: String?, output: String, originalBytes: Int? = null): String {
+        val name = spillName(guestPath)
+        val label = previewLabel(toolName)
+        return renderPreview(
+            output = output,
+            toolName = toolName,
+            bodyBudget = PREVIEW_BODY_CHARS,
+            intro = "$MARKER $label produced ${output.length} chars.\n",
+            originalBytes = originalBytes,
+            instructions = if (name != null) {
+                "Full output saved to $guestPath — use file_read (offset/lines) or a shell range read.\n" +
+                    "Open in app: minis://workspace/$SPILL_DIR/$name\n"
+            } else {
+                "Full output could not be saved or verified in the session workspace, " +
+                    "so only this bounded preview is available.\n"
+            },
+        )
+    }
+
+    /** Keep the larger readback budget; never send the model to a second spill. */
+    internal fun alreadySpilledPreview(toolName: String, guestPath: String, output: String): String {
+        if (spillName(guestPath) == null) return cappedPreview(toolName, output)
+        return renderPreview(
+            output = output,
+            toolName = toolName,
+            bodyBudget = READBACK_BODY_CHARS,
+            intro = "$MARKER ${previewLabel(toolName)} returned ${output.length} chars from $guestPath, " +
+                "which is already an offloaded tool-output file — it is NOT being offloaded again.\n",
+            instructions = "For more of that file, page it with file_read (offset/lines) or a shell range read.\n",
+        )
+    }
+
+    private fun renderPreview(
+        output: String,
+        toolName: String,
+        bodyBudget: Int,
+        intro: String,
+        instructions: String,
+        originalBytes: Int? = null,
+    ): String {
+        val headBudget = when {
+            ToolAliases.canonical(toolName) in LOG_TOOLS -> bodyBudget / 4
+            bodyBudget == READBACK_BODY_CHARS -> READBACK_HEAD_CHARS
+            else -> bodyBudget / 2
+        }
+        val slices = ToolOutputTruncator.previewSlices(output, headBudget, bodyBudget - headBudget)
+        return buildString {
+            append(intro)
+            if (slices.omittedChars > 0) {
+                val bytes = originalBytes ?: ToolOutputTruncator.utf8ByteLength(output)
+                val estimatedTokens = (bytes.toLong() + 3) / 4
+                append("Warning: truncated output (original token count: $estimatedTokens)\n")
+            }
+            append("Total output lines: ${ToolOutputTruncator.totalLines(output)}\n")
+            append(instructions).append('\n')
+            append(slices.head)
+            if (slices.omittedChars > 0) {
+                append("\n\n…(${slices.omittedChars} chars omitted)…\n\n")
+                append(slices.tail)
+            }
+        }
+    }
+
+    internal fun previewLabel(toolName: String): String = buildString {
+        for (ch in ToolOutputTruncator.sliceHead(toolName, MAX_LABEL_CHARS)) {
+            append(if (ch.code < 0x20 || ch in "\u0085\u2028\u2029") ' ' else ch)
+        }
+    }.ifBlank { "tool" }
+
+    private const val MAX_HEADER_CHARS = 2_048
+    private val SAVED_INTRO = Regex("""^\[tool-output-spill] [^\r\n]+ produced \d+ (?:chars|bytes)\.$""")
+    private val SAVED_LINE = Regex("""(?m)^Full output saved to ($GUEST_PREFIX$FILENAME) — use file_read (?:if you need more|\(offset/lines\) or a shell range read)\.$""")
+    private val LEGACY_MCP_FOOTER = Regex("""(?m)^\[Full output: $GUEST_PREFIX$FILENAME \(read it with offset/limit\)\]\r?\n?""")
+    private val LEGACY_SAVED_HEADER = Regex("""^\[tool output offloaded to save context[^\r\n]*?\. Full output saved to ($GUEST_PREFIX$FILENAME)(?: — use file_read to retrieve it if needed\.)?]$""")
+    private val READBACK_HEADER = Regex("""^\[tool-output-spill] [^\r\n]+? returned \d+ chars from ($GUEST_PREFIX$FILENAME), which is already an offloaded tool-output file""")
+
+    /** A declared host envelope reference; not a filesystem or provenance check. */
+    internal fun declaredSpillPath(content: String): String? {
+        val start = envelopeStart(content)
+        val path = when {
+            start < 0 -> null
+            content.startsWith(MARKER, start) -> {
+                val header = previewHeader(content, start)
+                if (!SAVED_INTRO.matches(header.substringBefore('\n'))) return null
+                SAVED_LINE.find(header)?.groupValues?.get(1)
+            }
+            content.startsWith(LEGACY_OFFLOADED_MARKER) ->
+                LEGACY_SAVED_HEADER.find(content.take(MAX_HEADER_CHARS).substringBefore('\n'))?.groupValues?.get(1)
+            else -> null
+        }
+        return path?.takeIf { isSpillGuestPath(it) }
+    }
+
+    internal fun readBackSpillPath(content: String): String? {
+        if (!content.startsWith(MARKER)) return null
+        return READBACK_HEADER.find(previewHeader(content))?.groupValues?.get(1)?.takeIf { isSpillGuestPath(it) }
+    }
+
+    private fun previewHeader(content: String, start: Int = 0): String =
+        content.substring(start, start + minOf(MAX_HEADER_CHARS, content.length - start)).substringBefore("\n\n")
+
+    /** Slice the displayed text, not the framework's existing links and headings. */
+    internal fun previewBody(content: String): String {
+        val start = envelopeStart(content)
+        return when {
+            start < 0 -> content
+            content.startsWith(MARKER, start) -> {
+                val end = start + previewHeader(content, start).length
+                if (!content.startsWith("\n\n", end)) return content
+                val body = content.substring(end + 2)
+                // The old MCP preview repeated the path after its body. The
+                // projection must not copy that stale hint through its tail.
+                if (content.substring(start, end).substringBefore('\n').endsWith(" bytes.")) {
+                    LEGACY_MCP_FOOTER.replace(body, "")
+                } else body
+            }
+            else -> content.substringAfter('\n', content)
+        }
+    }
+
+    /** Candidate only; the UI still opens it through [hostFile]. */
+    fun parseGuestPath(content: String): String? = declaredSpillPath(content) ?: readBackSpillPath(content)
+        ?: if (isOffloadPlaceholder(content)) null else GUEST_PATH.find(content)?.value?.takeIf { isSpillGuestPath(it) }
+
+    /** The detail view can also recover the path in a stored sub-agent report's old envelope. */
+    internal fun parseGuestPath(content: String, storedToolName: String): String? =
+        (if (SubAgentKind.isSpawnTool(storedToolName)) legacyReportPath(content) else null) ?: parseGuestPath(content)
+
+    /**
+     * Declared recovery reference only — no loose path scan. Shared by the two
+     * request-time pruning tiers so a legacy sub-agent report keeps its verified
+     * link after folding instead of losing it to the new-envelope-only parser.
+     */
+    internal fun declaredRecoveryPath(content: String, storedToolName: String): String? =
+        declaredSpillPath(content)
+            ?: if (SubAgentKind.isSpawnTool(storedToolName)) legacyReportPath(content) else null
+
+    private const val LEGACY_REPORT_LIMIT = 64_000
+    private const val LEGACY_REPORT_HEAD_CHARS = 8_000
+    private val LEGACY_REPORT_INTRO = Regex("""\[tool-output-spill] sub_agent_report produced (\d+) chars\.""")
+    private val LEGACY_REPORT_NOTE = Regex("""\n\n…\(truncated — full report at (${GUEST_PREFIX}subagent-report-[0-9a-f]{16}\.txt)\)…\n\n""")
+
+    // The old writer inserted the note exactly at the end of its 8k head,
+    // or one code unit earlier when it backed off a surrogate pair.
+    private fun legacyReportPath(content: String): String? {
+        if (content.length <= LIMIT || !content.startsWith("$MARKER sub_agent_report produced ")) return null
+        val introEnd = content.indexOf('\n').takeIf { it in 1..MAX_LABEL_CHARS } ?: return null
+        val size = LEGACY_REPORT_INTRO.matchEntire(content.substring(0, introEnd))
+            ?.groupValues?.get(1)?.toIntOrNull() ?: return null
+        if (size <= LEGACY_REPORT_LIMIT) return null
+        val noteStart = introEnd + 1 + LEGACY_REPORT_HEAD_CHARS
+        return (LEGACY_REPORT_NOTE.matchAt(content, noteStart) ?: LEGACY_REPORT_NOTE.matchAt(content, noteStart - 1))
+            ?.groupValues?.get(1)
+    }
+
+    fun hostFile(context: Context, sessionId: String, guestPath: String): File? =
+        if (canReadInChat(context, sessionId)) hostFile(context.filesDir, sessionId, guestPath) else null
+
+    internal fun hostFile(filesDir: File, sessionId: String, guestPath: String): File? =
+        hostFile(com.openminis.app.sandbox.PathResolver.forSessionLayout(filesDir, sessionId), filesDir, sessionId, guestPath)
+
+    /**
+     * Same verification with a prebuilt resolver: a request projection checks
+     * many candidate paths and must not rebuild the session layout per path.
+     */
+    internal fun hostFile(
+        resolver: com.openminis.app.sandbox.PathResolver,
+        filesDir: File,
+        sessionId: String,
+        guestPath: String,
+    ): File? {
+        val name = spillName(guestPath) ?: return null
+        val dir = spillDir(filesDir, sessionId, create = false) ?: return null
+        return try {
+            val file = File(dir, name)
+            val resolved = resolver.toHost(guestPath) ?: return null
+            file.takeIf {
+                it == resolved && it.canonicalFile == File(dir.canonicalFile, name) && it.isFile && it.canRead()
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** Publish the same recoverable guest path format for progressive trimming. */
+    fun offloadForTrim(context: Context, sessionId: String, toolId: String, content: String): String? {
+        if (!canReadInChat(context, sessionId)) return null
+        val filesDir = context.filesDir
+        val existing = declaredSpillPath(content)
+        if (isOffloadPlaceholder(content)) {
+            return existing?.takeIf { hostFile(filesDir, sessionId, it) != null }
+        }
+        return offloadInSession(filesDir, sessionId, "trim-$toolId", content)
     }
 }
 
-/**
- * [T-tool-output-offload-loop GH#343] The pure outcome of inspecting one tool
- * result body: pass it through untouched, answer from an existing spill file,
- * cap it without a file (no session), or write a new spill file.
- */
 internal enum class SpillPlan { PASSTHROUGH, ALREADY_SPILLED, CAPPED, WRITE }

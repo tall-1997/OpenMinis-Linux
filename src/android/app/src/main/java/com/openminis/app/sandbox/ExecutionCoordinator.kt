@@ -48,6 +48,10 @@ object ExecutionCoordinator {
          * 超时的调用方保持原语义。
          */
         val timedOut: Boolean = false,
+        /** Structured refusal from the host before the command reached the shell. */
+        val notStarted: Boolean = false,
+        /** The command delivered its matching end frame, not a timeout or lost shell. */
+        val completed: Boolean = false,
     )
 
     private var appContextRef: Context? = null
@@ -147,7 +151,7 @@ object ExecutionCoordinator {
         if (stoppedSince(sessionId, epoch)) return notStarted(sessionId, "before it was queued")
         MCPToolPolicy.blockedMessage(appContext, command)?.let { msg ->
             lineCallback?.invoke(msg)
-            return CommandResult(output = msg, exitCode = 1, durationMs = 0)
+            return CommandResult(output = msg, exitCode = 1, durationMs = 0, notStarted = true)
         }
         SandboxJobKeepAlive.onStart(appContext, sessionId, command)
         try {
@@ -194,7 +198,7 @@ object ExecutionCoordinator {
         if (refused != null) {
             Log.w(TAG, "[$sessionId] refused before start: $refused")
             lineCallback?.invoke(refused)
-            return@withLock CommandResult(output = refused, exitCode = 126, durationMs = 0)
+            return@withLock CommandResult(output = refused, exitCode = 126, durationMs = 0, notStarted = true)
         }
         SandboxResourceGate.withCommandLock(
             command,
@@ -282,6 +286,7 @@ object ExecutionCoordinator {
             // never the output text (a user command can echo the timeout
             // marker itself; see ShellChannelRecovery).
             val timedOut = shell.consumeTimedOut()
+            val completed = shell.consumeCompleted()
             if (ShellChannelRecovery.shouldDiscardChannel(exitCode, rawOutput, timedOut)) {
                 discardTimedOutChannel(sessionId, shell)
             }
@@ -326,6 +331,7 @@ object ExecutionCoordinator {
                 // CHANNEL (see shouldDiscardChannel above). For the tool's
                 // TIMEOUT status, an offload handler timeout also qualifies.
                 timedOut = timedOut || handlerTimedOut,
+                completed = completed && !timedOut && !handlerTimedOut,
             )
         }
         } finally {
@@ -562,7 +568,7 @@ object ExecutionCoordinator {
 
     private fun notStarted(sessionId: String, phase: String): CommandResult {
         com.openminis.app.logging.AppLogger.info(TAG, "[stop-tool] [$sessionId] command stopped $phase - not run")
-        return CommandResult(output = NOT_STARTED_OUTPUT, exitCode = 130, durationMs = 0L)
+        return CommandResult(output = NOT_STARTED_OUTPUT, exitCode = 130, durationMs = 0L, notStarted = true)
     }
 
     /**

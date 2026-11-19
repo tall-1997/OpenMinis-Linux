@@ -1,5 +1,6 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.agent.ToolResultProjection
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.repository.PreviewText
@@ -22,10 +23,10 @@ import com.openminis.app.security.ToolAliases
  * Contracts:
  *  - Under the trigger the history passes through UNCHANGED (same instance) —
  *    byte-stable requests keep provider prefix caches warm.
- *  - Recency: the most recent [MICRO_PRUNE_KEEP_RECENT] prunable tool-result
- *    carriers stay VERBATIM; older ones are slimmed to head + marker + tail.
- *  - Whitelist: only tools whose output is re-runnable/re-fetchable
- *    ([MICRO_PRUNABLE_TOOLS], matched through [ToolAliases.canonical]).
+ *  - Recency: the newest [MICRO_PRUNE_KEEP_RECENT] results and their complete
+ *    tool rounds stay verbatim, using the same scope as tool-result aging.
+ *  - Whitelist: only known bulky tool output ([MICRO_PRUNABLE_TOOLS], matched
+ *    through [ToolAliases.canonical]); pruning does not authorize another call.
  *    file_read is deliberately EXCLUDED — its verbatim content is what the
  *    model crafts file_edit old_string/new_string against (the on-disk
  *    read cache is fingerprint-based, but losing the text still degrades
@@ -33,16 +34,15 @@ import com.openminis.app.security.ToolAliases
  *  - Structure: tool_use/tool_result pairing is never touched — only the
  *    text `content` of a prunable ToolResult part is replaced, so every
  *    provider still sees a balanced conversation. Idempotent.
- *  - The pressure reading is [ChatViewModel.contextTokensForPolicy] — the
- *    "real or calibrated floor" number the compaction gate itself uses, so a
- *    freshly-resumed session (no usage report yet) is still covered.
+ *  - The caller supplies context pressure and the policy-derived trigger for
+ *    the current request, including when no provider usage has been reported.
  */
 /**
  * 6 = ToolResultAging's keep window: the two cheap layers must preserve the
  * SAME newest-results set, or aging's deliberately-kept work products get
  * slimmed by the layer that runs after it (round-3 adversarial finding).
  */
-internal const val MICRO_PRUNE_KEEP_RECENT = 6
+internal const val MICRO_PRUNE_KEEP_RECENT = ToolResultProjection.DEFAULT_KEEP_RECENT
 internal const val MICRO_PRUNE_HEAD_CHARS = 400
 internal const val MICRO_PRUNE_TAIL_CHARS = 400
 
@@ -55,9 +55,8 @@ internal const val MICRO_PRUNE_TAIL_CHARS = 400
 internal const val MICRO_TRIGGER_FRACTION_OF_COMPACT = 0.8
 
 /**
- * Tools whose old outputs are safe to slim: re-runnable or re-fetchable, and
- * bulky enough to matter. Matched through [ToolAliases.canonical] so history
- * aliases (shell_exec) reach the same verdict as their canonical name.
+ * Tools with typically bulky text outputs. Matched through [ToolAliases.canonical]
+ * so history aliases (shell_exec) reach the same verdict as their canonical name.
  */
 internal val MICRO_PRUNABLE_TOOLS: Set<String> = setOf(
     "shell_execute",
@@ -120,12 +119,21 @@ internal fun neutralizeUntrustedTags(text: String): String {
     // so the escape list can never drift from the classify list). Authority
     // envelopes escape globally; the rest at line start.
     for (marker in HarnessNoteMarkers.ALL + PreviewText.HOST_NOTE_NO_REPLY_HEAD) {
-        if (marker == "[MEMORY_REFERENCE" || marker == "[STANDING_RULES") {
+        if (marker == HarnessNoteMarkers.MEMORY_ENVELOPE || marker == HarnessNoteMarkers.STANDING_RULES_ENVELOPE) {
             // Authority envelopes escape ANYWHERE (global replace).
             out = out.replace(marker, "［" + marker.substring(1))
         } else {
-            out = LINE_START_NEUTRALIZERS[marker]!!.let { rx ->
-                rx.replace(out) { m -> m.value.take(1) + "\u200B" + m.value.substring(1) }
+            // A marker missing from the table must never crash request
+            // assembly ([P3-2 final]): skip with a log so the drift is visible
+            // instead of failing every request that carries a remote result.
+            val neutralizer = LINE_START_NEUTRALIZERS[marker]
+            if (neutralizer == null) {
+                com.openminis.app.logging.AppLogger.warning(
+                    "ChatHistoryMicroPrune",
+                    "no line-start neutralizer for harness marker ${marker.take(24)} — escape skipped",
+                )
+            } else {
+                out = neutralizer.replace(out) { m -> m.value.take(1) + "\u200B" + m.value.substring(1) }
             }
         }
     }
@@ -171,116 +179,30 @@ internal fun microPruneOldToolResults(
     headChars: Int = MICRO_PRUNE_HEAD_CHARS,
     tailChars: Int = MICRO_PRUNE_TAIL_CHARS,
     triggerTokens: Long = 0L,
+    verifiedSpillPaths: Set<String> = emptySet(),
 ): List<LLMMessage> {
-    if (windowTokens <= 0 || usedTokens <= 0) return history
-    // triggerTokens <= 0 = the policy declines auto-compaction for this window
-    // (small-window tier) — the cheap tier declines with it.
-    if (triggerTokens <= 0) return history
-    if (usedTokens < triggerTokens) return history
-    // Index the prunable carriers newest-first; the newest [keepRecent] stay verbatim.
-    val carrierIndexes = history.withIndex()
-        .filter { (_, msg) -> msg.role == LLMMessage.Role.USER && hasPrunableResult(msg) }
-        .map { it.index }
-    if (carrierIndexes.size <= keepRecent) return history
-    val slimTargets = carrierIndexes.dropLast(keepRecent).toHashSet()
-    var changed = false
-    val out = history.mapIndexed { index, msg ->
-        if (index !in slimTargets) return@mapIndexed msg
-        val pruned = pruneToolResultParts(msg, headChars, tailChars)
-        if (pruned !== msg) changed = true
-        pruned
-    }
-    return if (changed) out else history
-}
-
-private fun hasPrunableResult(msg: LLMMessage): Boolean =
-    msg.contentParts.any { it is AgentContentPart.ToolResult && prunableTool(it.name) }
-
-/** Slims every prunable ToolResult part of [msg]; returns [msg] untouched when nothing changed. */
-private fun pruneToolResultParts(msg: LLMMessage, headChars: Int, tailChars: Int): LLMMessage {
-    var changed = false
-    val newParts = msg.contentParts.map { part ->
-        // isError results stay verbatim (ToolResultAging's own rule: the
-        // message IS the diagnostic — slimming it destroys the failure trace).
-        if (part is AgentContentPart.ToolResult &&
-            prunableTool(part.name) &&
-            !part.isError
-        ) {
-            val slimmed = slimText(part.content, headChars, tailChars)
-            if (slimmed != part.content) {
-                changed = true
-                part.copy(content = slimmed)
-            } else {
-                part
-            }
-        } else {
-            part
+    // triggerTokens <= 0 means the window policy declines auto-compaction.
+    if (windowTokens <= 0 || usedTokens <= 0 || triggerTokens <= 0 || usedTokens < triggerTokens) return history
+    val protectFrom = ToolResultProjection.protectedSuffixStart(history, keepRecent)
+    var projected: MutableList<LLMMessage>? = null
+    for (index in 0 until protectFrom) {
+        val message = history[index]
+        var parts: MutableList<AgentContentPart>? = null
+        for ((partIndex, part) in message.contentParts.withIndex()) {
+            if (part !is AgentContentPart.ToolResult || !prunableTool(part.name)) continue
+            val replacement = ToolResultProjection.replacement(
+                part, ToolResultProjection.MICRO_PRUNE_MARKER, headChars, tailChars,
+                verifiedSpillPaths = verifiedSpillPaths,
+            ) ?: continue
+            val changed = parts ?: message.contentParts.toMutableList().also { parts = it }
+            changed[partIndex] = part.copy(content = replacement)
+        }
+        parts?.let {
+            val changed = projected ?: history.toMutableList().also { projected = it }
+            changed[index] = message.copy(contentParts = it)
         }
     }
-    return if (!changed) msg else msg.copy(contentParts = newParts)
-}
-
-/** Stable identifying prefix of the slim marker — the idempotence guard. */
-private const val MICRO_PRUNE_MARKER_HEAD = "\n…[micro-pruned "
-
-/** head + marker + tail; short content passes through unchanged (idempotence). */
-private fun slimText(content: String, headChars: Int, tailChars: Int): String {
-    // Already-slimmed content passes through unchanged: re-slicing would chew
-    // the previous marker into the new head and grow the block on every pass.
-    if (content.contains(MICRO_PRUNE_MARKER_HEAD)) return content
-    if (content.length <= headChars + tailChars + 64) return content
-    val omitted = content.length - headChars - tailChars
-    val head = content.take(headChars)
-    val tail = content.takeLast(tailChars)
-    return "$head\n…[micro-pruned $omitted chars — re-run the tool or file_read the path to recover]…\n$tail"
-}
-
-// ── Request-prep — the loop's single pre-step entry ──────────────────────
-
-/**
- * [T-compaction-cascade] The loop's request-history preparation:
- *  1. neutralize untrusted framework markers in remote-content tool results
- *     (EVERY request — spoofing does not care about token pressure);
- *  2. tier-① micro-prune when pressure crosses the derived trigger.
- * Both are request-time projections over the history — the persisted rows
- * stay byte-identical. The in-loop compaction guard
- * ([ChatViewModelInLoopContext.inLoopContextCheck]) remains the compaction
- * authority: it fires at the operator's compact percent and zeroes the stale
- * reading after compacting, which also re-arms this pipeline's trigger.
- */
-/**
- * [T-threshold-formula-family] The prune trigger in TOKENS, derived from the
- * SAME gate the in-loop compaction uses ([ContextPolicy.forContextWindow] with
- * the operator's compact percent) times [MICRO_TRIGGER_FRACTION_OF_COMPACT] —
- * the cheap tier always fires before the LLM compaction, including the 32-64K
- * window tier whose compact threshold is ABSOLUTE (window minus 15k), where a
- * plain ratio would fire after it. 0 = the policy declines auto-compaction for
- * this window; the cheap tier declines with it.
- */
-internal fun ChatViewModel.pruneTriggerTokens(): Long {
-    val win = effectiveContextWindowTokens()?.toLong() ?: return 0L
-    if (win <= 0) return 0L
-    val policy = com.openminis.app.data.ContextPolicy.forContextWindow(
-        win.toInt(), effectiveCompactPercent(),
-    )
-    return (policy.compactThreshold * MICRO_TRIGGER_FRACTION_OF_COMPACT).toLong()
-}
-
-internal fun ChatViewModel.prepareRequestHistory(stallResumeContext: String?): List<LLMMessage> {
-    val win = effectiveContextWindowTokens()?.toLong() ?: 0L
-    val pressure = contextTokensForPolicy().toLong()
-    val triggerTokens = pruneTriggerTokens()
-    return effectiveAgentHistory()
-        .let { applyStallNudge(it, stallResumeContext) }
-        .let { history -> neutralizeRemoteToolResults(history) }
-        .let { history ->
-            microPruneOldToolResults(
-                history = history,
-                usedTokens = pressure,
-                windowTokens = win,
-                triggerTokens = triggerTokens,
-            )
-        }
+    return projected ?: history
 }
 
 /**
@@ -298,7 +220,10 @@ internal fun neutralizeRemoteToolResults(history: List<LLMMessage>): List<LLMMes
             var msgChanged = false
             val parts = msg.contentParts.map { part ->
                 if (part is AgentContentPart.ToolResult && remoteContentTool(part.name)) {
-                    val clean = neutralizeUntrustedTags(part.content)
+                    // [T-untrusted-tag-neutralization] Deterministic transform
+                    // memoized per text (WeakHashMap) — 11 regex passes per
+                    // remote result no longer repeat on every request.
+                    val clean = TokenScanMemo.neutralized(part.content)
                     if (clean != part.content) {
                         msgChanged = true
                         part.copy(content = clean)

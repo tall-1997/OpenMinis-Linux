@@ -1,14 +1,18 @@
 package com.openminis.app.backup
 
 import com.openminis.app.backup.BackupExporter.Companion.iso8601
+import com.openminis.app.data.CompactAssets
+import com.openminis.app.util.IsoTime
 import com.openminis.app.data.db.ChatSessionEntity
 import com.openminis.app.data.db.CompactMarkerEntity
 import com.openminis.app.data.db.FolderEntity
 import com.openminis.app.data.db.MessageEntity
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 
 /**
  * Wire-record builders for the `.minisbak` chat rows — the cross-platform
@@ -71,11 +75,42 @@ internal fun markerRecord(c: CompactMarkerEntity): JsonElement = buildJsonObject
     put("summary", JsonPrimitive(c.summary))
     put("firstKeptSortOrder", JsonPrimitive(c.firstKeptSortOrder))
     put("compactedCount", JsonPrimitive(c.compactedCount))
+    // Keep the iOS date field; Android also needs exact ordering for undo.
     put("createdAt", JsonPrimitive(iso8601(c.createdAt)))
+    put("createdAtMillis", JsonPrimitive(c.createdAt))
     put("uiBoundarySortOrder", c.uiBoundarySortOrder?.let(::JsonPrimitive) ?: JsonNull)
     put("boundaryMessageId", c.boundaryMessageId?.let(::JsonPrimitive) ?: JsonNull)
     put("firstKeptMessageId", c.firstKeptMessageId?.let(::JsonPrimitive) ?: JsonNull)
     put("lastCompactedMessageId", c.lastCompactedMessageId?.let(::JsonPrimitive) ?: JsonNull)
+    put("version", JsonPrimitive(c.version))
+    c.summaryChunks?.let { put("summaryChunks", JsonPrimitive(it)) }
+    CompactAssets.decode(c.assetsJson).encode()?.let { put("assetsJson", JsonPrimitive(it)) }
+}
+
+/** Missing or malformed Android-only assets never block an otherwise valid legacy marker. */
+internal fun compactMarkerFromRecord(record: JsonObject): CompactMarkerEntity? {
+    fun value(key: String) = (record[key] as? JsonPrimitive)?.contentOrNull
+    val createdAt = value("createdAt")
+    return CompactMarkerEntity(
+        id = value("id") ?: return null,
+        sessionId = value("sessionId") ?: return null,
+        summary = value("summary").orEmpty(),
+        firstKeptSortOrder = value("firstKeptSortOrder")?.toIntOrNull() ?: 0,
+        compactedCount = value("compactedCount")?.toIntOrNull() ?: 0,
+        createdAt = value("createdAtMillis")?.toLongOrNull()
+            ?: createdAt?.let { it.toLongOrNull() ?: IsoTime.parseFlexible(it) } ?: 0L,
+        uiBoundarySortOrder = value("uiBoundarySortOrder")?.toIntOrNull(),
+        boundaryMessageId = value("boundaryMessageId"),
+        firstKeptMessageId = value("firstKeptMessageId"),
+        lastCompactedMessageId = value("lastCompactedMessageId"),
+        // [P3-2] Only an explicit version is trusted. Pre-version packages
+        // (iOS, older Android) had no `version` field; the v1 resolution path
+        // already handles a lastCompactedMessageId-only row, so inferring v2
+        // from its presence changed how the restored marker anchored.
+        version = value("version")?.toIntOrNull() ?: 1,
+        summaryChunks = value("summaryChunks"),
+        assetsJson = CompactAssets.decode(value("assetsJson")).encode(),
+    )
 }
 
 internal fun folderRecord(f: FolderEntity): JsonElement = buildJsonObject {

@@ -26,6 +26,25 @@ class SupervisorRunStoreTest {
     }
 
     @Test
+    fun restartOfInterruptedRunReusesReceiptIdentityButNewRunDoesNot() = runBlocking {
+        val sid = "resume-receipt-scope"
+        val prior = SupervisorRunStore.start(sid, null, "objective", 6, objectiveRowId = "stored-objective")
+        assertEquals("stored-objective", prior.id)
+        SupervisorRunStore.appendRound(sid, null, 1, "first instruction", "first report")
+        val interrupted = SupervisorRunStore.latest(sid, null)!!.copy(state = SupervisorRunStore.STATE_INTERRUPTED)
+        SupervisorRunStore.internalReplaceForTest(sid, interrupted)
+        val resumed = SupervisorRunStore.start(sid, null, "objective", 6, interrupted)
+        assertEquals(prior.id, resumed.id)
+        assertEquals(1, resumed.workerTurns)
+        assertEquals(interrupted.rounds, resumed.rounds)
+        fun pendingWorker(record: SupervisorRunStore.RunRecord) = ToolReceiptScope.supervisor(sid, record.id)!!
+            .lane("supervisor-seat", "worker").step("round", record.workerTurns + 1).call("file_write", "{}")!!
+        assertEquals(pendingWorker(interrupted).logicalSha, pendingWorker(resumed).logicalSha)
+        val newRun = SupervisorRunStore.start(sid, null, "objective", 6, objectiveRowId = "new-objective")
+        assertTrue(pendingWorker(resumed).logicalSha != pendingWorker(newRun).logicalSha)
+    }
+
+    @Test
     fun start_capsObjectiveLength() = runBlocking {
         freshStore()
         val long = "x".repeat(600)

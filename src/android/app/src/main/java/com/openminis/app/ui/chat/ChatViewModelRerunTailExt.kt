@@ -56,8 +56,7 @@ internal suspend fun ChatViewModel.runRerunStreamTail(
     // [P0-5] Prompt assembly does disk I/O (skills/MCP reloads, memory
     // fragments) — keep it off the main dispatcher. All inputs are StateFlow
     // reads / pure helpers; written fields are @Volatile.
-    val baseSystemPrompt = withContext(Dispatchers.Default) { buildSystemPrompt() }
-    val systemPrompt = wrapSystemPromptForOAuth(provider, baseSystemPrompt)
+    val systemPrompt = withContext(Dispatchers.IO) { buildMemoryDeliveryPrompt() }
 
     // _isStreaming was already set synchronously by the caller.
     val launchedProvider = provider

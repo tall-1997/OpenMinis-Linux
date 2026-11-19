@@ -2,45 +2,31 @@ package com.openminis.app.tools
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * [T-webfetch-spill] The `web_fetch` output cap is a preview trigger, not a
- * loss point. The old `htmlToText(raw).take(8_000)` silently discarded
- * everything past the cap with no spill file and no recovery path. The
- * over-cap decision is pinned here: with a spill path the body is the shared
- * [ToolOutputSpill] placeholder (head+tail + guest path); without one the
- * FULL converted text is deferred to the unified exit instead of dropped.
- */
 class WebFetchToolSpillTest {
+    private val url = "https://example.test/document"
 
     @Test
-    fun triggerThresholdIsUnchanged() {
-        assertEquals(8_000, WebFetchTool.MAX_OUTPUT)
+    fun `sessionless fetch hands off the complete extracted text`() {
+        val html = "<article>" + "H".repeat(8_000) + "M".repeat(20_000) + "T".repeat(5_000) + "</article>"
+        val extracted = WebFetchTool.htmlToText(html)
+        assertEquals("URL: $url\n\n${html.removePrefix("<article>").removeSuffix("</article>")}",
+            WebFetchTool.presentResponse(url, extracted, null, null))
     }
 
     @Test
-    fun overCapWithSpillPathBecomesTheSharedPlaceholderPreview() {
-        val big = "H".repeat(8_000) + "M".repeat(20_000) + "T".repeat(5_000)
-        val out = WebFetchTool.presentOverCap(big, "/var/minis/workspace/tool-spill/web_fetch.txt")
-        // Same placeholder shape every oversized tool output uses.
-        assertTrue(out.startsWith("[tool-output-spill] web_fetch produced ${big.length} chars."))
-        assertTrue(out.contains("Full output saved to /var/minis/workspace/tool-spill/web_fetch.txt"))
-        assertTrue(out.contains("file_read"))
-        // Head and tail preserved, middle elided, bounded body.
-        assertTrue(out.contains("H".repeat(32)))
-        assertTrue(out.contains("T".repeat(32)))
-        assertFalse(out.contains("M".repeat(100)))
-        assertTrue(out.length < big.length)
-    }
-
-    @Test
-    fun overCapWithoutASpillPathDefersTheFullTextToTheUnifiedExit() {
-        // No session wired here: the FULL converted text goes to the caller,
-        // whose ToolOutputPolicy.apply (which resolves the session) owns the
-        // cap + spill. A silent take() is exactly what must NOT come back.
-        val big = "H".repeat(20_000)
-        assertEquals(big, WebFetchTool.presentOverCap(big, null))
+    fun `unified exit keeps final URL and end of a page in the short preview`() {
+        val body = "INTRO\n" + "middle".repeat(5_000) + "\nCONCLUSION"
+        val output = WebFetchTool.presentResponse(url, body, null, null)
+        val preview = ToolOutputPolicy.apply(output, "fetch", null, null, WebFetchTool.NAME)
+        assertTrue(preview.startsWith("[tool-output-spill] web_fetch"))
+        assertTrue(preview.contains("URL: $url\n\nINTRO"))
+        assertTrue(preview.endsWith("CONCLUSION"))
+        assertTrue(ToolOutputSpill.previewBody(preview).length <= ToolOutputSpill.PREVIEW_BODY_CHARS + 40)
+        assertFalse(preview.contains("minis://workspace"))
+        assertNull(ToolOutputSpill.parseGuestPath(preview))
     }
 }

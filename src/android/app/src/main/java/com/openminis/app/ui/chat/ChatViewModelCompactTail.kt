@@ -38,18 +38,16 @@ internal fun buildDetachedCompactHistory(
     } else {
         summaryWrappedText
     }
-    val start = tail.indexOfFirst { it.role == LLMMessage.Role.USER }
-    if (start < 0) {
-        return tail + LLMMessage(role = LLMMessage.Role.USER, content = wrapped)
+    return attachCompactSummary(tail, wrapped)
+}
+
+/** A detached slice may start with an assistant/tool pair. Keep both halves. */
+internal fun attachCompactSummary(history: List<LLMMessage>, summary: String): List<LLMMessage> {
+    val first = history.firstOrNull()
+    if (first?.role != LLMMessage.Role.USER || first.contentParts.any { it is AgentContentPart.ToolResult }) {
+        return listOf(LLMMessage(role = LLMMessage.Role.USER, content = summary)) + history
     }
-    val out = ArrayList<LLMMessage>(tail.size - start + 1)
-    val first = tail[start]
-    // Parts must move with the text: the first tail row is usually a real
-    // user send or tool-result carrier whose contentParts override `content`
-    // on the wire ([T-user-text-prefix-parts-sync]).
-    out.add(prependUserText(first, wrapped))
-    out.addAll(tail.subList(start + 1, tail.size))
-    return out
+    return listOf(prependUserText(first, summary)) + history.drop(1)
 }
 
 /** How many of the newest dropped messages the detached digest inspects. */

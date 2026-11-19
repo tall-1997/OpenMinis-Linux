@@ -19,6 +19,10 @@ enum class ToolErrorCode {
     UNKNOWN_TOOL,
     /** Screen/window changed since the snapshot the action was planned against. */
     STALE_OBSERVATION,
+    /** No automatic retry: prior delivery/acceptance still needs confirmation. */
+    RECEIPT_UNCONFIRMED,
+    /** A safe dispatch checkpoint or stable identity was unavailable. */
+    RECEIPT_BLOCKED,
 }
 
 data class ToolExecutionResult(
@@ -50,6 +54,18 @@ data class ToolExecutionResult(
      * subclassification iOS handles inline via error-message parsing.
      */
     val timedOut: Boolean = false,
+    /** Host-only proof for reconciling the actual result with its durable delivery claim. */
+    val receiptProof: String? = null,
+    /** Adapter verified that the operation never started (not a generic error or timeout). */
+    val notSent: Boolean = false,
+    /**
+     * The host observed a TERMINAL outcome for this dispatch: a real adapter
+     * response (including a business failure or a server-reported error), an
+     * executed command that ended (watchdog timeout / kill included), or a
+     * sandbox run that failed. Settles the receipt so proven-ended failures do
+     * not stay pending forever; NEVER implies business success.
+     */
+    val deliveryAccepted: Boolean = false,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -60,7 +76,8 @@ data class ToolExecutionResult(
             imageMimeType == other.imageMimeType && toolTitle == other.toolTitle &&
             pageURL == other.pageURL && imageFilePath == other.imageFilePath &&
             imageLinuxPath == other.imageLinuxPath &&
-            timedOut == other.timedOut
+            timedOut == other.timedOut && receiptProof == other.receiptProof && notSent == other.notSent &&
+            deliveryAccepted == other.deliveryAccepted
     }
 
     override fun hashCode(): Int {
@@ -75,6 +92,8 @@ data class ToolExecutionResult(
         result = 31 * result + (imageFilePath?.hashCode() ?: 0)
         result = 31 * result + (imageLinuxPath?.hashCode() ?: 0)
         result = 31 * result + timedOut.hashCode()
-        return result
+        result = 31 * result + receiptProof.hashCode()
+        result = 31 * result + notSent.hashCode()
+        return 31 * result + deliveryAccepted.hashCode()
     }
 }

@@ -57,6 +57,8 @@ object ToolApprovalKey {
                     if (cmd.isNotBlank()) append(' ').append(cmd)
                 }.trim()
                 toolName == "browser_use" -> a.optString("action", "").trim().lowercase()
+                // A session grant to search, or to restore one entry, is not a blanket write grant.
+                toolName == "memory_get" -> "${a.optString("action", "search")}:${a.optString("entry_id", "")}"
                 else -> ""
             }
         } catch (_: Exception) {

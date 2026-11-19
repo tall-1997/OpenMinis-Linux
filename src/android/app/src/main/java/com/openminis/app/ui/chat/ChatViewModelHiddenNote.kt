@@ -14,12 +14,8 @@ internal const val GOAL_NOTE_MARKER = "Current objective — supersedes any earl
 /**
  * [T-once-notices] Reset one-shot notice bookkeeping when the session changes.
  *
- * State is durable ([NoticeLedgerStore]): the in-memory set used to die with
- * the process, so every restart re-delivered each recalled memory and
- * re-announced the goal — the repeated-injection bug in a different disguise.
- * On load the record is reconciled with the transcript: if the note it refers
- * to is no longer in history (compaction/trim), the delivery record is dropped
- * so the memory can surface again once.
+ * The durable recall keys describe successful attempts, not notes pinned in
+ * history. Goal and task-state notices still have their own transcript carriers.
  */
 internal suspend fun ChatViewModel.ensureSessionScopedNotices() {
     val sid = activeSessionId
@@ -28,25 +24,24 @@ internal suspend fun ChatViewModel.ensureSessionScopedNotices() {
     val filesDir = context.filesDir
     val saved = withContext(Dispatchers.IO) { NoticeLedgerStore.load(filesDir, sid) }
     announcedRecallKeys.clear()
-    announcedRecallKeys.addAll(saved.recallKeys)
+    // Earlier versions saved candidate labels before dispatch. They are not delivery evidence.
+    announcedRecallKeys.addAll(saved.recallKeys.filter { it.startsWith("v2:") })
     goalAnnouncedSha = saved.goalSha
     stateSnapshotSha = saved.stateSha
-    announcedRecallCarrier = RECALL_NOTE_MARKER.takeIf { marker ->
-        agentHistory.any { it.content.contains(marker) }
-    }
     goalAnnouncedCarrier = GOAL_NOTE_MARKER.takeIf { marker ->
         agentHistory.any { it.content.contains(marker) }
     }
-    // The transcript is the source of truth: keys without their note in
-    // context are stale, and the goal must be announced again.
-    if (announcedRecallCarrier == null) announcedRecallKeys.clear()
     if (goalAnnouncedCarrier == null) goalAnnouncedSha = null
 }
 
+internal fun ChatViewModel.currentNoticeState(): NoticeLedgerStore.State = NoticeLedgerStore.State(
+    announcedRecallKeys.toSet(), goalAnnouncedSha, stateSnapshotSha,
+)
+
 /**
  * [T-once-notices] Everything that used to be rebuilt into every request:
- * plan-step retry steering, recalled memory, and the goal objective. Each is
- * committed once and then carried by history.
+ * plan-step retry steering and the goal objective. Recall is now request-local:
+ * persisting it in history would bypass diary TTL on every subsequent turn.
  */
 internal suspend fun ChatViewModel.commitSessionNoticesOnce(
     goalObjective: String,
@@ -55,16 +50,6 @@ internal suspend fun ChatViewModel.commitSessionNoticesOnce(
 ) {
     ensureSessionScopedNotices()
     var ledgerDirty = false
-    // [T-recall-once] Eviction, not repetition, is the reason to surface a
-    // memory again: compaction/trimming can drop the committed note, and a
-    // memory the model can no longer see must be allowed to return ONCE.
-    if (announcedRecallCarrier != null &&
-        agentHistory.none { it.content.contains(RECALL_NOTE_MARKER) }
-    ) {
-        announcedRecallKeys.clear()
-        announcedRecallCarrier = null
-        ledgerDirty = true
-    }
     // [T-state-hydration] The host restores the live task state itself after a
     // compaction/trim/load dropped it. No model tool call and no prompt rule:
     // the snapshot is written into the transcript once and deduped by sha.
@@ -97,11 +82,6 @@ internal suspend fun ChatViewModel.commitSessionNoticesOnce(
         ledgerDirty = true
     }
     consumePlanStepRetryPrompt()?.let { commitHiddenUserNote(it) }
-    newRecallReminder()?.let { note ->
-        commitHiddenUserNote(note)
-        announcedRecallCarrier = RECALL_NOTE_MARKER
-        ledgerDirty = true
-    }
     if (goalCanContinue && goalPrompt != null && goalObjective.isNotBlank()) {
         val goalEvicted = goalAnnouncedCarrier != null &&
             agentHistory.none { it.content.contains(GOAL_NOTE_MARKER) }
@@ -120,11 +100,7 @@ internal suspend fun ChatViewModel.commitSessionNoticesOnce(
         // session's delivery record under the next one.
         val sid = noticesSessionId ?: activeSessionId
         val filesDir = context.filesDir
-        val state = NoticeLedgerStore.State(
-            announcedRecallKeys.toSet(),
-            goalAnnouncedSha,
-            stateSnapshotSha,
-        )
+        val state = currentNoticeState()
         withContext(Dispatchers.IO) { NoticeLedgerStore.save(filesDir, sid, state) }
     }
 }
@@ -146,11 +122,12 @@ internal suspend fun ChatViewModel.commitHiddenUserNote(text: String) {
             role = LLMMessage.Role.USER,
             content = framed,
             contentParts = listOf(AgentContentPart.Text(framed)),
+            isHostGenerated = true,
         ),
     )
     // Read the session id up front: the IO hop can outlive a session switch.
     val sid = activeSessionId
-    val partsJson = """[{"type":"text","value":${escapeJson(framed)}}]"""
+    val partsJson = hostReminderPartsJson(escapeJson(framed))
     val persisted = withContext(Dispatchers.IO) {
         runCatching { chatRepository.appendMessage(sid, "user", partsJson) }.getOrNull()
     } ?: return

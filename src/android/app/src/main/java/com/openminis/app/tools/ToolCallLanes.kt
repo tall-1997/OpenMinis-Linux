@@ -80,8 +80,10 @@ internal object ToolCallLanes {
      * Local command-template plugins run a materialized shell command
      * through the full shell pipeline, so they inherit the shell lane.
      */
-    fun laneFor(canonicalName: String, isLocalTool: Boolean = false): ToolCallLane {
-        if (isLocalTool || canonicalName in SHELL_FAMILY) return ToolCallLane.BARRIER
+    fun laneFor(canonicalName: String, isLocalTool: Boolean = false, args: String = "{}"): ToolCallLane {
+        if (isLocalTool || canonicalName in SHELL_FAMILY ||
+            (canonicalName == "memory_get" && !memoryGetIsSearch(args))
+        ) return ToolCallLane.BARRIER
         return if (canonicalName in CONCURRENT_TOOLS) ToolCallLane.CONCURRENT
         else ToolCallLane.BARRIER
     }

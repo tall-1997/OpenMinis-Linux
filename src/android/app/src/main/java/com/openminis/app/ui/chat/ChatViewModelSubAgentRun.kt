@@ -51,6 +51,7 @@ internal suspend fun ChatViewModel.runOneSubAgentInner(
         /** [T-subagent-plan-autolog] Wave this lane belongs to, for the registry. */
         batchId: String? = null,
         batchSession: String = "",
+        receiptScope: com.openminis.app.tools.ToolReceiptScope? = null,
     ): ToolExecutionResult {
         val prompt = spawn.prompt
         val role = spawn.role
@@ -357,7 +358,10 @@ internal suspend fun ChatViewModel.runOneSubAgentInner(
             val subAgentFirstEventMs = com.openminis.app.data.GroupRoutingState.resolveFirstEventTimeoutMs(
                 providerRepository, _selectedGroupId.value, requestedThinking.isEnabled,
             )
-            val result = com.openminis.app.tools.WritePathGuard.withPaths(writePaths) {
+            val dispatchWritePaths = if (SubAgentKind.isReadOnly(effectiveKind)) {
+                listOf(com.openminis.app.tools.WritePathGuard.NO_WRITE)
+            } else writePaths
+            val result = com.openminis.app.tools.WritePathGuard.withPaths(dispatchWritePaths) {
                 SubAgentRunner.run(
                     provider = provider,
                     temperature = entry.overrides.temperature,
@@ -401,7 +405,8 @@ internal suspend fun ChatViewModel.runOneSubAgentInner(
                         ),
                     ),
                     maxTokens = (entry.model.maxOutputTokens ?: 4096).coerceIn(256, 8192),
-                    executeTool = { name, json, callId ->
+                    receiptScope = receiptScope,
+                    executeTool = { name, json, callId, batchScope ->
                         if (SubAgentKind.blocks(effectiveKind, name)) {
                             ToolExecutionResult("Error: $effectiveKind sub-agent cannot use $name.", false)
                         } else if (com.openminis.app.tools.CollabRoles.toolsFor(context, role)?.let { name !in it } == true) {
@@ -425,7 +430,7 @@ internal suspend fun ChatViewModel.runOneSubAgentInner(
                                 // executeTool's gate/workspace identity comes from
                                 // ChatViewModel.activeSessionId, so passing
                                 // parentSession here only poisoned the spill key.
-                                ?: executeTool(name, json, callId)
+                                ?: executeTool(name, json, callId, receiptScope = batchScope)
                         }
                     },
                     onStep = { turn, toolName -> onStep(turn, toolName) },

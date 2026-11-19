@@ -12,11 +12,8 @@ import org.junit.Test
  * the class shutter must make those invisible while keeping the JS bridge
  * (print / __minis_call) working.
  *
- * [T-executecode-spill] The stdout cap is a preview trigger, not a loss point:
- * past [ExecuteCodeTool.MAX_STDOUT] the full stdout must stay recoverable
- * (spill file + path when a session is wired, full-text deferral to the
- * unified exit otherwise), and chars dropped past the capture ceiling are
- * reported, never silent.
+ * With no session, captured stdout is handed intact to the dispatch exit.
+ * The hard capture ceiling counts any dropped characters.
  */
 class ExecuteCodeToolTest {
 
@@ -55,24 +52,20 @@ class ExecuteCodeToolTest {
     // -- [T-executecode-spill] stdout over the cap ---------------------------
 
     @Test
-    fun overCapStdoutKeepsHeadAndTailInsteadOfTakeClipping() = runBlocking {
-        // ~60k chars of print output: the old `text.take(MAX_STDOUT)` silently
-        // dropped the last ~10k. The tail must now survive end to end.
+    fun overCapStdoutKeepsHeadAndTailInsteadOfTakeClipping() {
         val result = run("for (var i = 0; i < 6000; i++) print('line-' + i)")
         assertTrue(result.success)
-        assertTrue(result.output.contains("line-0\n"))
-        assertTrue(result.output.contains("line-5999\n"))
-        assertTrue(result.output.length > ExecuteCodeTool.MAX_STDOUT)
+        assertEquals((0 until 6000).joinToString("") { "line-$it\n" }, result.output)
     }
 
     @Test
-    fun overCapStdoutWithSpillPathBecomesTheSharedPlaceholderPreview() {
-        val big = "H".repeat(ExecuteCodeTool.MAX_STDOUT + 10)
-        val out = ExecuteCodeTool.presentOverCap(big, "/var/minis/workspace/tool-spill/x.txt")
-        assertTrue(out.startsWith("[tool-output-spill] execute_code produced ${big.length} chars."))
-        assertTrue(out.contains("Full output saved to /var/minis/workspace/tool-spill/x.txt"))
-        assertTrue(out.contains("file_read"))
-        assertTrue(out.length < big.length)
+    fun oneLargePrintCannotOverrunTheCaptureCapOrSplitAPair() {
+        val cap = ExecuteCodeTool.MAX_CAPTURE_CHARS
+        val bridge = ExecuteCodeTool.Bridge { _, _ -> error("no nested call") }
+        bridge.print("x".repeat(cap - 1) + "\uD83D\uDE00")
+        bridge.print("last")
+        assertEquals("x".repeat(cap - 1), bridge.out.toString())
+        assertEquals(8L, bridge.droppedPrintChars) // entire pair, its newline, then 'last\n'
     }
 
     @Test
@@ -80,13 +73,13 @@ class ExecuteCodeToolTest {
         // No spill path available here: the FULL captured buffer goes to the
         // caller, whose ToolOutputPolicy.apply owns the cap + spill. A silent
         // take() is exactly what must NOT come back.
-        val big = "H".repeat(ExecuteCodeTool.MAX_STDOUT + 10)
+        val big = "H".repeat(ToolOutputSpill.LIMIT + 10)
         assertEquals(big, ExecuteCodeTool.presentStdout(big, 0L, null, null))
     }
 
     @Test
     fun printCharsDroppedPastTheCaptureCeilingAreReported() {
-        val big = "H".repeat(ExecuteCodeTool.MAX_STDOUT + 10)
+        val big = "H".repeat(ToolOutputSpill.LIMIT + 10)
         val out = ExecuteCodeTool.presentStdout(big, 1_234L, null, null)
         assertTrue(out.contains("(print cap reached — 1234 more chars were dropped"))
         assertTrue(out.contains("capture bound"))

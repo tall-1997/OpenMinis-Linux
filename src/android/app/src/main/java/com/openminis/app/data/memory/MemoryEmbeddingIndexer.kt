@@ -2,6 +2,9 @@ package com.openminis.app.data.memory
 
 import com.openminis.app.data.db.MemoryEmbeddingDao
 import com.openminis.app.data.db.MemoryEmbeddingEntity
+import com.openminis.app.data.repository.MemoryLifecycle
+import com.openminis.app.data.repository.memoryTextPrefix
+import com.openminis.app.evolution.LearnedPrefsStore
 import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicLong
@@ -32,6 +35,7 @@ class MemoryEmbeddingIndexer(
     private val model: String,
     private val dao: MemoryEmbeddingDao,
     private val scope: CoroutineScope,
+    private val clock: () -> Long = System::currentTimeMillis,
 ) {
 
     // ── indexing (write side) ──────────────────────────────────────────────
@@ -98,17 +102,18 @@ class MemoryEmbeddingIndexer(
 
     /** Core, blocking; callers run it on IO. */
     suspend fun indexFileNow(dir: File, file: File) {
-        val text = runCatching { file.readText() }.getOrNull() ?: return
+        if (!isIndexable(file) || file.parentFile?.canonicalFile != dir.canonicalFile) return
+        val text = MemoryLifecycle.read(dir, file.name)?.active(clock())?.text ?: return
         val scopeKey = runCatching { dir.canonicalPath }.getOrElse { dir.absolutePath }
         val source = file.name
-        val lines = indexableLines(text)
+        val lines = indexableLines(text).distinctBy { it.line }
         val ids = lines.map { entryId(scopeKey, source, it.line) }
-        if (ids.isEmpty()) {
-            // File emptied (or every line filtered): drop its vectors wholesale.
-            val stale = dao.listIdsForSource(scopeKey, source)
-            deleteInChunks(stale)
-            return
-        }
+        val currentIds = ids.toHashSet()
+        // Prune even when embeddings for newly added lines are temporarily unavailable.
+        val stale = dao.listIdsForSource(scopeKey, source).filter { it !in currentIds }
+        deleteInChunks(stale)
+        if (stale.isNotEmpty()) MemoryLifecycle.invalidateRecall()
+        if (ids.isEmpty()) return
         // Existing under the CURRENT model only — a model switch re-embeds.
         val existing = HashSet<String>()
         for (chunk in ids.chunked(IN_CHUNK)) {
@@ -134,11 +139,9 @@ class MemoryEmbeddingIndexer(
                     updatedAt = now,
                 )
             })
+            // Restore may have triggered a lookup before backfill commits these vectors.
+            MemoryLifecycle.invalidateRecall()
         }
-        // Lines that vanished from the file lose their vector.
-        val currentIds = ids.toHashSet()
-        val stale = dao.listIdsForSource(scopeKey, source).filter { it !in currentIds }
-        deleteInChunks(stale)
     }
 
     private suspend fun deleteInChunks(ids: List<String>) {
@@ -171,7 +174,15 @@ class MemoryEmbeddingIndexer(
         if (rows.isEmpty()) return emptyList()
         data class Scored(val hit: MemoryEmbeddingSupport.SemanticHit, val score: Float)
         val scored = ArrayList<Scored>(rows.size)
+        val now = clock()
+        val activeLines = HashMap<Pair<String, String>, Set<String>>()
         for (row in rows) {
+            if (row.scope !in scopeSet || row.source in protectedFiles) continue
+            val visible = activeLines.getOrPut(row.scope to row.source) {
+                val view = MemoryLifecycle.read(File(row.scope), row.source)?.active(now)
+                view?.let { indexableLines(it.text).mapTo(HashSet()) { line -> line.line } }.orEmpty()
+            }
+            if (row.line !in visible) continue
             val vector = FloatVectorBlob.decode(row.vector) ?: continue
             val score = VectorMath.cosine(queryVector, vector)
             // MIN_SEMANTIC_SCORE: high-dim cosine for unrelated text is a
@@ -180,7 +191,7 @@ class MemoryEmbeddingIndexer(
             // reintroduce exactly the recall-noise class the cross-turn
             // dedup work removed.
             if (score < MIN_SEMANTIC_SCORE) continue
-            scored.add(Scored(MemoryEmbeddingSupport.SemanticHit(row.source, row.line, score), score))
+            scored.add(Scored(MemoryEmbeddingSupport.SemanticHit(row.source, row.line, score, scope = row.scope), score))
         }
         return scored.sortedByDescending { it.score }.take(limit).map { it.hit }
     }
@@ -200,7 +211,7 @@ class MemoryEmbeddingIndexer(
             .map { it.trim() }
             .filter { it.isNotEmpty() && !it.startsWith("<!--") }
             .filter { it.any { c -> c.isLetterOrDigit() } }
-            .map { Line(it.take(MAX_LINE_CHARS), isHeadline(it)) }
+            .map { Line(memoryTextPrefix(it, MAX_LINE_CHARS), isHeadline(it)) }
             .toList()
 
     private fun isHeadline(line: String): Boolean =
@@ -215,10 +226,10 @@ class MemoryEmbeddingIndexer(
     }
 
     private fun isIndexable(file: File): Boolean =
-        file.isFile && file.extension == "md" && file.name != GLOBAL_FILE
+        file.isFile && file.extension == "md" && file.name !in protectedFiles
 
     companion object {
-        private const val GLOBAL_FILE = "GLOBAL.md"
+        private val protectedFiles = setOf("GLOBAL.md", "SOUL.md", "PERSONA.md", "AGENTS.md", LearnedPrefsStore.FILE_NAME)
 
         /** Recall is line-based; vectors for longer lines are poor signal anyway. */
         internal const val MAX_LINE_CHARS = 500

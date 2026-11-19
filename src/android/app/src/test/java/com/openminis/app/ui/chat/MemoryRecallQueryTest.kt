@@ -1,5 +1,6 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.data.model.LLMMessage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -26,6 +27,19 @@ class MemoryRecallQueryTest {
                 "<system-reminder>The previous response was empty. Continue.</system-reminder>",
             ),
         )
+    }
+
+    @Test
+    fun `semantic cache identity follows the latest real row and never the previous row of a draft`() {
+        val user = LLMMessage(LLMMessage.Role.USER, "autumn harvest", dbMessageId = "old-user")
+        val followUp = user.copy(content = "continue", dbMessageId = "next-user")
+        val host = user.copy(content = "unmarked caller nudge", dbMessageId = "host", isHostGenerated = true)
+        val past = listOf(user, followUp, host)
+        assertEquals("autumn harvest", memoryRecallQueryForHistory(past))
+        assertEquals("next-user", memoryRecallTurnIdForHistory(past))
+        val draft = followUp.copy(dbMessageId = null)
+        assertEquals("autumn harvest", memoryRecallQueryForHistory(past + draft))
+        assertNull(memoryRecallTurnIdForHistory(past + draft))
     }
 
     @Test

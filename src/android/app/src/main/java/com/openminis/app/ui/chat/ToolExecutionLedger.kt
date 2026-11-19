@@ -42,9 +42,13 @@ internal class ToolExecutionLedger {
 
     private val entries = ConcurrentHashMap<Key, Entry>()
 
+    // A replay can use result text, but it is not a new persisted delivery pair.
+    private fun AgentContentPart.ToolResult.withoutReceiptProof() =
+        if (receiptProof == null) this else copy(receiptProof = null)
+
     /** Read-only: the recorded result for a key, or null when never completed. */
     fun reuse(id: String, name: String, argsSha: String): AgentContentPart.ToolResult? =
-        (entries[Key(id, name, argsSha)] as? Entry.Completed)?.part
+        (entries[Key(id, name, argsSha)] as? Entry.Completed)?.part?.withoutReceiptProof()
 
     /** Introspection for tests / diagnostics. */
     fun size(): Int = entries.size
@@ -79,12 +83,12 @@ internal class ToolExecutionLedger {
             when (val existing = entries[key]) {
                 is Entry.Completed -> {
                     onReuse(existing.part)
-                    return existing.part
+                    return existing.part.withoutReceiptProof()
                 }
                 is Entry.InFlight -> {
                     val part = existing.deferred.await()
                     onReuse(part)
-                    return part
+                    return part.withoutReceiptProof()
                 }
                 null -> {
                     val deferred = CompletableDeferred<AgentContentPart.ToolResult>()

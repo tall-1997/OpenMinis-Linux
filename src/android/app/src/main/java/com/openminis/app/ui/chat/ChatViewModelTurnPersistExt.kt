@@ -2,15 +2,16 @@ package com.openminis.app.ui.chat
 
 import com.openminis.app.data.ToolLimitPrefs
 import com.openminis.app.data.model.AgentContentPart
-import com.openminis.app.data.model.AgentToolDefinition
+import com.openminis.app.data.model.ContextUsageAnchor
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.LLMStreamChunk
 import com.openminis.app.data.model.LLMUsage
+import com.openminis.app.data.model.ModelAttributionSnapshot
 import com.openminis.app.data.model.ThinkingLevel
-import com.openminis.app.provider.NonFiniteJson
 import com.openminis.app.provider.selectableThinkingLevels
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 
 // [T-android-split-chat-turnpersist] Turn finalization + per-turn persistence
@@ -144,11 +145,10 @@ internal fun turnPartsFromBlocks(
             "tool_use" -> {
                 val name = block.toolName
                 if (name.isBlank()) continue
-                val inputStr = toolCallInputs[block.id] ?: "{}"
-                val inputJson = NonFiniteJson.parseOrNull(inputStr) ?: JSONObject()
-                // [T-android-gemini3-thoughtsig / #179] Carry the block's
-                // signature into the persisted/replayed ToolUse.
-                out.add(AgentContentPart.ToolUse(block.id, name, inputJson, thoughtSignature = block.thoughtSignature))
+                // allToolInputs carries preflight's final JSON, not the streamed draft.
+                out.add(AgentContentPart.ToolUse.fromInputJson(
+                    block.id, name, toolCallInputs[block.id] ?: "{}", block.thoughtSignature,
+                ))
             }
             // "thinking" / "info" → not persisted in parts
             else -> { /* skip */ }
@@ -177,44 +177,33 @@ internal fun turnPartsFromBlocks(
  * update ([T-android-session-last-message-live-tool-call]) so both produce
  * an identical payload that [ChatRepository.extractTextPreview] understands.
  */
-internal fun ChatViewModel.buildAssistantPartsJson(
+internal fun buildAssistantPartsJson(
     parts: List<AgentContentPart>,
     toolBlockMeta: Map<String, AssistantBlock>,
-): String = buildString {
-    append("[")
-    parts.forEachIndexed { index, part ->
-        if (index > 0) append(",")
+): String = JSONArray().apply {
+    for (part in parts) {
         when (part) {
-            is AgentContentPart.Text -> {
-                append("""{"type":"text","value":${escapeJson(part.text)}}""")
-            }
+            is AgentContentPart.Text -> put(JSONObject().put("type", "text").put("value", part.text))
             is AgentContentPart.ToolUse -> {
-                // Skip tool_use with blank name — upstream bug guard.
-                val name = part.name
-                if (name.isBlank()) return@forEachIndexed
-                val inputStr = part.input.toString()
+                if (part.name.isBlank()) continue
                 val meta = toolBlockMeta[part.id]
-                val desc = meta?.toolTitle ?: ""
-                val pageURL = meta?.browserURL ?: ""
-                val imgPath = meta?.imageFilePath ?: ""
-                // [P-process-card] Persist per-block timing so restored
-                // sessions can rebuild it. Without these columns every
-                // restored block had durationMs=0, so process cards
-                // (which sum block durations) showed no duration at all
-                // after a reload while live runs showed one.
-                val durMs = meta?.durationMs ?: 0L
-                val startMs = meta?.startTimeMs ?: 0L
-                // [T-android-gemini3-thoughtsig / #179] Persist the captured
-                // signature (null-literal when absent) so it survives a session
-                // reload and can be replayed on the historical functionCall.
-                val sigJson = part.thoughtSignature?.let { escapeJson(it) } ?: "null"
-                append("""{"type":"toolUse","value":{"toolUseId":${escapeJson(part.id)},"name":${escapeJson(name)},"input":${escapeJson(inputStr)},"description":${escapeJson(desc)},"pageURL":${escapeJson(pageURL)},"imageFilePath":${escapeJson(imgPath)},"thoughtSignature":$sigJson,"durationMs":$durMs,"startTimeMs":$startMs}}""")
+                val value = JSONObject().apply {
+                    put("toolUseId", part.id)
+                    put("name", part.name)
+                    put("input", part.inputJson)
+                    put("description", meta?.toolTitle.orEmpty())
+                    put("pageURL", meta?.browserURL.orEmpty())
+                    put("imageFilePath", meta?.imageFilePath.orEmpty())
+                    put("thoughtSignature", part.thoughtSignature ?: JSONObject.NULL)
+                    put("durationMs", meta?.durationMs ?: 0L)
+                    put("startTimeMs", meta?.startTimeMs ?: 0L)
+                }
+                put(JSONObject().put("type", "toolUse").put("value", value))
             }
-            else -> { /* tool_result is persisted via persistToolResultMessage */ }
+            else -> Unit // Results are persisted via persistToolResultMessage.
         }
     }
-    append("]")
-}
+}.toString()
 
 internal suspend fun ChatViewModel.persistAssistantTurnForRun(
     run: com.openminis.app.service.ActiveRun,
@@ -229,6 +218,8 @@ internal suspend fun ChatViewModel.persistAssistantTurnForRun(
     // have moved the latter). Null from callers that genuinely don't know;
     // the agent loop always knows.
     requestedLevel: ThinkingLevel? = null,
+    modelSnapshot: ModelAttributionSnapshot? = null,
+    contextUsageAnchor: ContextUsageAnchor? = null,
 ): String? = run.withPersistencePermit {
     kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
         // [T-thinking-dual-ledger] Resolve the ledger HERE, where the turn's
@@ -243,7 +234,13 @@ internal suspend fun ChatViewModel.persistAssistantTurnForRun(
                 declaredSelectableLevels = currentModel?.selectableThinkingLevels ?: emptyList(),
             )
         }
-        persistAssistantTurn(parts, usage, reasoningContent, toolBlockMeta, streamDurationMs = run.streamRate.takeDurationMs(), thinkingUsage = thinkingUsage).also { id ->
+        persistAssistantTurn(
+            parts, usage, reasoningContent, toolBlockMeta,
+            streamDurationMs = run.streamRate.takeDurationMs(),
+            thinkingUsage = thinkingUsage,
+            modelSnapshot = modelSnapshot,
+            contextUsageAnchor = contextUsageAnchor,
+        ).also { id ->
             if (id != null) {
                 withContext(Dispatchers.Main.immediate) { notePersistedUiRow(uiMessageId, id) }
                 if (assistantText != null) run.markAssistantTurnPersisted(assistantText)
@@ -252,23 +249,10 @@ internal suspend fun ChatViewModel.persistAssistantTurnForRun(
     }
 }
 
-internal suspend fun ChatViewModel.persistToolResultMessageForRun(
-    run: com.openminis.app.service.ActiveRun,
-    parts: List<AgentContentPart>,
-    targetSessionId: String = realSessionId.ifEmpty { sessionId },
-    uiMessageId: String? = run.assistantMessageId,
-): String? = run.withPersistencePermit {
-    kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
-        val resultIds = parts.filterIsInstance<AgentContentPart.ToolResult>().mapTo(mutableSetOf()) { it.id }
-        persistToolResultMessage(parts, targetSessionId).also { dbId ->
-            if (dbId != null) withContext(Dispatchers.Main.immediate) { notePersistedUiRow(uiMessageId, dbId) }
-            val currentToolId = run.currentToolSnapshot()?.callId
-            if (dbId != null && currentToolId != null && currentToolId in resultIds) {
-                run.setCurrentTool(null, null)
-            }
-        }
-    }
-}
+// [T-atomic-tool-turn] The single-row tool-result writer was removed: the
+// agent loop persists the assistant(tool_use) row and the user(tool_result)
+// row through persistToolTurnPairForRun, which commits both in one Room
+// transaction. See ChatViewModelToolTurnPair.kt.
 
 internal suspend fun ChatViewModel.persistAssistantTurn(
     parts: List<AgentContentPart>,
@@ -281,27 +265,17 @@ internal suspend fun ChatViewModel.persistAssistantTurn(
     // [T-thinking-dual-ledger] Requested vs provider-evidenced thinking tier
     // for THIS turn; null = caller could not know (no request was made).
     thinkingUsage: TurnThinkingUsage? = null,
+    modelSnapshot: ModelAttributionSnapshot? = null,
+    contextUsageAnchor: ContextUsageAnchor? = null,
 ): String? {
     if (parts.isEmpty()) return null
     val partsJson = buildAssistantPartsJson(parts, toolBlockMeta)
-    val tokenJson = usage?.let {
-        val durSuffix = streamDurationMs?.let { d -> ",\"streamDurationMs\":$d" } ?: ""
-        // [T-thinking-dual-ledger] thinkingLevelRequested is ALWAYS written
-        // when the ledger is known (every agent-loop turn); effective is
-        // written only when the response produced evidence — absent key =
-        // unknown, deliberately distinct from a written "OFF".
-        val thinkingSuffix = thinkingUsage?.let { t ->
-            ",\"thinkingLevelRequested\":${escapeJson(t.requested)}" +
-                (t.effective?.let { e -> ",\"thinkingLevelEffective\":${escapeJson(e)}" } ?: "")
-        } ?: ""
-        """{"inputTokens":${it.inputTokens},"outputTokens":${it.outputTokens},"cacheCreationTokens":${it.cacheCreationInputTokens ?: 0},"cacheReadTokens":${it.cacheReadInputTokens ?: 0},"latestContextTokens":${it.latestContextTokens}$durSuffix$thinkingSuffix}"""
-    }
+    val anchor = turnContextUsageAnchor(usage, modelSnapshot, contextUsageAnchor)
+    val tokenJson = buildTurnTokenUsageJson(usage, streamDurationMs, thinkingUsage, anchor)
     val entity = chatRepository.appendMessage(
         realSessionId.ifEmpty { sessionId }, "assistant", partsJson, tokenJson,
         reasoningContent = reasoningContent,
-        // [T-token-attribution-snapshot] From the live request context, not
-        // the session row — see currentModelSnapshot().
-        modelSnapshot = currentModelSnapshot(),
+        modelSnapshot = modelSnapshot ?: anchor?.modelSnapshot ?: currentModelSnapshot(),
     )
     return entity.id
 }
@@ -312,22 +286,27 @@ internal suspend fun ChatViewModel.persistToolResultMessage(
     parts: List<AgentContentPart>,
     targetSessionId: String = realSessionId.ifEmpty { sessionId },
 ): String? {
-    // [T-android-duplicate-toolcall-replay] Belt-and-braces: one row must
-    // never carry two toolResult parts for the same toolUseId — a replay
-    // that slipped past dispatch-time refusal would otherwise duplicate
-    // the persisted payload and re-enter the transcript on reload.
-    val results = parts.filterIsInstance<AgentContentPart.ToolResult>()
-        .distinctBy { it.id }
+    val partsJson = buildToolResultPartsJson(parts) ?: return null
+    return chatRepository.appendMessage(targetSessionId, "user", partsJson).id
+}
+
+internal fun buildToolResultPartsJson(parts: List<AgentContentPart>): String? {
+    // [T-android-duplicate-toolcall-replay] Keep at most one result per wire ID.
+    val results = parts.filterIsInstance<AgentContentPart.ToolResult>().distinctBy { it.id }
     if (results.isEmpty()) return null
-    val partsJson = buildString {
-        append("[")
-        results.forEachIndexed { index, result ->
-            if (index > 0) append(",")
-            val snapshotText = escapeJson(result.content.lines().takeLast(30).joinToString("\n"))
-            append("""{"type":"toolResult","value":{"toolUseId":${escapeJson(result.id)},"name":${escapeJson(result.name)},"output":${escapeJson(result.content)},"success":${!result.isError},"snapshot":{"type":"text","text":$snapshotText}}}""")
+    return JSONArray().apply {
+        for (result in results) {
+            val value = JSONObject().apply {
+                put("toolUseId", result.id)
+                put("name", result.name)
+                put("output", result.content)
+                put("success", !result.isError)
+                result.imageLinuxPath?.let { put("imageLinuxPath", it) }
+                result.receiptProof?.let { put("receiptProof", it) }
+                put("snapshot", JSONObject().put("type", "text")
+                    .put("text", result.content.lines().takeLast(30).joinToString("\n")))
+            }
+            put(JSONObject().put("type", "toolResult").put("value", value))
         }
-        append("]")
-    }
-    val entity = chatRepository.appendMessage(targetSessionId, "user", partsJson)
-    return entity.id
+    }.toString()
 }

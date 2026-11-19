@@ -279,7 +279,7 @@ class RootfsManagerInstrumentedTest {
         try {
             testDir.mkdirs()
             java.util.zip.GZIPInputStream(ByteArrayInputStream(gzBytes)).use { gzStream ->
-                manager.extractTar(gzStream, testDir)
+                extractTar(gzStream, testDir)
             }
 
             assertTrue(File(testDir, "hello.txt").exists())
@@ -297,7 +297,7 @@ class RootfsManagerInstrumentedTest {
         val testDir = File(context.cacheDir, "empty-tar-test-${System.nanoTime()}")
         try {
             testDir.mkdirs()
-            manager.extractTar(ByteArrayInputStream(emptyTar), testDir)
+            extractTar(ByteArrayInputStream(emptyTar), testDir)
 
             // Should create no files (only the dir itself)
             assertEquals(0, testDir.listFiles()?.size ?: 0)
@@ -315,7 +315,7 @@ class RootfsManagerInstrumentedTest {
         val testDir = File(context.cacheDir, "large-tar-test-${System.nanoTime()}")
         try {
             testDir.mkdirs()
-            manager.extractTar(ByteArrayInputStream(tarBytes), testDir)
+            extractTar(ByteArrayInputStream(tarBytes), testDir)
 
             assertEquals(largeContent, File(testDir, "large.txt").readText())
         } finally {

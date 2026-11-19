@@ -132,8 +132,10 @@ internal fun ChatViewModel.sendMessage(
             disarmSupervisor()
             _inputText.value = ""
             viewModelScope.launch {
-                persistSupervisorUserTurn(trimmed)
-                if (!startSupervisorSession(trimmed)) {
+                // [T-supervisor-objective-row] The loop's receipt scope anchors on
+                // the durable objective row; start refuses a fresh run without it.
+                val objectiveRowId = persistSupervisorUserTurn(trimmed)
+                if (!startSupervisorSession(trimmed, objectiveRowId = objectiveRowId)) {
                     appendSystemInfo(
                         text = context.getString(R.string.supervisor_start_failed),
                         iconKind = "error",
@@ -143,29 +145,7 @@ internal fun ChatViewModel.sendMessage(
             return
         }
     }
-    // Context pressure check. Unlike before, needsCompact now HOLDS the
-    // send: either compact silently (auto-compact on) or ask first. The
-    // whole point is that the request which tripped the threshold must not
-    // be the one that goes out over-length.
-    if (!skipContextCheck && !internalGoalRun) {
-        when (checkContextBeforeSend()) {
-            ChatViewModel.PreSendContextAction.PROCEED -> {}
-            ChatViewModel.PreSendContextAction.COMPACT_THEN_SEND -> {
-                pendingSendText = text
-                _inputText.value = ""
-                compactAndSendPending()
-                return
-            }
-            ChatViewModel.PreSendContextAction.ASK_USER -> {
-                // Park the text on the VM (not the composer) so the dialog
-                // owns it; cancelCompactBeforeSend puts it back.
-                pendingSendText = text
-                _inputText.value = ""
-                _showCompactBeforeSendPrompt.value = true
-                return
-            }
-        }
-    }
+    if (pendingSendText != null) return
     // A fresh send supersedes any pending resume — mirror iOS which clears
     // canResume at the top of send().
     _canResume.value = false
@@ -249,8 +229,6 @@ internal fun ChatViewModel.sendMessage(
         appendSystemInfo("Goal execution needs a text-capable model. Select one and resume the Goal.", "info")
         return
     }
-    if (!internalGoalRun) clearAttachments()
-
     // T145: claim _isStreaming synchronously so a rapid second tap can't
     // slip past the entry guard during DB/OAuth setup. See retryFromMessage.
     AppLogger.info(ChatViewModel.TAG_STREAM, "send _isStreaming=true (sync, sid=$activeSessionId)")
@@ -286,11 +264,31 @@ internal fun ChatViewModel.sendMessage(
     // any error in the truncate path doesn't leave the composer stuck
     // in edit mode.
     val editingId = if (internalGoalRun) null else _editingMessageId.value
-    if (editingId != null) _editingMessageId.value = null
-
+    val sendSession = activeSessionId
+    val sendEpoch = snapshotResumeEpoch()
     viewModelScope.launch {
         var streamLaunched = false
+        var compactBeforeSend = false
         try {
+        if (!skipContextCheck && !internalGoalRun && editingId == null && revertStageFlow.value == null &&
+            !groupChatEnabled.value && !provider.model.isPureVideoGenerator
+        ) {
+            val action = checkContextBeforeSend(provider, trimmed, currentAttachments)
+            if (!_isStreaming.value || activeSessionId != sendSession || snapshotResumeEpoch() != sendEpoch) return@launch
+            if (action != ChatViewModel.PreSendContextAction.PROCEED) {
+                pendingSendText = text
+                if (_inputText.value == text) _inputText.value = ""
+                compactBeforeSend = action == ChatViewModel.PreSendContextAction.COMPACT_THEN_SEND
+                _showCompactBeforeSendPrompt.value = !compactBeforeSend
+                return@launch
+            }
+        }
+        if (editingId != null) _editingMessageId.value = null
+        if (!internalGoalRun) {
+            // Remove only attachments captured at tap time, not ones added while estimating.
+            val sentIds = currentAttachments.mapTo(HashSet()) { it.id }
+            _attachments.value = _attachments.value.filterNot { it.id in sentIds }
+        }
         // Ensure session exists in DB (creates on first message for draft sessions)
         val activeSessionId = ensureSession()
 
@@ -453,15 +451,7 @@ internal fun ChatViewModel.sendMessage(
             }
         }
 
-        // Build system prompt
-        // Anthropic OAuth requires the Claude Code prefix in the system prompt
-        // [P0-5] Prompt assembly reloads skills/MCP repos from disk and reads
-        // memory fragments — move it off the main dispatcher. All inputs are
-        // StateFlow reads / pure helpers; the fields it writes
-        // systemPromptStablePrefixLen is @Volatile.
-        val baseSystemPrompt = withContext(Dispatchers.Default) { buildSystemPrompt() }
-        val systemPrompt =
-            wrapSystemPromptForOAuth(provider, baseSystemPrompt)
+        val systemPrompt = withContext(Dispatchers.IO) { buildMemoryDeliveryPrompt() }
 
         // Start agent loop with fallback. _isStreaming was set synchronously at top.
         streamLaunched = true
@@ -524,7 +514,7 @@ internal fun ChatViewModel.sendMessage(
                             fallbackProviders = fallbackProviders,
                             fallbackStrategy = activeFallbackStrategy,
                             goalExecutionRun = internalGoalRun,
-
+                            skipInitialCompaction = skipContextCheck && !internalGoalRun,
                         )
                         AppLogger.info(ChatViewModel.TAG_STREAM, "send runAgentLoop RETURN normal")
                         // Drain any prompts the user queued while this loop was running.
@@ -580,6 +570,7 @@ internal fun ChatViewModel.sendMessage(
                 AppLogger.info(ChatViewModel.TAG_STREAM, "send _isStreaming=false (setup aborted)")
                 _isStreaming.value = false
             }
+            if (compactBeforeSend && activeSessionId == sendSession && pendingSendText == text) compactAndSendPending()
         }
     }
 }

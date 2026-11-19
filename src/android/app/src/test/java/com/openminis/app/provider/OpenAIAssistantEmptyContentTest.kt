@@ -85,6 +85,26 @@ class OpenAIAssistantEmptyContentTest {
     }
 
     @Test
+    fun `both request bodies preserve the published tool argument string`() {
+        val args = """{"query": ["one", "two"]}"""
+        val call = AgentContentPart.ToolUse.fromInputJson("call_1", "lookup", args)
+        val history = listOf(
+            LLMMessage(LLMMessage.Role.USER, "look up the items"),
+            LLMMessage(LLMMessage.Role.ASSISTANT, "", contentParts = listOf(call)),
+        )
+
+        val chatArguments = assistantMessage(bodyOf(history)).getJSONArray("tool_calls").getJSONObject(0)
+            .getJSONObject("function").getString("arguments")
+        val input = provider().buildResponsesAPIBody(history, systemPrompt = null, maxTokens = 1024, stream = false)
+            .getJSONArray("input")
+        val responseCall = (0 until input.length()).map(input::getJSONObject)
+            .single { it.optString("type") == "function_call" }
+
+        assertEquals(args, chatArguments)
+        assertEquals(args, responseCall.getString("arguments"))
+    }
+
+    @Test
     fun `assistant text still rides content when both text and tool_calls exist`() {
         val history = listOf(
             LLMMessage(LLMMessage.Role.USER, "go"),

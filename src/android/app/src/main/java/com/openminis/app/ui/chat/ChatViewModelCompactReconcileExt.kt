@@ -18,9 +18,6 @@ import com.openminis.app.logging.AppLogger
  *    `compactAll` hands the model as `previousSummary`, so a stale one folds
  *    deleted content into a fresh summary and returns it to context (the
  *    actual leak this fixes; see [com.openminis.app.data.CompactMarkerValidity]).
- *  - `_compactMarkerDetached` — "the anchor fell out of the bounded history
- *    window", probed once per session load. The cut moves the window and
- *    changes which rows exist, so a verdict measured before it is meaningless.
  *
  * Deliberately silent about `_messages`: the caller already truncated the list
  * and rebuilt `agentHistory`; a divider repaint rides the next session reload,
@@ -35,7 +32,6 @@ internal suspend fun ChatViewModel.reconcileCompactMarkersAfterTruncation(sessio
     _cachedLatestMarker = latest
     _compactSummary.value = latest?.summary
     if (latest != null) stateHydrationPending = true  // [T-state-hydration]
-    _compactMarkerDetached = false
     if (removed > 0) {
         AppLogger.info(
             ChatViewModel.TAG_STREAM,

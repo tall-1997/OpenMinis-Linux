@@ -80,8 +80,7 @@ internal fun ChatViewModel.resumeQueueAfterCancel() {
         // [P0-5] Prompt assembly does disk I/O (skills/MCP reloads, memory
         // fragments) — keep it off the main dispatcher. All inputs are
         // StateFlow reads / pure helpers; written fields are @Volatile.
-        val baseSystemPrompt = withContext(Dispatchers.Default) { buildSystemPrompt() }
-        val systemPrompt = wrapSystemPromptForOAuth(provider, baseSystemPrompt)
+        val systemPrompt = withContext(Dispatchers.IO) { buildMemoryDeliveryPrompt() }
 
         // T145: claim the streaming flag synchronously before launching
         // the streamJob so a concurrent send/retry tap is rejected by the

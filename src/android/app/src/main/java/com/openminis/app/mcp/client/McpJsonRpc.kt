@@ -2,6 +2,7 @@ package com.openminis.app.mcp.client
 
 import com.openminis.app.provider.NonFiniteJson
 import com.openminis.app.provider.ssePayloads
+import com.openminis.app.tools.ToolOutputPolicy
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
@@ -212,7 +213,7 @@ object McpJsonRpc {
     data class McpResultContext(
         val serverName: String,
         val toolName: String,
-        val saveOutput: ((fullText: String) -> String)? = null,
+        val saveOutput: ((fullText: String) -> String?)? = null,
     )
 
     /**
@@ -223,11 +224,9 @@ object McpJsonRpc {
      * render their text or JSON. `isError: true` results are surfaced as
      * failures by the caller.
      *
-     * With [ctx], the combined text passes through [McpOutputLimit] (pi
-     * `mcp/src/output-limit.ts`): text over 20KB is cut in the middle, the
-     * warning line carries the token estimate and the total line count, and
-     * the full text lands in a session spill file the model can page back with
-     * `file_read` offset/limit.
+     * With [ctx], [McpOutputLimit] uses the shared spill preview and also
+     * checks MCP's 20 KiB byte limit. A verified spill can be paged with
+     * `file_read` offset/lines.
      */
     fun formatCallResult(result: JSONObject, ctx: McpResultContext? = null): CallOutcome {
         val isError = result.optBoolean("isError", false)
@@ -272,7 +271,10 @@ object McpJsonRpc {
         // model-facing text too and gets the same limit instead of dumping a
         // huge JSON blob straight in.
         val payload = combined.ifEmpty { if (preserved.isEmpty()) structuredFallback() else "" }
-        val text = McpOutputLimit.limit(ctx.serverName, ctx.toolName, payload, preserved, ctx.saveOutput)
+        val text = McpOutputLimit.limit(
+            ctx.serverName, ctx.toolName,
+            ToolOutputPolicy.redactEnvVars(payload), preserved, ctx.saveOutput,
+        )
             .text
             .trim()
         return CallOutcome(text, isError)

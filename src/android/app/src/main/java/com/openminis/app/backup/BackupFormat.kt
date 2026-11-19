@@ -265,6 +265,8 @@ data class BackupFileIndexEntry(
      */
     val skipped: String? = null,
     val isDirectory: Boolean? = null,
+    /** Diary records only. SHA-256 of the required sidecar, or "none" for a legacy-only diary. */
+    @SerialName("memory_pair") val memoryPair: String? = null,
 ) {
     companion object {
         fun file(path: String, size: Long, sha256: String, category: BackupCategory) =

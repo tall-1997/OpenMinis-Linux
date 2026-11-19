@@ -50,9 +50,7 @@ import com.openminis.app.ui.settings.SettingsValueRow
 import com.openminis.app.util.IsoTime
 import com.openminis.app.ui.components.MinisTextButton
 /**
- * Session memory sheet: auto-injected files + op-log, with AutoFile/Write/Get
- * detail modes under [StandardChatSheet]. The back-arrow leaves a detail mode;
- * the trailing X dismisses the whole sheet (mirrors iOS SessionMemoryView).
+ * Session memory sheet: auto-injected files, archive, and memory tool records.
  */
 @Composable
 fun SessionMemorySheet(
@@ -131,6 +129,7 @@ fun SessionMemorySheet(
     ) {
         when (val m = mode) {
             MemorySheetMode.List -> ListBody(
+                archive = { MemoryArchiveRow(memoryRepository) },
                 autoItems = autoItems,
                 toolRecords = toolRecords,
                 onAutoItemClick = { item ->
@@ -300,6 +299,7 @@ private fun DetailToolbar(
 
 @Composable
 private fun ListBody(
+    archive: @Composable () -> Unit,
     autoItems: List<AutoItem>,
     toolRecords: List<MemoryToolRecord>,
     onAutoItemClick: (AutoItem) -> Unit,
@@ -369,22 +369,12 @@ private fun ListBody(
             }
         }
 
-        // ── Section 2: Memory diary (not a setting — injected logs) ──
-        if (sections.diary.isNotEmpty()) {
-            item {
-                SettingsSection(
-                    header = stringResource(R.string.memory_section_diary),
-                    footer = stringResource(R.string.memory_section_diary_footer),
-                ) {
-                    sections.diary.forEachIndexed { index, entry ->
-                        SettingsValueRow(
-                            title = entry.name,
-                            value = entry.detail,
-                            onClick = { onAutoItemClick(entry) },
-                            showDivider = index < sections.diary.size - 1,
-                        )
-                    }
+        item {
+            SettingsSection(header = stringResource(R.string.memory_section_diary)) {
+                for (entry in sections.diary) {
+                    SettingsValueRow(title = entry.name, value = entry.detail, onClick = { onAutoItemClick(entry) })
                 }
+                archive()
             }
         }
 

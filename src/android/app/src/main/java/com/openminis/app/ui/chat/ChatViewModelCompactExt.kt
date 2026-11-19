@@ -2,603 +2,171 @@ package com.openminis.app.ui.chat
 
 import android.util.Log
 import androidx.lifecycle.viewModelScope
+import com.openminis.app.R
+import com.openminis.app.data.CompactSliceBoundaries
+import com.openminis.app.data.repository.MemorySediment
+import com.openminis.app.data.repository.commitCompactPrefix
+import com.openminis.app.data.repository.loadCompactSource
 import com.openminis.app.logging.AppLogger
-import com.openminis.app.data.db.CompactMarkerEntity
-import com.openminis.app.data.model.AgentContentPart
-import com.openminis.app.data.model.LLMMessage
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import com.openminis.app.R
 
-/**
- * [T-android-auto-compact-inloop] Compact the session.
- *
- * [allowDuringProcessing] lets the in-loop guard in [runAgentLoop] compact
- * BETWEEN agent iterations, where `_isStreaming` is legitimately true. All
- * user-initiated paths keep the default (false) so the "can't compact while
- * a turn is running" guard is unchanged for them. Re-entrancy is still
- * covered by [_isCompacting]. Mirrors iOS f70ac173.
- *
- * [onFinished] fires on the IO coroutine once the compaction attempt has
- * settled (success or failure), so the loop can await it before issuing the
- * next API call — the function itself is fire-and-forget.
- */
-/**
- * Public entry: guarantees [onFinished] is invoked exactly once even when a
- * precondition rejects the request before any work is launched. The inner
- * implementation has many early returns; wrapping it here is safer than
- * threading a callback through each one, and it means an in-loop caller can
- * never hang waiting for a callback that was skipped.
- */
+/** Manual compaction blocks an active turn; the agent loop may compact between iterations. */
 internal fun ChatViewModel.compactAll(
     anchorIdxOverride: Int? = null,
     allowDuringProcessing: Boolean = false,
+    throughId: String? = null,
     onFinished: ((Boolean) -> Unit)? = null,
 ) {
-    var started = false
-    compactAllImpl(anchorIdxOverride, allowDuringProcessing, onFinished) { started = true }
-    if (!started) onFinished?.invoke(false)
-}
-
-private inline fun ChatViewModel.compactAllImpl(
-    anchorIdxOverride: Int?,
-    allowDuringProcessing: Boolean,
-    noinline onFinished: ((Boolean) -> Unit)?,
-    markStarted: () -> Unit,
-) {
-    AppLogger.info(ChatViewModel.TAG, "[Compact] compactAll() invoked streaming=${_isStreaming.value} compacting=${_isCompacting.value} historySize=${agentHistory.size} anchorOverride=$anchorIdxOverride inLoop=$allowDuringProcessing")
+    fun reject(message: String) {
+        appendSystemInfo(message, "compact")
+        onFinished?.invoke(false)
+    }
     if (_isStreaming.value && !allowDuringProcessing) {
-        AppLogger.info(ChatViewModel.TAG, "[Compact] aborted: stream in progress")
-        appendSystemInfo(
-            text = context.getString(R.string.vm_compact_in_progress_blocked),
-            iconKind = "compact",
-        )
+        reject(context.getString(R.string.vm_compact_in_progress_blocked))
         return
     }
-    if (_isCompacting.value) {
-        AppLogger.info(ChatViewModel.TAG, "[Compact] aborted: another compact already in flight")
-        appendSystemInfo(
-            text = context.getString(R.string.vm_compact_already_running),
-            iconKind = "compact",
-        )
-        return
-    }
-    val provider = currentProvider ?: run {
-        appendSystemInfo(context.getString(R.string.vm_compact_no_provider), "compact")
-        return
-    }
-    val history = agentHistory.toList()
-    if (history.isEmpty()) {
-        appendSystemInfo(context.getString(R.string.vm_compact_empty_session), "compact")
-        return
-    }
-    // [GH#325] Compact is an explicit user action (or an in-loop recovery of
-    // a live session), not a delete: mark the session retained so the exit
-    // cleanup cannot remove its row + workspace if the tail becomes empty.
-    markSessionExplicitlyEmptied("compact")
-    // ─── v2 unified anchor model ───────────────────────────────────
-    //
-    // anchor = last active agentHistory entry. The compacted range is
-    // `[prev marker anchor + 1, anchor]` (or `[0, anchor]` if no prev),
-    // so each compact "extends" the latest summary forward to cover all
-    // new turns. effectiveAgentHistory then re-injects the LAST N
-    // user-text turns LEADING UP TO the anchor as fresh context, so the
-    // model still sees recent verbatim content alongside the summary.
-    //
-    // Mirrors iOS post-Phase-v2: anchor = last active message, no
-    // "auto-keep tail" baked into the compacted range — that's a
-    // read-side decoration done by effectiveAgentHistory.
-    //
-    // anchor must be a persisted entry (have a non-null dbMessageId).
-    // The strict iOS check also requires id ∈ rawMessages DB, but DAO
-    // is suspend and we'd have to relocate range calculation into the
-    // launch below. As a compromise we do the dbMessageId-non-empty
-    // pre-check here (catches most stale-id cases at this stage), and
-    // do the rawDbIds-membership check inside the launch before the
-    // marker is written. Mirrors iOS AIChatViewModel+Compaction.swift:
-    // 644-657 "walk back through agentHistory looking for dbMessageId
-    // AND allRaw.contains" — split across two phases to honor suspend
-    // boundaries.
-    val anchorIdx: Int = if (anchorIdxOverride != null) {
-        // compactBefore() supplied a specific anchor — walk back from
-        // there to the closest entry with a dbMessageId (mirrors the
-        // tail-walk-back logic but bounded to [0..override]).
-        var i = anchorIdxOverride.coerceIn(0, history.lastIndex)
-        while (i >= 0 && history[i].dbMessageId.isNullOrEmpty()) i -= 1
-        i
-    } else {
-        // compactAll() — walk back from the tail to the closest
-        // persisted entry. iOS compactAll calls compactBefore with the
-        // last active UI message; we go through agentHistory directly
-        // since Android's agentHistory and UI list are tighter-coupled.
-        var i = history.lastIndex
-        while (i >= 0 && history[i].dbMessageId.isNullOrEmpty()) i -= 1
-        i
-    }
-    if (anchorIdx < 0) {
-        appendSystemInfo("Cannot compact: no persisted messages yet.", "compact")
-        return
-    }
-
-    // Slice to compact = (prev marker's anchor + 1) … anchorIdx inclusive.
-    // For v2 prev markers, lastCompactedMessageId IS the prev anchor —
-    // start at prevIdx + 1. For v1 prev markers, firstKeptMessageId points
-    // at "first kept" — start AT prevIdx (it was exclusive on right edge).
-    val prev = _cachedLatestMarker
-    val effectiveStartIdx: Int = if (prev == null) {
-        0
-    } else {
-        val prevAnchorOrFirstKept: String? = if (prev.version >= 2) {
-            prev.lastCompactedMessageId?.takeIf { it.isNotEmpty() }
-        } else {
-            prev.firstKeptMessageId?.takeIf { it.isNotEmpty() }
-                ?: prev.boundaryMessageId?.takeIf { it.isNotEmpty() }
-        }
-        val prevIdx = prevAnchorOrFirstKept?.let { id ->
-            history.indexOfFirst { it.dbMessageId == id }
-        } ?: -1
-        if (prevIdx < 0) 0   // prev anchor not in current history — restart from top
-        else if (prev.version >= 2) prevIdx + 1
-        else prevIdx
-    }
-    if (effectiveStartIdx > anchorIdx) {
-        appendSystemInfo(context.getString(R.string.vm_compact_already_compacted), "compact")
-        return
-    }
-    // [T-compact-preserves-tool-pairs] Boundaries must never split a
-    // tool_use/tool_result pair — a dangling half 400s the next request.
-    val (sliceStart, sliceAnchor) = preserveToolPairsAtBoundaries(history, effectiveStartIdx, anchorIdx)
-    if (sliceAnchor < effectiveStartIdx) {
-        // The pair walks dragged the anchor below the previous marker's start:
-        // honoring it would move the marker BACKWARD and re-compact already
-        // covered turns. Abort — the in-loop guard retries on fresh data.
-        appendSystemInfo(context.getString(R.string.vm_compact_already_compacted), "compact")
-        return
-    }
-    val toCompact = history.subList(sliceStart, sliceAnchor + 1)
-    if (toCompact.isEmpty()) {
-        appendSystemInfo(context.getString(R.string.vm_compact_nothing_to_compact), "compact")
-        return
-    }
-    // Past every precondition — from here the launch below owns the
-    // onFinished callback.
-    markStarted()
-    _isCompacting.value = true
-    // [T-android-compact-runaway] Size the wall-clock budget off the actual
-    // transcript, so a long first compaction is not cut off by a limit
-    // tuned for a short one. Measured on the same truncated transcript the
-    // request will carry, not the raw history.
-    val transcriptChars = buildConversationTextForSummary(toCompact).length
-    val timeoutMs = ChatViewModel.compactTimeoutMsFor(transcriptChars)
-    compactCallsIssued.set(0)
     val stages = compactStagePlan()
-    _compactProgress.value = ChatViewModel.CompactProgress(
-        startedAtMs = System.currentTimeMillis(),
-        depth = 0,
-        callsIssued = 0,
-        callBudget = ChatViewModel.COMPACT_STAGE_BUDGET,
-        timeoutSeconds = (timeoutMs / 1000L).toInt(),
-        stage = 1,
-        stageBudget = stages.size.coerceAtLeast(1),
-        stageKind = stages.firstOrNull()?.kind ?: "session",
-        modelLabel = stages.firstOrNull()?.label ?: "session",
-        nextHint = stages.firstOrNull()?.nextHint ?: "",
-    )
-    AppLogger.info(
-        ChatViewModel.TAG,
-        "[Compact] starting two-shot: ${toCompact.size} entries, ${transcriptChars} transcript chars, " +
-            "timeout=${timeoutMs / 1000}s, stages=${stages.joinToString { it.kind }}",
-    )
-    compactJob = viewModelScope.launch(Dispatchers.IO) {
-        // [T-android-compact-queued-drain] Only a SUCCESSFUL compact kicks
-        // the queued-prompt drain below; failure/cancel/empty-summary paths
-        // keep today's behavior (queued bubbles stay pending + cancellable).
-        var compactSucceeded = false
-        // Distinguishes "we gave up on time" from other failures so the
-        // user-facing message can say so and invite a retry.
-        var timedOut = false
+    if (stages.isEmpty()) {
+        reject(context.getString(R.string.vm_compact_no_provider))
+        return
+    }
+    val sid = activeSessionId
+    if (sid.isBlank()) {
+        reject(context.getString(R.string.vm_compact_empty_session))
+        return
+    }
+    val bound = throughId ?: anchorIdxOverride?.let { index -> agentHistory.getOrNull(index)?.dbMessageId }
+    if (anchorIdxOverride != null && bound.isNullOrBlank()) {
+        reject("Cannot compact: the requested boundary isn't persisted.")
+        return
+    }
+    if (!_isCompacting.compareAndSet(false, true)) {
+        reject(context.getString(R.string.vm_compact_already_running))
+        return
+    }
+    markSessionExplicitlyEmptied("compact")
+    compactCallsIssued.set(0)
+    // Enter try/finally even when cancellation arrives before the dispatcher runs.
+    compactJob = viewModelScope.launch(Dispatchers.IO, start = CoroutineStart.UNDISPATCHED) {
+        var succeeded = false
+        var timeoutMs = 0L
         try {
-            val existing = _compactSummary.value
-            val outcome = runTwoShotCompact(
-                messages = toCompact,
-                previousSummary = existing,
-                stages = stages,
-                timeoutMs = timeoutMs,
-            )
-            val summary = outcome.summary
-            // [T-compact-reduced-anchor] A reduced retry summarizes only the
-            // OLDEST prefix. The marker may advance only that far; the rest
-            // of the range stays active and verbatim.
-            val coveredCount = outcome.coveredMessages.coerceIn(1, toCompact.size)
-            // [T-compact-preserves-tool-pairs] The marker never moves backward:
-            // a reduced retry that covers only the pulled-back prefix must not
-            // lower the anchor below what the previous compact already covered.
-            var coveredEndIdx = (sliceStart + coveredCount - 1)
-                .coerceIn(sliceStart, sliceAnchor)
-                .coerceAtLeast(effectiveStartIdx)
-            // [T-compact-preserves-tool-pairs] The reduced-retry cut can land
-            // MID-PAIR: coveredEndIdx on a tool_use whose carrier sits at +1
-            // would open the next projection on a dangling half. FORWARD-snap:
-            // extend to include the carrier (still ≤ sliceAnchor; monotonic ≥
-            // effectiveStartIdx holds — the snap only ever increases). A
-            // carrier row at coveredEndIdx needs NO snap: both halves are
-            // inside the summarized range, and the next projection starts
-            // AFTER the whole pair.
-            while (coveredEndIdx < sliceAnchor &&
-                history[coveredEndIdx].role == LLMMessage.Role.ASSISTANT &&
-                history.getOrNull(coveredEndIdx + 1)?.contentParts?.any { it is AgentContentPart.ToolResult } == true
-            ) {
-                coveredEndIdx += 1
+            currentCoroutineContext().ensureActive()
+            val source = chatRepository.loadCompactSource(
+                sid, bound, allowTerminatedTail = !_isStreaming.value &&
+                    !com.openminis.app.service.SessionActivityTracker.isActive(sid),
+            ) { row, raw ->
+                decodeCompactMessage(row.id, row.role, raw, mediaStore.mediaBaseDir)
             }
-            if (summary.isEmpty()) {
-                withContext(Dispatchers.Main) {
-                    appendSystemInfo("Compaction produced no output — try again later.", "compact")
-                }
-                return@launch
-            }
-
-            val sid = realSessionId.ifEmpty { sessionId }
-            // v2 marker: lastCompactedMessageId IS the anchor — single
-            // source of truth. The anchor we resolved above is guaranteed
-            // to have a persisted dbMessageId. Legacy fields (firstKept /
-            // boundary / sortOrder) stay null/MAX so a downgraded reader
-            // sees "everything compacted, nothing kept" as a graceful
-            // fallback rather than a stale boundary.
-            // Re-resolve anchor: now that we're inside an IO coroutine
-            // we can read the messages DB to verify the dbMessageId is
-            // actually persisted, not just set on the in-memory
-            // LLMMessage. iOS does this belt-and-suspenders check
-            // (AIChatViewModel+Compaction.swift:644-657). Walk back from
-            // the original anchorIdx until we find an entry whose id is
-            // both non-empty AND present in rawDbIds.
-            val rawDbIds: Set<String> = try {
-                chatRepository.loadMessageIds(sid)
-            } catch (e: Exception) {
-                Log.w(ChatViewModel.TAG, "[Compact] loadMessages for raw-id verify failed: ${e.message}")
-                emptySet()
-            }
-            val verifiedAnchorIdx: Int = if (rawDbIds.isEmpty()) {
-                // DB read failed; trust the in-memory walk-back result.
-                coveredEndIdx
-            } else {
-                var i = coveredEndIdx
-                // Never walk back past the start of the range: an anchor
-                // before it would mark already-active messages as compacted.
-                // Marker floor: never anchor below the previous compact start
-                // ([T-compact-preserves-tool-pairs] the pair walk may have pulled
-                // sliceStart below it — the MARKER must still advance monotonically).
-                while (i >= effectiveStartIdx) {
-                    val id = history[i].dbMessageId
-                    if (!id.isNullOrEmpty() && id in rawDbIds) break
-                    i -= 1
-                }
-                i
-            }
-            if (verifiedAnchorIdx < effectiveStartIdx) {
-                Log.w(ChatViewModel.TAG, "[Compact] No agentHistory entry in the covered range has a DB-persisted dbMessageId; aborting")
-                withContext(Dispatchers.Main) {
-                    appendSystemInfo("Compact failed: could not anchor to a persisted message.", "compact")
-                }
-                return@launch
-            }
-            if (verifiedAnchorIdx != coveredEndIdx) {
-                AppLogger.warning(
-                    ChatViewModel.TAG,
-                    "[Compact] anchor walked back within the covered prefix " +
-                        "from idx=$coveredEndIdx to idx=$verifiedAnchorIdx; " +
-                        "messages after it stay active.",
-                )
-            }
-            val lastCompactedDbId = history[verifiedAnchorIdx].dbMessageId
-                ?: run {
-                    Log.w(ChatViewModel.TAG, "[Compact] verified anchor at idx=$verifiedAnchorIdx lost dbMessageId; aborting")
-                    withContext(Dispatchers.Main) {
-                        appendSystemInfo("Compact failed: anchor message id unavailable.", "compact")
-                    }
-                    return@launch
-                }
-            val marker = CompactMarkerEntity(
-                id = java.util.UUID.randomUUID().toString(),
-                sessionId = sid,
-                summary = summary,
-                firstKeptSortOrder = Int.MAX_VALUE,   // legacy field; v2 ignores
-                compactedCount = coveredCount,
-                createdAt = System.currentTimeMillis(),
-                uiBoundarySortOrder = null,
-                boundaryMessageId = null,
-                firstKeptMessageId = null,
-                lastCompactedMessageId = lastCompactedDbId,
-                version = 2,
-                // [T-compact-chunk-pool] Roll this pass's summary into
-                // the retrieval pool carried by the previous marker, so
-                // earlier material stays retrievable instead of being
-                // folded into one ever-changing blob.
-                summaryChunks = ChatViewModel.appendSummaryChunk(prev?.summaryChunks, summary),
-            )
-            val markerPersisted = runCatching {
-                chatRepository.dao.insertCompactMarker(marker)
-                true
-            }.getOrElse {
-                Log.w(ChatViewModel.TAG, "Failed to persist compact marker: ${it.message}")
-                false
-            }
-            if (!markerPersisted) {
-                withContext(Dispatchers.Main) {
-                    appendSystemInfo("Compaction failed: could not save the compact marker.", "compact")
-                }
-                return@launch
-            }
-            _compactSummary.value = summary
-            stateHydrationPending = true  // [T-state-hydration] folded history lost the state copy
-            // Keep the marker in memory so effectiveAgentHistory() can
-            // resolve the boundary on the very next outgoing turn.
-            // Mirrors iOS `cachedLatestMarker = marker`.
-            _cachedLatestMarker = marker
-            // [T-compact-metadata] codex records `retained_image_count` /
-            // `compaction_summary_tokens` next to its summary; these are the
-            // equivalents worth auditing. Logged rather than stored so the marker
-            // schema does not grow a diagnostics column.
-            AppLogger.info(
-                ChatViewModel.TAG,
-                "[CompactMeta] summaryChars=${summary.length} summaryTokens=${summary.length / 4} " +
-                    "compacted=${coveredCount} of ${toCompact.size} keepTurns=${ChatViewModel.COMPACT_KEEP_RECENT_USER_TURNS} " +
-                    "detachedTail=${DETACHED_TAIL_MESSAGES} chunks=${marker.summaryChunks?.length ?: 0}",
-            )
-            // [T-memory-sediment] Leave a searchable trace of what this compaction
-            // folded away. Gated on the memory toggle, de-duplicated by payload.
-            if (_memoryEnabled.value) {
-                runCatching {
-                    val written = com.openminis.app.data.repository.MemorySediment
-                        .recordCompaction(
-                            sessionMemoryRepo(),
-                            summary,
-                            coveredCount,
-                        )
-                    if (written != null) {
-                        AppLogger.info(ChatViewModel.TAG, "[CompactMeta] sediment: $written")
-                    }
-                }.onFailure {
-                    // Never let a memory side-effect fail a successful compaction.
-                    AppLogger.warning(ChatViewModel.TAG, "[CompactMeta] sediment failed: ${it.message}")
-                }
-            }
-            // [T-android-compact-delivery] Verify the marker actually
-            // delivers: the next outgoing projection must resolve the
-            // boundary (anchor found in agentHistory). A marker that
-            // cannot be resolved makes effectiveAgentHistory() degrade
-            // to the FULL history — the compaction silently does nothing
-            // and the next request re-sends everything (the exact
-            // "compact didn't help" symptom). Fail loudly here instead.
-            val anchorId = marker.lastCompactedMessageId
-            val anchorResolved = marker.version < 2 || anchorId.isNullOrEmpty() ||
-                agentHistory.any { it.dbMessageId == anchorId }
-            if (!anchorResolved) {
-                Log.w(
-                    ChatViewModel.TAG,
-                    "[Compact] marker ${marker.id.take(8)} persisted but anchor " +
-                        "${anchorId?.take(8)} does not resolve (agentHistory=${agentHistory.size}); " +
-                        "next request would carry the full history",
-                )
-                withContext(Dispatchers.Main) {
-                    appendSystemInfo(
-                        "Compaction saved, but the boundary could not be resolved; the next request still carries the full history.",
-                        "compact",
-                    )
-                }
-            }
-            // Fresh anchor sits inside the window by construction.
-            _compactMarkerDetached = false
-            // [T-android-compact-stale-usage] Same stale-reading hazard the
-            // in-loop path fixed ([T-android-auto-compact-inloop]): the last
-            // usage chunk describes the PRE-compaction payload, and
-            // refreshContextUsage() prefers it over the estimate. Zero it so
-            // the next reading comes from the effective-history estimate, and
-            // refresh now — the usage sheet / context ring otherwise keep
-            // reporting the pre-compact size until some future turn completes
-            // (observed on device: sheet showed 659.5K after a compact that
-            // took the next-turn payload to ~115K).
-            _lastTurnContextTokens.value = 0
-            withContext(Dispatchers.Main) {
-                refreshContextUsage()
-                // Gray out everything in the compacted range; the kept
-                // tail (last N user turns + tool/assistant follow-ups)
-                // stays full opacity. Determined by walking _messages
-                // until we pass the row whose id == lastCompactedDbId.
-                //
-                // Also drop any prior compact-divider system rows — a
-                // session shows at most one divider (the latest marker).
-                // Those old dividers are stored as system messages with
-                // a "compact" iconKind in toolBlocks[0].toolName.
-                val cutoffId: String = lastCompactedDbId
-                var passedCutoff = false   // anchor is guaranteed non-null in v2
-                val cleaned = _messages.value
-                    .filterNot { msg ->
-                        // Drop prior compact-divider rows; appendSystemInfo
-                        // below will re-add the new one.
-                        msg.role == "system" &&
-                            msg.toolBlocks.firstOrNull()?.toolName == "compact"
-                    }
-                    .map { msg ->
-                        if (msg.role == "system") msg
-                        else if (passedCutoff) msg
-                        else {
-                            val grayed = if (msg.isCompactedHistory) msg
-                                else msg.copy(isCompactedHistory = true)
-                            if (msg.id == cutoffId) passedCutoff = true
-                            grayed
-                        }
-                    }
-                // T84: count UI bubbles in this pass's compacted range.
-                // Filters: role != system (dividers/notices don't count).
-                // Range: everything up to and including the cutoff row,
-                // since the kept-tail starts immediately after.
-                // Falls back to "all non-system" when cutoffId is null
-                // (compact-everything path), matching iOS dividerInsertIdx
-                // == messages.count behavior.
-                //
-                // We deliberately do NOT exclude `isCompactedHistory` rows.
-                // Back-to-back compacts (or compact after restoring a prior
-                // marker on session reload) leave the in-range rows already
-                // grayed; excluding them produced "0 messages compacted"
-                // even though `toCompact.size` was nonzero. The divider's
-                // count should reflect the size of THIS pass's range, not
-                // the delta of newly-grayed rows.
-                val cutoffIdx = cleaned.indexOfLast { it.id == cutoffId }
-                val compactedUICount = if (cutoffIdx < 0) {
-                    cleaned.count { it.role != "system" }
+            val boundaries = CompactSliceBoundaries(source.messages, protectPending = true)
+            val end = boundaries.atOrBefore(source.messages.size)
+            if (end == 0) {
+                val text = if (source.limited || source.messages.isNotEmpty()) {
+                    "Cannot compact the oldest uncovered messages: a body is unavailable or a tool round is incomplete. History was kept."
                 } else {
-                    cleaned.take(cutoffIdx + 1).count { it.role != "system" }
+                    context.getString(R.string.vm_compact_nothing_to_compact)
                 }
-                _messages.value = cleaned
-                AppLogger.info(ChatViewModel.TAG, "[Compact] divider: $compactedUICount UI bubbles compacted (history entries: ${toCompact.size})")
-                appendSystemInfo(
-                    text = "$compactedUICount messages compacted",
-                    iconKind = "compact",
-                    payload = summary,
-                )
+                withContext(Dispatchers.Main) { appendSystemInfo(text, "compact") }
+                return@launch
             }
-            compactSucceeded = true
-            // [T-recall-turn-dedup] The compacted context no longer carries the
-            // announced block — forget it so the same memories can be
-            // re-announced on the next turn.
-            // [T-recall-once] Delivered-memory bookkeeping survives compaction:
-            // a compacted note that is re-selected would be a repeated injection.
+            val input = source.messages.take(end)
+            timeoutMs = ChatViewModel.compactTimeoutMsFor(buildConversationTextForSummary(input).length)
+            _compactProgress.value = ChatViewModel.CompactProgress(
+                startedAtMs = System.currentTimeMillis(),
+                depth = 0,
+                callsIssued = 0,
+                callBudget = ChatViewModel.COMPACT_STAGE_BUDGET,
+                timeoutSeconds = (timeoutMs / 1000L).toInt(),
+                stage = 1,
+                stageBudget = stages.size,
+                stageKind = stages.first().kind,
+                modelLabel = stages.first().label,
+                nextHint = stages.first().nextHint,
+            )
+            val outcome = runTwoShotCompact(input, source.previousSummary, stages, timeoutMs)
+            val coveredCount = outcome.coveredMessages
+            check(coveredCount in 1..input.size && boundaries.isClosed(coveredCount)) {
+                "Summary did not cover a complete persisted prefix."
+            }
+            currentCoroutineContext().ensureActive()
+            // Beyond this point, once Room commits we must publish the same marker
+            // even if the user cancels. Room failure leaves both caches untouched.
+            withContext(NonCancellable) {
+                val marker = chatRepository.commitCompactPrefix(
+                    source, coveredCount, outcome.summary,
+                    appendChunks = { preceding, text ->
+                        // [P3-3] Same degradation as the read side: trim an
+                        // over-budget legacy pool to its newest fitting records
+                        // instead of dropping every earlier snapshot.
+                        appendSummaryChunk(fitSummaryChunks(preceding), text)
+                    },
+                    mergeAssets = ChatCompactAssets::merge,
+                )
+                succeeded = true
+                withContext(Dispatchers.Main) publish@{
+                    if (activeSessionId != sid) return@publish
+                    _cachedLatestMarker = marker
+                    _compactSummary.value = marker.summary
+                    stateHydrationPending = true
+                    _lastTurnContextTokens.value = 0
+                    val coveredIds = source.rows.take(coveredCount).mapTo(HashSet()) { it.id }
+                    applyNewCompactDivider(marker, coveredIds)
+                    if (source.limited || coveredCount < source.messages.size) {
+                        appendSystemInfo("Some messages were not summarized and are still active.", "compact")
+                    }
+                    refreshContextUsage()
+                }
+            }
+            if (_memoryEnabled.value && activeSessionId == sid) {
+                try {
+                    MemorySediment.recordCompaction(sessionMemoryRepo(), outcome.summary, coveredCount)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    AppLogger.warning(ChatViewModel.TAG, "[Compact] sediment failed: ${e.message}")
+                }
+            }
         } catch (e: TimeoutCancellationException) {
-            // [T-android-compact-runaway] MUST precede the CancellationException
-            // arm — TimeoutCancellationException extends it, so the generic
-            // re-throw would otherwise swallow our own timeout and surface it
-            // as a silent cancel with no message.
-            timedOut = true
-            val elapsed = (timeoutMs / 1000L).toInt()
-            val calls = compactCallsIssued.get()
-            Log.w(ChatViewModel.TAG, "[Compact] timed out after ${elapsed}s ($calls model call(s) issued)")
             withContext(Dispatchers.Main) {
-                appendSystemInfo(
-                    text = context.getString(R.string.vm_compaction_timed_out, elapsed, calls),
-                    iconKind = "compact",
+                if (activeSessionId == sid) appendSystemInfo(
+                    context.getString(R.string.vm_compaction_timed_out, (timeoutMs / 1000L).toInt(), compactCallsIssued.get()),
+                    "compact",
                 )
             }
         } catch (e: CancellationException) {
-            // User-initiated (cancelCompact) or scope teardown. Tell the
-            // user only if they are still around to read it; the `finally`
-            // below releases the lock either way.
-            if (compactJob?.isCancelled == true) {
-                runCatching {
-                    withContext(NonCancellable + Dispatchers.Main) {
-                        appendSystemInfo("Compaction cancelled.", "compact")
-                    }
-                }
+            if (!succeeded) withContext(NonCancellable + Dispatchers.Main) {
+                if (activeSessionId == sid) appendSystemInfo("Compaction cancelled.", "compact")
             }
             throw e
         } catch (e: Exception) {
             Log.w(ChatViewModel.TAG, "Compact failed", e)
             withContext(Dispatchers.Main) {
-                appendSystemInfo(
-                    text = context.getString(R.string.vm_compaction_failed, e.message ?: e.javaClass.simpleName),
-                    iconKind = "compact",
+                if (activeSessionId == sid) appendSystemInfo(
+                    context.getString(R.string.vm_compaction_failed, e.message ?: e.javaClass.simpleName),
+                    "compact",
                 )
             }
         } finally {
-            _isCompacting.value = false
             _compactProgress.value = null
-            AppLogger.info(
-                ChatViewModel.TAG,
-                "[Compact] finished: success=$compactSucceeded timedOut=$timedOut " +
-                    "calls=${compactCallsIssued.get()}",
-            )
-            // [T-android-auto-compact-inloop] Signal the awaiting in-loop
-            // caller. In `finally` so a thrown/cancelled compaction can
-            // never strand the agent loop waiting on a callback.
-            onFinished?.invoke(compactSucceeded)
+            _isCompacting.value = false
+            onFinished?.invoke(succeeded)
         }
-        // [T-android-compact-queued-drain] A successful compact must let
-        // any queued prompts proceed — previously nothing re-triggered the
-        // drain after compact (loop-end / cancel / tool-boundary are the
-        // only drain triggers), so a prompt sitting in the queue when a
-        // compact ran stayed in the dashed "queued" state forever. Reuse
-        // resumeQueueAfterCancel: it re-checks queue-non-empty + not-
-        // streaming + not-compacting after its grace delay (so an ✕ tap at
-        // the compact-finish instant is a clean no-op), refreshes OAuth,
-        // and drains through the normal stream-slot machinery — no new
-        // reentrancy path. Runs after `finally` so isCompacting is already
-        // false. Mirrors the iOS fix for the same report.
-        if (compactSucceeded && _promptQueue.value.isNotEmpty()) {
-            AppLogger.info(ChatViewModel.TAG, "[Compact] success with ${_promptQueue.value.size} queued prompt(s) — kicking drain")
-            resumeQueueAfterCancel()
-        }
+        if (succeeded && activeSessionId == sid && _promptQueue.value.isNotEmpty()) resumeQueueAfterCancel()
     }
 }
 
-/**
- * [T-android-auto-compact-inloop] Run [compactAll] with the in-loop flag and
- * suspend until it settles. Returns whether it actually compacted.
- *
- * `compactAll` is fire-and-forget (it launches its own IO coroutine), so the
- * loop cannot simply call it and continue — the next API call would read the
- * pre-compaction history and the guard would fire again immediately.
- * (Extracted from ChatViewModel.kt for the architecture line ceiling; the
- * [T-compaction-cascade] pre-step tier calls this too.)
- */
-internal suspend fun ChatViewModel.awaitCompaction(): Boolean =
-    kotlinx.coroutines.suspendCancellableCoroutine { cont ->
-        var resumed = false
-        compactAll(allowDuringProcessing = true) { ok ->
-            // compactAll guarantees exactly one callback, but guard anyway:
-            // resuming a continuation twice throws.
-            if (!resumed) {
-                resumed = true
-                if (cont.isActive) cont.resume(ok) { _, _, _ -> }
-            }
-        }
+/** Suspend until the model pass and the verified marker write have both settled. */
+internal suspend fun ChatViewModel.awaitCompaction(): Boolean = suspendCancellableCoroutine { cont ->
+    compactAll(allowDuringProcessing = true) { ok ->
+        if (cont.isActive) cont.resume(ok) { _, _, _ -> }
     }
-
-/**
- * [T-compact-preserves-tool-pairs] Adjusts the compact boundaries so a
- * tool_use/tool_result pair is never split across them (OpenHarness
- * `_split_preserving_tool_pairs`, dsh `selectCompactableRange`):
- *
- *  - Kept-tail start (anchorIdx+1): if the kept region would OPEN on a
- *    tool_result carrier, its paired tool_use is inside the summarized range
- *    and the next request carries a dangling tool_result — providers
- *    (Anthropic schema-first) reject that conversation shape outright. Pull
- *    the anchor back until the kept region opens on a non-carrier, so the
- *    pair stays kept together.
- *  - Slice start (startIdx): if the summarized range would OPEN on a
- *    tool_result carrier, its tool_use lives in the PREVIOUS summary — pull
- *    the start back so the whole pair is summarized together instead of the
- *    result alone.
- *
- * Both walks only ever move the boundary outward past whole pair halves;
- * the returned range is never empty (start ≤ anchor preserved by the first
- * walk's `a > s` condition). Pure — safe to unit test.
- */
-internal fun preserveToolPairsAtBoundaries(
-    history: List<LLMMessage>,
-    startIdx: Int,
-    anchorIdx: Int,
-): Pair<Int, Int> {
-    fun isToolResultCarrier(i: Int): Boolean =
-        i in history.indices &&
-            history[i].role == LLMMessage.Role.USER &&
-            history[i].contentParts.any { it is AgentContentPart.ToolResult }
-    var s = startIdx
-    var a = anchorIdx
-    // Phase 1: shrink the kept tail while it opens on a carrier.
-    while (a > s && isToolResultCarrier(a + 1)) a -= 1
-    // Phase 2: shrink the slice start while it opens on a carrier.
-    while (s > 0 && isToolResultCarrier(s)) s -= 1
-    // Phase 3: phase 2 may have moved `s` below `a`, re-opening the kept-tail
-    // carrier case phase 1 already skipped — and the degenerate single-message
-    // form (a == s) blocks the shrink entirely. Either way the only
-    // non-oscillating fix is FORWARD: extend `a` across the whole carrier run
-    // (monotonic, bounded by history.size), so use and results are summarized
-    // together and the kept region opens on a non-carrier.
-    if (isToolResultCarrier(a + 1)) {
-        while (isToolResultCarrier(a + 1)) a += 1
-    }
-    return s to a
 }

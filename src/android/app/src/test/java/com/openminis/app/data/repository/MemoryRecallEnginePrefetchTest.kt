@@ -33,7 +33,7 @@ class MemoryRecallEnginePrefetchTest {
 
     private fun seed(dir: File) {
         File(dir, "2026-11-12.md").writeText(
-            "# 项目偏好\n用户偏好安静模式\n中午的咖啡店在楼下\n数据库用 Postgres\n",
+            "# 项目偏好\n用户偏好安静模式\n中午的咖啡店在楼下\n数据库用 Postgres\n$semanticOnlyLine\n",
         )
     }
 
@@ -63,7 +63,7 @@ class MemoryRecallEnginePrefetchTest {
         seed(dir)
         val support = FakeSupport(listOf(MemoryEmbeddingSupport.SemanticHit("2026-11-12.md", semanticOnlyLine, 0.9f)))
         val engine = engine(dir, support)
-        val query = "服务器部署的问题"
+        val query = "autumn markdown"
 
         engine.prefetchSemanticForTest(query)
         val cached = engine.recallForPromptCached(query).map { it.line }
@@ -84,7 +84,7 @@ class MemoryRecallEnginePrefetchTest {
         seed(dir)
         val support = FakeSupport(listOf(MemoryEmbeddingSupport.SemanticHit("2026-11-12.md", semanticOnlyLine, 0.9f)))
         val engine = engine(dir, support)
-        val query = "服务器部署的问题"
+        val query = "autumn markdown"
 
         engine.prefetchSemanticForTest(query)
         assertTrue(engine.recallForPromptCached(query).map { it.line }.contains(semanticOnlyLine))
@@ -120,11 +120,9 @@ class MemoryRecallEnginePrefetchTest {
     @Test
     fun `no support - recallForPromptCached equals recallForPrompt on an identical engine`() = runBlocking {
         val dirA = tempDir()
-        val dirB = tempDir()
         seed(dirA)
-        seed(dirB)
         val cachedEngine = engine(dirA, support = null)
-        val plainEngine = engine(dirB, support = null)
+        val plainEngine = engine(dirA, support = null)
         val query = "用户的偏好"
 
         // The public fire-and-forget entry must be a hard no-op with no support

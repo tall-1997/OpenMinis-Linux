@@ -135,7 +135,7 @@ data class StubPreviewTailRow(
 )
 
 @Dao
-interface ChatDao : MessageHeadDao, ChatTruncationDao, SessionBindingDao, UsageStatsDao {
+interface ChatDao : MessageHeadDao, ChatTruncationDao, SessionBindingDao, UsageStatsDao, CompactCoverageDao {
     // Sessions
     @Query("SELECT * FROM sessions ORDER BY updated_at DESC")
     fun observeSessions(): Flow<List<ChatSessionEntity>>

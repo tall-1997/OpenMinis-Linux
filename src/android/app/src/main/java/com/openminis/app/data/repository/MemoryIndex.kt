@@ -40,9 +40,18 @@ object MemoryIndex {
     /** Chars of the first entry kept as a preview. */
     internal const val PREVIEW_CHARS = 80
 
-    private val DAILY = Regex("""^\d{4}-\d{2}-\d{2}\.md$""")
+    private val DAILY = MemoryDiaryFormat.dateFile
+    private val ENTRY_MARK = MemoryDiaryFormat.marker
 
-    private val ENTRY_MARK = Regex("""(?m)^<!-- \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} -->""")
+    internal data class TrackedFragment(val text: String, val entries: List<MemoryDeliverySpan> = emptyList())
+
+    /** The note follows existing rows; all entry offsets remain relative to the original prefix. */
+    internal fun appendBudgetNote(toc: TrackedFragment?, note: String?): TrackedFragment? = when {
+        note.isNullOrBlank() -> toc
+        toc == null -> TrackedFragment(note)
+        else -> toc.copy(text = "${toc.text}\n$note")
+    }
+    private data class IndexedDay(val row: Row, val previewRef: MemoryEntryRef?)
 
     data class Row(
         /** `YYYY-MM-DD`, also the sort key. */
@@ -69,48 +78,57 @@ object MemoryIndex {
         sharedDir: File?,
         excludeDates: Set<String>,
         maxRows: Int = MAX_ROWS,
-    ): List<Row> {
-        val byDate = LinkedHashMap<String, Row>()
-        // Shared first, session second: a later put() replaces the shared row.
+        now: Long = System.currentTimeMillis(),
+    ): List<Row> = indexedDays(sessionDir, sharedDir, excludeDates, now).take(maxRows).map { it.row }
+
+    private fun indexedDays(
+        sessionDir: File?,
+        sharedDir: File?,
+        excludeDates: Set<String>,
+        now: Long,
+    ): List<IndexedDay> {
+        val byDate = LinkedHashMap<String, IndexedDay>()
+        // Shared first, session second: a later visible session row replaces the shared row.
         for ((dir, shared) in listOf(sharedDir to true, sessionDir to false)) {
             val files = dir?.listFiles() ?: continue
             for (file in files) {
                 if (!file.isFile || !DAILY.matches(file.name)) continue
                 val date = file.name.removeSuffix(".md")
-                val row = rowFor(file, date, shared) ?: continue
-                byDate[date] = row
+                if (date in excludeDates) continue
+                val view = MemoryLifecycle.read(dir, file.name)?.active(now) ?: continue
+                if (!view.hasVisibleText()) continue
+                val entries = ENTRY_MARK.findAll(view.text).count()
+                val (preview, ref) = previewOf(view)
+                byDate[date] = IndexedDay(Row(date, entries, preview, shared), ref)
             }
         }
-        val sorted = byDate.values.sortedByDescending { it.date }
-        return sorted.filter { it.date !in excludeDates }.take(maxRows)
+        return byDate.values.sortedByDescending { it.row.date }
     }
 
-    private fun rowFor(file: File, date: String, shared: Boolean): Row? {
-        val text = runCatching { file.readText() }.getOrNull() ?: return null
-        if (text.isBlank()) return null
-        val entries = ENTRY_MARK.findAll(text).count()
-        return Row(date = date, entries = entries, preview = previewOf(text), shared = shared)
-    }
-
-    /** First line that is neither a timestamp marker nor a heading. */
-    private fun previewOf(text: String): String {
-        for (line in text.lineSequence()) {
-            val trimmed = line.trim()
-            if (trimmed.isEmpty()) continue
-            if (ENTRY_MARK.matches(trimmed)) continue
-            val cleaned = trimmed.removePrefix("#").trim()
-            if (cleaned.isEmpty()) continue
-            return if (cleaned.length <= PREVIEW_CHARS) cleaned else cleaned.take(PREVIEW_CHARS) + "…"
+    private fun previewOf(view: MemoryLifecycle.View): Pair<String, MemoryEntryRef?> {
+        for (owned in view.lines()) {
+            if (owned.isSedimentCaption()) continue
+            val (line, entry) = owned
+            val trimmed = line.removePrefix("\uFEFF").trim()
+            if (trimmed.isEmpty() || ENTRY_MARK.matches(trimmed)) continue
+            val cleaned = MemoryAuthority.stripForgedTag(trimmed.removePrefix("#").trim())
+            if (cleaned.isEmpty() || cleaned.startsWith("<!--")) continue
+            val preview = if (cleaned.length <= PREVIEW_CHARS) cleaned else memoryTextPrefix(cleaned, PREVIEW_CHARS) + "…"
+            return preview to entry?.ref
         }
-        return ""
+        return "" to null
     }
 
     /** Renders [rows]; returns null when there is nothing to index. */
-    fun render(rows: List<Row>, omitted: Int = 0): String? {
+    fun render(rows: List<Row>, omitted: Int = 0): String? =
+        renderTracked(rows.map { IndexedDay(it, null) }, omitted)?.text
+
+    private fun renderTracked(rows: List<IndexedDay>, omitted: Int): TrackedFragment? {
         if (rows.isEmpty()) return null
-        return buildString {
+        val spans = mutableListOf<MemoryDeliverySpan>()
+        val text = buildString {
             append("Older diary days (index only — call memory_get with a keyword to read one):\n")
-            for (row in rows) {
+            for ((row, ref) in rows) {
                 append("- ")
                 append(row.date)
                 append(" (")
@@ -118,13 +136,20 @@ object MemoryIndex {
                 append(if (row.entries == 1) " entry" else " entries")
                 append(if (row.shared) " · shared" else " · this chat")
                 append("): ")
-                if (row.preview.isNotEmpty()) append('"').append(row.preview).append('"')
+                if (row.preview.isNotEmpty()) {
+                    append('"')
+                    val start = length
+                    append(row.preview)
+                    if (ref != null) spans += MemoryDeliverySpan(ref, start, length)
+                    append('"')
+                }
                 appendLine()
             }
             if (omitted > 0) {
                 append("… (").append(omitted).append(" older day(s) not listed; memory_get can still search them)")
             }
         }.trimEnd()
+        return TrackedFragment(text, spans)
     }
 
     /**
@@ -136,16 +161,20 @@ object MemoryIndex {
         sharedDir: File?,
         excludeDates: Set<String>,
         maxRows: Int = MAX_ROWS,
-    ): String? {
-        val rows = rows(sessionDir, sharedDir, excludeDates, maxRows)
-        if (rows.isEmpty()) return null
-        // Recompute the omitted count so the block can say how much it hid.
-        val total = rows(sessionDir, sharedDir, excludeDates, Int.MAX_VALUE).size
-        val body = render(rows, (total - rows.size).coerceAtLeast(0)) ?: return null
-        return MemoryAuthority.withEnvelope(
-            body,
-            MemoryTrust.UNVERIFIED_CANDIDATE,
-            MemoryOrigin.AGENT,
-        )
+    ): String? = fragmentWithEntries(sessionDir, sharedDir, excludeDates, maxRows)?.text
+
+    internal fun fragmentWithEntries(
+        sessionDir: File?,
+        sharedDir: File?,
+        excludeDates: Set<String>,
+        maxRows: Int = MAX_ROWS,
+        now: Long = System.currentTimeMillis(),
+    ): TrackedFragment? {
+        val all = indexedDays(sessionDir, sharedDir, excludeDates, now)
+        val shown = all.take(maxRows)
+        val body = renderTracked(shown, all.size - shown.size) ?: return null
+        val text = MemoryAuthority.withEnvelope(body.text, MemoryTrust.UNVERIFIED_CANDIDATE, MemoryOrigin.AGENT)
+        val prefix = text.length - body.text.length
+        return body.copy(text = text, entries = body.entries.map { it.shifted(prefix) })
     }
 }

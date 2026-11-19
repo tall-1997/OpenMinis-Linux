@@ -471,18 +471,21 @@ background=true detaches the wave: this call returns a dispatch_id at once inste
     // Aligned with iOS AIChatViewModel.swift:5059-5067
     private fun memoryWriteDefinition(): AgentToolDefinition = AgentToolDefinition(
         name = "memory_write",
-        description = "Write a memory entry to today's daily log (YYYY-MM-DD.md). Memories persist across all sessions. " +
-            "Each entry is prepended with a timestamp. " +
-            "Save: user preferences, recurring patterns, key facts, project conventions, reusable knowledge. " +
+        description = "Write a memory entry to this chat's daily log (YYYY-MM-DD.md). " +
+            "Save user preferences, project conventions, key facts and reusable knowledge as durable notes. " +
+            "Only mark throwaway, temporary context as low importance. " +
             "Avoid saving passwords, API keys, tokens, or secrets unless the user explicitly confirms after being warned. " +
-            "Keep entries concise and general-purpose. GLOBAL.md is read-only (user-maintained via Settings).",
+            "GLOBAL.md is read-only (user-maintained via Settings).",
         parameters = mapOf(
-            "tool_title" to AgentToolParam("string", "A concise 5-10 word summary of what this tool call does, shown to the user (e.g. 'Save user preference for Python', 'Note today's project context'). Use the same language as the user."),
-            "content" to AgentToolParam("string", "The memory content to write. Use concise Markdown with a short heading (## Topic) and context about what was done/learned."),
-            "revision" to AgentToolParam("string", "Optional. Pass the current log revision (reported at the end of memory_get) to make the write conflict-safe; the write fails with MEMORY_CONFLICT instead of overwriting a concurrent update."),
+            "tool_title" to AgentToolParam("string", "A concise 5-10 word summary of what this tool call does, shown to the user. Use the same language as the user."),
+            "content" to AgentToolParam("string", "Concise Markdown for the memory entry."),
+            "revision" to AgentToolParam("string", "Optional daily log revision from memory_get; a stale revision returns MEMORY_CONFLICT."),
+            "importance" to AgentToolParam("string", "Default normal: keep durable preferences, key decisions and user-requested permanent notes out of lifecycle management. Low: eligible for recovery-only archive after 60 days without use.", enumValues = listOf("normal", "low")),
+            "pinned" to AgentToolParam("boolean", "True when the user asks to keep this note fixed; a pinned entry never expires or auto-archives."),
+            "ttl_days" to AgentToolParam("integer", "Optional, only for unpinned low-importance entries (1–3650). After this many days, the note stops appearing automatically and can be explicitly queried/restored."),
         ),
         required = listOf("tool_title", "content"),
-        propertyOrdering = listOf("tool_title", "content", "revision"),
+        propertyOrdering = listOf("tool_title", "content", "revision", "importance", "pinned", "ttl_days"),
     )
 
     // Aligned with iOS AIChatViewModel.swift:5069-5078
@@ -492,17 +495,13 @@ background=true detaches the wave: this call returns a dispatch_id at once inste
             "Returns matching lines with surrounding context. Use this to recall previous knowledge, user preferences, or past notes.",
         parameters = mapOf(
             "tool_title" to AgentToolParam("string", "A concise 5-10 word summary of what this tool call does, shown to the user (e.g. 'Recall user preferences', 'Search past notes'). Use the same language as the user."),
-            // [T-memory-scope-drift] The enum has to match what the EXECUTOR
-            // (MemoryTools.executeMemoryGet) implements: `daily`, `all`, plus a
-            // distinct `evolution` branch. Only the first two were advertised while
-            // EvolutionTool's own description instructs the model to call
-            // `memory_get scope=evolution` — an enum-forbidden value. The deleted
-            // MemoryTools schema factories were the copy that stayed correct.
-            "scope" to AgentToolParam("string", "Memory scope to search: 'daily' for daily logs only, 'all' for daily logs + GLOBAL.md, 'evolution' for the self-evolution proposal summary (accept/reject with the evolution tool).", enumValues = listOf("daily", "all", "evolution")),
-            "keywords" to AgentToolParam("string", "Space-separated keywords for fuzzy matching (e.g. 'python preference' or 'API key setup'). All keywords must appear in a line or its surrounding context for a match. Leave empty to return full memory files."),
+            "scope" to AgentToolParam("string", "'daily' searches active daily notes; 'all' adds GLOBAL.md; 'archive' explicitly searches expired or archived notes in this chat and returns entry IDs; 'evolution' shows the evolution proposal summary.", enumValues = listOf("daily", "all", "archive", "evolution")),
+            "keywords" to AgentToolParam("string", "Optional space-separated keywords. All terms must match to return a result."),
+            "action" to AgentToolParam("string", "Default search. Use restore only on explicit user request, with scope=archive and the exact entry_id from archive search. Restoring clears the old TTL and restarts the idle window.", enumValues = listOf("search", "restore")),
+            "entry_id" to AgentToolParam("string", "Archive result ID for restore (date:ID); not a path."),
         ),
         required = listOf("tool_title"),
-        propertyOrdering = listOf("tool_title", "scope", "keywords"),
+        propertyOrdering = listOf("tool_title", "scope", "keywords", "action", "entry_id"),
     )
 
     // [P2-alias-schema-dedup] shellExecAliasDefinition() / envExecDefinition()

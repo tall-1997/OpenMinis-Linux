@@ -178,31 +178,19 @@ class ToolResultAgingTest {
             keepRecent = 1,
             minChars = 1_200,
         )
-        val folded = plan.messages[0].contentParts[0] as AgentContentPart.ToolResult
-        assertTrue(folded.imageData!!.contentEquals(bytes))
-        assertEquals("image/png", folded.imageMimeType)
-        assertEquals("/var/minis/attachments/shot.png", folded.imageLinuxPath)
+        assertEquals(0, plan.agedCount)
+        assertSame(withImage, plan.messages[0].contentParts[0])
     }
 
     // -------------------------------------------------------------- content
 
     @Test
-    fun `placeholder keeps a readable path so the model can page it back`() {
-        val spill = "/var/minis/workspace/tool-spill/tool_abc123.txt"
-        val body = "line1\nline2\n" + "q".repeat(6_000) + "\n[full output: $spill]\n"
-        val text = ToolResultAging.placeholder("shell_execute", body)
-        assertTrue(text.startsWith(ToolResultAging.MARKER))
-        assertTrue(text.contains(spill))
-        assertTrue(text.contains("full output: $spill"))
-        // Folded text is strictly shorter than the original.
-        assertTrue(text.length < body.length)
-    }
-
-    @Test
-    fun `placeholder without a path tells the model to re-run the tool`() {
-        val text = ToolResultAging.placeholder("grep", "m".repeat(3_000))
+    fun `placeholder without a verified path never suggests a rerun`() {
+        val text = ToolResultAging.placeholder("shell_execute", "m".repeat(3_000))
         assertFalse(text.contains("/var/minis/"))
-        assertTrue(text.contains("re-run this tool"))
+        assertFalse(text.contains("re-run"))
+        assertTrue(text.contains("no verified recovery path"))
+        assertTrue(text.length < 3_000)
     }
 
     @Test

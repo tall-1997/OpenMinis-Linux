@@ -1,7 +1,11 @@
 package com.openminis.app.ui.chat
 
 import com.openminis.app.data.model.AgentToolDefinition
+import com.openminis.app.data.repository.MemoryBlockSplit
+import com.openminis.app.data.repository.MemoryIndex
+import com.openminis.app.data.repository.MemoryPromptBudget
 import com.openminis.app.data.repository.MultiAgentSettings
+import com.openminis.app.sandbox.SessionWorkspace
 import com.openminis.app.logging.AppLogger
 
 /**
@@ -31,17 +35,17 @@ internal fun ChatViewModel.buildSystemPrompt(): String? = buildSystemPromptWithS
  * byte-identical behaviour.
  */
 internal fun ChatViewModel.buildSystemPromptWithSections(
-    /**
-     * [#25-publish-gate] Side-effect gate for the VM-level
-     * `systemPromptStablePrefixLen`. The Token Usage sheet measures with the
-     * SAME builder — without this gate its build (possibly against NEWER
-     * skill/memory state than the in-flight run's) overwrites the boundary
-     * the run loop still consumes, pointing the Anthropic cache_control
-     * breakpoint into per-turn content: full-prompt cache miss every turn
-     * for the rest of the run.
-     */
     publishStablePrefix: Boolean = true,
-): Pair<String, List<Pair<ContextBlockKey, String>>> {
+): Pair<String, List<Pair<ContextBlockKey, String>>> =
+    assembleSystemPrompt(publishStablePrefix).let { it.delivery.prompt to it.sections }
+
+internal data class SystemPromptAssembly(
+    val delivery: MemoryDeliveryPrompt,
+    val sections: List<Pair<ContextBlockKey, String>>,
+)
+
+/** A read-only preview must not publish a breakpoint, snapshot, or persistent refresh. */
+internal fun ChatViewModel.assembleSystemPrompt(publishStablePrefix: Boolean): SystemPromptAssembly {
     // Cache-friendly layout: keep `base` byte-stable by stripping out anything
     // that varies per request, then append the per-turn / per-day fragments at
     // the very end. OpenAI / DeepSeek prompt caching is prefix-based, so the
@@ -297,12 +301,7 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     // turn instead of "after kill app". Cheap: loadAll is a SQLite
     // SELECT + listFiles, no network.
     // [T-skill-manifest] pi skills.ts:358 progressive loading (default ON, SkillPromptPrefs); OFF = legacy one-line fragment byte-identical.
-    val skillFragment = skillRepository?.let { it.reloadFromDisk(); com.openminis.app.data.repository.SkillManifest.sessionFragment(it, activeSessionId, context) }
-    // [T-mcp-integration-android] Re-read servers.json (the CLI / file
-    // browser may have changed it out-of-band) then build the Top-20
-    // enabled-MCP disclosure, injected right after the skills fragment.
-    mcpRepository?.reloadFromDisk()
-    val mcpFragment = mcpRepository?.mcpPromptFragment(activeSessionId)
+    val (skillFragment, mcpFragment) = promptDisclosures(publishStablePrefix)
     // [T-rules-uncoupled-from-memory-toggle] The three RULES layers
     // (project AGENTS.md, session GLOBAL.md, app GLOBAL.md) are standing
     // instructions, not memory: they inject regardless of the session's
@@ -312,9 +311,9 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     // recall, memory tools) follows the toggle — turning memory off must not
     // silently silence the rules the user wrote for this chat.
     val sessionMem = sessionMemoryRepo()
-    val memorySessionId = com.openminis.app.sandbox.ExecutionCoordinator.ownerSessionId(
-        realSessionId.ifEmpty { sessionId },
-    )
+    val memorySessionId = ownerSessionId
+    val dailySessionId = activeSessionId
+    val sessionDiaryDir = SessionWorkspace.memoryDir(context.filesDir, memorySessionId)
     // [T-memory-project-rules] Project-scoped rules (AGENTS.md / AGENTS.override.md
     // in the project workspace) — the layer codex's agents_md.rs provides and this
     // app previously lacked. Unfiled sessions simply have none.
@@ -342,104 +341,22 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     val sessionGlobal = if ("session-global" in keptInstructionKeys) {
         sessionMem?.loadGlobalMemoryFragment(sessionScoped = true)
     } else null
-    // [T-daily-recall-gate] Resident daily injection is today's log + the
-    // MemoryIndex TOC; older days return only on relevance. The gate query is
-    // the same live-recall fold the per-turn block uses (latest user text +
-    // assistant tail) — a pure state read, zero network, zero engine calls.
-    // A fold too short to query (liveRecallInput null) falls back to the
-    // DIAG_TASK_KEYWORDS vocabulary inside the gate.
-    val dailyRecallQuery = if (memoryOn) liveRecallInput()?.query else null
-    val dailyInjection = if (memoryOn) {
-        sessionMem.loadRecentDailyFragments(dailyRecallQuery)
-    } else null
-    val dailyFragments = dailyInjection?.fragments.orEmpty()
-    // [T-publish-gate-purity] The Token Usage sheet builds this prompt too,
-    // with publishStablePrefix=false. The resident-file set drives recall
-    // suppression for the IN-FLIGHT run; a measurement build must not rewrite
-    // it from newer memory state. Publish it only on a real send build.
-    if (publishStablePrefix) {
-        residentDailyFiles = dailyFragments.flatMap { listOf(it.date, "${it.date}.md") }.toSet()
-    }
-    // [T-memory-window] Two-pass assembly: the per-day verbatim window and
-    // the MemoryIndex TOC together cover every diary day exactly once. Pass 1
-    // finds which days the budget admits verbatim; pass 2 rebuilds the TOC
-    // against exactly those dates, so a day the budget drops lands in the TOC
-    // instead of vanishing — the root fix for "the model only remembers two
-    // days".
-    val memoryAssembly = com.openminis.app.data.repository.MemoryAssembly.assemble(
-        standing = listOfNotNull(
-            projectRulesFragment?.let {
-                com.openminis.app.data.repository.MemoryPromptBudget.Fragment(
-                    "project-rules", it,
-                    com.openminis.app.data.repository.MemoryPromptBudget.PRIORITY_PROJECT,
-                    truncatable = false,
-                )
-            },
-            sessionGlobal?.let {
-                com.openminis.app.data.repository.MemoryPromptBudget.Fragment(
-                    "session-global", it,
-                    com.openminis.app.data.repository.MemoryPromptBudget.PRIORITY_SESSION,
-                    truncatable = false,
-                )
-            },
-            standingGlobal?.let {
-                com.openminis.app.data.repository.MemoryPromptBudget.Fragment(
-                    "app-global", it,
-                    com.openminis.app.data.repository.MemoryPromptBudget.PRIORITY_APP,
-                    truncatable = true,
-                )
-            },
-        ),
-        // [T-rules-uncoupled-from-memory-toggle] The memory toggle gates the
-        // DIARY side only — daily window, TOC, recall, memory tools. The three
-        // standing-rules layers above are instructions, not memory: they ride
-        // regardless, exactly like SOUL.md. (The 2026-11-19 adversarial round
-        // caught the first cut of the decoupling gating this whole assembly —
-        // rules vanished with memory off while the DISABLED copy claimed they
-        // still bound.)
-        daily = if (memoryOn) dailyFragments else emptyList(),
-        header = com.openminis.app.data.repository.MemoryAssembly.DAILY_BLOCK_HEADER,
-    ) { excludeDates ->
-        if (!memoryOn) {
-            null
-        } else {
-            val toc = com.openminis.app.data.repository.MemoryIndex.fragment(
-                sessionDir = com.openminis.app.sandbox.SessionWorkspace
-                    .memoryDir(context.filesDir, memorySessionId),
-                sharedDir = com.openminis.app.data.repository.MemoryIndex.sharedDir(context.filesDir),
-                excludeDates = excludeDates,
-            )
-            // [T-daily-recall-gate] The budget note rides AFTER the index rows
-            // (same block, next line) so the model sees why older notes are
-            // missing and how to fetch them. Non-null only when the hard
-            // budget actually dropped days; those days are also TOC rows, so
-            // nothing becomes invisible.
-            listOfNotNull(toc, dailyInjection?.budgetNote)
-                .joinToString("\n")
-                .takeIf { it.isNotBlank() }
-        }
-    }
-    // [T-memory-prompt-budget] One budget for the whole memory block, admitted
-    // narrowest-scope-first, so a long GLOBAL.md can never displace this chat's
-    // own rules. Non-null whenever any layer was admitted — INCLUDING with the
-    // memory toggle off ([T-rules-uncoupled-from-memory-toggle]).
-    val memoryAllocation = memoryAssembly?.allocation
-    // [GH#357] Split the block: standing rules stay in the byte-stable head,
-    // while the daily-log window (+TOC) moves to the dynamic tail. A single
-    // memory_write rewrites a daily log, and before this split that was a
-    // cache-prefix miss for the whole prompt on the following turn.
-    val memoryBlocks = com.openminis.app.data.repository.MemoryBlockSplit.split(memoryAllocation)
+    val standing = listOfNotNull(
+        projectRulesFragment?.let { MemoryPromptBudget.Fragment("project-rules", it, MemoryPromptBudget.PRIORITY_PROJECT, false) },
+        sessionGlobal?.let { MemoryPromptBudget.Fragment("session-global", it, MemoryPromptBudget.PRIORITY_SESSION, false) },
+        standingGlobal?.let { MemoryPromptBudget.Fragment("app-global", it, MemoryPromptBudget.PRIORITY_APP, true) },
+    )
+    // A read-only build still displays the current diary window. The same inputs
+    // are kept with the absolute slot so an attempt can refresh only the diary.
+    val (memoryAssembly, dailyInjection) = assembleDailyMemory(
+        sessionMem, sessionDiaryDir, MemoryIndex.sharedDir(context.filesDir),
+        liveRecallInput()?.query.takeIf { memoryOn }, standing, memoryOn,
+        now = System.currentTimeMillis(), log = publishStablePrefix,
+    )
+    val memoryAllocation = memoryAssembly.allocation
+    val memoryBlocks = MemoryBlockSplit.split(memoryAllocation)
     val globalMemoryFragment = memoryBlocks.stable
     val dailyMemoryFragment = memoryBlocks.transient
-    // [T-memory-recall] Lightweight FTS recall: search ALL historical memory
-    // entries for keywords from the latest user message, inject top-4 hits.
-    // No embedding service: keyword density + recency + recall-count scoring.
-    // [T-memory-recall-live] Recall moved out of the run-level system prompt and
-    // into a one-shot note (see [newRecallReminder]). Computed once per RUN, the
-    // query was the last user message — which does not change during a long tool
-    // loop — so the fragment stayed frozen for up to maxTurns while the subtask
-    // moved on. Null here keeps the dynamic-tail assembly byte-shape unchanged.
-    val recalledMemoryFragment: String? = null
     // Standing, user-approved evolution rules. Not gated by memoryOn (same as SOUL.md).
     // [P1-20] Scene classification is memoized on its exact input triple
     // (category/title/latest-user-sample) — see ChatViewModel.learnedSceneTag.
@@ -450,7 +367,7 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     // `memory/daily-inject` line (which names the source files) cannot say who
     // received them — this line is the join key between the two. Emitted once
     // per system-prompt build, not per request iteration.
-    AppLogger.info(
+    if (publishStablePrefix) AppLogger.info(
         "XSessionDiag",
         "[XSessionDiag] prompt/memory: session=${activeSessionId.take(8)} " +
             "memoryEnabled=$memoryOn " +
@@ -477,10 +394,11 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         keptInstructionKeys,
         memoryAllocation?.included?.mapTo(HashSet()) { it.key }.orEmpty(),
     )
-    val dynamicTail = assembleDynamicTail(
+    var dailyOffsetInTail = 0
+    val dynamicTail = assembleDynamicTailWithDailySlot(
         worldBookFragment = worldBookFragment,
         learnedPrefsFragment = learnedPrefsFragment,
-        recalledMemoryFragment = recalledMemoryFragment,
+        recalledMemoryFragment = null,
         runtimeContext = renderRuntimeContext(dateStr, tzId, lang, modelUseCount),
         personalityReminder = StandingContract.block(
             com.openminis.app.agent.SoulStore.cachedMetadata.value.name,
@@ -500,6 +418,7 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         // was never wired) — every prompt assembled since shipped without the
         // daily memory window.
         dailyMemoryFragment = dailyMemoryFragment,
+        onDailySlot = { dailyOffsetInTail = it },
     )
     // [T-prompt-sections] pi coding-agent src/core/system-prompt.ts:128-228: the assembly
     // is expressed as named sections; join() is byte-identical to the previous buildString
@@ -513,8 +432,9 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
         dynamicTail = dynamicTail,
     )
     val prompt = PromptSections.join(promptSections)
+    val stablePrefixLen = PromptSections.stablePrefixLength(promptSections)
     if (publishStablePrefix) {
-        systemPromptStablePrefixLen = PromptSections.stablePrefixLength(promptSections)
+        systemPromptStablePrefixLen = stablePrefixLen
         PromptSections.publishAndDiff(activeSessionId, promptSections)?.let {
             AppLogger.info("PromptSections", it)
         }
@@ -549,7 +469,19 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
             context,
         )
     }
-    return prompt to sections
+    val slotStart = stablePrefixLen + dailyOffsetInTail
+    val slot = DailyMemoryDelivery(
+        prompt = prompt,
+        start = slotStart,
+        end = slotStart + dailyMemorySlot(dailyMemoryFragment).length,
+        sessionId = dailySessionId,
+        memoryOwnerId = memorySessionId,
+        standing = standing,
+        spans = emptyList(),
+        residentSources = memoryAssembly.residentSources(),
+        stablePrefixLen = stablePrefixLen,
+    )
+    return SystemPromptAssembly(MemoryDeliveryPrompt(prompt, slot, stablePrefixLen), sections)
 }
 
 internal fun ChatViewModel.taskAnchorFragment(): String? {
@@ -592,6 +524,20 @@ internal fun assembleDynamicTail(
     taskAnchor: String? = null,
     /** [GH#357] Daily-log memory window: volatile, so it belongs in this tail. */
     dailyMemoryFragment: String? = null,
+): String = assembleDynamicTailWithDailySlot(
+    worldBookFragment, learnedPrefsFragment, recalledMemoryFragment, runtimeContext,
+    personalityReminder, taskAnchor, dailyMemoryFragment,
+) { }
+
+internal fun assembleDynamicTailWithDailySlot(
+    worldBookFragment: String,
+    learnedPrefsFragment: String?,
+    recalledMemoryFragment: String?,
+    runtimeContext: String,
+    personalityReminder: String?,
+    taskAnchor: String?,
+    dailyMemoryFragment: String?,
+    onDailySlot: (Int) -> Unit,
 ): String = buildString {
     if (worldBookFragment.isNotEmpty()) append(worldBookFragment)
     if (learnedPrefsFragment != null) {
@@ -606,10 +552,8 @@ internal fun assembleDynamicTail(
     // per-turn context (a memory_write changes it), so it must never sit in
     // the cached prefix. Keeping it adjacent to the other memory fragments
     // preserves the model-facing reading order.
-    if (dailyMemoryFragment != null && dailyMemoryFragment.isNotBlank()) {
-        append("\n\n")
-        append(dailyMemoryFragment)
-    }
+    onDailySlot(length)
+    append(dailyMemorySlot(dailyMemoryFragment))
     // [T-task-anchor] Ahead of the runtime context: the anchor is stable
     // across turns (unlike the date line below it) and belongs with the
     // other per-turn fragments, not in the stable prefix where one session's

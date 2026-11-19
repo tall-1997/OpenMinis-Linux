@@ -243,7 +243,7 @@ internal class OpenAIRequestBodies(
                                     put("type", "function")
                                     put("function", JSONObject().apply {
                                         put("name", tu.name)
-                                        put("arguments", tu.input.toString())
+                                        put("arguments", tu.inputJson)
                                     })
                                 })
                             }
@@ -1004,7 +1004,7 @@ internal class OpenAIRequestBodies(
                                 put("id", safeFcId)
                                 put("call_id", safeCallId)
                                 put("name", tu.name)
-                                put("arguments", tu.input.toString())
+                                put("arguments", tu.inputJson)
                             })
                         }
                     }

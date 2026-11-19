@@ -11,7 +11,15 @@ import com.openminis.app.tools.CronJobTool
 import com.openminis.app.tools.ReadImageTool
 import com.openminis.app.tools.ToolExecutionResult
 import com.openminis.app.tools.ToolOutputPolicy
+import com.openminis.app.tools.ToolReceiptDispatch
+import com.openminis.app.tools.ToolReceiptScope
+import com.openminis.app.tools.needsToolReceipt
+import com.openminis.app.tools.memoryGetIsSearch
+import com.openminis.app.tools.toolReceiptMissingAnchor
+import com.openminis.app.tools.WritePathGuard
+import com.openminis.app.service.ActiveRunContext
 import com.openminis.app.security.SecurityGateHolder
+import com.openminis.app.security.ToolAliases
 import org.json.JSONObject
 
 // [T-android-action-guard] Screen-side tools the loop guard owns: repeats,
@@ -83,30 +91,49 @@ internal suspend fun ChatViewModel.executeTool(
     toolBlocks: MutableList<AssistantBlock> = mutableListOf(),
     assistantId: String = "",
     currentText: String = "",
+    receiptScope: ToolReceiptScope? = null,
+    spawnDispatch: SpawnDispatchOptions? = null,
+    nestedRefusal: ((String, String) -> ToolExecutionResult?)? = null,
 ): ToolExecutionResult {
-    // [T-rule-allowlist-enforce] Dispatch-side enforcement of the per-rule
-    // tool whitelist: the schema cut keeps the model from DECLARING outside
-    // tools; this gate keeps it from CALLING them (aliases resolved first).
-    // Covers every executor that routes through this entry (main loop,
-    // sub-agent lanes, supervisor, group chat).
-    sessionToolAllowlist?.let { allow ->
-        val canonical = com.openminis.app.security.ToolAliases.canonical(name)
-        if (canonical !in allow && name !in allow) {
-            return ToolExecutionResult(
-                output = "Error: tool '$name' is not in this session's allowed tool set " +
-                    "(set by the automation rule whitelist). " +
-                    "Allowed: ${allow.sorted().joinToString(", ")}.",
-                success = false,
-                errorCode = com.openminis.app.tools.ToolErrorCode.PERMISSION_DENIED,
+    val canonical = receiptDispatchName(name)
+    val sid = activeSessionId
+    val toolTitle = resolveToolTitle(canonical, argsJson)
+    var guardVerdict: com.openminis.app.guard.GuardVerdict? = null
+    val authorize: suspend () -> ToolExecutionResult? = {
+        nestedRefusal?.invoke(canonical, argsJson)
+            ?: toolAuthorizationRefusal(name, canonical, argsJson, sid, toolTitle) ?: run {
+            guardVerdict = if (guardEligible(canonical)) {
+                com.openminis.app.guard.ActionGuard.beforeCall(sid, canonical, argsJson)
+            } else null
+            (guardVerdict as? com.openminis.app.guard.GuardVerdict.Refuse)?.let {
+                ToolExecutionResult(
+                    it.reason, false,
+                    errorCode = com.openminis.app.tools.ToolErrorCode.EXECUTION_FAILED,
+                    recoveryHint = "Stop retrying this action; report the situation to the user instead.",
+                    toolTitle = toolTitle,
+                )
+            }
+        }
+    }
+    val dispatch: suspend (ToolReceiptDispatch.Delivery?) -> ToolExecutionResult = { delivery ->
+        if (sid != activeSessionId || ActiveRunContext.current()?.isStopped == true) {
+            delivery?.notSent()
+            ToolExecutionResult("The owning session or run changed before dispatch.", false)
+        } else {
+            executeToolDispatched(
+                name, canonical, argsJson, toolId, toolBlocks, assistantId, currentText,
+                toolTitle, guardVerdict, delivery, spawnDispatch, nestedRefusal,
             )
         }
     }
-    val result = executeToolDispatched(name, argsJson, toolId, toolBlocks, assistantId, currentText)
-    // [T-plan-host-derive] Board reconciliation from work evidence, after
-    // every successful tool: narration attribution advances a stale board
-    // (the model moved to the next step without the bookkeeping call), and
-    // an all-done board closes an ACTIVE Goal through the verifier path.
-    // Best-effort: a reconciliation failure must never fail the tool.
+    val result = if (needsToolReceipt(canonical, argsJson)) {
+        val key = receiptScope?.takeIf { it.sessionSha == ToolReceiptScope.sessionDigest(sid) }
+            ?.call(canonical, argsJson) ?: return toolReceiptMissingAnchor()
+        ToolReceiptDispatch(toolReceiptStore()).run(key, toolId, authorize, dispatch)
+    } else {
+        authorize() ?: dispatch(null)
+    }
+    // [T-plan-host-derive] Only actual success can advance the board.
     if (result.success) {
         val note = runCatching {
             com.openminis.app.tools.PlanBoardAdvance.reconcileAfterTool(
@@ -127,75 +154,52 @@ internal suspend fun ChatViewModel.executeTool(
     return result
 }
 
-internal suspend fun ChatViewModel.executeToolDispatched(
-    name: String,
-    argsJson: String,
-    toolId: String,
-    // [T-android-capability-sets] Trailing params default for the detached
-    // child-executor call sites (sub-agent/supervisor/group-chat) that have
-    // no streaming UI context — kills the four-copy `("" , mutableListOf(),
-    // "", "")` ritual.
-    toolBlocks: MutableList<AssistantBlock> = mutableListOf(),
-    assistantId: String = "",
-    currentText: String = "",
-): ToolExecutionResult {
-    // T330: tri-state permission gating moved into the offload IPC
-    // handler (OffloadGate). The CLIs land there whether the LLM
-    // emitted a named tool call or a raw shell command, so the gate
-    // is consistent across both paths. The pre-check that lived here
-    // (`permissionTools = {calendar, location, …}`) was effectively
-    // dead since these tools have no native ChatViewModel executor
-    // — they always fall through to shell_execute or the offload
-    // bridge, which is now where checkPermission runs.
-    val canonical = com.openminis.app.security.ToolAliases.canonical(name)
-    // [pi-port] MODEL_ONLY callability enforcement (ToolExposureGate): the
-    // lookup is a pure in-memory name read, so it runs FIRST — before the
-    // failure-memory ledger and SecurityGate reads, which a tool that can
-    // never execute has no business spending — and refuses in the unified
-    // early-refusal shape. direct / deferred names fall through unchanged
-    // (a deferred tool called straight after find_tools enablement is the
-    // normal path, not a refusal).
+internal fun receiptDispatchName(name: String): String = ToolAliases.canonical(name).let { canonical ->
+    if (SubAgentKind.isSpawnTool(canonical)) ToolAliases.canonical(canonical.lowercase()) else canonical
+}
+
+private suspend fun ChatViewModel.toolAuthorizationRefusal(
+    name: String, canonical: String, argsJson: String, sessionId: String, toolTitle: String,
+): ToolExecutionResult? {
+    sessionToolAllowlist?.let { allow ->
+        if (canonical !in allow && name !in allow) {
+            return ToolExecutionResult(
+                "Error: tool '$name' is not in this session's allowed tool set (set by the automation rule whitelist). " +
+                    "Allowed: ${allow.sorted().joinToString(", ")}.",
+                false, errorCode = com.openminis.app.tools.ToolErrorCode.PERMISSION_DENIED,
+            )
+        }
+    }
+    if (canonical == "memory_get" && !memoryGetIsSearch(argsJson) && WritePathGuard.current().isNotEmpty()) {
+        return ToolExecutionResult(
+            "Error: restoring archived memory is outside this lane's allowed write paths.",
+            false, errorCode = com.openminis.app.tools.ToolErrorCode.PERMISSION_DENIED,
+        )
+    }
     if (com.openminis.app.tools.ToolExposureGate.levelForName(canonical) ==
         com.openminis.app.tools.ToolExposureGate.MODEL_ONLY
     ) {
-        return com.openminis.app.tools.ToolExposureGate.modelOnlyRefusal(
-            canonical, resolveToolTitle(canonical, argsJson),
-        )
+        return com.openminis.app.tools.ToolExposureGate.modelOnlyRefusal(canonical, toolTitle)
     }
-    // [T-known-failure] A call that already failed twice with these exact
-    // arguments is refused by code, not by the model remembering. Any argument
-    // change produces a different fingerprint and runs normally.
-    com.openminis.app.tools.ToolFailureMemory
-        .refusalFor(context, activeSessionId, canonical, argsJson)?.let { return it }
-    val gated = com.openminis.app.security.SecurityGateHolder.intercept(
-        context, canonical, argsJson, activeSessionId,
-    )
-    if (gated != null) return gated
-    // [T-tool-title-single-source GH#344] NEVER fall back to the bare
-    // canonical name: an untitled file_read / read_image used to persist as
-    // snake_case (executeTool's result.toolTitle was non-empty, so
-    // finalizePlannedCall's ifEmpty fallback never restored the friendly
-    // label). The resolver derives "Reading /path" from args instead.
-    val toolTitle = resolveToolTitle(canonical, argsJson)
+    val priorFailure = if (com.openminis.app.tools.isReceiptPolling(canonical, argsJson)) null
+    else com.openminis.app.tools.ToolFailureMemory.refusalFor(context, sessionId, canonical, argsJson)
+    return priorFailure ?: SecurityGateHolder.intercept(context, canonical, argsJson, sessionId)
+}
 
-    // [T-android-action-guard] Loop/refusal guard for screen-side tools
-    // (ui_read / ui_action / virtual screen): the Repeat ladder can refuse
-    // before the tool runs, OutwardPacing sleeps inside beforeCall (never
-    // double-sleep), and the ladder reminders come back attached to the
-    // result below. A refused call returns here — afterCall is NOT invoked
-    // (the guard's stopped state makes it a no-op anyway).
-    val guardVerdict = if (guardEligible(canonical)) {
-        com.openminis.app.guard.ActionGuard.beforeCall(activeSessionId, canonical, argsJson)
-    } else null
-    if (guardVerdict is com.openminis.app.guard.GuardVerdict.Refuse) {
-        return ToolExecutionResult(
-            guardVerdict.reason,
-            false,
-            errorCode = com.openminis.app.tools.ToolErrorCode.EXECUTION_FAILED,
-            recoveryHint = "Stop retrying this action; report the situation to the user instead.",
-            toolTitle = toolTitle,
-        )
-    }
+private suspend fun ChatViewModel.executeToolDispatched(
+    name: String,
+    canonical: String,
+    argsJson: String,
+    toolId: String,
+    toolBlocks: MutableList<AssistantBlock>,
+    assistantId: String,
+    currentText: String,
+    toolTitle: String,
+    guardVerdict: com.openminis.app.guard.GuardVerdict?,
+    delivery: ToolReceiptDispatch.Delivery?,
+    spawnDispatch: SpawnDispatchOptions?,
+    nestedRefusal: ((String, String) -> ToolExecutionResult?)?,
+): ToolExecutionResult {
 
     // [T-android-capability-sets] Predicate registries run ahead of the name
     // subject when. Results flow through the SAME guard/evolution/output tail
@@ -206,6 +210,14 @@ internal suspend fun ChatViewModel.executeToolDispatched(
     for (set in CAPABILITY_SETS) {
         if (set.handles(canonical)) {
             capabilityResult = set.execute(canonical, argsJson, activeSessionId, context)
+                .let { result ->
+                    // The adapter boundary returned a terminal answer (success,
+                    // business failure, or its own pre-execution refusal). Settle
+                    // the receipt either way — the result text carries the real
+                    // reason, and proven-ended failures must not pend forever.
+                    if (result.success || result.deliveryAccepted || result.notSent) result
+                    else result.copy(deliveryAccepted = true)
+                }
                 .let { if (it.toolTitle.isBlank()) it.copy(toolTitle = toolTitle) else it }
             break
         }
@@ -218,6 +230,7 @@ internal suspend fun ChatViewModel.executeToolDispatched(
         val args = runCatching { JSONObject(argsJson) }.getOrNull() ?: JSONObject()
         val query = args.optString("query", "")
         if (query.isBlank()) {
+            delivery?.notSent()
             return ToolExecutionResult(
                 "find_tools requires a non-empty query.",
                 false,
@@ -227,7 +240,9 @@ internal suspend fun ChatViewModel.executeToolDispatched(
             )
         }
         val limit = args.optInt("limit", 8)
-        return findAndEnableTools(query, limit)
+        val discovered = findAndEnableTools(query, limit)
+        if (discovered.success) delivery?.completed(discovered) else delivery?.notSent()
+        return discovered
     }
 
     // [T-ssh-workspace] (#32) Sessions bound to an SSH workspace resolve
@@ -276,6 +291,7 @@ internal suspend fun ChatViewModel.executeToolDispatched(
                             .blockedMessage(verdict, com.openminis.app.tools.UiReadTool.NAME),
                         success = false,
                         errorCode = com.openminis.app.tools.ToolErrorCode.PERMISSION_DENIED,
+                        notSent = true,
                     )
                 com.openminis.app.accessibility.A11yAppPolicy.Verdict.Allowed ->
                     // Session-scoped: ui_read also injects the first-entry app guide
@@ -303,6 +319,7 @@ internal suspend fun ChatViewModel.executeToolDispatched(
                             .blockedMessage(action, com.openminis.app.tools.UiActionTool.NAME),
                         success = false,
                         errorCode = com.openminis.app.tools.ToolErrorCode.PERMISSION_DENIED,
+                        notSent = true,
                     )
                 com.openminis.app.accessibility.A11yAppPolicy.Verdict.Allowed -> {
                     val result = com.openminis.app.tools.UiActionTool.execute(argsJson)
@@ -354,6 +371,7 @@ internal suspend fun ChatViewModel.executeToolDispatched(
                             .blockedMessage(skillVerdict, com.openminis.app.tools.UiSkillTool.NAME),
                         success = false,
                         errorCode = com.openminis.app.tools.ToolErrorCode.PERMISSION_DENIED,
+                        notSent = true,
                     )
                 com.openminis.app.accessibility.A11yAppPolicy.Verdict.Allowed ->
                     com.openminis.app.tools.UiSkillTool.execute(
@@ -376,7 +394,7 @@ internal suspend fun ChatViewModel.executeToolDispatched(
         "shell_execute", "env_exec" -> {
             val envOverride = com.openminis.app.sandbox.ExecutionEnvironments.overrideFor(activeSessionId)
             if (envOverride == null) {
-                executeShellCommand(argsJson, toolId, toolBlocks, assistantId, currentText)
+                executeShellCommand(argsJson, toolId, toolBlocks, assistantId, currentText, delivery)
             } else {
                 com.openminis.app.sandbox.ExecutionEnvironments.executeShell(envOverride, argsJson)
             }
@@ -387,7 +405,7 @@ internal suspend fun ChatViewModel.executeToolDispatched(
             // this is a one-line delegation. Behavior unchanged.
             val o = JSONObject(argsJson)
             o.put("command", com.openminis.app.tools.SuExecTool.wrapSuCommand(o.optString("command")))
-            executeShellCommand(o.toString(), toolId, toolBlocks, assistantId, currentText)
+            executeShellCommand(o.toString(), toolId, toolBlocks, assistantId, currentText, delivery)
         }
         "browser_use" -> executeBrowserUseTool(argsJson)
         // [P1-19] Aliases save_memory / recall_memory are canonicalized to
@@ -403,13 +421,10 @@ internal suspend fun ChatViewModel.executeToolDispatched(
                 argsJson,
                 com.openminis.app.di.AppGraph.evolutionEngineOrNull(),
             )
-        com.openminis.app.tools.DispatchAgentsTool.NAME -> executeRunSubAgentDeduped(
-            com.openminis.app.tools.DispatchAgentsTool.toSpawnArgs(argsJson, context),
-            toolId, toolBlocks, assistantId, currentText,
-        )
-        com.openminis.app.tools.WolfpackTool.NAME -> executeRunSubAgentDeduped(
-            com.openminis.app.tools.WolfpackTool.toSpawnArgs(argsJson),
-            toolId, toolBlocks, assistantId, currentText,
+        com.openminis.app.tools.DispatchAgentsTool.NAME, com.openminis.app.tools.WolfpackTool.NAME,
+        SubAgentKind.SPAWN_AGENT, SubAgentKind.RUN_SUBAGENT -> executeRunSubAgentDeduped(
+            spawnDispatchArgs(canonical, argsJson), toolId, toolBlocks, assistantId, currentText,
+            spawnDispatch ?: SpawnDispatchOptions(), delivery,
         )
         com.openminis.app.tools.AgentPlanTool.NAME -> {
             val planResult = com.openminis.app.tools.AgentPlanTool.execute(
@@ -460,6 +475,7 @@ internal suspend fun ChatViewModel.executeToolDispatched(
                 context,
                 activeSessionId,
                 mcpRepository,
+                onCompleted = { delivery?.completed(it) },
             )
 
         // [T-ssh-backend] Remote SSH exec/SFTP. Blocking JSch I/O is confined
@@ -473,24 +489,13 @@ internal suspend fun ChatViewModel.executeToolDispatched(
         com.openminis.app.tools.AskReasoningTool.NAME ->
             com.openminis.app.tools.AskReasoningTool.execute(argsJson) { sys, user -> oneShotAsk(sys, user) }
         com.openminis.app.tools.ExecuteCodeTool.NAME ->
-            // [GH#61/#83/#146] This nested dispatch is NOT a model tool-call
-            // stream: ExecuteCodeTool invokes it from inside the executed code
-            // with a programmatically built JSON string, so there is no raw
-            // argument tail to repair. Malformed JSON still fails closed inside
-            // executeTool's own parse sites — it can never silently become `{}`.
-            com.openminis.app.tools.ExecuteCodeTool.execute(
-                argsJson,
-                invoke = { n, a -> executeTool(n, a, toolId, toolBlocks, assistantId, currentText) },
-                // [T-executecode-spill] session spill path
-                sessionId = activeSessionId,
-                context = context,
-            )
-        // [pi-port §2.7] Nested calls take the SAME executeTool path (SecurityGate
-        // + guards); only the script's return value becomes this toolResult.
+            dispatchScriptWithReceipts(delivery, toolId, nestedRefusal, readOnlyMemory = true) { invoke ->
+                com.openminis.app.tools.ExecuteCodeTool.execute(argsJson, invoke, activeSessionId, context)
+            }
         com.openminis.app.tools.CodemodeTool.NAME ->
-            com.openminis.app.tools.CodemodeTool.execute(argsJson, invoke = { n, a ->
-                executeTool(n, a, toolId, toolBlocks, assistantId, currentText)
-            })
+            dispatchScriptWithReceipts(delivery, toolId, nestedRefusal, readOnlyMemory = false) { invoke ->
+                com.openminis.app.tools.CodemodeTool.execute(argsJson, invoke)
+            }
         com.openminis.app.tools.ProductMediaTools.DESCRIBE_IMAGE -> executeReadImageTool(argsJson)
         com.openminis.app.tools.ProductMediaTools.GENERATE_IMAGE ->
             executeGenerateImageTool(argsJson, currentProvider, activeSessionId)
@@ -521,8 +526,6 @@ internal suspend fun ChatViewModel.executeToolDispatched(
             com.openminis.app.tools.TerminalTools.execute(argsJson, activeSessionId, context)
         com.openminis.app.tools.PresentTool.NAME ->
             com.openminis.app.tools.PresentTool.execute(argsJson, activeSessionId, context)
-        SubAgentKind.SPAWN_AGENT, SubAgentKind.RUN_SUBAGENT ->
-            executeRunSubAgentDeduped(argsJson, toolId, toolBlocks, assistantId, currentText)
         com.openminis.app.tools.WebSearchTool.NAME,
         com.openminis.app.tools.OcrTool.NAME,
         com.openminis.app.tools.ScreenTimeTool.NAME,
@@ -581,7 +584,7 @@ internal suspend fun ChatViewModel.executeToolDispatched(
             // SecurityGate still audits the materialized command there).
             val localTool = com.openminis.app.plugins.LocalToolPluginStore.find(context, canonical)
             if (localTool != null) {
-                executeLocalTool(localTool, argsJson, toolId, toolBlocks, assistantId, currentText)
+                executeLocalTool(localTool, argsJson, toolId, toolBlocks, assistantId, currentText, delivery)
             } else {
                 ToolExecutionResult(
                     "Unknown tool: $name",
@@ -592,6 +595,11 @@ internal suspend fun ChatViewModel.executeToolDispatched(
             }
         }
     }
+    // This is the actual adapter return (the approval, replay, and preflight
+    // paths never reach here). Script and spawn adapters record their own evidence.
+    if (canonical != com.openminis.app.tools.ExecuteCodeTool.NAME &&
+        canonical != com.openminis.app.tools.CodemodeTool.NAME && !SubAgentKind.isSpawnTool(canonical)
+    ) delivery?.completed(result)
     // [T-android-action-guard] Record the outcome and attach the ladder
     // reminders (3/6, 3/6/9, 5/8, 2/4) to what the model sees. For reads,
     // "unchanged" is an output fingerprint match with the previous read in
@@ -618,7 +626,9 @@ internal suspend fun ChatViewModel.executeToolDispatched(
         if (suffix.isNotEmpty()) output = "$output\n$suffix"
         result = result.copy(output = output)
     }
-    if (!result.success) {
+    if (!result.success && delivery?.state != com.openminis.app.tools.ToolReceiptState.UNKNOWN &&
+        delivery?.state != com.openminis.app.tools.ToolReceiptState.NOT_SENT
+    ) {
         com.openminis.app.evolution.EvolutionHooks.onToolFailure(
             activeSessionId, canonical, argsJson, result.output,
         )
@@ -663,6 +673,7 @@ private suspend fun ChatViewModel.executeLocalTool(
     toolBlocks: MutableList<AssistantBlock>,
     assistantId: String,
     currentText: String,
+    delivery: ToolReceiptDispatch.Delivery?,
 ): ToolExecutionResult {
     val args = runCatching { JSONObject(argsJson) }.getOrNull() ?: JSONObject()
     // Only params the model actually supplied — materialize applies defaults
@@ -675,7 +686,7 @@ private suspend fun ChatViewModel.executeLocalTool(
             val shellArgs = JSONObject()
                 .put("command", m.command)
                 .put("tool_title", tool.name)
-            executeShellCommand(shellArgs.toString(), toolId, toolBlocks, assistantId, currentText)
+            executeShellCommand(shellArgs.toString(), toolId, toolBlocks, assistantId, currentText, delivery)
         }
         is com.openminis.app.plugins.LocalToolPluginStore.MaterializeResult.MissingParam ->
             ToolExecutionResult(

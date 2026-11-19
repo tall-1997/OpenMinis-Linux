@@ -17,7 +17,7 @@ import kotlinx.coroutines.withContext
  * Falls back to [current] when the build fails; a stale prompt must never
  * abort the run.
  */
-internal suspend fun ChatViewModel.refreshRunPromptForInjectedTurn(current: String?): String? =
+internal suspend fun ChatViewModel.refreshRunPromptForInjectedTurn(current: MemoryDeliveryPrompt?): MemoryDeliveryPrompt? =
     withContext(Dispatchers.IO) {
-        runCatching { buildSystemPrompt() }.getOrNull()
+        runCatching { buildMemoryDeliveryPrompt() }.getOrNull()
     } ?: current

@@ -118,6 +118,22 @@ class WalkBackTokenBudgetTest {
     }
 
     @Test
+    fun budgetUsesStructuredTextOnlyAndWeightsCjk() {
+        val text = "测".repeat(100)
+        val user = userText(text).copy(contentParts = listOf(AgentContentPart.Text(text)))
+        val history = listOf(user, assistantText("ok"))
+        val exact = WalkBack.bounded(
+            history, anchorIdx = 1, maxUserTextTurns = 1, maxMessages = 100, maxEstimatedTokens = 61,
+        )
+        val short = WalkBack.bounded(
+            history, anchorIdx = 1, maxUserTextTurns = 1, maxMessages = 100, maxEstimatedTokens = 60,
+        )
+        assertEquals(0, exact.priorIdx)
+        assertNull(short.priorIdx)
+        assertEquals(WalkBack.STOP_TOKEN_BUDGET_WOULD_EXCEED, short.stopReason)
+    }
+
+    @Test
     fun invalidAnchorIsStillReportedBeforeAnyBudgetWork() {
         val result = WalkBack.bounded(unitHistory(), anchorIdx = 99, maxUserTextTurns = 3, maxMessages = 100)
         assertEquals(WalkBack.STOP_INVALID_ANCHOR, result.stopReason)

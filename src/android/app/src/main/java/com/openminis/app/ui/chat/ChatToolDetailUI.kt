@@ -234,8 +234,8 @@ internal fun ToolDetailSheet(
                     )
                 }
                 val hasBrowserUrl = isBrowserTool && browserActionUrl.isNotEmpty()
-                val spillPath = remember(block.content) {
-                    com.openminis.app.tools.ToolOutputSpill.parseGuestPath(block.content)
+                val spillPath = remember(block.content, block.toolName) {
+                    com.openminis.app.tools.ToolOutputSpill.parseGuestPath(block.content, storedToolName = block.toolName)
                 }
                 if (spillPath != null) {
                     Box(

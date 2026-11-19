@@ -50,11 +50,11 @@ object FileEditTool {
                 return ToolExecutionResult(
                     "Error: $path is inside a read-only mounted folder and cannot be modified. " +
                         "Toggle writability in Settings → Mount External Folders if this is a mistake.",
-                    false, toolTitle = toolTitle,
+                    false, toolTitle = toolTitle, notSent = true,
                 )
             }
             WritePathGuard.denyReason(path)?.let { msg ->
-                return ToolExecutionResult(msg, false, toolTitle = toolTitle)
+                return ToolExecutionResult(msg, false, toolTitle = toolTitle, notSent = true)
             }
             // [T-memory-poison-guard] Same daily quota as memory_write and the
             // shell gate — see FileWriteTool.
@@ -78,7 +78,7 @@ object FileEditTool {
             ).takeIf { !it.ok }?.let { d ->
                 return ToolExecutionResult(
                     d.modelMessage ?: "Error: file_edit refused by prior-read gate",
-                    false, toolTitle = toolTitle,
+                    false, toolTitle = toolTitle, notSent = true,
                 )
             }
 

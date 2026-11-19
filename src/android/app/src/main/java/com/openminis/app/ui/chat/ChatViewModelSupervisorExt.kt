@@ -181,12 +181,14 @@ internal suspend fun ChatViewModel.pendingSupervisorRecovery(): SupervisorRunSto
 internal suspend fun ChatViewModel.startSupervisorSession(
     objective: String,
     recovery: SupervisorRunStore.RunRecord? = null,
+    objectiveRowId: String? = null,
 ): Boolean {
     val trimmed = objective.trim()
     if (trimmed.isEmpty()) return false
     val sessionId = activeSessionId
     if (sessionId.isBlank()) return false
     if (SupervisorSessionHost.isLive(sessionId)) return false
+    if (recovery == null && objectiveRowId.isNullOrBlank()) return false
 
     val supervisorEntry = resolveSupervisorEntry() ?: return false
     val workerEntry = resolveWorkerEntry() ?: return false
@@ -203,7 +205,13 @@ internal suspend fun ChatViewModel.startSupervisorSession(
     // no-ops on a missing head, and a lost record means a phantom "running"
     // run the next time the session is opened. Same ordering for the UI
     // state: the bar must appear the instant the send is consumed.
-    SupervisorRunStore.start(sessionId, context, trimmed, maxWorkerTurns)
+    val run = try {
+        SupervisorRunStore.start(sessionId, context, trimmed, maxWorkerTurns, recovery, objectiveRowId)
+    } catch (e: java.io.IOException) {
+        AppLogger.warning("Supervisor", "Could not checkpoint the supervisor run: ${e.message}")
+        return false
+    }
+    val receiptScope = com.openminis.app.tools.ToolReceiptScope.supervisor(sessionId, run.id)
     SupervisorUiHost.reset(sessionId)
     SupervisorUiHost.update(sessionId, SupervisorUiHost.Phase.INSTRUCTING, trimmed, 0)
 
@@ -223,6 +231,8 @@ internal suspend fun ChatViewModel.startSupervisorSession(
             workerEntry = workerEntry,
             workerProvider = workerProvider,
             inbox = inbox,
+            receiptScope = receiptScope,
+            completedWorkerRounds = run.workerTurns,
         )
     }
     SupervisorSessionHost.register(
@@ -312,13 +322,13 @@ internal fun ChatViewModel.disarmSupervisor(): Boolean {
  * loop owns its own context pipeline, and user interjections reach the
  * supervisor through the inbox, not through the chat transcript.
  */
-internal suspend fun ChatViewModel.persistSupervisorUserTurn(text: String) {
+internal suspend fun ChatViewModel.persistSupervisorUserTurn(text: String): String? {
     val trimmed = text.trim()
-    if (trimmed.isEmpty()) return
-    val sessionId = activeSessionId
-    if (sessionId.isBlank()) return
+    if (trimmed.isEmpty()) return null
+    val sessionId = ensureSession()
+    if (sessionId.isBlank()) return null
     val partsJson = buildUserPartsJson(trimmed, emptyList(), null)
-    val persisted = chatRepository.appendMessage(sessionId, "user", partsJson) ?: return
+    val persisted = chatRepository.appendMessage(sessionId, "user", partsJson) ?: return null
     val userMsg = ChatMessage(
         id = persisted.id,
         role = "user",
@@ -327,6 +337,7 @@ internal suspend fun ChatViewModel.persistSupervisorUserTurn(text: String) {
     )
     _messages.value = trimLoadedWindow(_messages.value + userMsg)
     notePersistedUiRow(persisted.id, persisted.id)
+    return persisted.id
 }
 
 private suspend fun ChatViewModel.runSupervisorSession(
@@ -340,6 +351,8 @@ private suspend fun ChatViewModel.runSupervisorSession(
     workerEntry: ModelEntry,
     workerProvider: com.openminis.app.provider.LLMProvider,
     inbox: SupervisorChat.SupervisorInbox,
+    receiptScope: com.openminis.app.tools.ToolReceiptScope?,
+    completedWorkerRounds: Int,
 ) {
     val supervisorBubbleId = "$SUPERVISOR_BUBBLE_PREFIX$sessionId"
 
@@ -351,9 +364,15 @@ private suspend fun ChatViewModel.runSupervisorSession(
     }
 
     supervisorNotice("Supervisor session started — objective: $objective")
+    val receiptNotice = pendingToolReceiptNotice(sessionId)
+    if (receiptNotice != null) supervisorNotice(receiptNotice)
 
-    var workerRound = 0
-    SupervisorUiHost.update(sessionId, SupervisorUiHost.Phase.INSTRUCTING, objective, 0)
+    // An interrupted round uses the same ordinal after recovery. Only the
+    // committed round report advances the recovered counter.
+    var workerRound = completedWorkerRounds
+    val reviewScope = receiptScope?.lane("supervisor-seat", "review")
+    val workerScope = receiptScope?.lane("supervisor-seat", "worker")
+    SupervisorUiHost.update(sessionId, SupervisorUiHost.Phase.INSTRUCTING, objective, workerRound)
 
     // [T-m9-supervisor-experience] Recall per-session tool experience once,
     // before any seat exists, so the supervisor's first turn already sees
@@ -367,7 +386,7 @@ private suspend fun ChatViewModel.runSupervisorSession(
                 provider = supervisorProvider,
                 // [T-lanes-inherit-session-rules] The supervisor is a session
                 // lane: the session's standing rules ride its prompt.
-                system = laneSystemWithRules(system),
+                system = laneSystemWithRules(listOfNotNull(system, receiptNotice).joinToString("\n\n")),
                 user = user,
                 tools = SupervisorSeats.supervisorTools(supervisorBaseTools(supervisorEntry)),
                 toolGate = null,
@@ -381,6 +400,7 @@ private suspend fun ChatViewModel.runSupervisorSession(
                 stopWhenClosing = false,
                 // [GH#221] Same per-instance header channel as the main loop.
                 extraHeaders = providerExtraHeaders(supervisorEntry.providerInstanceId),
+                receiptScope = reviewScope?.step("round", workerRound),
                 onStatus = {},
             )
         }
@@ -405,17 +425,18 @@ private suspend fun ChatViewModel.runSupervisorSession(
                 modelDisplayName = workerEntry.model.displayName,
                 userPrompt = user,
                 role = null,
-                // [T-subagent-report-spill] Session-keyed spill for oversized
-                // worker reports (see SubAgentRun wiring note).
+                // Report spills use the same session workspace as the worker's tools.
+                reportContext = context,
                 sessionId = sessionId,
                 // [T-lanes-inherit-session-rules] Supervisor workers inherit the
                 // session rules too — same lane contract as spawn_agent.
-                sessionRules = sessionRulesForLanes(),
+                sessionRules = listOfNotNull(sessionRulesForLanes(), receiptNotice).joinToString("\n\n"),
                 historySanitizer = { neutralizeRemoteToolResults(it) },
                 skillsHint = null,
                 tools = SupervisorSeats.workerTools(supervisorBaseTools(workerEntry)),
                 maxTokens = (workerEntry.model.maxOutputTokens ?: 4096).coerceIn(256, 8192),
-                executeTool = { name, json, callId ->
+                receiptScope = workerScope?.step("round", workerRound),
+                executeTool = { name, json, callId, batchScope ->
                     val result = if (SubAgentKind.blocks(SubAgentKind.WORKER, name)) {
                         ToolExecutionResult("Error: WORKER sub-agent cannot use $name.", false)
                     } else {
@@ -423,7 +444,7 @@ private suspend fun ChatViewModel.runSupervisorSession(
                             // [F1 GH#343] Third parameter is the tool call id; the
                             // old blank id made every supervisor worker call spill
                             // to the same `tool.txt`.
-                            ?: executeTool(name, json, callId)
+                            ?: executeTool(name, json, callId, receiptScope = batchScope)
                     }
                     // [T-m9-supervisor-experience] Fold this executed call into
                     // the session's tool profile; a failed fold never blocks the
@@ -465,8 +486,8 @@ private suspend fun ChatViewModel.runSupervisorSession(
         evidenceFileExists = { path ->
             SessionWorkspace.resolveGuestPath(context.filesDir, sessionId, path)?.exists() ?: false
         },
-        onRound = { n, instructionDigest, reportDigest ->
-            SupervisorRunStore.appendRound(sessionId, context, n, instructionDigest, reportDigest)
+        onRound = { _, instructionDigest, reportDigest ->
+            SupervisorRunStore.appendRound(sessionId, context, workerRound, instructionDigest, reportDigest)
         },
         onTerminal = { state, summary ->
             SupervisorRunStore.markTerminal(sessionId, context, state, summary)

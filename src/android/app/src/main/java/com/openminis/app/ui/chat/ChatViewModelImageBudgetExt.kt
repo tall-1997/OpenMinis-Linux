@@ -1,6 +1,6 @@
 package com.openminis.app.ui.chat
 
-import com.openminis.app.logging.AppLogger
+import com.openminis.app.sandbox.SessionWorkspace
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.provider.ImageBudget
@@ -22,7 +22,11 @@ import com.openminis.app.provider.ImageBudget
  * Emits a one-shot [requestBudgetEvent] for the UI Snackbar so the
  * user knows older images were compacted into placeholders.
  */
-internal fun ChatViewModel.applyRequestImageBudget(messages: List<LLMMessage>): List<LLMMessage> {
+internal fun ChatViewModel.applyRequestImageBudget(
+    messages: List<LLMMessage>,
+    persistSpillover: Boolean,
+    onElision: (ImageBudget.RequestBudgetPlan) -> Unit = {},
+): List<LLMMessage> {
     // Collect every image in chronological order so the planner can
     // walk in reverse and protect the most recent images.
     data class ImageRef(val msgIdx: Int, val partIdx: Int, val image: ImageBudget.BudgetImage)
@@ -64,9 +68,9 @@ internal fun ChatViewModel.applyRequestImageBudget(messages: List<LLMMessage>): 
 
     // For dropped images without a linuxPath, lazily spill to disk so
     // the placeholder still gives the model an addressable reference.
-    val attachmentsRoot = activeSessionId?.let { sid ->
-        com.openminis.app.sandbox.SessionWorkspace.hostDir(context.filesDir, sid, "attachments")
-    }
+    val attachmentsRoot = if (persistSpillover && activeSessionId.isNotBlank()) {
+        SessionWorkspace.hostDir(context.filesDir, activeSessionId, "attachments")
+    } else null
     val resolvedPaths = HashMap<ImageBudget.ImagePartId, String?>()
     for (ref in images) {
         val id = ImageBudget.ImagePartId.of(ref.image.data)
@@ -117,10 +121,6 @@ internal fun ChatViewModel.applyRequestImageBudget(messages: List<LLMMessage>): 
         mutated[mi] = msg.copy(contentParts = newParts)
     }
 
-    _requestBudgetEvent.tryEmit(plan)
-    AppLogger.info(
-        ChatViewModel.TAG,
-        "applyRequestImageBudget: dropped=${plan.droppedCount}/${plan.totalCount} keptBytes=${plan.keptBytes}B elidedBytes=${plan.elidedBytes}B",
-    )
+    onElision(plan)
     return mutated
 }

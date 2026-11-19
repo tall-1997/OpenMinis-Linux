@@ -2,8 +2,10 @@ package com.openminis.app.ui.chat
 
 import android.content.Context
 import com.openminis.app.data.model.AgentContentPart
+import com.openminis.app.data.model.ContextUsageAnchor
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.LLMUsage
+import com.openminis.app.data.model.ModelAttributionSnapshot
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.service.ActiveRun
@@ -135,6 +137,8 @@ internal suspend fun ChatViewModel.nudgePlanBoardCloseFor(
     turnThinkingLevel: ThinkingLevel,
     accumulatedText: String,
     activeRun: ActiveRun?,
+    modelSnapshot: ModelAttributionSnapshot? = null,
+    contextUsageAnchor: ContextUsageAnchor? = null,
 ): PlanBoardCloseResult {
     if (!isFinalTurn || nudgesUsed >= PlanBoardClosePrompt.DEFAULT_MAX_NUDGES || activeRun?.isStopped == true) {
         return PlanBoardCloseResult.NONE
@@ -154,9 +158,11 @@ internal suspend fun ChatViewModel.nudgePlanBoardCloseFor(
 
     val turnParts = buildTurnParts(allToolBlocks, turnStartBlockIndex, allToolInputs)
     val blockMeta = allToolBlocks.filter { it.kind == "tool_use" }.associateBy { it.id }
-    persistAssistantTurnForRun(
-        checkNotNull(activeRun) { "Agent loop has no persistence owner" }, turnParts, lastUsage, turnReasoningContent, blockMeta, accumulatedText,
+    persistAssistantTurnForRunAndBackfill(
+        activeRun, turnParts, blockMeta, lastUsage, turnReasoningContent, accumulatedText, agentHistory,
         requestedLevel = turnThinkingLevel,
+        modelSnapshot = modelSnapshot,
+        contextUsageAnchor = contextUsageAnchor,
     )
     if (activeRun?.isStopped == true) return PlanBoardCloseResult.STOPPED
     appendBoundedHistory(

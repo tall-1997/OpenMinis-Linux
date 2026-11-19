@@ -87,6 +87,11 @@ class PersistentShell(
         return value
     }
 
+    @Volatile private var lastCommandCompleted = false
+
+    /** Read immediately after executeCommand while the coordinator owns the shell mutex. */
+    fun consumeCompleted(): Boolean = lastCommandCompleted.also { lastCommandCompleted = false }
+
     val isAlive: Boolean
         get() = process?.isAlive == true
 
@@ -426,30 +431,7 @@ class PersistentShell(
         Log.i(TAG, "Persistent shell process exited")
     }
 
-    /**
-     * Execute a command in the persistent shell and wait for completion.
-     *
-     * Wraps the command with a unique marker to detect output boundaries:
-     *   {command}; echo "__MINIS_DONE_{marker}_EXIT_$?__"
-     *
-     * @return Pair of (output, exitCode)
-     */
-    /**
-     * [T-offload-prelude-source-once] Offload reply-parsing shell functions,
-     * sourced into the persistent bash. This used to run `file.readText()` on
-     * the rootfs and re-source ~25 functions on EVERY command. The shell is
-     * long-lived and reused, so the functions persist once loaded — the only
-     * thing that invalidates them is a change in the registered handler set
-     * (app update / new handler). So the body is built, the script file written,
-     * and the `. source` emitted ONLY when the signature changes; every other
-     * command returns "" and prepends nothing.
-     *
-     * [sourcedOffloadSignature] resets on respawn (a new bash has no functions),
-     * so the next command after a restart re-sources. The offload-exit reporting
-     * the prelude exists for (the `__MINIS_OFFLOAD_RC` / handler_timeout mapping)
-     * keeps working unchanged: the wrapper functions are in the shell exactly as
-     * before, just installed once instead of per command.
-     */
+    /** Offload helpers persist in this shell until it respawns or the handler set changes. */
     @Volatile
     private var sourcedOffloadSignature: String? = null
 
@@ -486,6 +468,7 @@ class PersistentShell(
         // [GH#358] Each command starts with a clean verdict; only THIS command's
         // watchdog branch (or resetAfterTimeout) may set it.
         lastCommandTimedOut = false
+        lastCommandCompleted = false
         // [stop=kill] Same hygiene: a Stop that armed the verdict on a prior
         // command must not label the NEXT command's result.
         killedByUser = false
@@ -795,6 +778,11 @@ class PersistentShell(
         return flagged && ShellStopKill.isSignalExit(exitCode)
     }
 
-    private fun applyKilledByUserMarker(result: Pair<String, Int>): Pair<String, Int> =
-        Pair(ShellStopKill.markedOutput(consumeKilledByUser(result.second), result.first), result.second)
+    private fun applyKilledByUserMarker(result: Pair<String, Int>): Pair<String, Int> {
+        val stopped = consumeKilledByUser(result.second)
+        // Negative codes come from host transport failures; positive status
+        // here comes only from the command's matching DONE frame.
+        lastCommandCompleted = result.second >= 0 && !stopped
+        return Pair(ShellStopKill.markedOutput(stopped, result.first), result.second)
+    }
 }

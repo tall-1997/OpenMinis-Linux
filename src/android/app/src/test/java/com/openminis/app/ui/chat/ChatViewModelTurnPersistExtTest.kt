@@ -1,7 +1,12 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.data.db.MessageEntity
 import com.openminis.app.data.model.AgentContentPart
+import org.json.JSONArray
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -87,5 +92,91 @@ class ChatViewModelTurnPersistExtTest {
         val use = parts[0] as AgentContentPart.ToolUse
         assertEquals("u2", use.id)
         assertEquals(0, use.input.length())
+    }
+
+    @Test
+    fun `repaired inputs form a detached snapshot and survive persistence`() {
+        val rawDraft = """{"query":"partial"}"""
+        val repaired = """{"query":"complete","more":{"key":"value"}}"""
+        val block = toolUse("u1", "find").copy(toolArgs = rawDraft, thoughtSignature = "signature")
+        val parts = turnPartsFromBlocks(listOf(block), 0, mapOf("u1" to repaired))
+        val tool = parts.single() as AgentContentPart.ToolUse
+        assertEquals(repaired, tool.inputJsonSnapshot)
+        tool.input.getJSONObject("more").put("key", "changed")
+        assertEquals("value", tool.input.getJSONObject("more").getString("key"))
+        val row = JSONArray(buildAssistantPartsJson(parts, mapOf("u1" to block)))
+        val stored = row.getJSONObject(0).getJSONObject("value")
+        assertEquals(repaired, stored.getString("input"))
+        val restored = readTranscriptToolUse(stored)
+        assertEquals("complete", restored.input.getString("query"))
+        assertEquals("signature", restored.thoughtSignature)
+        assertEquals(restored.input.toString(), restored.inputJsonSnapshot)
+    }
+
+    @Test
+    fun `invalid persisted tool arguments are not published as raw JSON`() {
+        val restored = readTranscriptToolUse(JSONObject().put("input", "{bad").put("thoughtSignature", JSONObject.NULL))
+        assertEquals("{}", restored.inputJsonSnapshot)
+        assertNull(restored.thoughtSignature)
+    }
+
+    @Test
+    fun `receipt and image path round trip without changing success and dedupe semantics`() {
+        val proof = "a".repeat(64)
+        val first = AgentContentPart.ToolResult(
+            "u1", "write", "accepted but failed", isError = true,
+            imageLinuxPath = "/tmp/path with spaces.png", receiptProof = proof,
+        )
+        val second = AgentContentPart.ToolResult("u2", "read", "ok")
+        val duplicate = first.copy(content = "duplicate", isError = false, receiptProof = null)
+        val partsJson = checkNotNull(buildToolResultPartsJson(listOf(first, second, duplicate)))
+        val rows = JSONArray(partsJson)
+        assertEquals(2, rows.length())
+        val mapped = mapStoredLLMMessage(
+            MessageEntity("result-row", "session", "user", partsJson, createdAt = 0L, sortOrder = 1),
+            mediaFile = { error("Unexpected media reference: $it") },
+        )
+        assertEquals(listOf(first, second), mapped.contentParts)
+        val failedRow = rows.getJSONObject(0).getJSONObject("value")
+        assertFalse(failedRow.getBoolean("success"))
+        assertEquals(first, readTranscriptToolResult(failedRow))
+        val successRow = rows.getJSONObject(1).getJSONObject("value")
+        assertTrue(successRow.getBoolean("success"))
+        assertFalse(successRow.has("receiptProof"))
+        assertFalse(successRow.has("imageLinuxPath"))
+        assertEquals(second, readTranscriptToolResult(successRow))
+    }
+
+    @Test
+    fun `legacy successful output never manufactures a host proof`() {
+        val oldStyle = JSONObject().put("output", "ok")
+        for (success in listOf(JSONObject.NULL, true, "true", "yes")) {
+            val result = readTranscriptToolResult(oldStyle.put("success", success))
+            assertFalse(result.isError)
+            assertNull(result.receiptProof)
+        }
+        assertTrue(readTranscriptToolResult(oldStyle.put("success", "false")).isError)
+        oldStyle.remove("success")
+        assertFalse(readTranscriptToolResult(oldStyle).isError)
+        assertNull(readTranscriptToolResult(oldStyle.put("receiptProof", true)).receiptProof)
+    }
+
+    @Test
+    fun `receipt origin host marks the row and a real user turn stays an anchor`() {
+        val reminder = "<system-reminder>\ncontinue where you left off\n</system-reminder>"
+        val host = mapStoredLLMMessage(
+            MessageEntity("n1", "session", "user",
+                hostReminderPartsJson(JSONObject.quote(reminder)), createdAt = 0L, sortOrder = 1),
+            mediaFile = { error("Unexpected media reference: $it") },
+        )
+        assertTrue(host.isHostGenerated)
+        assertFalse(receiptUserRow(host))
+        val real = mapStoredLLMMessage(
+            MessageEntity("n2", "session", "user", """[{"type":"text","value":"run the tests"}]""",
+                createdAt = 0L, sortOrder = 2),
+            mediaFile = { error("Unexpected media reference: $it") },
+        )
+        assertFalse(real.isHostGenerated)
+        assertTrue(receiptUserRow(real))
     }
 }

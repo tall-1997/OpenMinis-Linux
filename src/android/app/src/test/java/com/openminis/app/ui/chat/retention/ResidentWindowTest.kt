@@ -199,6 +199,18 @@ class ResidentWindowTest {
     }
 
     @Test
+    fun `published tool arguments cost two bytes per stored UTF-16 code unit`() {
+        val args = "{ \"value\": \"\u96ea\uD83D\uDE00\" }"
+        val turn = LLMMessage(
+            role = LLMMessage.Role.ASSISTANT,
+            content = "",
+            contentParts = listOf(AgentContentPart.ToolUse.fromInputJson("call_1", "lookup", args)),
+        )
+
+        assertEquals(args.length.toLong() * 2, ResidentWindow.messageBytes(turn))
+    }
+
+    @Test
     fun `byteCut lands on the exact suffix boundary`() {
         // Distinct, hand-computable sizes pin the suffix-sum arithmetic —
         // an off-by-one in the precomputed array would return a neighboring

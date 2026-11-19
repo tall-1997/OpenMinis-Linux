@@ -8,6 +8,7 @@ import com.openminis.app.tools.ToolExecutionResult
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.net.URL
@@ -33,12 +34,10 @@ object OnlineApiTool {
 
     private fun networkClient(context: Context, plugin: PluginRegistry.RemotePlugin): OkHttpClient = synchronized(networkClients) {
         networkClients.getOrPut(plugin.configurationKey()) {
-            OkHttpClient.Builder()
+            configureConnectorTransport(OkHttpClient.Builder())
                 .dns(ConnectorNetworkPolicy.dns(context.applicationContext, plugin))
                 .connectTimeout(15, TimeUnit.SECONDS)
                 .readTimeout(25, TimeUnit.SECONDS)
-                .followRedirects(false)
-                .followSslRedirects(false)
                 .build()
         }
     }
@@ -161,7 +160,7 @@ object OnlineApiTool {
                 args.keys().forEach { k -> if (k !in substituted) json.putOpt(k, args.opt(k)) }
                 json.toString().toRequestBody("application/json; charset=utf-8".toMediaType())
             } else null
-            requestBuilder.method(requestMethod, body)
+            requestBuilder.method(requestMethod, onlineRequestBody(requestMethod, body))
             client.newCall(requestBuilder.build()).execute().use { response ->
                 code = response.code
                 if (code in 300..399) {
@@ -199,6 +198,25 @@ object OnlineApiTool {
             429 -> ToolExecutionResult("Plugin rate-limited (429). Try again later.", false)
             in 200..299 -> ToolExecutionResult(text.take(MAX_OUTPUT), true)
             else -> ToolExecutionResult("Remote HTTP $code: ${text.take(300)}", false)
+        }
+    }
+
+    internal fun configureConnectorTransport(builder: OkHttpClient.Builder): OkHttpClient.Builder =
+        builder.retryOnConnectionFailure(false).followRedirects(false).followSslRedirects(false)
+
+    /** A bodyless DELETE still needs a one-shot body to suppress OkHttp follow-ups. */
+    internal fun onlineRequestBody(method: String, body: RequestBody?): RequestBody? {
+        if (method == "GET" || method == "HEAD") return body
+        val delegate = body ?: ByteArray(0).toRequestBody()
+        val written = java.util.concurrent.atomic.AtomicBoolean()
+        return object : RequestBody() {
+            override fun contentType() = delegate.contentType()
+            override fun contentLength() = delegate.contentLength()
+            override fun isOneShot() = true
+            override fun writeTo(sink: okio.BufferedSink) {
+                if (!written.compareAndSet(false, true)) throw java.io.IOException("Connector write body cannot be replayed")
+                delegate.writeTo(sink)
+            }
         }
     }
 

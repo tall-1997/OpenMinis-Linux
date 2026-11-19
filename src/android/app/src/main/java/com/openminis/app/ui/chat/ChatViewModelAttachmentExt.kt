@@ -246,12 +246,11 @@ internal suspend fun ChatViewModel.prepareUserAttachments(
             Log.e(ChatViewModel.TAG, "Failed to persist non-image attachment ${attachment.fileName}", e)
             null
         }
+        val linuxPath = "/var/minis/attachments/uploads/$safeName"
         if (ref != null) {
-            nonImageMediaRefPartsJson.add(buildMediaRefPartJson(ref))
+            nonImageMediaRefPartsJson.add(buildMediaRefPartJson(ref, linuxPath = linuxPath))
             nonImageUris.add(Uri.fromFile(java.io.File(mediaStore.mediaBaseDir, ref.relativePath)))
         }
-
-        val linuxPath = "/var/minis/attachments/uploads/$safeName"
         metas.add(UploadMeta(linuxPath = linuxPath, size = dest.length(), modifiedIso = nowStr))
     }
 
@@ -346,7 +345,7 @@ private fun ChatViewModel.uniqueUploadFileName(dir: java.io.File, original: Stri
     }
 }
 
-private fun ChatViewModel.buildMediaRefPartJson(
+internal fun buildMediaRefPartJson(
     ref: com.openminis.app.data.model.MediaRef,
     linuxPath: String? = null,
 ): String {

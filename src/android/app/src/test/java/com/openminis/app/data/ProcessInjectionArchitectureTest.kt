@@ -28,23 +28,36 @@ class ProcessInjectionArchitectureTest {
             loop.contains("processInjectedSystemPrompt("),
         )
         assertTrue("notices are committed once", loop.contains("commitSessionNoticesOnce("))
-        assertTrue(
-            "the request prompt is only date-refreshed",
-            loop.contains("refreshRuntimeContextDate("),
-        )
+        assertTrue("the agent loop uses the shared request projector", loop.contains("projectChatRequest("))
         val notes = ProductionSources.read("ui/chat/ChatViewModelHiddenNote.kt")
         assertTrue("goal is announced once", notes.contains("goalAnnouncedSha"))
-        assertTrue("recall is committed once", notes.contains("newRecallReminder()"))
-        assertTrue("recall re-surfaces only after eviction", notes.contains("announcedRecallCarrier"))
+        assertFalse("recall must not be pinned in transcript history before dispatch", notes.contains("newRecallReminder("))
         assertTrue("plan retry is not dropped", notes.contains("consumePlanStepRetryPrompt()"))
     }
 
     @Test
-    fun `recall never re-selects a delivered line`() {
-        val ext = ProductionSources.read("ui/chat/ChatViewModelPlanContextExt.kt")
-        assertTrue("fresh-hit filter must exist", ext.contains("internal fun <T> recallFreshHits("))
-        assertTrue("delivered lines are remembered", ext.contains("announcedRecallKeys"))
-        assertFalse("the per-turn recall part is gone", ext.contains("internal fun ChatViewModel.liveRecallPrompt("))
+    fun `automatic recall is projected without writing the transcript`() {
+        val projector = ProductionSources.read("ui/chat/ChatViewModelRequestProjection.kt")
+        assertTrue(projector.contains("projectMemoryDeliveryPrompt("))
+        assertTrue(projector.contains("withoutStoredRecallReminders()"))
+        assertTrue(projector.contains("withMemoryRecallReminder(recall)"))
+        assertFalse(projector.contains("recordSuccessfulMemoryDelivery("))
+        assertFalse(projector.contains("commitHiddenUserNote("))
+        assertFalse("Preview never starts semantic prefetch", projector.contains("prefetchSemanticRecallForRequest("))
+        assertTrue(projector.contains("turnId = memoryRecallTurnIdForHistory(history)"))
+        val loop = ProductionSources.read("ui/chat/ChatViewModelAgentLoopExt.kt")
+        assertTrue(loop.contains("prefetchSemanticRecallForRequest(history)"))
+    }
+
+    @Test
+    fun `only the successful request settles memory delivery`() {
+        val loop = ProductionSources.read("ui/chat/ChatViewModelAgentLoopExt.kt")
+        val settle = ProductionSources.read("ui/chat/ChatViewModelRequestSettlement.kt")
+        val truncated = loop.indexOf("SuccessfulOverflowKind.TRUNCATED")
+        val eligible = loop.indexOf("collectDone && eligibleContextReceipt(")
+        val accepted = loop.indexOf("acceptRequestProjection(")
+        assertTrue("failed or truncated attempts cannot settle delivery", truncated >= 0 && eligible > truncated && accepted > eligible)
+        assertTrue(settle.contains("recordSuccessfulMemoryDelivery(projection.prompt?.daily, request.systemPrompt, request.messages, projection.recall, realUserId)"))
     }
 
     @Test

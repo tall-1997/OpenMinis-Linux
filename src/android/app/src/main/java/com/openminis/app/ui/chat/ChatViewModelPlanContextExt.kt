@@ -1,6 +1,7 @@
 package com.openminis.app.ui.chat
 
 import androidx.lifecycle.viewModelScope
+import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -26,25 +27,25 @@ internal fun <T> recallFreshHits(
     keyOf: (T) -> String,
 ): List<T> = hits.filter { keyOf(it) !in announced }
 
-/** [T-recall-once] One-shot recall fragment; committed once, never rebuilt. */
-internal fun ChatViewModel.newRecallReminder(): String? {
-    if (!_memoryEnabled.value) return null
-    val input = liveRecallInput() ?: return null
+/** Request-local recall; merely selecting a hit must neither persist nor suppress it. */
+internal fun ChatViewModel.newRecallReminder(
+    daily: DailyMemoryDelivery?,
+    query: String? = liveRecallInput()?.query,
+    turnId: String? = null,
+): RecallReminder? {
+    if (!_memoryEnabled.value || query == null) return null
+    val session = activeSessionId
+    val now = daily?.projectedAt ?: System.currentTimeMillis()
     val engine = recallEngineForLiveRecall() ?: return null
-    val hits = recallHitsNotAlreadyResident(
-        engine.recallForPromptCached(input.query),
-        residentDailyFiles,
-    ) { it.source }
-    if (hits.isEmpty()) return null
-    val fresh = recallFreshHits(hits, announcedRecallKeys) { "${it.day}:${it.line}" }
-    if (fresh.isEmpty()) return null
-    // Mark delivered only what actually rendered: a hit cut by the fragment
-    // cap was never shown, so burning it out of the session is permanent
-    // suppression of a memory the model never received.
-    val rendered = engine.formatAsPromptFragmentWithHits(fresh)
+    val residentRefs = daily?.entryRefs.orEmpty()
+    val hits = engine.recallCandidatesForDelivery(query, now, turnId).filterNot { hit ->
+        val ref = hit.ref
+        if (ref != null) ref in residentRefs else hit.source in daily?.residentSources.orEmpty()
+    }
+    val announced = if (noticesSessionId == session) announcedRecallKeys else emptySet()
+    val rendered = engine.formatAsPromptFragmentWithHits(recallFreshHits(hits, announced) { it.announcementKey }, now)
     if (rendered.text.isBlank()) return null
-    announcedRecallKeys.addAll(rendered.included.map { "${it.day}:${it.line}" })
-    return rendered.text
+    return RecallReminder("<system-reminder>\n${rendered.text}\n</system-reminder>", rendered.included, session, now)
 }
 
 /**
@@ -90,10 +91,13 @@ internal fun ChatViewModel.liveRecallInput(): LiveRecallInput? {
     return LiveRecallInput(query, lastUser.id)
 }
 
-/**
- * Real-user text eligible as a memory query. Host reminders are not a query,
- * and a blank or tool-result carrier is not one either.
- */
+/** Newest substantive user text from the same pre-projection history (including a composer draft). */
+internal fun memoryRecallQueryForHistory(history: List<LLMMessage>): String? = history.asReversed().firstNotNullOfOrNull { message ->
+    if (!isMemoryUserInput(message)) return@firstNotNullOfOrNull null
+    val query = memoryRecallQuery(message.content) ?: return@firstNotNullOfOrNull null
+    query.takeIf(TaskAnchor::isSubstantive)
+}
+
 /**
  * Drop recall hits whose file is already in the system prompt verbatim.
  * ZCode does not re-select a memory that is already in context.
@@ -149,13 +153,28 @@ internal fun ChatViewModel.recallEngineForLiveRecall(): com.openminis.app.data.r
  * the prefetch exists.
  */
 internal fun ChatViewModel.prefetchSemanticRecall() {
-    if (!_memoryEnabled.value) return
-    if (com.openminis.app.data.memory.MemoryEmbeddingRuntime.recallSupportOrNull() == null) return
+    if (!_memoryEnabled.value || com.openminis.app.data.memory.MemoryEmbeddingRuntime.indexerOrNull() == null) return
+    prefetchSemanticRecallForRequest(agentHistorySnapshot())
+}
+
+internal fun memoryRecallTurnIdForHistory(history: List<LLMMessage>): String? =
+    history.lastOrNull(::isMemoryUserInput)?.dbMessageId?.takeIf { it.isNotBlank() }
+
+private fun isMemoryUserInput(message: LLMMessage): Boolean =
+    message.role == LLMMessage.Role.USER && !message.isHostGenerated && !HarnessNoteMarkers.isUserHarnessNote(message) &&
+        message.contentParts.none { it is AgentContentPart.ToolUse || it is AgentContentPart.ToolResult } &&
+        (message.content.isNotBlank() || message.contentParts.any { it !is AgentContentPart.Text || it.text.isNotBlank() } ||
+            message.imageParts.isNotEmpty() || message.audioParts.isNotEmpty())
+
+/** Request-side only; estimates can read the completed cache but never launch prefetch. */
+internal fun ChatViewModel.prefetchSemanticRecallForRequest(history: List<LLMMessage>) {
+    if (!_memoryEnabled.value || com.openminis.app.data.memory.MemoryEmbeddingRuntime.indexerOrNull() == null) return
+    val turnId = memoryRecallTurnIdForHistory(history) ?: return
+    val query = memoryRecallQueryForHistory(history) ?: return
+    val session = activeSessionId
     viewModelScope.launch(Dispatchers.IO) {
         runCatching {
-            val input = liveRecallInput() ?: return@runCatching
-            val engine = recallEngineForLiveRecall() ?: return@runCatching
-            engine.prefetchSemantic(input.query)
+            if (session == activeSessionId && _memoryEnabled.value) recallEngineForLiveRecall()?.prefetchSemantic(query, turnId)
         }
     }
 }
