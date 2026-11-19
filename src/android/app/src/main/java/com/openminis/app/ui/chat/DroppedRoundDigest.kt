@@ -60,15 +60,20 @@ internal object DroppedRoundDigest {
         // bound. This runs on every request while a drop persists; scanning
         // all 3,000 dropped rounds to keep 24 lines was pure waste. Older
         // messages beyond the scan are reported as a count, not read.
+        // [T-harness-config] The three caps are policy, not constants: a
+        // per-session override must be able to change how much of the dropped
+        // tail the digest may carry. Defaults are byte-identical to the
+        // documented constants above.
+        val config = com.openminis.app.agent.HarnessConfig.current()
         val kept = ArrayDeque<String>()
         var used = 0
         var scanned = 0
         var i = dropped.lastIndex
-        while (i >= 0 && kept.size < MAX_LINES && scanned < MAX_SCAN_MESSAGES) {
+        while (i >= 0 && kept.size < config.digestMaxLines && scanned < config.digestScanMessages) {
             scanned++
             val line = lineFor(dropped[i])
             if (line != null) {
-                if (kept.isNotEmpty() && used + line.length + 1 > MAX_CHARS) break
+                if (kept.isNotEmpty() && used + line.length + 1 > config.digestMaxChars) break
                 kept.addFirst(line)
                 used += line.length + 1
             }

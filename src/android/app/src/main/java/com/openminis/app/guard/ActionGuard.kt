@@ -180,7 +180,12 @@ object ActionGuard {
             else -> Outcome.Effective
         }
         val hit = guard.record(signature(tool, args), ok, outcome) ?: return null
-        return LoopGuard.message(hit.first, hit.second, stop = hit.first.stopAt <= hit.second)
+        // [T-loop-guard-stop-policy] `stop` must describe what ACTUALLY happened,
+        // not whether the count reached the last rung. With the stop policy off,
+        // the last rung is one more reminder — reporting it as "Refused:" would
+        // tell the model a call was blocked that in fact ran.
+        val didStop = guard.stopped == hit.first
+        return LoopGuard.message(hit.first, hit.second, stop = didStop)
     }
 
     /**

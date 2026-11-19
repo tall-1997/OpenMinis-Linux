@@ -1,6 +1,7 @@
 package com.openminis.app.ui.chat
 
 import android.util.Log
+import com.openminis.app.agent.TimeContextGate
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
@@ -52,7 +53,11 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
     val marker = _cachedLatestMarker
     // No compact in play → return full history untouched.
     if (summary.isNullOrBlank() || marker == null) {
-        return maybeProgressivelyTrimmed(agentHistory.toList(), applyProgressiveTrim)
+        val plain = maybeProgressivelyTrimmed(agentHistory.toList(), applyProgressiveTrim)
+        // [T-time-context-interval] The clock belongs to EVERY request, not only
+        // the ones that follow a compaction: a fresh session is exactly where
+        // "watch the build for 20 minutes" had no timestamp at all.
+        return if (forRequest) applyRequestClockNote(plain) else plain
     }
 
     val summaryWrappedText = "<context-summary>\n" +
@@ -359,7 +364,10 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
         // prose between tool calls. The fold makes the model see them as
         // part of the original request. Transcript/DB/UI/ledger all
         // untouched — request-assembly only.
-        return maybeProgressivelyTrimmed(foldHarnessNotes(result), applyProgressiveTrim)
+        val assembled = maybeProgressivelyTrimmed(foldHarnessNotes(result), applyProgressiveTrim)
+        // [T-time-context-interval] Request-side clock, applied after the fold so
+        // the note lands on the real user turn rather than on a harness note.
+        return if (forRequest) applyRequestClockNote(assembled) else assembled
     }
 
 
@@ -417,6 +425,83 @@ internal fun evictedStateNote(
     return snapshot.subList(anchorIdx + 1, snapshot.size)
         .lastOrNull { it.content.contains(SessionStateSnapshot.MARKER) }
 }
+
+/**
+ * [T-time-context-interval] Append the clock note to the LAST real user turn of
+ * an outgoing request.
+ *
+ * WHY here and not in the send path: `SendExt` annotates the user body, then
+ * `runAgentLoopBody` calls `rebuildAgentHistoryFromDatabase` before the first
+ * request — the annotating text is a request-side copy, so the note was gone by
+ * the time `requestHistory` was built, and every later turn of the same run
+ * never got one at all. Injecting at assembly means:
+ *  - the note exists in exactly what the model receives;
+ *  - nothing is persisted (the DB row keeps the user's raw words);
+ *  - the interval throttle applies to real requests, which is the point.
+ *
+ * The note rides the last USER message as appended text + a matching Text part,
+ * the same shape `prependUserText` produces, so providers that serialize parts
+ * AND providers that serialize content both see it. A carrier (tool-result) turn
+ * is skipped on purpose: mutating a carrier would put the note between a call
+ * and its result in the model's reading order.
+ */
+internal fun ChatViewModel.applyRequestClockNote(history: List<LLMMessage>): List<LLMMessage> {
+    if (history.isEmpty()) return history
+    val nowMs = System.currentTimeMillis()
+    val sid = realSessionId.ifEmpty { activeSessionId }
+    val idx = history.indexOfLast { msg ->
+        msg.role == LLMMessage.Role.USER &&
+            msg.contentParts.none {
+                it is AgentContentPart.ToolResult || it is AgentContentPart.ToolUse
+            } &&
+            !HarnessNoteMarkers.isUserHarnessNote(msg)
+    }
+    if (idx < 0) return history
+    val target = history[idx]
+    // [T-time-context-sentinel] Match the SAME literal the producer writes.
+    // A bare `<system-note>` test also matched the workspace reminder and the
+    // file-reference note (both ride the same user turn), so any session with a
+    // resolvable workspace silently lost its clock entirely.
+    if (target.content.contains("<system-note>\u5f53\u524d\u65f6\u95f4")) return history
+    val keywordHit = CLOCK_HINTS.any { target.content.contains(it, ignoreCase = true) }
+    if (!keywordHit && !TimeContextGate.shouldInject(sid, nowMs)) return history
+    TimeContextGate.markInjected(sid, nowMs)
+
+    val zone = java.util.TimeZone.getDefault().toZoneId()
+    val stamp = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+        .format(java.time.Instant.ofEpochMilli(nowMs).atZone(zone))
+    val note = buildString {
+        append("\n\n<system-note>\u5f53\u524d\u65f6\u95f4: ").append(stamp)
+        TurnClock.previousMessageAt(sid)?.let { prev ->
+            if (prev > 0L) {
+                append(" (since previous message: ")
+                append(TimeContextGate.formatElapsed((nowMs - prev).coerceAtLeast(0L)))
+                append(')')
+            }
+        }
+        append("</system-note>")
+    }
+    TurnClock.markModelVisible(sid, nowMs)
+    val updated = target.copy(
+        content = target.content + note,
+        contentParts = target.contentParts + AgentContentPart.Text(note),
+    )
+    return history.toMutableList().also { it[idx] = updated }
+}
+
+/**
+ * Kept identical to TimeReminder's vocabulary so both paths agree.
+ *
+ * Escaped on purpose: this file sits at a CJK-literal baseline of 0, and a
+ * Chinese hint spelled literally would fail that ratchet while the identical
+ * string in `agent/MessageTransformers.kt` passes.
+ */
+private val CLOCK_HINTS: List<String> = listOf(
+    "\u73b0\u5728", "now", "today", "\u4eca\u5929", "\u51e0\u70b9", "\u65f6\u95f4",
+    "weather", "\u5929\u6c14",
+    "remind", "\u63d0\u9192", "schedule", "\u5b89\u6392",
+    "\u5206\u949f", "\u5c0f\u65f6", "minute", "hour",
+)
 
 /**
  * [T-compact-summary-target] Index of the USER message the compact summary

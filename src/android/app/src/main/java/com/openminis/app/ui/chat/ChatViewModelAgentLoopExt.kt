@@ -511,11 +511,9 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 drainSteeringIntoRun(assistantId, accumulatedText, allToolBlocks, uiBatcher) { swapLoopStateToInjectedBubble(it) }
                 declareToolSetDeltaIfChanged(agentTools)
                 val requestHistory = ToolIdNormalization.normalizeMessages(
-                    effectiveAgentHistory().let { history ->
-                        // [T-stall-resume] One-shot continuation note only.
-                        applyStallNudge(history, stallResumeContext)
-                    }
-                )
+                    // [T-stall-resume] One-shot continuation note only.
+                    effectiveAgentHistory().let { applyStallNudge(it, stallResumeContext) },
+                ).also { recordRequestJournal(turn, it) }   // [T-session-journal] shadow log
                 // [T-first-event-watchdog][T-routing-strategy-x] First-token budget.
                 val firstEventTimeoutMs = GroupRoutingState.resolveFirstEventTimeoutMs(providerRepository,
                     _selectedGroupId.value,

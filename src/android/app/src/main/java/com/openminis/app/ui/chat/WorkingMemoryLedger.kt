@@ -85,12 +85,16 @@ internal class WorkingMemoryLedger {
             ),
         )
         delivered.add(false)
+        // [T-harness-config] The cap is policy, not a constant: a per-session
+        // override must be able to change how many rounds the handover retains.
+        // The shipped default (600) is byte-identical to MAX_ENTRIES.
+        val maxEntries = com.openminis.app.agent.HarnessConfig.current().ledgerMaxEntries
         var folded = false
-        if (entries.size > MAX_ENTRIES) {
+        if (entries.size > maxEntries) {
             folded = true
             // Fold the oldest run of entries into one marker line: drop the
-            // first (MAX_ENTRIES / 2) entries but keep their count visible.
-            val drop = MAX_ENTRIES / 2
+            // first (maxEntries / 2) entries but keep their count visible.
+            val drop = maxEntries / 2
             val oldest = entries.subList(0, drop)
             // [T-working-memory-fold-sample] Folding undelivered records must
             // not reduce them to a bare count: keep a short sample of what

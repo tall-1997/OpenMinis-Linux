@@ -116,13 +116,15 @@ internal fun ChatViewModel.contextTokensForPolicy(): Int {
         )
         PolicyMeasurement.REQUEST -> effectiveAgentHistoryUncounted()
     }
-    return maxOf(
-        _lastTurnContextTokens.value,
-        // [T-compact-gate-one-pass] One estimate, not two: the un-budgeted
-        // slice always dominates the budgeted one (same list minus dropped
-        // rounds), and each estimate serializes every tool argument. The old
-        // three-term form walked the whole history twice per request.
-        estimateMessagesTokens(slice),
+    // [T-token-meter-single-authority] The precedence rule lives in
+    // TokenMeter: a trigger takes the LARGER of provider reading and
+    // estimate, so neither a stale usage value nor an under-estimate can
+    // hide an oversized request. One estimate per call: the un-budgeted
+    // slice always dominates the budgeted one (same list minus dropped
+    // rounds) and each estimate serializes every tool argument.
+    return TokenMeter.pressure(
+        providerTokens = _lastTurnContextTokens.value,
+        estimatedTokens = estimateMessagesTokens(slice),
     )
 }
 
@@ -135,10 +137,14 @@ internal fun ChatViewModel.contextTokensForPolicy(): Int {
  * 55k, which reads as a false alarm.
  */
 internal fun ChatViewModel.contextTokensForDisplay(): Int =
-    maxOf(
-        _lastTurnContextTokens.value,
-        estimateAgentHistoryTokens(),
-    )
+    // [T-token-meter-single-authority] A display number is the LARGER of the
+    // provider reading and the pending estimate. The reading describes the
+    // previous request, so right after a large paste the estimate is the honest
+    // one — see TokenMeter.forDisplay for why "provider wins" was wrong.
+    TokenMeter.forDisplay(
+        providerTokens = _lastTurnContextTokens.value,
+        estimatedTokens = estimateAgentHistoryTokens(),
+    ).totalTokens
 
 /**
  * Recompute contextUsage for the session-menu ring.
@@ -153,28 +159,22 @@ internal fun ChatViewModel.contextTokensForDisplay(): Int =
  */
 fun ChatViewModel.refreshContextUsage() {
     val reported = _lastTurnContextTokens.value
-    var usedChars = 0L
-    var imageCount = 0
-    for (msg in effectiveAgentHistoryUncounted()) {
-        for (part in msg.contentParts) {
-            when (part) {
-                is AgentContentPart.Text -> usedChars += part.text.length
-                is AgentContentPart.ToolUse -> usedChars += TokenScanMemo.toolUseInputJson(part.input).length
-                is AgentContentPart.ToolResult -> {
-                    usedChars += part.content.length
-                }
-                is AgentContentPart.ImageData -> imageCount += 1
-            }
-        }
-    }
+    // [T-token-meter-single-authority] The composition walk lives in
+    // TokenMeter.breakdown; this function only turns it into the ring's
+    // ContextUsage. Same parts counted as before, so the number users see does
+    // not shift — it is now produced by the same authority the gate uses.
+    val parts = TokenMeter.breakdown(effectiveAgentHistoryUncounted())
     // [T-pi-context-token-estimator] The flat chars/3.5 heuristic ignored
     // image parts entirely; the pi-ported estimator counts each image as
     // ~4800 chars (its empirical image-token weight) and ceils the char
     // division instead of truncating it.
-    val estTokens = com.openminis.app.data.ContextTokenEstimator.estimateTextTokens(
-        usedChars + imageCount * com.openminis.app.data.ContextTokenEstimator.ESTIMATED_IMAGE_CHARS,
-    )
-    val used = if (reported > 0) reported.toLong() else estTokens
+    val estTokens = com.openminis.app.data.ContextTokenEstimator.estimateTextTokens(parts.totalChars)
+        .coerceIn(0L, Int.MAX_VALUE.toLong())
+        .toInt()
+    val used = TokenMeter.forDisplay(
+        providerTokens = reported,
+        estimatedTokens = estTokens,
+    ).totalTokens.toLong()
     val window = currentModelContextWindow?.toLong() ?: 0L
     contextUsage.value = com.openminis.app.data.model.ContextUsage(used, window)
 }

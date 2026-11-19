@@ -43,6 +43,21 @@ data class UserTransformContext(
     val nowMillis: Long = System.currentTimeMillis(),
     /** Set when the session's user-made workspace path is resolvable on the host. */
     val workspaceHint: String? = null,
+    /**
+     * [T-time-context-interval] Owning session, so the clock can throttle
+     * itself per session (a new chat must not inherit the previous chat's
+     * "already stamped" state). Null disables the interval path and leaves the
+     * keyword path working, which is what JVM tests that do not model a
+     * session rely on.
+     */
+    val sessionId: String? = null,
+    /**
+     * [T-time-context-interval] Epoch millis of the newest model-visible
+     * message BEFORE this one, used to report elapsed time. Null = unknown
+     * (first message of a session), which suppresses the elapsed line instead
+     * of printing a fabricated one.
+     */
+    val previousMessageAtMs: Long? = null,
 )
 
 object MessageTransformerChain {
@@ -171,14 +186,52 @@ object MessageTransformerChain {
             // once this request — never stamp twice (cross-hour retries would
             // otherwise accumulate conflicting timestamps).
             if (text.contains("<system-note>当前时间")) return null
-            // Skip for messages that clearly aren't time-sensitive
-            // (pure code/file operations don't benefit from a clock stamp).
-            val needsTime = TIME_SENSITIVE_HINTS.any { hint -> text.contains(hint, ignoreCase = true) }
-            if (!needsTime) return null
+            // [T-time-context-request-side] The clock is now injected during
+            // REQUEST ASSEMBLY (see ChatViewModel.applyRequestClockNote), which
+            // is the only place a later turn of the same run can be stamped:
+            // this chain runs once, on the send path, and the loop rebuilds the
+            // history from the DB right after it. The keyword path stays here as
+            // the first-turn fast path (the request builder's sentinel then sees
+            // the note and skips), and the interval path remains for callers that
+            // have a session but no loop.
+            // [T-time-context-interval] Two ways in, and they are not equal:
+            //  - a time-sensitive word means the answer depends on the clock,
+            //    so inject immediately and reset the interval;
+            //  - otherwise inject at most once per TimeContextGate.MIN_INTERVAL_MS,
+            //    which is what gives a long tool chain a usable clock at all.
+            // The keyword path alone left \"watch the build for 20 minutes\" with
+            // no timestamp, and the model answered from the session's first turn.
+            val keywordHit = TIME_SENSITIVE_HINTS.any { hint ->
+                text.contains(hint, ignoreCase = true)
+            }
+            val intervalDue = TimeContextGate.shouldInject(context.sessionId, context.nowMillis)
+            if (!keywordHit && !intervalDue) return null
+            TimeContextGate.markInjected(context.sessionId, context.nowMillis)
             val now = java.time.Instant.ofEpochMilli(context.nowMillis)
                 .atZone(java.util.TimeZone.getDefault().toZoneId())
-            return "<system-note>当前时间: ${format.format(now)}</system-note>"
+            return buildString {
+                append("<system-note>当前时间: ").append(format.format(now))
+                // [T-time-context-interval] Elapsed is what turns a timestamp
+                // into a clock: without it the model cannot tell \"a minute ago\"
+                // from \"an hour ago\", which is the actual complaint behind
+                // mis-dated answers in long runs.
+                val prev = context.previousMessageAtMs
+                if (prev != null && prev > 0L) {
+                    val elapsedMs = (context.nowMillis - prev).coerceAtLeast(0L)
+                    append(ELAPSED_PREFIX)
+                        .append(TimeContextGate.formatElapsed(elapsedMs))
+                        .append(ELAPSED_SUFFIX)
+                }
+                append("</system-note>")
+            }
         }
+
+        /** ASCII on purpose: keeps the CJK literal ratchet flat. */
+        private const val ELAPSED_PREFIX = " (since previous message: "
+
+        /** Closing paren for ELAPSED_PREFIX. */
+        private const val ELAPSED_SUFFIX = ")"
+
 
         private val TIME_SENSITIVE_HINTS = listOf(
             "现在", "now", "today", "今天", "几点", "时间", "weather", "天气",

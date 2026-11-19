@@ -46,8 +46,12 @@ internal fun detachedTailSize(
  * window minus the notice+digest reserve, same accounting as postAnchor.
  */
 internal fun detachedTailSizeForWindow(history: List<LLMMessage>, windowTokens: Int?): Int {
+    val config = com.openminis.app.agent.HarnessConfig.current()
     val budget = PostAnchorTail.budgetTokensForWindow(windowTokens)
-    val tailBudget = (budget - PostAnchorTail.NOTICE_RESERVE_TOKENS).coerceAtLeast(1)
+    // [T-harness-config] Read the SAME reserve object the postAnchor path
+    // subtracts, so a config override cannot make the two paths disagree about
+    // how much room the notice+digest may take.
+    val tailBudget = config.effectiveTailBudget(budget)
     return detachedTailSize(history, tailBudget)
 }
 

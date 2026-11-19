@@ -228,7 +228,12 @@ internal class MemoryFragmentBuilder(
             val file = File(memoryDir, "$dateStr.md")
             if (file.exists()) {
                 val content = readTextResilient(file, "daily-memory") ?: ""
-                if (content.isNotEmpty()) {
+                // [T-memory-frontmatter] A disabled or expired file must not
+                // reach the model. Eligibility is decided once, here, so the
+                // gate, the budget and the index cannot disagree about it.
+                if (content.isNotEmpty() &&
+                    MemoryMetadataParser.isEligible(content, now, file.lastModified())
+                ) {
                     raw.add(MemoryDailyGate.RawDay(dateStr, dayOffset, content))
                 }
             }

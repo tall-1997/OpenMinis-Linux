@@ -69,6 +69,8 @@ object MemoryIndex {
         sharedDir: File?,
         excludeDates: Set<String>,
         maxRows: Int = MAX_ROWS,
+        /** [T-memory-frontmatter] Clock for TTL eligibility; injectable for tests. */
+        nowMs: Long = System.currentTimeMillis(),
     ): List<Row> {
         val byDate = LinkedHashMap<String, Row>()
         // Shared first, session second: a later put() replaces the shared row.
@@ -77,7 +79,7 @@ object MemoryIndex {
             for (file in files) {
                 if (!file.isFile || !DAILY.matches(file.name)) continue
                 val date = file.name.removeSuffix(".md")
-                val row = rowFor(file, date, shared) ?: continue
+                val row = rowFor(file, date, shared, nowMs) ?: continue
                 byDate[date] = row
             }
         }
@@ -85,9 +87,13 @@ object MemoryIndex {
         return sorted.filter { it.date !in excludeDates }.take(maxRows)
     }
 
-    private fun rowFor(file: File, date: String, shared: Boolean): Row? {
+    private fun rowFor(file: File, date: String, shared: Boolean, nowMs: Long): Row? {
         val text = runCatching { file.readText() }.getOrNull() ?: return null
         if (text.isBlank()) return null
+        // [T-memory-frontmatter] An index row is an invitation to read the file,
+        // so an ineligible file must not appear here either — otherwise the TOC
+        // advertises memory the prompt deliberately withheld.
+        if (!MemoryMetadataParser.isEligible(text, nowMs, file.lastModified())) return null
         val entries = ENTRY_MARK.findAll(text).count()
         return Row(date = date, entries = entries, preview = previewOf(text), shared = shared)
     }
@@ -137,11 +143,16 @@ object MemoryIndex {
         excludeDates: Set<String>,
         maxRows: Int = MAX_ROWS,
     ): String? {
-        val rows = rows(sessionDir, sharedDir, excludeDates, maxRows)
-        if (rows.isEmpty()) return null
-        // Recompute the omitted count so the block can say how much it hid.
-        val total = rows(sessionDir, sharedDir, excludeDates, Int.MAX_VALUE).size
-        val body = render(rows, (total - rows.size).coerceAtLeast(0)) ?: return null
+        // [T-memory-index-single-pass] One scan, not two. The old body called
+        // rows() twice — once for the page and once at Int.MAX_VALUE purely to
+        // learn how many rows were hidden — and each call now also reads and
+        // parses frontmatter for every daily file in both scopes. Computing the
+        // total from the same List keeps the omitted count exact with half the
+        // IO and half the parsing.
+        val all = rows(sessionDir, sharedDir, excludeDates, Int.MAX_VALUE)
+        if (all.isEmpty()) return null
+        val page = all.take(maxRows.coerceAtLeast(1))
+        val body = render(page, (all.size - page.size).coerceAtLeast(0)) ?: return null
         return MemoryAuthority.withEnvelope(
             body,
             MemoryTrust.UNVERIFIED_CANDIDATE,

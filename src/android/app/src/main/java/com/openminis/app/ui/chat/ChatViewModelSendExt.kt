@@ -391,10 +391,20 @@ internal fun ChatViewModel.sendMessage(
                 .hostDir(context.filesDir, activeSessionId, "workspace")
             dir.absolutePath.takeIf { dir.isDirectory }
         }.getOrNull()
+        // [T-time-context-interval] The clock note needs the owning session and
+        // the previous message's time: the session keys the interval throttle,
+        // and the previous time is what turns a timestamp into an elapsed
+        // reading. Both are read BEFORE this message marks itself visible.
+        val clockSession = realSessionId.ifEmpty { activeSessionId }
         val modelBody = com.openminis.app.agent.MessageTransformerChain.applyUser(
             modelBodyRaw,
-            com.openminis.app.agent.UserTransformContext(workspaceHint = workspaceHint),
+            com.openminis.app.agent.UserTransformContext(
+                workspaceHint = workspaceHint,
+                sessionId = clockSession,
+                previousMessageAtMs = TurnClock.previousMessageAt(clockSession),
+            ),
         )
+        TurnClock.markModelVisible(clockSession, System.currentTimeMillis())
 
         val userContentParts = mutableListOf<AgentContentPart>()
         if (modelBody.isNotEmpty()) userContentParts.add(AgentContentPart.Text(modelBody))

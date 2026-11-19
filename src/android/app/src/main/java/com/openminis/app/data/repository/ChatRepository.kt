@@ -1149,7 +1149,7 @@ class ChatRepository(
      * those collapse markdown for a 100-char single-line preview, while
      * this preserves the full text the offload caller wants to inspect.
      */
-    private fun extractTextForOffload(partsJson: String): String {
+    internal fun extractTextForOffload(partsJson: String): String {
         return try {
             val arr = org.json.JSONArray(partsJson)
             val texts = mutableListOf<String>()

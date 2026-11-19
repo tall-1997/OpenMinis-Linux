@@ -162,6 +162,11 @@ object AgentTools {
         add(ProductMediaTools.translateTextDefinition())
         add(SessionLookupTool.searchDefinition())
         add(SessionLookupTool.readDefinition())
+        // [T-history-retrieval] Read-only search over THIS session's folded
+        // history. Announced by the memory/compaction fragment, so it is
+        // alwaysOn (see the alwaysOn block below) rather than long-tail.
+        add(HistorySearchTool.searchDefinition())
+        add(HistorySearchTool.readDefinition())
         add(AskUserQuestion.definition())
         add(CronJobTool.definition())
         // [T-android-automation-rules] Conditional-trigger rules (Wi-Fi /
@@ -254,6 +259,10 @@ object AgentTools {
                 listOf(
                     AgentPlanTool.NAME, CronJobTool.NAME, EvolutionTool.NAME,
                     SessionLookupTool.SEARCH, SessionLookupTool.READ,
+                    // [T-history-retrieval] The compaction/notice fragment names
+                    // these two, so a long-tail gate would leave the model an
+                    // instruction it cannot obey.
+                    HistorySearchTool.SEARCH, HistorySearchTool.READ,
                 ),
             )
             if (memoryEnabled) {

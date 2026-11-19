@@ -201,6 +201,39 @@ private inline fun ChatViewModel.compactAllImpl(
         "[Compact] starting two-shot: ${toCompact.size} entries, ${transcriptChars} transcript chars, " +
             "timeout=${timeoutMs / 1000}s, stages=${stages.joinToString { it.kind }}",
     )
+    // [T-compaction-transaction] Bracket-first durable record, written BEFORE
+    // the summary call: an unmatched start is the only way a later launch can
+    // know that a paid-for attempt never settled.
+    val journalSid = realSessionId.ifEmpty { sessionId }
+    // [T-compaction-transaction] Retry authorization: a failed attempt that
+    // advanced nothing must not be re-run blindly — that is how one broken
+    // summarizer used to spend calls forever. The generation moves only on a
+    // SETTLED compaction (see settleCompactionJournal), so this check passes
+    // exactly when the previous attempt actually produced a new boundary.
+    val nowMs = System.currentTimeMillis()
+    if (!CompactionTransaction.retryAllowedNow(journalSid, nowMs)) {
+        // The previous attempt failed and nothing has changed since; running it
+        // again would spend another summary call to learn the same thing.
+        AppLogger.info(
+            ChatViewModel.TAG,
+            "[Compact] retry suppressed: last attempt failed and nothing advanced " +
+                "(cooldown=${CompactionTransaction.FAILURE_COOLDOWN_MS / 1000}s)",
+        )
+        appendSystemInfo(
+            text = context.getString(R.string.vm_compact_already_running),
+            iconKind = "compact",
+        )
+        _isCompacting.value = false
+        _compactProgress.value = null
+        onFinished?.invoke(false)
+        return
+    }
+    val compactionAttemptId = beginCompactionJournal(
+        sessionId = journalSid,
+        anchorIdx = anchorIdx,
+        rangeMessages = toCompact.size,
+        rangeChars = transcriptChars,
+    )
     compactJob = viewModelScope.launch(Dispatchers.IO) {
         // [T-android-compact-queued-drain] Only a SUCCESSFUL compact kicks
         // the queued-prompt drain below; failure/cancel/empty-summary paths
@@ -228,6 +261,11 @@ private inline fun ChatViewModel.compactAllImpl(
             // disappeared in one step.
             val coveredCount = coveredCountFor(outcome, toCompact.size) ?: run {
                 AppLogger.info(ChatViewModel.TAG, "[Compact] failed; context kept unchanged")
+                abandonCompactionJournal(
+                    journalSid,
+                    compactionAttemptId,
+                    "summarizer produced no usable summary",
+                )
                 return@launch
             }
             // [T-compact-reduced-anchor] A reduced retry summarizes only the
@@ -239,6 +277,7 @@ private inline fun ChatViewModel.compactAllImpl(
                 withContext(Dispatchers.Main) {
                     appendSystemInfo("Compaction produced no output — try again later.", "compact")
                 }
+                abandonCompactionJournal(journalSid, compactionAttemptId, "empty summary")
                 return@launch
             }
 
@@ -281,6 +320,7 @@ private inline fun ChatViewModel.compactAllImpl(
                 withContext(Dispatchers.Main) {
                     appendSystemInfo("Compact failed: could not anchor to a persisted message.", "compact")
                 }
+                abandonCompactionJournal(journalSid, compactionAttemptId, "no persisted anchor")
                 return@launch
             }
             if (verifiedAnchorIdx != coveredEndIdx) {
@@ -297,6 +337,7 @@ private inline fun ChatViewModel.compactAllImpl(
                     withContext(Dispatchers.Main) {
                         appendSystemInfo("Compact failed: anchor message id unavailable.", "compact")
                     }
+                    abandonCompactionJournal(journalSid, compactionAttemptId, "anchor id unavailable")
                     return@launch
                 }
             val marker = CompactMarkerEntity(
@@ -328,6 +369,7 @@ private inline fun ChatViewModel.compactAllImpl(
                 withContext(Dispatchers.Main) {
                     appendSystemInfo("Compaction failed: could not save the compact marker.", "compact")
                 }
+                abandonCompactionJournal(journalSid, compactionAttemptId, "marker not persisted")
                 return@launch
             }
             _compactSummary.value = summary
@@ -336,6 +378,15 @@ private inline fun ChatViewModel.compactAllImpl(
             // resolve the boundary on the very next outgoing turn.
             // Mirrors iOS `cachedLatestMarker = marker`.
             _cachedLatestMarker = marker
+            // [T-compaction-transaction] The transaction's durable end. The
+            // generation advanced here is what authorizes a later retry.
+            settleCompactionJournal(
+                sessionId = sid,
+                attemptId = compactionAttemptId,
+                summaryChars = summary.length,
+                coveredCount = coveredCount,
+                markerId = marker.id,
+            )
             // [T-compact-metadata] codex records `retained_image_count` /
             // `compaction_summary_tokens` next to its summary; these are the
             // equivalents worth auditing. Logged rather than stored so the marker
@@ -471,6 +522,7 @@ private inline fun ChatViewModel.compactAllImpl(
             // re-throw would otherwise swallow our own timeout and surface it
             // as a silent cancel with no message.
             timedOut = true
+            abandonCompactionJournal(journalSid, compactionAttemptId, "timed out")
             val elapsed = (timeoutMs / 1000L).toInt()
             val calls = compactCallsIssued.get()
             Log.w(ChatViewModel.TAG, "[Compact] timed out after ${elapsed}s ($calls model call(s) issued)")
@@ -481,6 +533,7 @@ private inline fun ChatViewModel.compactAllImpl(
                 )
             }
         } catch (e: CancellationException) {
+            abandonCompactionJournal(journalSid, compactionAttemptId, "cancelled")
             // User-initiated (cancelCompact) or scope teardown. Tell the
             // user only if they are still around to read it; the `finally`
             // below releases the lock either way.
@@ -493,6 +546,11 @@ private inline fun ChatViewModel.compactAllImpl(
             }
             throw e
         } catch (e: Exception) {
+            abandonCompactionJournal(
+                journalSid,
+                compactionAttemptId,
+                e.message ?: e.javaClass.simpleName,
+            )
             Log.w(ChatViewModel.TAG, "Compact failed", e)
             withContext(Dispatchers.Main) {
                 appendSystemInfo(

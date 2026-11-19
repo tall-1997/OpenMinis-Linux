@@ -42,8 +42,9 @@ internal object PostAnchorTail {
      */
     internal const val NOTICE_RESERVE_TOKENS: Int = 1_200
 
-    /** [T-postanchor-notice-reserve] Base notice cost, used to cap the digest. */
-    private const val NOTICE_BASE_TOKENS: Int = 64
+    // [T-harness-config] Base notice cost now lives on HarnessConfig
+    // (noticeBaseTokens). A second private copy here was one more number that
+    // could drift from the object the digest cap actually reads.
 
     /** [T-compact-window-scaled-budget] postAnchor share of the window. */
     internal const val WINDOW_FRACTION: Double = 0.35
@@ -59,8 +60,11 @@ internal object PostAnchorTail {
      */
     internal fun budgetTokensForWindow(windowTokens: Int?, applyTailBudget: Boolean = true): Int {
         if (!applyTailBudget) return Int.MAX_VALUE
-        if (windowTokens == null) return BUDGET_TOKENS
-        return minOf(BUDGET_TOKENS, (windowTokens * WINDOW_FRACTION).toInt())
+        // [T-harness-config] The numbers live in one validated object so a
+        // per-session override can change them without editing call sites. The
+        // defaults are byte-identical to the constants above (asserted by the
+        // tool-title/budget contract gate).
+        return com.openminis.app.agent.HarnessConfig.current().postAnchorBudgetFor(windowTokens)
     }
 
 
@@ -134,7 +138,11 @@ internal object PostAnchorTail {
         // as whole groups — a half-kept round could orphan a tool_use.
         // [T-postanchor-notice-reserve] Reserve the notice/digest cost so the
         // kept slice + notice stays inside the declared budget.
-        val effectiveBudget = (budget.budgetTokens - NOTICE_RESERVE_TOKENS).coerceAtLeast(1)
+        // [T-harness-config] The SAME reserve object the detached tail
+        // subtracts. Reading the constant here made the two paths disagree
+        // whenever a config override set a different reserve.
+        val config = com.openminis.app.agent.HarnessConfig.current()
+        val effectiveBudget = config.effectiveTailBudget(budget.budgetTokens)
         val costs = IntArray(groups.size) { i ->
             groups[i].sumOf { msg -> budget.estimate(msg) }.coerceAtLeast(0)
         }
@@ -200,8 +208,12 @@ internal object PostAnchorTail {
                 val maxChars = if (budget.budgetTokens == Int.MAX_VALUE) {
                     Int.MAX_VALUE
                 } else {
-                    // The share actually reserved for notice+digest.
-                    (NOTICE_RESERVE_TOKENS - NOTICE_BASE_TOKENS)
+                    // [T-harness-config] The share actually reserved for
+                    // notice+digest, taken from the same object the budget
+                    // above subtracted, so an override cannot make the two
+                    // disagree.
+                    (com.openminis.app.agent.HarnessConfig.current()
+                        .let { it.noticeReserveTokens - it.noticeBaseTokens })
                         .coerceAtLeast(0) * 4
                 }
                 if (text.length <= maxChars) {
@@ -249,22 +261,12 @@ internal object PostAnchorTail {
     }
 
     /**
-     * [T-postanchor-intra-round-split] True while a tool_use in [group] has no
-     * matching tool_result yet. Splitting there would orphan the call; wait
-     * until the result carrier has landed in the same group.
+     * [T-postanchor-intra-round-split][T-tool-pairing-single-authority] True
+     * while a tool_use in [group] has no matching tool_result yet. Splitting
+     * there would orphan the call; wait until the result carrier has landed in
+     * the same group. Delegates to [ToolPairingCore] so the Responses
+     * combined id is normalized the same way every other pairing check does.
      */
-    private fun hasPendingToolUse(group: List<LLMMessage>): Boolean {
-        val results = HashSet<String>()
-        for (m in group) {
-            for (p in m.contentParts) {
-                if (p is AgentContentPart.ToolResult && p.id.isNotEmpty()) results.add(p.id)
-            }
-        }
-        for (m in group) {
-            for (p in m.contentParts) {
-                if (p is AgentContentPart.ToolUse && p.id.isNotEmpty() && p.id !in results) return true
-            }
-        }
-        return false
-    }
+    private fun hasPendingToolUse(group: List<LLMMessage>): Boolean =
+        ToolPairingCore.hasPendingUse(group)
 }
