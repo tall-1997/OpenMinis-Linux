@@ -20,6 +20,14 @@ import kotlinx.coroutines.withTimeout
 internal data class CompactOutcome(
     val summary: String,
     val coveredMessages: Int,
+    /**
+     * [T-compact-no-wipe-on-failure] False when no stage produced a real
+     * summary and the fallback is a placeholder. The caller MUST NOT write a
+     * marker for such an outcome: advancing the anchor over a range whose
+     * only "summary" is one sentence is how a long run lost its whole active
+     * tail.
+     */
+    val succeeded: Boolean = true,
 )
 
 internal suspend fun ChatViewModel.runTwoShotCompact(
@@ -57,12 +65,12 @@ internal suspend fun ChatViewModel.runTwoShotCompact(
             AppLogger.warning(
                 ChatViewModel.TAG,
                 "[Compact] all stages failed (${lastError?.message}); retrying on reduced " +
-                    "input ${input.size}/${messages.size} messages before truncating",
+                    "input ${input.size}/${messages.size} messages",
             )
             withContext(Dispatchers.Main) {
                 appendSystemInfo(
                     "All compact attempts failed (${lastError?.message ?: "no output"}). " +
-                        "Retrying on a smaller slice before dropping older context.",
+                        "Retrying on a smaller slice.",
                     "compact",
                 )
             }
@@ -87,7 +95,7 @@ internal suspend fun ChatViewModel.runTwoShotCompact(
             } + when (stage.nextHint) {
                 "fallback" -> " If this fails, the next model is tried."
                 "session-retry" -> " If this fails, the current model is tried once more."
-                else -> " If this fails, older context is truncated."
+                else -> " If this fails, the context is kept unchanged."
             }
             withContext(Dispatchers.Main) {
                 appendSystemInfo(headline, "compact")
@@ -133,19 +141,20 @@ internal suspend fun ChatViewModel.runTwoShotCompact(
             }
         }
     }
-    AppLogger.warning(ChatViewModel.TAG, "[Compact] compaction exhausted, truncating older context: ${lastError?.message}")
+    AppLogger.warning(ChatViewModel.TAG, "[Compact] compaction exhausted; context kept unchanged: ${lastError?.message}")
     withContext(Dispatchers.Main) {
         appendSystemInfo(
-            "Compaction could not summarize (${lastError?.message ?: "no output"}). " +
-                "Truncating older context to continue.",
+            "Compaction failed (${lastError?.message ?: "no output"}). " +
+                "The context is kept unchanged.",
             "compact",
         )
     }
     return CompactOutcome(
         summary = existing?.takeIf { it.isNotBlank() }
-            ?: "Earlier conversation was truncated after compaction failed. Recent turns remain below.",
-        // Truncation intentionally discards the whole range (the historic
-        // last-resort behavior); the anchor still advances over all of it.
-        coveredMessages = messages.size,
+            ?: "Compaction failed; the current context was kept unchanged.",
+        // [T-compact-no-wipe-on-failure] Nothing was summarized; do not let
+        // the caller advance the marker. The range stays active.
+        coveredMessages = 0,
+        succeeded = false,
     )
 }

@@ -391,9 +391,20 @@ internal fun ChatViewModel.sendMessage(
                 .hostDir(context.filesDir, activeSessionId, "workspace")
             dir.absolutePath.takeIf { dir.isDirectory }
         }.getOrNull()
+        // [T-time-context-interval] The clock note needs the owning session and
+        // the time of the previous MODEL-VISIBLE message. That baseline is
+        // owned by request assembly (applyRequestClockNote stamps it), NOT by
+        // this send path: marking it here made the assembler report
+        // "(since previous message:0s)" because this very message had just
+        // been recorded as the previous one.
+        val clockSession = realSessionId.ifEmpty { activeSessionId }
         val modelBody = com.openminis.app.agent.MessageTransformerChain.applyUser(
             modelBodyRaw,
-            com.openminis.app.agent.UserTransformContext(workspaceHint = workspaceHint),
+            com.openminis.app.agent.UserTransformContext(
+                workspaceHint = workspaceHint,
+                sessionId = clockSession,
+                previousMessageAtMs = TurnClock.previousMessageAt(clockSession),
+            ),
         )
 
         val userContentParts = mutableListOf<AgentContentPart>()

@@ -2533,9 +2533,9 @@
     <string name="code_editor_status_size">%1$d lignes · %2$d caractères</string>
     <string name="code_editor_undo">Annuler</string>
     <string name="code_editor_wrap">Basculer le retour à la ligne</string>
-    <string name="compact_progress_fallback">Compression (%1$d/%2$d) avec le modèle de secours %3$s… %4$d s. En cas d\'échec, le contexte ancien est tronqué.</string>
+    <string name="compact_progress_fallback">Compression (%1$d/%2$d) avec le modèle de secours %3$s… %4$d s. En cas d\'échec, le contexte reste inchangé.</string>
     <string name="compact_progress_session">Compression (%1$d/%2$d) avec le modèle courant %3$s… %4$d s. En cas d\'échec, le secours ou une seule nouvelle tentative s\'exécute.</string>
-    <string name="compact_progress_session_retry">Compression (%1$d/%2$d), nouvelle tentative du modèle courant %3$s… %4$d s. Pas de secours défini. En cas d\'échec, le contexte ancien est tronqué.</string>
+    <string name="compact_progress_session_retry">Compression (%1$d/%2$d), nouvelle tentative du modèle courant %3$s… %4$d s. Pas de secours défini. En cas d\'échec, le contexte reste inchangé.</string>
     <string name="composer_expand_editor">Agrandir l\'éditeur</string>
     <string name="config_affects_later">Cela peut affecter les appels d\'outils ultérieurs.</string>
     <string name="config_reversible">Réversible, mais mérite un coup d\'œil rapide.</string>
@@ -2722,7 +2722,7 @@
     <string name="model_group_models_plain">%1$d modèles</string>
     <!-- backfill: strings.xml -->
     <string name="model_groups_compact_fallback">Repli de compression</string>
-    <string name="model_groups_compact_fallback_footer">Le modèle courant tente une compression. En cas d\'échec, le modèle de secours tente une fois. Sans secours, le modèle courant est retenté une fois. Deux échecs tronquent le contexte ancien.</string>
+    <string name="model_groups_compact_fallback_footer">Le modèle courant tente une compression. En cas d\'échec, le modèle de secours tente une fois. Sans secours, le modèle courant est retenté une fois. Si la compression échoue, le contexte reste inchangé.</string>
     <string name="model_groups_default_primary">Principal par défaut</string>
     <string name="model_groups_defaults">Valeurs par défaut</string>
     <!-- backfill: strings_settings.xml -->
@@ -3324,4 +3324,19 @@
     <string name="process_card_thinking_now">Réflexion…</string>
     <string name="appearance_show_turn_changes_card_title">Carte des modifications du tour</string>
     <string name="appearance_show_turn_changes_card_subtitle">Affiche à chaque tour une carte listant les fichiers modifiés par l\'assistant, avec statistiques de lignes et annulation en un geste. Désactivée par défaut.</string>
+    <string name="vm_compact_retry_cooldown">La dernière compaction a échoué. Réessayez dans %1$d s.</string>
+    <string name="guard_stop_section">Garde-fou des boucles</string>
+    <string name="guard_stop_title">Arrêt en cas de répétition</string>
+    <string name="guard_stop_on">Peut arrêter la session</string>
+    <string name="guard_stop_off">N\'arrête jamais la session</string>
+    <string name="guard_stop_footer">Quand il est actif, le garde-fou arrête la session dès que la même action se répète trop souvent. Quand il est inactif, il se contente de rappeler au modèle, utile pendant une longue attente comme une compilation.</string>
+    <string name="token_usage_section_memory">Mémoire</string>
+    <string name="token_usage_memory_lines">Lignes livrées</string>
+    <string name="token_usage_memory_shown">Nombre d\'affichages</string>
+    <string name="modeldetail_section_context_budget">Budget de contexte</string>
+    <string name="modeldetail_context_budget_footer">Part de la conversation récente conservée par la compaction. Automatique suit la fenêtre du modèle ; une valeur personnalisée ne s\'applique qu\'à ce modèle.</string>
+    <string name="modeldetail_tail_budget_custom">Budget final personnalisé</string>
+    <string name="modeldetail_tail_budget">Budget final</string>
+    <string name="modeldetail_tail_budget_state_auto">Automatique (s\'adapte à la fenêtre, jusqu\'à 60k)</string>
+    <string name="modeldetail_tail_budget_state_specific">Personnalisé pour ce modèle</string>
 </resources>

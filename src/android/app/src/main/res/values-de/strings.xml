@@ -2470,9 +2470,9 @@
     <string name="code_editor_status_size">%1$d Zeilen · %2$d Zeichen</string>
     <string name="code_editor_undo">Rückgängig</string>
     <string name="code_editor_wrap">Zeilenumbruch umschalten</string>
-    <string name="compact_progress_fallback">Komprimiere (%1$d/%2$d) mit Fallback-Modell %3$s… %4$d s. Bei Fehlschlag wird älterer Kontext abgeschnitten.</string>
+    <string name="compact_progress_fallback">Komprimiere (%1$d/%2$d) mit Fallback-Modell %3$s… %4$d s. Bei Fehlschlag bleibt der Kontext unverändert.</string>
     <string name="compact_progress_session">Komprimiere (%1$d/%2$d) mit aktuellem Modell %3$s… %4$d s. Bei Fehlschlag laufen Fallback oder ein einmaliger neuer Versuch.</string>
-    <string name="compact_progress_session_retry">Komprimiere (%1$d/%2$d), aktueller Modellversuch %3$s… %4$d s. Kein Fallback gesetzt. Bei Fehlschlag wird älterer Kontext abgeschnitten.</string>
+    <string name="compact_progress_session_retry">Komprimiere (%1$d/%2$d), aktueller Modellversuch %3$s… %4$d s. Kein Fallback gesetzt. Bei Fehlschlag bleibt der Kontext unverändert.</string>
     <string name="composer_expand_editor">Editor vergrößern</string>
     <string name="config_affects_later">Das kann spätere Tool-Aufrufe betreffen.</string>
     <string name="config_reversible">Umkehrbar, aber ein kurzer Blick lohnt sich.</string>
@@ -2642,7 +2642,7 @@
     <string name="model_group_detail_routing_fallback_footer">Wenn diese Gruppe im Chat gewählt ist, werden die Mitglieder in der Reihenfolge unten versucht. Es wird nie in eine andere Gruppe gewechselt. Relays bepreisen Modelle oft unterschiedlich — setze günstigere vorne.</string>
     <string name="model_group_detail_routing_load_balance_footer">Verteilt neue Sitzungen nur auf Mitglieder dieser Gruppe. Wechselt nicht in eine andere Gruppe.</string>
     <string name="model_groups_compact_fallback">Kompakt-Fallback</string>
-    <string name="model_groups_compact_fallback_footer">Das aktuelle Modell komprimiert einmal. Schlägt das fehl, versucht der Fallback es einmal. Ohne Fallback wird das aktuelle Modell einmal wiederholt. Zwei Fehlschläge schneiden älteren Kontext ab.</string>
+    <string name="model_groups_compact_fallback_footer">Das aktuelle Modell komprimiert einmal. Schlägt das fehl, versucht der Fallback es einmal. Ohne Fallback wird das aktuelle Modell einmal wiederholt. Wenn die Komprimierung fehlschlägt, bleibt der Kontext unverändert.</string>
     <string name="model_groups_default_primary">Standard-Primär</string>
     <string name="model_groups_defaults">Standards</string>
     <string name="model_groups_slot_groups">Gruppen</string>
@@ -3175,4 +3175,19 @@
     <string name="process_card_thinking_now">Denkt…</string>
     <string name="appearance_show_turn_changes_card_title">Änderungskarte pro Runde</string>
     <string name="appearance_show_turn_changes_card_subtitle">Zeigt pro Runde eine Karte mit den vom Assistenten geänderten Dateien, Zeilenstatistik und Ein-Tipp-Rückgängig. Standardmäßig aus; das Protokoll bleibt ohne sie aufgeräumt.</string>
+    <string name="vm_compact_retry_cooldown">Die letzte Komprimierung ist fehlgeschlagen. Erneut versuchen in %1$d s.</string>
+    <string name="guard_stop_section">Schleifenbremse</string>
+    <string name="guard_stop_title">Bei Wiederholungen stoppen</string>
+    <string name="guard_stop_on">Darf die Sitzung stoppen</string>
+    <string name="guard_stop_off">Stoppt die Sitzung nie</string>
+    <string name="guard_stop_footer">Wenn aktiv, stoppt die Bremse die Sitzung, sobald sich dieselbe Aktion zu oft wiederholt. Wenn aus, erinnert sie das Modell nur - hilfreich bei langen Wartezeiten wie einem Build.</string>
+    <string name="token_usage_section_memory">Gedächtnis</string>
+    <string name="token_usage_memory_lines">Gelieferte Zeilen</string>
+    <string name="token_usage_memory_shown">Anzahl Anzeigen</string>
+    <string name="modeldetail_section_context_budget">Kontextbudget</string>
+    <string name="modeldetail_context_budget_footer">Wie viel aktuelle Unterhaltung die Komprimierung überlebt. Automatisch richtet sich nach dem Fenster des Modells; ein eigener Wert gilt nur für dieses Modell.</string>
+    <string name="modeldetail_tail_budget_custom">Eigenes Restbudget</string>
+    <string name="modeldetail_tail_budget">Restbudget</string>
+    <string name="modeldetail_tail_budget_state_auto">Automatisch (skaliert mit dem Fenster, bis 60k)</string>
+    <string name="modeldetail_tail_budget_state_specific">Eigen für dieses Modell</string>
 </resources>

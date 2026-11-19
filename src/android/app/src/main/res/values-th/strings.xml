@@ -2533,9 +2533,9 @@
     <string name="code_editor_status_size">%1$d บรรทัด · %2$d อักขระ</string>
     <string name="code_editor_undo">เลิกทำ</string>
     <string name="code_editor_wrap">สลับการตัดคำขึ้นบรรทัด</string>
-    <string name="compact_progress_fallback">กำลังบีบอัด (%1$d/%2$d) ด้วยโมเดลสำรอง %3$s… %4$d วินาที ถ้าล้มเหลว บริบทเก่าจะถูกตัดทิ้ง</string>
+    <string name="compact_progress_fallback">กำลังบีบอัด (%1$d/%2$d) ด้วยโมเดลสำรอง %3$s… %4$d วินาที ถ้าล้มเหลว บริบทจะยังคงเดิม</string>
     <string name="compact_progress_session">กำลังบีบอัด (%1$d/%2$d) ด้วยโมเดลปัจจุบัน %3$s… %4$d วินาที ถ้าล้มเหลว จะรันโมเดลสำรองหรือลองใหม่หนึ่งครั้ง</string>
-    <string name="compact_progress_session_retry">กำลังบีบอัด (%1$d/%2$d) ลองโมเดลปัจจุบัน %3$s ใหม่… %4$d วินาที ยังไม่ตั้งโมเดลสำรอง ถ้าล้มเหลว บริบทเก่าจะถูกตัดทิ้ง</string>
+    <string name="compact_progress_session_retry">กำลังบีบอัด (%1$d/%2$d) ลองโมเดลปัจจุบัน %3$s ใหม่… %4$d วินาที ยังไม่ตั้งโมเดลสำรอง ถ้าล้มเหลว บริบทจะยังคงเดิม</string>
     <string name="composer_expand_editor">ขยายตัวแก้ไข</string>
     <string name="config_affects_later">สิ่งนี้อาจมีผลกับการเรียกเครื่องมือครั้งต่อ ๆ ไป</string>
     <string name="config_reversible">ย้อนกลับได้ แต่ควรแวะดูสักหน่อย</string>
@@ -2722,7 +2722,7 @@
     <string name="model_group_models_plain">%1$d โมเดล</string>
     <!-- backfill: strings.xml -->
     <string name="model_groups_compact_fallback">โมเดลสำรองสำหรับบีบอัด</string>
-    <string name="model_groups_compact_fallback_footer">โมเดลปัจจุบันพยายามหนึ่งครั้ง ถ้าล้มเหลวโมเดลสำรองจะพยายามหนึ่งครั้ง ถ้าไม่มีสำรอง จะลองโมเดลปัจจุบันอีกครั้ง พลาดสองครั้งจะตัดบริบทเก่าทิ้ง</string>
+    <string name="model_groups_compact_fallback_footer">โมเดลปัจจุบันพยายามหนึ่งครั้ง ถ้าล้มเหลวโมเดลสำรองจะพยายามหนึ่งครั้ง ถ้าไม่มีสำรอง จะลองโมเดลปัจจุบันอีกครั้ง ถ้าการบีบอัดล้มเหลว บริบทจะยังคงเดิม</string>
     <string name="model_groups_default_primary">โมเดลหลักค่าเริ่มต้น</string>
     <string name="model_groups_defaults">ค่าเริ่มต้น</string>
     <!-- backfill: strings_settings.xml -->
@@ -3324,4 +3324,19 @@
     <string name="process_card_thinking_now">กำลังคิด…</string>
     <string name="appearance_show_turn_changes_card_title">การ์ดการเปลี่ยนแปลงของรอบ</string>
     <string name="appearance_show_turn_changes_card_subtitle">แสดงการ์ดรายไฟล์ที่ผู้ช่วยแก้ไขในแต่ละรอบ พร้อมสถิติบรรทัดและการเลิกทำแตะเดียว ปิดอยู่ตามค่าเริ่มต้น</string>
+    <string name="vm_compact_retry_cooldown">การบีบอัดครั้งล่าสุดล้มเหลว ลองใหม่ได้ใน %1$d วินาที</string>
+    <string name="guard_stop_section">ตัวป้องกันลูป</string>
+    <string name="guard_stop_title">หยุดเมื่อทำซ้ำ</string>
+    <string name="guard_stop_on">หยุดเซสชันได้</string>
+    <string name="guard_stop_off">ไม่หยุดเซสชัน</string>
+    <string name="guard_stop_footer">เมื่อเปิด ตัวป้องกันจะหยุดเซสชันเมื่อการกระทำเดิมซ้ำบ่อยเกินไป เมื่อปิดจะเพียงเตือนโมเดล เหมาะกับการรอนาน เช่น การบิลด์</string>
+    <string name="token_usage_section_memory">ความจำ</string>
+    <string name="token_usage_memory_lines">บรรทัดที่ส่ง</string>
+    <string name="token_usage_memory_shown">จำนวนครั้งที่แสดง</string>
+    <string name="modeldetail_section_context_budget">งบประมาณคอนเท็กซ์</string>
+    <string name="modeldetail_context_budget_footer">ปริมาณบทสนทนาล่าสุดที่คงอยู่หลังการบีบอัด โหมดอัตโนมัติปรับตามหน้าต่างของโมเดล ค่าที่กำหนดเองใช้กับโมเดลนี้เท่านั้น</string>
+    <string name="modeldetail_tail_budget_custom">งบประมาณท้ายที่กำหนดเอง</string>
+    <string name="modeldetail_tail_budget">งบประมาณท้าย</string>
+    <string name="modeldetail_tail_budget_state_auto">อัตโนมัติ (ปรับตามหน้าต่าง สูงสุด 60k)</string>
+    <string name="modeldetail_tail_budget_state_specific">เฉพาะโมเดลนี้</string>
 </resources>

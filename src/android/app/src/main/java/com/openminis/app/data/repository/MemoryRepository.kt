@@ -226,7 +226,14 @@ class MemoryRepository(private val memoryDir: File) {
      * 非空时先校验现有文件内容哈希，不匹配返回 MEMORY_CONFLICT，不覆盖并发更新。
      * 写入成功返回新 revision（哈希前 16 位）。
      */
-    fun writeMemory(content: String, expectedRevision: String? = null): String {
+    fun writeMemory(
+        content: String,
+        expectedRevision: String? = null,
+        /** [T-memory-frontmatter-writer] Optional schema fields for a NEW day file. */
+        type: String? = null,
+        scope: String? = null,
+        ttlDays: Int? = null,
+    ): String {
         if (content.isBlank()) return "Error: Missing required 'content' parameter"
 
         // [T-memory-poison-guard] 写入侧毒窗防护（镜像 Kelivo poison-window
@@ -269,7 +276,21 @@ class MemoryRepository(private val memoryDir: File) {
             Log.i(TAG, "Memory dedup: identical entry already in $fileName — skipped")
             return "Skipped: 今日日志已存在逐字相同的条目（写入侧去重），未重复追加。"
         }
-        val newContent = entry + existing
+        // [T-memory-frontmatter-writer] A NEW day file leads with its metadata
+        // — "new writes carry the full field set" was the `4.1` acceptance
+        // item, and until now nothing emitted a block at all. An EXISTING file
+        // is never rewritten: prepending would shift the revision under a
+        // concurrent writer and could strand a half-written entry.
+        val header = if (existing.isEmpty()) {
+            MemoryMetadataParser.frontmatterFor(
+                type = type ?: "daily",
+                scope = scope,
+                ttlDays = ttlDays,
+            )
+        } else {
+            ""
+        }
+        val newContent = header + entry + existing
 
         return try {
             writeTextAtomic(file, newContent)

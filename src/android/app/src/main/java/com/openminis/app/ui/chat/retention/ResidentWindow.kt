@@ -2,6 +2,7 @@ package com.openminis.app.ui.chat.retention
 
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
+import com.openminis.app.ui.chat.ToolPairingCore
 
 /**
  * The model-context retention rule, and the reason the chat surface is not
@@ -121,40 +122,15 @@ internal object ResidentWindow {
      * unmatched. Results waiting at the current message boundary stay in the
      * state when extending further left — an earlier use may still match them.
      */
-    private fun legalBoundaries(history: List<LLMMessage>): BooleanArray {
-        val n = history.size
-        val legal = BooleanArray(n + 1)
-        val pendingResults = HashMap<String, Int>()
-        var badUses = 0
-        for (i in n - 1 downTo 0) {
-            val message = history[i]
-            val inFlightTurn = i == n - 1 && message.role == LLMMessage.Role.ASSISTANT
-            val parts = message.contentParts
-            for (p in parts.asReversed()) {
-                when (p) {
-                    is AgentContentPart.ToolResult -> {
-                        val key = toolKey(p.id, p.name)
-                        pendingResults[key] = (pendingResults[key] ?: 0) + 1
-                    }
-                    is AgentContentPart.ToolUse -> {
-                        val key = toolKey(p.id, p.name)
-                        val waiting = pendingResults[key] ?: 0
-                        if (waiting > 0) {
-                            if (waiting == 1) pendingResults.remove(key) else pendingResults[key] = waiting - 1
-                        } else if (!inFlightTurn) {
-                            badUses++
-                        }
-                    }
-                    else -> Unit
-                }
-            }
-            legal[i] = pendingResults.isEmpty() && badUses == 0
-        }
-        legal[n] = false
-        return legal
-    }
-
-    private fun toolKey(id: String, name: String): String = "$id\u0000$name"
+    /**
+     * [T-tool-pairing-single-authority] Delegates to [ToolPairingCore] so the
+     * trimming path, the post-anchor budget and the request repair can never
+     * disagree about which cuts are legal. The previous in-file fold keyed on
+     * `"$id\u0000$name"`, which split the Responses combined id
+     * (`call_id|fc_id`) from its result and produced phantom orphans.
+     */
+    internal fun legalBoundaries(history: List<LLMMessage>): BooleanArray =
+        ToolPairingCore.legalCuts(history)
 
     /** First legal cut index >= [from], or null. Built once, O(1) per query. */
     private fun firstLegal(legal: BooleanArray, from: Int): Int? {

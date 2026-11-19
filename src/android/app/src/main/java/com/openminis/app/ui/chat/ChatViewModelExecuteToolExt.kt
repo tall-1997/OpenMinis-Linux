@@ -534,6 +534,16 @@ internal suspend fun ChatViewModel.executeToolDispatched(
         com.openminis.app.tools.SessionLookupTool.READ -> com.openminis.app.tools.SessionLookupTool.executeRead(
             argsJson, activeSessionId, context,
         )
+        // [T-history-retrieval] Read-only retrieval over THIS session's folded
+        // history (see HistorySearchTool KDoc). Both branches are suspend, like
+        // the SessionLookup pair above, because dispatch already runs inside the
+        // loop's coroutine.
+        com.openminis.app.tools.HistorySearchTool.SEARCH -> com.openminis.app.tools.HistorySearchTool.executeSearch(
+            argsJson, activeSessionId, context,
+        )
+        com.openminis.app.tools.HistorySearchTool.READ -> com.openminis.app.tools.HistorySearchTool.executeRead(
+            argsJson, activeSessionId, context,
+        )
         com.openminis.app.tools.AskUserQuestion.NAME, com.openminis.app.tools.AskUserQuestion.ALIAS -> executeAskUserQuestion(argsJson)
         CodeGraphTool.NAME -> {
             val args = JSONObject(argsJson).let { json ->

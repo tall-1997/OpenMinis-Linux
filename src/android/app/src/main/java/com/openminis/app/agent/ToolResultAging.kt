@@ -170,8 +170,14 @@ object ToolResultAging {
         // 4 of them aged immediately). Extend the window back to the
         // assistant message that owns the oldest kept result, so a round is
         // either entirely verbatim or entirely aged.
-        val keepFromMessage = live[scanned - keep][0]
-        val candidates = live.filter { it[0] < keepFromMessage }
+        // keep == 0 means "fold every eligible result": taking
+        // live[scanned - 0] would be out of bounds, so branch explicitly.
+        val candidates = if (keep == 0) {
+            live
+        } else {
+            val keepFromMessage = live[scanned - keep][0]
+            live.filter { it[0] < keepFromMessage }
+        }
         val byMessage = HashMap<Int, MutableList<Int>>()
         for (slot in candidates) {
             byMessage.getOrPut(slot[0]) { ArrayList(2) } += slot[1]
@@ -197,7 +203,18 @@ object ToolResultAging {
                     old.content.length >= SPILL_LIMIT_CHARS ||
                     old.content.length >= UNSPILLED_FOLD_FLOOR_CHARS
                 if (!recoverable) continue
-                val folded = placeholder(old.name, old.content, old.isError)
+                // [T-age-placeholder-offset] Offset 0: the spill file holds
+                // exactly this result, so the addressable range starts at the
+                // beginning and runs for `old.content.length` chars. Passing it
+                // is what makes the placeholder actionable — the model can ask
+                // `file_read` for that exact range instead of paging a file it
+                // cannot see the extent of.
+                val folded = placeholder(
+                    toolName = old.name,
+                    content = old.content,
+                    isError = old.isError,
+                    spillOffset = 0,
+                )
                 // Subtract-only guard: never let the "saving" grow the payload.
                 if (folded.length >= old.content.length) continue
                 parts[pi] = old.copy(content = folded)
@@ -218,11 +235,29 @@ object ToolResultAging {
      * the model, not UI copy, and the repo's CJK-literal ratchet forbids
      * hardcoded CJK in source (translations live in resources only).
      */
-    fun placeholder(toolName: String, content: String, isError: Boolean = false): String {
+    fun placeholder(
+        toolName: String,
+        content: String,
+        isError: Boolean = false,
+        /**
+         * [T-age-placeholder-offset] 0-based char offset of this result inside
+         * its spill file, or null when the content has no path (nothing to
+         * address). The acceptance item was "the placeholder carries the spill
+         * path AND an offset so `file_read` can取回 exactly this range"; a path
+         * alone forces the model to read the whole file to find the passage it
+         * already had. Callers that fold a sliced body pass the slice's start.
+         */
+        spillOffset: Int? = null,
+    ): String {
         val path = READABLE_PATH.find(content)?.value
         val headLimit = if (isError) ERROR_HEADLINE_CHARS else HEADLINE_CHARS
-        val headline = headlineOf(content, headLimit)
-        val tail = if (content.length > headLimit + TAIL_CHARS) tailOf(content, TAIL_CHARS) else ""
+        // [T-age-single-normalization] Collapse whitespace ONCE for both
+        // excerpts: placeholder() runs on every folded result of every
+        // request, and the old head+tail implementation walked the content
+        // twice.
+        val flat = collapseWhitespace(content)
+        val headline = clipHead(flat, headLimit)
+        val tail = if (flat.length > headLimit + TAIL_CHARS) clipTail(flat, TAIL_CHARS) else ""
         return buildString {
             append(MARKER).append(' ').append(toolName.ifBlank { "tool" })
             if (isError) append(" (error)")
@@ -235,6 +270,16 @@ object ToolResultAging {
             }
             if (path != null) {
                 append("\nfull output: ").append(path)
+                // [T-age-placeholder-offset] Address the passage, not just the
+                // file. Without a range the model must read the whole spill to
+                // recover text it already had in context, which is the cost the
+                // fold was supposed to remove.
+                    if (spillOffset != null && spillOffset >=0) {
+                        // [T-age-offset-honest] Offset only. `content` here is the PREVIEW, so
+                        // quoting its length as the file's size made a follow-up
+                        // file_read(offset=0, limit=that) silently truncate the real output.
+                        append(" (offset ").append(spillOffset).append(')')
+                    }
             } else {
                 append("\nfull content: re-run this tool")
             }
@@ -247,11 +292,20 @@ object ToolResultAging {
      * logs put their actionable line last, so a folded result that keeps only
      * the head hides the error it exists to summarize.
      */
-    fun tailOf(content: String, limit: Int = TAIL_CHARS): String {
-        val flat = collapseWhitespace(content)
+    fun tailOf(content: String, limit: Int = TAIL_CHARS): String =
+        clipTail(collapseWhitespace(content), limit)
+
+    /** Head of an ALREADY-normalized string; empty-safe. */
+    private fun clipHead(text: String, limit: Int): String {
+        if (text.length <= limit) return text
+        val cut = if (Character.isHighSurrogate(text[limit - 1])) limit - 1 else limit
+        return text.substring(0, cut) + "…"
+    }
+
+    /** Tail of an ALREADY-normalized string; never starts on a lone low surrogate. */
+    private fun clipTail(flat: String, limit: Int): String {
         if (flat.length <= limit) return flat
         var cut = flat.takeLast(limit)
-        // Never start the excerpt on a lone low surrogate.
         if (cut.first().isLowSurrogate()) cut = cut.drop(1)
         return cut
     }
@@ -260,12 +314,8 @@ object ToolResultAging {
      * First [limit] chars of the original, whitespace-collapsed and
      * surrogate-safe (a lone high surrogate would poison JSON encoding).
      */
-    fun headlineOf(content: String, limit: Int = HEADLINE_CHARS): String {
-        val text = collapseWhitespace(content)
-        if (text.length <= limit) return text
-        val cut = if (Character.isHighSurrogate(text[limit - 1])) limit - 1 else limit
-        return text.substring(0, cut) + "…"
-    }
+    fun headlineOf(content: String, limit: Int = HEADLINE_CHARS): String =
+        clipHead(collapseWhitespace(content), limit)
 
     /**
      * Collapse every whitespace run to one space and trim. Shared by head and

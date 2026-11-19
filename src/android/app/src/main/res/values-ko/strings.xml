@@ -2532,9 +2532,9 @@
     <string name="code_editor_status_size">%1$d줄 · %2$d자</string>
     <string name="code_editor_undo">실행 취소</string>
     <string name="code_editor_wrap">줄바꿈 전환</string>
-    <string name="compact_progress_fallback">압축 중(%1$d/%2$d), 폴백 모델 %3$s 사용… %4$d초. 실패하면 오래된 컨텍스트가 잘립니다.</string>
+    <string name="compact_progress_fallback">압축 중(%1$d/%2$d), 폴백 모델 %3$s 사용… %4$d초. 실패하면 컨텍스트가 그대로 유지됩니다.</string>
     <string name="compact_progress_session">압축 중(%1$d/%2$d), 현재 모델 %3$s 사용… %4$d초. 실패하면 폴백 또는 1회 재시도가 실행됩니다.</string>
-    <string name="compact_progress_session_retry">압축 중(%1$d/%2$d), 현재 모델 %3$s 재시도… %4$d초. 폴백이 설정되지 않았습니다. 실패하면 오래된 컨텍스트가 잘립니다.</string>
+    <string name="compact_progress_session_retry">압축 중(%1$d/%2$d), 현재 모델 %3$s 재시도… %4$d초. 폴백이 설정되지 않았습니다. 실패하면 컨텍스트가 그대로 유지됩니다.</string>
     <string name="composer_expand_editor">편집기 확장</string>
     <string name="config_affects_later">이 변경은 이후 도구 호출에 영향을 줄 수 있습니다.</string>
     <string name="config_reversible">되돌릴 수 있지만 한 번 살펴볼 가치가 있습니다.</string>
@@ -2721,7 +2721,7 @@
     <string name="model_group_models_plain">모델 %1$d개</string>
     <!-- backfill: strings.xml -->
     <string name="model_groups_compact_fallback">컴팩트 폴백</string>
-    <string name="model_groups_compact_fallback_footer">현재 모델로 한 번 압축을 시도합니다. 실패하면 폴백을 한 번 시도합니다. 폴백이 없으면 현재 모델을 한 번 재시도합니다. 두 번 실패하면 오래된 컨텍스트를 잘라냅니다.</string>
+    <string name="model_groups_compact_fallback_footer">현재 모델로 한 번 압축을 시도합니다. 실패하면 폴백을 한 번 시도합니다. 폴백이 없으면 현재 모델을 한 번 재시도합니다. 압축에 실패해도 컨텍스트는 그대로 유지됩니다.</string>
     <string name="model_groups_default_primary">기본 메인</string>
     <string name="model_groups_defaults">기본값</string>
     <!-- backfill: strings_settings.xml -->
@@ -3323,4 +3323,19 @@
     <string name="process_card_thinking_now">생각 중…</string>
     <string name="appearance_show_turn_changes_card_title">턴 변경 카드</string>
     <string name="appearance_show_turn_changes_card_subtitle">어시스턴트가 변경한 파일을 턴마다 표시하고, 줄 수 통계와 원터치 실행 취소를 제공합니다. 기본값은 꺼짐입니다.</string>
+    <string name="vm_compact_retry_cooldown">마지막 압축에 실패했습니다. %1$d초 후에 다시 시도할 수 있습니다.</string>
+    <string name="guard_stop_section">루프 가드</string>
+    <string name="guard_stop_title">반복 시 중지</string>
+    <string name="guard_stop_on">세션을 중지할 수 있음</string>
+    <string name="guard_stop_off">세션을 중지하지 않음</string>
+    <string name="guard_stop_footer">켜면 같은 작업이 너무 자주 반복될 때 세션을 중지합니다. 끄면 모델에 알림만 하며, 빌드 같은 긴 대기에 유용합니다.</string>
+    <string name="token_usage_section_memory">메모리</string>
+    <string name="token_usage_memory_lines">전달된 줄</string>
+    <string name="token_usage_memory_shown">표시 횟수</string>
+    <string name="modeldetail_section_context_budget">컨텍스트 예산</string>
+    <string name="modeldetail_context_budget_footer">압축 후 남는 최근 대화의 양입니다. 자동은 모델 윈도에 맞춰 조정되고, 사용자 지정 값은 이 모델에만 적용됩니다.</string>
+    <string name="modeldetail_tail_budget_custom">사용자 지정 꼬리 예산</string>
+    <string name="modeldetail_tail_budget">꼬리 예산</string>
+    <string name="modeldetail_tail_budget_state_auto">자동(윈도에 맞춰 조정, 최대 60k)</string>
+    <string name="modeldetail_tail_budget_state_specific">이 모델 전용</string>
 </resources>

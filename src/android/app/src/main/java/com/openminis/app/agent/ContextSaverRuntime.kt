@@ -56,6 +56,9 @@ object ContextSaverRuntime {
      */
     const val CHARS_PER_TOKEN = 3L
 
+    /** [T-harness-config] The shipped ruler; `HarnessConfig` owns the live value. */
+    internal const val DEFAULT_CHARS_PER_TOKEN = 3L
+
     /**
      * [T-absolute-age-ceiling] Floor that makes aging fire even on a huge window.
      *
@@ -75,6 +78,9 @@ object ContextSaverRuntime {
      */
     const val ABSOLUTE_AGE_TOKENS = 24_000
 
+    /** [T-harness-config] The shipped ceiling; `HarnessConfig` owns the live value. */
+    internal const val DEFAULT_ABSOLUTE_AGE_TOKENS = 24_000
+
     /**
      * Apply the configured saving level to [history] for one outgoing request.
      *
@@ -82,19 +88,29 @@ object ContextSaverRuntime {
      * @param reportedTokens input tokens reported by the previous API call.
      * @return the history to send; the input instance when nothing folded.
      */
-    fun age(history: List<LLMMessage>, windowTokens: Int, reportedTokens: Int): List<LLMMessage> {
+    internal fun age(
+        history: List<LLMMessage>,
+        windowTokens: Int,
+        reportedTokens: Int,
+        config: HarnessConfig = HarnessConfig.current(),
+    ): List<LLMMessage> {
         val mode = modeOverride ?: ContextSaverPrefs.mode()
         if (mode == ContextSaverPrefs.Mode.OFF) {
             publish(Stats(mode = mode.id))
             return history
         }
+        // [T-harness-config] Both numbers are policy, not constants: a per-session
+        // override must be able to move the ceiling and the ruler together.
+        // [T-harness-config-resolve] Resolved by the caller for this model.
         val trigger = ContextSaverPrefs.triggerTokens(mode, windowTokens)
-        val floorTokens = (ToolResultAging.totalChars(history) / CHARS_PER_TOKEN).toInt()
+        val floorTokens = (ToolResultAging.totalChars(history) / config.agingCharsPerToken).toInt()
         // [T-absolute-age-ceiling] Three ways in: the API reported a big request,
         // the history alone is above the window-relative trigger, or it is above
         // the absolute ceiling (which fires on wide windows where the relative
         // trigger can never be met).
-        if (reportedTokens < trigger && floorTokens < trigger && floorTokens < ABSOLUTE_AGE_TOKENS) {
+        if (reportedTokens < trigger && floorTokens < trigger &&
+            floorTokens < config.absoluteAgeTokens
+        ) {
             publish(Stats(mode = mode.id, triggerTokens = trigger))
             return history
         }

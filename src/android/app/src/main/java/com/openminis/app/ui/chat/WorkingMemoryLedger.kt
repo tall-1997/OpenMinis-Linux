@@ -1,7 +1,5 @@
 package com.openminis.app.ui.chat
 
-import java.util.concurrent.ConcurrentHashMap
-
 /**
  * [T-working-memory-ledger] Host-maintained per-session ledger of tool work,
  * rendered ONLY when the postAnchor tail budget evicts rounds that were never
@@ -55,6 +53,10 @@ internal class WorkingMemoryLedger {
      */
     private val delivered = ArrayList<Boolean>()
 
+    /** [T-working-memory-persist] Indices marked by the last render, so a
+     * failed transcript commit can put them back instead of losing them. */
+    private var lastDeliveredIndices: List<Int> = emptyList()
+
     @Synchronized
     fun append(
         turn: Int,
@@ -62,35 +64,108 @@ internal class WorkingMemoryLedger {
         argsDigest: String,
         argsSummary: String,
         resultHead: String,
-    ) {
+    ): Boolean {
         entries.add(
             Entry(
                 turn = turn,
                 tool = tool,
                 argsDigest = argsDigest,
-                argsSummary = argsSummary.take(ARGS_SUMMARY_CHARS),
-                resultHead = resultHead.take(RESULT_HEAD_CHARS),
+                argsSummary = com.openminis.app.util.TextClip.safeTake(
+                    argsSummary,
+                    ARGS_SUMMARY_CHARS,
+                ),
+                // [T-working-memory-frame-safe] The line is committed inside
+                // a <system-reminder> frame; raw tool output can contain a
+                // closing tag or newlines that would end the frame early and
+                // leak subsequent lines into user-visible previews.
+                resultHead = com.openminis.app.util.TextClip.safeTake(
+                    WorkingMemoryArgs.oneLine(resultHead),
+                    RESULT_HEAD_CHARS,
+                ),
             ),
         )
         delivered.add(false)
-        if (entries.size > MAX_ENTRIES) {
+        // [T-harness-config] The cap is policy, not a constant: a per-session
+        // override must be able to change how many rounds the handover retains.
+        // The shipped default (600) is byte-identical to MAX_ENTRIES.
+        val maxEntries = com.openminis.app.agent.HarnessConfig.current().ledgerMaxEntries
+        var folded = false
+        if (entries.size > maxEntries) {
+            folded = true
             // Fold the oldest run of entries into one marker line: drop the
-            // first (MAX_ENTRIES / 2) entries but keep their count visible.
-            val drop = MAX_ENTRIES / 2
-            val folded = entries.subList(0, drop)
+            // first (maxEntries / 2) entries but keep their count visible.
+            val drop = maxEntries / 2
+            val oldest = entries.subList(0, drop)
+            // [T-working-memory-fold-sample] Folding undelivered records must
+            // not reduce them to a bare count: keep a short sample of what
+            // the oldest rounds were about, so the handover still names work.
+            val sample = oldest.asReversed().take(FOLD_SAMPLE_ENTRIES)
+                .joinToString(", ") {
+                    val label = it.argsSummary.ifBlank { "no-args" }
+                    "${it.tool}($label)"
+                }
+            val sampleLabel = com.openminis.app.util.TextClip.safeTake(
+                WorkingMemoryArgs.oneLine("sample: $sample"),
+                ARGS_SUMMARY_CHARS,
+            )
             val foldLine = Entry(
-                turn = folded.first().turn,
+                turn = oldest.first().turn,
                 tool = FOLD_TOOL,
-                argsDigest = "rounds ${folded.first().turn}–${folded.last().turn}",
-                argsSummary = "rounds ${folded.first().turn}–${folded.last().turn}",
+                argsDigest = "rounds ${oldest.first().turn}–${oldest.last().turn}",
+                argsSummary = if (sample.isBlank()) {
+                    "rounds ${oldest.first().turn}–${oldest.last().turn}"
+                } else {
+                    sampleLabel
+                },
                 // Honest wording: compact may never have run, so pointing at a
                 // summary that does not cover these rounds is a false lead.
-                resultHead = "${folded.size} earlier tool rounds folded (records beyond this point)",
+                resultHead = "${oldest.size} earlier tool rounds folded (records beyond this point)",
             )
             entries.subList(0, drop).clear()
             delivered.subList(0, drop).clear()
             entries.add(0, foldLine)
             delivered.add(0, false)
+            // A fold shifts every index; an undo token from before it can no
+            // longer address the right records.
+            lastDeliveredIndices = emptyList()
+        }
+        return folded
+    }
+
+    /** Newest entry, for append-only persistence. */
+    @Synchronized
+    fun lastEntry(): Entry? = entries.lastOrNull()
+
+    /** Snapshot for compaction/rewrite of the durable file. */
+    @Synchronized
+    fun snapshot(undeliveredOnly: Boolean): List<Entry> =
+        entries.indices
+            .filter { !undeliveredOnly || !delivered[it] }
+            .map { entries[it] }
+
+    /** Restore from the durable file; every restored record is undelivered. */
+    @Synchronized
+    fun restore(restored: List<Entry>) {
+        entries.clear()
+        delivered.clear()
+        val tail = restored.takeLast(MAX_ENTRIES)
+        for (e in tail) {
+            entries.add(
+                Entry(
+                    turn = e.turn,
+                    tool = e.tool,
+                    argsDigest = e.argsDigest,
+                    argsSummary = com.openminis.app.util.TextClip.safeTake(
+                        e.argsSummary,
+                        ARGS_SUMMARY_CHARS,
+                    ),
+                    resultHead = com.openminis.app.util.TextClip.safeTake(
+                        WorkingMemoryArgs.oneLine(e.resultHead),
+                        RESULT_HEAD_CHARS,
+                    ),
+                ),
+            )
+            delivered.add(false)
         }
     }
 
@@ -128,6 +203,7 @@ internal class WorkingMemoryLedger {
             i += run
         }
         for (idx in chosen) delivered[idx] = true
+        lastDeliveredIndices = chosen
         val body = lines.joinToString("\n")
         val remaining = undeliveredIndices.size - chosen.size
         val head = if (remaining > 0) "($remaining older tool rounds pending — delivered on later evictions)\n" else ""
@@ -136,6 +212,16 @@ internal class WorkingMemoryLedger {
 
     @Synchronized
     fun size(): Int = entries.size
+
+    /** [T-working-memory-persist] Undo the last render when its note failed
+     * to reach the transcript; the next turn retries instead of losing it. */
+    @Synchronized
+    fun undoLastDelivery() {
+        for (idx in lastDeliveredIndices) {
+            if (idx in delivered.indices) delivered[idx] = false
+        }
+        lastDeliveredIndices = emptyList()
+    }
 
     /** True when undelivered entries exist. */
     @Synchronized
@@ -149,6 +235,12 @@ internal class WorkingMemoryLedger {
 
         /** Per-delivery cap: a wall of records invites narration. */
         internal const val MAX_DELIVERY_LINES = 40
+
+        /** [T-working-memory-fold-sample] Identities kept in a fold marker. */
+        internal const val FOLD_SAMPLE_ENTRIES = 3
+
+        /** [T-working-memory-store-bound] Live per-session ledgers kept. */
+        internal const val MAX_LIVE_LEDGERS = 128
     }
 }
 
@@ -188,6 +280,12 @@ internal object WorkingMemoryArgs {
     fun summary(toolName: String, argsJson: String): String {
         val raw = argsJson.trim()
         if (raw.isEmpty()) return ""
+        // [T-working-memory-prose-tools] A memory_write's useful identity is
+        // "it wrote an entry", not the entry body: that body can contain
+        // user-confided facts or credentials, and this line is persisted.
+        if (com.openminis.app.security.ToolAliases.canonical(toolName) == "memory_write") {
+            return "memory entry (${raw.length} chars)"
+        }
         val parsed = runCatching { org.json.JSONObject(raw) }.getOrNull()
         val detail = if (parsed != null) {
             runCatching { resolveToolDetail(toolName, parsed) }.getOrDefault("")
@@ -195,7 +293,12 @@ internal object WorkingMemoryArgs {
         } else {
             raw
         }
-        return oneLine(detail).take(WorkingMemoryLedger.ARGS_SUMMARY_CHARS)
+        // [T-working-memory-secret-mask] This line is PERSISTED into the
+        // transcript, so a command carrying an Authorization header/API key
+        // must not be duplicated there verbatim. Shape-based masking only;
+        // paths and ordinary commands stay readable.
+        return oneLine(com.openminis.app.util.SecretMasking.mask(detail))
+            .let { com.openminis.app.util.TextClip.safeTake(it, WorkingMemoryLedger.ARGS_SUMMARY_CHARS) }
     }
 
     /**
@@ -209,7 +312,9 @@ internal object WorkingMemoryArgs {
         val parts = ArrayList<String>(3)
         while (keys.hasNext() && parts.size < MAX_PAIRS) {
             val key = keys.next()
-            if (key == "tool_title" || key == "tool_input") continue
+            // Identity only: prose/body fields are not a useful one-line
+            // record and may contain user content or secrets.
+            if (key in NON_IDENTITY_KEYS) continue
             val value = json.opt(key)
             val text = when (value) {
                 is String -> value
@@ -217,34 +322,168 @@ internal object WorkingMemoryArgs {
                 else -> continue
             }.trim()
             if (text.isEmpty()) continue
-            parts += "$key=${oneLine(text).take(VALUE_CHARS)}"
+            parts += "$key=" + com.openminis.app.util.TextClip.safeTake(oneLine(text), VALUE_CHARS)
         }
         return parts.joinToString(", ")
     }
 
-    private fun oneLine(text: String): String =
+    internal fun oneLine(text: String): String =
         FRAME_TAG.replace(text, "[tag]")
             .replace(WHITESPACE, " ")
             .trim()
 
     private const val MAX_PAIRS = 3
     private const val VALUE_CHARS = 60
+
+    /** Keys whose values are prose/payload, not a call identity. */
+    private val NON_IDENTITY_KEYS = setOf(
+        "tool_title", "tool_input", "content", "text", "body", "prompt",
+        "value", "data", "old_string", "new_string",
+    )
 }
 
 /**
- * Per-session ledger holder. Process-scoped on purpose: the ledger's job is
- * to outlive context trimming WITHIN the process (the evict-then-deliver
- * trigger is the tail budget, which only fires in-process). A process death
- * also loses the transcript's in-memory tail, so re-delivering across a
- * restart would double-deliver against a history that was reloaded from DB.
+ * Per-session ledger holder with a DURABLE handover log.
+ *
+ * [T-working-memory-persist] The ledger used to be process-scoped: a process
+ * kill between the tail-budget eviction and the next hydration silently lost
+ * every undelivered round. The log is now append-only JSONL per session,
+ * rewritten on fold/delivery, exactly like [NoticeLedgerStore]'s per-session
+ * file. Delivered records are removed on delivery, so a restart never
+ * re-announces work the transcript already carries.
+ *
+ * IO is best-effort: a failed write must never affect the tool result.
  */
 internal object WorkingMemoryStore {
 
-    private val ledgers = ConcurrentHashMap<String, WorkingMemoryLedger>()
+    /** [T-working-memory-store-bound] Access-ordered LRU of live ledgers. */
+    private val ledgers = java.util.Collections.synchronizedMap(
+        object : java.util.LinkedHashMap<String, Slot>(16, 0.75f, true) {
+            override fun removeEldestEntry(
+                eldest: MutableMap.MutableEntry<String, Slot>,
+            ): Boolean = size > WorkingMemoryLedger.MAX_LIVE_LEDGERS
+        },
+    )
 
-    fun ledgerFor(sessionId: String): WorkingMemoryLedger =
-        ledgers.getOrPut(sessionId) { WorkingMemoryLedger() }
+    private data class Slot(
+        val ledger: WorkingMemoryLedger,
+        var filesDir: java.io.File?,
+    )
 
+    private const val DIR = "working-memory"
+
+    private fun dir(filesDir: java.io.File): java.io.File = java.io.File(filesDir, DIR)
+
+    private fun file(filesDir: java.io.File, sessionId: String): java.io.File =
+        java.io.File(dir(filesDir), "${safeSession(sessionId)}.jsonl")
+
+    private fun safeSession(sessionId: String): String =
+        sessionId.replace(Regex("[^A-Za-z0-9._-]"), "_")
+
+    internal fun ledgerFor(sessionId: String, filesDir: java.io.File? = null): WorkingMemoryLedger {
+        synchronized(ledgers) {
+            val existing = ledgers[sessionId]
+            if (existing != null) {
+                val same = existing.filesDir == null || filesDir == null ||
+                    existing.filesDir?.absolutePath == filesDir.absolutePath
+                if (same) {
+                    if (existing.filesDir == null && filesDir != null) {
+                        // First durable call after an in-memory-only access:
+                        // load the log when nothing was recorded yet.
+                        if (existing.ledger.size() == 0 && !existing.ledger.hasUndelivered()) {
+                            val loaded = load(filesDir, sessionId)
+                            ledgers[sessionId] = Slot(loaded, filesDir)
+                            return loaded
+                        }
+                        existing.filesDir = filesDir
+                    }
+                    return existing.ledger
+                }
+            }
+            val loaded = if (filesDir != null) load(filesDir, sessionId) else WorkingMemoryLedger()
+            ledgers[sessionId] = Slot(loaded, filesDir)
+            return loaded
+        }
+    }
+
+    private fun load(filesDir: java.io.File, sessionId: String): WorkingMemoryLedger {
+        val f = file(filesDir, sessionId)
+        if (!f.isFile) return WorkingMemoryLedger()
+        val restored = ArrayList<WorkingMemoryLedger.Entry>()
+        runCatching {
+            f.useLines { lines ->
+                for (line in lines) {
+                    if (restored.size >= WorkingMemoryLedger.MAX_ENTRIES * 2) break
+                    if (line.isBlank()) continue
+                    val o = runCatching { org.json.JSONObject(line) }.getOrNull() ?: continue
+                    val tool = o.optString("tool", "")
+                    val digest = o.optString("argsDigest", "")
+                    if (tool.isBlank() && digest.isBlank()) continue
+                    restored += WorkingMemoryLedger.Entry(
+                        turn = o.optInt("turn", 0),
+                        tool = tool,
+                        argsDigest = digest,
+                        argsSummary = o.optString("argsSummary", ""),
+                        resultHead = o.optString("resultHead", ""),
+                    )
+                }
+            }
+        }
+        return WorkingMemoryLedger().also { it.restore(restored) }
+    }
+
+    private fun toLine(e: WorkingMemoryLedger.Entry): String =
+        org.json.JSONObject()
+            .put("turn", e.turn)
+            .put("tool", e.tool)
+            .put("argsDigest", e.argsDigest)
+            .put("argsSummary", e.argsSummary)
+            .put("resultHead", e.resultHead)
+            .toString()
+
+    private fun persistAll(filesDir: java.io.File, sessionId: String, entries: List<WorkingMemoryLedger.Entry>) {
+        runCatching {
+            val target = file(filesDir, sessionId)
+            if (entries.isEmpty()) {
+                target.delete()
+                return@runCatching
+            }
+            dir(filesDir).mkdirs()
+            val body = buildString {
+                for (e in entries) append(toLine(e)).append('\n')
+            }
+            val tmp = java.io.File(target.parentFile, "${target.name}.tmp")
+            tmp.writeText(body, Charsets.UTF_8)
+            try {
+                java.nio.file.Files.move(
+                    tmp.toPath(),
+                    target.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                )
+            } catch (_: Exception) {
+                target.writeText(body, Charsets.UTF_8)
+                tmp.delete()
+            }
+        }
+    }
+
+    private fun appendLine(filesDir: java.io.File, sessionId: String, e: WorkingMemoryLedger.Entry) {
+        runCatching {
+            dir(filesDir).mkdirs()
+            file(filesDir, sessionId).appendText(toLine(e) + "\n", Charsets.UTF_8)
+        }
+    }
+
+    /** Test seam: how many live per-session ledgers the store retains. */
+    internal fun liveLedgerCountForTest(): Int = synchronized(ledgers) { ledgers.size }
+
+    /** [T-working-memory-persist] Warm the ledger on the IO dispatcher so the
+     * request-assembly `hasUndelivered` check does not read disk on Main. */
+    fun preload(sessionId: String, filesDir: java.io.File?) {
+        if (filesDir != null) ledgerFor(sessionId, filesDir)
+    }
+
+    @Synchronized
     fun append(
         sessionId: String,
         turn: Int,
@@ -252,19 +491,66 @@ internal object WorkingMemoryStore {
         argsDigest: String,
         argsSummary: String,
         resultHead: String,
+        filesDir: java.io.File? = null,
     ) {
-        ledgerFor(sessionId).append(turn, tool, argsDigest, argsSummary, resultHead)
+        val ledger = ledgerFor(sessionId, filesDir)
+        val folded = ledger.append(turn, tool, argsDigest, argsSummary, resultHead)
+        if (filesDir != null) {
+            if (folded) {
+                // Only undelivered records belong in the durable handover;
+                // old delivered records must not replay after a restart.
+                persistAll(filesDir, sessionId, ledger.snapshot(undeliveredOnly = true))
+            } else {
+                ledger.lastEntry()?.let { appendLine(filesDir, sessionId, it) }
+            }
+        }
     }
 
-    fun renderUndelivered(sessionId: String): String? =
-        ledgerFor(sessionId).renderUndelivered()
+    @Synchronized
+    fun renderUndelivered(sessionId: String, filesDir: java.io.File? = null): String? {
+        val ledger = ledgerFor(sessionId, filesDir)
+        // Do NOT rewrite the durable log here: the caller must persist the
+        // delivered removal only AFTER the transcript commit succeeds. A crash
+        // between render and commit then retries (duplicate-risk) instead of
+        // silently losing the handover.
+        return ledger.renderUndelivered()
+    }
+
+    /** [T-working-memory-persist] The note reached the transcript: drop the
+     * delivered records from the durable log so a restart cannot repeat them. */
+    @Synchronized
+    fun ackDelivered(sessionId: String, filesDir: java.io.File? = null) {
+        if (filesDir == null) return
+        val ledger = ledgerFor(sessionId, filesDir)
+        persistAll(filesDir, sessionId, ledger.snapshot(undeliveredOnly = true))
+    }
+
+    /** [T-working-memory-persist] The commit failed: make the same records
+     * deliverable again (in-memory state only; the log was never rewritten). */
+    @Synchronized
+    fun undoDelivery(sessionId: String, filesDir: java.io.File? = null) {
+        ledgerFor(sessionId, filesDir).undoLastDelivery()
+    }
 
     /** True when the ledger has lines not yet delivered to the transcript. */
-    fun hasUndelivered(sessionId: String): Boolean =
-        ledgerFor(sessionId).hasUndelivered()
+    @Synchronized
+    fun hasUndelivered(sessionId: String, filesDir: java.io.File? = null): Boolean =
+        ledgerFor(sessionId, filesDir).hasUndelivered()
 
-    /** Test / session-swap seam. */
+    /** Test / session-swap seam. Does not delete the durable log. */
     fun reset(sessionId: String? = null) {
-        if (sessionId == null) ledgers.clear() else ledgers.remove(sessionId)
+        synchronized(ledgers) {
+            if (sessionId == null) ledgers.clear() else ledgers.remove(sessionId)
+        }
+    }
+
+    /** Test seam: durable log path. */
+    internal fun fileForTest(filesDir: java.io.File, sessionId: String): java.io.File =
+        file(filesDir, sessionId)
+
+    /** `/clear` (or a deleted session): drop both memory and the durable log. */
+    fun delete(filesDir: java.io.File?, sessionId: String) {
+        synchronized(ledgers) { ledgers.remove(sessionId) }
+        if (filesDir != null) runCatching { file(filesDir, sessionId).delete() }
     }
 }

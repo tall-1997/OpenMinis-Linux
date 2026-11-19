@@ -2470,9 +2470,9 @@
     <string name="code_editor_status_size">%1$d líneas · %2$d caracteres</string>
     <string name="code_editor_undo">Deshacer</string>
     <string name="code_editor_wrap">Alternar ajuste de línea</string>
-    <string name="compact_progress_fallback">Compactando (%1$d/%2$d) con el modelo de respaldo %3$s… %4$d s. Si falla, el contexto antiguo se trunca.</string>
+    <string name="compact_progress_fallback">Compactando (%1$d/%2$d) con el modelo de respaldo %3$s… %4$d s. Si falla, el contexto no cambia.</string>
     <string name="compact_progress_session">Compactando (%1$d/%2$d) con el modelo actual %3$s… %4$d s. Si falla, se ejecuta el respaldo o un reintento único.</string>
-    <string name="compact_progress_session_retry">Compactando (%1$d/%2$d), reintentando el modelo actual %3$s… %4$d s. Sin respaldo establecido. Si falla, el contexto antiguo se trunca.</string>
+    <string name="compact_progress_session_retry">Compactando (%1$d/%2$d), reintentando el modelo actual %3$s… %4$d s. Sin respaldo establecido. Si falla, el contexto no cambia.</string>
     <string name="composer_expand_editor">Expandir editor</string>
     <string name="config_affects_later">Esto puede afectar a llamadas de herramientas posteriores.</string>
     <string name="config_reversible">Es reversible, pero merece un vistazo rápido.</string>
@@ -2642,7 +2642,7 @@
     <string name="model_group_detail_routing_fallback_footer">Cuando este grupo esté seleccionado en el chat, prueba los miembros en el orden de abajo. Nunca salta a otro grupo. Los relays suelen cobrar los modelos de forma distinta: pon primero los más baratos.</string>
     <string name="model_group_detail_routing_load_balance_footer">Reparte las sesiones nuevas solo entre miembros de este grupo. No cambia a otro grupo.</string>
     <string name="model_groups_compact_fallback">Respaldo de compactación</string>
-    <string name="model_groups_compact_fallback_footer">El modelo actual lo intenta una vez. Si falla, el respaldo lo intenta una vez. Sin respaldo, el modelo actual se reintenta una vez. Dos fallos truncan el contexto antiguo.</string>
+    <string name="model_groups_compact_fallback_footer">El modelo actual lo intenta una vez. Si falla, el respaldo lo intenta una vez. Sin respaldo, el modelo actual se reintenta una vez. Si la compactación falla, el contexto no cambia.</string>
     <string name="model_groups_default_primary">Principal por defecto</string>
     <string name="model_groups_defaults">Predeterminados</string>
     <string name="model_groups_slot_groups">Grupos</string>
@@ -3175,4 +3175,19 @@
     <string name="process_card_thinking_now">Pensando…</string>
     <string name="appearance_show_turn_changes_card_title">Tarjeta de cambios del turno</string>
     <string name="appearance_show_turn_changes_card_subtitle">Muestra una tarjeta por turno con los archivos que modificó el asistente, estadísticas de líneas y deshacer con un toque. Desactivada por defecto; la conversación se mantiene limpia sin ella.</string>
+    <string name="vm_compact_retry_cooldown">La última compactación falló. Puedes reintentar en %1$d s.</string>
+    <string name="guard_stop_section">Freno de bucles</string>
+    <string name="guard_stop_title">Detener si se repite</string>
+    <string name="guard_stop_on">Puede detener la sesión</string>
+    <string name="guard_stop_off">Nunca detiene la sesión</string>
+    <string name="guard_stop_footer">Si está activo, el freno detiene la sesión cuando la misma acción se repite demasiadas veces. Si está desactivado, solo avisa al modelo, útil en esperas largas como una compilación.</string>
+    <string name="token_usage_section_memory">Memoria</string>
+    <string name="token_usage_memory_lines">Líneas entregadas</string>
+    <string name="token_usage_memory_shown">Veces mostradas</string>
+    <string name="modeldetail_section_context_budget">Presupuesto de contexto</string>
+    <string name="modeldetail_context_budget_footer">Cuánto de la conversación reciente sobrevive a la compactación. Automático escala con la ventana del modelo; un valor propio solo se aplica a este modelo.</string>
+    <string name="modeldetail_tail_budget_custom">Presupuesto final propio</string>
+    <string name="modeldetail_tail_budget">Presupuesto final</string>
+    <string name="modeldetail_tail_budget_state_auto">Automático (escala con la ventana, hasta 60k)</string>
+    <string name="modeldetail_tail_budget_state_specific">Propio de este modelo</string>
 </resources>

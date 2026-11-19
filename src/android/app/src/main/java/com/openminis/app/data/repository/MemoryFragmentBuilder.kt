@@ -219,20 +219,39 @@ internal class MemoryFragmentBuilder(
      * admitted entry, inside [MemoryDailyGate]).
      */
     internal fun loadRecentDailyRawUncached(now: Long): List<MemoryDailyGate.RawDay> {
-        val raw = mutableListOf<MemoryDailyGate.RawDay>()
-        var dayOffset = 0
-        while (raw.size < MemoryRepository.MAX_RECENT_FILES &&
-            dayOffset < MemoryRepository.MAX_LOOKBACK_DAYS
-        ) {
-            val dateStr = IsoTime.formatLocalDate(now - dayOffset.toLong() * 86400_000L)
-            val file = File(memoryDir, "$dateStr.md")
-            if (file.exists()) {
-                val content = readTextResilient(file, "daily-memory") ?: ""
-                if (content.isNotEmpty()) {
-                    raw.add(MemoryDailyGate.RawDay(dateStr, dayOffset, content))
-                }
+        // [T-memory-supersedes] Resolve replacements ONCE for the window, before
+        // admitting anything. A day whose file declares `supersedes: <other>`
+        // retires that other day everywhere — prompt, index and recall — so the
+        // set is computed from the same files this function is about to read.
+        // [T-memory-window-single-read] One pass: read each candidate day once,
+        // keep (date, offset, content), then decide supersedes/eligibility from
+        // that text. The previous shape read the whole window twice.
+        val scanned = ArrayList<Triple<String, Int, Triple<File, Long, String>>>()
+        var scanOffset =0
+        while (scanOffset < MemoryRepository.MAX_LOOKBACK_DAYS) {
+            val ds = IsoTime.formatLocalDate(now - scanOffset.toLong() *86400_000L)
+            val f = File(memoryDir, "$ds.md")
+            if (f.exists()) {
+                val content = readTextResilient(f, "daily-memory") ?: ""
+                if (content.isNotEmpty()) scanned += Triple(ds, scanOffset, Triple(f, f.lastModified(), content))
             }
-            dayOffset++
+            scanOffset++
+        }
+        val superseded = MemoryMetadataParser.supersededIds(
+            scanned.map { (ds, _, payload) -> ds to payload.third },
+        )
+        val raw = mutableListOf<MemoryDailyGate.RawDay>()
+        for ((dateStr, dayOffset, payload) in scanned) {
+            if (raw.size >= MemoryRepository.MAX_RECENT_FILES) break
+            val (file, modifiedAt, content) = payload
+            if (dateStr in superseded) continue
+            // [T-memory-frontmatter] A disabled or expired file must not reach the
+            // model; the same decision feeds the gate, the budget and the index.
+            if (!MemoryMetadataParser.isEligible(content, now, modifiedAt)) continue
+            // [T-memory-frontmatter-strip] Inject the BODY, never the metadata block.
+            raw.add(
+                MemoryDailyGate.RawDay(dateStr, dayOffset, MemoryMetadataParser.strip(content)),
+            )
         }
         return raw
     }

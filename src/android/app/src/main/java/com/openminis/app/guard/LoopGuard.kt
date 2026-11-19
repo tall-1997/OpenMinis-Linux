@@ -74,6 +74,24 @@ class LoopGuard {
     private var failures = 0
     private val warned = HashMap<Signal, Int>()
 
+    /**
+     * [T-loop-guard-stop-policy] Whether reaching a stop rung may actually end
+     * the session.
+     *
+     * WHY this is a policy and not a constant: a legitimate high-frequency
+     * poll (waiting on a build, a deploy, a long-running job) trips the Repeat
+     * ladder while it is doing exactly the right thing, and the old behaviour
+     * — refuse the 12th identical call, then refuse everything but reads —
+     * left the user with no way forward except typing again. The reference
+     * harness keeps its reminder advisory for the same reason.
+     *
+     * Default stays [STOP_ENABLED_DEFAULT] (true) because an unattended mobile
+     * session genuinely needs a hard bound; the setting is what lets a caller
+     * opt out per session instead of patching the class.
+     */
+    @Volatile
+    var stopEnabled: Boolean = STOP_ENABLED_DEFAULT
+
     /** The signal that stopped this session, once any ladder reached its stop rung; null while still running. */
     @Volatile
     var stopped: Signal? = null
@@ -87,6 +105,7 @@ class LoopGuard {
     @Synchronized
     fun check(signature: String?): Signal? {
         stopped?.let { return it }
+        if (!stopEnabled) return null
         if (signature != null && countInWindow(signature) + 1 >= Signal.Repeat.stopAt) {
             return Signal.Repeat.also { stopped = it }
         }
@@ -104,8 +123,19 @@ class LoopGuard {
             val rung = signal.ladder.lastOrNull { count >= it } ?: return
             if (rung <= (warned[signal] ?: 0)) return
             warned[signal] = rung
-            if (rung == signal.stopAt) stopped = signal
-            if (hit == null || rung == signal.stopAt) hit = signal to count
+            // [T-loop-guard-stop-policy] A disabled stop turns the last rung
+            // into one more reminder: the model is told, the session keeps
+            // working. The audit line exists so a later “why did this never
+            // stop” question has an answer.
+            val isStop = rung == signal.stopAt && stopEnabled
+            if (rung == signal.stopAt) {
+                com.openminis.app.logging.AppLogger.info(
+                    "LoopGuard",
+                    "stop rung reached: signal=$signal count=$count enforced=$isStop",
+                )
+            }
+            if (isStop) stopped = signal
+            if (hit == null || isStop) hit = signal to count
         }
         if (signature != null) {
             recent.addLast(signature)
@@ -153,6 +183,13 @@ class LoopGuard {
     companion object {
         /** [Signal.Repeat] counts occurrences within the most recent 16 recorded calls. */
         const val COUNT_WINDOW = 16
+
+        /**
+         * [T-loop-guard-stop-policy] Default for [LoopGuard.stopEnabled].
+         * True keeps the shipped hard bound; a caller that wants advisory-only
+         * behaviour flips the instance flag.
+         */
+        const val STOP_ENABLED_DEFAULT = true
 
         /** Memory bound: at most the last 64 signatures are kept per session; older ones are dropped. */
         const val STORAGE_LIMIT = 64

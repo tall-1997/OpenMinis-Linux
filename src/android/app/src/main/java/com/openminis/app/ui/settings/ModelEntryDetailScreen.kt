@@ -116,6 +116,17 @@ fun ModelEntryDetailScreen(
     var autoCompactOn by remember {
         mutableStateOf(overrides.autoCompactEnabled ?: globalAutoCompactOn)
     }
+    // [T-harness-config-store] Per-model context budget: OFF follows the
+    // window automatically (35%, ceiling 60k); ON pins an explicit tail budget.
+    val harnessContext = LocalContext.current
+    var harnessCustom by remember(entryId) {
+        mutableStateOf(com.openminis.app.data.HarnessConfigStore.hasOverride(harnessContext.filesDir, entryId))
+    }
+    var harnessTailBudget by remember(entryId) {
+        mutableStateOf(
+            com.openminis.app.data.HarnessConfigStore.forModel(harnessContext.filesDir, entryId).postAnchorBudgetTokens,
+        )
+    }
     var compactPercentInherited by remember { mutableStateOf(overrides.compactThresholdPercent == null) }
     var compactPercentText by remember {
         mutableStateOf(
@@ -201,6 +212,17 @@ fun ModelEntryDetailScreen(
                     } else {
                         entry.copy(overrides = newOverrides, isHidden = isHidden)
                     }
+                    // [T-harness-config-store] Persist next to the model so the next assembly
+                    // resolves it; null restores the automatic scaling.
+                    com.openminis.app.data.HarnessConfigStore.save(
+                        harnessContext.filesDir,
+                        entryId,
+                        if (harnessCustom) {
+                            com.openminis.app.agent.HarnessConfig.DEFAULT.copy(postAnchorBudgetTokens = harnessTailBudget)
+                        } else {
+                            null
+                        },
+                    )
                     providerRepository.updateEntry(updated)
                     onBack()
                 },
@@ -312,6 +334,39 @@ fun ModelEntryDetailScreen(
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
+        // [T-harness-config-store] The tail budget compaction keeps. Only this
+        // model reads it; nothing is shared through a global.
+        SettingsSection(
+            header = stringResource(R.string.modeldetail_section_context_budget),
+            footer = stringResource(R.string.modeldetail_context_budget_footer),
+        ) {
+            SettingsSwitchRow(
+                title = stringResource(R.string.modeldetail_tail_budget_custom),
+                subtitle = if (harnessCustom) stringResource(R.string.modeldetail_tail_budget_state_specific)
+                    else stringResource(R.string.modeldetail_tail_budget_state_auto),
+                checked = harnessCustom,
+                onCheckedChange = { harnessCustom = it },
+            )
+            SettingsRow(
+                title = stringResource(R.string.modeldetail_tail_budget),
+                subtitle = if (harnessCustom) harnessTailBudget.toString()
+                    else stringResource(R.string.modeldetail_tail_budget_state_auto),
+                showChevron = false,
+                showDivider = false,
+                trailing = {
+                    PlusMinusStepper(
+                        value = harnessTailBudget,
+                        min = com.openminis.app.data.HarnessConfigStore.MIN_TAIL_BUDGET,
+                        max = com.openminis.app.data.HarnessConfigStore.MAX_TAIL_BUDGET,
+                        step = com.openminis.app.data.HarnessConfigStore.TAIL_BUDGET_STEP,
+                        enabled = harnessCustom,
+                        onValueChange = { harnessTailBudget = it },
+                        decreaseContentDescription = stringResource(R.string.tool_limits_decrease),
+                        increaseContentDescription = stringResource(R.string.tool_limits_increase),
+                    )
+                },
+            )
+        }
             }
         }
 

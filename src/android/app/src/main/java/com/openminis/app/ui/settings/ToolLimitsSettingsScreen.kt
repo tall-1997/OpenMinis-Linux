@@ -45,6 +45,10 @@ fun ToolLimitsSettingsScreen(onBack: () -> Unit) {
     // next to the other context/cost-management toggles on this page.
     val warmingRevision by CacheWarmingPrefs.revision.collectAsStateWithLifecycle()
     val warmingEnabled = remember(warmingRevision) { CacheWarmingPrefs.enabled() }
+    // [T-guard-stop-policy] Whether the repeat ladder may stop the session.
+    val guardRevision by com.openminis.app.data.GuardPrefs.revision.collectAsStateWithLifecycle()
+    val guardStopEnabled = remember(guardRevision) { com.openminis.app.data.GuardPrefs.stopEnabled() }
+    val guardContext = androidx.compose.ui.platform.LocalContext.current
 
     // Nested under multi-agent (and the tool-limits deep link), not a
     // first-level settings page. 1.36.16 keeps the back arrow here; 1.36.37
@@ -169,6 +173,24 @@ fun ToolLimitsSettingsScreen(onBack: () -> Unit) {
                 title = stringResource(R.string.cache_warming_title),
                 checked = warmingEnabled,
                 onCheckedChange = CacheWarmingPrefs::setEnabled,
+            )
+        }
+        // [T-guard-stop-policy] The loop guard's last rung: stop the session, or
+        // keep advising. Stopping stays the default; this is the escape hatch for
+        // a legitimate long wait that trips the repeat ladder.
+        SettingsSection(
+            header = stringResource(R.string.guard_stop_section),
+            footer = stringResource(R.string.guard_stop_footer),
+        ) {
+            SettingsSwitchRow(
+                title = stringResource(R.string.guard_stop_title),
+                subtitle = if (guardStopEnabled) stringResource(R.string.guard_stop_on)
+                    else stringResource(R.string.guard_stop_off),
+                checked = guardStopEnabled,
+                showDivider = false,
+                onCheckedChange = { on ->
+                    com.openminis.app.data.GuardPrefs.setStopEnabled(guardContext, on)
+                },
             )
         }
     }

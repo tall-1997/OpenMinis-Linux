@@ -2763,7 +2763,7 @@ class ChatViewModel(
      * [dropOrphanedToolParts] for why the sweep exists and what it cannot fix.
      */
     internal fun effectiveAgentHistory(): List<LLMMessage> {
-        val repaired = dropOrphanedToolParts(effectiveAgentHistoryUncounted())
+        val repaired = repairPairingForRequest(effectiveAgentHistoryUncounted(forRequest = true))
         // [GH#352] A base64 image that entered history as TEXT (instead of an
         // image content block) blows the model's context window on EVERY
         // request and bricks the session. Scrub it from the outgoing copy only;
@@ -2788,7 +2788,7 @@ class ChatViewModel(
             } else msg
         }
         // [T-tool-result-aging] Fold tool output the model already consumed.
-        return ContextSaverRuntime.age(cleaned, currentModelContextWindow ?: 0, _lastTurnContextTokens.value)
+        return agedHistoryForRequest(cleaned)
     }
 
     // dropOrphanedToolParts lives in ChatViewModelHistoryExt.kt
@@ -2813,12 +2813,10 @@ class ChatViewModel(
     internal var _compactMarkerDetached = false
 
     /**
-     * Tail size handed to the model when a marker's anchor has been evicted:
-     * summary + the newest [DETACHED_TAIL_MESSAGES] entries verbatim. Sized
-     * to keep the "most recent user turns + their tool round-trips" warm
-     * without re-introducing the full history the summary exists to replace.
+     * [T-detached-tail-budget] Upper bound on the detached tail; the actual
+     * size is chosen by [detachedTailSize] against the model's tail budget.
      */
-    internal val DETACHED_TAIL_MESSAGES = 60
+    internal val DETACHED_TAIL_MESSAGES = DETACHED_TAIL_MAX_MESSAGES
 
     /**
      * Assemble the outgoing history for a DETACHED marker: the summary is
@@ -2828,12 +2826,9 @@ class ChatViewModel(
      * [effectiveAgentHistoryUncounted]'s v2 path minus the anchor-based
      * slice, which is the only part that requires a resolvable anchor.
      */
-    internal fun detachedCompactHistory(summaryWrappedText: String): List<LLMMessage> =
-        buildDetachedCompactHistory(
-            summaryWrappedText = summaryWrappedText,
-            history = agentHistorySnapshot(),
-            tailSize = DETACHED_TAIL_MESSAGES,
-        )
+    internal fun detachedCompactHistory(summaryWrappedText: String): List<LLMMessage> {
+        return detachedCompactHistoryWithHarness(summaryWrappedText)
+    }
 
     internal suspend fun splitCompactHalves(
         messages: List<LLMMessage>,

@@ -69,29 +69,44 @@ object MemoryIndex {
         sharedDir: File?,
         excludeDates: Set<String>,
         maxRows: Int = MAX_ROWS,
+        /** [T-memory-frontmatter] Clock for TTL eligibility; injectable for tests. */
+        nowMs: Long = System.currentTimeMillis(),
     ): List<Row> {
-        val byDate = LinkedHashMap<String, Row>()
+        val candidates = ArrayList<Triple<File, String, Boolean>>()
         // Shared first, session second: a later put() replaces the shared row.
         for ((dir, shared) in listOf(sharedDir to true, sessionDir to false)) {
             val files = dir?.listFiles() ?: continue
             for (file in files) {
                 if (!file.isFile || !DAILY.matches(file.name)) continue
-                val date = file.name.removeSuffix(".md")
-                val row = rowFor(file, date, shared) ?: continue
-                byDate[date] = row
+                val text = runCatching { file.readText() }.getOrNull() ?: continue
+                if (text.isBlank()) continue
+                candidates += Triple(file, text, shared)
             }
+        }
+        // [T-memory-index-single-read] One read per file serves BOTH the metadata
+        // decisions and the row build; reading the directory twice (once here, once
+        // inside a supersede scan) doubled the prompt-path IO for no gain.
+        val superseded = MemoryMetadataParser.supersededIds(
+            candidates.map { (file, text, _) -> file.name.removeSuffix(".md") to text },
+        )
+        val byDate = LinkedHashMap<String, Row>()
+        for ((file, text, shared) in candidates) {
+            val date = file.name.removeSuffix(".md")
+            if (date in superseded) continue
+            if (!MemoryMetadataParser.isEligible(text, nowMs, file.lastModified())) continue
+            byDate[date] = Row(
+                date = date,
+                entries = ENTRY_MARK.findAll(text).count(),
+                // [T-memory-frontmatter-strip] Preview the BODY: the metadata block is
+                // not memory content, and a new day's first line is `---`.
+                preview = previewOf(MemoryMetadataParser.strip(text)),
+                shared = shared,
+            )
         }
         val sorted = byDate.values.sortedByDescending { it.date }
         return sorted.filter { it.date !in excludeDates }.take(maxRows)
     }
-
-    private fun rowFor(file: File, date: String, shared: Boolean): Row? {
-        val text = runCatching { file.readText() }.getOrNull() ?: return null
-        if (text.isBlank()) return null
-        val entries = ENTRY_MARK.findAll(text).count()
-        return Row(date = date, entries = entries, preview = previewOf(text), shared = shared)
-    }
-
+    
     /** First line that is neither a timestamp marker nor a heading. */
     private fun previewOf(text: String): String {
         for (line in text.lineSequence()) {
@@ -137,11 +152,16 @@ object MemoryIndex {
         excludeDates: Set<String>,
         maxRows: Int = MAX_ROWS,
     ): String? {
-        val rows = rows(sessionDir, sharedDir, excludeDates, maxRows)
-        if (rows.isEmpty()) return null
-        // Recompute the omitted count so the block can say how much it hid.
-        val total = rows(sessionDir, sharedDir, excludeDates, Int.MAX_VALUE).size
-        val body = render(rows, (total - rows.size).coerceAtLeast(0)) ?: return null
+        // [T-memory-index-single-pass] One scan, not two. The old body called
+        // rows() twice — once for the page and once at Int.MAX_VALUE purely to
+        // learn how many rows were hidden — and each call now also reads and
+        // parses frontmatter for every daily file in both scopes. Computing the
+        // total from the same List keeps the omitted count exact with half the
+        // IO and half the parsing.
+        val all = rows(sessionDir, sharedDir, excludeDates, Int.MAX_VALUE)
+        if (all.isEmpty()) return null
+        val page = all.take(maxRows.coerceAtLeast(1))
+        val body = render(page, (all.size - page.size).coerceAtLeast(0)) ?: return null
         return MemoryAuthority.withEnvelope(
             body,
             MemoryTrust.UNVERIFIED_CANDIDATE,

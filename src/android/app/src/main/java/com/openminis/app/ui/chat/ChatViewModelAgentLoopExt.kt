@@ -111,6 +111,8 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // [T-android-model-switch-midrun-adopt] Fallback state is re-read per request.
     var currentProvider = provider
     var remainingFallbacks = fallbackProviders.toMutableList()
+    // [T-drain-prompt-session] Pin this run's session for prompt rebuilds.
+    val loopSessionId = activeSessionId
     val fallbackReasons = mutableListOf<String>()
     // [port-upstream-1.16][T-b13-empty-fallback] Members that failed with an
     // error this run — the empty-turn walk never picks them again.
@@ -511,9 +513,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     goalPrompt = goalMount.prompt, goalCanContinue = goalMount.canContinue)
                 drainSteeringIntoRun(assistantId, accumulatedText, allToolBlocks, uiBatcher) { swapLoopStateToInjectedBubble(it) }
                 declareToolSetDeltaIfChanged(agentTools)
-                val requestHistory = ToolIdNormalization.normalizeMessages(
-                    prepareRequestHistory(stallResumeContext)
-                )
+                val requestHistory = finalizeRequestHistory(turn, ToolIdNormalization.normalizeMessages(prepareRequestHistory(stallResumeContext)))  // [T-session-journal-final]
                 // [T-first-event-watchdog][T-routing-strategy-x] First-token budget.
                 val firstEventTimeoutMs = GroupRoutingState.resolveFirstEventTimeoutMs(providerRepository,
                     _selectedGroupId.value,
@@ -529,7 +529,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 )
                 streamPhase.startAttempt()
                 currentProvider.streamMessage(
-                    applyRequestImageBudget(requestHistory),
+                    requestHistory,
                     turnSystemPrompt, dynamicMaxTokens(currentProvider, lastContextTokens),
                     temperature = samplingTemperature(_activeEntryId.value),
                     tools = agentTools,
@@ -1263,7 +1263,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             val handled = drainQueueIntoStandaloneTurn(assistantId, accumulatedText, allToolBlocks, uiBatcher)
             if (handled != null) {
                 swapLoopStateToInjectedBubble(handled)
-                activeSystemPrompt = refreshRunPromptForInjectedTurn(activeSystemPrompt)
+                activeSystemPrompt = refreshRunPromptForInjectedTurn(activeSystemPrompt, loopSessionId)
                 continue
             }
             // null = queue drained concurrently / no content — the normal
@@ -1839,14 +1839,11 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             break
         }
 
-        // [T-no-mid-task-speech] No stall nudge rides the loop: a synthetic USER turn
-        // makes the model stop and answer in prose (what ZCode/DeepSeek-Harness avoid);
-        // repeated calls still get the hint INSIDE the tool result (ToolLoopDetector), never as a turn.
+        // [T-no-mid-task-speech] No stall nudge; repeats get a hint inside the tool result.
 
         if (turn == 0) generateSessionTitleIfNeeded()  // auto-title after first exchange
 
-    // [T-android-queued-message-interrupt-on-toolclose] 工具结果边界上的排队消息会打断运行计划。
-        // starts a standalone turn. See drainQueueIntoStandaloneTurn.
+    // [T-android-queued-message-interrupt-on-toolclose] queue at a tool boundary -> standalone turn.
         if (_promptQueue.value.isNotEmpty()) {
             AppLogger.info(
                 ChatViewModel.TAG_STREAM,
@@ -1855,7 +1852,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             val handled = drainQueueIntoStandaloneTurn(assistantId, accumulatedText, allToolBlocks, uiBatcher)
             if (handled != null) {
                 swapLoopStateToInjectedBubble(handled)
-                activeSystemPrompt = refreshRunPromptForInjectedTurn(activeSystemPrompt)
+                activeSystemPrompt = refreshRunPromptForInjectedTurn(activeSystemPrompt, loopSessionId)
                 continue
             }
             // null = empty-after-build / drain rejected; fall through to normal next-turn dispatch so the queue doesn't pin the loop.

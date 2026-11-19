@@ -256,6 +256,20 @@ fun TokenUsageSheet(
                     if (saver.savedChars > 0) "≈" + formatTokens(saver.savedChars / ContextSaverRuntime.CHARS_PER_TOKEN) else "—",
                 )
             }
+            StatSection(title = stringResource(R.string.token_usage_section_memory)) {
+                // [T-memory-usage-ui] "Did the memory system put anything in front of
+                // the model?" Only this chat's own ledger is read, and a session that
+                // never delivered memory shows "—" rather than a misleading 0.
+                val memory = remember(breakdown) { viewModel.memoryUsageSummary() }
+                StatRow(
+                    stringResource(R.string.token_usage_memory_lines),
+                    if (memory.first > 0) memory.first.toString() else "—",
+                )
+                StatRow(
+                    stringResource(R.string.token_usage_memory_shown),
+                    if (memory.first > 0) memory.second.toString() else "—",
+                )
+            }
         }
     }
 }

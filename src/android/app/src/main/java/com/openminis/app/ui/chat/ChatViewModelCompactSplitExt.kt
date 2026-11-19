@@ -28,7 +28,9 @@ internal suspend fun ChatViewModel.generateCompactSummaryWithSplitting(
         "Previous context summary:\n$previousSummary\n\n" +
             "New conversation to merge:\n$transcript"
     }
-    val tokenBudget = ChatViewModel.compactSegmentTokenBudget(currentModel?.contextWindow ?: 128_000)
+    val tokenBudget = ChatViewModel.compactSegmentTokenBudget(
+        effectiveContextWindowTokens() ?: currentModel?.contextWindow ?: 128_000,
+    )
     val estimatedTokens = ChatViewModel.estimateCompactTokens(conversationText)
     if (compactAllowSplit && ChatViewModel.shouldProactivelySplit(
             messages.size,

@@ -547,8 +547,27 @@ private suspend fun ChatViewModel.runPlannedCall(
             updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, ctx.allToolBlocks.toList())
         }
         Log.d("ToolChain[VM]", "[turn=${ctx.turn}] executeTool START name=${call.name} args=${call.argsStr.take(200)}")
-        val result = executeTool(call.name, call.argsStr, call.id, ctx.allToolBlocks, ctx.assistantId, ctx.accumulatedText)
-        // [T-known-failure] Feed the outcome back into the failure ledger the
+        // [T-tool-receipt] Two-phase receipt for MUTATING calls only. The
+        // not_sent line lands before dispatch; a process death between here and
+        // the settle line is exactly the `unknown` state the model must verify
+        // instead of retrying. Read-only tools skip both calls (isMutating).
+        // [T-tool-receipt] The notice is computed BEFORE this call's own begin
+        // line lands, so it can only describe a PREVIOUS process's unfinished
+        // work — never the call the model is about to read a result for.
+        // [T-tool-receipt-report-once] PEEK: the notice is only acknowledged once it
+ // actually reaches the model (a refusal or a throwing dispatch would drop it).
+ val pendingReceipts = ToolReceiptStore.pendingUnsettled(context.filesDir, ctx.activeSessionId)
+               // [T-tool-receipt] Receipt bookkeeping lives in ChatViewModelToolReceiptExt:
+        // this file is at its line cap, and the receipt rules (notice, conflict,
+        // begin/settle/abandon) are one contract that must not be split.
+        val result = dispatchWithReceipt(ctx, call, pendingReceipts) {
+            executeTool(call.name, call.argsStr, call.id, ctx.allToolBlocks, ctx.assistantId, ctx.accumulatedText)
+        }
+        
+ // [T-session-journal-turn-bounds] One tool round in the shadow log, so
+        // a reader can rebuild the call/result sequence without the transcript.
+        // Best-effort by contract: a journal failure never touches the result.
+               // [T-known-failure] Feed the outcome back into the failure ledger the
         // dispatch gate reads: a success clears the record, a failure arms it
         // for the next identical call. Fire-and-forget; never affects the
         // result the model sees.
@@ -573,6 +592,7 @@ private suspend fun ChatViewModel.runPlannedCall(
             // hash-only line made the handover unusable and the work repeated.
             argsSummary = WorkingMemoryArgs.summary(call.name, call.argsStr),
             resultHead = result.output.take(120),
+            filesDir = context.filesDir,
         )
         finalizePlannedCall(ctx, call, result)
     }
@@ -659,6 +679,7 @@ private suspend fun ChatViewModel.fanOutSpawnCalls(
                             argsDigest = peerArgsSha.take(8),
                             argsSummary = WorkingMemoryArgs.summary(peer.name, peer.argsStr),
                             resultHead = peerResult.output.take(120),
+                            filesDir = context.filesDir,
                         )
                         finalizePlannedCall(ctx, peer, peerResult)
                     }

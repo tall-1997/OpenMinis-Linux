@@ -33,6 +33,19 @@ internal object PostAnchorTail {
      */
     internal const val BUDGET_TOKENS: Int = 60_000
 
+    /**
+     * [T-postanchor-notice-reserve] Tokens held back for the notice + digest
+     * that [apply] prepends. The digest is capped at 3,000 chars (~750 tokens
+     * under this estimator); 1,200 leaves room for the count line and a
+     * stalled-message banner. Without this reserve the "budget" was really
+     * budget + notice, breaking the summary+preAnchor+postAnchor corridor.
+     */
+    internal const val NOTICE_RESERVE_TOKENS: Int = 1_200
+
+    // [T-harness-config] Base notice cost now lives on HarnessConfig
+    // (noticeBaseTokens). A second private copy here was one more number that
+    // could drift from the object the digest cap actually reads.
+
     /** [T-compact-window-scaled-budget] postAnchor share of the window. */
     internal const val WINDOW_FRACTION: Double = 0.35
 
@@ -45,10 +58,17 @@ internal object PostAnchorTail {
      * again after the first compact (the capped request sits below the
      * threshold forever while the unsummarized region keeps growing).
      */
-    internal fun budgetTokensForWindow(windowTokens: Int?, applyTailBudget: Boolean = true): Int {
+    internal fun budgetTokensForWindow(
+        windowTokens: Int?,
+        applyTailBudget: Boolean = true,
+        config: com.openminis.app.agent.HarnessConfig = com.openminis.app.agent.HarnessConfig.current(),
+    ): Int {
         if (!applyTailBudget) return Int.MAX_VALUE
-        if (windowTokens == null) return BUDGET_TOKENS
-        return minOf(BUDGET_TOKENS, (windowTokens * WINDOW_FRACTION).toInt())
+        // [T-harness-config] The numbers live in one validated object so a
+        // per-session override can change them without editing call sites. The
+        // defaults are byte-identical to the constants above (asserted by the
+        // tool-title/budget contract gate).
+        return config.postAnchorBudgetFor(windowTokens)
     }
 
 
@@ -65,6 +85,8 @@ internal object PostAnchorTail {
          * plain count notice (pure tool traffic with nothing to excerpt).
          */
         val digest: (dropped: List<LLMMessage>) -> String? = { null },
+        /** [T-harness-config-resolve] The budget numbers for THIS model. */
+        val config: com.openminis.app.agent.HarnessConfig = com.openminis.app.agent.HarnessConfig.DEFAULT,
     )
 
     internal data class Result(
@@ -120,6 +142,14 @@ internal object PostAnchorTail {
         // accepted; each older group is kept only while the running total
         // still fits the budget. Everything older than the cutoff is dropped
         // as whole groups — a half-kept round could orphan a tool_use.
+        // [T-postanchor-notice-reserve] Reserve the notice/digest cost so the
+        // kept slice + notice stays inside the declared budget.
+        // [T-harness-config] The SAME reserve object the detached tail
+        // subtracts. Reading the constant here made the two paths disagree
+        // whenever a config override set a different reserve.
+        // [T-harness-config-resolve] Resolved by the caller for this model.
+        val config = budget.config
+        val effectiveBudget = config.effectiveTailBudget(budget.budgetTokens)
         val costs = IntArray(groups.size) { i ->
             groups[i].sumOf { msg -> budget.estimate(msg) }.coerceAtLeast(0)
         }
@@ -128,7 +158,7 @@ internal object PostAnchorTail {
         var i = groups.size - 2
         while (i >= 0) {
             val next = total + costs[i]
-            if (next > budget.budgetTokens) break
+            if (next > effectiveBudget) break
             total = next
             firstKept = i
             i -= 1
@@ -170,31 +200,80 @@ internal object PostAnchorTail {
         budget: Budget,
     ): String {
         val base = droppedRoundsNotice(droppedRounds, droppedTokens)
-        val digest = runCatching { budget.digest(dropped) }.getOrNull()
+        // [T-postanchor-digest-catch] Catch Exception, not Throwable: a
+        // digest bug must not break assembly, but OOM/cancellation must
+        // propagate instead of being silently converted into "no digest".
+        val digest = try {
+            budget.digest(dropped)
+        } catch (_: Exception) {
+            null
+        }?.takeIf { it.isNotBlank() }
+            // [T-postanchor-notice-reserve] Keep the digest inside the share
+            // reserved for it: a 3k-char digest on a 32k-window tail would
+            // otherwise consume ~7% of the window on its own.
+            ?.let { text ->
+                val maxChars = if (budget.budgetTokens == Int.MAX_VALUE) {
+                    Int.MAX_VALUE
+                } else {
+                    // [T-harness-config] The share actually reserved for
+                    // notice+digest, taken from the same object the budget
+                    // above subtracted, so an override cannot make the two
+                    // disagree.
+                    (budget.config
+                        .let { it.noticeReserveTokens - it.noticeBaseTokens })
+                        .coerceAtLeast(0) * 4
+                }
+                if (text.length <= maxChars) {
+                    text
+                } else {
+                    com.openminis.app.util.TextClip.safeTake(text, maxChars) + "…"
+                }
+            }
         return if (digest.isNullOrBlank()) base else base + "\n" + digest
     }
 
     /**
-     * Split into chronological rounds. A new round starts at a USER message
-     * that does NOT carry a tool result (tool results are persisted as
-     * USER-role messages — see [WalkBack.bounded]'s orphan-toolcall note);
-     * everything before the first such boundary forms group 0, which may be
-     * the tail of the pre-anchor round (assistant tool_use first).
+     * Split into budget groups. A new group starts at:
+     *  - a USER message that does NOT carry a tool result (a new round), or
+     *  - an ASSISTANT message after the group already contains an assistant
+     *    (a new tool STEP inside one round).
+     *
+     * [T-postanchor-intra-round-split] The second boundary is what makes a
+     * single user turn + 300 tool rounds budgetable at all. The old code
+     * returned ONE group for that shape, so `apply` skipped the budget and
+     * shipped all 300 steps. A step starts on its assistant tool_use and
+     * carries the following tool_result carrier(s), so a pair is never split;
+     * the round's user text rides the first step's group.
      */
     internal fun splitRounds(messages: List<LLMMessage>): List<List<LLMMessage>> {
         if (messages.isEmpty()) return emptyList()
         val groups = ArrayList<ArrayList<LLMMessage>>()
         var current = ArrayList<LLMMessage>()
         groups.add(current)
+        var currentHasAssistant = false
         for (msg in messages) {
             val startsRound = msg.role == LLMMessage.Role.USER &&
                 msg.contentParts.none { it is AgentContentPart.ToolResult }
-            if (startsRound && current.isNotEmpty()) {
+            val startsStep = msg.role == LLMMessage.Role.ASSISTANT &&
+                currentHasAssistant && !hasPendingToolUse(current)
+            if ((startsRound || startsStep) && current.isNotEmpty()) {
                 current = ArrayList()
                 groups.add(current)
+                currentHasAssistant = false
             }
             current.add(msg)
+            if (msg.role == LLMMessage.Role.ASSISTANT) currentHasAssistant = true
         }
         return groups
     }
+
+    /**
+     * [T-postanchor-intra-round-split][T-tool-pairing-single-authority] True
+     * while a tool_use in [group] has no matching tool_result yet. Splitting
+     * there would orphan the call; wait until the result carrier has landed in
+     * the same group. Delegates to [ToolPairingCore] so the Responses
+     * combined id is normalized the same way every other pairing check does.
+     */
+    private fun hasPendingToolUse(group: List<LLMMessage>): Boolean =
+        ToolPairingCore.hasPendingUse(group)
 }

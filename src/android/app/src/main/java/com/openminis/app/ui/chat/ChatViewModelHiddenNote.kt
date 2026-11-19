@@ -26,7 +26,11 @@ internal suspend fun ChatViewModel.ensureSessionScopedNotices() {
     if (sid == noticesSessionId) return
     noticesSessionId = sid
     val filesDir = context.filesDir
-    val saved = withContext(Dispatchers.IO) { NoticeLedgerStore.load(filesDir, sid) }
+    val saved = withContext(Dispatchers.IO) {
+        NoticeLedgerStore.load(filesDir, sid).also {
+            WorkingMemoryStore.preload(sid, filesDir)
+        }
+    }
     announcedRecallKeys.clear()
     announcedRecallKeys.addAll(saved.recallKeys)
     goalAnnouncedSha = saved.goalSha
@@ -83,8 +87,13 @@ internal suspend fun ChatViewModel.commitSessionNoticesOnce(
         // work that no plan/report snapshot covers (raw tool rounds). The
         // ledger's one-line records of undelivered rounds ride the same
         // hydration: delivered once into the transcript, then carried by it.
-        WorkingMemoryStore.renderUndelivered(activeSessionId)?.let { note ->
-            commitHiddenUserNote(note)
+        val note = WorkingMemoryStore.renderUndelivered(activeSessionId, context.filesDir)
+        if (note != null) {
+            if (commitHiddenUserNote(note)) {
+                WorkingMemoryStore.ackDelivered(activeSessionId, context.filesDir)
+            } else {
+                WorkingMemoryStore.undoDelivery(activeSessionId, context.filesDir)
+            }
             ledgerDirty = true
         }
     }
@@ -129,8 +138,26 @@ internal suspend fun ChatViewModel.commitSessionNoticesOnce(
     }
 }
 
-internal suspend fun ChatViewModel.commitHiddenUserNote(text: String) {
-    if (text.isBlank()) return
+/**
+ * [T-hidden-note-secret-mask] The framing choke point every host note passes
+ * through: mask credentials BEFORE persisting. Producers (ledger/failure)
+ * already mask, but recall/goal/state/plan notes can carry user-confided text
+ * from memory files. Masking here is the defense-in-depth layer that keeps the
+ * chat DB (and therefore export/backup) clean.
+ */
+internal fun frameHiddenNote(text: String): String {
+    // [T-hidden-note-frame-safe] memory_write can store a tool output that
+    // contains `</system-reminder>`; without neutralization the frame closes
+    // early and the rest of the note becomes raw user speech.
+    val safe = text.replace(FRAME_TAGS, "[tag]")
+    return "<system-reminder>\n" + com.openminis.app.util.SecretMasking.mask(safe) + "\n</system-reminder>"
+}
+
+/** Opening/closing harness frame tags, with optional attributes. */
+private val FRAME_TAGS = Regex("</?(?:system-reminder|context-summary)(?:\\s[^>]*)?>", RegexOption.IGNORE_CASE)
+
+internal suspend fun ChatViewModel.commitHiddenUserNote(text: String): Boolean {
+    if (text.isBlank()) return false
     // [T-hidden-user-note] Harness framing, not user speech: Z-Code delivers
     // recalled memory / objective as a `<system-reminder>` notice so the model
     // does not treat it as a request to answer. The no-reply contract lives in
@@ -140,7 +167,7 @@ internal suspend fun ChatViewModel.commitHiddenUserNote(text: String) {
     // `<system-reminder>` blocks) leaked the bookkeeping line into user
     // bubbles, and echo-prone models repeated it. The framing must stay
     // strip-clean end to end.
-    val framed = "<system-reminder>\n$text\n</system-reminder>"
+    val framed = frameHiddenNote(text)
     appendBoundedHistory(
         LLMMessage(
             role = LLMMessage.Role.USER,
@@ -153,10 +180,11 @@ internal suspend fun ChatViewModel.commitHiddenUserNote(text: String) {
     val partsJson = """[{"type":"text","value":${escapeJson(framed)}}]"""
     val persisted = withContext(Dispatchers.IO) {
         runCatching { chatRepository.appendMessage(sid, "user", partsJson) }.getOrNull()
-    } ?: return
+    } ?: return false
     withContext(Dispatchers.Main.immediate) {
         notePersistedUiRow(null, persisted.id)
     }
+    return true
 }
 
 // NOTE: the per-note no-reply head (HOST_NOTE_NO_REPLY_HEAD) that #339

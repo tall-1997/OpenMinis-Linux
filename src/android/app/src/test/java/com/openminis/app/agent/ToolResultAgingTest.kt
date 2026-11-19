@@ -187,6 +187,15 @@ class ToolResultAgingTest {
     // -------------------------------------------------------------- content
 
     @Test
+    fun `a result just over the head does not repeat head and tail`() {
+        // [T-age-head-and-tail] 241–320 chars must not render the same span
+        // twice; the tail fragment only appears once it cannot overlap.
+        val body = "a".repeat(150) + "b".repeat(150)
+        val text = ToolResultAging.placeholder("shell_execute", body)
+        assertFalse(text.contains("[tail]"))
+    }
+
+    @Test
     fun `placeholder keeps a readable path so the model can page it back`() {
         val spill = "/var/minis/workspace/tool-spill/tool_abc123.txt"
         val body = "line1\nline2\n" + "q".repeat(6_000) + "\n[full output: $spill]\n"
@@ -313,6 +322,19 @@ class ToolResultAgingTest {
     // ------------------------------------------------- round-coherent keep
 
     @Test
+    fun `keepRecent zero folds every eligible result without crashing`() {
+        // [T-age-zero-keep] keep=0 is the OFF-mode shape; the round-coherent
+        // index must not read live[scanned] out of bounds.
+        val history = listOf(
+            msg(result("a", 4_000)),
+            msg(result("b", 4_000), result("c", 4_000)),
+        )
+        val plan = ToolResultAging.age(history, keepRecent = 0, minChars = 1_200)
+        assertEquals(3, plan.agedCount)
+        assertTrue(contents(plan.messages).all { ToolResultAging.isAged(it) })
+    }
+
+    @Test
     fun `keep window never splits one parallel round`() {
         // One assistant turn fanned out into 3 calls. keepRecent = 1 would
         // fold b1/b2 and keep b3; the round-coherent rule keeps the whole
@@ -364,5 +386,27 @@ class ToolResultAgingTest {
         assertEquals("a b c", ToolResultAging.tailOf("a  b\t\nc"))
         val cut = ToolResultAging.tailOf("z".repeat(10) + "😘".repeat(200), limit = 5)
         assertFalse("must not start on a lone low surrogate", Character.isLowSurrogate(cut.first()))
+    }
+    
+    @Test
+    fun thePlaceholderAddressesThePassageNotJustTheFile() {
+        // [T-age-placeholder-offset] A path alone forces the model to read the
+        // whole spill to find text it already had in context; the offset is what
+        // makes the fold reversible without a full re-read.
+        val content = "x".repeat(400) + " /var/minis/workspace/tool-spill/out.txt " + "y".repeat(400)
+        val plain = ToolResultAging.placeholder("shell_execute", content)
+        val addressed = ToolResultAging.placeholder("shell_execute", content, spillOffset =0)
+        assertTrue(addressed.contains("offset 0"))
+ // [T-age-offset-honest] No length claim: content is the preview, so a
+ // quoted length would truncate a follow-up file_read of the spill file.
+ assertFalse(addressed.contains("length "))
+        assertTrue(addressed.length > plain.length)
+    }
+    
+    @Test
+    fun withoutAPathThereIsNoOffsetToClaim() {
+        val content = "z".repeat(400)
+        val text = ToolResultAging.placeholder("grep", content, spillOffset =0)
+        assertFalse(text.contains("offset"))
     }
 }

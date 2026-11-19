@@ -1,5 +1,6 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.agent.HarnessConfig
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 import org.junit.Assert.assertEquals
@@ -52,6 +53,45 @@ class PostAnchorBudgetTest {
     }
 
     // ── estimator completeness ────────────────────────────────────────────
+
+    @Test
+    fun `notice and digest fit inside the declared budget`() {
+        // [T-postanchor-notice-reserve] A 3k-char digest is ~750 tokens and
+        // must not be added on top of the tail budget.
+        val rounds = (0 until 6).map { i ->
+            listOf(
+                user("round $i"),
+                LLMMessage(
+                    role = LLMMessage.Role.ASSISTANT,
+                    content = "",
+                    contentParts = listOf(
+                        AgentContentPart.ToolUse(
+                            "c$i",
+                            "shell_execute",
+                            org.json.JSONObject("""{"command":"ls $i"}"""),
+                        ),
+                    ),
+                ),
+                LLMMessage(
+                    role = LLMMessage.Role.USER,
+                    content = "",
+                    contentParts = listOf(
+                        AgentContentPart.ToolResult("c$i", "shell_execute", "x".repeat(6_000)),
+                    ),
+                ),
+            )
+        }.flatten()
+        val result = PostAnchorTail.apply(
+            rounds,
+            PostAnchorTail.Budget(
+                budgetTokens = 8_000,
+                estimate = WalkBack::estimateMessageTokens,
+                digest = { "d".repeat(3_000) },
+            ),
+        )
+        val total = result.kept.sumOf { WalkBack.estimateMessageTokens(it) }
+        assertTrue("kept=$total must fit 8000", total <= 8_000)
+    }
 
     @Test
     fun `tool call arguments count toward the budget`() {
@@ -125,9 +165,54 @@ class PostAnchorBudgetTest {
     }
 
     @Test
-    fun `summary falls back to the first user when only notes exist`() {
+    fun `summary does not target a tool-result carrier`() {
+        val notice = user("[context window: 1 older rounds dropped (≈1 tokens) — x]")
+        val carrier = LLMMessage(
+            role = LLMMessage.Role.USER,
+            content = "",
+            contentParts = listOf(AgentContentPart.ToolResult("c1", "shell_execute", "ok")),
+        )
+        assertEquals(-1, firstInjectableUserIndex(listOf(notice, carrier)))
+    }
+
+    @Test
+    fun `summary falls back to no target when only notes exist`() {
         val note = user("<system-reminder>\n## Recalled relevant memories\nx\n</system-reminder>")
-        assertEquals(0, firstInjectableUserIndex(listOf(note)))
+        assertEquals(-1, firstInjectableUserIndex(listOf(note)))
+    }
+
+    @Test
+    fun `gate measurement follows the window tier`() {
+        // [T-exhausted-tier-measurement] <32K cannot compact, so it must weigh
+        // the real (trimmed/budgeted) request, not the un-budgeted worst case.
+        assertEquals(PolicyMeasurement.REQUEST, policyMeasurementMode(30_000, 75))
+        assertEquals(PolicyMeasurement.UNBUDGETED, policyMeasurementMode(32_000, 75))
+        assertEquals(PolicyMeasurement.UNBUDGETED, policyMeasurementMode(128_000, 75))
+        assertEquals(PolicyMeasurement.UNBUDGETED, policyMeasurementMode(null, 75))
+    }
+
+    // ── state note projection ─────────────────────────────────────────────
+
+    private fun stateNote() = user(
+        "<system-reminder>\n${SessionStateSnapshot.MARKER}\n\nPlan (1/2 done):\n1. [done] a\n</system-reminder>",
+    )
+
+    @Test
+    fun `an evicted state note is reported for request-only re-injection`() {
+        val before = user("task")
+        val note = stateNote()
+        val snapshot = listOf(before, note)
+        assertEquals(note, evictedStateNote(snapshot, anchorIdx = 0, kept = listOf(before)))
+    }
+
+    @Test
+    fun `a visible or summarized state note is not re-injected`() {
+        val before = user("task")
+        val note = stateNote()
+        // Visible in the kept projection.
+        assertEquals(null, evictedStateNote(listOf(before, note), anchorIdx = 0, kept = listOf(before, note)))
+        // Before the anchor: covered by the summary.
+        assertEquals(null, evictedStateNote(listOf(note, before), anchorIdx = 1, kept = listOf(before)))
     }
 
     @Test
@@ -141,4 +226,28 @@ class PostAnchorBudgetTest {
         val real = user("keep going")
         assertTrue(firstInjectableUserIndex(listOf(state, real)) == 1)
     }
+    
+    @Test
+    fun aPerModelOverrideReplacesTheWindowScalingButStaysInsideTheCeiling() {
+        // [T-harness-config-store] The knob the model detail screen writes: a
+        // custom tail budget wins over the window share, and can never exceed the
+        // shipped ceiling (32k window: 11200 by scaling, 20000 by override).
+        val custom = HarnessConfig.DEFAULT.copy(postAnchorBudgetTokens = 20_000)
+        assertEquals(11_200, PostAnchorTail.budgetTokensForWindow(32_000, true, HarnessConfig.DEFAULT))
+        assertEquals(11_200, PostAnchorTail.budgetTokensForWindow(32_000, true, custom))
+        assertEquals(20_000, PostAnchorTail.budgetTokensForWindow(128_000, true, custom))
+    }
+    
+    @Test
+    fun theBudgetCarriesTheConfigItWasBuiltWith() {
+        val custom = HarnessConfig.DEFAULT.copy(noticeReserveTokens = 900)
+        val budget = PostAnchorTail.Budget(
+            budgetTokens = 10_000,
+            estimate = WalkBack::estimateMessageTokens,
+            config = custom,
+        )
+        // effectiveTailBudget is what the kept slice actually gets: reserve-aware.
+        assertEquals(10_000 - 900, budget.config.effectiveTailBudget(budget.budgetTokens))
+    }
 }
+

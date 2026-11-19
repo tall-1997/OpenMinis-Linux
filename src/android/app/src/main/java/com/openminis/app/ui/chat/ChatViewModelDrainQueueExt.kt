@@ -46,7 +46,14 @@ internal suspend fun ChatViewModel.drainQueuedPrompts(
     fallbackProviders: List<ChatViewModel.FallbackCandidate>,
     fallbackStrategy: com.openminis.app.data.model.FallbackStrategy,
 ) {
+    val originSessionId = activeSessionId
     while (true) {
+        // [T-drain-prompt-session] Never claim a queued prompt for a session
+        // the user already left: the claim is destructive (queue removed).
+        if (activeSessionId != originSessionId) {
+            Log.w(ChatViewModel.TAG, "[DRAIN] session changed before claim; leaving the queue alone")
+            return
+        }
         val queued = claimPromptQueue() ?: break
         Log.i(ChatViewModel.TAG, "📨[DRAIN] Draining ${queued.size} queued prompt(s): " +
             queued.joinToString(", ") { "${it.id}=\"${it.text.take(20)}...\"" })
@@ -64,7 +71,11 @@ internal suspend fun ChatViewModel.drainQueuedPrompts(
 
         // Build a combined user message (text + images from all queued prompts).
         // Persist as a single row.
-        val sid = ensureSession()
+        // [T-drain-prompt-session] Bind the prompt to the session the drain
+        // STARTED in, not whatever is active after the suspend points:
+        // ensureSession() can observe a re-pointed VM and persist A's prompt
+        // into B.
+        val sid = originSessionId.ifEmpty { ensureSession() }
         val combinedAttachments = queued.flatMap { it.attachments }
         val prepared = prepareUserAttachments(combinedAttachments, sid)
 
@@ -106,6 +117,12 @@ internal suspend fun ChatViewModel.drainQueuedPrompts(
             continue
         }
 
+        // [T-drain-prompt-session] Last check before any persistence: the
+        // attachment build above is a suspend/IO point.
+        if (activeSessionId != sid) {
+            Log.w(ChatViewModel.TAG, "[DRAIN] session switched during preparation; not persisting")
+            return
+        }
         val userText = combinedText.toString()
         // [T-android-paste-mediaref] Same marker handling as the mid-loop
         // inject path above — see the note there for why queued prompts
@@ -122,6 +139,19 @@ internal suspend fun ChatViewModel.drainQueuedPrompts(
             bodyPartsJson = drainPaste?.partsJson,
         )
         val persistedUser = chatRepository.appendMessage(sid, "user", userPartsJson)
+        // [T-drain-prompt-session] The prompt now lives in session A's DB.
+        // If the user switched while the append was in flight, do NOT bind
+        // the bubble or append to this VM's agentHistory (which may already
+        // belong to B): that showed A's prompt in B and started a loop with
+        // the wrong session. The persisted row is intact for A to reopen.
+        if (activeSessionId != sid) {
+            Log.w(
+                ChatViewModel.TAG,
+                "[DRAIN] session switched (${sid.take(8)} -> ${activeSessionId.take(8)}); " +
+                    "persisted the prompt to its own session and stopped",
+            )
+            return
+        }
         // [T-android-drain-bubble-bind] Swap the drained placeholder bubbles
         // for ONE bubble bound to the persisted row (id = db id,
         // sourceDbIds set) — the exact shape the mid-loop inject path paints,
@@ -168,15 +198,10 @@ internal suspend fun ChatViewModel.drainQueuedPrompts(
                 runGroupChat(provider, closing = false)
             } else {
             // [T-drain-prompt-refresh] The queued prompt is a NEW user turn,
-            // but `systemPrompt` was built before it existed. Everything
-            // keyed to "the latest user message" — the task anchor, the
-            // daily-memory gate, recall — was therefore frozen on the
-            // previous turn. Rebuild now that the row is persisted and the
-            // bubble is bound; fall back to the old prompt only if the build
-            // fails.
-            val drainedPrompt = withContext(Dispatchers.IO) {
-                runCatching { buildSystemPrompt() }.getOrNull()
-            } ?: systemPrompt
+            // but `systemPrompt` was built before it existed. Rebuild now
+            // that the row is persisted and the bubble is bound; fall back to
+            // the old prompt only if the build fails.
+            val drainedPrompt = refreshRunPromptForInjectedTurn(systemPrompt, sid)
             runAgentLoop(
                 provider = provider,
                 systemPrompt = drainedPrompt,

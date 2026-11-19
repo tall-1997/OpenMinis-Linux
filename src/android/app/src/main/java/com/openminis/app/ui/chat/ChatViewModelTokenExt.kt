@@ -1,6 +1,7 @@
 package com.openminis.app.ui.chat
 
 import com.openminis.app.data.BPETokenizer
+import com.openminis.app.data.ContextPolicy
 import com.openminis.app.data.UsageState
 import com.openminis.app.data.foldToolUse
 import com.openminis.app.data.model.AgentContentPart
@@ -94,17 +95,64 @@ private fun estimateMixedTokens(text: String): Long = TokenScanMemo.mixedTokens(
  * uses the effective slice (not raw `agentHistory`) so compaction — which
  * shrinks exactly this slice — makes the post-compact check pass.
  */
-internal fun ChatViewModel.contextTokensForPolicy(): Int =
-    maxOf(
-        _lastTurnContextTokens.value,
-        estimateAgentHistoryTokens(),
-        estimateMessagesTokens(
-            effectiveAgentHistoryUncounted(
-                applyProgressiveTrim = false,
-                applyTailBudget = false,
-            ),
-        ),
+internal enum class PolicyMeasurement { UNBUDGETED, REQUEST }
+
+/**
+ * [T-exhausted-tier-measurement] Which slice the gate weighs for a window:
+ *  - compactable tier → the UN-BUDGETED slice (the tail cap must not hide the
+ *    unsummarized backlog from the compact gate);
+ *  - exhaustedOnly (<32K) → the REAL request (budget + ProgressiveTrim), or
+ *    a 21K-token history that trims to 18K would be declared exhausted and
+ *    stop the turn for no reason.
+ * Pure so the branch is testable without a ViewModel.
+ */
+internal fun policyMeasurementMode(window: Int?, compactPercent: Int): PolicyMeasurement {
+    if (window == null) return PolicyMeasurement.UNBUDGETED
+    return if (ContextPolicy.forContextWindow(window, compactPercent).compactThreshold > 0) {
+        PolicyMeasurement.UNBUDGETED
+    } else {
+        PolicyMeasurement.REQUEST
+    }
+}
+
+internal fun ChatViewModel.contextTokensForPolicy(): Int {
+    val window = effectiveContextWindowTokens()
+    val slice = when (policyMeasurementMode(window, effectiveCompactPercent())) {
+        PolicyMeasurement.UNBUDGETED -> effectiveAgentHistoryUncounted(
+            applyProgressiveTrim = false,
+            applyTailBudget = false,
+        )
+        PolicyMeasurement.REQUEST -> effectiveAgentHistoryUncounted()
+    }
+    // [T-token-meter-single-authority] The precedence rule lives in
+    // TokenMeter: a trigger takes the LARGER of provider reading and
+    // estimate, so neither a stale usage value nor an under-estimate can
+    // hide an oversized request. One estimate per call: the un-budgeted
+    // slice always dominates the budgeted one (same list minus dropped
+    // rounds) and each estimate serializes every tool argument.
+    return TokenMeter.pressure(
+        providerTokens = _lastTurnContextTokens.value,
+        estimatedTokens = estimateMessagesTokens(slice),
     )
+}
+
+/**
+ * [T-context-display-vs-pressure] What the USER should see as "context used":
+ * the real request projection (provider usage when known, otherwise the
+ * budgeted effective history). The gate deliberately measures the UN-BUDGETED
+ * slice ([contextTokensForPolicy]); showing that number in the ring or the
+ * Token Usage sheet would report e.g. 180k while the outgoing request is
+ * 55k, which reads as a false alarm.
+ */
+internal fun ChatViewModel.contextTokensForDisplay(): Int =
+    // [T-token-meter-single-authority] A display number is the LARGER of the
+    // provider reading and the pending estimate. The reading describes the
+    // previous request, so right after a large paste the estimate is the honest
+    // one — see TokenMeter.forDisplay for why "provider wins" was wrong.
+    TokenMeter.forDisplay(
+        providerTokens = _lastTurnContextTokens.value,
+        estimatedTokens = estimateAgentHistoryTokens(),
+    ).totalTokens
 
 /**
  * Recompute contextUsage for the session-menu ring.
@@ -119,28 +167,22 @@ internal fun ChatViewModel.contextTokensForPolicy(): Int =
  */
 fun ChatViewModel.refreshContextUsage() {
     val reported = _lastTurnContextTokens.value
-    var usedChars = 0L
-    var imageCount = 0
-    for (msg in effectiveAgentHistoryUncounted()) {
-        for (part in msg.contentParts) {
-            when (part) {
-                is AgentContentPart.Text -> usedChars += part.text.length
-                is AgentContentPart.ToolUse -> usedChars += TokenScanMemo.toolUseInputJson(part.input).length
-                is AgentContentPart.ToolResult -> {
-                    usedChars += part.content.length
-                }
-                is AgentContentPart.ImageData -> imageCount += 1
-            }
-        }
-    }
+    // [T-token-meter-single-authority] The composition walk lives in
+    // TokenMeter.breakdown; this function only turns it into the ring's
+    // ContextUsage. Same parts counted as before, so the number users see does
+    // not shift — it is now produced by the same authority the gate uses.
+    val parts = TokenMeter.breakdown(effectiveAgentHistoryUncounted())
     // [T-pi-context-token-estimator] The flat chars/3.5 heuristic ignored
     // image parts entirely; the pi-ported estimator counts each image as
     // ~4800 chars (its empirical image-token weight) and ceils the char
     // division instead of truncating it.
-    val estTokens = com.openminis.app.data.ContextTokenEstimator.estimateTextTokens(
-        usedChars + imageCount * com.openminis.app.data.ContextTokenEstimator.ESTIMATED_IMAGE_CHARS,
-    )
-    val used = if (reported > 0) reported.toLong() else estTokens
+    val estTokens = com.openminis.app.data.ContextTokenEstimator.estimateTextTokens(parts.totalChars)
+        .coerceIn(0L, Int.MAX_VALUE.toLong())
+        .toInt()
+    val used = TokenMeter.forDisplay(
+        providerTokens = reported,
+        estimatedTokens = estTokens,
+    ).totalTokens.toLong()
     val window = currentModelContextWindow?.toLong() ?: 0L
     contextUsage.value = com.openminis.app.data.model.ContextUsage(used, window)
 }
