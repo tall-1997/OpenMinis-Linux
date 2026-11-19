@@ -91,10 +91,15 @@ internal object SessionJournal {
             }.toString()
             // Trim by rewrite when the file would grow unbounded. Doing this
             // before the append keeps the post-append size predictable.
-            if (target.isFile && target.length() > MAX_BYTES) {
-                trim(target)
+            // [T-session-journal-lock] The trim rewrite and the append must be ONE
+            // critical section: setLength(0)+write between two appends silently
+            // dropped whichever line landed in between.
+            synchronized(lockFor(target)) {
+                if (target.isFile && target.length() > MAX_BYTES) {
+                    trim(target)
+                }
+                target.appendText(line + "\n", Charsets.UTF_8)
             }
-            target.appendText(line + "\n", Charsets.UTF_8)
         }
     }
 
@@ -171,6 +176,12 @@ internal object SessionJournal {
      * Seeking to `length - target`, then advancing past the first partial line,
      * always lands on a line boundary and costs one read of the kept tail.
      */
+    private val fileLocks = java.util.concurrent.ConcurrentHashMap<String, Any>()
+    
+    /** [T-session-journal-lock] One lock per journal file (trim vs append). */
+    private fun lockFor(target: java.io.File): Any =
+        fileLocks.getOrPut(target.absolutePath) { Any() }
+    
     private fun trim(target: java.io.File) {
         runCatching {
             val length = target.length()
@@ -237,12 +248,15 @@ internal object SessionJournal {
      * silently retrying.
      */
     fun interruptedCompactions(filesDir: java.io.File, sessionId: String): List<JSONObject> {
-        // [T-session-journal-bounded-tail] Size the scan by BYTES, not by a
-        // fixed line count. A trim keeps TRIM_KEEP_BYTES, so a line-count
-        // window smaller than that can leave a retained `compaction/start`
-        // outside the scan and silently defeat the whole interrupted-attempt
-        // report. The bound is expressed in the same unit as the retention.
-        val lines = (TRIM_KEEP_BYTES / BYTES_PER_LINE)
+        // [T-session-journal-scan-window] The scan must cover every byte the file
+        // can hold before a trim runs (MAX_BYTES), expressed in lines because that
+        // is what the reader consumes.
+        // [T-session-journal-scan-window] Cover the whole file up to the TRIM
+        // THRESHOLD, not just the retained size: trimming happens above MAX_BYTES,
+        // so a file legitimately sits between TRIM_KEEP_BYTES and MAX_BYTES with a
+        // `compaction/start` outside a TRIM_KEEP_BYTES window. Sizing the scan by
+        // the retained size silently missed exactly those attempts.
+        val lines = (MAX_BYTES / BYTES_PER_LINE)
             .coerceIn(64L, Int.MAX_VALUE.toLong())
             .toInt()
         val events = tail(filesDir, sessionId, limit = lines)

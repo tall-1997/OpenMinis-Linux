@@ -274,10 +274,12 @@ object ToolResultAging {
                 // file. Without a range the model must read the whole spill to
                 // recover text it already had in context, which is the cost the
                 // fold was supposed to remove.
-                if (spillOffset != null && spillOffset >= 0) {
-                    append(" (offset ").append(spillOffset)
-                    append(", length ").append(content.length).append(")")
-                }
+                    if (spillOffset != null && spillOffset >=0) {
+                        // [T-age-offset-honest] Offset only. `content` here is the PREVIEW, so
+                        // quoting its length as the file's size made a follow-up
+                        // file_read(offset=0, limit=that) silently truncate the real output.
+                        append(" (offset ").append(spillOffset).append(')')
+                    }
             } else {
                 append("\nfull content: re-run this tool")
             }

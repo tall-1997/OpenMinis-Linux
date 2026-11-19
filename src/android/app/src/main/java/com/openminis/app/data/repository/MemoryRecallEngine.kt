@@ -96,7 +96,10 @@ class MemoryRecallEngine(
      * disagree with what the model saw. A throwing implementation is ignored
      * and the BM25 order stands: an optional backend must never break recall.
      */
-    private val reranker: MemoryReranker = MemoryRerankerRegistry.active(),
+    // [T-memory-reranker-seam] Resolve per recall, not at construction: the engine
+    // is cached per session, so a value captured here would pin the identity
+    // reranker for the whole session and installing a backend would do nothing.
+    private val rerankerProvider: () -> MemoryReranker = { MemoryRerankerRegistry.active() },
 ) {
 
     companion object {
@@ -302,10 +305,12 @@ class MemoryRecallEngine(
         // punctuation-only lines are template scaffolding, not memories.
         class Raw(val file: String, val line: String, val day: String, val isHeadline: Boolean, val kwTokens: List<String>)
         val raws = mutableListOf<Raw>()
-
-        for (file in scanMemoryFiles()) {
+        // [T-memory-recall-sources] One read per file, with the same eligibility
+        // and supersede rules the prompt window applies.
+        val recallSources = recallSources(scanMemoryFiles(), System.currentTimeMillis())
+        for ((file, text) in recallSources) {
             val relName = file.name
-            val lines = runCatching { file.readLines() }.getOrNull() ?: continue
+            val lines = text.split('\n')
             val dayStr = dayKeyOf(relName)
             var inHtmlComment = false
 
@@ -417,7 +422,7 @@ class MemoryRecallEngine(
         // must never break recall. The permutation guard rejects a reranker
         // that drops or invents hits, because the delivered count is what
         // MemoryUsageLedger reports as "used".
-        val ordered = runCatching { reranker.rerank(query, merged) }.getOrNull()
+        val ordered = runCatching { rerankerProvider().rerank(query, merged) }.getOrNull()
             ?.takeIf { it.size == merged.size && it.toSet() == merged.toSet() }
             ?: merged
         memo = query to ordered
@@ -476,13 +481,18 @@ class MemoryRecallEngine(
     }
 
     fun saveRecallCounts() {
-        val file = recallCountsFile()
-        val obj = org.json.JSONObject()
-        recallCounts.forEach { (k, v) -> if (v.get() > 0) obj.put(k, v.get()) }
-        writeTextAtomic(file, obj.toString())
+        // [T-memory-recall-save-safe] Bookkeeping on the prompt path: a full disk
+        // or a failed atomic move must not surface as a provider failure and kill
+        // the reply (every sibling ledger already swallows).
+        runCatching {
+            val file = recallCountsFile()
+            val obj = org.json.JSONObject()
+            recallCounts.forEach { (k, v) -> if (v.get() >0) obj.put(k, v.get()) }
+            writeTextAtomic(file, obj.toString())
+        }
         // [T-memory-recall-io] Test seam: proves the prompt path writes once per
         // build instead of once per hit.
-        saveCountForTest += 1
+        saveCountForTest +=1
     }
 
     /** [T-memory-recall-io] Number of sidecar writes performed by this instance. */
@@ -493,12 +503,18 @@ class MemoryRecallEngine(
     internal fun recallCountsSnapshot(): Map<String, Int> =
         recallCounts.entries.associate { it.key to it.value.get() }.toSortedMap()
 
+    /**
+     * [T-memory-recall-sources] Candidate files only - NO reads here.
+     *
+     * The text is read once by `recallSources()`, which also applies the
+     * supersedes/eligibility rules; reading here as well would make the recall
+     * path read the whole directory twice (the thing the single-read change
+     * claims to have removed).
+     */
     private fun scanMemoryFiles(): List<File> {
-        // [T-android-memory-recall-r2] GLOBAL.md (BOTH scopes) is never a
-        // recall candidate: its full text rides in the system prompt every
-        // turn, so recalling it is pure duplication that used to consume the
-        // whole budget. Recall serves the dated logs — content that is NOT
-        // already standing context.
+        // [T-android-memory-recall-r2] GLOBAL.md (BOTH scopes) is never a recall
+        // candidate: its full text rides in the system prompt every turn, so
+        // recalling it is pure duplication that used to consume the whole budget.
         val isSearchable = { f: File -> f.isFile && f.extension == "md" && f.name != MemoryRepository.GLOBAL_FILE }
         val memoryDir = memoryDirProvider()
         val session = if (memoryDir.isDirectory) {
@@ -515,18 +531,8 @@ class MemoryRecallEngine(
             emptyList()
         }
         val sessionNames = session.mapTo(HashSet()) { it.name }
-        val merged = (session + shared.filter { it.name !in sessionNames })
+        return (session + shared.filter { it.name !in sessionNames })
             .sortedByDescending { it.lastModified() }
-        // [T-memory-supersedes] A superseded day is retired for recall too, not
-        // just for the prompt window. The rule is one helper; skipping it here
-        // would let the model recall a memory the prompt deliberately withheld
-        // — the exact inconsistency `disabled`/`ttl` already avoid.
-        val candidates = merged.mapNotNull { f ->
-            readTextResilient(f, TAG)?.let { f.name.removeSuffix(".md") to it }
-        }
-        val superseded = MemoryMetadataParser.supersededIds(candidates)
-        if (superseded.isEmpty()) return merged
-        return merged.filter { it.name.removeSuffix(".md") !in superseded }
     }
 
     /** [T-recall-delivery-accounting] Rendered fragment plus exactly the hits it carries. */

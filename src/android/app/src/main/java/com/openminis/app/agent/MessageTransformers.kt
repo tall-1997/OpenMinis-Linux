@@ -204,9 +204,14 @@ object MessageTransformerChain {
             val keywordHit = TIME_SENSITIVE_HINTS.any { hint ->
                 text.contains(hint, ignoreCase = true)
             }
-            val intervalDue = TimeContextGate.shouldInject(context.sessionId, context.nowMillis)
-            if (!keywordHit && !intervalDue) return null
-            TimeContextGate.markInjected(context.sessionId, context.nowMillis)
+            // [T-time-context-request-side] The INTERVAL path belongs to request
+            // assembly, not to this send-path chain: the loop rebuilds the history
+            // from the DB immediately after this runs, so a note injected here is
+            // discarded while its throttle mark survives - the first request of a
+            // long turn then carried no clock at all and elapsed was always0s.
+            // The keyword path stays: the user asked about time explicitly, and the
+            // assembler's sentinel/CLOCK_HINTS check makes the two agree.
+            if (!keywordHit) return null
             val now = java.time.Instant.ofEpochMilli(context.nowMillis)
                 .atZone(java.util.TimeZone.getDefault().toZoneId())
             return buildString {

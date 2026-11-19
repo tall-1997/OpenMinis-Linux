@@ -70,7 +70,10 @@ internal object CompactionTransaction {
     fun retryAllowedNow(sessionId: String, nowMs: Long): Boolean {
         val failed = lastFailure[sessionId] ?: return true
         if (generationOf(sessionId) != failed.first) return true
-        return nowMs - failed.second >= FAILURE_COOLDOWN_MS
+        // [T-compaction-cooldown-monotonic] A backwards wall clock (NTP fix,
+        // manual change, emulator skew) must not lock the retry out for the whole
+        // skew: a negative gap counts as expired, exactly like an elapsed one.
+        return nowMs < failed.second || nowMs - failed.second >= FAILURE_COOLDOWN_MS
     }
 
     /** [T-compaction-transaction] Record a failed attempt at the given clock. */
@@ -173,8 +176,12 @@ internal const val REASON_CANCELLED = "cancelled"
  * [T-compaction-transaction] Report attempts that opened and never closed —
  * i.e. a process died mid-compaction. Called on resume, not on every turn.
  */
-internal fun ChatViewModel.reportInterruptedCompactions() {
-    val sid = realSessionId.ifEmpty { sessionId }
+internal fun ChatViewModel.reportInterruptedCompactions(sessionId: String) {
+    // [T-session-journal-sid-capture] The caller captures the owner BEFORE
+    // launching the detached scan. Re-reading the live session here would
+    // attribute B's interrupted records to A after a fast switch, while A's
+    // own stayed unreported.
+    val sid = sessionId.ifEmpty { realSessionId.ifEmpty { activeSessionId } }
     if (sid.isEmpty()) return
     runCatching {
         val interrupted = SessionJournal.interruptedCompactions(context.filesDir, sid)

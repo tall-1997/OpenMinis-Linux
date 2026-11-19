@@ -87,4 +87,17 @@ class SecretMaskingTest {
         // "token: ok" is prose, not a credential; the 6-char floor avoids it.
         assertEquals("token: ok", SecretMasking.mask("token: ok"))
     }
+    
+    @Test
+    fun aLongAlphabeticPasswordIsStillMasked() {
+        // [T-secret-mask-shape] These strings are persisted (compaction summary,
+        // memory sediment), so a leaked alphabetic password is unacceptable; only
+        // the SPACE boundary protects ordinary prose.
+        assertFalse(SecretMasking.mask("password=correcthorsebatterystaple").contains("correcthorse"))
+    }
+    
+    @Test
+    fun ordinaryProseAfterASecretKeywordIsLeftAlone() {
+        assertTrue(SecretMasking.mask("secret: family recipe").contains("family recipe"))
+    }
 }

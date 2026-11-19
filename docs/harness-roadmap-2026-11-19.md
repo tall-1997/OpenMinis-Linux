@@ -437,8 +437,8 @@ G5 消除本轮两个 P0 的同一根因。三件都是只读或纯函数级别�
 |5.1|`TimeContextGate` + `applyRequestClockNote`|关键词快路径 +间隔；请求装配期注入，带 elapsed|
 |5.2|`TimeContextGate.alreadyStamped` / `markStamped`|值不变不追加（关键词路径也不重复），reset清理|
 |6.1|`HarnessConfig` + `HarnessConfigTest`|默认值逐项钉住；非法组合构造即抛|
-|6.2|`HarnessConfigStore` + `ChatViewModelLoadExt`安装点|每会话 override持久化；无文件的会话回落默认值，不继承上一个会话|
-|6.3|`LoopGuard.stopEnabled` + `ActionGuard`判定"是否真的停止"|默认保持硬边界；关闭时最后一档降级为提醒|
+|6.2|`HarnessConfig`（窗口自适应）+ 复审后的处置|**未交付「用户可调 + 持久化」**：复审发现该 store 没有任何生产写入方（不可达）、且进程级 override 会跨会话串值、还在主线程读盘，故整体删除；每模型的差异由 `postAnchorBudgetFor(window)` 自然提供。用户可调阈值需要设置页入口后再做|
+|6.3|`LoopGuard.stopEnabled` + `ActionGuard`判定"是否真的停止"|策略开关就位（默认硬边界保持不变）；**生产无 UI 入口**，属 seam，不是可用功能|
 |G12|`TitleNotInModelInputTest`|断言标题路径不写 `agentHistory`，只经 `_sessionTitle`发布|
 
 已知取舍（是明确选择，不是遗漏）：

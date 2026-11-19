@@ -29,6 +29,11 @@ internal fun ChatViewModel.recordRequestJournal(
     // not a balanced tree — so the boundary is recorded once per change.
     val sid = realSessionId.ifEmpty { sessionId }
     if (lastJournalTurn[sid] != turn) {
+        // [T-session-journal-turn-bounds] Close the PREVIOUS turn before opening
+        // this one: `turn/start` without a matching `turn/end` was the one event
+        // the reader could not derive from anything else.
+        lastJournalTurn[sid]?.let { previous -> recordTurnJournal(previous, starting = false) }
+        lastJournalTurn[sid] = turn
         lastJournalTurn[sid] = turn
         recordTurnJournal(turn, starting = true)
         SessionJournal.record(
@@ -65,20 +70,31 @@ private val lastJournalTurn = java.util.concurrent.ConcurrentHashMap<String, Int
  * producer. Call/result both carry the pairing key so a reader can rebuild the
  * round without the transcript.
  */
-internal fun ChatViewModel.recordToolJournal(turn: Int, tool: String, argsJson: String, success: Boolean) {
+internal fun ChatViewModel.recordToolCallJournal(turn: Int, tool: String, argsJson: String) {
+    // [T-session-journal-tool-bracket] Written BEFORE dispatch: a crash mid-call
+    // then leaves a call with no result, which is the shape the journal exists
+    // to record. Writing both after execution lost exactly that case.
     val sid = realSessionId.ifEmpty { sessionId }
-    val key = ToolPairingCore.pairKey(tool, argsJson)
     SessionJournal.record(
         filesDir = context.filesDir,
         sessionId = sid,
         kind = SessionJournal.TOOL_CALL,
-        fields = mapOf("turn" to turn, "tool" to tool, "key" to key),
+        fields = mapOf("turn" to turn, "tool" to tool, "key" to ToolPairingCore.pairKey(tool, argsJson)),
     )
+}
+
+internal fun ChatViewModel.recordToolResultJournal(turn: Int, tool: String, argsJson: String, success: Boolean) {
+    val sid = realSessionId.ifEmpty { sessionId }
     SessionJournal.record(
         filesDir = context.filesDir,
         sessionId = sid,
         kind = SessionJournal.TOOL_RESULT,
-        fields = mapOf("turn" to turn, "tool" to tool, "key" to key, "ok" to success),
+        fields = mapOf(
+            "turn" to turn,
+            "tool" to tool,
+            "key" to ToolPairingCore.pairKey(tool, argsJson),
+            "ok" to success,
+        ),
     )
 }
 

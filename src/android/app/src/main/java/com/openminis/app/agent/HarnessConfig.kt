@@ -98,7 +98,10 @@ internal data class HarnessConfig(
     fun postAnchorBudgetFor(windowTokens: Int?): Int {
         if (windowTokens == null || windowTokens <= 0) return postAnchorBudgetTokens
         val scaled = (windowTokens * postAnchorWindowFraction).toInt()
-        return minOf(postAnchorBudgetTokens, scaled)
+        // [T-harness-config-floor] A small-window model scales the ceiling below
+        // the reserve, which used to leave a one-token tail: validated() only
+        // guarded the CEILING, not the scaled value every caller actually uses.
+        return maxOf(minOf(postAnchorBudgetTokens, scaled), noticeReserveTokens +1)
     }
 
     /** [T-harness-config] Tokens actually available to the kept tail. */
@@ -108,36 +111,19 @@ internal data class HarnessConfig(
     companion object {
         /** Shipped defaults; every literal above mirrors a pre-existing constant. */
         val DEFAULT: HarnessConfig = HarnessConfig()
-
+        
         /**
-         * [T-harness-config] Process-wide override.
+         * [T-harness-config-no-global] The active configuration is the shipped
+         * default, always.
          *
-         * Volatile because the agent loop reads it from the send path while a
-         * settings change may land on another thread. `null` means "use the
-         * shipped defaults", which is the state every install starts in.
+         * WHY there is no mutable override: the first version kept a process-wide
+         * `@Volatile override` plus a per-session file store. Nothing ever WROTE
+         * the file (no settings entry), so the feature was unreachable, while the
+         * global field would have leaked one chat's numbers into the next the
+         * moment anything did write it. Per-model scaling already falls out of
+         * [postAnchorBudgetFor] taking the window; a user-tunable override needs a
+         * settings surface first and must be passed per call, not parked here.
          */
-        @Volatile
-        private var override: HarnessConfig? = null
-
-        fun current(): HarnessConfig = override ?: DEFAULT
-
-        /** Install a validated override; throws on an unusable combination. */
-        fun install(config: HarnessConfig) {
-            override = config.validated()
-        }
-
-        /** Test seam / session switch: drop the override. */
-        internal fun resetForTest() {
-            override = null
-        }
-
-        /**
-         * [T-harness-config-store] Reset to the shipped defaults. Same effect as
-         * [resetForTest] but named for the production path (a session with no
-         * stored override must not inherit the previous session's numbers).
-         */
-        fun reset() {
-            override = null
-        }
+        fun current(): HarnessConfig = DEFAULT
     }
 }

@@ -152,4 +152,33 @@ class ToolReceiptStoreTest {
         assertEquals(dir.resolve(ToolReceiptStore.DIR).absolutePath, f.parentFile.absolutePath)
         assertFalse(f.name.contains("/"))
     }
+    
+    @Test
+    fun peekingTheNoticeDoesNotConsumeIt() {
+        // [T-tool-receipt-report-once] peek and ack are separate: a refusal or a
+        // throwing dispatch drops the notice, and mark-on-peek would lose the
+        // warning forever - the double execution this feature prevents.
+        val sid = "peek-1"
+        ToolReceiptStore.begin(dir, sid, "file_edit", "{\"path\":\"/a\"}", opId = "op-peek")
+        val first = ToolReceiptStore.pendingUnsettled(dir, sid)
+        assertEquals(1, first.size)
+        assertEquals(1, ToolReceiptStore.pendingUnsettled(dir, sid).size)
+        ToolReceiptStore.ackUnsettled(dir, sid, first)
+        assertTrue(ToolReceiptStore.pendingUnsettled(dir, sid).isEmpty())
+    }
+    
+    @Test
+    fun aCleanlySettledIdMayBeReusedButAFailedOneMayNot() {
+        // A provider or relay can reuse a tool_call id across responses. Reusing it
+        // after a CLEAN success is harmless; after a FAILED or abandoned attempt the
+        // side effect may have landed, so it is a conflict.
+        val okSid = "reuse-ok"
+        ToolReceiptStore.begin(dir, okSid, "file_edit", "{\"p\":1}", opId = "id-1")
+        ToolReceiptStore.settle(dir, okSid, "file_edit", "{\"p\":1}", success = true, opId = "id-1")
+        assertEquals(null, ToolReceiptStore.conflictOf(dir, okSid, "id-1", "file_write", "{\"p\":2}"))
+        val badSid = "reuse-bad"
+        ToolReceiptStore.begin(dir, badSid, "file_edit", "{\"p\":1}", opId = "id-2")
+        ToolReceiptStore.settle(dir, badSid, "file_edit", "{\"p\":1}", success = false, opId = "id-2")
+        assertNotNull(ToolReceiptStore.conflictOf(dir, badSid, "id-2", "file_write", "{\"p\":2}"))
+    }
 }

@@ -48,8 +48,21 @@ object SecretMasking {
             "client_secret|clientSecret|secret_key|secretKey|" +
             "private_key|privateKey|token|password|passwd|secret"
 
+    // [T-secret-mask-shape] Mask only values SHAPED like a credential: a quoted
+    // value of4+ chars, or an unquoted token of8+ credential-alphabet chars
+    // that contains a digit or symbol. The old "any4+ non-space chars" form
+    // rewrote ordinary prose ("secret: family recipe" -> "secret=[redacted]
+    // recipe"), and this function's output is PERSISTED (compaction summaries,
+    // memory sediment, hidden notes), so that damage was not cosmetic.
     private val ASSIGNMENTS = Regex(
-        "(?i)[\"']?\\b($SECRET_KEYS)\\b[\"']?\\s*[:=]\\s*[\"']?([^\\s\"',;&#]{4,})",
+        "(?i)[\"']?\\b($SECRET_KEYS)\\b[\"']?\\s*[:=]\\s*" +
+        "(?:[\"'](?<quoted>[^\"']{4,})[\"']|" +
+        // Bare values: 8+ credential-alphabet characters. No digit/symbol
+        // requirement: a long alphabetic value (correcthorsebatterystaple) is a
+        // password too, and these strings are PERSISTED (compaction summary,
+        // memory sediment). Prose stays safe because a space ends the value, so
+        // "secret: family recipe" cannot match.
+        "(?<bare>[A-Za-z0-9_\\-./+=]{8,}))",
     )
 
     /**

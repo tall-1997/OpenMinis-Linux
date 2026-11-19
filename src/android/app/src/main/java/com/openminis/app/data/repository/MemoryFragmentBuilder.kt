@@ -223,37 +223,35 @@ internal class MemoryFragmentBuilder(
         // admitting anything. A day whose file declares `supersedes: <other>`
         // retires that other day everywhere — prompt, index and recall — so the
         // set is computed from the same files this function is about to read.
-        val window = ArrayList<Pair<String, String>>()
-        var scan = 0
-        while (scan < MemoryRepository.MAX_LOOKBACK_DAYS) {
-            val ds = IsoTime.formatLocalDate(now - scan.toLong() * 86400_000L)
+        // [T-memory-window-single-read] One pass: read each candidate day once,
+        // keep (date, offset, content), then decide supersedes/eligibility from
+        // that text. The previous shape read the whole window twice.
+        val scanned = ArrayList<Triple<String, Int, Triple<File, Long, String>>>()
+        var scanOffset =0
+        while (scanOffset < MemoryRepository.MAX_LOOKBACK_DAYS) {
+            val ds = IsoTime.formatLocalDate(now - scanOffset.toLong() *86400_000L)
             val f = File(memoryDir, "$ds.md")
             if (f.exists()) {
-                readTextResilient(f, "daily-memory")?.let { window += ds to it }
+                val content = readTextResilient(f, "daily-memory") ?: ""
+                if (content.isNotEmpty()) scanned += Triple(ds, scanOffset, Triple(f, f.lastModified(), content))
             }
-            scan++
+            scanOffset++
         }
-        val superseded = MemoryMetadataParser.supersededIds(window)
+        val superseded = MemoryMetadataParser.supersededIds(
+            scanned.map { (ds, _, payload) -> ds to payload.third },
+        )
         val raw = mutableListOf<MemoryDailyGate.RawDay>()
-        var dayOffset = 0
-        while (raw.size < MemoryRepository.MAX_RECENT_FILES &&
-            dayOffset < MemoryRepository.MAX_LOOKBACK_DAYS
-        ) {
-            val dateStr = IsoTime.formatLocalDate(now - dayOffset.toLong() * 86400_000L)
-            val file = File(memoryDir, "$dateStr.md")
-            if (file.exists()) {
-                val content = readTextResilient(file, "daily-memory") ?: ""
-                // [T-memory-frontmatter] A disabled or expired file must not
-                // reach the model. Eligibility is decided once, here, so the
-                // gate, the budget and the index cannot disagree about it.
-                if (content.isNotEmpty() &&
-                    dateStr !in superseded &&
-                    MemoryMetadataParser.isEligible(content, now, file.lastModified())
-                ) {
-                    raw.add(MemoryDailyGate.RawDay(dateStr, dayOffset, content))
-                }
-            }
-            dayOffset++
+        for ((dateStr, dayOffset, payload) in scanned) {
+            if (raw.size >= MemoryRepository.MAX_RECENT_FILES) break
+            val (file, modifiedAt, content) = payload
+            if (dateStr in superseded) continue
+            // [T-memory-frontmatter] A disabled or expired file must not reach the
+            // model; the same decision feeds the gate, the budget and the index.
+            if (!MemoryMetadataParser.isEligible(content, now, modifiedAt)) continue
+            // [T-memory-frontmatter-strip] Inject the BODY, never the metadata block.
+            raw.add(
+                MemoryDailyGate.RawDay(dateStr, dayOffset, MemoryMetadataParser.strip(content)),
+            )
         }
         return raw
     }

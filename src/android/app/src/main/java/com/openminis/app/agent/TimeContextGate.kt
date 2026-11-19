@@ -56,7 +56,9 @@ internal object TimeContextGate {
     fun shouldInject(sessionId: String?, nowMs: Long): Boolean {
         if (sessionId.isNullOrBlank()) return false
         val last = synchronized(lastInjectedAt) { lastInjectedAt[sessionId] } ?: return true
-        return nowMs - last >= MIN_INTERVAL_MS
+        // [T-time-context-monotonic] A clock that jumped backwards must not
+        // suppress the clock until it catches up: a negative gap is due.
+        return nowMs < last || nowMs - last >= MIN_INTERVAL_MS
     }
 
     /** Record that a clock note was injected for [sessionId] at [nowMs]. */

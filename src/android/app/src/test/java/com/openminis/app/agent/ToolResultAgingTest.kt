@@ -397,7 +397,9 @@ class ToolResultAgingTest {
         val plain = ToolResultAging.placeholder("shell_execute", content)
         val addressed = ToolResultAging.placeholder("shell_execute", content, spillOffset =0)
         assertTrue(addressed.contains("offset 0"))
- assertTrue(addressed.contains("length "))
+ // [T-age-offset-honest] No length claim: content is the preview, so a
+ // quoted length would truncate a follow-up file_read of the spill file.
+ assertFalse(addressed.contains("length "))
         assertTrue(addressed.length > plain.length)
     }
     

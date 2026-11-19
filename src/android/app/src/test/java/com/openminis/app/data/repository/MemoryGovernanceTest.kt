@@ -131,5 +131,24 @@
         val hits = emptyList<MemoryRecallEngine.RecallHit>()
         assertEquals(hits, MemoryReranker.IDENTITY.rerank("q", hits))
     }
+    
+    @Test
+    fun stripRemovesTheBlockAndKeepsTheBody() {
+        val text = "---\ntype: daily\nttl_days:3\n---\nbody line\n"
+        val body = MemoryMetadataParser.strip(text)
+        assertEquals("body line", body.trim())
+        assertFalse("the metadata block must not survive", body.contains("type: daily"))
+    }
+    
+    @Test
+    fun stripIsIdentityForAnythingThatIsNotAFrontmatterBlock() {
+        // A lone `---`, an unterminated block and a plain file must come back
+        // unchanged: the reader must never swallow a body that merely starts with
+        // a horizontal rule.
+        assertEquals("", MemoryMetadataParser.strip(""))
+        assertEquals("---", MemoryMetadataParser.strip("---"))
+        assertEquals("---\nno close\n", MemoryMetadataParser.strip("---\nno close\n"))
+        assertEquals("plain\n", MemoryMetadataParser.strip("plain\n"))
+    }
  }
  

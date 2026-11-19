@@ -18,12 +18,11 @@ import com.openminis.app.data.model.LLMMessage
  *
  * The precedence rule is therefore stated once, here, and every consumer calls
  * it instead of writing `maxOf(...)` for itself:
- *  - **display** and **pressure** both take the LARGER of the two. The provider
- *    reading describes the PREVIOUS request, so right after a large paste the
- *    pending estimate is the honest number; and for a trigger, a stale-but-real
- *    reading must never make an oversized request look small.
- *  - The provider reading is only ever smaller-or-equal in that comparison, so
- *    a first call (no reading) naturally shows the estimate.
+ *  - **display**: the provider reading wins when there is one (it is the billed
+ *    prompt size of the last call, which is what the ring and the Token Usage
+ *    sheet have always shown); the estimate is the pre-first-call fallback.
+ *  - **pressure**: the LARGER of the two, because a trigger must never let a
+ *    stale reading hide an oversized request.
  *
  * Which slice gets priced stays a policy question (the caller picks the list);
  * this object only decides how two numbers combine.
@@ -61,8 +60,8 @@ internal object TokenMeter {
         val estimatedTokens: Int,
         val breakdown: Breakdown = Breakdown(),
     ) {
-        /** True when the provider reading is the larger input. */
-        val sourceIsProvider: Boolean get() = providerTokens > 0 && providerTokens >= estimatedTokens
+        /** True when a provider reading exists (display prefers it). */
+        val sourceIsProvider: Boolean get() = providerTokens > 0
     }
 
        /**
@@ -85,14 +84,22 @@ internal object TokenMeter {
         val provider = event.optInt("providerTokens",0).coerceAtLeast(0)
         val estimated = event.optInt("estTokens",0).coerceAtLeast(0)
         return Measurement(
-            totalTokens = maxOf(provider, estimated),
+            // [T-token-meter-display-compat] Display keeps the provider reading when
+            // there is one, exactly as the ring did before this refactor: it is the
+            // billed prompt size of the last call, and the estimate (chars/3.5)
+            // overshoots on code/ASCII history, so swapping in max() moved a
+            // user-visible percentage by ~10%. The GATE keeps max() via pressure().
+            totalTokens = if (provider >0) provider else estimated,
             providerTokens = provider,
             estimatedTokens = estimated,
         )
     }
     
  /** pi-ported empirical weight of one image, in characters. */
-    const val ESTIMATED_IMAGE_CHARS: Long = 4_800L
+    // [T-token-meter-image-weight] One source: ContextTokenEstimator already
+    // defines this number, and a second literal is how every duplicated
+    // constant in this file's history drifted apart.
+    val ESTIMATED_IMAGE_CHARS: Long = com.openminis.app.data.ContextTokenEstimator.ESTIMATED_IMAGE_CHARS.toLong()
 
     fun breakdown(messages: List<LLMMessage>): Breakdown {
         var messageChars = 0L
@@ -116,13 +123,11 @@ internal object TokenMeter {
     /**
      * The number to DISPLAY.
      *
-     * [T-token-meter-display-louder] Deliberately the LARGER of the two, not
-     * "provider wins". A provider reading describes the PREVIOUS request; right
-     * after a large paste or a big tool result the pending request is already
-     * bigger than that reading, and showing the stale-smaller number is exactly
-     * the "sheet says 40k while the gate is about to compact" symptom this
-     * object was created to end. The ring's historic behaviour was
-     * `maxOf(provider, estimate)` and stays that way.
+     * [T-token-meter-display-compat] The provider reading wins when there is
+     * one: it is the billed prompt size of the last completed call, which is
+     * what the ring and the Token Usage sheet showed before this refactor,
+     * and the character estimate runs ~10% high on code/ASCII history.
+     * The GATE is the one that takes the larger of the two - see [pressure].
      */
     fun forDisplay(
         providerTokens: Int,
@@ -132,7 +137,7 @@ internal object TokenMeter {
         val provider = providerTokens.coerceAtLeast(0)
         val estimated = estimatedTokens.coerceAtLeast(0)
         return Measurement(
-            totalTokens = maxOf(provider, estimated),
+            totalTokens = if (provider > 0) provider else estimated,
             providerTokens = provider,
             estimatedTokens = estimated,
             breakdown = breakdown,

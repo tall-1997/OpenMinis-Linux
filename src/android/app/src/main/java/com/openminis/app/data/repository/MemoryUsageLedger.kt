@@ -23,9 +23,6 @@ internal object MemoryUsageLedger {
 
     private val counts = java.util.concurrent.ConcurrentHashMap<String, Int>()
 
-    @Volatile
-    private var primedDir: File? = null
-
     internal fun file(memoryDir: File): File = File(memoryDir, FILE)
 
     /** Key identity matches the recall/render path: `day:line`. */
@@ -34,7 +31,6 @@ internal object MemoryUsageLedger {
     /** Prime the cache from disk; safe to call more than once. */
     fun load(memoryDir: File?) {
         if (memoryDir == null) return
-        primedDir = memoryDir
         val text = runCatching { file(memoryDir).readText(Charsets.UTF_8) }.getOrNull() ?: return
         val obj = runCatching { JSONObject(text) }.getOrNull() ?: return
         val keys = obj.keys()
@@ -67,7 +63,35 @@ internal object MemoryUsageLedger {
     /** Snapshot for diagnostics / a future ranking signal. */
     fun snapshot(): Map<String, Int> = HashMap(counts)
 
+    /** [T-memory-usage-cap] Keys older than this many days are dropped. */
+    private const val RETENTION_DAYS = 30L
+    
+    /** [T-memory-usage-cap] Hard cap; the oldest days are evicted first. */
+    private const val MAX_KEYS = 5_000
+    
+    /**
+     * [T-memory-usage-cap] Keep the ledger bounded.
+     *
+     * The key is `day:line`, so the map grows with every distinct delivered line
+     * forever, and the whole map is rewritten on each delivery. Pruning by the
+     * day prefix is exact (the key starts with it) and keeps the file small.
+     */
+    private fun prune(nowMs: Long) {
+        val cutoff = java.time.LocalDate.now()
+            .minusDays(RETENTION_DAYS)
+            .toString()
+        val stale = counts.keys.filter { key ->
+            val day = key.substringBefore(':', "")
+            day.isNotEmpty() && day < cutoff
+        }
+        stale.forEach { counts.remove(it) }
+        if (counts.size <= MAX_KEYS) return
+        val excess = counts.size - MAX_KEYS
+        counts.keys.sorted().take(excess).forEach { counts.remove(it) }
+    }
+    
     private fun save(memoryDir: File) {
+        prune(System.currentTimeMillis())
         runCatching {
             val obj = JSONObject()
             counts.forEach { (k, v) -> if (v > 0) obj.put(k, v) }
@@ -84,6 +108,5 @@ internal object MemoryUsageLedger {
     /** Test seam. */
     internal fun resetForTest() {
         counts.clear()
-        primedDir = null
     }
 }

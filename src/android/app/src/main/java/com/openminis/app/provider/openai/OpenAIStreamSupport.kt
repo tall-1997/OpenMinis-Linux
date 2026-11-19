@@ -134,7 +134,16 @@ internal suspend fun emitNonStreamToolCalls(
     for (i in 0 until calls.length()) {
         val tc = calls.optJSONObject(i) ?: continue
         val fn = tc.optJSONObject("function") ?: continue
-        val id = tc.safeOptString("id", "").ifBlank { "nonstream_call_$i" }
+               // [T-nonstream-unique-id] A relay that omits `tool_call.id` used to get
+        // `nonstream_call_<index>`, which REPEATS for every response. Downstream
+        // identity is per-operation (receipts key conflicts on it, the tool
+        // ledger dedupes on it), so a repeated id made the second turn's
+        // mutation look like a replay of the first one. Generate a per-response
+        // unique id instead of a positional one.
+        val id = tc.safeOptString("id", "").ifBlank {
+            "nonstream_" + java.util.UUID.randomUUID().toString().replace("-", "").take(16) + "_$i"
+        }
+
         val name = fn.safeOptString("name", "")
         if (name.isEmpty()) continue
         send(LLMStreamChunk.ToolUseStart(id, name))

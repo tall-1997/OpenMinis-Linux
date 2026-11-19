@@ -128,7 +128,32 @@ internal object MemoryMetadataParser {
             .toHashSet()
     }
 
-    /** [T-memory-supersedes] Loose identity: lowercase, no `.md` suffix. */
+    /**
+     * [T-memory-frontmatter-strip] The file body WITHOUT the frontmatter block.
+     *
+     * WHY: the block is machine metadata. Rendering it into the TOC preview or
+     * the injected daily fragment showed the model `---` / `type: daily` as if
+     * it were memory content, and the TOC preview of a NEW day became literally
+     * "---". Readers strip; the writer keeps the raw file intact.
+     */
+    fun strip(text: String): String {
+        if (text.isEmpty()) return text
+        val reader = text.lineSequence().iterator()
+        if (!reader.hasNext() || reader.next().trim() != FENCE) return text
+        val rest = StringBuilder()
+        var closed = false
+        while (reader.hasNext()) {
+            val raw = reader.next()
+            if (!closed) {
+                if (raw.trim() == FENCE) closed = true
+                continue
+            }
+            rest.append(raw).append('\n')
+        }
+        // An unterminated block is not frontmatter: keep the original text.
+        return if (closed) rest.toString() else text
+    }
+
     private fun normalizeId(id: String): String =
         id.trim().lowercase().removeSuffix(".md")
 

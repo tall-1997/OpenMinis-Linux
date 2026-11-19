@@ -42,7 +42,13 @@ object HistorySearchTool {
 
     private const val SEARCH_LIMIT_DEFAULT = 6
     private const val SEARCH_LIMIT_MAX = 8
-    private const val EXCERPT_CHARS = 600
+    private const val EXCERPT_CHARS =600
+    
+    /** [T-history-query-cap] Query characters inspected when deriving keywords. */
+    private const val QUERY_CHAR_CAP =1_200
+    
+    /** Search terms kept; more terms only widen the OR without improving recall. */
+    private const val KEYWORD_LIMIT =8
     private const val PAGE_CHARS = 4_000
 
 
@@ -85,21 +91,42 @@ object HistorySearchTool {
      * character matches almost everything.
      */
     internal fun keywords(query: String): List<String> {
+        // [T-history-query-cap] A query can be a pasted document. Scanning it
+        // whole costs a megabyte of transient substrings to keep eight of them,
+        // so cap the input the way MemoryRecallEngine does.
+        val capped = if (query.length <= QUERY_CHAR_CAP) query else query.take(QUERY_CHAR_CAP)
         val out = LinkedHashSet<String>()
-        for (m in Regex("[A-Za-z0-9_]{2,}").findAll(query)) out += m.value.lowercase()
+        for (m in Regex("[A-Za-z0-9_]{2,}").findAll(capped)) {
+            // Lowercased for MATCHING only; the locator is case-insensitive, so a
+            // hit on README is still located in the original bytes.
+            out += m.value.lowercase()
+            if (out.size >= KEYWORD_LIMIT) return out.toList()
+        }
         val run = StringBuilder()
         fun flush() {
             val s = run.toString()
-            if (s.length == 1) out += s
-            for (i in 0 until s.length - 1) out += s.substring(i, i + 2)
+            if (s.length ==1) out += s
+            for (i in 0 until s.length -1) {
+                out += s.substring(i, i +2)
+                if (out.size >= KEYWORD_LIMIT) break
+            }
             run.setLength(0)
         }
-        for (ch in query) {
-            if (ch.code in 0x4E00..0x9FFF || ch.code in 0x3040..0x30FF) run.append(ch) else flush()
+        for (ch in capped) {
+            if (ch.code in 0x4E00..0x9FFF || ch.code in 0x3040..0x30FF) {
+                run.append(ch)
+                if (run.length >64) flush()
+            } else {
+                flush()
+            }
         }
         flush()
-        return out.take(8).toList()
+        return out.take(KEYWORD_LIMIT).toList()
     }
+
+    /** [T-history-case-insensitive] Code-point compare that ignores case. */
+    private fun sameCodePointIgnoringCase(a: Int, b: Int): Boolean =
+        a == b || Character.toLowerCase(a) == Character.toLowerCase(b)
 
     /**
      * Locate [needle] in [text] by code point, returning a centred excerpt and
@@ -116,10 +143,16 @@ object HistorySearchTool {
         val hay = text.codePoints().toArray()
         val pin = needle.codePoints().toArray()
         if (pin.isEmpty() || pin.size > hay.size) return null
+        // [T-history-case-insensitive] Keywords are matched with
+        // contains(ignoreCase = true), so the locator MUST use the same rule.
+        // Comparing code points exactly dropped every hit whose case differed
+        // (README, TODO, CamelCase identifiers, file names) - the most common
+        // things a developer asks history for - and the caller then reported
+        // "no match", which reads as "this never happened".
         var found = -1
         outer@ for (start in 0..(hay.size - pin.size)) {
             for (k in pin.indices) {
-                if (hay[start + k] != pin[k]) continue@outer
+                if (!sameCodePointIgnoringCase(hay[start + k], pin[k])) continue@outer
             }
             found = start
             break
@@ -235,7 +268,12 @@ object HistorySearchTool {
                     toolTitle = toolTitle,
                 )
             }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+        // [T-history-cancel] A cancelled query is not a tool failure: rethrow so
+        // structured concurrency can unwind instead of logging a bogus failure.
+        throw e
         } catch (e: Exception) {
+
             ToolExecutionResult("Error: ${e.message}", false, toolTitle = toolTitle)
         }
     }
@@ -278,7 +316,12 @@ object HistorySearchTool {
                     toolTitle = toolTitle,
                 )
             }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+        // [T-history-cancel] A cancelled query is not a tool failure: rethrow so
+        // structured concurrency can unwind instead of logging a bogus failure.
+        throw e
         } catch (e: Exception) {
+
             ToolExecutionResult("Error: ${e.message}", false, toolTitle = toolTitle)
         }
     }

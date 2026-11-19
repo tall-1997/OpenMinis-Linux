@@ -72,63 +72,41 @@ object MemoryIndex {
         /** [T-memory-frontmatter] Clock for TTL eligibility; injectable for tests. */
         nowMs: Long = System.currentTimeMillis(),
     ): List<Row> {
-        val byDate = LinkedHashMap<String, Row>()
+        val candidates = ArrayList<Triple<File, String, Boolean>>()
         // Shared first, session second: a later put() replaces the shared row.
         for ((dir, shared) in listOf(sharedDir to true, sessionDir to false)) {
             val files = dir?.listFiles() ?: continue
             for (file in files) {
                 if (!file.isFile || !DAILY.matches(file.name)) continue
-                val date = file.name.removeSuffix(".md")
-                val row = rowFor(file, date, shared, nowMs) ?: continue
-                byDate[date] = row
-            }
-        }
-        // [T-memory-supersedes] Retire replaced days before slicing, so a
-        // superseded file cannot occupy one of the [maxRows] slots the TOC is
-        // allowed to advertise.
-        val superseded = supersededDates(sessionDir, sharedDir)
-        val sorted = byDate.values.sortedByDescending { it.date }
-        return sorted
-            .filter { it.date !in excludeDates && it.date !in superseded }
-            .take(maxRows)
-    }
-
-    private fun rowFor(file: File, date: String, shared: Boolean, nowMs: Long): Row? {
-        val text = runCatching { file.readText() }.getOrNull() ?: return null
-        if (text.isBlank()) return null
-        // [T-memory-frontmatter] An index row is an invitation to read the file,
-        // so an ineligible file must not appear here either — otherwise the TOC
-        // advertises memory the prompt deliberately withheld.
-        if (!MemoryMetadataParser.isEligible(text, nowMs, file.lastModified())) return null
-        val entries = ENTRY_MARK.findAll(text).count()
-        return Row(date = date, entries = entries, preview = previewOf(text), shared = shared)
-    }
-
-    /**
-     * [T-memory-supersedes] Dates whose file is replaced by another file's
-     * `supersedes:` value.
-     *
-     * WHY in the index too: the TOC is an invitation to read a file. Listing a
-     * day the prompt deliberately withheld advertises memory the model cannot
-     * see, and worse, invites it to call `history_read` on a body that was
-     * excluded for being stale. Same rule, same helper as the prompt path.
-     */
-    fun supersededDates(
-        sessionDir: File?,
-        sharedDir: File?,
-    ): Set<String> {
-        val candidates = ArrayList<Pair<String, String>>()
-        for (dir in listOf(sharedDir, sessionDir)) {
-            val files = dir?.listFiles() ?: continue
-            for (file in files) {
-                if (!file.isFile || !DAILY.matches(file.name)) continue
                 val text = runCatching { file.readText() }.getOrNull() ?: continue
-                candidates += file.name.removeSuffix(".md") to text
+                if (text.isBlank()) continue
+                candidates += Triple(file, text, shared)
             }
         }
-        return MemoryMetadataParser.supersededIds(candidates)
+        // [T-memory-index-single-read] One read per file serves BOTH the metadata
+        // decisions and the row build; reading the directory twice (once here, once
+        // inside a supersede scan) doubled the prompt-path IO for no gain.
+        val superseded = MemoryMetadataParser.supersededIds(
+            candidates.map { (file, text, _) -> file.name.removeSuffix(".md") to text },
+        )
+        val byDate = LinkedHashMap<String, Row>()
+        for ((file, text, shared) in candidates) {
+            val date = file.name.removeSuffix(".md")
+            if (date in superseded) continue
+            if (!MemoryMetadataParser.isEligible(text, nowMs, file.lastModified())) continue
+            byDate[date] = Row(
+                date = date,
+                entries = ENTRY_MARK.findAll(text).count(),
+                // [T-memory-frontmatter-strip] Preview the BODY: the metadata block is
+                // not memory content, and a new day's first line is `---`.
+                preview = previewOf(MemoryMetadataParser.strip(text)),
+                shared = shared,
+            )
+        }
+        val sorted = byDate.values.sortedByDescending { it.date }
+        return sorted.filter { it.date !in excludeDates }.take(maxRows)
     }
-
+    
     /** First line that is neither a timestamp marker nor a heading. */
     private fun previewOf(text: String): String {
         for (line in text.lineSequence()) {

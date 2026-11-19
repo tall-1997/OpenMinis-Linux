@@ -96,7 +96,9 @@ class HarnessWiringTest {
             exec.contains("opId = call.id"),
         )
         val turn = src("ui/chat/ChatViewModelToolTurnExec.kt")
-        assertTrue("the tool round must reach the journal", turn.contains("recordToolJournal("))
+        val seam = src("ui/chat/ChatViewModelToolReceiptExt.kt")
+        assertTrue("the call must be journaled before dispatch", seam.contains("recordToolCallJournal("))
+        assertTrue("the result must be journaled after dispatch", seam.contains("recordToolResultJournal("))
         assertTrue("the dispatch must go through the receipt seam", turn.contains("dispatchWithReceipt("))
     }
 }

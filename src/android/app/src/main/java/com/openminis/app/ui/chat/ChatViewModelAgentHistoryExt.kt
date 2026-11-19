@@ -457,6 +457,12 @@ internal fun ChatViewModel.applyRequestClockNote(history: List<LLMMessage>): Lis
             !HarnessNoteMarkers.isUserHarnessNote(msg)
     }
     if (idx < 0) return history
+    // [T-time-context-baseline] Mark the baseline on EVERY request carrying a real
+    // user turn, before the early returns below. Marking only when a note is
+    // emitted made elapsed measure "since the last clock note" (up to a whole
+    // interval) instead of "since the previous message" - a factual error in the
+    // line the model reads.
+    val previousAt = TurnClock.previousMessageAt(sid)
     val target = history[idx]
     // [T-time-context-sentinel] Match the SAME literal the producer writes.
     // A bare `<system-note>` test also matched the workspace reminder and the
@@ -478,7 +484,7 @@ internal fun ChatViewModel.applyRequestClockNote(history: List<LLMMessage>): Lis
     TimeContextGate.markStamped(sid, stamp)
     val note = buildString {
         append("\n\n<system-note>\u5f53\u524d\u65f6\u95f4: ").append(stamp)
-        TurnClock.previousMessageAt(sid)?.let { prev ->
+        previousAt?.let { prev ->
             if (prev > 0L) {
                 append(" (since previous message: ")
                 append(TimeContextGate.formatElapsed((nowMs - prev).coerceAtLeast(0L)))

@@ -20,14 +20,13 @@ class TokenMeterTest {
     private fun user(text: String) = LLMMessage(role = LLMMessage.Role.USER, content = text)
 
     @Test
-    fun displayNeverShowsLessThanThePendingRequest() {
-        // [T-token-meter-display-louder] The provider reading describes the
-        // PREVIOUS request. Right after a big paste the pending request is
-        // already larger, and showing the older, smaller number is how the
-        // sheet came to say 40k while the gate was about to compact.
-        val m = TokenMeter.forDisplay(providerTokens = 5_000, estimatedTokens = 8_000)
-        assertEquals(8_000, m.totalTokens)
-        assertFalse(m.sourceIsProvider)
+    fun displayKeepsTheProviderReadingWhenThereIsOne() {
+        // [T-token-meter-display-compat] Display keeps origin/main behaviour:
+        // the provider reading is the billed prompt size of the last call.
+        // The GATE (pressure) is the one that takes the larger of the two.
+        val m = TokenMeter.forDisplay(providerTokens =5_000, estimatedTokens =8_000)
+        assertEquals(5_000, m.totalTokens)
+        assertTrue(m.sourceIsProvider)
     }
 
     @Test
@@ -65,8 +64,9 @@ class TokenMeterTest {
         event.put("estTokens",8_000)
         event.put("providerTokens",5_000)
         val fromJournal = TokenMeter.fromJournalSnapshot(event)
-        val live = TokenMeter.forDisplay(providerTokens =5_000, estimatedTokens =8_000)
-        assertEquals(live.totalTokens, fromJournal?.totalTokens)
+        // The snapshot is the figure the GATE acted on, which is what a
+        // post-mortem has to compare against.
+        val live = TokenMeter.pressure(providerTokens =5_000, estimatedTokens =8_000)
     }
     
     @Test
@@ -125,5 +125,15 @@ class TokenMeterTest {
         val b = TokenMeter.breakdown(emptyList())
         assertEquals(0L, b.totalChars)
         assertEquals(0, TokenMeter.pressure(0, 0))
+    }
+    
+    @Test
+    fun theSnapshotAgreesWithTheDisplayPrecedence() {
+        val event = org.json.JSONObject()
+        event.put("estTokens",8_000)
+        event.put("providerTokens",5_000)
+        val fromJournal = TokenMeter.fromJournalSnapshot(event)
+        val live = TokenMeter.forDisplay(providerTokens =5_000, estimatedTokens =8_000)
+        assertEquals(live.totalTokens, fromJournal?.totalTokens)
     }
 }

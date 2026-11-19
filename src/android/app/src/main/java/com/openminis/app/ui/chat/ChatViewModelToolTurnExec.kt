@@ -554,19 +554,20 @@ private suspend fun ChatViewModel.runPlannedCall(
         // [T-tool-receipt] The notice is computed BEFORE this call's own begin
         // line lands, so it can only describe a PREVIOUS process's unfinished
         // work — never the call the model is about to read a result for.
-        val unresolvedReceipt = ToolReceiptStore.unsettledNotice(context.filesDir, ctx.activeSessionId)
+        // [T-tool-receipt-report-once] PEEK: the notice is only acknowledged once it
+ // actually reaches the model (a refusal or a throwing dispatch would drop it).
+ val pendingReceipts = ToolReceiptStore.pendingUnsettled(context.filesDir, ctx.activeSessionId)
                // [T-tool-receipt] Receipt bookkeeping lives in ChatViewModelToolReceiptExt:
         // this file is at its line cap, and the receipt rules (notice, conflict,
         // begin/settle/abandon) are one contract that must not be split.
-        val result = dispatchWithReceipt(ctx, call, unresolvedReceipt) {
+        val result = dispatchWithReceipt(ctx, call, pendingReceipts) {
             executeTool(call.name, call.argsStr, call.id, ctx.allToolBlocks, ctx.assistantId, ctx.accumulatedText)
         }
         
  // [T-session-journal-turn-bounds] One tool round in the shadow log, so
         // a reader can rebuild the call/result sequence without the transcript.
         // Best-effort by contract: a journal failure never touches the result.
-        recordToolJournal(ctx.turn, call.name, call.argsStr, result.success)
-        // [T-known-failure] Feed the outcome back into the failure ledger the
+               // [T-known-failure] Feed the outcome back into the failure ledger the
         // dispatch gate reads: a success clears the record, a failure arms it
         // for the next identical call. Fire-and-forget; never affects the
         // result the model sees.
