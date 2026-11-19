@@ -413,6 +413,42 @@ G5 消除本轮两个 P0 的同一根因。三件都是只读或纯函数级别�
 
 ---
 
+##四之二、落地对照（20/20项 + G12）
+
+全部交付物已在本分支实现。逐项给出承载体，便于核对而不必相信本文档。
+
+| # |承载体 |备注 |
+|---|---|---|
+|0.1|`SessionJournal` + `lastRequestDigests` / `firstDigestDivergence`|验收改为"投影一致"：journal存 digest不存正文（避免成为第二份 transcript），可断言的是 digest序列逐项一致，分歧返回首个不一致下标；`-2`表示无记录（不是"一致"）|
+|0.2|`TokenMeter` + `fromJournalSnapshot`|门限/环图/Token Sheet/压缩决策同源；journal读回供事后核对|
+|0.3|`ToolPairingCore` + `repairToolPairing` / `PairingRepair` + `SessionJournal.PAIRING_REPAIRED`|三处实现收敛为一处；修复对模型保持静默（报错会让它重发同一调用），但计数入 journal|
+|1.1|`CompactionTransaction`（start→summary→end）+ `interruptedCompactions`|中途死亡重启后可识别 interrupted|
+|1.2|`advanceGeneration` / `retryAllowedNow` / `markFailed`|仅成功 settle推进 generation；失败进入30s冷却，用户取消不冷却|
+|1.3|`ContextSaverRuntime`压力门控 + `ToolResultAging.placeholder(spillOffset =)`|低于阈值直接 return（字节级不变）；占位符带 offset + length|
+|2.1|`HistorySearchTool.executeSearch`|≤8条 × ≤600字；`source[start:end] == excerpt`有测试断言|
+|2.2|`HistorySearchTool.executeRead`|4000字分页 + `next_offset`（末页为 null）；越界有明确错误|
+|2.3|`ChatRepository.compactBoundaryMs` → `searchMessages(endMs =)`|范围限定在 marker之前；无命中时说明检索范围|
+|3.1|`ToolReceiptStore`（JSONL三态 + abandoned）|用 per-session sidecar而非 Room实体：与既有 ledger一致，免一次迁移|
+|3.2|`ToolReceiptStore.isMutating`短路|只读工具零写入|
+|3.3|`ToolReceiptStore.conflictOf(opId =)`|按 operation id判定：同 id不同指纹 =不同操作 →拒绝；同 id同指纹 =合法重放|
+|4.1|`MemoryMetadataParser.frontmatterFor` + `MemoryRepository.writeMemory`|新文件首块写 frontmatter；既有文件不重写（避免并发写撕裂）|
+|4.2|`MemoryMetadataParser.supersededIds`|三个读取方共用：日窗口、`MemoryIndex.rows`、`MemoryRecallEngine.scanMemoryFiles`|
+|4.3|`MemoryReranker` + `MemoryRerankerRegistry` + `MemoryUsageLedger`|默认仍是关键词 BM25；reranker可运行时替换（置换校验：丢/造 hit即忽略）；交付计数与召回计数分离|
+|5.1|`TimeContextGate` + `applyRequestClockNote`|关键词快路径 +间隔；请求装配期注入，带 elapsed|
+|5.2|`TimeContextGate.alreadyStamped` / `markStamped`|值不变不追加（关键词路径也不重复），reset清理|
+|6.1|`HarnessConfig` + `HarnessConfigTest`|默认值逐项钉住；非法组合构造即抛|
+|6.2|`HarnessConfigStore` + `ChatViewModelLoadExt`安装点|每会话 override持久化；无文件的会话回落默认值，不继承上一个会话|
+|6.3|`LoopGuard.stopEnabled` + `ActionGuard`判定"是否真的停止"|默认保持硬边界；关闭时最后一档降级为提醒|
+|G12|`TitleNotInModelInputTest`|断言标题路径不写 `agentHistory`，只经 `_sessionTitle`发布|
+
+已知取舍（是明确选择，不是遗漏）：
+
+-3.1用 sidecar JSONL而不是 Room实体：免一次迁移，且与既有 ledger同构；代价是无法用 SQL查询回执。
+-4.3 reranker默认仍是 identity：接缝、置换校验、运行时注册都已就位，但没有接入 embeddings后端（那需要模型文件与开关，属另一件事）。
+-0.1的"逐字节一致"降级为"digest序列一致"：journal不存正文是安全要求，两者无法同时满足。
+
+---
+
 ## 五、明确不采纳的部分
 
 写在这里是为了避免以后有人"顺手全抄"：

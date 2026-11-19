@@ -98,4 +98,71 @@ internal object MemoryMetadataParser {
     /** Eligibility of a file's text at a point in time. */
     fun isEligible(text: String, nowMs: Long, fileModifiedAtMs: Long): Boolean =
         parse(text).isEligible(nowMs, fileModifiedAtMs)
+
+    /**
+     * [T-memory-supersedes] Identities replaced by some file's `supersedes:`
+     * value.
+     *
+     * WHY a shared helper: "a superseded memory must not reach the prompt AND
+     * must not be recalled" is one rule applied in three readers (the daily
+     * prompt window, the index and the recall engine). Three inline copies is
+     * exactly how the token meter and the tool pairing drifted in this branch,
+     * so the rule lives once and each reader passes its own (id, text) pairs.
+     *
+     * Matching is deliberately loose and forgiving, because the value is
+     * human-written: case-insensitive, with or without a `.md` suffix, and it
+     * matches an id by exact equality. A near-miss supersedes nothing rather
+     * than hiding an unrelated memory.
+     */
+    fun supersededIds(files: List<Pair<String, String>>): Set<String> {
+        if (files.isEmpty()) return emptySet()
+        val claimed = HashSet<String>()
+        for ((_, text) in files) {
+            val target = parse(text).supersedes ?: continue
+            claimed += normalizeId(target)
+        }
+        if (claimed.isEmpty()) return emptySet()
+        return files.asSequence()
+            .map { it.first }
+            .filter { normalizeId(it) in claimed }
+            .toHashSet()
+    }
+
+    /** [T-memory-supersedes] Loose identity: lowercase, no `.md` suffix. */
+    private fun normalizeId(id: String): String =
+        id.trim().lowercase().removeSuffix(".md")
+
+    /**
+     * [T-memory-frontmatter-writer] Render the block this parser reads back.
+     *
+     * WHY the writer lives beside the parser: the two halves of one format
+     * drifting apart is the failure this whole file exists to prevent — the
+     * reader already had `supersedes`/`ttl_days` support while nothing emitted
+     * them, so `4.1` was "reader-only". Emitting from the same object means a
+     * key added here is a key the reader already understands.
+     *
+     * Only non-null fields are written, so a plain daily log stays a plain
+     * daily log instead of gaining five `null` lines. Returns the empty string
+     * when there is nothing to declare — callers prepend it unconditionally.
+     */
+    fun frontmatterFor(
+        type: String? = null,
+        scope: String? = null,
+        ttlDays: Int? = null,
+        disabled: Boolean = false,
+        supersedes: String? = null,
+    ): String {
+        val lines = ArrayList<String>(5)
+        type?.takeIf { it.isNotBlank() }?.let { lines += "type: $it" }
+        scope?.takeIf { it.isNotBlank() }?.let { lines += "scope: $it" }
+        if (disabled) lines += "disabled: true"
+        ttlDays?.let { lines += "ttl_days: $it" }
+        supersedes?.takeIf { it.isNotBlank() }?.let { lines += "supersedes: $it" }
+        if (lines.isEmpty()) return ""
+        return buildString {
+            append(FENCE).append('\n')
+            for (line in lines) append(line).append('\n')
+            append(FENCE).append('\n')
+        }
+    }
 }

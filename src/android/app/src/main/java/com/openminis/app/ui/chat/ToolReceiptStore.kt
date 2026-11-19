@@ -38,6 +38,9 @@ internal object ToolReceiptStore {
      * `not_sent` line without claiming the call ran or failed. */
     internal const val ABANDONED = "abandoned"
 
+ /** [T-tool-receipt-conflict] Field carrying the caller's operation id. */
+ internal const val OP_ID = "op"
+
     /** Hard cap on the live file; older lines are dropped by rewrite. */
     internal const val MAX_BYTES = 2L * 1024 * 1024
     internal const val TRIM_TO_LINES = 1_000
@@ -73,6 +76,44 @@ internal object ToolReceiptStore {
         com.openminis.app.tools.ToolFailureMemory.fingerprint(tool, argsJson)
 
     /**
+     * [T-tool-receipt-conflict] Does [opId] already name a DIFFERENT operation?
+     *
+     * The contract is about the OPERATION ID, not the call's content. A
+     * content fingerprint cannot express it: [receiptKey] hashes (tool, args),
+     * so two different operations always differ and the same operation always
+     * matches - a conflict is invisible from the key alone. Reusing an id for
+     * different content is the case a replay must be REFUSED rather than
+     * merged: the caller would either re-run a mutation it believes already
+     * landed, or skip verification on one that did not.
+     *
+     * Returns the recorded tool name of the conflicting record, or null. A
+     * blank id, a missing file or a read-only tool are all no-conflict -
+     * the check must never be the reason a call is refused.
+     */
+    fun conflictOf(
+        filesDir: java.io.File?,
+        sessionId: String,
+        opId: String,
+        tool: String,
+        argsJson: String,
+    ): String? {
+        if (filesDir == null || sessionId.isBlank() || opId.isBlank()) return null
+        if (!isMutating(tool)) return null
+        val target = file(filesDir, sessionId)
+        if (!target.isFile) return null
+        val key = receiptKey(tool, argsJson)
+        val parsed = runCatching {
+            target.readLines(Charsets.UTF_8).mapNotNull { line ->
+                if (line.isBlank()) null
+                else runCatching { JSONObject(line) }.getOrNull()
+            }
+        }.getOrDefault(emptyList())
+        val sameOp = parsed.filter { o -> o.optString(OP_ID) == opId }
+        val conflicting = sameOp.firstOrNull { o -> o.optString("key") != key }
+        return conflicting?.optString("tool")?.takeIf { it.isNotBlank() }
+    }
+    
+    /**
      * Record `not_sent` BEFORE dispatch. A crash after this line and before
      * [settle] is exactly the `unknown` state the caller must verify.
      */
@@ -81,6 +122,7 @@ internal object ToolReceiptStore {
         sessionId: String,
         tool: String,
         argsJson: String,
+        opId: String = "",
     ) {
         if (filesDir == null || sessionId.isBlank() || !isMutating(tool)) return
         append(
@@ -89,6 +131,7 @@ internal object ToolReceiptStore {
                 .put("key", receiptKey(tool, argsJson))
                 .put("tool", tool)
                 .put("state", NOT_SENT)
+        .put(OP_ID, opId)
                 .put("at", System.currentTimeMillis()),
         )
     }
@@ -100,6 +143,7 @@ internal object ToolReceiptStore {
         tool: String,
         argsJson: String,
         success: Boolean,
+        opId: String = "",
     ) {
         if (filesDir == null || sessionId.isBlank() || !isMutating(tool)) return
         append(
@@ -108,6 +152,7 @@ internal object ToolReceiptStore {
                 .put("key", receiptKey(tool, argsJson))
                 .put("tool", tool)
                 .put("state", ACCEPTED)
+        .put(OP_ID, opId)
                 .put("success", success)
                 .put("at", System.currentTimeMillis()),
         )
@@ -134,6 +179,7 @@ internal object ToolReceiptStore {
         sessionId: String,
         tool: String,
         argsJson: String,
+        opId: String = "",
     ) {
         if (filesDir == null || sessionId.isBlank() || !isMutating(tool)) return
         // [T-tool-receipt-abandon-append] Append a closer; never rewrite.
@@ -147,6 +193,7 @@ internal object ToolReceiptStore {
                 .put("key", receiptKey(tool, argsJson))
                 .put("tool", tool)
                 .put("state", ABANDONED)
+        .put(OP_ID, opId)
                 .put("at", System.currentTimeMillis()),
         )
     }

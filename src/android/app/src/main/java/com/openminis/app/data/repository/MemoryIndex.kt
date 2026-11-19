@@ -83,8 +83,14 @@ object MemoryIndex {
                 byDate[date] = row
             }
         }
+        // [T-memory-supersedes] Retire replaced days before slicing, so a
+        // superseded file cannot occupy one of the [maxRows] slots the TOC is
+        // allowed to advertise.
+        val superseded = supersededDates(sessionDir, sharedDir)
         val sorted = byDate.values.sortedByDescending { it.date }
-        return sorted.filter { it.date !in excludeDates }.take(maxRows)
+        return sorted
+            .filter { it.date !in excludeDates && it.date !in superseded }
+            .take(maxRows)
     }
 
     private fun rowFor(file: File, date: String, shared: Boolean, nowMs: Long): Row? {
@@ -96,6 +102,31 @@ object MemoryIndex {
         if (!MemoryMetadataParser.isEligible(text, nowMs, file.lastModified())) return null
         val entries = ENTRY_MARK.findAll(text).count()
         return Row(date = date, entries = entries, preview = previewOf(text), shared = shared)
+    }
+
+    /**
+     * [T-memory-supersedes] Dates whose file is replaced by another file's
+     * `supersedes:` value.
+     *
+     * WHY in the index too: the TOC is an invitation to read a file. Listing a
+     * day the prompt deliberately withheld advertises memory the model cannot
+     * see, and worse, invites it to call `history_read` on a body that was
+     * excluded for being stale. Same rule, same helper as the prompt path.
+     */
+    fun supersededDates(
+        sessionDir: File?,
+        sharedDir: File?,
+    ): Set<String> {
+        val candidates = ArrayList<Pair<String, String>>()
+        for (dir in listOf(sharedDir, sessionDir)) {
+            val files = dir?.listFiles() ?: continue
+            for (file in files) {
+                if (!file.isFile || !DAILY.matches(file.name)) continue
+                val text = runCatching { file.readText() }.getOrNull() ?: continue
+                candidates += file.name.removeSuffix(".md") to text
+            }
+        }
+        return MemoryMetadataParser.supersededIds(candidates)
     }
 
     /** First line that is neither a timestamp marker nor a heading. */

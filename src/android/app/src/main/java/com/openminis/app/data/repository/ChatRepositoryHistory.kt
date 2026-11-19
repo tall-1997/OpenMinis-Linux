@@ -25,3 +25,24 @@ suspend fun ChatRepository.messageText(sessionId: String, messageId: String): St
     val hydrated = hydrateDisplayRows(listOf(row)).firstOrNull() ?: row
     return extractTextForOffload(hydrated.partsJson).takeIf { it.isNotBlank() }
 }
+
+/**
+ * [T-history-marker-scope] Epoch millis of the newest compaction boundary for
+ * this session, or null when nothing has been compacted.
+ *
+ * WHY: `history_search` exists to reach history that compaction folded OUT of
+ * the request. Without a cutoff it also returned the messages the model is
+ * already looking at, which wastes a slot on something it can read directly and
+ * makes "I found it in history" indistinguishable from "it is right above". The
+ * contractor is exact: prefer the anchor row's own timestamp (the last message
+ * actually folded), fall back to the marker's creation time for markers whose
+ * anchor row has since been removed.
+ */
+suspend fun ChatRepository.compactBoundaryMs(sessionId: String): Long? {
+    val marker = dao.latestCompactMarker(sessionId) ?: return null
+    val anchorId = marker.lastCompactedMessageId
+    if (!anchorId.isNullOrBlank()) {
+        dao.getMessage(sessionId, anchorId)?.let { return it.createdAt }
+    }
+    return marker.createdAt
+}

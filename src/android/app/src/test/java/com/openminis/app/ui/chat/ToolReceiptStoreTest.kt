@@ -112,6 +112,40 @@ class ToolReceiptStoreTest {
         assertTrue(ToolReceiptStore.file(dir, sid).readText().contains("abandoned"))
     }
 
+       @Test
+    fun reusingAnOperationIdForDifferentContentIsAConflict() {
+        // [T-tool-receipt-conflict] The identity is the OPERATION ID. A replay
+        // of the same operation is fine; the same id carrying different content
+        // is a different operation and must be refused, not merged.
+        val sid = "c1"
+        ToolReceiptStore.begin(dir, sid, "file_edit", "{\"path\":\"/a\"}", opId = "op-1")
+        assertEquals(
+            "file_edit",
+            ToolReceiptStore.conflictOf(dir, sid, "op-1", "file_write", "{\"path\":\"/b\"}"),
+        )
+    }
+    
+    @Test
+    fun replayingTheSameOperationIsNotAConflict() {
+        val sid = "c2"
+        val args = "{\"path\":\"/c\"}"
+        ToolReceiptStore.begin(dir, sid, "file_edit", args, opId = "op-2")
+        assertEquals(null, ToolReceiptStore.conflictOf(dir, sid, "op-2", "file_edit", args))
+    }
+    
+    @Test
+    fun anUnknownOperationIdIsNotAConflict() {
+        val sid = "c3"
+        ToolReceiptStore.begin(dir, sid, "file_edit", "{\"path\":\"/d\"}", opId = "op-3")
+        assertEquals(null, ToolReceiptStore.conflictOf(dir, sid, "op-other", "file_edit", "{}"))
+    }
+    
+    @Test
+    fun anEmptyOperationIdOrReadOnlyToolIsNeverAConflict() {
+        assertEquals(null, ToolReceiptStore.conflictOf(dir, "c4", "", "file_edit", "{}"))
+        assertEquals(null, ToolReceiptStore.conflictOf(dir, "c4", "op", "file_read", "{}"))
+    }
+    
     @Test
     fun unsafeSessionIdsStayInsideTheDirectory() {
         val f = ToolReceiptStore.file(dir, "../../etc/passwd")

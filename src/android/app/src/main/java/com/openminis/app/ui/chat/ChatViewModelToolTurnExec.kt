@@ -555,28 +555,14 @@ private suspend fun ChatViewModel.runPlannedCall(
         // line lands, so it can only describe a PREVIOUS process's unfinished
         // work — never the call the model is about to read a result for.
         val unresolvedReceipt = ToolReceiptStore.unsettledNotice(context.filesDir, ctx.activeSessionId)
-        ToolReceiptStore.begin(context.filesDir, ctx.activeSessionId, call.name, call.argsStr)
-        // [T-tool-receipt-cancel] `executeTool` can throw (cancellation, scope
-        // teardown, a tool that escapes its own handling). Without this guard
-        // the not_sent line stayed open forever and every later tool result in
-        // the session carried a stale "outcome is UNKNOWN" warning.
-        val rawResult = try {
+               // [T-tool-receipt] Receipt bookkeeping lives in ChatViewModelToolReceiptExt:
+        // this file is at its line cap, and the receipt rules (notice, conflict,
+        // begin/settle/abandon) are one contract that must not be split.
+        val result = dispatchWithReceipt(ctx, call, unresolvedReceipt) {
             executeTool(call.name, call.argsStr, call.id, ctx.allToolBlocks, ctx.assistantId, ctx.accumulatedText)
-        } catch (t: Throwable) {
-            ToolReceiptStore.abandon(context.filesDir, ctx.activeSessionId, call.name, call.argsStr)
-            throw t
         }
-        // [T-tool-receipt] A refusal never dispatched, so it must not settle as
-        // `accepted` — the state reserved for "the call ran". Leaving the
-        // not_sent line open would be worse, so the refusal clears it by
-        // settling with the refusal marker instead of pretending success.
-        ToolReceiptStore.settle(
-            context.filesDir, ctx.activeSessionId, call.name, call.argsStr, rawResult.success,
-        )
-        val result = if (unresolvedReceipt == null) rawResult else {
-            rawResult.copy(output = unresolvedReceipt + "\n\n" + rawResult.output)
-        }
-        // [T-session-journal-turn-bounds] One tool round in the shadow log, so
+        
+ // [T-session-journal-turn-bounds] One tool round in the shadow log, so
         // a reader can rebuild the call/result sequence without the transcript.
         // Best-effort by contract: a journal failure never touches the result.
         recordToolJournal(ctx.turn, call.name, call.argsStr, result.success)

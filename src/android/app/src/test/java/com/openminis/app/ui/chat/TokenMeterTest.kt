@@ -58,6 +58,25 @@ class TokenMeterTest {
     }
 
     @Test
+    fun aJournalSnapshotReproducesTheSameNumber() {
+        // [T-token-meter-journal-source] The durable copy must agree with the
+        // live measurement, or a post-mortem compares two different rules.
+        val event = org.json.JSONObject()
+        event.put("estTokens",8_000)
+        event.put("providerTokens",5_000)
+        val fromJournal = TokenMeter.fromJournalSnapshot(event)
+        val live = TokenMeter.forDisplay(providerTokens =5_000, estimatedTokens =8_000)
+        assertEquals(live.totalTokens, fromJournal?.totalTokens)
+    }
+    
+    @Test
+    fun anEventWithoutTokenFieldsIsNotASnapshot() {
+        // A request event written by an older build must not be read as zero.
+        assertEquals(null, TokenMeter.fromJournalSnapshot(null))
+        assertEquals(null, TokenMeter.fromJournalSnapshot(org.json.JSONObject().put("turn",3)))
+    }
+    
+    @Test
     fun breakdownCountsEveryPartKindAndImagesByWeight() {
         val messages = listOf(
             LLMMessage(

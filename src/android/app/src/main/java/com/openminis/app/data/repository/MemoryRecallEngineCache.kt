@@ -53,6 +53,12 @@ object MemoryRecallEngineCache {
             embeddingSupport = com.openminis.app.data.memory.MemoryEmbeddingRuntime.recallSupportOrNull(),
         )
         engine.loadRecallCounts()
+        // [T-memory-usage-ledger] Prime the delivery counter from disk alongside
+        // the recall counter. Without this the ledger resets on every process
+        // start, so "was this memory ever shown?" answered zero for a memory the
+        // user saw last week — which is exactly the question the counter exists
+        // to settle.
+        com.openminis.app.data.repository.MemoryUsageLedger.load(memoryDir)
         synchronized(engines) {
             // Re-check: another thread may have inserted while we were building.
             engines[key]?.let { return it }

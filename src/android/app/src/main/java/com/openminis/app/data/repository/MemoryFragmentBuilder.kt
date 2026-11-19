@@ -219,6 +219,21 @@ internal class MemoryFragmentBuilder(
      * admitted entry, inside [MemoryDailyGate]).
      */
     internal fun loadRecentDailyRawUncached(now: Long): List<MemoryDailyGate.RawDay> {
+        // [T-memory-supersedes] Resolve replacements ONCE for the window, before
+        // admitting anything. A day whose file declares `supersedes: <other>`
+        // retires that other day everywhere — prompt, index and recall — so the
+        // set is computed from the same files this function is about to read.
+        val window = ArrayList<Pair<String, String>>()
+        var scan = 0
+        while (scan < MemoryRepository.MAX_LOOKBACK_DAYS) {
+            val ds = IsoTime.formatLocalDate(now - scan.toLong() * 86400_000L)
+            val f = File(memoryDir, "$ds.md")
+            if (f.exists()) {
+                readTextResilient(f, "daily-memory")?.let { window += ds to it }
+            }
+            scan++
+        }
+        val superseded = MemoryMetadataParser.supersededIds(window)
         val raw = mutableListOf<MemoryDailyGate.RawDay>()
         var dayOffset = 0
         while (raw.size < MemoryRepository.MAX_RECENT_FILES &&
@@ -232,6 +247,7 @@ internal class MemoryFragmentBuilder(
                 // reach the model. Eligibility is decided once, here, so the
                 // gate, the budget and the index cannot disagree about it.
                 if (content.isNotEmpty() &&
+                    dateStr !in superseded &&
                     MemoryMetadataParser.isEligible(content, now, file.lastModified())
                 ) {
                     raw.add(MemoryDailyGate.RawDay(dateStr, dayOffset, content))

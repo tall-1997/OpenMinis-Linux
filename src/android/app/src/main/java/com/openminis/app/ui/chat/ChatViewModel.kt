@@ -2763,7 +2763,7 @@ class ChatViewModel(
      * [dropOrphanedToolParts] for why the sweep exists and what it cannot fix.
      */
     internal fun effectiveAgentHistory(): List<LLMMessage> {
-        val repaired = dropOrphanedToolParts(effectiveAgentHistoryUncounted(forRequest = true))
+        val repaired = repairPairingForRequest(effectiveAgentHistoryUncounted(forRequest = true))
         // [GH#352] A base64 image that entered history as TEXT (instead of an
         // image content block) blows the model's context window on EVERY
         // request and bricks the session. Scrub it from the outgoing copy only;

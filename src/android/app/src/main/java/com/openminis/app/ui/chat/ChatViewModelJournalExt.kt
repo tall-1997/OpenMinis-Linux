@@ -82,6 +82,31 @@ internal fun ChatViewModel.recordToolJournal(turn: Int, tool: String, argsJson: 
     )
 }
 
+/**
+ * [T-orphan-use-report] Record that one request was served from a REPAIRED
+ * history.
+ *
+ * WHY the journal and not just the existing warning: the warning line scrolls
+ * out of logcat, and the question this answers ("did this session ever send a
+ * history whose tool pairing had to be fixed?") is asked days later. One line
+ * per repaired request, keyed by counts, is what makes that answerable.
+ *
+ * Best-effort by contract: never throws, never blocks the turn.
+ */
+internal fun ChatViewModel.recordPairingRepairJournal(droppedResults: Int, interruptedUses: Int) {
+    runCatching {
+        SessionJournal.record(
+            filesDir = context.filesDir,
+            sessionId = realSessionId.ifEmpty { sessionId },
+            kind = SessionJournal.PAIRING_REPAIRED,
+            fields = mapOf(
+                "droppedResults" to droppedResults,
+                "interruptedUses" to interruptedUses,
+            ),
+        )
+    }
+}
+
 internal fun ChatViewModel.recordTurnJournal(turn: Int, starting: Boolean) {
     runCatching {
         SessionJournal.record(

@@ -82,13 +82,21 @@ class HarnessWiringTest {
 
     @Test
     fun mutatingToolsWriteAReceiptAndCancelledOnesCloseIt() {
-        val exec = src("ui/chat/ChatViewModelToolTurnExec.kt")
+        // The receipt contract lives in ChatViewModelToolReceiptExt (extracted to
+        // keep the tool-turn file under its line cap), so the guard points there.
+        val exec = src("ui/chat/ChatViewModelToolReceiptExt.kt")
         assertTrue(exec.contains("ToolReceiptStore.begin("))
         assertTrue(exec.contains("ToolReceiptStore.settle("))
         assertTrue(
             "a throwing dispatch must abandon its open receipt",
             exec.contains("ToolReceiptStore.abandon("),
         )
-        assertTrue((0 until 1).isEmpty() || exec.contains("recordToolJournal("))
+        assertTrue(
+            "the operation id is what a conflict is judged on",
+            exec.contains("opId = call.id"),
+        )
+        val turn = src("ui/chat/ChatViewModelToolTurnExec.kt")
+        assertTrue("the tool round must reach the journal", turn.contains("recordToolJournal("))
+        assertTrue("the dispatch must go through the receipt seam", turn.contains("dispatchWithReceipt("))
     }
 }

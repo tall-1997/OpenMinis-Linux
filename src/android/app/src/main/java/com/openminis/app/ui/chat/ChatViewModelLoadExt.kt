@@ -547,6 +547,18 @@ internal fun ChatViewModel.loadSession() {
         _compactSummary.value = marker?.summary
         if (marker != null) stateHydrationPending = true  // [T-state-hydration] compacted history
         _cachedLatestMarker = marker
+        // [T-harness-config-store] Install THIS session's numeric policy.
+        // Loading a session is the one place every entry path converges, so the
+        // override is applied here rather than at each send: a 32K-window chat
+        // and a 200K-window chat must not inherit each other's tail budget just
+        // because they were opened in sequence. No stored file → the shipped
+        // defaults are restored, never the previous session's numbers.
+        runCatching {
+            com.openminis.app.data.HarnessConfigStore.install(
+                filesDir = context.filesDir,
+                sessionId = realSessionId.ifEmpty { sessionId },
+            )
+        }
         // [T-compaction-transaction] A process that died mid-compaction left an
         // unmatched `compaction/start`. Report it once at load so the user and
         // the logs can explain a "compaction silently did nothing" session

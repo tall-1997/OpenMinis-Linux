@@ -44,6 +44,14 @@ internal fun ChatViewModel.newRecallReminder(): String? {
     val rendered = engine.formatAsPromptFragmentWithHits(fresh)
     if (rendered.text.isBlank()) return null
     announcedRecallKeys.addAll(rendered.included.map { "${it.day}:${it.line}" })
+    // [T-memory-usage-ledger] Mark only what actually REACHED the model, keyed
+    // the same way the render counts it. A hit cut by the fragment cap was
+    // never shown and must not earn delivery credit — that is why this is a
+    // separate counter from the engine's recall count.
+    com.openminis.app.data.repository.MemoryUsageLedger.markUsed(
+        memoryDir = liveRecallMemoryDir(),
+        hits = rendered.included.map { it.day to it.line },
+    )
     return rendered.text
 }
 
@@ -121,14 +129,24 @@ internal fun memoryRecallQuery(userText: String): String? {
  * Same construction for render and prefetch ⇒ same [MemoryRecallEngineCache]
  * key ⇒ the same instance holds the prefetch cache the render will consume.
  */
+/**
+ * [T-memory-usage-ledger] The daily-memory directory this session recalls from.
+ *
+ * Extracted so the render and the usage ledger name the SAME directory: a
+ * ledger written to a different path would report zero deliveries forever while
+ * the prompt clearly carried the memory.
+ */
+internal fun ChatViewModel.liveRecallMemoryDir(): java.io.File =
+    com.openminis.app.sandbox.SessionWorkspace.memoryDir(
+        context.filesDir,
+        com.openminis.app.sandbox.ExecutionCoordinator.ownerSessionId(
+            realSessionId.ifEmpty { sessionId },
+        ),
+    )
+
 internal fun ChatViewModel.recallEngineForLiveRecall(): com.openminis.app.data.repository.MemoryRecallEngine? {
     return com.openminis.app.data.repository.MemoryRecallEngineCache.forSession(
-        memoryDir = com.openminis.app.sandbox.SessionWorkspace.memoryDir(
-            context.filesDir,
-            com.openminis.app.sandbox.ExecutionCoordinator.ownerSessionId(
-                realSessionId.ifEmpty { sessionId },
-            ),
-        ),
+        memoryDir = liveRecallMemoryDir(),
         // [T-memory-shared-recall] The app-wide directory joins recall, so a
         // lesson recorded in another chat is reachable from this one.
         sharedDir = com.openminis.app.data.repository.MemoryIndex.sharedDir(context.filesDir),

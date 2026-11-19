@@ -5,6 +5,7 @@ import com.openminis.app.MinisApp
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
 import com.openminis.app.data.repository.ChatRepository
+import com.openminis.app.data.repository.compactBoundaryMs
 import com.openminis.app.data.repository.messageText
 import org.json.JSONArray
 import org.json.JSONObject
@@ -175,6 +176,14 @@ object HistorySearchTool {
             .takeIf { it in setOf("user", "assistant", "tool") }
         val limit = args.optInt("limit", SEARCH_LIMIT_DEFAULT).coerceIn(1, SEARCH_LIMIT_MAX)
         return try {
+            // [T-history-marker-scope] Restrict to history compaction folded
+            // OUT of the request. Without the cutoff this tool also returned the
+            // messages the model is already reading, which spends a hit slot on
+            // something it can see directly and makes "found in history"
+            // indistinguishable from "it is right above". No marker at all
+            // means nothing has been folded, so the whole session stays visible
+            // (searching an uncompacted chat is still useful).
+            val boundaryMs = repo.compactBoundaryMs(sessionId)
             // Over-fetch, then filter by role and excerpt: a hit whose excerpt
             // cannot be located is not a usable hit and must not consume a slot.
             val matches = repo.searchMessages(
@@ -182,7 +191,7 @@ object HistorySearchTool {
                 keywords = words,
                 limit = limit * 4,
                 startMs = null,
-                endMs = null,
+                endMs = boundaryMs,
             )
             val hits = JSONArray()
             for (m in matches) {
@@ -204,8 +213,17 @@ object HistorySearchTool {
                 if (hits.length() >= limit) break
             }
             if (hits.length() == 0) {
+                // [T-history-marker-scope] Say WHERE it looked. "No match" after
+                // a silent scope change reads as "this never happened", which is
+                // a worse failure than no answer: the model concludes the work
+                // was not done.
+                val scope = if (boundaryMs == null) {
+                    "this session"
+                } else {
+                    "the compacted part of this session (the active region is already in context)"
+                }
                 ToolExecutionResult(
-                    "No earlier message in this session matched " +
+                    "No message in $scope matched " +
                         words.joinToString(", ") + ". Try fewer or different keywords.",
                     true,
                     toolTitle = toolTitle,

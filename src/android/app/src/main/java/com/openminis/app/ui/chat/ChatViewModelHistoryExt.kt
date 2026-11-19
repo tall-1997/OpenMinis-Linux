@@ -6,12 +6,52 @@ import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.ToolPairing
 
 /**
+ * [T-orphan-use-report] What one pairing repair had to change.
+ *
+ * WHY this type exists: `0.3` asked for `dropOrphanedToolParts` to REPORT the
+ * damage instead of silently fixing it. The repair itself must stay — deleting
+ * a call or fabricating an error both made the model re-issue the call every
+ * turn — but a repair that only logs is invisible after the fact. The counts
+ * ride back to the caller, which writes them to the session journal, so "this
+ * request was served from a mutated history" survives the process.
+ */
+internal data class PairingRepair(
+    val history: List<LLMMessage>,
+    val droppedResults: Int,
+    val interruptedUses: Int,
+) {
+    val changed: Boolean get() = droppedResults > 0 || interruptedUses > 0
+}
+
+/**
  * Validate tool rounds in wire order. A result is valid only when it follows
  * an unmatched use with the same id and name; set membership alone is unsafe
  * because duplicate ids, wrong names, and result-before-use all reach providers
  * as malformed requests.
  */
-internal fun dropOrphanedToolParts(history: List<LLMMessage>): List<LLMMessage> {
+internal fun dropOrphanedToolParts(history: List<LLMMessage>): List<LLMMessage> =
+    repairToolPairing(history).history
+
+/** [T-orphan-use-report] The same sweep, keeping what it had to change. */
+ /**
+  * [T-orphan-use-report] Repair the outgoing history AND record what the
+  * repair had to change.
+  *
+  * WHY the wrapper exists: `ChatViewModel.kt` sits exactly on its architecture
+  * ceiling, so the reporting cannot live at the call site. The repair must stay
+  * invisible to the MODEL (an error made it re-issue the call) but must not be
+  * invisible to the operator, or "this request was served from a mutated
+  * history" becomes undiagnosable after the fact.
+  */
+ internal fun ChatViewModel.repairPairingForRequest(history: List<LLMMessage>): List<LLMMessage> {
+    val repair = repairToolPairing(history)
+    if (repair.changed) {
+        recordPairingRepairJournal(repair.droppedResults, repair.interruptedUses)
+    }
+    return repair.history
+ }
+ 
+internal fun repairToolPairing(history: List<LLMMessage>): PairingRepair {
     data class Use(
         val id: String,
         val name: String,
@@ -75,7 +115,9 @@ internal fun dropOrphanedToolParts(history: List<LLMMessage>): List<LLMMessage> 
         use.messageIndex == history.lastIndex &&
             (use.id to use.name to use.partIndex) in tailUses
     }
-    if (droppedResults.isEmpty() && repairedUses.isEmpty()) return history
+    if (droppedResults.isEmpty() && repairedUses.isEmpty()) {
+        return PairingRepair(history, droppedResults = 0, interruptedUses = 0)
+    }
 
     AppLogger.warning(
         ChatViewModel.TAG,
@@ -107,5 +149,13 @@ internal fun dropOrphanedToolParts(history: List<LLMMessage>): List<LLMMessage> 
             )
         }
     }
-    return cleaned
+    // [T-orphan-use-report] The counts ride back to the caller: the repair
+    // stays silent for the MODEL (an error made it re-issue the call) but must
+    // not be silent for the operator, or "this request was served from a
+    // mutated history" becomes undiagnosable after the fact.
+    return PairingRepair(
+        history = cleaned,
+        droppedResults = droppedResults.size,
+        interruptedUses = repairedUses.size,
+    )
 }

@@ -46,6 +46,9 @@ internal object SessionJournal {
     internal const val REQUEST_ASSEMBLED = "request/assembled"
     internal const val TOOL_CALL = "tool/call"
     internal const val TOOL_RESULT = "tool/result"
+
+    /** [T-orphan-use-report] One request was served from a REPAIRED history. */
+    internal const val PAIRING_REPAIRED = "pairing/repaired"
     internal const val COMPACTION_START = "compaction/start"
     internal const val COMPACTION_SUMMARY = "compaction/summary"
     internal const val COMPACTION_END = "compaction/end"
@@ -255,6 +258,48 @@ internal object SessionJournal {
         return open.values.toList()
     }
 
+    /**
+     * [T-session-journal-consistency] The newest assembled request's
+     * per-message digests, or null when no request has been recorded.
+     *
+     * WHY this is the projection `0.1` can actually assert: the journal stores
+     * digests, not bodies (it must not become a second transcript - secrets,
+     * size), so `deriveMessages(journal)` reconstructs the DIGEST sequence.
+     * That is enough to answer the question the phase exists for - was the
+     * request the model received the history the ViewModel believed it had?
+     * - and a divergence still points at the first differing index.
+     */
+    fun lastRequestDigests(filesDir: java.io.File?, sessionId: String): List<String>? {
+        if (filesDir == null || sessionId.isBlank()) return null
+        val events = tail(filesDir, sessionId, limit =200)
+        val newest = events.lastOrNull { it.optString("kind") == REQUEST_ASSEMBLED }
+            ?: return null
+        val joined = newest.optString("digests", "")
+        return if (joined.isEmpty()) emptyList() else joined.split(',')
+    }
+    
+    /**
+     * [T-session-journal-consistency] First index where the recorded request
+     * and [actual] disagree.
+     *
+     * Return contract: -1 identical, -2 nothing recorded (no verdict is not
+     * a mismatch), otherwise the first differing index - or min(size) when one
+     * side is a prefix of the other, because that is the first index only one
+     * side has.
+     */
+    fun firstDigestDivergence(
+        recorded: List<String>?,
+        actual: List<com.openminis.app.data.model.LLMMessage>,
+    ): Int {
+        if (recorded == null) return -2
+        val actualDigests = actual.map { digestOf(it) }
+        val common = minOf(recorded.size, actualDigests.size)
+        for (i in 0 until common) {
+            if (recorded[i] != actualDigests[i]) return i
+        }
+        return if (recorded.size == actualDigests.size) -1 else common
+    }
+    
     /** Test seam. */
     internal fun resetSeqForTest() {
         seq.set(0)

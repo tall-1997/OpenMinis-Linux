@@ -470,6 +470,12 @@ internal fun ChatViewModel.applyRequestClockNote(history: List<LLMMessage>): Lis
     val zone = java.util.TimeZone.getDefault().toZoneId()
     val stamp = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
         .format(java.time.Instant.ofEpochMilli(nowMs).atZone(zone))
+    // [T-time-context-snapshot] The value, not the clock, decides. A keyword hit
+    // bypasses the interval gate by design, so without this a second request in
+    // the same minute carried two identical `当前时间: 14:32` notes — noise the
+    // model learns to skip, which is worse than no note at all.
+    if (TimeContextGate.alreadyStamped(sid, stamp)) return history
+    TimeContextGate.markStamped(sid, stamp)
     val note = buildString {
         append("\n\n<system-note>\u5f53\u524d\u65f6\u95f4: ").append(stamp)
         TurnClock.previousMessageAt(sid)?.let { prev ->

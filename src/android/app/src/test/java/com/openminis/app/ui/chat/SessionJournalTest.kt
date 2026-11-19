@@ -150,6 +150,90 @@ class SessionJournalTest {
     }
 
     @Test
+    fun theRecordedDigestsMatchTheHistoryThatWasSent() {
+        // [T-session-journal-consistency] The0.1 acceptance item in the form the
+        // storage supports: the journal keeps digests, so the question it answers
+        // is whether the request was the history we believed it was.
+        val sid = "derive-1"
+        val history = listOf(
+            msg(LLMMessage.Role.USER, "do the thing"),
+            msg(LLMMessage.Role.ASSISTANT, "done"),
+        )
+        SessionJournal.recordRequest(
+            filesDir = dir,
+            sessionId = sid,
+            turn =1,
+            messages = history,
+            estimatedTokens =10,
+            providerTokens =9,
+            summaryChars =0,
+            markerId = null,
+            droppedRounds =0,
+        )
+        val recorded = SessionJournal.lastRequestDigests(dir, sid)
+        assertEquals(-1, SessionJournal.firstDigestDivergence(recorded, history))
+        assertEquals(2, recorded?.size)
+    }
+    
+    @Test
+    fun aDivergencePointsAtTheFirstChangedMessage() {
+        val sid = "derive-2"
+        val sent = listOf(
+            msg(LLMMessage.Role.USER, "one"),
+            msg(LLMMessage.Role.ASSISTANT, "two"),
+            msg(LLMMessage.Role.USER, "three"),
+        )
+        SessionJournal.recordRequest(
+            filesDir = dir,
+            sessionId = sid,
+            turn =1,
+            messages = sent,
+            estimatedTokens =10,
+            providerTokens =0,
+            summaryChars =0,
+            markerId = null,
+            droppedRounds =0,
+        )
+        val actuallyDelivered = listOf(
+            msg(LLMMessage.Role.USER, "one"),
+            msg(LLMMessage.Role.ASSISTANT, "two BUT LONGER"),
+            msg(LLMMessage.Role.USER, "three"),
+        )
+        val recorded = SessionJournal.lastRequestDigests(dir, sid)
+        assertEquals(1, SessionJournal.firstDigestDivergence(recorded, actuallyDelivered))
+    }
+    
+    @Test
+    fun aShorterHistoryDivergesAtTheFirstMissingIndex() {
+        val sid = "derive-3"
+        val sent = listOf(
+            msg(LLMMessage.Role.USER, "one"),
+            msg(LLMMessage.Role.ASSISTANT, "two"),
+        )
+        SessionJournal.recordRequest(
+            filesDir = dir,
+            sessionId = sid,
+            turn =1,
+            messages = sent,
+            estimatedTokens =5,
+            providerTokens =0,
+            summaryChars =0,
+            markerId = null,
+            droppedRounds =0,
+        )
+        val recorded = SessionJournal.lastRequestDigests(dir, sid)
+        assertEquals(1, SessionJournal.firstDigestDivergence(recorded, sent.take(1)))
+    }
+    
+    @Test
+    fun noRecordedRequestIsNotAVerdict() {
+        // -2, not -1: nothing recorded must not read as "they matched", or a
+        // session that predates the journal would silently pass the check.
+        assertEquals(-2, SessionJournal.firstDigestDivergence(null, emptyList()))
+        assertEquals(null, SessionJournal.lastRequestDigests(dir, "never-written"))
+    }
+    
+    @Test
     fun unsafeSessionIdsCannotEscapeTheDirectory() {
         val f = SessionJournal.file(dir, "../../etc/passwd")
         assertEquals(dir.resolve(SessionJournal.DIR).absolutePath, f.parentFile.absolutePath)

@@ -87,6 +87,16 @@ class MemoryRecallEngine(
      * consult it, so a wired support cannot perturb the keyword path.
      */
     private val embeddingSupport: com.openminis.app.data.memory.MemoryEmbeddingSupport? = null,
+    /**
+     * [T-memory-reranker-seam] Optional reorder of the BM25 survivors.
+     *
+     * Identity by default, so the shipped path is byte-identical. A reranker
+     * receives the final picks and may reorder them — it may NOT drop one,
+     * because "delivered count is visible" (`MemoryUsageLedger`) would then
+     * disagree with what the model saw. A throwing implementation is ignored
+     * and the BM25 order stands: an optional backend must never break recall.
+     */
+    private val reranker: MemoryReranker = MemoryRerankerRegistry.active(),
 ) {
 
     companion object {
@@ -402,8 +412,16 @@ class MemoryRecallEngine(
             if (used > MAX_HITS_PER_FILE) continue
             merged += hit
         }
-        memo = query to merged
-        return merged
+        // [T-memory-reranker-seam] Optional reorder of the final picks. A
+        // throwing implementation keeps the BM25 order: an optional backend
+        // must never break recall. The permutation guard rejects a reranker
+        // that drops or invents hits, because the delivered count is what
+        // MemoryUsageLedger reports as "used".
+        val ordered = runCatching { reranker.rerank(query, merged) }.getOrNull()
+            ?.takeIf { it.size == merged.size && it.toSet() == merged.toSet() }
+            ?: merged
+        memo = query to ordered
+        return ordered
     }
 
     /**
@@ -497,8 +515,18 @@ class MemoryRecallEngine(
             emptyList()
         }
         val sessionNames = session.mapTo(HashSet()) { it.name }
-        return (session + shared.filter { it.name !in sessionNames })
+        val merged = (session + shared.filter { it.name !in sessionNames })
             .sortedByDescending { it.lastModified() }
+        // [T-memory-supersedes] A superseded day is retired for recall too, not
+        // just for the prompt window. The rule is one helper; skipping it here
+        // would let the model recall a memory the prompt deliberately withheld
+        // — the exact inconsistency `disabled`/`ttl` already avoid.
+        val candidates = merged.mapNotNull { f ->
+            readTextResilient(f, TAG)?.let { f.name.removeSuffix(".md") to it }
+        }
+        val superseded = MemoryMetadataParser.supersededIds(candidates)
+        if (superseded.isEmpty()) return merged
+        return merged.filter { it.name.removeSuffix(".md") !in superseded }
     }
 
     /** [T-recall-delivery-accounting] Rendered fragment plus exactly the hits it carries. */

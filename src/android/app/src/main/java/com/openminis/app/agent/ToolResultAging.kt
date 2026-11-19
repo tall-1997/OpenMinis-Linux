@@ -203,7 +203,18 @@ object ToolResultAging {
                     old.content.length >= SPILL_LIMIT_CHARS ||
                     old.content.length >= UNSPILLED_FOLD_FLOOR_CHARS
                 if (!recoverable) continue
-                val folded = placeholder(old.name, old.content, old.isError)
+                // [T-age-placeholder-offset] Offset 0: the spill file holds
+                // exactly this result, so the addressable range starts at the
+                // beginning and runs for `old.content.length` chars. Passing it
+                // is what makes the placeholder actionable — the model can ask
+                // `file_read` for that exact range instead of paging a file it
+                // cannot see the extent of.
+                val folded = placeholder(
+                    toolName = old.name,
+                    content = old.content,
+                    isError = old.isError,
+                    spillOffset = 0,
+                )
                 // Subtract-only guard: never let the "saving" grow the payload.
                 if (folded.length >= old.content.length) continue
                 parts[pi] = old.copy(content = folded)
@@ -224,7 +235,20 @@ object ToolResultAging {
      * the model, not UI copy, and the repo's CJK-literal ratchet forbids
      * hardcoded CJK in source (translations live in resources only).
      */
-    fun placeholder(toolName: String, content: String, isError: Boolean = false): String {
+    fun placeholder(
+        toolName: String,
+        content: String,
+        isError: Boolean = false,
+        /**
+         * [T-age-placeholder-offset] 0-based char offset of this result inside
+         * its spill file, or null when the content has no path (nothing to
+         * address). The acceptance item was "the placeholder carries the spill
+         * path AND an offset so `file_read` can取回 exactly this range"; a path
+         * alone forces the model to read the whole file to find the passage it
+         * already had. Callers that fold a sliced body pass the slice's start.
+         */
+        spillOffset: Int? = null,
+    ): String {
         val path = READABLE_PATH.find(content)?.value
         val headLimit = if (isError) ERROR_HEADLINE_CHARS else HEADLINE_CHARS
         // [T-age-single-normalization] Collapse whitespace ONCE for both
@@ -246,6 +270,14 @@ object ToolResultAging {
             }
             if (path != null) {
                 append("\nfull output: ").append(path)
+                // [T-age-placeholder-offset] Address the passage, not just the
+                // file. Without a range the model must read the whole spill to
+                // recover text it already had in context, which is the cost the
+                // fold was supposed to remove.
+                if (spillOffset != null && spillOffset >= 0) {
+                    append(" (offset ").append(spillOffset)
+                    append(", length ").append(content.length).append(")")
+                }
             } else {
                 append("\nfull content: re-run this tool")
             }

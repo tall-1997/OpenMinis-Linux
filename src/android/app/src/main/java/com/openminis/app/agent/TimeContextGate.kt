@@ -89,8 +89,38 @@ internal object TimeContextGate {
         return if (minutes == 0L) "${hours}h" else "${hours}h ${minutes}m"
     }
 
+    /**
+     * [T-time-context-snapshot] The last stamp actually emitted, per session.
+     *
+     * WHY value-keyed and not time-keyed: the interval gate keys on WHEN, which
+     * lets a keyword hit re-stamp inside the same minute and put two identical
+     * `当前时间: 14:32` notes on one request. The snapshot rule is "the value did
+     * not change, so do not append it again" — a rule about the VALUE, so it has
+     * to be recorded as the value.
+     */
+    private val lastStamp = java.util.Collections.synchronizedMap(
+        object : java.util.LinkedHashMap<String, String>(16, 0.75f, true) {
+            override fun removeEldestEntry(
+                eldest: MutableMap.MutableEntry<String, String>,
+            ): Boolean = size > MAX_SESSIONS
+        },
+    )
+
+    /** True when this session already saw exactly this stamp. */
+    fun alreadyStamped(sessionId: String?, stamp: String): Boolean {
+        if (sessionId.isNullOrBlank() || stamp.isBlank()) return false
+        return synchronized(lastStamp) { lastStamp[sessionId] == stamp }
+    }
+
+    /** Record the stamp a session just received. */
+    fun markStamped(sessionId: String?, stamp: String) {
+        if (sessionId.isNullOrBlank() || stamp.isBlank()) return
+        synchronized(lastStamp) { lastStamp[sessionId] = stamp }
+    }
+
     /** Test seam. */
     internal fun resetForTest() {
         synchronized(lastInjectedAt) { lastInjectedAt.clear() }
+        synchronized(lastStamp) { lastStamp.clear() }
     }
 }

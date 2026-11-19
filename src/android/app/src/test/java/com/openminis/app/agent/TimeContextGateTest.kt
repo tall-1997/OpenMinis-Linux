@@ -68,6 +68,32 @@ class TimeContextGateTest {
     }
 
     @Test
+    fun anIdenticalStampIsNotInjectedTwice() {
+        // [T-time-context-snapshot] A keyword hit bypasses the interval gate, so
+        // without the value check a second request in the same minute carried two
+        // identical clock notes — noise the model learns to skip.
+        assertFalse(TimeContextGate.alreadyStamped("s", "2026-11-1914:32"))
+        TimeContextGate.markStamped("s", "2026-11-1914:32")
+        assertTrue(TimeContextGate.alreadyStamped("s", "2026-11-1914:32"))
+        assertFalse(TimeContextGate.alreadyStamped("s", "2026-11-1914:33"))
+    }
+    
+    @Test
+    fun theStampIsPerSessionAndClearedByReset() {
+        TimeContextGate.markStamped("a", "2026-11-1914:32")
+        assertFalse(TimeContextGate.alreadyStamped("b", "2026-11-1914:32"))
+        TimeContextGate.resetForTest()
+        assertFalse(TimeContextGate.alreadyStamped("a", "2026-11-1914:32"))
+    }
+    
+    @Test
+    fun aNullSessionNeverClaimsAStamp() {
+        TimeContextGate.markStamped(null, "x")
+        assertFalse(TimeContextGate.alreadyStamped(null, "x"))
+        assertFalse(TimeContextGate.alreadyStamped("s", ""))
+    }
+    
+    @Test
     fun theInjectionTableIsBounded() {
         // A host that opens many sessions must not accumulate entries forever.
         repeat(200) { i -> TimeContextGate.markInjected("s$i", 1_000L) }

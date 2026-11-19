@@ -387,4 +387,24 @@ class ToolResultAgingTest {
         val cut = ToolResultAging.tailOf("z".repeat(10) + "😘".repeat(200), limit = 5)
         assertFalse("must not start on a lone low surrogate", Character.isLowSurrogate(cut.first()))
     }
+    
+    @Test
+    fun thePlaceholderAddressesThePassageNotJustTheFile() {
+        // [T-age-placeholder-offset] A path alone forces the model to read the
+        // whole spill to find text it already had in context; the offset is what
+        // makes the fold reversible without a full re-read.
+        val content = "x".repeat(400) + " /var/minis/workspace/tool-spill/out.txt " + "y".repeat(400)
+        val plain = ToolResultAging.placeholder("shell_execute", content)
+        val addressed = ToolResultAging.placeholder("shell_execute", content, spillOffset =0)
+        assertTrue(addressed.contains("offset 0"))
+ assertTrue(addressed.contains("length "))
+        assertTrue(addressed.length > plain.length)
+    }
+    
+    @Test
+    fun withoutAPathThereIsNoOffsetToClaim() {
+        val content = "z".repeat(400)
+        val text = ToolResultAging.placeholder("grep", content, spillOffset =0)
+        assertFalse(text.contains("offset"))
+    }
 }

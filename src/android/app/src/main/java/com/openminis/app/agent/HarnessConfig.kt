@@ -126,8 +126,17 @@ internal data class HarnessConfig(
             override = config.validated()
         }
 
-        /** Test seam: drop the override. */
+        /** Test seam / session switch: drop the override. */
         internal fun resetForTest() {
+            override = null
+        }
+
+        /**
+         * [T-harness-config-store] Reset to the shipped defaults. Same effect as
+         * [resetForTest] but named for the production path (a session with no
+         * stored override must not inherit the previous session's numbers).
+         */
+        fun reset() {
             override = null
         }
     }

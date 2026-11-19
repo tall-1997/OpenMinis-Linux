@@ -65,7 +65,33 @@ internal object TokenMeter {
         val sourceIsProvider: Boolean get() = providerTokens > 0 && providerTokens >= estimatedTokens
     }
 
-    /** pi-ported empirical weight of one image, in characters. */
+       /**
+     * [T-token-meter-journal-source] Rebuild a measurement from the snapshot
+     * the journal recorded for the last assembled request.
+     *
+     * WHY: the0.2 acceptance item is that the four consumers read ONE
+     * number, and the journal is the only place that number is DURABLE - a
+     * live measurement is recomputed per request, so a sheet/gate
+     * disagreement cannot be checked after the fact. Reading the snapshot
+     * back gives diagnostics (and the Token Usage sheet after a reload) the
+     * exact figure the gate used.
+     *
+     * Null when the event predates the fields, so a caller falls back to a
+     * live measurement rather than displaying a fabricated zero.
+     */
+    fun fromJournalSnapshot(event: org.json.JSONObject?): Measurement? {
+        if (event == null) return null
+        if (!event.has("estTokens") && !event.has("providerTokens")) return null
+        val provider = event.optInt("providerTokens",0).coerceAtLeast(0)
+        val estimated = event.optInt("estTokens",0).coerceAtLeast(0)
+        return Measurement(
+            totalTokens = maxOf(provider, estimated),
+            providerTokens = provider,
+            estimatedTokens = estimated,
+        )
+    }
+    
+ /** pi-ported empirical weight of one image, in characters. */
     const val ESTIMATED_IMAGE_CHARS: Long = 4_800L
 
     fun breakdown(messages: List<LLMMessage>): Breakdown {
