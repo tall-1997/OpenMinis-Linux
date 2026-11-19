@@ -40,7 +40,6 @@ internal suspend fun ChatViewModel.commitInstructionSnapshot(goalValues: Map<Str
             goalValues = goalValues,
             appGlobalFragment = appGlobal,
             sessionGlobalFragment = sessionGlobal,
-            memoryEnabled = memoryEnabled,
             projectRulesFragment = projectRules,
         )
         // `sameSource` must stay false: true means both keys resolved to one

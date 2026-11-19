@@ -419,6 +419,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             return compacted
         }
 
+
         // Error-path / truncation-path recovery: compact AND re-dispatch; true =
         // caller `continue`s, false (cap spent / compaction failed) falls through.
         suspend fun compactAndRetryForOverflow(details: String): Boolean {
@@ -504,16 +505,15 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     loopExitedNormally = true
                     break@agentTurns
                 }
-                // [T-once-notices] committed into the transcript once — never rebuilt.
-                // [T-agent-steering + T-toolset-delta] pi turn-boundary injections, before history build.
+                // [T-once-notices] committed once; [T-agent-steering + T-toolset-delta] pi turn-boundary injections.
+                // [T-compaction-cascade] prepareRequestHistory: untrusted-marker
+                // neutralization + tier-① micro-prune (request-time projections).
+                // Compaction itself is owned by inLoopContextCheck / the overflow gates.
                 commitSessionNoticesOnce(goalObjective = requestGoalState?.objective.orEmpty(),
                     goalPrompt = goalMount.prompt, goalCanContinue = goalMount.canContinue)
                 drainSteeringIntoRun(assistantId, accumulatedText, allToolBlocks, uiBatcher) { swapLoopStateToInjectedBubble(it) }
                 declareToolSetDeltaIfChanged(agentTools)
-                // [T-session-journal-final] Journal what is actually sent (post image budget).
-                val requestHistory = finalizeRequestHistory(turn, ToolIdNormalization.normalizeMessages(
-                    effectiveAgentHistory().let { applyStallNudge(it, stallResumeContext) }, // [T-stall-resume]
-                ))
+                val requestHistory = finalizeRequestHistory(turn, ToolIdNormalization.normalizeMessages(prepareRequestHistory(stallResumeContext)))  // [T-session-journal-final]
                 // [T-first-event-watchdog][T-routing-strategy-x] First-token budget.
                 val firstEventTimeoutMs = GroupRoutingState.resolveFirstEventTimeoutMs(providerRepository,
                     _selectedGroupId.value,
@@ -881,15 +881,13 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                         (effective.cacheReadInputTokens ?: 0) + (effective.cacheCreationInputTokens ?: 0)
                     if (lastContextTokens > 0) {
                         _lastTurnContextTokens.value = lastContextTokens
-                        // [T-token-usage-calibration] 用真实 usage 校准估算器。
-                        val modelKey = currentModel?.id ?: ""
-                        if (modelKey.isNotEmpty()) {
-                            com.openminis.app.data.TokenUsageCalibration.observe(
-                                modelKey,
-                                estimated = estimateAgentHistoryTokens(),
-                                actual = lastContextTokens,
-                            )
-                        }
+                        // [T-token-usage-calibration][T-calibration-raw] Real usage
+                        // calibrates the estimator (raw sum of the PROJECTED request).
+                        observeCalibratedUsage(
+                            currentModel?.id ?: "",
+                            requestHistory,
+                            lastContextTokens,
+                        )
                         // [T-cache-hit-rate] Per-turn cache hit rate for TokenUsageSheet.
                         val inputTotal = chunk.usage.inputTokens + (chunk.usage.cacheReadInputTokens ?: 0) + 
                             (chunk.usage.cacheCreationInputTokens ?: 0)

@@ -120,6 +120,12 @@ object SubAgentRunner {
         // coordinator does. Null = the session has no rules; the worker prompt
         // is then byte-identical to before.
         sessionRules: String? = null,
+        // [T-untrusted-tag-neutralization] Request-time projection the parent
+        // applies to its own history (remote-content tool results get framework
+        // markers escaped); lanes with browser/web tools have the same spoofing
+        // surface, so the parent passes its projection here. Identity default =
+        // lanes whose caller has no projection (none today).
+        historySanitizer: (List<LLMMessage>) -> List<LLMMessage> = { it },
     ): ToolExecutionResult {
         val briefed = SubAgentBrief.wrap(userPrompt, kind = kind, role = role, writePaths = writePaths)
         // Defensive: duplicate tool names reach providers as duplicate schemas
@@ -203,9 +209,11 @@ object SubAgentRunner {
                 // window; the freshest tool results stay verbatim. [T-subagent-history-spill]
                 // The spiller lets oversized old results keep a recovery path
                 // in their stub instead of a bare head+tail excerpt.
-                val sendHistory = SubAgentHistoryCompactor.compact(
-                    history,
-                    spill = { _, content -> sessionSpill("history", content) },
+                val sendHistory = historySanitizer(
+                    SubAgentHistoryCompactor.compact(
+                        history,
+                        spill = { _, content -> sessionSpill("history", content) },
+                    ),
                 )
                 val textSb = StringBuilder()
                 val toolCalls = mutableListOf<Triple<String, String, JSONObject>>()

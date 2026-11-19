@@ -30,14 +30,24 @@ class InstructionSnapshotValuesTest {
     )
 
     @Test
-    fun memoryOffKeepsOnlyTheGoal() {
+    fun ruleFragmentsAreRecordedRegardlessOfMemoryToggle() {
+        // [T-rules-uncoupled-from-memory-toggle] Rules are instructions, not
+        // memory: they inject with the session's memory toggle off too, so the
+        // snapshot must record them (freezing nothing = describing an
+        // instruction-less prompt that actually carried rules).
         val values = InstructionSnapshotValues.of(
             goalValues(),
             appGlobalFragment = "APP-RULES",
             sessionGlobalFragment = "SESSION-RULES",
-            memoryEnabled = false,
         )
-        assertEquals(setOf(InstructionState.KEY_GOAL), values.keys)
+        assertEquals(
+            setOf(
+                InstructionState.KEY_GOAL,
+                InstructionState.KEY_APP_GLOBAL,
+                InstructionState.KEY_SESSION_GLOBAL,
+            ),
+            values.keys,
+        )
     }
 
     @Test
@@ -46,7 +56,6 @@ class InstructionSnapshotValuesTest {
             goalValues = emptyMap(),
             appGlobalFragment = "APP-RULES",
             sessionGlobalFragment = "SESSION-RULES",
-            memoryEnabled = true,
         )
         assertEquals("APP-RULES", values.getValue(InstructionState.KEY_APP_GLOBAL))
         assertEquals("SESSION-RULES", values.getValue(InstructionState.KEY_SESSION_GLOBAL))
@@ -58,7 +67,6 @@ class InstructionSnapshotValuesTest {
             goalValues = emptyMap(),
             appGlobalFragment = null,
             sessionGlobalFragment = "S",
-            memoryEnabled = true,
         )
         assertFalse(values.containsKey(InstructionState.KEY_APP_GLOBAL))
         assertEquals("S", values.getValue(InstructionState.KEY_SESSION_GLOBAL))
@@ -70,7 +78,6 @@ class InstructionSnapshotValuesTest {
             goalValues = emptyMap(),
             appGlobalFragment = "   \n",
             sessionGlobalFragment = "",
-            memoryEnabled = true,
         )
         assertTrue(values.isEmpty())
     }
@@ -81,7 +88,6 @@ class InstructionSnapshotValuesTest {
             goalValues = emptyMap(),
             appGlobalFragment = null,
             sessionGlobalFragment = null,
-            memoryEnabled = false,
         )
         assertTrue(values.isEmpty())
     }
@@ -92,7 +98,6 @@ class InstructionSnapshotValuesTest {
             goalValues(),
             appGlobalFragment = "APP-RULES",
             sessionGlobalFragment = null,
-            memoryEnabled = false,
         )
         assertTrue(values.getValue(InstructionState.KEY_GOAL).contains("ship it"))
     }
@@ -105,7 +110,6 @@ class InstructionSnapshotValuesTest {
             goalValues = emptyMap(),
             appGlobalFragment = "APP",
             sessionGlobalFragment = "SESSION",
-            memoryEnabled = true,
             projectRulesFragment = "PROJECT",
         )
         assertEquals("PROJECT", values.getValue(InstructionState.KEY_PROJECT_RULES))
@@ -114,14 +118,20 @@ class InstructionSnapshotValuesTest {
     }
 
     @Test
-    fun projectRulesAreDroppedAlongWithTheOtherGlobalsWhenMemoryIsOff() {
+    fun allThreeRuleLayersAreRecordedTogether() {
         val values = InstructionSnapshotValues.of(
             goalValues = emptyMap(),
             appGlobalFragment = "APP",
             sessionGlobalFragment = "SESSION",
-            memoryEnabled = false,
             projectRulesFragment = "PROJECT",
         )
-        assertTrue(values.isEmpty())
+        assertEquals(
+            setOf(
+                InstructionState.KEY_APP_GLOBAL,
+                InstructionState.KEY_PROJECT_RULES,
+                InstructionState.KEY_SESSION_GLOBAL,
+            ),
+            values.keys,
+        )
     }
 }

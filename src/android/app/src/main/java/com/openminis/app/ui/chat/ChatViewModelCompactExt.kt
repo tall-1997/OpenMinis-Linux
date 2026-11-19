@@ -4,6 +4,8 @@ import android.util.Log
 import androidx.lifecycle.viewModelScope
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.data.db.CompactMarkerEntity
+import com.openminis.app.data.model.AgentContentPart
+import com.openminis.app.data.model.LLMMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -158,16 +160,25 @@ private inline fun ChatViewModel.compactAllImpl(
         ?: currentModel?.contextWindow
         ?: 128_000
     val compactRangeCap = maxCompactRangeTokens(compactWindow)
-    val cappedAnchorIdx = cappedCompactEnd(history, effectiveStartIdx, anchorIdx, compactRangeCap)
-    if (cappedAnchorIdx != anchorIdx) {
+    val cappedEnd = cappedCompactEnd(history, effectiveStartIdx, anchorIdx, compactRangeCap)
+    if (cappedEnd != anchorIdx) {
         AppLogger.info(
             ChatViewModel.TAG,
-            "[Compact] range capped at idx=$cappedAnchorIdx (requested $anchorIdx) — " +
+            "[Compact] range capped at idx=$cappedEnd (requested $anchorIdx) — " +
                 "cap=$compactRangeCap tokens per attempt",
         )
-        anchorIdx = cappedAnchorIdx
     }
-    val toCompact = history.subList(effectiveStartIdx, anchorIdx + 1)
+    // [T-compact-preserves-tool-pairs] Boundaries must never split a
+    // tool_use/tool_result pair — a dangling half 400s the next request.
+    val (sliceStart, sliceAnchor) = preserveToolPairsAtBoundaries(history, effectiveStartIdx, cappedEnd)
+    if (sliceAnchor < effectiveStartIdx) {
+        // The pair walks dragged the anchor below the previous marker's start:
+        // honoring it would move the marker BACKWARD and re-compact already
+        // covered turns. Abort — the in-loop guard retries on fresh data.
+        appendSystemInfo(context.getString(R.string.vm_compact_already_compacted), "compact")
+        return
+    }
+    val toCompact = history.subList(sliceStart, sliceAnchor + 1)
     if (toCompact.isEmpty()) {
         appendSystemInfo(context.getString(R.string.vm_compact_nothing_to_compact), "compact")
         return
@@ -277,8 +288,26 @@ private inline fun ChatViewModel.compactAllImpl(
             // [T-compact-reduced-anchor] A reduced retry summarizes only the
             // OLDEST prefix. The marker may advance only that far; the rest
             // of the range stays active and verbatim.
-            val coveredEndIdx = (effectiveStartIdx + coveredCount - 1)
-                .coerceIn(effectiveStartIdx, anchorIdx)
+            // [T-compact-preserves-tool-pairs] The marker never moves backward:
+            // a reduced retry that covers only the pulled-back prefix must not
+            // lower the anchor below what the previous compact already covered.
+            var coveredEndIdx = (sliceStart + coveredCount - 1)
+                .coerceIn(sliceStart, sliceAnchor)
+                .coerceAtLeast(effectiveStartIdx)
+            // [T-compact-preserves-tool-pairs] The reduced-retry cut can land
+            // MID-PAIR: coveredEndIdx on a tool_use whose carrier sits at +1
+            // would open the next projection on a dangling half. FORWARD-snap:
+            // extend to include the carrier (still ≤ sliceAnchor; monotonic ≥
+            // effectiveStartIdx holds — the snap only ever increases). A
+            // carrier row at coveredEndIdx needs NO snap: both halves are
+            // inside the summarized range, and the next projection starts
+            // AFTER the whole pair.
+            while (coveredEndIdx < sliceAnchor &&
+                history[coveredEndIdx].role == LLMMessage.Role.ASSISTANT &&
+                history.getOrNull(coveredEndIdx + 1)?.contentParts?.any { it is AgentContentPart.ToolResult } == true
+            ) {
+                coveredEndIdx += 1
+            }
             if (summary.isEmpty()) {
                 withContext(Dispatchers.Main) {
                     appendSystemInfo("Compaction produced no output — try again later.", "compact")
@@ -314,6 +343,9 @@ private inline fun ChatViewModel.compactAllImpl(
                 var i = coveredEndIdx
                 // Never walk back past the start of the range: an anchor
                 // before it would mark already-active messages as compacted.
+                // Marker floor: never anchor below the previous compact start
+                // ([T-compact-preserves-tool-pairs] the pair walk may have pulled
+                // sliceStart below it — the MARKER must still advance monotonically).
                 while (i >= effectiveStartIdx) {
                     val id = history[i].dbMessageId
                     if (!id.isNullOrEmpty() && id in rawDbIds) break
@@ -593,4 +625,74 @@ private inline fun ChatViewModel.compactAllImpl(
             resumeQueueAfterCancel()
         }
     }
+}
+
+/**
+ * [T-android-auto-compact-inloop] Run [compactAll] with the in-loop flag and
+ * suspend until it settles. Returns whether it actually compacted.
+ *
+ * `compactAll` is fire-and-forget (it launches its own IO coroutine), so the
+ * loop cannot simply call it and continue — the next API call would read the
+ * pre-compaction history and the guard would fire again immediately.
+ * (Extracted from ChatViewModel.kt for the architecture line ceiling; the
+ * [T-compaction-cascade] pre-step tier calls this too.)
+ */
+internal suspend fun ChatViewModel.awaitCompaction(): Boolean =
+    kotlinx.coroutines.suspendCancellableCoroutine { cont ->
+        var resumed = false
+        compactAll(allowDuringProcessing = true) { ok ->
+            // compactAll guarantees exactly one callback, but guard anyway:
+            // resuming a continuation twice throws.
+            if (!resumed) {
+                resumed = true
+                if (cont.isActive) cont.resume(ok) { _, _, _ -> }
+            }
+        }
+    }
+
+/**
+ * [T-compact-preserves-tool-pairs] Adjusts the compact boundaries so a
+ * tool_use/tool_result pair is never split across them (OpenHarness
+ * `_split_preserving_tool_pairs`, dsh `selectCompactableRange`):
+ *
+ *  - Kept-tail start (anchorIdx+1): if the kept region would OPEN on a
+ *    tool_result carrier, its paired tool_use is inside the summarized range
+ *    and the next request carries a dangling tool_result — providers
+ *    (Anthropic schema-first) reject that conversation shape outright. Pull
+ *    the anchor back until the kept region opens on a non-carrier, so the
+ *    pair stays kept together.
+ *  - Slice start (startIdx): if the summarized range would OPEN on a
+ *    tool_result carrier, its tool_use lives in the PREVIOUS summary — pull
+ *    the start back so the whole pair is summarized together instead of the
+ *    result alone.
+ *
+ * Both walks only ever move the boundary outward past whole pair halves;
+ * the returned range is never empty (start ≤ anchor preserved by the first
+ * walk's `a > s` condition). Pure — safe to unit test.
+ */
+internal fun preserveToolPairsAtBoundaries(
+    history: List<LLMMessage>,
+    startIdx: Int,
+    anchorIdx: Int,
+): Pair<Int, Int> {
+    fun isToolResultCarrier(i: Int): Boolean =
+        i in history.indices &&
+            history[i].role == LLMMessage.Role.USER &&
+            history[i].contentParts.any { it is AgentContentPart.ToolResult }
+    var s = startIdx
+    var a = anchorIdx
+    // Phase 1: shrink the kept tail while it opens on a carrier.
+    while (a > s && isToolResultCarrier(a + 1)) a -= 1
+    // Phase 2: shrink the slice start while it opens on a carrier.
+    while (s > 0 && isToolResultCarrier(s)) s -= 1
+    // Phase 3: phase 2 may have moved `s` below `a`, re-opening the kept-tail
+    // carrier case phase 1 already skipped — and the degenerate single-message
+    // form (a == s) blocks the shrink entirely. Either way the only
+    // non-oscillating fix is FORWARD: extend `a` across the whole carrier run
+    // (monotonic, bounded by history.size), so use and results are summarized
+    // together and the kept region opens on a non-carrier.
+    if (isToolResultCarrier(a + 1)) {
+        while (isToolResultCarrier(a + 1)) a += 1
+    }
+    return s to a
 }
