@@ -1,19 +1,24 @@
 package com.openminis.app.ui.chat
 
 import android.util.Log
-import androidx.lifecycle.viewModelScope
 import com.openminis.app.R
+import com.openminis.app.data.ContextUsageAttempt
 import com.openminis.app.data.GroupRoutingState
 import com.openminis.app.data.ToolLimitPrefs
+import com.openminis.app.data.reportedRequestInputTokens
+import com.openminis.app.data.settleContextUsageAttempt
 import com.openminis.app.data.model.AgentContentPart
+import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.LLMError
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.LLMStreamChunk
 import com.openminis.app.data.model.LLMUsage
 import com.openminis.app.data.model.ThinkingLevel
-import com.openminis.app.data.model.ToolIdNormalization
+import com.openminis.app.data.model.ContextUsageAnchor
+import com.openminis.app.data.model.ModelAttributionSnapshot
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.LLMProvider
+import com.openminis.app.provider.OutboundPrivacyChanged
 import com.openminis.app.provider.countsAsFirstTokenProgress
 import com.openminis.app.provider.streamStallWatchdog
 import com.openminis.app.tools.SubAgentKind
@@ -41,35 +46,27 @@ import org.json.JSONObject
 
 internal suspend fun ChatViewModel.runAgentLoopBody(
     provider: LLMProvider,
-    systemPrompt: String?,  // send-time snapshot; REBUILT on mid-run adoption below
+    systemPrompt: MemoryDeliveryPrompt?,
+    skipInitialCompaction: Boolean = false,
     fallbackProviders: List<ChatViewModel.FallbackCandidate> = emptyList(),
     fallbackStrategy: com.openminis.app.data.model.FallbackStrategy = com.openminis.app.data.model.FallbackStrategy.default,
     goalExecutionRun: Boolean = false,
     /** [T-android-instant-thinking] send 路径已预插占位气泡，复用其 id。 */
     overrideAssistantId: String? = null,
+    journal: ChatRunJournal,
+    loopResumeEpoch: Long,
+    generationRunId: String,
+    uiBatcher: UiUpdateBatcher,
 ) {
-    // Room is the transcript authority: rebuild right before the first request so UI paging,
-    // cold-open tail limits and the resident hot-cache cannot hide older user instructions;
-    // restores raw BodyStore bodies (the current user row is already persisted by sendMessage).
-    withContext(Dispatchers.IO) {
-        rebuildAgentHistoryFromDatabase(activeSessionId)
-    }
-    // [T-android-resume-banner-race] Snapshot the resume epoch at run start: every `_canResume = true`
-    // the tail emits must land while this snapshot is current — a newer send bumps the epoch, so a
-    // tail outliving its replacement drops the raise instead of re-showing the resume banner.
-    val loopResumeEpoch = snapshotResumeEpoch()
+    val loopSessionId = journal.sessionId
+    val activeRun = com.openminis.app.service.ActiveRunContext.current()
+    fun ownsLoop() = ownsTranscript(loopSessionId, loopResumeEpoch, activeRun)
+    if (!ownsLoop()) return
     // [T-android-model-switch-midrun-adopt] Epoch this run last acted on (var:
     // resolveModelSwitch reassigns it on mid-run adoption, so the fallback writeback below
     // may still persist the ADOPTED model).
     var loopModelEpoch = snapshotModelSelectionEpoch()
     AppLogger.info(ChatViewModel.TAG_STREAM, "runAgentLoop ENTER provider=${provider.javaClass.simpleName} historySize=${agentHistory.size}")
-    // [T-generation-run] 每轮生成落账：崩溃后可定位半截流归属哪个会话/模型。成功时 succeeded()；
-    // 失败路径不落 FINISH，留 RUNNING 由 GenerationRunLifecycle.closeOpen()（runAgentLoop
-    // 包裹层）或下次启动扫描收尾。
-    val runAnchor = agentHistory.lastOrNull { it.dbMessageId != null }?.dbMessageId.orEmpty()
-    val generationRunId = com.openminis.app.agent.GenerationRunLifecycle.start(
-        context, activeSessionId, provider.model.displayName, runAnchor,
-    )
     // [T-android-mem-probe-trust] Log the send-path context shape once per run. Extracted to
     // ChatViewModelCtxShape.kt (architecture ceiling; the counting pass is pure and JVM-tested
     // there). [T-thinking-dual-ledger] The line carries the requested thinking tier; the
@@ -88,9 +85,9 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // [GH#61/#83/#146] 本轮无法解析的参数尾巴（keyed by toolCall id，每轮清空）。
     val toolCallRawArgs = mutableMapOf<String, String>()
     var accumulatedText = ""
-    var lastContextTokens = 0  // updated each turn from API usage
-    val activeRun = com.openminis.app.service.ActiveRunContext.current()
-    activeRun?.associateSession(activeSessionId)
+    var mayBypassInitialCompaction = skipInitialCompaction
+    var receiptUserTurnId = agentHistory.lastOrNull(::receiptUserRow)?.dbMessageId
+    activeRun?.associateSession(loopSessionId)
     activeRun?.attachAssistantMessage(assistantId)
     // T94 fix 2: throttle text-delta UI updates to ~20fps (50ms).
     var lastUiUpdateMs = 0L
@@ -111,8 +108,6 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // [T-android-model-switch-midrun-adopt] Fallback state is re-read per request.
     var currentProvider = provider
     var remainingFallbacks = fallbackProviders.toMutableList()
-    // [T-drain-prompt-session] Pin this run's session for prompt rebuilds.
-    val loopSessionId = activeSessionId
     val fallbackReasons = mutableListOf<String>()
     // [port-upstream-1.16][T-b13-empty-fallback] Members that failed with an
     // error this run — the empty-turn walk never picks them again.
@@ -121,7 +116,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // Accumulate tool inputs across all turns (so persist includes all, not just current turn)
     val allToolInputs = mutableMapOf<String, String>()
     val goalManager = com.openminis.app.goal.GoalManager(chatRepository)
-    val goalSessionId = activeSessionId
+    val goalSessionId = loopSessionId
     var goalMountedForCurrentRequest = false
     var goalContinuations = 0
     // [T-subagent-background] Bounded nudges for uncollected detached waves.
@@ -129,13 +124,14 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // [T-plan-close-nudge] Same bounded shape, for an unreconciled plan board.
     var planCloseNudges = 0
     var goalRunRequested = goalExecutionRun
-    // [T-perf-ui-batch] Non-text mutations batch through a 200ms window on Dispatchers.Default.
-    val uiBatcher = UiUpdateBatcher(viewModelScope, ::updateAssistantMessage)
-    uiBatcher.start()
     // [T-android-stream-drop-autocontinue] Per-run budget of silent
     // auto-continuations after a relay-side stream cut (see the
     // turnFinishReason == null branch below).
     var streamDropContinuations = 0
+    /** [T-gemini-signalless-eof] Text-only reason-less EOFs seen this run; the second one completes. */
+    var reasonlessTextContinuations = 0
+    // [T-retry-projection-reuse] See DispatchProjectionCache.
+    val projectionCache = DispatchProjectionCache()
 
     // Add placeholder assistant message (once). Marked awaiting so the "Minis is
     // thinking" indicator shows during the initial request gap before the first
@@ -170,6 +166,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // end. Set false by every break path that ISN'T "past MAX_AGENT_TURNS" — without
     // it the post-loop tail slapped a fake turn-limit error everywhere.
     var loopExitedNormally = false
+    var completedReply = false
     // [T-android-auto-compact-inloop] In-loop guard compactions in THIS runAgentLoop —
     // bounds compact-thrash: once the cap is hit, a still-over-threshold history stops
     // the turn. Mirrors iOS maxInLoopCompactions.
@@ -206,7 +203,10 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // switch loop-scope state to the injected bubble.
     fun swapLoopStateToInjectedBubble(newAssistantId: String) {
         goalRunRequested = false
+        receiptUserTurnId = agentHistory.lastOrNull(::receiptUserRow)?.dbMessageId
+        mayBypassInitialCompaction = false
         assistantId = newAssistantId
+        activeRun?.attachAssistantMessage(newAssistantId)
         accumulatedText = ""
         allToolBlocks.clear()
         allToolInputs.clear()
@@ -218,87 +218,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     var activeSystemPrompt = systemPrompt
     agentTurns@ for (turn in 0 until maxTurns) {
         currentCoroutineContext().ensureActive()
-        // Sanitize history before each API call (mirrors iOS pre-API validation)
-        sanitizeAgentHistory()
-
-        // Context window management: offload large tool outputs in older messages to disk
-        // when this model's window threshold is crossed (stubs in agentHistory still tell
-        // the model where to file_read). [T-anthropic-context-window] heuristic-backed
-        // contextWindowTokens (offload fires for heuristic-only 1M Claude/Gemini models).
-        // [T-context-window-live-read] live read per loop turn — a stale snapshot inside a
-        // long turn is exactly the iOS fcc22b66 item-3 bug.
-        effectiveContextWindowTokens()?.takeIf { it > 0 }?.let { window ->
-            offloadContextIfNeeded(
-                contextWindow = window,
-                lastContextTokens = lastContextTokens,
-            )
-        }
-
-        // [T-android-auto-compact-inloop] In-loop context guard (iOS f70ac173):
-        // checkContextBeforeSend only runs at the SEND entry point, so one turn fanning
-        // out into many tool iterations could blow past the thresholds mid-loop; offload
-        // alone can't recover when the bulk is the model's own text. Runs AFTER offload,
-        // judging the post-offload size.
-        when (inLoopContextCheck(inLoopCompactions)) {
-            ChatViewModel.InLoopContextAction.PROCEED -> {}
-            ChatViewModel.InLoopContextAction.COMPACTED -> {
-                // The next API call reads the freshly-compacted
-                // effectiveAgentHistory automatically — compaction already
-                inLoopCompactions++
-
-                // [T-android-inloop-compact-divider-order / GH#235] Seal the bubble this run
-                // has been writing into and continue in a FRESH one below the divider — shared
-                // implementation with the overflow compact-and-retry body (ChatCompactSealSwap
-                // .kt). Same loop-scope reset as the queued-prompt swap, so the new bubble starts
-                // empty and buildTurnParts slices only the new turn's blocks.
-                val freshAssistantId = "assistant_${System.currentTimeMillis()}_${turn}"
-                sealCompactedBubbleAndSwap(assistantId, accumulatedText, allToolBlocks, freshAssistantId, turnThinkingLevel)
-                assistantId = freshAssistantId
-                accumulatedText = ""
-                allToolBlocks.clear()
-                allToolInputs.clear()
-                toolInputChunkRings.clear()
-                toolCallRawArgs.clear()
-                AppLogger.info(
-                    ChatViewModel.TAG,
-                    "[Compact] in-loop: sealed and swapped, continuing below the divider",
-                )
-                continue
-            }
-            ChatViewModel.InLoopContextAction.STOP -> {
-                // The loop cannot present a modal mid-flight, so stop
-                // safely: user-visible notice + resumable, without the
-                // turn-limit error overwrite.
-                AppLogger.warning(
-                    ChatViewModel.TAG,
-                    "[AutoCompact] stopping turn: context exhausted and compaction cannot recover",
-                )
-                // [T-android-inloop-stop-thinking-orphan] Finalize the
-                // assistant message before leaving the loop.
-                withContext(Dispatchers.Main) {
-                    drainLiveAssistantUi(assistantId, accumulatedText, allToolBlocks)
-                }
-                // No persistAssistantTurn here: this guard runs BEFORE the
-                // turn body, so nothing new has been produced yet and the
-                // per-turn accumulators it would need
-                // (turnStartBlockIndex / lastUsage / turnReasoningContent)
-                // are not in scope. Everything from previous turns was
-                // already persisted by those turns.
-                appendSystemInfo(
-                    text = context.getString(R.string.vm_context_full_unreduced),
-                    iconKind = "compact",
-                )
-                // [T-android-group-pause-badge-restamp] A LIVE interruption just happened:
-                // real entry into the paused state.
-                markLiveInterruptionAndArmResume(loopResumeEpoch)
-                // Android's `hitTurnLimit = false`: deliberate stop, NOT the runaway-ceiling
-                // path — finalizeAtTurnLimit is skipped (the notice above is the user-visible
-                // explanation) and the post-loop tail must not slap a fake "hit 200 turns" error.
-                loopExitedNormally = true
-                break
-            }
-        }
-
+        if (!ownsLoop()) return
         // Mark where this turn's blocks start in allToolBlocks so we persist only the NEW
         // parts from this turn. Matches iOS's per-turn RawMessage persistence.
         var turnStartedAtMs = System.currentTimeMillis()
@@ -359,7 +279,8 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         var turnRefusalCategory: String? = null
         var turnRefusalExplanation: String? = null
         var lastUsage: LLMUsage? = null
-        val maxTokens = dynamicMaxTokens(provider, lastContextTokens)
+        var dispatched: ProjectedChatRequest? = null
+        var usageAttempt: ContextUsageAttempt? = null
         // [GH#61/#83/#146] New turn → previous turn's unparseable tails are
         // stale; a provider id reused across turns must not inherit one.
         toolCallRawArgs.clear()
@@ -409,8 +330,8 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 setTransientInlineError(
                     context.getString(
                         com.openminis.app.R.string.vm_context_filling_compacting,
-                        contextTokensForPolicy(),
-                        effectiveContextWindowTokens() ?: 0,
+                        dispatched?.estimate?.tokens ?: 0,
+                        dispatched?.window ?: 0,
                     ),
                 )
             }
@@ -420,17 +341,18 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         }
 
 
-        // Error-path / truncation-path recovery: compact AND re-dispatch; true =
-        // caller `continue`s, false (cap spent / compaction failed) falls through.
-        suspend fun compactAndRetryForOverflow(details: String): Boolean {
-            if (!runOverflowCompaction(details)) return false
-            // Drop the overflowing attempt's usage — the collector max-merges per field.
+        // Re-enter the dispatch loop without spending a model turn on compaction.
+        suspend fun rebaseAfterCompaction() {
             lastUsage = null
-            lastContextTokens = 0
-            // Same seal+swap contract as the in-loop COMPACTED branch (GH#235);
+            usageAttempt = null
+            dispatched = null
+            mayBypassInitialCompaction = false
             val freshAssistantId = "assistant_${System.currentTimeMillis()}_$turn"
+            uiBatcher.seal(assistantId)
+            if (!ownsLoop()) return
             sealCompactedBubbleAndSwap(assistantId, messageTextSnapshot(), allToolBlocks, freshAssistantId, turnThinkingLevel)
             assistantId = freshAssistantId
+            activeRun?.attachAssistantMessage(freshAssistantId)
             accumulatedText = ""
             allToolBlocks.clear()
             // [T-compact-retry-rebase] The seal+swap rewound the list to EMPTY but the
@@ -458,6 +380,11 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             lastUiUpdateMs = 0L
             lastFlushedLen = 0
             stallResumeContext = null
+        }
+
+        suspend fun compactAndRetryForOverflow(details: String): Boolean {
+            if (!runOverflowCompaction(details)) return false
+            rebaseAfterCompaction()
             return true
         }
 
@@ -466,85 +393,8 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         // drop (the turn's own usage still gets persisted by the turn-end path).
         suspend fun compactForSilentOverflow(details: String): Boolean =
             runOverflowCompaction(details)
-        while (!collectDone) {
-            // [T-android-model-switch-midrun-adopt] See resolveModelSwitch.
-            resolveModelSwitch(loopModelEpoch, currentProvider)?.let { adopted ->
-                currentProvider = adopted.provider
-                remainingFallbacks = adopted.fallbacks.toMutableList()
-                retryAttempt = 0
-                loopModelEpoch = adopted.epoch
-                // A new model starts a new failure streak.
-                emptyStreakEntryIds.clear()
-                // [T-android-persona-switch-rebuild] Persona keys on providerInstanceId.
-                rebuildSystemPromptForAdoptedEntry(currentProvider)?.let { activeSystemPrompt = it }
-            }
-            // [GH#521] Per-attempt phase clocks (see [StreamPhaseReport]).
-            val streamPhase = StreamPhaseReport()
-            try {
-                // [T-android-enhanced-cache] Per-turn stamp at the single choke point every
-                // request passes through; non-Anthropic providers ignore the cast.
-                (currentProvider as? com.openminis.app.provider.anthropic.AnthropicProvider)
-                    ?.enhancedCache = _enhancedCacheEnabled.value
-                // effectiveAgentHistory() prepends `<context-summary>` when a compact exists;
-                // raw agentHistory (zero-copy) otherwise. A Goal belongs to the session, not
-                // only to an explicit /goal resume run — read it every request so ordinary
-                // turns carry it.
-                val requestGoalState = withContext(Dispatchers.IO) {
-                    goalManager.get(goalSessionId)
-                }
-                val goalMount = com.openminis.app.goal.goalMount(requestGoalState, goalManager::continuationPrompt)
-                goalMountedForCurrentRequest = goalMount.canContinue
-                // [T-p1-instruction-snapshot] Freeze the instruction values this request is built on.
-                commitInstructionSnapshot(
-                    com.openminis.app.data.instruction.InstructionStateStore.goalInstructionValues(requestGoalState),
-                )
-                if (com.openminis.app.goal.shouldSkipGoalRunRequest(goalRunRequested, turn > 0, goalMount)) {
-                    withContext(Dispatchers.Main) {
-                        updateAssistantMessage(assistantId, accumulatedText, false, allToolBlocks)
-                    }
-                    loopExitedNormally = true
-                    break@agentTurns
-                }
-                // [T-once-notices] committed once; [T-agent-steering + T-toolset-delta] pi turn-boundary injections.
-                // [T-compaction-cascade] prepareRequestHistory: untrusted-marker
-                // neutralization + tier-① micro-prune (request-time projections).
-                // Compaction itself is owned by inLoopContextCheck / the overflow gates.
-                commitSessionNoticesOnce(goalObjective = requestGoalState?.objective.orEmpty(),
-                    goalPrompt = goalMount.prompt, goalCanContinue = goalMount.canContinue)
-                drainSteeringIntoRun(assistantId, accumulatedText, allToolBlocks, uiBatcher) { swapLoopStateToInjectedBubble(it) }
-                declareToolSetDeltaIfChanged(agentTools)
-                val requestHistory = finalizeRequestHistory(turn, ToolIdNormalization.normalizeMessages(prepareRequestHistory(stallResumeContext)))  // [T-session-journal-final]
-                // [T-first-event-watchdog][T-routing-strategy-x] First-token budget.
-                val firstEventTimeoutMs = GroupRoutingState.resolveFirstEventTimeoutMs(providerRepository,
-                    _selectedGroupId.value,
-                    (if (currentModelSupportsReasoning) _thinkingLevel.value else ThinkingLevel.OFF).isEnabled)
-                // [T-stream-stall-watchdog] 2x first-event budget = stalled, not slow.
-                val streamIdleTimeoutMs = firstEventTimeoutMs * 2
-                // [GH#221] 用户头 + OpenCode 会话头走同一通道。
-                val requestHeaders = requestExtraHeaders()
-                // [GH#563][T-no-repeated-injection] Date only; state lives in history.
-                val turnSystemPrompt = refreshRuntimeContextDate(
-                    activeSystemPrompt,
-                    java.time.LocalDate.now().toString(),
-                )
-                streamPhase.startAttempt()
-                currentProvider.streamMessage(
-                    requestHistory,
-                    turnSystemPrompt, dynamicMaxTokens(currentProvider, lastContextTokens),
-                    temperature = samplingTemperature(_activeEntryId.value),
-                    tools = agentTools,
-                    thinkingLevel = if (currentModelSupportsReasoning) _thinkingLevel.value else ThinkingLevel.OFF,
-                    systemStablePrefixLen = systemPromptStablePrefixLen,
-                    extraHeaders = requestHeaders,
-                ).streamStallWatchdog(
-                    firstTimeoutMs = firstEventTimeoutMs,
-                    idleTimeoutMs = streamIdleTimeoutMs,
-                    // [GH#521] headers 之后单独计首 token；否则 15-28s 静默网关会被 2× idle 掩盖。
-                    firstContentTimeoutMs = firstEventTimeoutMs,
-                    firstContentReason = "connected (stream established) but no first token " +
-                        "within ${firstEventTimeoutMs / 1000}s — retrying",
-                ).collect { chunk ->
-            streamPhase.onChunk(chunk)
+        // Keep event handling in its own coroutine state machine.
+        suspend fun consumeStreamChunk(chunk: LLMStreamChunk) {
             // [T-stream-trace-live] 运行时轨迹录制（日志页开关控制，默认关）。
             com.openminis.app.provider.StreamTraceRecorder.record(chunk)
             when (chunk) {
@@ -612,7 +462,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     // consumer until it resolves.
                     val strippedDelta = stallEchoStripper?.feed(chunk.text) ?: chunk.text
                     if (strippedDelta.isEmpty() && stallEchoStripper != null) {
-                        return@collect
+                        return
                     }
                     // T307: append-only on the StringBuilder; the snapshot the
                     // overlay reads is taken by `messageTextSnapshot()`.
@@ -875,27 +725,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                         cacheCreationInputTokens = maxOf(prev.cacheCreationInputTokens ?: 0, cur.cacheCreationInputTokens ?: 0).takeIf { it > 0 },
                         latestContextTokens = maxOf(prev.latestContextTokens, cur.latestContextTokens),
                     )
-                    val effective = lastUsage ?: cur
-                    if (effective.latestContextTokens > 0) lastContextTokens = effective.latestContextTokens
-                    else if (effective.inputTokens > 0) lastContextTokens = effective.inputTokens +
-                        (effective.cacheReadInputTokens ?: 0) + (effective.cacheCreationInputTokens ?: 0)
-                    if (lastContextTokens > 0) {
-                        _lastTurnContextTokens.value = lastContextTokens
-                        // [T-token-usage-calibration][T-calibration-raw] Real usage
-                        // calibrates the estimator (raw sum of the PROJECTED request).
-                        observeCalibratedUsage(
-                            currentModel?.id ?: "",
-                            requestHistory,
-                            lastContextTokens,
-                        )
-                        // [T-cache-hit-rate] Per-turn cache hit rate for TokenUsageSheet.
-                        val inputTotal = chunk.usage.inputTokens + (chunk.usage.cacheReadInputTokens ?: 0) + 
-                            (chunk.usage.cacheCreationInputTokens ?: 0)
-                        if (inputTotal > 0) {
-                            _lastCacheHitRate.value =
-                                ((chunk.usage.cacheReadInputTokens ?: 0).toDouble() / inputTotal).coerceIn(0.0, 1.0)
-                        }
-                    }
+                    // Usage is provisional until this stream survives the retry and finish checks.
                 }
                 is LLMStreamChunk.ReasoningContent -> {
                     // Opaque reasoning blob (DeepSeek/Kimi reasoning_content) — recorded on
@@ -920,339 +750,455 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                         uiBatcher.enqueue(assistantId, messageTextSnapshot(), true, allToolBlocks.toList())
                     }
             }
-                }  // end collect
-                // [T-stall-echo-strip] Stream finished: resolve any seed-aligned bytes the
-                // stripper still holds (and its final echo determination) before the finalize
-                // snapshot below — otherwise a short resumed reply would never surface.
-                stallEchoStripper?.let { stripper ->
-                    val tail = stripper.flush()
-                    if (tail.isNotEmpty()) {
-                        turnTextSb.append(tail)
-                        val blockSb = currentTextBlockSb
-                        if (blockSb == null) {
-                            // No text block open (the whole attempt was held
-                            // in the probe buffer) — open one for the tail.
-                            val freshSb = StringBuilder(tail)
-                            currentTextBlockSb = freshSb
-                            allToolBlocks.add(
-                                AssistantBlock(
-                                    id = "text_${turn}_${allToolBlocks.size}",
-                                    kind = "text",
-                                    content = tail,
-                                ),
-                            )
-                        } else {
-                            blockSb.append(tail)
+        }
+
+        suspend fun dispatchTurn(): Boolean {
+            var privacyRefreshes = 0
+            while (!collectDone) {
+                if (!ownsLoop()) return false
+                // [T-android-model-switch-midrun-adopt] See resolveModelSwitch.
+                resolveModelSwitch(loopModelEpoch, currentProvider)?.let { adopted ->
+                    currentProvider = adopted.provider
+                    remainingFallbacks = adopted.fallbacks.toMutableList()
+                    retryAttempt = 0
+                    loopModelEpoch = adopted.epoch
+                    // A new model starts a new failure streak.
+                    emptyStreakEntryIds.clear()
+                    // [T-android-persona-switch-rebuild] Persona keys on providerInstanceId.
+                    rebuildSystemPromptForAdoptedEntry()?.let { activeSystemPrompt = it }
+                }
+                // [GH#521] Per-attempt phase clocks (see [StreamPhaseReport]).
+                val streamPhase = StreamPhaseReport()
+                try {
+                    // [T-android-enhanced-cache] Per-turn stamp at the single choke point every
+                    // request passes through; non-Anthropic providers ignore the cast.
+                    (currentProvider as? com.openminis.app.provider.anthropic.AnthropicProvider)
+                        ?.enhancedCache = _enhancedCacheEnabled.value
+                    // effectiveAgentHistory() prepends `<context-summary>` when a compact exists;
+                    // raw agentHistory (zero-copy) otherwise. A Goal belongs to the session, not
+                    // only to an explicit /goal resume run — read it every request so ordinary
+                    // turns carry it.
+                    val requestGoalState = withContext(Dispatchers.IO) {
+                        goalManager.get(goalSessionId)
+                    }
+                    if (!ownsLoop()) return false
+                    val goalMount = com.openminis.app.goal.goalMount(requestGoalState, goalManager::continuationPrompt)
+                    goalMountedForCurrentRequest = goalMount.canContinue
+                    // [T-p1-instruction-snapshot] Freeze the instruction values this request is built on.
+                    commitInstructionSnapshot(
+                        com.openminis.app.data.instruction.InstructionStateStore.goalInstructionValues(requestGoalState),
+                    )
+                    if (com.openminis.app.goal.shouldSkipGoalRunRequest(goalRunRequested, turn > 0, goalMount)) {
+                        withContext(Dispatchers.Main) {
+                            updateAssistantMessage(assistantId, accumulatedText, false, allToolBlocks)
                         }
-                        pendingChunkSb.append(tail)
+                        return false
                     }
-                    stallEchoStripper = null
-                }
-                // T94 fix 2: flush text that landed in the throttle window after the last UI
-                // tick — the retry-rollback / turn-finalize paths below assume _messages
-                // reflects all accumulated text-deltas; don't leave the last 0-50ms on the floor.
-                if (pendingChunkSb.isNotEmpty()) {
-                    pendingChunkSb.setLength(0)
-                    // T307: also flush the active text block's pending tail + the snapshot.
-                    materializeActiveTextBlock()
-                    activeRun?.updateAssistantText(messageTextSnapshot())
-                    withContext(Dispatchers.Main) {
-                        updateAssistantMessage(assistantId, messageTextSnapshot(), true, allToolBlocks)
+                    commitSessionNoticesOnce(goalObjective = requestGoalState?.objective.orEmpty(),
+                        goalPrompt = goalMount.prompt, goalCanContinue = goalMount.canContinue, expectedSessionId = loopSessionId)
+                    if (!ownsLoop()) return false
+                    val beforeSteering = assistantId
+                    drainSteeringIntoRun(assistantId, accumulatedText, allToolBlocks, uiBatcher, expectedSessionId = loopSessionId) {
+                        swapLoopStateToInjectedBubble(it)
+                        turnStartBlockIndex = 0
                     }
-                } else {
-                    // [T-thinking-delta-ui-gate] No pending text, but the ActiveRun text may
-                    // still lag the throttle gate — the stop-path rescue and session preview
-                    // read it.
-                    activeRun?.updateAssistantText(messageTextSnapshot())
-                }
-                // [T-thinking-delta-ui-gate] The gated thinking publish can leave the block's
-                // content behind; the persist paths below read block.content — materialise
-                // the full thinking once at stream end.
-                materializeThinkingBlock()
-                // T256: reset throttle bookkeeping for the next turn so its first delta
-                // fires immediately rather than coalescing against this turn's baseline.
-                lastFlushedLen = 0
-                lastUiUpdateMs = 0L
-                lastFileToolInputMs = 0L
-                lastOtherToolInputMs = 0L
-                collectDone = true
-                streamPhase.logSuccess(turn, activeSessionId, currentProvider.model.id)
-                com.openminis.app.agent.GenerationRunLifecycle.succeeded(context, generationRunId)
-                // [T-prompt-cache-warming] TTL bookkeeping for the warming hook (planner gates
-                // any actual warm; default OFF); captures the exact request shape for replay.
-                PromptCacheWarmCoordinator.onStreamTurnSucceeded(
-                    currentProvider, requestHistory, turnSystemPrompt, agentTools,
-                    if (currentModelSupportsReasoning) _thinkingLevel.value else ThinkingLevel.OFF,
-                    lastUsage, isBusy = { _isStreaming.value },
-                )
-                // [T-context-overflow-usage] Success-path overflow gate (pi isContextOverflow
-                // cases 2+3), two families with DIFFERENT recovery paths, matching pi exactly:
-                //  - TRUNCATED (length stop + zero output on a full window, Xiaomi MiMo): no
-                //    answer — compact once, re-dispatch (①).
-                //  - SILENT (natural stop + prompt side over the window, z.ai): the answer DID
-                //    stream — compact ONLY ("overflow is never retried"), let the turn end with
-                //    its streamed content; touching turn state here would drop the user's answer.
-                val win = effectiveContextWindowTokens() ?: 0
-                val successOverflowKind = com.openminis.app.provider.ContextOverflowDetector.successfulOverflowKind(
-                    finishReason = turnFinishReason,
-                    outputTokens = (lastUsage?.outputTokens ?: 0).toLong(),
-                    inputTokens = ((lastUsage?.inputTokens ?: 0) + (lastUsage?.cacheReadInputTokens ?: 0)).toLong(),
-                    contextWindow = win,
-                )
-                when (successOverflowKind) {
-                    com.openminis.app.provider.ContextOverflowDetector.SuccessfulOverflowKind.TRUNCATED -> {
-                        if (compactAndRetryForOverflow("truncation overflow on ${currentProvider.model.displayName} (usage=${lastUsage?.latestContextTokens ?: 0}, window=$win)")) {
-                            // [P0-fix] collectDone was already set above, so a bare `continue`
-                            // fell out of the exited while (two reviews); re-arm for the retry.
-                            collectDone = false
+                    if (assistantId != beforeSteering) activeSystemPrompt = refreshRunPromptForInjectedTurn(activeSystemPrompt, loopSessionId)
+                    if (!ownsLoop()) return false
+                    val tools = agentTools
+                    declareToolSetDeltaIfChanged(tools)
+                    if (!ownsLoop()) return false
+                    val projection = buildDispatchProjection(
+                        projectionCache, loopSessionId, currentProvider, activeSystemPrompt, tools, stallResumeContext,
+                    ) ?: return false
+                    when (inLoopContextCheck(projection, inLoopCompactions, mayBypassInitialCompaction)) {
+                        ChatViewModel.InLoopContextAction.PROCEED -> Unit
+                        ChatViewModel.InLoopContextAction.COMPACTED -> {
+                            if (!ownsLoop()) return false
+                            inLoopCompactions++
+                            rebaseAfterCompaction()
                             continue
                         }
-                    }
-                    com.openminis.app.provider.ContextOverflowDetector.SuccessfulOverflowKind.SILENT -> {
-                        compactForSilentOverflow(
-                            "silent overflow on ${currentProvider.model.displayName} (usage=${lastUsage?.latestContextTokens ?: 0}, window=$win)",
-                        )
-                    }
-                    null -> {}
-                }
-                // [T-stall-resume] The stream attempt succeeded — no resume context may leak
-                // into a later turn.
-                stallResumeContext = null
-                // Stream completed without error — clear any lingering retry UI state.
-                if (_autoRetryAttempt.value != 0 || _autoRetryCountdown.value != 0) {
-                    _autoRetryAttempt.value = 0
-                    _autoRetryCountdown.value = 0
-                }
-                // [T-first-event-watchdog] The operator cancels itself; no cleanup needed.
-            } catch (e: QueuedPromptInterrupt) {
-                // [T-android-queued-message-interrupt-thinking] Deliberate cut,
-                // NOT a provider failure — must precede the generic catch.
-                settleInterruptedThinkingTurn(turn, allToolBlocks, generationRunId)
-                stallResumeContext = null
-                queuedPromptInterrupted = true
-                break
-            } catch (e: Exception) {
-                if (e is CancellationException && e.cause == null) { CancellationDiagnostic.log(provider.model.displayName, activeSessionId, e, _isStreaming.value); throw e }  // [T-cancel-diag] record timeline, real job cancellation
-                val actual = CanceledIoClassification.asTransientStall(unwrapFlowException(e), turnTextSb.isNotEmpty()) ?: unwrapFlowException(e)
-                streamPhase.logFailure(turn, actual)
-                val isRateLimit = actual is com.openminis.app.data.model.LLMError.RateLimited
-                val is5xx = (actual as? com.openminis.app.data.model.LLMError)?.isCapacityRejection == true
-                val isPermanentCapacity = actual is com.openminis.app.data.model.LLMError.ProviderError &&
-                    (actual.httpStatus == 429 ||
-                        com.openminis.app.provider.HttpRetryAfter.isPermanentCapacityBody(actual.detail))
-                // [T-transient-5xx-fallback] A capacity 5xx parks the member too (30s default,
-                // Retry-After wins): a dead channel re-picked next turn is the "老是断开" pattern.
-                if (isRateLimit || isPermanentCapacity || is5xx)
-                    GroupRoutingState.markRoutingCooldownFor(
-                        _activeEntryId.value,
-                        _selectedGroupId.value,
-                        actual,
-                        providerRepository,
-                    )
-                // Auto-retry on transient network/5xx/transient errors on the SAME provider.
-                // [T-pi-retry-classifier][T-pi-overflow-detector] Quota/billing wording
-                // suppresses same-provider retry (quota windows reset in hours); generic
-                // provider errors route through the pi-ported overflow table into the
-                // compaction branch — the exclusion table vetoes rate-limit text (LoopErrorGate).
-                val isTransient = com.openminis.app.agent.LoopErrorGate.isTransient(actual, is5xx, isPermanentCapacity)
-                val isContextOverflow = com.openminis.app.agent.LoopErrorGate.isContextOverflow(actual)
-                // [T-compact-on-context-overflow] Compaction on the provider's own context verdict.
-                if (isContextOverflow && compactAndRetryForOverflow("${currentProvider.model.displayName}: ${actual.message?.take(160) ?: actual.javaClass.simpleName}")) {
-                    continue  // retry on same provider with compacted history
-                }
-                // Compaction failed or cap spent — fall through to fallback/throw.
-                // [T-android-model-switch-midrun-adopt] No abandon: the adoption at the top of
-                // the loop already moved onto the user's pick, so this retry goes out on it.
-                val maxRetries = effectiveMaxRetries()
-                // 429 with another group member: switch endpoints instead of hammering the same
-                // key through 1/2/4/8/16s (inside a typical 60s relay window). A relay 5xx is the
-                // same capacity verdict (measured on token.zlshag.xyz: instant 503 for every
-                // payload shape while a sibling model on the same key streams 200) — one quick
-                // attempt absorbs a blip, the rest of the budget goes to switching; network
-                // errors and last-candidate 5xx/429 keep the ladder.
-                val skipSameProviderRetry = (isRateLimit && remainingFallbacks.isNotEmpty()) || isPermanentCapacity
-                val sameProviderBudget = when {
-                    isRateLimit -> minOf(maxRetries, 1)
-                    is5xx && remainingFallbacks.isNotEmpty() -> minOf(maxRetries, 1)
-                    else -> maxRetries
-                }
-                if (isTransient && !skipSameProviderRetry && sameProviderBudget > 0 && retryAttempt < sameProviderBudget) {
-                    val retryAfter = (actual as? com.openminis.app.data.model.LLMError.RateLimited)?.retryAfterSeconds
-                    val delaySec = com.openminis.app.provider.HttpRetryAfter.delaySeconds(
-                        retryAttempt, retryAfter, ChatViewModel.AUTO_RETRY_DELAYS_SEC,
-                    )
-                    retryAttempt += 1
-                    val errDesc = actual.message ?: actual.javaClass.simpleName
-                    Log.w(ChatViewModel.TAG, "🔁 Transient error on ${currentProvider.model.displayName}, retry $retryAttempt/$maxRetries in ${delaySec}s: $errDesc")
-                    withContext(Dispatchers.Main) {
-                        _autoRetryAttempt.value = retryAttempt
-                        // Inline error on the streaming bubble during countdown; keeps
-                        // isStreaming=true so the UI doesn't tear down the stream state.
-                        setTransientInlineError("$errDesc — retrying ($retryAttempt/$maxRetries)…")
-                    }
-                    try {
-                        for (remaining in delaySec downTo 1) {
-                            _autoRetryCountdown.value = remaining
-                            kotlinx.coroutines.delay(1000)
+                        ChatViewModel.InLoopContextAction.STOP -> {
+                            if (!ownsLoop()) return false
+                            stopAtContextLimit(assistantId, accumulatedText, allToolBlocks, loopResumeEpoch)
+                            return false
                         }
-                        val jitter = com.openminis.app.provider.HttpRetryAfter.jitterMs()
-                        if (jitter > 0L) kotlinx.coroutines.delay(jitter)
-                    } finally {
-                        _autoRetryCountdown.value = 0
                     }
-                    // Clear inline error so the retry attempt can start cleanly.
-                    withContext(Dispatchers.Main) { clearInlineError() }
-                    // Roll back partial blocks from the failed attempt so the retried stream's
-                    // deltas don't double-append; turns before the bound survive.
-                    if (allToolBlocks.size > turnStartBlockIndex) {
-                        while (allToolBlocks.size > turnStartBlockIndex) { allToolBlocks.removeAt(allToolBlocks.size - 1) }
-                        // [T-android-fallback-text-rewind] Keep this turn's already-streamed text on
-                        // screen across the rollback: accumulatedText only folds in turnTextSb after
-                        // the while loop completes, so bare accumulatedText would visibly rewind what
-                        // the user read; the next attempt streams into a fresh turnTextSb and
-                        // re-publishes `accumulatedText + newTurnText`.
+                    lastUsage = null
+                    turnFinishReason = null
+                    turnRefusalCategory = null
+                    turnRefusalExplanation = null
+                    dispatched = projection
+                    val request = projection.request
+                    usageAttempt = projection.usageAttempt
+                    journal.recordRequestJournal(turn, projection)
+                    if (!ownsLoop()) return false
+                    publishRequestProjection(projection)
+                    val firstEventTimeoutMs = GroupRoutingState.resolveFirstEventTimeoutMs(
+                        providerRepository, _selectedGroupId.value, request.thinkingLevel.isEnabled,
+                    )
+                    val streamIdleTimeoutMs = firstEventTimeoutMs * 2
+                    streamPhase.startAttempt()
+                    val stream = currentProvider.streamMessage(
+                        request.messages, request.systemPrompt,
+                        dynamicMaxTokens(currentProvider, projection.estimate.tokens, projection.window),
+                        temperature = samplingTemperature(requestEntryId(projection.model)),
+                        tools = request.tools,
+                        thinkingLevel = request.thinkingLevel,
+                        systemStablePrefixLen = projection.prompt?.stablePrefixLen ?: -1,
+                        extraHeaders = providerExtraHeaders(projection.model.providerInstanceId, loopSessionId),
+                        expectedOutboundMask = projection.outboundMask,
+                    ).streamStallWatchdog(
+                        firstTimeoutMs = firstEventTimeoutMs,
+                        idleTimeoutMs = streamIdleTimeoutMs,
+                        // [GH#521] headers 之后单独计首 token；否则 15-28s 静默网关会被 2× idle 掩盖。
+                        firstContentTimeoutMs = firstEventTimeoutMs,
+                        firstContentReason = "connected (stream established) but no first token " +
+                            "within ${firstEventTimeoutMs / 1000}s — retrying",
+                    )
+                    mayBypassInitialCompaction = false
+                    stream.collect { chunk ->
+                        if (!ownsLoop()) throw CancellationException("Run no longer owns the transcript")
+                        if (streamPhase.onChunk(chunk)) projection.markModelProgress(loopSessionId)
+                        consumeStreamChunk(chunk)
+                    }
+                    uiBatcher.flush()
+                    if (!ownsLoop()) return false
+                    // [T-stall-echo-strip] Stream finished: resolve any seed-aligned bytes the
+                    // stripper still holds (and its final echo determination) before the finalize
+                    // snapshot below — otherwise a short resumed reply would never surface.
+                    stallEchoStripper?.let { stripper ->
+                        val tail = stripper.flush()
+                        if (tail.isNotEmpty()) {
+                            turnTextSb.append(tail)
+                            val blockSb = currentTextBlockSb
+                            if (blockSb == null) {
+                                // No text block open (the whole attempt was held
+                                // in the probe buffer) — open one for the tail.
+                                val freshSb = StringBuilder(tail)
+                                currentTextBlockSb = freshSb
+                                allToolBlocks.add(
+                                    AssistantBlock(
+                                        id = "text_${turn}_${allToolBlocks.size}",
+                                        kind = "text",
+                                        content = tail,
+                                    ),
+                                )
+                            } else {
+                                blockSb.append(tail)
+                            }
+                            pendingChunkSb.append(tail)
+                        }
+                        stallEchoStripper = null
+                    }
+                    // T94 fix 2: flush text that landed in the throttle window after the last UI
+                    // tick — the retry-rollback / turn-finalize paths below assume _messages
+                    // reflects all accumulated text-deltas; don't leave the last 0-50ms on the floor.
+                    if (pendingChunkSb.isNotEmpty()) {
+                        pendingChunkSb.setLength(0)
+                        // T307: also flush the active text block's pending tail + the snapshot.
+                        materializeActiveTextBlock()
+                        activeRun?.updateAssistantText(messageTextSnapshot())
                         withContext(Dispatchers.Main) {
                             updateAssistantMessage(assistantId, messageTextSnapshot(), true, allToolBlocks)
                         }
+                    } else {
+                        // [T-thinking-delta-ui-gate] No pending text, but the ActiveRun text may
+                        // still lag the throttle gate — the stop-path rescue and session preview
+                        // read it.
+                        activeRun?.updateAssistantText(messageTextSnapshot())
                     }
-                    // T307: SB-based per-turn accumulators reset. [T-stall-resume] Capture the
-                    // partial text BEFORE the reset: a mid-stream stall (stalledAfterFirstEvent)
-                    // carries the already-produced text into the retried request so the model
-                    // continues, not regenerates.
-                    if ((actual as? com.openminis.app.data.model.LLMError.TransientError)?.stalledAfterFirstEvent == true) {
-                        val partial = turnTextSb.toString()
-                        stallResumeContext = com.openminis.app.provider.StallResume.note(partial)
-                        // [T-stall-echo-strip] Arm the echo suppressor for the retried attempt;
-                        // the seed must be the exact bytes the note embeds (StallResume.tail).
-                        stallEchoStripper = com.openminis.app.provider.StallEchoStripper(
-                            com.openminis.app.provider.StallResume.tail(partial),
-                        )
-                    }
-                    turnTextSb.setLength(0)
-                    currentTextBlockSb = null
-                    // [T-android-tool-splits-reply-fix] The tracked turn text block was just rolled
-                    // back with the rest of this turn's partial blocks.
-                    turnTextBlockIdx = -1
-                    turnThinking.clear()
-                    // [T-reasoning-blob-per-attempt] The dead attempt's reasoning echo must not survive
-                    // onto the retried turn — a fallback on a non-reasoning provider would replay
-                    // attempt 1's reasoning_content verbatim.
-                    turnReasoningBlob = null
-                    toolCalls.clear()
-                    toolCallSignatures.clear()  // [T-android-gemini3-thoughtsig / #179]
-                    // [T-android-duplicate-toolcall-replay] Reset replay bookkeeping with the dispatch
-                    // list: the retried attempt re-streams into an empty toolCalls, so dead-attempt
-                    // raw-id sightings must not refuse the fresh ones.
-                    toolReplayGuard.reset()
-                    replayRenamedIds.clear()
-                    // T94 fix 2 + T256: throttle bookkeeping is per-stream attempt; reset with the
-                    // partial-block rollback so the next attempt's first delta fires immediately
-                    // rather than coalescing against stale baselines.
-                    pendingChunkSb.setLength(0)
-                    lastUiUpdateMs = 0L
+                    // [T-thinking-delta-ui-gate] The gated thinking publish can leave the block's
+                    // content behind; the persist paths below read block.content — materialise
+                    // the full thinking once at stream end.
+                    materializeThinkingBlock()
+                    // T256: reset throttle bookkeeping for the next turn so its first delta
+                    // fires immediately rather than coalescing against this turn's baseline.
                     lastFlushedLen = 0
+                    lastUiUpdateMs = 0L
                     lastFileToolInputMs = 0L
                     lastOtherToolInputMs = 0L
-                    continue  // retry on same provider
-                }
-                // Retries exhausted or non-retryable — proceed to fallback / throw.
-                _autoRetryAttempt.value = 0
-                _autoRetryCountdown.value = 0
-                // [T-android-timeout-while-running] Clear any transient inline error from the
-                // prior retry attempts before we engage the fallback lane.
-                withContext(Dispatchers.Main) { clearInlineError() }
-                val llmErr = actual as? com.openminis.app.data.model.LLMError
-                val shouldFallback = fallbackStrategy == com.openminis.app.data.model.FallbackStrategy.always ||
-                    llmErr?.isFallbackable == true ||
-                    isRateLimit || is5xx || isPermanentCapacity
-                val curGate = currentProvider.callGateKey
-                val nextCandidate = if (shouldFallback && _selectedGroupId.value != null) {
-                    var c: ChatViewModel.FallbackCandidate? = remainingFallbacks.removeFirstOrNull()
-                    while (c != null && com.openminis.app.provider.ProviderKeyGate.sameBucket(c.provider.callGateKey, curGate)) {
-                        c = remainingFallbacks.removeFirstOrNull()
-                    }
-                    c
-                } else null
-                val next = nextCandidate?.provider
-                if (next != null && nextCandidate != null) {
-                    val reason = when {
-                        isRateLimit -> actual.message ?: "Rate limited"
-                        actual is com.openminis.app.data.model.LLMError.ProviderError -> actual.detail
-                        else -> actual.message ?: "Error"
-                    }
-                    // [T-android-model-indicator-flash-on-endpoint-retry] Same-model recovery
-                    // is a TRANSPARENT retry, not a real
-                    val isRealModelChange = next.model.id != currentProvider.model.id
-                    fallbackReasons.add("⚠️ ${currentProvider.model.displayName}: $reason")
-                    Log.i(ChatViewModel.TAG, "🔀 $reason on ${currentProvider.model.displayName}, switching to ${next.model.displayName} (realModelChange=$isRealModelChange)")
-                    currentProvider = next
-                    triedEntryIds.add(nextCandidate.entryId)
-                    retryAttempt = 0
-                    // [T-android-model-switch-midrun-adopt] The run stays on `next` for the
-                    // rest of THIS request, but persisting when the user picked another model
-                    // mid-stream would clobber that pick and leave the top-of-loop adoption
-                    // with nothing to adopt (the old code wrote unconditionally).
-                    if (ModelSwitchGate.mayWriteBack(loopModelEpoch, snapshotModelSelectionEpoch())) {
-                        persistFallbackModelSelection(next, nextCandidate.entryId, isRealModelChange)
-                    } else {
-                        Log.i(
-                            ChatViewModel.TAG,
-                            "[ModelSwitch] user changed model mid-run (epoch $loopModelEpoch -> ${snapshotModelSelectionEpoch()}); " +
-                                "skipping fallback writeback so the next request adopts the user's selection",
-                        )
-                    }
-                    val infoText = fallbackReasons.joinToString("\n") + "\n🔄 Switched to ${currentProvider.model.displayName}"
-                    allToolBlocks.removeAll { it.kind == "info" }
-                    allToolBlocks.add(0, AssistantBlock(
-                        id = "fallback_info_$turn",
-                        kind = "info",
-                        content = infoText,
-                        toolTitle = "Switched model",
-                        toolStatus = ToolBlockStatus.SUCCESS,
-                    ))
-                    // [T-android-fallback-text-rewind] Same as the retry-rollback path above:
-                    // preserve this turn's streamed text on screen while switching providers —
-                    // accumulatedText hasn't folded turnTextSb in yet, so the new provider
-                    // streams into a fresh turnTextSb and re-publishes `accumulatedText + newTurnText`.
-                    withContext(Dispatchers.Main) {
-                        updateAssistantMessage(assistantId, messageTextSnapshot(), true, allToolBlocks)
-                    }
-                    // Reset turn state for retry with new provider
-                    turnTextSb.setLength(0)
-                    currentTextBlockSb = null
-                    // [T-android-tool-splits-reply-fix] Fresh stream from a different provider
-                    // — and the add(0, info) above shifted every block index anyway.
-                    turnTextBlockIdx = -1
-                    turnThinking.clear()
-                    // [T-reasoning-blob-per-attempt] Same contract as the same-provider retry
-                    // above: the fallback provider owns the reasoning field now.
-                    turnReasoningBlob = null
-                    toolCalls.clear()
-                    toolCallSignatures.clear()  // [T-android-gemini3-thoughtsig / #179]
-                    // [T-android-duplicate-toolcall-replay] Reset replay bookkeeping with the
-                    // dispatch list: the retried attempt re-streams into an empty toolCalls, so
-                    // dead-attempt raw-id sightings must not refuse the fresh ones.
-                    toolReplayGuard.reset()
-                    replayRenamedIds.clear()
-                    // loop continues — will retry collect with currentProvider
-                } else {
-                    // All fallbacks exhausted. Surface the trail of tried
-                    // models AND the group members that were silently
-                    // skipped (disabled / not logged in / hidden) so the
-                    // user can see why fallback never reached them —
-                    // mirrors iOS streamWithGroupFallback exhausted path.
-                    if (shouldFallback) {
-                        val skipped = unavailableGroupMembers()
-                        if (fallbackReasons.isNotEmpty() || skipped.isNotEmpty()) {
-                            val trail = (fallbackReasons + skipped).joinToString("\n")
-                            val finalDesc = actual.message ?: actual.toString()
-                            throw com.openminis.app.data.model.LLMError.ProviderError("$trail\n$finalDesc")
+                    collectDone = true
+                    streamPhase.logSuccess(turn, loopSessionId, currentProvider.model.id)
+                    // Distinguish an empty truncation (retry) from a delivered natural stop (do not retry).
+                    val win = projection.window
+                    val measuredInput = reportedRequestInputTokens(
+                        lastUsage, currentProvider is com.openminis.app.provider.anthropic.AnthropicProvider,
+                    )
+                    val successOverflowKind = com.openminis.app.provider.ContextOverflowDetector.successfulOverflowKind(
+                        finishReason = turnFinishReason,
+                        outputTokens = (lastUsage?.outputTokens ?: 0).toLong(),
+                        inputTokens = (measuredInput ?: 0).toLong(),
+                        contextWindow = win,
+                    )
+                    when (successOverflowKind) {
+                        com.openminis.app.provider.ContextOverflowDetector.SuccessfulOverflowKind.TRUNCATED -> {
+                            if (compactAndRetryForOverflow("truncation overflow on ${currentProvider.model.displayName} (usage=${lastUsage?.latestContextTokens ?: 0}, window=$win)")) {
+                                // [P0-fix] collectDone was already set above, so a bare `continue`
+                                // fell out of the exited while (two reviews); re-arm for the retry.
+                                collectDone = false
+                                continue
+                            }
                         }
+                        com.openminis.app.provider.ContextOverflowDetector.SuccessfulOverflowKind.SILENT -> {
+                            compactForSilentOverflow(
+                                "silent overflow on ${currentProvider.model.displayName} (usage=${lastUsage?.latestContextTokens ?: 0}, window=$win)",
+                            )
+                        }
+                        null -> {}
                     }
-                    throw actual  // re-throw unwrapped, all fallbacks exhausted
+                    // [T-stall-resume] The stream attempt succeeded — no resume context may leak
+                    // into a later turn.
+                    stallResumeContext = null
+                    // Stream completed without error — clear any lingering retry UI state.
+                    if (_autoRetryAttempt.value != 0 || _autoRetryCountdown.value != 0) {
+                        _autoRetryAttempt.value = 0
+                        _autoRetryCountdown.value = 0
+                    }
+                    // [T-first-event-watchdog] The operator cancels itself; no cleanup needed.
+                } catch (e: OutboundPrivacyChanged) {
+                    if (privacyRefreshes++ > 0) throw e
+                    projectionCache.clear()
+                } catch (e: QueuedPromptInterrupt) {
+                    // [T-android-queued-message-interrupt-thinking] Deliberate cut,
+                    // NOT a provider failure — must precede the generic catch.
+                    settleInterruptedThinkingTurn(turn, allToolBlocks)
+                    stallResumeContext = null
+                    queuedPromptInterrupted = true
+                    break
+                } catch (e: Exception) {
+                    currentCoroutineContext().ensureActive()
+                    if (!ownsLoop()) return false
+                    if (e is CancellationException && e.cause == null) { CancellationDiagnostic.log(provider.model.displayName, loopSessionId, e, _isStreaming.value); throw e }
+                    uiBatcher.flush()
+                    if (!ownsLoop()) return false
+                    val actual = CanceledIoClassification.asTransientStall(unwrapFlowException(e), turnTextSb.isNotEmpty()) ?: unwrapFlowException(e)
+                    streamPhase.logFailure(turn, actual)
+                    val isRateLimit = actual is com.openminis.app.data.model.LLMError.RateLimited
+                    val is5xx = (actual as? com.openminis.app.data.model.LLMError)?.isCapacityRejection == true
+                    val isPermanentCapacity = actual is com.openminis.app.data.model.LLMError.ProviderError &&
+                        (actual.httpStatus == 429 ||
+                            com.openminis.app.provider.HttpRetryAfter.isPermanentCapacityBody(actual.detail))
+                    // [T-transient-5xx-fallback] A capacity 5xx parks the member too (30s default,
+                    // Retry-After wins): a dead channel re-picked next turn is the "老是断开" pattern.
+                    if (isRateLimit || isPermanentCapacity || is5xx)
+                        GroupRoutingState.markRoutingCooldownFor(
+                            _activeEntryId.value,
+                            _selectedGroupId.value,
+                            actual,
+                            providerRepository,
+                        )
+                    // Auto-retry on transient network/5xx/transient errors on the SAME provider.
+                    // [T-pi-retry-classifier][T-pi-overflow-detector] Quota/billing wording
+                    // suppresses same-provider retry (quota windows reset in hours); generic
+                    // provider errors route through the pi-ported overflow table into the
+                    // compaction branch — the exclusion table vetoes rate-limit text (LoopErrorGate).
+                    val isTransient = com.openminis.app.agent.LoopErrorGate.isTransient(actual, is5xx, isPermanentCapacity)
+                    val isContextOverflow = com.openminis.app.agent.LoopErrorGate.isContextOverflow(actual)
+                    // [T-compact-on-context-overflow] Compaction on the provider's own context verdict.
+                    if (isContextOverflow && compactAndRetryForOverflow("${currentProvider.model.displayName}: ${actual.message?.take(160) ?: actual.javaClass.simpleName}")) {
+                        continue  // retry on same provider with compacted history
+                    }
+                    // Compaction failed or cap spent — fall through to fallback/throw.
+                    // [T-android-model-switch-midrun-adopt] No abandon: the adoption at the top of
+                    // the loop already moved onto the user's pick, so this retry goes out on it.
+                    val maxRetries = effectiveMaxRetries()
+                    // 429 with another group member: switch endpoints instead of hammering the same
+                    // key through 1/2/4/8/16s (inside a typical 60s relay window). A relay 5xx is the
+                    // same capacity verdict (measured on token.zlshag.xyz: instant 503 for every
+                    // payload shape while a sibling model on the same key streams 200) — one quick
+                    // attempt absorbs a blip, the rest of the budget goes to switching; network
+                    // errors and last-candidate 5xx/429 keep the ladder.
+                    val skipSameProviderRetry = (isRateLimit && remainingFallbacks.isNotEmpty()) || isPermanentCapacity
+                    val sameProviderBudget = when {
+                        isRateLimit -> minOf(maxRetries, 1)
+                        is5xx && remainingFallbacks.isNotEmpty() -> minOf(maxRetries, 1)
+                        else -> maxRetries
+                    }
+                    if (isTransient && !skipSameProviderRetry && sameProviderBudget > 0 && retryAttempt < sameProviderBudget) {
+                        val retryAfter = (actual as? com.openminis.app.data.model.LLMError.RateLimited)?.retryAfterSeconds
+                        val delaySec = com.openminis.app.provider.HttpRetryAfter.delaySeconds(
+                            retryAttempt, retryAfter, ChatViewModel.AUTO_RETRY_DELAYS_SEC,
+                        )
+                        retryAttempt += 1
+                        val errDesc = actual.message ?: actual.javaClass.simpleName
+                        Log.w(ChatViewModel.TAG, "🔁 Transient error on ${currentProvider.model.displayName}, retry $retryAttempt/$maxRetries in ${delaySec}s: $errDesc")
+                        withContext(Dispatchers.Main) {
+                            _autoRetryAttempt.value = retryAttempt
+                            // Inline error on the streaming bubble during countdown; keeps
+                            // isStreaming=true so the UI doesn't tear down the stream state.
+                            setTransientInlineError("$errDesc — retrying ($retryAttempt/$maxRetries)…")
+                        }
+                        try {
+                            for (remaining in delaySec downTo 1) {
+                                _autoRetryCountdown.value = remaining
+                                kotlinx.coroutines.delay(1000)
+                            }
+                            val jitter = com.openminis.app.provider.HttpRetryAfter.jitterMs()
+                            if (jitter > 0L) kotlinx.coroutines.delay(jitter)
+                        } finally {
+                            _autoRetryCountdown.value = 0
+                        }
+                        // Clear inline error so the retry attempt can start cleanly.
+                        withContext(Dispatchers.Main) { clearInlineError() }
+                        // Roll back partial blocks from the failed attempt so the retried stream's
+                        // deltas don't double-append; turns before the bound survive.
+                        if (allToolBlocks.size > turnStartBlockIndex) {
+                            while (allToolBlocks.size > turnStartBlockIndex) { allToolBlocks.removeAt(allToolBlocks.size - 1) }
+                            // [T-android-fallback-text-rewind] Keep this turn's already-streamed text on
+                            // screen across the rollback: accumulatedText only folds in turnTextSb after
+                            // the while loop completes, so bare accumulatedText would visibly rewind what
+                            // the user read; the next attempt streams into a fresh turnTextSb and
+                            // re-publishes `accumulatedText + newTurnText`.
+                            withContext(Dispatchers.Main) {
+                                updateAssistantMessage(assistantId, messageTextSnapshot(), true, allToolBlocks)
+                            }
+                        }
+                        // T307: SB-based per-turn accumulators reset. [T-stall-resume] Capture the
+                        // partial text BEFORE the reset: a mid-stream stall (stalledAfterFirstEvent)
+                        // carries the already-produced text into the retried request so the model
+                        // continues, not regenerates.
+                        if ((actual as? com.openminis.app.data.model.LLMError.TransientError)?.stalledAfterFirstEvent == true) {
+                            val partial = turnTextSb.toString()
+                            stallResumeContext = com.openminis.app.provider.StallResume.note(partial)
+                            // [T-stall-echo-strip] Arm the echo suppressor for the retried attempt;
+                            // the seed must be the exact bytes the note embeds (StallResume.tail).
+                            stallEchoStripper = com.openminis.app.provider.StallEchoStripper(
+                                com.openminis.app.provider.StallResume.tail(partial),
+                            )
+                        }
+                        turnTextSb.setLength(0)
+                        currentTextBlockSb = null
+                        // [T-android-tool-splits-reply-fix] The tracked turn text block was just rolled
+                        // back with the rest of this turn's partial blocks.
+                        turnTextBlockIdx = -1
+                        turnThinking.clear()
+                        // [T-reasoning-blob-per-attempt] The dead attempt's reasoning echo must not survive
+                        // onto the retried turn — a fallback on a non-reasoning provider would replay
+                        // attempt 1's reasoning_content verbatim.
+                        turnReasoningBlob = null
+                        toolCalls.clear()
+                        toolCallSignatures.clear()  // [T-android-gemini3-thoughtsig / #179]
+                        // [T-android-duplicate-toolcall-replay] Reset replay bookkeeping with the dispatch
+                        // list: the retried attempt re-streams into an empty toolCalls, so dead-attempt
+                        // raw-id sightings must not refuse the fresh ones.
+                        toolReplayGuard.reset()
+                        replayRenamedIds.clear()
+                        // T94 fix 2 + T256: throttle bookkeeping is per-stream attempt; reset with the
+                        // partial-block rollback so the next attempt's first delta fires immediately
+                        // rather than coalescing against stale baselines.
+                        pendingChunkSb.setLength(0)
+                        lastUiUpdateMs = 0L
+                        lastFlushedLen = 0
+                        lastFileToolInputMs = 0L
+                        lastOtherToolInputMs = 0L
+                        continue  // retry on same provider
+                    }
+                    // Retries exhausted or non-retryable — proceed to fallback / throw.
+                    _autoRetryAttempt.value = 0
+                    _autoRetryCountdown.value = 0
+                    // [T-android-timeout-while-running] Clear any transient inline error from the
+                    // prior retry attempts before we engage the fallback lane.
+                    withContext(Dispatchers.Main) { clearInlineError() }
+                    val llmErr = actual as? com.openminis.app.data.model.LLMError
+                    val shouldFallback = fallbackStrategy == com.openminis.app.data.model.FallbackStrategy.always ||
+                        llmErr?.isFallbackable == true ||
+                        isRateLimit || is5xx || isPermanentCapacity
+                    val curGate = currentProvider.callGateKey
+                    val nextCandidate = if (shouldFallback && _selectedGroupId.value != null) {
+                        var c: ChatViewModel.FallbackCandidate? = remainingFallbacks.removeFirstOrNull()
+                        while (c != null && com.openminis.app.provider.ProviderKeyGate.sameBucket(c.provider.callGateKey, curGate)) {
+                            c = remainingFallbacks.removeFirstOrNull()
+                        }
+                        c
+                    } else null
+                    val next = nextCandidate?.provider
+                    if (next != null && nextCandidate != null) {
+                        val reason = when {
+                            isRateLimit -> actual.message ?: "Rate limited"
+                            actual is com.openminis.app.data.model.LLMError.ProviderError -> actual.detail
+                            else -> actual.message ?: "Error"
+                        }
+                        // [T-android-model-indicator-flash-on-endpoint-retry] Same-model recovery
+                        // is a TRANSPARENT retry, not a real
+                        val isRealModelChange = next.model.id != currentProvider.model.id
+                        fallbackReasons.add("⚠️ ${currentProvider.model.displayName}: $reason")
+                        Log.i(ChatViewModel.TAG, "🔀 $reason on ${currentProvider.model.displayName}, switching to ${next.model.displayName} (realModelChange=$isRealModelChange)")
+                        currentProvider = next
+                        triedEntryIds.add(nextCandidate.entryId)
+                        retryAttempt = 0
+                        // [T-android-model-switch-midrun-adopt] The run stays on `next` for the
+                        // rest of THIS request, but persisting when the user picked another model
+                        // mid-stream would clobber that pick and leave the top-of-loop adoption
+                        // with nothing to adopt (the old code wrote unconditionally).
+                        if (ModelSwitchGate.mayWriteBack(loopModelEpoch, snapshotModelSelectionEpoch())) {
+                            persistFallbackModelSelection(next, nextCandidate.entryId, isRealModelChange)
+                        } else {
+                            Log.i(
+                                ChatViewModel.TAG,
+                                "[ModelSwitch] user changed model mid-run (epoch $loopModelEpoch -> ${snapshotModelSelectionEpoch()}); " +
+                                    "skipping fallback writeback so the next request adopts the user's selection",
+                            )
+                        }
+                        val infoText = fallbackReasons.joinToString("\n") + "\n🔄 Switched to ${currentProvider.model.displayName}"
+                        allToolBlocks.removeAll { it.kind == "info" }
+                        allToolBlocks.add(0, AssistantBlock(
+                            id = "fallback_info_$turn",
+                            kind = "info",
+                            content = infoText,
+                            toolTitle = "Switched model",
+                            toolStatus = ToolBlockStatus.SUCCESS,
+                        ))
+                        // [T-android-fallback-text-rewind] Same as the retry-rollback path above:
+                        // preserve this turn's streamed text on screen while switching providers —
+                        // accumulatedText hasn't folded turnTextSb in yet, so the new provider
+                        // streams into a fresh turnTextSb and re-publishes `accumulatedText + newTurnText`.
+                        withContext(Dispatchers.Main) {
+                            updateAssistantMessage(assistantId, messageTextSnapshot(), true, allToolBlocks)
+                        }
+                        // Reset turn state for retry with new provider
+                        turnTextSb.setLength(0)
+                        currentTextBlockSb = null
+                        // [T-android-tool-splits-reply-fix] Fresh stream from a different provider
+                        // — and the add(0, info) above shifted every block index anyway.
+                        turnTextBlockIdx = -1
+                        turnThinking.clear()
+                        // [T-reasoning-blob-per-attempt] Same contract as the same-provider retry
+                        // above: the fallback provider owns the reasoning field now.
+                        turnReasoningBlob = null
+                        toolCalls.clear()
+                        toolCallSignatures.clear()  // [T-android-gemini3-thoughtsig / #179]
+                        // [T-android-duplicate-toolcall-replay] Reset replay bookkeeping with the
+                        // dispatch list: the retried attempt re-streams into an empty toolCalls, so
+                        // dead-attempt raw-id sightings must not refuse the fresh ones.
+                        toolReplayGuard.reset()
+                        replayRenamedIds.clear()
+                        // loop continues — will retry collect with currentProvider
+                    } else {
+                        // All fallbacks exhausted. Surface the trail of tried
+                        // models AND the group members that were silently
+                        // skipped (disabled / not logged in / hidden) so the
+                        // user can see why fallback never reached them —
+                        // mirrors iOS streamWithGroupFallback exhausted path.
+                        if (shouldFallback) {
+                            val skipped = unavailableGroupMembers()
+                            if (fallbackReasons.isNotEmpty() || skipped.isNotEmpty()) {
+                                val trail = (fallbackReasons + skipped).joinToString("\n")
+                                val finalDesc = actual.message ?: actual.toString()
+                                throw com.openminis.app.data.model.LLMError.ProviderError("$trail\n$finalDesc")
+                            }
+                        }
+                        throw actual  // re-throw unwrapped, all fallbacks exhausted
+                    }
                 }
-            }
-        }  // end while (!collectDone)
+            }  // end while (!collectDone)
+            return true
+        }
+        if (!dispatchTurn()) {
+            loopExitedNormally = true
+            break
+        }
+        if (!ownsLoop()) return
 
         // [T-android-queued-message-interrupt-thinking] The thinking-phase
         // cut landed here: skip normal bookkeeping and inject as a standalone
@@ -1260,7 +1206,8 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         // row and render below the prompt it preceded on every reload.
         if (queuedPromptInterrupted) {
             if (turn == 0) generateSessionTitleIfNeeded()
-            val handled = drainQueueIntoStandaloneTurn(assistantId, accumulatedText, allToolBlocks, uiBatcher)
+            val handled = drainQueueIntoStandaloneTurn(assistantId, accumulatedText, allToolBlocks, uiBatcher, expectedSessionId = loopSessionId)
+            if (!ownsLoop()) return
             if (handled != null) {
                 swapLoopStateToInjectedBubble(handled)
                 activeSystemPrompt = refreshRunPromptForInjectedTurn(activeSystemPrompt, loopSessionId)
@@ -1279,17 +1226,6 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         accumulatedText += turnText
         activeRun?.updateAssistantText(accumulatedText)
 
-        // Build assistant contentParts for history
-        val assistantParts = mutableListOf<AgentContentPart>()
-        if (turnText.isNotEmpty()) {
-            assistantParts.add(AgentContentPart.Text(turnText))
-        }
-        for ((id, name, args) in toolCalls) {
-            // [T-android-gemini3-thoughtsig / #179] Attach the captured Gemini
-            // 3.x signature so it round-trips through persistence and replay.
-            assistantParts.add(AgentContentPart.ToolUse(id, name, args, thoughtSignature = toolCallSignatures[id]))
-        }
-
         // Map toolUseId -> input JSON string for persistence (accumulated across turns)
         toolCalls.forEach { (id, _, args) -> allToolInputs[id] = args.toString() }
         val toolInputMap = allToolInputs
@@ -1301,10 +1237,10 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         val turnReasoningContent: String? = turnReasoningBlob
             ?: turnThinking.toString().takeIf { it.isNotEmpty() } // fallback: no blob arrived
 
-        appendBoundedHistory(LLMMessage(
+        if (toolCalls.isEmpty()) appendBoundedHistory(LLMMessage(
             role = LLMMessage.Role.ASSISTANT,
             content = turnText,
-            contentParts = assistantParts,
+            contentParts = if (turnText.isEmpty()) emptyList() else listOf(AgentContentPart.Text(turnText)),
             reasoningContent = turnReasoningContent,
         ))
         // [port-upstream-1.16][T-b13-empty-fallback] A turn with content ends
@@ -1366,6 +1302,22 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             }
         }
 
+        val completed = dispatched?.takeIf {
+            collectDone && eligibleContextReceipt(turnFinishReason, turnText.isNotBlank(), toolCalls.isNotEmpty())
+        }
+        val contextUsageAnchor = completed?.let { request ->
+            acceptRequestProjection(currentProvider, request, usageAttempt, lastUsage, receiptUserTurnId)
+        }
+        val servedModel = dispatched?.model
+        val requestedThinking = dispatched?.request?.thinkingLevel ?: turnThinkingLevel
+        suspend fun persistTurn(parts: List<AgentContentPart> = buildTurnParts(allToolBlocks, turnStartBlockIndex, toolInputMap)): String? {
+            val blockMeta = allToolBlocks.filter { it.kind == "tool_use" }.associateBy { it.id }
+            return persistAssistantTurnForRunAndBackfill(
+                activeRun, parts, blockMeta, lastUsage, turnReasoningContent, accumulatedText, agentHistory,
+                requestedLevel = requestedThinking, modelSnapshot = servedModel, contextUsageAnchor = contextUsageAnchor,
+            )
+        }
+
         var goalAccountingSucceeded = true
         if (toolCalls.isEmpty() && goalMountedForCurrentRequest) {
             val turnUsageTokens = (lastUsage?.inputTokens ?: 0).toLong() + (lastUsage?.outputTokens ?: 0).toLong()
@@ -1386,12 +1338,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         ) {
             val goal = runCatching { goalManager.get(goalSessionId) }.getOrNull()
             if (goal != null && goalManager.mayContinue(goalSessionId, usefulActivity = true)) {
-                val turnParts = buildTurnParts(allToolBlocks, turnStartBlockIndex, allToolInputs)
-                val blockMeta = allToolBlocks.filter { it.kind == "tool_use" }.associateBy { it.id }
-                val persistedId = persistAssistantTurnForRun(
-                    checkNotNull(activeRun) { "Agent loop has no persistence owner" }, turnParts, lastUsage, turnReasoningContent, blockMeta, accumulatedText,
-                    requestedLevel = turnThinkingLevel,
-                )
+                persistTurn()
                 if (activeRun?.isStopped == true) { loopExitedNormally = true; break }
                 val steering = com.openminis.app.goal.GoalContinuation.note(goal)
                 appendBoundedHistory(
@@ -1415,7 +1362,11 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         }
 
         // [T-plan-close-nudge] Natural turn end with an unreconciled board leaves the Goal ACTIVE forever.
-        when (nudgePlanBoardCloseFor(toolCalls.isEmpty(), goalSessionId, planCloseNudges, allToolBlocks, turnStartBlockIndex, allToolInputs, lastUsage, turnReasoningContent, turnThinkingLevel, accumulatedText, activeRun)) {
+        when (nudgePlanBoardCloseFor(
+            toolCalls.isEmpty(), goalSessionId, planCloseNudges, allToolBlocks, turnStartBlockIndex, allToolInputs,
+            lastUsage, turnReasoningContent, requestedThinking, accumulatedText, activeRun,
+            modelSnapshot = servedModel, contextUsageAnchor = contextUsageAnchor,
+        )) {
             PlanBoardCloseResult.NUDGED -> {
                 planCloseNudges++
                 // [T-nudge-turn-cap-guard] Same cap contract as the goal
@@ -1473,12 +1424,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 // Same shape as the Goal continuation above: persist this turn's
                 // assistant output first, otherwise history would carry two
                 // consecutive user messages and providers reject the sequence.
-                val turnParts = buildTurnParts(allToolBlocks, turnStartBlockIndex, allToolInputs)
-                val blockMeta = allToolBlocks.filter { it.kind == "tool_use" }.associateBy { it.id }
-                persistAssistantTurnForRun(
-                    checkNotNull(activeRun) { "Agent loop has no persistence owner" }, turnParts, lastUsage, turnReasoningContent, blockMeta, accumulatedText,
-                    requestedLevel = turnThinkingLevel,
-                )
+                persistTurn()
                 if (activeRun?.isStopped == true) { loopExitedNormally = true; break }
                 appendBoundedHistory(
                     LLMMessage(
@@ -1506,12 +1452,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             withContext(Dispatchers.Main) {
                 updateAssistantMessage(assistantId, accumulatedText, false, allToolBlocks)
             }
-            val turnParts = buildTurnParts(allToolBlocks, turnStartBlockIndex, toolInputMap)
-            val blockMeta = allToolBlocks.filter { it.kind == "tool_use" }.associateBy { it.id }
-            val persistedId = persistAssistantTurnForRun(
-                checkNotNull(activeRun) { "Agent loop has no persistence owner" }, turnParts, lastUsage, turnReasoningContent, blockMeta, accumulatedText,
-                requestedLevel = turnThinkingLevel,
-            )
+            persistTurn()
             if (activeRun?.isStopped == true) { loopExitedNormally = true; break }
             // [T-error-persist-android] Empty-response hint: the model ended a turn
             // (finish=stop/end_turn) with no visible text and no tool blocks — the
@@ -1524,64 +1465,37 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             // [T-android-silent-stream-drop] A turn's stopReason comes ONLY from the
             // SSE terminal event, which always carries a concrete reason — a null
             // means the stream closed WITHOUT one (a mid-flight throw would have
-            // gone down the fallback/retry path instead, not here).
-            //
-            // Previously null was folded into `finishedCleanly`, so a PARTIAL reply
-            // — bytes arrived, then the socket died — was persisted silently as if
-            // complete: it just stopped, no error, no way to retry (the "断流" reports;
-            // iOS d6604021). Only the PARTIAL case is handled here: an EMPTY turn with
-            // a null stopReason keeps the empty-turn handling below (system-reminder
-            // retry, then the hint), which already covers it — re-routing loses that.
+            // gone down the fallback/retry path instead, not here). Only the PARTIAL
+            // case is handled here: an EMPTY turn with a null stopReason keeps the
+            // empty-turn handling below (system-reminder retry, then the hint).
             if (turnFinishReason == null && hasVisibleContent) {
-                // [T-android-stream-drop-autocontinue] Relay-side silent cut: the SSE stream ended with no finish_reason and no [DONE] while content was already on screen. Buffet relays do this
-                // routinely (nginx proxy_read_timeout during long thinking silences, upstream caps after big tool-call turns) — the "一瞬间出现4个 Execute Shell 然后中断" pattern is exactly a
-                // cut right after the tool-call flush.
-                //
-                // The partial assistant turn is ALREADY appended to agentHistory (turn boundary above) and ALREADY persisted (persistAssistantTurnForRun just ran), so continuing is
-                // safe and lossless: append a continue-reminder and re-enter the loop. The next turn streams into the SAME assistant bubble (accumulatedText/allToolBlocks carry over), so the
-                // user sees one continuous reply instead of a banner + a manual retry that regenerates everything. Mirrors the Goal
-                // auto-continuation pattern. Budget-limited per run; the
-                // banner below only fires once the budget is exhausted.
-                if (activeRun?.isStopped != true &&
-                    streamDropContinuations < ChatViewModel.MAX_STREAM_DROP_CONTINUATIONS
-                ) {
-                    streamDropContinuations++
-                    AppLogger.warning(
-                        ChatViewModel.TAG_STREAM,
-                        "stream closed without a finish reason after ${accumulatedText.length} chars — " +
-                            "auto-continuation $streamDropContinuations/" +
-                            "${ChatViewModel.MAX_STREAM_DROP_CONTINUATIONS} " +
-                            "(turn=$turn, model=${provider.model.id}, provider=${provider.name})",
+                when (
+                    resolveReasonlessStreamEnd(
+                        isTextOnly = toolCalls.isEmpty(),
+                        textChars = accumulatedText.length,
+                        turn = turn,
+                        providerId = provider.model.id,
+                        providerName = provider.name,
+                        runStopped = activeRun?.isStopped == true,
+                        reasonlessTextContinuations = reasonlessTextContinuations,
+                        streamDropContinuations = streamDropContinuations,
+                        resumeEpoch = loopResumeEpoch,
                     )
-                    commitStreamDropReminder()
-                    continue
-                }
-                AppLogger.warning(
-                    ChatViewModel.TAG_STREAM,
-                    "stream closed without a finish reason after ${accumulatedText.length} chars — " +
-                        "surfacing as an interrupted reply (turn=$turn)",
-                )
-                // The budget is exhausted but the turn is NOT over: commit the
-                // same reminder the automatic continuations used, so the
-                // persisted tail stays resumable. Without it the tail is a
-                // plain partial reply, which InterruptedTailDetector reads as a
-                // COMPLETED turn — after a reload there is nothing to resume and
-                // the banner's Retry can only regenerate and hit the same cut.
-                commitStreamDropReminder()
-                if (activeRun?.isStopped != true) {
-                    withContext(Dispatchers.Main) {
-                        setInlineError(
-                            context.getString(R.string.chat_error_stream_dropped_partial),
-                        )
+                ) {
+                    ReasonlessEnd.COMPLETE -> turnFinishReason = "end_turn"
+                    ReasonlessEnd.TEXT_CONTINUE -> {
+                        reasonlessTextContinuations++
+                        streamDropContinuations++
+                        continue
                     }
+                    ReasonlessEnd.LADDER_CONTINUE -> {
+                        streamDropContinuations++
+                        continue
+                    }
+                    // Deliberate stop, not the runaway ceiling — keep the post-loop
+                    // tail from adding a fake turn-limit error.
+                    ReasonlessEnd.SURFACE -> { loopExitedNormally = true; break }
                 }
-                // [T-android-group-pause-badge-restamp] A LIVE interruption
-                // just happened: real entry into the paused state.
-                markLiveInterruptionAndArmResume(loopResumeEpoch)
-                // Deliberate stop, not the runaway ceiling — keep the
-                // post-loop tail from adding a fake turn-limit error.
-                loopExitedNormally = true
-                break
             }
 
             // [port-upstream-1.16][T-android-model-refusal] The model DECLINED
@@ -1728,6 +1642,8 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             // P2-3: exiting with pending steering — re-route it onto the
             // post-run prompt dispatch (no-op when the queue is empty).
             drainToPromptQueueFallback()
+            completedReply = !isEmptyTurn && !emptyTurnFallbackUsed &&
+                eligibleContextReceipt(turnFinishReason, hasVisibleContent, hasTools = false)
             loopExitedNormally = true
             break
         }
@@ -1745,82 +1661,59 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         // [T-truncated-tool-call-reject] finish_reason=length/max_tokens 由 ToolCallPreflight 统一拒绝。
         val turnCtx = ToolTurnContext(
             ledger = toolExecutionLedger,
-            activeSessionId = activeSessionId,
+            activeSessionId = loopSessionId,
             assistantId = assistantId,
             accumulatedText = accumulatedText,
             turn = turn,
             turnFinishReason = turnFinishReason,
-            agentTools = agentTools,
+            agentTools = dispatched?.request?.tools.orEmpty(),
             replayRenamedIds = replayRenamedIds,
             allToolBlocks = allToolBlocks,
             toolInputChunkRings = toolInputChunkRings,
             toolCallRawArgs = toolCallRawArgs,
+            receiptUserTurnId = receiptUserTurnId,
+            // [T-receipt-after-result] The boundary is what THIS attempt actually
+            // carried: the last result row (with its host proof) visible in the
+            // projected request, never an attempt counter or a live UI bubble.
+            receiptAfterResultId = receiptAfterResultRowId(dispatched?.request?.messages.orEmpty(), receiptUserTurnId),
         )
+        validateCompletedToolCalls(toolCalls)
         val plan = preflightToolTurn(turnCtx, toolCalls)
+        toolInputMap.putAll(plan.repairedArgsById)
+        if (!ownsLoop()) return
+        val turnParts = completedToolTurnParts(
+            buildTurnParts(allToolBlocks, turnStartBlockIndex, toolInputMap),
+            toolCalls, toolInputMap, toolCallSignatures, turnText,
+        )
         val execution = executePlannedToolTurn(turnCtx, plan)
 
         // ---- Phase 3: assemble resultParts in emission order ----
-        val resultParts = mutableListOf<AgentContentPart>()
-        for ((id, name, _) in toolCalls) {
-            val refused = plan.refusedParts[id]
-            val executed = execution.executedParts[id]
-            when {
-                refused != null -> resultParts.add(refused)
-                executed != null -> resultParts.add(executed)
-                SubAgentKind.isSpawnTool(name) -> {
-                    // A spawn call whose peer result never landed (fan-out
-                    // interrupted) still needs a tool_result so the
-                    // tool_use/tool_result pairing stays balanced.
-                    resultParts.add(AgentContentPart.ToolResult(
-                        id = id, name = name,
-                        content = "Error: this spawn call's result is missing — the wave was " +
-                            "collected without a report for this call. Re-issue the dispatch.",
-                        isError = true,
-                    ))
-                }
-            }
-        }
+        val resultParts = assembleTurnResultParts(toolCalls, plan, execution)
 
         // [T-frozen-repeat-hint] One hint inside the tool result; never a USER turn.
         ToolRepeatTracker.applyHint(repeatTracker, toolCalls, resultParts)
 
         currentCoroutineContext().ensureActive()
-        if (activeRun?.isStopped == true) { loopExitedNormally = true; break }
-        // Update UI with tool statuses. Mark as awaiting the next model
-        // response so "Minis is thinking" shows during the network gap
-        // between tool results being sent and the next turn's first chunk.
-        // Mirrors iOS isAwaitingModelResponse.
-        withContext(Dispatchers.Main) {
-            updateAssistantMessage(
-                assistantId, accumulatedText, true, allToolBlocks,
-                isAwaitingModelResponse = true,
-            )
-        }
-
-        // 持久化本轮 assistant+tools，并回填 agentHistory 的 dbMessageId（compact 边界依赖）。
-        val turnParts = buildTurnParts(allToolBlocks, turnStartBlockIndex, toolInputMap)
-        val blockMeta = allToolBlocks.filter { it.kind == "tool_use" }.associateBy { it.id }
-        val assistantDbId = persistAssistantTurnForRunAndBackfill(
-            activeRun, turnParts, blockMeta, lastUsage, turnReasoningContent, accumulatedText, agentHistory,
-            requestedLevel = turnThinkingLevel,
-        )
-        if (activeRun?.isStopped == true) { loopExitedNormally = true; break }
-
-        // tool_result 作为 user 角色消息持久化（镜像 iOS）。
-        val toolResultDbId = persistToolResultMessageForRun(
+        if (!ownsLoop()) return
+        // [T-atomic-tool-turn] Only committed calls and results enter request history.
+        val (assistantDbId, toolResultDbId) = persistToolTurnPairForRun(
             checkNotNull(activeRun) { "Agent loop has no persistence owner" },
-            resultParts,
+            turnParts,
+            allToolBlocks.filter { it.kind == "tool_use" }.associateBy { it.id },
+            lastUsage, turnReasoningContent, accumulatedText, resultParts,
+            targetSessionId = goalSessionId,
+            expectedEpoch = loopResumeEpoch,
             uiMessageId = assistantId,
-        )
-        if (activeRun?.isStopped == true) { loopExitedNormally = true; break }
-
-        // 工具结果进入历史。
-        appendBoundedHistory(LLMMessage(
-            role = LLMMessage.Role.USER,
-            content = "",
-            contentParts = resultParts,
-            dbMessageId = toolResultDbId,
-        ))
+            requestedLevel = requestedThinking,
+            modelSnapshot = servedModel,
+            contextUsageAnchor = contextUsageAnchor,
+        ) ?: return
+        if (!ownsLoop()) return
+        reconcilePersistedToolTurn(goalSessionId, receiptUserTurnId, assistantDbId, toolResultDbId, turnParts, resultParts)
+        withContext(Dispatchers.Main.immediate) {
+            if (ownsLoop()) updateAssistantMessage(assistantId, accumulatedText, true, allToolBlocks, isAwaitingModelResponse = true)
+        }
+        if (!ownsLoop()) return
         val turnUsageTokens = (lastUsage?.inputTokens ?: 0).toLong() + (lastUsage?.outputTokens ?: 0).toLong()
         val goalUsageResult = if (goalMountedForCurrentRequest) runCatching {
             goalManager.recordUsage(
@@ -1849,7 +1742,8 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 ChatViewModel.TAG_STREAM,
                 "📨[QueueInterrupt] turn=$turn ${_promptQueue.value.size} queued prompt(s) — interrupting after current tool call to start a standalone turn",
             )
-            val handled = drainQueueIntoStandaloneTurn(assistantId, accumulatedText, allToolBlocks, uiBatcher)
+            val handled = drainQueueIntoStandaloneTurn(assistantId, accumulatedText, allToolBlocks, uiBatcher, expectedSessionId = loopSessionId)
+            if (!ownsLoop()) return
             if (handled != null) {
                 swapLoopStateToInjectedBubble(handled)
                 activeSystemPrompt = refreshRunPromptForInjectedTurn(activeSystemPrompt, loopSessionId)
@@ -1858,32 +1752,36 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             // null = empty-after-build / drain rejected; fall through to normal next-turn dispatch so the queue doesn't pin the loop.
         }
     }
-    uiBatcher.flush()
-    uiBatcher.stop()
+    if (!ownsLoop()) return
     if (!loopExitedNormally) {
         AppLogger.warning(
             ChatViewModel.TAG_STREAM,
             "runAgentLoop EXIT — hit turn cap=$maxTurns, finalizing as resumable",
         )
         // [T-generation-run] Not a clean finish — close the ledger so the launch scan reserves ABANDONED for a process that actually died.
-        com.openminis.app.agent.GenerationRunLifecycle.failed(context, generationRunId)
         withContext(Dispatchers.Main) {
             finalizeAtTurnLimit(assistantId, accumulatedText, allToolBlocks, loopResumeEpoch)
         }
     } else {
         AppLogger.info(ChatViewModel.TAG_STREAM, "runAgentLoop EXIT (loop body ended naturally)")
     }
-    // [T-context-ring] Refresh after settlement.
-    refreshContextUsage()
+    // [T-context-ring] Refresh after settlement. [T-usage-display-caliber] A
+    // settled MEASURED reading is the most truthful number for the last request;
+    // this tail refresh only carries an unbudgeted raw estimate of a different
+    // caliber — skip it while a measured reading is showing.
+    if ((contextUsage.value?.measuredPrefixTokens ?: 0) == 0L) {
+        refreshContextUsage()
+    }
     // [GH#131] One assistant response has settled. A cancelled turn (Stop) deliberately
     // does NOT fire: there is no complete reply, and user scripts treat OnResponse as
     // "the answer is final" (notify, sync out, downstream automation). Cancellation
     // normally exits the loop first; the isActive guard closes the race where it lands here.
-    if (currentCoroutineContext().isActive) {
+    if (completedReply && currentCoroutineContext().isActive && ownsLoop()) {
+        com.openminis.app.agent.GenerationRunLifecycle.succeeded(context, generationRunId)
         runCatching {
             com.openminis.app.agent.lifecycle.LifecycleHooks.fire(
                 com.openminis.app.agent.lifecycle.LifecycleHooks.LifecycleEvent.RESPONSE,
-                realSessionId.ifEmpty { sessionId },
+                loopSessionId,
                 accumulatedText.takeLast(500),
             )
         }

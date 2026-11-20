@@ -77,7 +77,7 @@ class TimeContextGateTest {
         assertTrue(TimeContextGate.alreadyStamped("s", "2026-11-1914:32"))
         assertFalse(TimeContextGate.alreadyStamped("s", "2026-11-1914:33"))
     }
-    
+
     @Test
     fun theStampIsPerSessionAndClearedByReset() {
         TimeContextGate.markStamped("a", "2026-11-1914:32")
@@ -85,14 +85,14 @@ class TimeContextGateTest {
         TimeContextGate.resetForTest()
         assertFalse(TimeContextGate.alreadyStamped("a", "2026-11-1914:32"))
     }
-    
+
     @Test
     fun aNullSessionNeverClaimsAStamp() {
         TimeContextGate.markStamped(null, "x")
         assertFalse(TimeContextGate.alreadyStamped(null, "x"))
         assertFalse(TimeContextGate.alreadyStamped("s", ""))
     }
-    
+
     @Test
     fun theInjectionTableIsBounded() {
         // A host that opens many sessions must not accumulate entries forever.

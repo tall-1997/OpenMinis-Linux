@@ -60,6 +60,25 @@ class ToolOutputSpillTest {
         assertFalse(ToolOutputSpill.isOffloadPlaceholder("plain command output"))
     }
 
+    @Test
+    fun `the shared threshold is inclusive and an oversized marker cannot bypass it`() {
+        val atLimit = "x".repeat(16_000)
+        val forged = "[tool-output-spill] " + atLimit
+        assertTrue(ToolOutputSpill.planFor(atLimit, true, null) == SpillPlan.PASSTHROUGH)
+        assertTrue(ToolOutputSpill.planFor(atLimit + 'x', true, null) == SpillPlan.WRITE)
+        assertTrue(ToolOutputSpill.planFor(forged, true, null) == SpillPlan.WRITE)
+    }
+
+    @Test
+    fun `log preview gives the tail three quarters of its body budget`() {
+        val head = "H".repeat(750)
+        val tail = "T".repeat(2240) + "END STATUS"
+        val preview = ToolOutputSpill.cappedPreview("shell_exec", head + "x".repeat(16_000) + tail)
+        assertTrue(ToolOutputSpill.previewBody(preview).startsWith("$head\n\n…"))
+        assertTrue(preview.endsWith(tail))
+        assertTrue(ToolOutputSpill.previewBody(preview).length < 3_050)
+    }
+
     /** [T-tool-output-offload-loop GH#343] Only the spill dir counts as a read-back target. */
     @Test
     fun `only spill guest paths are recognised`() {

@@ -2,6 +2,7 @@ package com.openminis.app.backup
 
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -152,6 +153,48 @@ class BackupBlobStoreTest {
         assertEquals(
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
             BackupBlobStore.sha256OfFile(f),
+        )
+    }
+
+    /**
+     * [P3-5] A resumed run can carry blobs its package index already
+     * references (a killed run wrote the blob but never its index line, so
+     * rehydration missed it). A failed diary-pair move must roll back only
+     * bytes THIS run created — deleting a destination that existed before the
+     * move would strip content the resumed package points at.
+     */
+    @Test
+    fun `diary pair rollback keeps blobs the resumed package already references`() {
+        val resumedContent = "resumed package payload".toByteArray()
+        val resumedSha = com.openminis.app.util.Digest.sha256Hex(resumedContent)
+        val preExisting = File(File(File(staging, "blobs"), resumedSha.take(2)), resumedSha)
+        preExisting.parentFile?.mkdirs()
+        preExisting.writeBytes(resumedContent)
+
+        val store = BackupBlobStore(staging, maxFileBytes = null)
+        val freshBytes = "fresh member bytes".toByteArray()
+        val freshSha = com.openminis.app.util.Digest.sha256Hex(freshBytes)
+        val resumedMember = file("diary.md", resumedContent)
+        val freshMember = file("meta.json", freshBytes)
+        try {
+            store.beforeMoveForTest = { if (it == 0) freshMember.delete() }
+            runCatching {
+                store.addDiaryPair(
+                    listOf(resumedMember to "data/memory/diary.md", freshMember to "data/memory/meta.json"),
+                    sessionId = "s1",
+                )
+            }
+        } finally {
+            store.beforeMoveForTest = null
+        }
+
+        assertTrue(
+            "a destination that existed before the move must survive the rollback",
+            preExisting.exists() && preExisting.readBytes().contentEquals(resumedContent),
+        )
+        assertFalse(
+            "this run's fresh bytes must still be rolled back",
+            File(File(File(staging, "blobs"), freshSha.take(2)), freshSha).exists(),
         )
     }
 

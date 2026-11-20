@@ -7,6 +7,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
@@ -26,15 +27,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
  * frame-drop during heavy stream bursts. Batching reduces context switches and
  * lets Compose coalesce recompositions.
  *
- * Usage:
- *   val batcher = UiUpdateBatcher(viewModelScope, ::updateAssistantMessage)
- *   // in collect loop:
- *   batcher.enqueue(assistantId, messageSnapshot, isStreaming, allToolBlocks.toList())
- *   // when a bubble is finalized mid-loop (queued-prompt inject):
- *   batcher.seal(oldAssistantId)
- *   // on loop exit:
- *   batcher.flush()
- *   batcher.stop()
+ * [withRunUiBatcher] owns the consumer for a model run. The loop can flush before
+ * finalizing and seal retired bubbles without creating another consumer.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class UiUpdateBatcher(
@@ -219,22 +213,42 @@ class UiUpdateBatcher(
         val job = consumerJob ?: return
         if (!job.isActive) return
         val completion = CompletableDeferred<Unit>()
-        flushRequests.send(completion)
-        completion.await()
+        if (!flushRequests.trySend(completion).isSuccess) return
+        select<Unit> {
+            completion.onAwait { }
+            job.onJoin { }
+        }
     }
 
     /** Stop the consumer (call on cleanup or when the loop exits). */
     fun stop() {
-        queue.close()
         consumerJob?.cancel()
+        queue.cancel()
+        flushRequests.cancel()
+        sealRequests.cancel()
     }
 
     private suspend fun pushToMain(update: Update) {
-        // Tombstone re-check at push time: the id may have been sealed while
-        // the consumer sat in the batch window with the update coalesced.
-        if (update.id in sealedIds) return
         withContext(Dispatchers.Main.immediate) {
-            updateFn(update.id, update.content, update.isStreaming, update.toolBlocks, update.isAwaitingModelResponse)
+            // Recheck after the dispatcher hop, not when the update was queued for Main.
+            if (update.id !in sealedIds) {
+                updateFn(update.id, update.content, update.isStreaming, update.toolBlocks, update.isAwaitingModelResponse)
+            }
         }
+    }
+}
+
+/** The collector must not outlive its producer, even on a throw or cancellation. */
+internal suspend fun <T> withRunUiBatcher(
+    update: (String, String, Boolean, List<AssistantBlock>, Boolean) -> Unit,
+    consumerDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    block: suspend (UiUpdateBatcher) -> T,
+): T = coroutineScope {
+    val batcher = UiUpdateBatcher(this, update, consumerDispatcher = consumerDispatcher)
+    batcher.start()
+    try {
+        block(batcher)
+    } finally {
+        batcher.stop()
     }
 }

@@ -1,5 +1,6 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.data.ContextTokenMeter
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 
@@ -109,17 +110,16 @@ internal object WalkBack {
         var acceptedPriorIdx: Int? = null
         var acceptedUserTextTurns = 0
         var acceptedMessageCount = 0
-        // [T-walkback-streaming-budget] Accumulate the candidate slice while
-        // walking left instead of pre-computing a prefix array over the WHOLE
-        // history. The prefix pass was O(anchor) on every request and could
-        // not stop early; a token-heavy tail now aborts after a few messages.
-        var candidateTokens = 0
-
+        // Accumulate only the messages reached by this backward walk.
+        var candidateTokens = 0L
         var i = anchorIdx
         while (i >= 0) {
             val msg = history[i]
             if (maxEstimatedTokens != null) {
                 candidateTokens += estimateMessageTokens(msg)
+                if (candidateTokens > maxEstimatedTokens) {
+                    return WalkBackResult(acceptedPriorIdx, acceptedUserTextTurns, acceptedMessageCount, STOP_TOKEN_BUDGET_WOULD_EXCEED)
+                }
             }
             if (msg.role != LLMMessage.Role.USER) {
                 i -= 1
@@ -140,23 +140,6 @@ internal object WalkBack {
             if (msg.contentParts.any { it is AgentContentPart.ToolResult }) {
                 i -= 1
                 continue
-            }
-            // [T-compact-token-budget-first] Token budget decides BEFORE the
-            // message cap: in an agent-dense session the anchor can sit behind
-            // 100+ tool rounds with zero user-text turns, and letting the
-            // message cap return first made preAnchor permanently empty — the
-            // work memory between the summary and the tail simply vanished
-            // (observed live: 605-message run, 432 rounds dropped by the tail
-            // budget, walkBack returning 0 turns every request). The token
-            // estimate covers the same risk the cap guarded against (a few
-            // huge tool results), with an actual budget instead of a count.
-            if (maxEstimatedTokens != null && candidateTokens > maxEstimatedTokens) {
-                return WalkBackResult(
-                    priorIdx = acceptedPriorIdx,
-                    userTextTurnsFound = acceptedUserTextTurns,
-                    messageCount = acceptedMessageCount,
-                    stopReason = STOP_TOKEN_BUDGET_WOULD_EXCEED,
-                )
             }
             val candidateMessageCount = anchorIdx - i + 1
             if (candidateMessageCount > maxMessages && maxEstimatedTokens == null) {
@@ -195,43 +178,9 @@ internal object WalkBack {
         )
     }
 
-    /**
-     * [T-compact-keep-budget] Coarse per-message token estimate (chars / 4).
-     *
-     * Deliberately the same approximation the send path already logs
-     * (`approxTokens = chars / 4`) and that `CompactAttempt.maxOutFor` uses, so
-     * the budget decision and the reported context size cannot disagree by
-     * using two different rulers.
-     *
-     * [T-budget-ruler-complete] Tool-call ARGUMENTS and image payloads are
-     * part of the request too. Leaving them out let a 12-call build round
-     * (huge `file_write` / `file_edit` inputs) count as ~12 tokens against a
-     * 60k budget, so the "budgeted" request could still blow a 128k window.
-     * Arguments are serialized here exactly as the wire does; images use the
-     * same 1,500-token weight as `estimateMessagesTokens`.
-     */
-    fun estimateMessageTokens(msg: LLMMessage): Int {
-        var chars = msg.content.length
-        for (part in msg.contentParts) {
-            when (part) {
-                is AgentContentPart.Text -> chars += part.text.length
-                is AgentContentPart.ToolResult -> {
-                    chars += part.content.length
-                    if (part.imageData != null) chars += IMAGE_CHARS
-                }
-                is AgentContentPart.ToolUse ->
-                    // [T-token-scan-memo] reuse the same per-object memo as the
-                    // send-path estimator: this runs for every budget pass, and
-                    // input.toString() is a linear copy of multi-KB args.
-                    chars += TokenScanMemo.toolUseInputJson(part.input).length
-                is AgentContentPart.ImageData -> chars += IMAGE_CHARS
-            }
-        }
-        return (chars / 4).coerceAtLeast(1)
-    }
-
-    /** Same image weight as ChatViewModel.estimateMessagesTokens (1,500 tok). */
-    private const val IMAGE_CHARS = 6_000
+    /** Keep a minimum cost for empty entries at the history-selection boundary. */
+    fun estimateMessageTokens(msg: LLMMessage): Int =
+        ContextTokenMeter.rawMessageTokens(msg).coerceAtLeast(1)
 }
 
 internal fun ChatViewModel.walkBackUserTurnsBounded(

@@ -1,160 +1,96 @@
 package com.openminis.app.ui.chat
 
-import com.openminis.app.logging.AppLogger
 import com.openminis.app.data.model.LLMMessage
+import com.openminis.app.logging.AppLogger
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 
-/**
- * [T-compact-reduced-anchor] What a compaction pass actually covered.
- *
- * [coveredMessages] is the number of LEADING range messages the returned
- * summary describes. A full pass covers the whole range; a reduced pass
- * covers only the prefix it was given, and the caller must place the marker
- * anchor at that boundary — otherwise messages the summary never saw are
- * marked as compacted and disappear from context forever.
- */
-internal data class CompactOutcome(
-    val summary: String,
-    val coveredMessages: Int,
-    /**
-     * [T-compact-no-wipe-on-failure] False when no stage produced a real
-     * summary and the fallback is a placeholder. The caller MUST NOT write a
-     * marker for such an outcome: advancing the anchor over a range whose
-     * only "summary" is one sentence is how a long run lost its whole active
-     * tail.
-     */
-    val succeeded: Boolean = true,
-)
+/** A successful pass describes only the exact prefix submitted to it. */
+internal data class CompactOutcome(val summary: String, val coveredMessages: Int, val succeeded: Boolean = true)
+
+internal class CompactStageTimeout(attemptLabel: String, timeoutMs: Long) :
+    IllegalStateException("Compaction with $attemptLabel timed out after ${timeoutMs / 1_000}s.")
+
+/** Try every configured stage on the full input, then on the oldest closed prefix. */
+internal suspend fun runCompactPasses(
+    messages: List<LLMMessage>,
+    previousSummary: String?,
+    stageCount: Int,
+    generate: suspend (List<LLMMessage>, String?, stageIndex: Int, reduced: Boolean) -> String,
+): CompactOutcome {
+    check(stageCount > 0) { "No LLM provider available for compaction" }
+    var lastError: Exception? = null
+    val reduced = reducedCompactRetryInput(messages)
+    for (input in listOfNotNull(messages, reduced)) {
+        for (stage in 0 until stageCount) {
+            try {
+                val text = generate(input, previousSummary, stage, input === reduced).trim()
+                if (ChatViewModel.isCompactSummaryAcceptable(text, input)) {
+                    return CompactOutcome(text, input.size)
+                }
+                lastError = IllegalStateException("Compact summary failed the quality check (${text.length} chars).")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                lastError = e
+            }
+        }
+    }
+    throw lastError ?: IllegalStateException("Compaction produced no summary; history was kept")
+}
 
 internal suspend fun ChatViewModel.runTwoShotCompact(
     messages: List<LLMMessage>,
     previousSummary: String?,
     stages: List<ChatViewModel.CompactAttempt>,
     timeoutMs: Long,
-): CompactOutcome {
-    val existing = previousSummary
-    if (stages.isEmpty()) {
-        throw IllegalStateException("No LLM provider available for compaction")
-    }
-    var lastError: Exception? = null
-    // [T-compact-reduced-retry] Both full-size stages failed. Truncation
-    // is the LAST resort because it discards history outright, so try one
-    // more pass on a reduced input first: the newest slice of the range
-    // plus the previous summary. A provider that refused for size or
-    // complexity reasons can often still answer a smaller request, and
-    // keeping the tail preserves the most recent turns either way.
-    //
-    // [T-compact-fallback-walk] The reduced pass re-walks the SAME stage
-    // list. Resetting compactLeafAttempt between passes used to make the
-    // leaf re-resolve to the session model only — so a session provider
-    // that was down outright (auth, 5xx) burned the reduced shot on the
-    // same broken endpoint and the fallback models never saw it. A
-    // smaller request rescues a size failure; a different provider
-    // rescues an outage; the reduced pass needs both.
-    val reduced = reducedCompactRetryInput(messages)
-    val passes = buildList {
-        add(messages to false)
-        if (reduced != null) add(reduced to true)
-    }
-    for ((input, isReduced) in passes) {
-        if (isReduced) {
-            AppLogger.warning(
-                ChatViewModel.TAG,
-                "[Compact] all stages failed (${lastError?.message}); retrying on reduced " +
-                    "input ${input.size}/${messages.size} messages",
-            )
-            withContext(Dispatchers.Main) {
-                appendSystemInfo(
-                    "All compact attempts failed (${lastError?.message ?: "no output"}). " +
-                        "Retrying on a smaller slice.",
-                    "compact",
-                )
-            }
-            compactCallsIssued.set(0)
-        }
-        for ((index, stage) in stages.withIndex()) {
-            val stageNo = index + 1
-            compactLeafAttempt = stage
-            _compactProgress.value = _compactProgress.value?.copy(
-                stage = stageNo,
-                stageBudget = stages.size,
-                stageKind = stage.kind,
-                modelLabel = stage.label,
-                nextHint = stage.nextHint,
-                callsIssued = stageNo,
-                callBudget = stages.size,
-            )
-            val headline = when (stage.kind) {
-                "fallback" -> "Compressing ($stageNo/${stages.size}) with fallback model ${stage.label}."
-                "session-retry" -> "Compressing ($stageNo/${stages.size}) retrying current model ${stage.label}. No fallback set."
-                else -> "Compressing ($stageNo/${stages.size}) with current model ${stage.label}."
-            } + when (stage.nextHint) {
-                "fallback" -> " If this fails, the next model is tried."
-                "session-retry" -> " If this fails, the current model is tried once more."
-                else -> " If this fails, the context is kept unchanged."
-            }
-            withContext(Dispatchers.Main) {
-                appendSystemInfo(headline, "compact")
-            }
-            try {
-                val stageTimeout = minOf(timeoutMs, 120_000L)
-                val text = withTimeout(stageTimeout) {
-                    generateCompactSummaryWithSplitting(input, existing, 0)
-                }.trim()
-                // [T-compact-summary-quality] A short or off-target summary
-                // silently poisons every later turn: the model then reasons
-                // from a summary that dropped the user's actual goal. Treat a
-                // failing check as a stage failure so the next stage (or the
-                // reduced pass) still gets a chance.
-                if (text.isNotEmpty() && ChatViewModel.isCompactSummaryAcceptable(text, input)) {
-                    if (isReduced) {
-                        AppLogger.info(
-                            ChatViewModel.TAG,
-                            "[Compact] reduced-input retry succeeded via ${stage.label} (${text.length} chars)",
-                        )
-                    }
-                    // [T-compact-reduced-anchor] The marker may only advance
-                    // over the prefix this pass actually summarized.
-                    return CompactOutcome(text, input.size)
-                }
-                lastError = IllegalStateException(
-                    if (text.isEmpty()) "empty compact summary from ${stage.label}"
-                    else "compact summary from ${stage.label} failed the quality check " +
-                        "(${text.length} chars)",
-                )
-            } catch (e: CancellationException) {
-                if (e is kotlinx.coroutines.TimeoutCancellationException) {
-                    lastError = e
-                    AppLogger.warning(ChatViewModel.TAG, "[Compact] stage ${stage.kind} timed out")
-                } else {
-                    throw e
-                }
-            } catch (e: Exception) {
-                lastError = e
-                AppLogger.warning(ChatViewModel.TAG, "[Compact] stage ${stage.kind} failed: ${e.message}")
-            } finally {
-                compactLeafAttempt = null
-            }
-        }
-    }
-    AppLogger.warning(ChatViewModel.TAG, "[Compact] compaction exhausted; context kept unchanged: ${lastError?.message}")
-    withContext(Dispatchers.Main) {
-        appendSystemInfo(
-            "Compaction failed (${lastError?.message ?: "no output"}). " +
-                "The context is kept unchanged.",
-            "compact",
-        )
-    }
-    return CompactOutcome(
-        summary = existing?.takeIf { it.isNotBlank() }
-            ?: "Compaction failed; the current context was kept unchanged.",
-        // [T-compact-no-wipe-on-failure] Nothing was summarized; do not let
-        // the caller advance the marker. The range stays active.
-        coveredMessages = 0,
-        succeeded = false,
+    sessionId: String = activeSessionId,
+    sessionWindowTokens: Int? = null,
+): CompactOutcome = runCompactPasses(messages, previousSummary, stages.size) { input, existing, index, reduced ->
+    val stage = stages[index]
+    val stageNo = index + 1
+    if (index == 0) compactCallsIssued.set(0)
+    // Large fallback groups retain one leaf per stage, with no split fan-out.
+    val passCallBudget = maxOf(ChatViewModel.MAX_COMPACT_LLM_CALLS, stages.size)
+    val spent = compactCallsIssued.get()
+    val callBudget = passCallBudget - spent - (stages.size - stageNo)
+    _compactProgress.value = _compactProgress.value?.copy(
+        stage = stageNo,
+        stageBudget = stages.size,
+        stageKind = stage.kind,
+        modelLabel = stage.label,
+        nextHint = stage.nextHint,
+        depth = 0,
+        callsIssued = spent,
+        callBudget = passCallBudget,
     )
+    val headline = when (stage.kind) {
+        "fallback" -> "Compressing ($stageNo/${stages.size}) with fallback model ${stage.label}."
+        "session-retry" -> "Compressing ($stageNo/${stages.size}) retrying current model ${stage.label}. No fallback set."
+        else -> "Compressing ($stageNo/${stages.size}) with current model ${stage.label}."
+    } + when (stage.nextHint) {
+        "fallback" -> " If this fails, the next model is tried."
+        "session-retry" -> " If this fails, the current model is tried once more."
+        else -> " If no attempt succeeds, unsummarized history stays active."
+    }
+    withContext(Dispatchers.Main) {
+        if (activeSessionId != sessionId) throw CancellationException("Compaction session changed")
+        if (reduced && index == 0) {
+            appendSystemInfo("Full compaction failed. Retrying the oldest complete prefix (${input.size}/${messages.size}).", "compact")
+        }
+        appendSystemInfo(headline, "compact")
+    }
+    val stageTimeout = minOf(timeoutMs, 120_000L)
+    try {
+        withTimeoutOrNull(stageTimeout) {
+            generateCompactSummaryWithSplitting(input, existing, stage, callBudget, sessionWindowTokens)
+        } ?: throw CompactStageTimeout(stage.label, stageTimeout)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        AppLogger.warning(ChatViewModel.TAG, "[Compact] stage ${stage.kind} failed: ${e.javaClass.simpleName}")
+        throw e
+    }
 }

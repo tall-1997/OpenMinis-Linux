@@ -168,7 +168,7 @@ object SubAgentBatchRegistry {
         return loaded
     }
 
-    private fun saveLocked(sessionId: String, context: Context?, batches: List<Batch>) {
+    private fun saveLocked(sessionId: String, context: Context?, batches: List<Batch>, required: Boolean = false) {
         val k = key(sessionId)
         val trimmed = batches.take(MAX_BATCHES)
         val f = file(context, k)
@@ -177,11 +177,11 @@ object SubAgentBatchRegistry {
             memory[k] = trimmed.toMutableList()
             return
         }
-        // Persist failure is logged, not thrown: the wave is already running and
-        // killing a dispatch because a status file could not be written would
-        // trade a real result for bookkeeping. Memory still advances.
+        // Admission must be durable. Once a wave is running, subsequent status
+        // writes remain best-effort rather than abandoning real work.
         if (AtomicFileWrite.write(f, encode(trimmed)) == null) {
             AppLogger.error(TAG, "batch registry persist failed for $k (${f.absolutePath})")
+            if (required) throw java.io.IOException("Could not checkpoint sub-agent dispatch")
         }
         memory[k] = trimmed.toMutableList()
     }
@@ -212,7 +212,7 @@ object SubAgentBatchRegistry {
         )
         lock(sessionId).withLock {
             val all = loadLocked(sessionId, context)
-            saveLocked(sessionId, context, listOf(batch) + all)
+            saveLocked(sessionId, context, listOf(batch) + all, required = true)
         }
         return batch
     }

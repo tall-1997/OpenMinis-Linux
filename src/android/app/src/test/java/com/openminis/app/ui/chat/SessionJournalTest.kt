@@ -174,7 +174,7 @@ class SessionJournalTest {
         assertEquals(-1, SessionJournal.firstDigestDivergence(recorded, history))
         assertEquals(2, recorded?.size)
     }
-    
+
     @Test
     fun aDivergencePointsAtTheFirstChangedMessage() {
         val sid = "derive-2"
@@ -202,7 +202,7 @@ class SessionJournalTest {
         val recorded = SessionJournal.lastRequestDigests(dir, sid)
         assertEquals(1, SessionJournal.firstDigestDivergence(recorded, actuallyDelivered))
     }
-    
+
     @Test
     fun aShorterHistoryDivergesAtTheFirstMissingIndex() {
         val sid = "derive-3"
@@ -224,7 +224,7 @@ class SessionJournalTest {
         val recorded = SessionJournal.lastRequestDigests(dir, sid)
         assertEquals(1, SessionJournal.firstDigestDivergence(recorded, sent.take(1)))
     }
-    
+
     @Test
     fun noRecordedRequestIsNotAVerdict() {
         // -2, not -1: nothing recorded must not read as "they matched", or a
@@ -232,7 +232,7 @@ class SessionJournalTest {
         assertEquals(-2, SessionJournal.firstDigestDivergence(null, emptyList()))
         assertEquals(null, SessionJournal.lastRequestDigests(dir, "never-written"))
     }
-    
+
     @Test
     fun unsafeSessionIdsCannotEscapeTheDirectory() {
         val f = SessionJournal.file(dir, "../../etc/passwd")

@@ -173,7 +173,7 @@ class BackupExporter(
                 }
                 if (BackupCategory.MEMORY in options.categories) {
                     onProgress?.invoke("Exporting memory…")
-                    stats[BackupCategory.MEMORY.key] = exportMemory(dataDir)
+                    stats[BackupCategory.MEMORY.key] = exportMemory(dataDir, blobStore)
                 }
                 if (BackupCategory.MCP_SERVERS in options.categories) {
                     onProgress?.invoke("Exporting MCP servers…")
@@ -431,10 +431,12 @@ class BackupExporter(
      * of the "avatar lost after restore" regression: it only knew the memory
      * root, while the icon was written outside it.
      */
-    private fun exportMemory(dataDir: File): BackupManifest.CategoryStat =
+    private fun exportMemory(dataDir: File, blobs: BackupBlobStore): BackupManifest.CategoryStat =
         BackupMemoryTree.export(
             BackupMemoryTree.deviceRoot(context.filesDir),
             File(dataDir, "memory"),
+            maxDiaryBytes = blobs.maxFileBytesForManifest,
+            onSkip = blobs::recordSkip,
         )
 
     /**

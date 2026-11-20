@@ -3,7 +3,6 @@ package com.openminis.app.backup
 import android.content.Context
 import com.openminis.app.data.db.AppDatabase
 import com.openminis.app.data.db.ChatSessionEntity
-import com.openminis.app.data.db.CompactMarkerEntity
 import com.openminis.app.data.db.FolderEntity
 import com.openminis.app.data.db.MessageEntity
 import com.openminis.app.data.repository.ChatRepository
@@ -518,32 +517,15 @@ class BackupImporter(
         }
 
         readJsonl(dataDir, "compact_markers") { rec ->
-            val c = rec.obj ?: return@readJsonl
-            val id = c.str("id") ?: return@readJsonl
-            val sessionId = c.str("sessionId") ?: return@readJsonl
-            if (dao.getSession(sessionId) == null) {
+            val marker = rec.obj?.let(::compactMarkerFromRecord) ?: return@readJsonl
+            if (dao.getSession(marker.sessionId) == null) {
                 report.skipped += 1
                 return@readJsonl
             }
-            // insertCompactMarker is ABORT-on-conflict, so a re-run would throw
-            // on rows that already exist. Merge must be idempotent.
-            runCatching {
-                dao.insertCompactMarker(
-                    CompactMarkerEntity(
-                        id = id,
-                        sessionId = sessionId,
-                        summary = c.str("summary") ?: "",
-                        firstKeptSortOrder = c.int("firstKeptSortOrder") ?: 0,
-                        compactedCount = c.int("compactedCount") ?: 0,
-                        createdAt = c.millis("createdAt") ?: 0,
-                        uiBoundarySortOrder = c.int("uiBoundarySortOrder"),
-                        boundaryMessageId = c.str("boundaryMessageId"),
-                        firstKeptMessageId = c.str("firstKeptMessageId"),
-                        lastCompactedMessageId = c.str("lastCompactedMessageId"),
-                    )
-                )
-                report.imported += 1
-            }.onFailure { report.skipped += 1 }
+            // ABORT on a duplicate id keeps repeat imports idempotent.
+            runCatching { dao.insertCompactMarker(marker) }
+                .onSuccess { report.imported += 1 }
+                .onFailure { report.skipped += 1 }
         }
 
         // [T-android-restore-preview] Rebuild each restored session's
@@ -560,17 +542,7 @@ class BackupImporter(
         // The session file trees. Containment root is the sessions directory:
         // a path in the index that escapes it is refused outright.
         val sessionsRoot = File(context.filesDir, "minis-sessions")
-        val files = BackupRestoreFiles.restore(
-            packageRoot = root,
-            fileIndex = fileIndex,
-            category = BackupCategory.CHATS,
-            containmentRoot = sessionsRoot,
-        ) { path ->
-            // "chats/<sid>/<rest…>"
-            val parts = path.split('/')
-            if (parts.size < 3 || parts[0] != "chats" || parts[1] == "_bodies") null
-            else File(sessionsRoot, parts.drop(1).joinToString("/"))
-        }
+        val files = BackupRestoreFiles.restoreSessionTrees(root, fileIndex, sessionsRoot)
         applyFileResult(report, files)
         return report
     }

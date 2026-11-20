@@ -4,6 +4,9 @@ import com.openminis.app.logging.AppLogger
 import com.openminis.app.util.Digest
 import java.io.File
 import java.io.InputStream
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption.ATOMIC_MOVE
+import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 
 /**
  * Content-addressed blob writer for the staging directory (§2), mirroring
@@ -27,7 +30,7 @@ import java.io.InputStream
  *   [reuse] can recognise unchanged files; null skips bookkeeping.
  */
 class BackupBlobStore(
-    stagingRoot: File,
+    internal val stagingRoot: File,
     private val maxFileBytes: Long?,
     private val reuse: Reuse? = null,
     private val incremental: BackupIncrementalManifest? = null,
@@ -201,6 +204,50 @@ class BackupBlobStore(
         incremental?.record(logicalPath, digest, size, file.lastModified())
         _blobIndex.add(BackupBlobIndexEntry(digest, size, logicalPath, sessionId, mimeType(logicalPath)))
         return Outcome.Stored(digest, size)
+    }
+
+    /** Internal crash injection; production leaves it null. Fires before each member move. */
+    internal var beforeMoveForTest: ((memberIndex: Int) -> Unit)? = null
+
+    /** Publish a diary's immutable, validated members as one group; do not reuse stat-only blobs. */
+    internal fun addDiaryPair(members: List<Pair<File, String>>, sessionId: String?): List<String> {
+        val hashes = members.map { (file, _) -> sha256OfFile(file) }
+        val fresh = LinkedHashMap<String, Pair<File, String>>()
+        for ((index, member) in members.withIndex()) {
+            val hash = hashes[index]
+            if (hash !in seen) fresh.putIfAbsent(hash, member)
+            else BackupDiaryPairs.verify(blobFile(hash), hash, member.first.length())
+        }
+        val moved = mutableListOf<File>()
+        // [P3-5] A resumed run can leave blobs in the tree that its package
+        // index already references (a killed run wrote the blob but never its
+        // index line, so rehydration missed it). Such a destination exists
+        // BEFORE this run's move — a rollback must not delete it, or the
+        // resumed package loses content it references. Only bytes this run
+        // created are rolled back.
+        val preExisting = HashSet<String>()
+        try {
+            for ((index, entry) in fresh.entries.withIndex()) {
+                val (hash, member) = entry.toPair()
+                val destination = blobFile(hash)
+                destination.parentFile?.mkdirs()
+                if (destination.exists()) preExisting += destination.absolutePath
+                beforeMoveForTest?.invoke(index)
+                Files.move(member.first.toPath(), destination.toPath(), ATOMIC_MOVE, REPLACE_EXISTING)
+                moved += destination
+            }
+        } catch (e: Exception) {
+            moved.forEach { if (it.absolutePath !in preExisting) it.delete() }
+            throw e
+        }
+        for ((hash, member) in fresh) {
+            val path = member.second
+            val size = blobFile(hash).length()
+            seen.add(hash)
+            totalBytesStored += size
+            _blobIndex.add(BackupBlobIndexEntry(hash, size, path, sessionId, mimeType(path)))
+        }
+        return hashes
     }
 
     /** Offer in-memory bytes (generated content that never hits disk). */

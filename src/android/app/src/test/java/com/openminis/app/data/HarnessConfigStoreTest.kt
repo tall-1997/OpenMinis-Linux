@@ -20,24 +20,24 @@ class HarnessConfigStoreTest {
 
     @get:Rule
     val tmp = TemporaryFolder()
-    
+
     @Before
     fun setUp() {
         HarnessConfigStore.clearForTest()
     }
-    
+
     @After
     fun tearDown() {
         HarnessConfigStore.clearForTest()
     }
-    
+
     @Test
     fun missingEntryFallsBackToTheShippedDefaults() {
         val dir = tmp.newFolder()
         assertEquals(HarnessConfig.DEFAULT, HarnessConfigStore.forModel(dir, "m1"))
         assertFalse(HarnessConfigStore.hasOverride(dir, "m1"))
     }
-    
+
     @Test
     fun aSavedOverrideIsReadBackAndIsolatedPerModel() {
         val dir = tmp.newFolder()
@@ -50,7 +50,7 @@ class HarnessConfigStoreTest {
             HarnessConfigStore.forModel(dir, "m2").postAnchorBudgetTokens,
         )
     }
-    
+
     @Test
     fun savingNullRestoresTheDefaults() {
         val dir = tmp.newFolder()
@@ -60,7 +60,7 @@ class HarnessConfigStoreTest {
         assertFalse(HarnessConfigStore.hasOverride(dir, "m1"))
         assertEquals(HarnessConfig.DEFAULT, HarnessConfigStore.forModel(dir, "m1"))
     }
-    
+
     @Test
     fun anInvalidStoredConfigBehavesLikeNoOverride() {
         val dir = tmp.newFolder()
@@ -69,7 +69,7 @@ class HarnessConfigStoreTest {
         target.writeText("{ this is not json", Charsets.UTF_8)
         assertEquals(HarnessConfig.DEFAULT, HarnessConfigStore.forModel(dir, "m1"))
     }
-    
+
     @Test
     fun anOutOfRangeStoredConfigIsRejectedByValidation() {
         val dir = tmp.newFolder()
@@ -81,7 +81,7 @@ class HarnessConfigStoreTest {
         target.writeText(bad, Charsets.UTF_8)
         assertEquals(HarnessConfig.DEFAULT, HarnessConfigStore.forModel(dir, "m1"))
     }
-    
+
     @Test
     fun theJsonRoundTripKeepsEveryField() {
         val custom = HarnessConfig(
@@ -93,7 +93,7 @@ class HarnessConfigStoreTest {
         )
         assertEquals(custom, HarnessConfigStore.fromJson(HarnessConfigStore.toJson(custom)))
     }
-    
+
     @Test
     fun theStoredFileLivesUnderTheHarnessConfigDirectory() {
         val dir = tmp.newFolder()
@@ -104,7 +104,7 @@ class HarnessConfigStoreTest {
         // The unsafe characters must be neutralized, not passed through.
         assertTrue(stored.name.none { it == '/' })
     }
-    
+
     @Test
     fun anUnknownEntryIdIsNeverStored() {
         val dir = tmp.newFolder()
@@ -113,4 +113,3 @@ class HarnessConfigStoreTest {
         assertEquals(HarnessConfig.DEFAULT, HarnessConfigStore.forModel(dir, ""))
     }
 }
-

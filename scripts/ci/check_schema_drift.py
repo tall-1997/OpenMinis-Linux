@@ -58,6 +58,7 @@ APP_DB_SOURCES = (
     "AuditMigrations.kt",
     "MemoryEmbeddingMigrations.kt",
     "ThinkingDormancyMigrations.kt",
+    "CompactAssetMigrations.kt",
 )
 
 

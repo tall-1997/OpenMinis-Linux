@@ -1,184 +1,75 @@
 package com.openminis.app.ui.chat
 
-import org.junit.After
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Before
+import org.junit.Assume.assumeNoException
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.io.IOException
+import java.io.RandomAccessFile
 import java.nio.file.Files
 
-/**
- * [T-tool-receipt] `not_sent` before dispatch, `accepted` after — an unmatched
- * `not_sent` IS the `unknown` state the model must verify instead of retrying.
- * Read-only tools leave nothing behind.
- */
 class ToolReceiptStoreTest {
+    @get:Rule val tmp = TemporaryFolder()
 
-    private lateinit var dir: File
+    private val key = "a".repeat(16)
+    private fun path(session: String): File = tmp.root.resolve(LegacyToolReceiptStore.DIR).apply { mkdirs() }
+        .resolve("$session.jsonl")
 
-    @Before
-    fun setUp() {
-        dir = Files.createTempDirectory("tool-receipts").toFile()
-    }
-
-    @After
-    fun tearDown() {
-        dir.deleteRecursively()
-    }
+    private fun record(state: String, op: String, key: String = this.key) = JSONObject()
+        .put("key", key).put("state", state).put("op", op).put("tool", "file_write")
+        .put("success", false).toString()
 
     @Test
-    fun onlyMutatingToolsLeaveReceipts() {
-        assertTrue(ToolReceiptStore.isMutating("file_edit"))
-        assertTrue(ToolReceiptStore.isMutating("shell_execute"))
-        assertTrue("aliases must not slip through", ToolReceiptStore.isMutating("shell_exec"))
-        assertFalse(ToolReceiptStore.isMutating("file_read"))
-        assertFalse(ToolReceiptStore.isMutating("grep"))
-    }
-
-    @Test
-    fun aSettledCallIsNotReportedAsUnsettled() {
-        val sid = "r1"
-        val args = """{"path":"/src/A.kt"}"""
-        ToolReceiptStore.begin(dir, sid, "file_edit", args)
-        ToolReceiptStore.settle(dir, sid, "file_edit", args, success = true)
-        assertTrue(ToolReceiptStore.unsettled(dir, sid).isEmpty())
+    fun legacyDiagnosticsCountOnlyUnsettledAttemptsWithoutWriting() {
+        val file = path("own-chat")
+        val lines = listOf(record("not_sent", "first"), record("not_sent", "second"),
+            record("accepted", "first"), record("not_sent", "third", "b".repeat(16)),
+            record("abandoned", "third", "b".repeat(16)))
+        val raw = lines.joinToString("\n", postfix = "\n")
+        file.writeText(raw)
+        assertEquals(LegacyToolReceiptStore.Diagnostics(1), LegacyToolReceiptStore.readDiagnostics(tmp.root, "own-chat"))
+        assertEquals(raw, file.readText())
+        assertNull(LegacyToolReceiptStore.readDiagnostics(tmp.root, "other-chat"))
     }
 
     @Test
-    fun aCrashBetweenBeginAndSettleIsObservable() {
-        val sid = "r2"
-        val args = """{"command":"rm -rf build"}"""
-        ToolReceiptStore.begin(dir, sid, "shell_execute", args)
-        val open = ToolReceiptStore.unsettled(dir, sid)
-        assertEquals(1, open.size)
-        assertEquals("shell_execute", open.first().optString("tool"))
+    fun ambiguousSanitizedNamesAndTraversalDoNotHaveAnOwner() {
+        path("chat_a").writeText(record("not_sent", "first") + "\n")
+        assertNull(LegacyToolReceiptStore.readDiagnostics(tmp.root, "chat_a"))
+        assertNull(LegacyToolReceiptStore.readDiagnostics(tmp.root, "chat/a"))
+        assertNull(LegacyToolReceiptStore.readDiagnostics(tmp.root, "../chat_a"))
     }
 
     @Test
-    fun readOnlyCallsWriteNothing() {
-        val sid = "r3"
-        ToolReceiptStore.begin(dir, sid, "file_read", """{"path":"/a"}""")
-        ToolReceiptStore.settle(dir, sid, "file_read", """{"path":"/a"}""", success = true)
-        assertTrue(ToolReceiptStore.unsettled(dir, sid).isEmpty())
-        assertFalse(ToolReceiptStore.file(dir, sid).exists())
+    fun tornMalformedAndOverlongLinesCannotSettleAnAttempt() {
+        val file = path("own-chat")
+        file.writeText(record("not_sent", "first") + "\n!\n" +
+            record("accepted", "first").padEnd(8 * 1024 + 1, ' ') + "\n" +
+            record("accepted", "first"))
+        assertEquals(LegacyToolReceiptStore.Diagnostics(1), LegacyToolReceiptStore.readDiagnostics(tmp.root, "own-chat"))
     }
 
     @Test
-    fun receiptsArePerSession() {
-        ToolReceiptStore.begin(dir, "a", "file_write", """{"path":"/a"}""")
-        assertEquals(1, ToolReceiptStore.unsettled(dir, "a").size)
-        assertTrue(ToolReceiptStore.unsettled(dir, "b").isEmpty())
+    fun oversizedLegacyFileIsNotRead() {
+        val file = path("own-chat")
+        RandomAccessFile(file, "rw").use { it.setLength(LegacyToolReceiptStore.MAX_BYTES.toLong() + 1) }
+        assertNull(LegacyToolReceiptStore.readDiagnostics(tmp.root, "own-chat"))
     }
 
     @Test
-    fun aCorruptLineDoesNotHideTheRest() {
-        val sid = "r4"
-        val f = ToolReceiptStore.file(dir, sid)
-        f.parentFile?.mkdirs()
-        f.writeText("not-json\n\n", Charsets.UTF_8)
-        ToolReceiptStore.begin(dir, sid, "file_write", """{"path":"/b"}""")
-        assertEquals(1, ToolReceiptStore.unsettled(dir, sid).size)
-    }
-
-    @Test
-    fun abandonClearsTheUnsettledWarning() {
-        // [T-tool-receipt-cancel] A cancelled dispatch must not warn every later
-        // turn about an "unknown" outcome the process actually observed.
-        val sid = "r5"
-        val args = """{"path":"/src/B.kt"}"""
-        ToolReceiptStore.begin(dir, sid, "file_edit", args)
-        assertNotNull(ToolReceiptStore.unsettledNotice(dir, sid))
-        ToolReceiptStore.abandon(dir, sid, "file_edit", args)
-        assertTrue(ToolReceiptStore.unsettled(dir, sid).isEmpty())
-        assertNull(ToolReceiptStore.unsettledNotice(dir, sid))
-    }
-
-    @Test
-    fun abandonIsAppendOnlyAndKeepsOtherRecords() {
-        // [T-tool-receipt-abandon-append] Append-only by contract: rewriting the
-        // file raced a concurrent begin/settle and could drop a fresh append.
-        val sid = "r6"
-        ToolReceiptStore.begin(dir, sid, "file_edit", """{"path":"/a"}""")
-        ToolReceiptStore.begin(dir, sid, "file_write", """{"path":"/b"}""")
-        ToolReceiptStore.abandon(dir, sid, "file_edit", """{"path":"/a"}""")
-        val open = ToolReceiptStore.unsettled(dir, sid)
-        assertEquals(1, open.size)
-        assertEquals("file_write", open.first().optString("tool"))
-        // The abandoned record is still on disk as evidence, not deleted.
-        assertTrue(ToolReceiptStore.file(dir, sid).readText().contains("abandoned"))
-    }
-
-       @Test
-    fun reusingAnOperationIdForDifferentContentIsAConflict() {
-        // [T-tool-receipt-conflict] The identity is the OPERATION ID. A replay
-        // of the same operation is fine; the same id carrying different content
-        // is a different operation and must be refused, not merged.
-        val sid = "c1"
-        ToolReceiptStore.begin(dir, sid, "file_edit", "{\"path\":\"/a\"}", opId = "op-1")
-        assertEquals(
-            "file_edit",
-            ToolReceiptStore.conflictOf(dir, sid, "op-1", "file_write", "{\"path\":\"/b\"}"),
-        )
-    }
-    
-    @Test
-    fun replayingTheSameOperationIsNotAConflict() {
-        val sid = "c2"
-        val args = "{\"path\":\"/c\"}"
-        ToolReceiptStore.begin(dir, sid, "file_edit", args, opId = "op-2")
-        assertEquals(null, ToolReceiptStore.conflictOf(dir, sid, "op-2", "file_edit", args))
-    }
-    
-    @Test
-    fun anUnknownOperationIdIsNotAConflict() {
-        val sid = "c3"
-        ToolReceiptStore.begin(dir, sid, "file_edit", "{\"path\":\"/d\"}", opId = "op-3")
-        assertEquals(null, ToolReceiptStore.conflictOf(dir, sid, "op-other", "file_edit", "{}"))
-    }
-    
-    @Test
-    fun anEmptyOperationIdOrReadOnlyToolIsNeverAConflict() {
-        assertEquals(null, ToolReceiptStore.conflictOf(dir, "c4", "", "file_edit", "{}"))
-        assertEquals(null, ToolReceiptStore.conflictOf(dir, "c4", "op", "file_read", "{}"))
-    }
-    
-    @Test
-    fun unsafeSessionIdsStayInsideTheDirectory() {
-        val f = ToolReceiptStore.file(dir, "../../etc/passwd")
-        assertEquals(dir.resolve(ToolReceiptStore.DIR).absolutePath, f.parentFile.absolutePath)
-        assertFalse(f.name.contains("/"))
-    }
-    
-    @Test
-    fun peekingTheNoticeDoesNotConsumeIt() {
-        // [T-tool-receipt-report-once] peek and ack are separate: a refusal or a
-        // throwing dispatch drops the notice, and mark-on-peek would lose the
-        // warning forever - the double execution this feature prevents.
-        val sid = "peek-1"
-        ToolReceiptStore.begin(dir, sid, "file_edit", "{\"path\":\"/a\"}", opId = "op-peek")
-        val first = ToolReceiptStore.pendingUnsettled(dir, sid)
-        assertEquals(1, first.size)
-        assertEquals(1, ToolReceiptStore.pendingUnsettled(dir, sid).size)
-        ToolReceiptStore.ackUnsettled(dir, sid, first)
-        assertTrue(ToolReceiptStore.pendingUnsettled(dir, sid).isEmpty())
-    }
-    
-    @Test
-    fun aCleanlySettledIdMayBeReusedButAFailedOneMayNot() {
-        // A provider or relay can reuse a tool_call id across responses. Reusing it
-        // after a CLEAN success is harmless; after a FAILED or abandoned attempt the
-        // side effect may have landed, so it is a conflict.
-        val okSid = "reuse-ok"
-        ToolReceiptStore.begin(dir, okSid, "file_edit", "{\"p\":1}", opId = "id-1")
-        ToolReceiptStore.settle(dir, okSid, "file_edit", "{\"p\":1}", success = true, opId = "id-1")
-        assertEquals(null, ToolReceiptStore.conflictOf(dir, okSid, "id-1", "file_write", "{\"p\":2}"))
-        val badSid = "reuse-bad"
-        ToolReceiptStore.begin(dir, badSid, "file_edit", "{\"p\":1}", opId = "id-2")
-        ToolReceiptStore.settle(dir, badSid, "file_edit", "{\"p\":1}", success = false, opId = "id-2")
-        assertNotNull(ToolReceiptStore.conflictOf(dir, badSid, "id-2", "file_write", "{\"p\":2}"))
+    fun linkedLegacyFileDoesNotEstablishOwnership() {
+        val foreign = path("other-chat").apply { writeText(record("not_sent", "first") + "\n") }
+        try {
+            Files.createSymbolicLink(path("own-chat").toPath(), foreign.toPath())
+        } catch (e: IOException) {
+            assumeNoException(e) // A Windows host may not permit creating test symlinks.
+        } catch (e: UnsupportedOperationException) {
+            assumeNoException(e)
+        }
+        assertNull(LegacyToolReceiptStore.readDiagnostics(tmp.root, "own-chat"))
     }
 }

@@ -45,7 +45,7 @@ internal suspend fun pruneStaleCompactMarkers(dao: ChatDao, sessionId: String): 
         // A throwing read counts as "still here" — a transient DB error must
         // not silently discard a valid summary.
         val alive = anchor != null &&
-            (try { dao.messageById(anchor) != null } catch (_: Exception) { true })
+            (try { dao.compactOrderForId(sessionId, anchor) != null } catch (_: Exception) { true })
         val verdict = CompactMarkerValidity.verdict(marker) { id -> id == anchor && alive }
         if (verdict != CompactMarkerValidity.Verdict.Stale) return removed
         val deleted = try { dao.deleteCompactMarker(marker.id) } catch (_: Exception) { 0 }

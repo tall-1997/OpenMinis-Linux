@@ -1,12 +1,16 @@
 package com.openminis.app.data
 
+import com.openminis.app.agent.HarnessConfig
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
-import com.openminis.app.ui.chat.ChatViewModel
 import com.openminis.app.ui.chat.WalkBack
+import com.openminis.app.ui.chat.assembleDetachedCompactHistory
 import com.openminis.app.ui.chat.buildDetachedCompactHistory
 import com.openminis.app.ui.chat.detachedTailSize
+import com.openminis.app.ui.chat.detachedTailStartForWindow
 import com.openminis.app.ui.chat.dropOrphanedToolParts
+import com.openminis.app.ui.chat.evictedStateNote
+import com.openminis.app.ui.chat.SessionStateSnapshot
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -78,23 +82,22 @@ class CompactDetachedAnchorTest {
     }
 
     @Test
-    fun `leading assistant turns are peeled so the first message is user`() {
+    fun `summary before an assistant head preserves every uncovered message`() {
         val h = listOf(asst(1), asst(2), user(3), asst(3))
         val out = buildDetachedCompactHistory("<summary/>", h, tailSize = 60)
         assertEquals(LLMMessage.Role.USER, out.first().role)
-        assertTrue(out.first().content.startsWith("<summary/>"))
+        assertEquals("<summary/>", out.first().content)
+        assertEquals(h, out.drop(1))
     }
 
     @Test
-    fun `a tail with no user turn still carries the summary first`() {
+    fun `a tail with no user turn gets a leading summary`() {
         val h = listOf(asst(1), asst(2))
         val out = buildDetachedCompactHistory("<summary/>", h, tailSize = 60)
-        // [T-detached-tail-pairing] Assistant-only tail: the summary becomes
-        // its own user turn before the paired suffix.
-        assertEquals(3, out.size)
-        assertEquals(LLMMessage.Role.USER, out.first().role)
         assertEquals("<summary/>", out.first().content)
-        assertEquals("a1", out[1].content)
+        assertEquals(LLMMessage.Role.USER, out.first().role)
+        assertEquals(listOf(AgentContentPart.Text("<summary/>")), out.first().contentParts)
+        assertEquals(h, out.drop(1))
     }
 
     @Test
@@ -116,9 +119,10 @@ class CompactDetachedAnchorTest {
             user(2), useMsg("call_2"), resultMsg("call_2"),
             user(3),
         )
-        // tailSize=3 → rawCut=4 → lands on assistant tool_use → walk back to u2 (index 3).
-        val out = buildDetachedCompactHistory("<summary/>", h, tailSize = 3)
+        // tailSize=2 puts the raw cut on the carrier; its call must remain in the suffix.
+        val out = buildDetachedCompactHistory("<summary/>", h, tailSize = 2)
         assertEquals(LLMMessage.Role.USER, out.first().role)
+        assertEquals(h.drop(4), out.drop(1))
         val (uses, results) = toolIds(out)
         assertEquals("every kept use must keep its result", uses, results)
     }
@@ -155,30 +159,21 @@ class CompactDetachedAnchorTest {
 
     @Test
     fun `summary injection onto a parts-carrying user turn syncs contentParts`() {
-        // [T-user-text-prefix-parts-sync] The wire builders serialize
-        // contentParts when non-empty and never read `content`, so the
-        // content-only injection dropped the whole summary from the wire
-        // whenever the first tail row carried parts (tool-result carrier
-        // or a real send). The summary must ride the parts as well.
-        // [T-anthropic-toolresult-first] On a carrier the text appends AFTER
-        // the tool parts (Anthropic requires tool_result first in a user
-        // message) — the assertions below pin both the ride and the order.
-        val h = listOf(useMsg("call_1"), resultMsg("call_1"))
-        val out = buildDetachedCompactHistory("<summary/>", h, tailSize = 2)
-        val first = out.first()
-        assertEquals(LLMMessage.Role.USER, first.role)
-        assertTrue(first.content.startsWith("<summary/>"))
-        assertTrue(
-            "summary must ride contentParts too",
-            first.contentParts.filterIsInstance<AgentContentPart.Text>()
-                .any { it.text.contains("<summary/>") },
-        )
-        // The tool result part is preserved after the injected text.
-        val toolIdx = first.contentParts.indexOfFirst { it is AgentContentPart.ToolResult }
-        val textIdx = first.contentParts.indexOfFirst {
-            it is AgentContentPart.Text && it.text.contains("<summary/>")
-        }
-        assertTrue("summary text must follow the tool_result on the carrier", textIdx > toolIdx)
+        val message = user(1).copy(contentParts = listOf(AgentContentPart.Text("u1")))
+        val out = buildDetachedCompactHistory("<summary/>", listOf(message), tailSize = 1)
+        val first = out.single()
+        assertEquals("<summary/>\n\nu1", first.content)
+        assertEquals(listOf(AgentContentPart.Text("<summary/>"), AgentContentPart.Text("u1")), first.contentParts)
+    }
+
+    @Test
+    fun `detached assistant tool call retains its result and the following user turn`() {
+        val h = listOf(useMsg("call_1"), resultMsg("call_1"), user(1))
+        val out = buildDetachedCompactHistory("<summary/>", h, tailSize = h.size)
+        assertEquals(LLMMessage.Role.USER, out.first().role)
+        assertEquals("<summary/>", out.first().content)
+        assertEquals(h, out.drop(1))
+        assertEquals(out, dropOrphanedToolParts(out))
     }
 
     @Test
@@ -262,6 +257,43 @@ class CompactDetachedAnchorTest {
         assertEquals(LLMMessage.Role.USER, out.first().role)
         val (uses, results) = toolIds(out)
         assertEquals(uses, results)
+    }
+
+    @Test
+    fun `the formal detached path keeps uncovered rows while the budgeted path keeps the paired step`() {
+        val state = user(4).copy(content = "<system-reminder>\n${SessionStateSnapshot.MARKER}\ncurrent plan\n</system-reminder>")
+        val newest = resultMsg("last").let { row ->
+            row.copy(contentParts = listOf((row.contentParts.single() as AgentContentPart.ToolResult).copy(content = "x".repeat(1_000))))
+        }
+        val raw = listOf(asst(1), user(2), state, useMsg("last|fc_last"), newest)
+        val config = HarnessConfig.DEFAULT.copy(postAnchorBudgetTokens = 300, noticeReserveTokens = 100)
+        val envelope = "<context-summary>\nprior coverage\n<context-assets>known file</context-assets>\n</context-summary>"
+        val fullCut = detachedTailStartForWindow(raw, 32_000, applyTailBudget = false, config = config)
+        val full = assembleDetachedCompactHistory(envelope, raw, fullCut, config)
+        assertEquals(0, fullCut)
+        assertEquals(envelope, full.first().content)
+        assertEquals(raw, full.drop(1))
+
+        val budgetCut = detachedTailStartForWindow(raw, 32_000, applyTailBudget = true, config = config)
+        assertEquals(3, budgetCut)
+        val recovered = evictedStateNote(raw, -1, raw.drop(budgetCut))
+        assertEquals(state, recovered)
+        val budgeted = assembleDetachedCompactHistory(envelope, raw, budgetCut, config, recovered)
+        assertEquals(raw.takeLast(2), budgeted.drop(1))
+        assertTrue(budgeted.first().content.contains("3 earlier messages are not in this request"))
+        assertTrue(budgeted.first().content.contains("<context-assets>known file</context-assets>"))
+        assertTrue(budgeted.first().content.contains("current plan"))
+        assertEquals(budgeted, dropOrphanedToolParts(budgeted))
+    }
+
+    @Test
+    fun `a fitting newer step does not pull an oversized older pair back into the tail`() {
+        val olderCall = useMsg("older").copy(reasoningContent = "x".repeat(20_000))
+        val history = listOf(user(1), olderCall, resultMsg("older"), useMsg("new"), resultMsg("new"))
+        val config = HarnessConfig.DEFAULT.copy(postAnchorBudgetTokens = 300, noticeReserveTokens = 100)
+        val cut = detachedTailStartForWindow(history, 32_000, applyTailBudget = true, config = config)
+        assertEquals(3, cut)
+        assertEquals(history.takeLast(2), assembleDetachedCompactHistory("<summary/>", history, cut, config).drop(1))
     }
 
     @Test

@@ -14,17 +14,17 @@ class GuardPrefsTest {
     fun setUp() {
         GuardPrefs.resetForTest()
     }
-    
+
     @After
     fun tearDown() {
         GuardPrefs.resetForTest()
     }
-    
+
     @Test
     fun theShippedDefaultStopsTheSession() {
         assertTrue(GuardPrefs.stopEnabled())
     }
-    
+
     @Test
     fun turningItOffIsRememberedUntilTurnedBackOn() {
         GuardPrefs.setStopEnabled(false)
@@ -32,7 +32,7 @@ class GuardPrefsTest {
         GuardPrefs.setStopEnabled(true)
         assertTrue(GuardPrefs.stopEnabled())
     }
-    
+
     @Test
     fun everyRealChangeBumpsTheRevisionButARepeatDoesNot() {
         val start = GuardPrefs.revision.value
@@ -42,7 +42,7 @@ class GuardPrefsTest {
         GuardPrefs.setStopEnabled(false)
         assertEquals(afterChange, GuardPrefs.revision.value)
     }
-    
+
     @Test
     fun resetRestoresTheDefault() {
         GuardPrefs.setStopEnabled(false)
@@ -50,4 +50,3 @@ class GuardPrefsTest {
         assertTrue(GuardPrefs.stopEnabled())
     }
 }
-

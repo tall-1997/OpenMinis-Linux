@@ -19,6 +19,8 @@ interface MemoryEmbeddingSupport {
         val line: String,
         /** Cosine similarity in [-1, 1]. */
         val score: Float,
+        /** Canonical directory, from the vector row; optional for alternate providers. */
+        val scope: String? = null,
     )
 
     /**

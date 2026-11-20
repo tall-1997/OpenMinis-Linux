@@ -1,11 +1,20 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.data.LEGACY_ORPHAN_STOP_NOTE
+import com.openminis.app.data.USER_STOP_NOTE
 import com.openminis.app.data.db.PersistedMessageStatus
+import com.openminis.app.data.isAttestedLegacyStopCarrier
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
+import com.openminis.app.data.model.ModelAttributionSnapshot
+import com.openminis.app.data.repository.ChatRepository
+import com.openminis.app.data.repository.PendingTurnRow
+import com.openminis.app.data.repository.appendTurnRows
+import com.openminis.app.logging.AppLogger
 import com.openminis.app.service.ActiveRun
 import com.openminis.app.service.SessionActivityTracker
 import com.openminis.app.service.SubAgentActivityTracker
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
@@ -39,30 +48,71 @@ internal fun resolveInterruptedPartialText(
     else -> ""
 }
 
+/** Project only stored, unpaired Stops before the wire sanitizers touch result text. */
+internal fun projectLegacyOrphanedStops(history: List<LLMMessage>): List<LLMMessage> {
+    if (history.none { it.isAttestedLegacyStopCarrier() }) return history
+    val pending = HashMap<String, Int>()
+    var projected: MutableList<LLMMessage>? = null
+    history.forEachIndexed { index, message ->
+        val legacyStop = message.isAttestedLegacyStopCarrier()
+        var replacements: MutableList<AgentContentPart>? = null
+        message.contentParts.forEachIndexed { partIndex, part ->
+            when (part) {
+                is AgentContentPart.ToolUse -> {
+                    val key = ToolPairingCore.pairKey(part.id, part.name)
+                    pending[key] = (pending[key] ?: 0) + 1
+                }
+                is AgentContentPart.ToolResult -> {
+                    val key = ToolPairingCore.pairKey(part.id, part.name)
+                    val count = pending[key] ?: 0
+                    when {
+                        count == 1 -> pending.remove(key)
+                        count > 1 -> pending[key] = count - 1
+                        legacyStop -> {
+                            val parts = replacements ?: message.contentParts.toMutableList().also { replacements = it }
+                            parts[partIndex] = AgentContentPart.Text(LEGACY_ORPHAN_STOP_NOTE)
+                        }
+                        else -> Unit
+                    }
+                }
+                else -> Unit
+            }
+        }
+        replacements?.let { parts ->
+            val out = projected ?: history.toMutableList().also { projected = it }
+            out[index] = message.copy(content = LEGACY_ORPHAN_STOP_NOTE, contentParts = parts)
+        }
+    }
+    return projected ?: history
+}
+
 /** Finish cancellation with captured run/session data, never the newly selected chat. */
 internal suspend fun ChatViewModel.finishStoppedRun(
     run: ActiveRun?,
     stoppedSessionId: String,
+    stoppedEpoch: Long,
     capturedSessionIds: List<String>,
     capturedAssistantId: String?,
-    capturedModelSnapshot: com.openminis.app.data.model.ModelAttributionSnapshot?,
+    capturedModelSnapshot: ModelAttributionSnapshot?,
     interruptedLabel: String,
 ) {
     run?.awaitPersistenceDrained()
     var partialText = run?.unpersistedAssistantText().orEmpty()
-    val stoppedTool = run?.currentToolSnapshot()?.let { Triple(it.callId, it.name, it.args) }
     run?.setCurrentTool(null, null)
-    val hasToolResult = stoppedTool?.first?.isNotBlank() == true && stoppedTool.second?.isNotBlank() == true
+    var capturedAssistantDbIds = emptyList<String>()
 
-    withContext(NonCancellable + Dispatchers.Main.immediate) {
+    fun ownsStoppedTurn() = ownsTranscript(stoppedSessionId, stoppedEpoch, run = null)
+    val ownsAfterUi = withContext(NonCancellable + Dispatchers.Main.immediate) {
+        if (!ownsStoppedTurn()) return@withContext false
         capturedAssistantId?.let(::flushStreamingDelta)
-        if (activeSessionId == stoppedSessionId) {
+        if (capturedAssistantId != null) {
             // [review 2.1 background-pause-gate] The flush above now drains
             // the FRESHEST delta (parked pendingContent included) into the
             // canonical list first — reading `captured` before that flush
             // would rescue the pre-pause text and re-persist a regressed
             // bubble. Keep this read strictly after the flush.
             val captured = _messages.value.firstOrNull { it.id == capturedAssistantId }
+            capturedAssistantDbIds = captured?.sourceDbIds.orEmpty()
             // [T-android-stop-dup-row] Only rescue the canonical cumulative
             // content when this run committed nothing durable yet; otherwise
             // the already-persisted round rows plus this row render the same
@@ -75,7 +125,7 @@ internal suspend fun ChatViewModel.finishStoppedRun(
                 )
             }
             _messages.value = _messages.value.map { message ->
-                if (message.role == "assistant" && (message.id == capturedAssistantId || message.isStreaming)) {
+                if (message.role == "assistant" && message.id == capturedAssistantId) {
                     val cancelledBlocks = message.toolBlocks.map { block ->
                         if (block.kind == "tool_use" && block.toolStatus in setOf(
                                 ToolBlockStatus.STREAMING, ToolBlockStatus.PENDING, ToolBlockStatus.RUNNING,
@@ -93,113 +143,90 @@ internal suspend fun ChatViewModel.finishStoppedRun(
         }
         capturedSessionIds.forEach(SubAgentActivityTracker::clearSession)
         SessionActivityTracker.setInactive(stoppedSessionId)
+        true
     }
+    if (!ownsAfterUi) return
 
-    withContext(NonCancellable + Dispatchers.IO) {
-        persistInterruptedTurn(
-            sessionId = stoppedSessionId,
-            partialText = partialText,
-            stoppedTool = stoppedTool,
-            modelSnapshot = capturedModelSnapshot,
-        )
+    val persisted = withContext(NonCancellable + Dispatchers.IO) {
+        if (!ownsStoppedTurn()) return@withContext emptyList()
+        try {
+            // A draft/deleted chat may have no session row to attach to.
+            if (chatRepository.getSession(stoppedSessionId) == null || !ownsStoppedTurn()) return@withContext emptyList()
+            chatRepository.persistUserStop(
+                sessionId = stoppedSessionId,
+                partialText = partialText,
+                modelSnapshot = capturedModelSnapshot,
+                capturedAssistantDbIds = capturedAssistantDbIds,
+                ownsWrite = ::ownsStoppedTurn,
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            AppLogger.warning(ChatViewModel.TAG, "Could not persist user Stop: ${e.javaClass.simpleName}")
+            emptyList()
+        }
     }
 
     withContext(NonCancellable + Dispatchers.Main.immediate) {
-        if (activeSessionId != stoppedSessionId) return@withContext
+        if (!ownsStoppedTurn()) return@withContext
         _messages.value = _messages.value.map { message ->
             if (message.id == capturedAssistantId && message.role == "assistant") {
                 message.copy(error = interruptedLabel)
             } else message
         }
-        if (partialText.isNotEmpty() && !hasToolResult) {
-            appendBoundedHistory(
-                LLMMessage(
-                    role = LLMMessage.Role.ASSISTANT,
-                    content = partialText,
-                    contentParts = listOf(
-                        AgentContentPart.Text(partialText),
-                        AgentContentPart.Text(
-                            "<system-reminder>The user stopped this response. Content may be incomplete.</system-reminder>",
-                        ),
-                    ),
-                ),
-            )
-        }
-        // Match the persistence order in persistInterruptedTurn(): the
-        // assistant interruption is followed by the synthetic tool result.
-        // Resume must see that complete pair before a queued prompt starts.
-        val cancelledToolParts = stoppedTool?.let { (toolId, toolName, _) ->
-            if (!toolId.isNullOrBlank() && !toolName.isNullOrBlank()) {
-                listOf(
-                    AgentContentPart.ToolResult(
-                        id = toolId,
-                        name = toolName,
-                        content = ChatViewModel.CANCELLED_MARKER,
-                        isError = true,
-                    ),
-                )
-            } else null
-        }
-        if (!cancelledToolParts.isNullOrEmpty()) {
-            val alreadyRecorded = agentHistory.any { message ->
-                message.contentParts.any { part ->
-                    part is AgentContentPart.ToolResult &&
-                        cancelledToolParts.any { it.id == part.id && it.name == part.name }
-                }
-            }
-            if (!alreadyRecorded) {
-                appendBoundedHistory(
-                    LLMMessage(role = LLMMessage.Role.USER, content = "", contentParts = cancelledToolParts),
-                )
+        if (persisted.isNotEmpty()) {
+            appendBoundedHistoryAll(persisted)
+            for (message in persisted) {
+                val uiId = capturedAssistantId.takeIf { message.role == LLMMessage.Role.ASSISTANT }
+                notePersistedUiRow(uiId, checkNotNull(message.dbMessageId))
             }
         }
         if (_promptQueue.value.isNotEmpty()) resumeQueueAfterCancel()
     }
 }
 
-/** Persist a partial assistant turn or pair a cancelled tool result with its saved tool call. */
-private suspend fun ChatViewModel.persistInterruptedTurn(
+/** Only persist observed Stop state. A current-tool snapshot is not a durable call or result. */
+internal suspend fun ChatRepository.persistUserStop(
     sessionId: String,
     partialText: String,
-    stoppedTool: Triple<String?, String?, String?>?,
-    modelSnapshot: com.openminis.app.data.model.ModelAttributionSnapshot?,
-) {
-    val assistantRowId = chatRepository.lastAssistantMessageId(sessionId)
-    if (stoppedTool != null && assistantRowId != null) {
-        chatRepository.updateMessageErrorInfo(assistantRowId, PersistedMessageStatus.INTERRUPTED_INFO)
+    modelSnapshot: ModelAttributionSnapshot? = null,
+    capturedAssistantDbIds: List<String> = emptyList(),
+    ownsWrite: () -> Boolean = { true },
+): List<LLMMessage> {
+    val rows = buildList {
+        if (partialText.isNotEmpty()) {
+            add(PendingTurnRow(
+                role = "assistant",
+                partsJson = JSONArray().put(JSONObject().put("type", "text").put("value", partialText)).toString(),
+                modelSnapshot = modelSnapshot,
+                errorInfo = PersistedMessageStatus.INTERRUPTED_INFO,
+            ))
+        }
+        add(PendingTurnRow("user", hostReminderPartsJson(JSONObject.quote(USER_STOP_NOTE))))
     }
-    if (partialText.isNotEmpty()) {
-        val parts = JSONArray().put(
-            JSONObject().put("type", "text").put(
-                "value",
-                partialText + "<system-reminder>The user stopped this response. Content may be incomplete.</system-reminder>",
-            ),
-        )
-        chatRepository.appendMessage(
-            sessionId = sessionId,
-            role = "assistant",
-            partsJson = parts.toString(),
-            modelSnapshot = modelSnapshot,
-            errorInfo = if (stoppedTool == null) PersistedMessageStatus.INTERRUPTED_INFO else null,
-        )
-    } else if (assistantRowId != null && stoppedTool == null) {
-        chatRepository.updateMessageErrorInfo(assistantRowId, PersistedMessageStatus.INTERRUPTED_INFO)
+    val stickerRow = if (partialText.isEmpty() && capturedAssistantDbIds.isNotEmpty()) {
+        lastAssistantMessageId(sessionId)?.takeIf { it in capturedAssistantDbIds }
+    } else null
+    val saved = appendTurnRows(sessionId, rows, ownsWrite = ownsWrite)
+    if (saved.isNotEmpty() && stickerRow != null && ownsWrite()) {
+        // The durable host note is authoritative even if refreshing this UI sticker fails.
+        try {
+            updateMessageErrorInfo(stickerRow, PersistedMessageStatus.INTERRUPTED_INFO)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            AppLogger.warning(ChatViewModel.TAG, "Could not restore the Stop sticker: ${e.javaClass.simpleName}")
+        }
     }
-
-    val toolId = stoppedTool?.first
-    val toolName = stoppedTool?.second
-    if (!toolId.isNullOrBlank() && !toolName.isNullOrBlank()) {
-        val input = runCatching { JSONObject(stoppedTool.third ?: "{}") }.getOrElse { JSONObject() }
-        persistToolResultMessage(
-            listOf(
-                AgentContentPart.ToolResult(
-                    id = toolId,
-                    name = toolName,
-                    content = ChatViewModel.CANCELLED_MARKER,
-                    isError = true,
-                ),
-            ),
-            targetSessionId = sessionId,
+    return saved.map { row ->
+        val isNote = row.role == "user"
+        val text = if (isNote) USER_STOP_NOTE else partialText
+        LLMMessage(
+            role = if (isNote) LLMMessage.Role.USER else LLMMessage.Role.ASSISTANT,
+            content = text,
+            contentParts = listOf(AgentContentPart.Text(text)),
+            dbMessageId = row.id,
+            isHostGenerated = isNote,
         )
     }
 }

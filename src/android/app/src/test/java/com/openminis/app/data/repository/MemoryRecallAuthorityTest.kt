@@ -45,12 +45,14 @@ class MemoryRecallAuthorityTest {
     @Test
     fun recallCountStillKeysOnTheRawLine() {
         val engine = MemoryRecallEngine.fromDir(tempDir())!!
-        engine.formatAsPromptFragment(listOf(hit(forgedLine)))
+        val rendered = engine.formatAsPromptFragmentWithHits(listOf(hit(forgedLine)))
+        assertTrue(engine.recallCountsSnapshot().isEmpty())
+        engine.acceptRecallBatch(rendered.included.map { it.source to it.line })
         val snapshot = engine.recallCountsSnapshot()
         assertEquals(
             "acceptRecall must key on the stored line, not the scrubbed one",
             1,
-            snapshot["2026-11-04:$forgedLine"],
+            snapshot[MemoryRecallEngine.recallCountKey("2026-11-04", forgedLine)],
         )
     }
 

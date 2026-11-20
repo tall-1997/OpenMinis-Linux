@@ -1,7 +1,5 @@
 package com.openminis.app.data.repository
 
-import com.openminis.app.util.IsoTime
-
 /**
  * [T-memory-sediment] Turns a successful compaction into a durable memory entry.
  *
@@ -21,8 +19,8 @@ import com.openminis.app.util.IsoTime
  *  - gated by the session's memory toggle at the call site — with memory off
  *    nothing is written, consistent with the rest of the memory feature.
  *
- * Pure helpers here; the write itself goes through [MemoryRepository.writeMemory]
- * so the existing size/entry quotas still apply.
+ * The write goes through the same host diary transaction as memory_write,
+ * including deduplication, quotas, and lifecycle metadata.
  */
 object MemorySediment {
 
@@ -59,9 +57,9 @@ object MemorySediment {
      */
     fun record(repository: MemoryRepository, entry: String?): String? {
         val payload = entry ?: return null
-        val today = repository.readFile("${IsoTime.formatLocalDate()}.md")
-        if (isDuplicate(payload, today)) return null
-        return repository.writeMemory(payload)
+        // Exact/normalized dedup is in the same locked transaction as the write.
+        return repository.writeHostMemory(payload, origin = MemoryEntryOrigin.SEDIMENT, autoArchive = true)
+            .takeUnless { it.startsWith("Skipped:") }
     }
 
     /** Convenience: build + record in one call. */

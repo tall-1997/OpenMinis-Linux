@@ -1,8 +1,17 @@
 package com.openminis.app.ui.chat
 
+import android.util.Log
+import com.openminis.app.R
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
+import com.openminis.app.data.repository.PendingTurnRow
+import com.openminis.app.data.repository.appendTurnRows
+import com.openminis.app.service.ActiveRunContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 /**
@@ -107,9 +116,18 @@ internal class AgentSteeringQueue(startMode: QueueMode = QueueMode.ONE_AT_A_TIME
     }
 
     /** Drain respecting the current mode: ALL -> everything, ONE_AT_A_TIME -> oldest only. */
-    fun drainPerMode(): List<SteeringEntry> = when (mode) {
-        QueueMode.ALL -> drainAll()
-        QueueMode.ONE_AT_A_TIME -> listOfNotNull(drainOne())
+    fun drainPerMode(ownsQueue: () -> Boolean = { true }): List<SteeringEntry> = synchronized(lock) {
+        if (!ownsQueue() || items.isEmpty()) return@synchronized emptyList()
+        when (mode) {
+            QueueMode.ALL -> items.toList().also { items.clear() }
+            QueueMode.ONE_AT_A_TIME -> listOf(items.removeFirst())
+        }
+    }
+
+    /** Return a batch only if it did not commit; newer offers stay behind it. */
+    fun restoreUnsent(entries: List<SteeringEntry>) = synchronized(lock) {
+        val present = items.mapTo(hashSetOf()) { it.id }
+        for (entry in entries.asReversed()) if (present.add(entry.id)) items.addFirst(entry)
     }
 
     /**
@@ -288,14 +306,40 @@ internal suspend fun ChatViewModel.drainSteeringIntoRun(
     accumulatedText: String,
     allToolBlocks: List<AssistantBlock>,
     uiBatcher: UiUpdateBatcher,
+    expectedSessionId: String? = null,
     onCommitted: (String) -> Unit,
 ) {
-    val entries = steeringState().queue.drainPerMode()
-    if (entries.isEmpty()) return
-    val bubbles = entries.map { commitSteeringUserMessage(it) }
+    val run = ActiveRunContext.current()
+    val sid = expectedSessionId ?: activeSessionId
+    if (!ownsQueuedTurn(sid, run)) return
+    val queue = steeringState().queue
+    if (queue.isEmpty) return
+    val owner = queuedTurnSession(sid, run) ?: return
+    fun ownsSteering() = ownsQueuedTurn(owner, run)
+    val persist = suspend {
+        persistSteeringQueueBatch(queue, ::ownsSteering) { entries -> commitSteeringUserMessages(owner, entries) }
+    }
+    val committed = try {
+        if (run == null) persist() else run.withPersistencePermit { persist() }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.e(ChatViewModel.TAG, "Queued steering write failed: ${e.javaClass.simpleName}")
+        withContext(Dispatchers.Main.immediate) {
+            if (ownsSteering()) setInlineError(context.getString(R.string.error_empty_response_generic))
+        }
+        return
+    } ?: return
+    val (entries, userIds) = committed
+    if (!ownsSteering() || userIds.size != entries.size) return
+    val bubbles = entries.zip(userIds) { entry, id ->
+        ChatMessage(id = id, role = "user", content = entry.text, sourceDbIds = listOf(id))
+    }
     val newAssistantId = "assistant_${System.currentTimeMillis()}"
-    withContext(Dispatchers.Main.immediate) {
-        uiBatcher.seal(assistantId)
+    uiBatcher.seal(assistantId)
+    val bound = withContext(Dispatchers.Main.immediate) {
+        if (!ownsSteering()) return@withContext false
+        appendCommittedSteeringHistory(bubbles)
         _messages.value = repositionAfterSteeringCommit(
             messages = _messages.value,
             placeholderMessageIds = entries.map { it.placeholderMessageId }.toSet(),
@@ -317,8 +361,35 @@ internal suspend fun ChatViewModel.drainSteeringIntoRun(
             bubble.sourceDbIds.firstOrNull()?.let { notePersistedUiRow(bubble.id, it) }
         }
         updateAssistantMessage(assistantId, accumulatedText, false, allToolBlocks)
+        true
     }
-    onCommitted(newAssistantId)
+    if (bound && ownsSteering()) onCommitted(newAssistantId)
+}
+
+/** The drained prefix is either persisted once to its owner or restored in order. */
+internal suspend fun <T : Any> persistSteeringQueueBatch(
+    queue: AgentSteeringQueue,
+    ownsQueue: () -> Boolean,
+    appendToOwner: suspend (List<SteeringEntry>) -> T,
+): Pair<List<SteeringEntry>, T>? {
+    val caller = currentCoroutineContext()
+    return withContext(NonCancellable + Dispatchers.IO) {
+        caller.ensureActive()
+        val entries = queue.drainPerMode(ownsQueue)
+        if (entries.isEmpty()) return@withContext null
+        if (!ownsQueue()) {
+            queue.restoreUnsent(entries)
+            return@withContext null
+        }
+        val persisted = try {
+            caller.ensureActive()
+            appendToOwner(entries)
+        } catch (e: Exception) {
+            queue.restoreUnsent(entries)
+            throw e
+        }
+        (entries to persisted).takeIf { ownsQueue() }
+    }
 }
 
 /**
@@ -397,8 +468,11 @@ internal fun ChatViewModel.withdrawSteeringPlaceholder(messageId: String): Boole
  * at least one entry was re-routed.
  */
 internal suspend fun ChatViewModel.drainToPromptQueueFallback(): Boolean {
-    if (!_isStreaming.value) return false
-    return withContext(Dispatchers.Main) {
+    val sid = activeSessionId
+    val run = ActiveRunContext.current()
+    if (!_isStreaming.value || (run != null && sid !in run.ownerSessionIds)) return false
+    return withContext(Dispatchers.Main.immediate) {
+        if (!_isStreaming.value || !ownsQueuedTurn(sid, run)) return@withContext false
         var moved = false
         steeringState().queue.drainToFallback { entry ->
             moved = true
@@ -427,40 +501,28 @@ private const val STEERING_BRIDGE_TEXT =
     "(A steering note from the user follows, added mid-run. The current task keeps " +
         "running — fold the note into the work in progress; treat it as a task change only if it says so.)"
 
-/**
- * Commit one steering entry the way [injectQueuedPromptsAsNewTurn] commits a
- * queued prompt: conditional role-alternation bridge, persisted DB row,
- * bounded-history append. The UI bubble is NOT appended here —
- * [drainSteeringIntoRun] inserts the returned bubbles at the sealed-assistant
- * position in one batch reposition.
- */
-private suspend fun ChatViewModel.commitSteeringUserMessage(entry: SteeringEntry): ChatMessage {
-    val sid = ensureSession()
-    if (agentHistory.lastOrNull()?.role == LLMMessage.Role.USER) {
-        appendBoundedHistory(
-            LLMMessage(
-                role = LLMMessage.Role.ASSISTANT,
-                content = STEERING_BRIDGE_TEXT,
-                contentParts = listOf(AgentContentPart.Text(STEERING_BRIDGE_TEXT)),
-            ),
-        )
+/** Commit all claimed entries in one transaction to avoid partially replaying an ALL batch. */
+private suspend fun ChatViewModel.commitSteeringUserMessages(
+    sessionId: String,
+    entries: List<SteeringEntry>,
+): List<String> = chatRepository.appendTurnRows(sessionId, entries.map { entry ->
+    PendingTurnRow("user", buildUserPartsJson(entry.text, emptyList()))
+}).let { rows -> if (rows.all { it.sessionId == sessionId }) rows.map { it.id } else emptyList() }
+
+private fun ChatViewModel.appendCommittedSteeringHistory(bubbles: List<ChatMessage>) {
+    val turn = buildList {
+        for ((index, bubble) in bubbles.withIndex()) {
+            if (index > 0 || agentHistory.lastOrNull()?.role == LLMMessage.Role.USER) {
+                add(LLMMessage(
+                    role = LLMMessage.Role.ASSISTANT, content = STEERING_BRIDGE_TEXT,
+                    contentParts = listOf(AgentContentPart.Text(STEERING_BRIDGE_TEXT)),
+                ))
+            }
+            add(LLMMessage(
+                role = LLMMessage.Role.USER, content = bubble.content,
+                contentParts = listOf(AgentContentPart.Text(bubble.content)), dbMessageId = bubble.id,
+            ))
+        }
     }
-    val partsJson = buildUserPartsJson(entry.text, emptyList())
-    val persisted = withContext(Dispatchers.IO) {
-        runCatching { chatRepository.appendMessage(sid, "user", partsJson) }.getOrNull()
-    }
-    appendBoundedHistory(
-        LLMMessage(
-            role = LLMMessage.Role.USER,
-            content = entry.text,
-            contentParts = listOf(AgentContentPart.Text(entry.text)),
-            dbMessageId = persisted?.id,
-        ),
-    )
-    return ChatMessage(
-        id = persisted?.id ?: "steer_${System.currentTimeMillis()}",
-        role = "user",
-        content = entry.text,
-        sourceDbIds = listOfNotNull(persisted?.id),
-    )
+    appendBoundedHistoryAll(turn)
 }

@@ -33,24 +33,6 @@ internal fun dropOrphanedToolParts(history: List<LLMMessage>): List<LLMMessage> 
     repairToolPairing(history).history
 
 /** [T-orphan-use-report] The same sweep, keeping what it had to change. */
- /**
-  * [T-orphan-use-report] Repair the outgoing history AND record what the
-  * repair had to change.
-  *
-  * WHY the wrapper exists: `ChatViewModel.kt` sits exactly on its architecture
-  * ceiling, so the reporting cannot live at the call site. The repair must stay
-  * invisible to the MODEL (an error made it re-issue the call) but must not be
-  * invisible to the operator, or "this request was served from a mutated
-  * history" becomes undiagnosable after the fact.
-  */
- internal fun ChatViewModel.repairPairingForRequest(history: List<LLMMessage>): List<LLMMessage> {
-    val repair = repairToolPairing(history)
-    if (repair.changed) {
-        recordPairingRepairJournal(repair.droppedResults, repair.interruptedUses)
-    }
-    return repair.history
- }
- 
 internal fun repairToolPairing(history: List<LLMMessage>): PairingRepair {
     data class Use(
         val id: String,

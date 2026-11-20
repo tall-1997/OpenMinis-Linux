@@ -37,6 +37,7 @@ internal fun ChatViewModel.commitStreamDropReminder() {
             role = LLMMessage.Role.USER,
             content = reminder,
             contentParts = listOf(AgentContentPart.Text(reminder)),
+            isHostGenerated = true,
         ),
     )
     // Read the session id up front: the IO hop below can outlive a session
@@ -44,7 +45,7 @@ internal fun ChatViewModel.commitStreamDropReminder() {
     // make THAT session look interrupted.
     val sid = activeSessionId
     viewModelScope.launch(Dispatchers.IO) {
-        val partsJson = """[{"type":"text","value":${escapeJson(reminder)}}]"""
+        val partsJson = hostReminderPartsJson(escapeJson(reminder))
         val persisted = chatRepository.appendMessage(sid, "user", partsJson)
         withContext(Dispatchers.Main.immediate) {
             notePersistedUiRow(null, persisted.id)

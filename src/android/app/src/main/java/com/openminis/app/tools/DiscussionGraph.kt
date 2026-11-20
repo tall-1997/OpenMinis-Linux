@@ -164,10 +164,13 @@ object DiscussionGraph {
     }
 
     fun denyExecution(name: String, argsJson: String): String? {
-        if (SubAgentKind.isSpawnTool(name) || SubAgentKind.blocks(SubAgentKind.PLAN, name) || name in EXTRA_DENY) {
+        val canonical = com.openminis.app.security.ToolAliases.canonical(name)
+        if (SubAgentKind.isSpawnTool(canonical) || SubAgentKind.blocks(SubAgentKind.PLAN, canonical) ||
+            canonical in EXTRA_DENY || (canonical == "memory_get" && !memoryGetIsSearch(argsJson))
+        ) {
             return "讨论模式只读，拒绝 $name。"
         }
-        if (name in SHELLS) {
+        if (canonical in SHELLS) {
             val cmd = commandOf(argsJson) ?: return "讨论模式拒绝无法解析的 shell。"
             return SubAgentKind.readOnlyShellDenial(cmd)
         }

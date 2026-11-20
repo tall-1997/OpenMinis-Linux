@@ -105,7 +105,9 @@ class CompactResilienceTest {
         // succeeded=false -> null (no marker), success -> covered prefix.
         assertNull(coveredCountFor(CompactOutcome("failed", 0, succeeded = false), 10))
         assertEquals(6, coveredCountFor(CompactOutcome("ok", 6), 10))
-        assertEquals(1, coveredCountFor(CompactOutcome("ok", 0), 10))
+        assertNull(coveredCountFor(CompactOutcome("ok", 0), 10))
+        assertNull(coveredCountFor(CompactOutcome("ok", 11), 10))
+        assertNull(coveredCountFor(CompactOutcome(" ", 6), 10))
         assertNull(coveredCountFor(CompactOutcome("ok", 6), 0))
     }
 
@@ -138,7 +140,7 @@ class CompactResilienceTest {
             maxTokens = 20_000,
             estimate = com.openminis.app.ui.chat.WalkBack::estimateMessageTokens,
         )
-        assertEquals(4, end) // 5 × 4000 = 20000 fits; the 6th would exceed
+        assertEquals(4, end) // Five 4,000-token payloads fit exactly.
         assertTrue(end < heavy.lastIndex)
     }
 

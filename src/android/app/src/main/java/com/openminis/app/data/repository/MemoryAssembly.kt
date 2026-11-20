@@ -73,6 +73,7 @@ internal object MemoryAssembly {
         val date: String,
         /** Enveloped per-day text (label + capped preview + continuation). */
         val text: String,
+        val visibleEntries: List<MemoryDeliverySpan> = emptyList(),
     )
 
     /** Outcome of the two-pass assembly. */
@@ -82,7 +83,11 @@ internal object MemoryAssembly {
         val admittedDailyDates: Set<String>,
         /** Window dates that ended up as TOC rows instead of verbatim. */
         val droppedDailyDates: Set<String>,
-    )
+        /** Entry anchors relative to [MemoryBlockSplit.Blocks.transient], after both budgets. */
+        val deliverySpans: List<MemoryDeliverySpan> = emptyList(),
+    ) {
+        val deliveredEntries: Set<MemoryEntryRef> get() = deliverySpans.mapTo(HashSet()) { it.ref }
+    }
 
     /**
      * @param standing fragments admitted before the daily window (project
@@ -103,6 +108,16 @@ internal object MemoryAssembly {
         budgetChars: Int = MemoryPromptBudget.DEFAULT_BUDGET_CHARS,
         header: String? = null,
         tocFor: (excludeDates: Set<String>) -> String?,
+    ): Result = assembleTracked(standing, daily, budgetChars, header) { excluded ->
+        tocFor(excluded)?.let { MemoryIndex.TrackedFragment(it) }
+    }
+
+    fun assembleTracked(
+        standing: List<MemoryPromptBudget.Fragment>,
+        daily: List<DailyFragment>,
+        budgetChars: Int = MemoryPromptBudget.DEFAULT_BUDGET_CHARS,
+        header: String? = null,
+        tocFor: (excludeDates: Set<String>) -> MemoryIndex.TrackedFragment?,
     ): Result {
         // Reserve the caption's cost before anything else so no daily
         // fragment or TOC row can ever displace it. Spent only when there is
@@ -136,12 +151,12 @@ internal object MemoryAssembly {
             val probe = MemoryPromptBudget.allocate(standing + dayFragments, effectiveBudget)
             val admitted = probe.included.mapNotNull { keyToDate[it.key] }.toSet()
             // Pass 2: the TOC indexes exactly the days pass 1 did not admit.
-            val toc = tocFor(admitted) ?: return result(probe, admitted, daily, header)
+            val toc = tocFor(admitted) ?: return result(probe, admitted, daily, header, null)
             val allocation = MemoryPromptBudget.allocate(
                 standing + dayFragments + listOf(
                     MemoryPromptBudget.Fragment(
                         key = INDEX_KEY,
-                        text = toc,
+                        text = toc.text,
                         priority = MemoryPromptBudget.PRIORITY_INDEX,
                         // Truncatable, never whole-dropped while budget
                         // remains: rows sort newest-first, so a truncated TOC
@@ -154,7 +169,7 @@ internal object MemoryAssembly {
                 effectiveBudget,
             )
             if (INDEX_KEY !in allocation.droppedKeys) {
-                return result(allocation, admitted, daily, header)
+                return result(allocation, admitted, daily, header, toc)
             }
             // The budget was exhausted before the TOC's turn: demote the
             // oldest verbatim day to the TOC and rerun the pair of passes.
@@ -162,7 +177,7 @@ internal object MemoryAssembly {
             // window; with nothing left to demote the allocation above is
             // the honest answer.
             val oldest = window.lastOrNull { it.date in admitted }
-                ?: return result(allocation, admitted, daily, header)
+                ?: return result(allocation, admitted, daily, header, toc)
             window = window - oldest
         }
     }
@@ -172,11 +187,30 @@ internal object MemoryAssembly {
         admitted: Set<String>,
         input: List<DailyFragment>,
         header: String?,
-    ): Result = Result(
-        allocation = insertHeader(allocation, header),
-        admittedDailyDates = admitted,
-        droppedDailyDates = input.mapTo(mutableSetOf()) { it.date } - admitted,
-    )
+        toc: MemoryIndex.TrackedFragment?,
+    ): Result {
+        val dailySpans = input.associate { "$DAILY_KEY_PREFIX${it.date}" to it.visibleEntries }
+        val withHeader = insertHeader(allocation, header)
+        val deliverySpans = buildList {
+            var offset = 0
+            for (fragment in withHeader.included.filter { MemoryBlockSplit.isTransientKey(it.key) }) {
+                val spans = if (fragment.key == INDEX_KEY) toc?.entries.orEmpty() else dailySpans[fragment.key].orEmpty()
+                val end = if (fragment.key in allocation.truncatedKeys) {
+                    fragment.text.length - MemoryPromptBudget.TRUNCATION_MARKER.length
+                } else fragment.text.length
+                for (span in spans) if (span.start >= 0 && span.start < span.end && span.end <= end) {
+                    add(span.shifted(offset))
+                }
+                offset += fragment.text.length + 2 // Same separator as MemoryBlockSplit.
+            }
+        }
+        return Result(
+            allocation = withHeader,
+            admittedDailyDates = admitted,
+            droppedDailyDates = input.mapTo(mutableSetOf()) { it.date } - admitted,
+            deliverySpans = deliverySpans,
+        )
+    }
 
     /**
      * Inserts the caption ahead of the first admitted daily fragment or TOC

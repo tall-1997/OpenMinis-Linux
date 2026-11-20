@@ -21,7 +21,10 @@ import com.openminis.app.util.IsoTime
  *   - loadGlobalMemoryFragment() / loadRecentDailyFragments(): emit the
  *     global and per-day daily-log blocks for the system prompt
  */
-class MemoryRepository(private val memoryDir: File) {
+class MemoryRepository(
+    private val memoryDir: File,
+    private val clock: () -> Long = System::currentTimeMillis,
+) {
 
     val learnedPrefs = LearnedPrefsStore(File(memoryDir, LearnedPrefsStore.FILE_NAME))
 
@@ -32,7 +35,7 @@ class MemoryRepository(private val memoryDir: File) {
     // loaders. Callers get a memoized repository via
     // ChatViewModel.sessionMemoryRepo(), so the cache survives across turns.
     private val fragments: MemoryFragmentBuilder by lazy {
-        MemoryFragmentBuilder(memoryDir, learnedPrefs, ::fileFingerprint)
+        MemoryFragmentBuilder(memoryDir, learnedPrefs, ::fileFingerprint, clock)
     }
 
     /**
@@ -107,10 +110,11 @@ class MemoryRepository(private val memoryDir: File) {
 
         /**
          * Create GLOBAL.md with [DEFAULT_GLOBAL_CONTENT] iff it does not
-         * exist yet. Mirrors SoulStore.ensureExists: safe on every launch,
-         * never overwrites user edits.
+         * exist yet. This startup hook also recovers interrupted diary restores,
+         * including when the existing GLOBAL.md needs no seeding.
          */
         fun ensureGlobalExists(context: android.content.Context) {
+            MemoryRestoreJournal.recoverInterrupted(context.filesDir)
             val file = File(context.filesDir, "minis-global/memory/$GLOBAL_FILE")
             if (file.exists()) return
             try {
@@ -183,9 +187,7 @@ class MemoryRepository(private val memoryDir: File) {
 
         /** writeMemory 的落盘格式：行首时间戳标记 + 正文 + 空行。行首锚定计数，
          *  正文里出现同形字符串不会被误计为一条记忆。 */
-        private val ENTRY_MARK = Regex(
-            "(?m)^<!-- \\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2} -->\\s*$"
-        )
+        private val ENTRY_MARK = MemoryDiaryFormat.marker
 
         /** 当日日志里已有的条目数（供沙箱侧配额闸门复用）。 */
         fun dailyEntryCount(dir: File): Int {
@@ -212,10 +214,6 @@ class MemoryRepository(private val memoryDir: File) {
         }
     }
 
-    init {
-        memoryDir.mkdirs()
-    }
-
     // -- memory_write --
 
     /**
@@ -226,89 +224,124 @@ class MemoryRepository(private val memoryDir: File) {
      * 非空时先校验现有文件内容哈希，不匹配返回 MEMORY_CONFLICT，不覆盖并发更新。
      * 写入成功返回新 revision（哈希前 16 位）。
      */
+    /** File-level schema fields apply only when creating a day file. */
     fun writeMemory(
         content: String,
         expectedRevision: String? = null,
-        /** [T-memory-frontmatter-writer] Optional schema fields for a NEW day file. */
         type: String? = null,
         scope: String? = null,
         ttlDays: Int? = null,
+    ): String = writeEntry(
+        content, expectedRevision, null, null, autoArchive = false, pin = false,
+        initialHeader = MemoryMetadataParser.frontmatterFor(type = type ?: "daily", scope = scope, ttlDays = ttlDays),
+    )
+
+    /** Only host tool/sedimentation writes enroll entries, including durable notes for usage tracking. */
+    internal fun writeHostMemory(
+        content: String,
+        expectedRevision: String? = null,
+        origin: MemoryEntryOrigin,
+        ttlDays: Int? = null,
+        autoArchive: Boolean,
+        pin: Boolean = false,
+    ): String {
+        if (ttlDays != null && (!autoArchive || ttlDays !in 1..MemoryLifecycle.MAX_TTL_DAYS)) return "Error: Invalid ttl_days"
+        return writeEntry(content, expectedRevision, origin, ttlDays, autoArchive, pin,
+            initialHeader = MemoryMetadataParser.frontmatterFor(type = "daily"),
+        )
+    }
+
+    private fun writeEntry(
+        content: String,
+        expectedRevision: String?,
+        origin: MemoryEntryOrigin?,
+        ttlDays: Int?,
+        autoArchive: Boolean,
+        pin: Boolean,
+        initialHeader: String,
     ): String {
         if (content.isBlank()) return "Error: Missing required 'content' parameter"
-
-        // [T-memory-poison-guard] 写入侧毒窗防护（镜像 Kelivo poison-window
-        // breaker 精神）：单条超限 + 单日条目超限。失控的 agent loop 反复写
-        // memory_write 时，坏窗口不允许永久毒化当日日志。
         val contentBytes = content.toByteArray(Charsets.UTF_8).size
         if (contentBytes > MAX_ENTRY_BYTES) {
             return "Error: 记忆条目过长（$contentBytes 字节，上限 $MAX_ENTRY_BYTES）。请精简为要点再写。"
         }
-        val fileName = "${IsoTime.formatLocalDate()}.md"
-        val file = File(memoryDir, fileName)
-
-        val timestamp = IsoTime.formatLocalSeconds(System.currentTimeMillis())
-        val entry = "<!-- $timestamp -->\n$content\n\n"
-
-        val existing = if (file.exists()) file.readText() else ""
-        if (expectedRevision != null) {
-            val actual = Digest.sha256Hex(existing)
-            if (!actual.startsWith(expectedRevision)) {
-                return "Error: MEMORY_CONFLICT — 日志文件已被并发更新（期望 revision $expectedRevision，实际 ${actual.take(16)}…）。请先 memory_get 重新读取后再写。"
-            }
-        }
-        val entryCount = ENTRY_MARK.findAll(existing).count()
-        if (entryCount >= MAX_DAILY_ENTRIES) {
-            return "Error: 今日记忆已达上限（$MAX_DAILY_ENTRIES 条）。旧的按日归档，明日自动开始新日志；请精简而不是继续追加。"
-        }
-        // [T-memory-entry-format-guard] 条目正文不得包含落盘格式的标记行——
-        // 该行会让后续 ENTRY_MARK.split 产生幻影条目（去重误判 + 条目计数虚增）。
         if (ENTRY_MARK.containsMatchIn(content)) {
             return "Error: 条目正文不能包含时间戳标记行（<!-- YYYY-MM-DD HH:mm:ss --> 是落盘格式保留字）。请改写后再写；确需保留示例时，在标记行行首缩进一个空格即可。"
         }
-        // [T-memory-dedup-on-write] OpenHarness 式签名去重：与今日日志既有条目
-        // 归一化后逐字相同的写入是模型回声（loop 重试 / 报错后原样重写）——
-        // 再落一份会让召回命中双份。归一化仅折叠行尾空白与空行（保留行首缩进，防代码类条目误判）。
-        val normalizedNew = content.lines().joinToString("\n") { it.trimEnd() }.trim()
-        val duplicate = existing.isNotBlank() && ENTRY_MARK.split(existing).any { seg ->
-            seg.trim().lines().joinToString("\n") { it.trimEnd() }.trim() == normalizedNew
-        }
-        if (duplicate) {
-            Log.i(TAG, "Memory dedup: identical entry already in $fileName — skipped")
-            return "Skipped: 今日日志已存在逐字相同的条目（写入侧去重），未重复追加。"
-        }
-        // [T-memory-frontmatter-writer] A NEW day file leads with its metadata
-        // — "new writes carry the full field set" was the `4.1` acceptance
-        // item, and until now nothing emitted a block at all. An EXISTING file
-        // is never rewritten: prepending would shift the revision under a
-        // concurrent writer and could strand a half-written entry.
-        val header = if (existing.isEmpty()) {
-            MemoryMetadataParser.frontmatterFor(
-                type = type ?: "daily",
-                scope = scope,
-                ttlDays = ttlDays,
-            )
-        } else {
-            ""
-        }
-        val newContent = header + entry + existing
-
+        val now = clock()
+        val fileName = "${IsoTime.formatLocalDate(now)}.md"
+        val timestamp = IsoTime.formatLocalSeconds(now)
+        val normalizedNew = normalizeEntry(content)
         return try {
-            writeTextAtomic(file, newContent)
-            val newRevision = Digest.sha256Hex(newContent).take(16)
-            Log.i(TAG, "Memory written to $fileName (${content.length} chars, revision $newRevision)")
-            indexForEmbeddingsAsync(file)
-            "Memory saved to $fileName (${content.length} chars, revision $newRevision)"
+            MemoryLifecycle.locked(memoryDir) { dir ->
+                MemoryRestoreJournal.recover(dir, fileName)
+                val file = MemoryLifecycle.child(dir, fileName) ?: throw IOException("invalid diary path")
+                // Share the file-tool lock for the whole transaction. Its strict UTF-8 read
+                // protects handwritten bytes; the actual write is a same-directory atomic move.
+                AtomicFileWrite.readModifyWrite(file) write@{ text ->
+                    val existing = if (hasUtf8Bom(file)) "\uFEFF$text" else text
+                    if (expectedRevision != null) {
+                        val actual = Digest.sha256Hex(existing)
+                        if (!actual.startsWith(expectedRevision)) {
+                            return@write WriteOutcome("Error: MEMORY_CONFLICT — 日志文件已被并发更新（期望 revision $expectedRevision，实际 ${actual.take(16)}…）。请先 memory_get 重新读取后再写。")
+                        }
+                    }
+                    val header = MemoryMetadataParser.header(existing)
+                    val bodyStart = header?.bodyStart ?: if (existing.startsWith('\uFEFF')) 1 else 0
+                    val body = existing.substring(bodyStart)
+                    val blocks = MemoryDiaryFormat.blocks(body)
+                    val diary = if (blocks.any { it.id != null }) MemoryLifecycle.read(dir, fileName) else null
+                    val exactManaged = diary?.managed()?.firstOrNull { normalizeEntry(it.body) == normalizedNew }
+                    if (exactManaged != null || body.isNotBlank() && ENTRY_MARK.split(body).any { normalizeEntry(it) == normalizedNew }) {
+                        if ((pin || origin == MemoryEntryOrigin.MEMORY_WRITE && !autoArchive) && exactManaged != null &&
+                            MemoryLifecycle.pin(dir, fileName, exactManaged.ref.id, now)
+                        ) {
+                            indexForEmbeddingsAsync(file)
+                            return@write WriteOutcome("Memory saved: existing entry kept as a durable note in $fileName")
+                        }
+                        return@write WriteOutcome("Skipped: 今日日志已存在逐字相同的条目（写入侧去重），未重复追加。")
+                    }
+                    if (blocks.size >= MAX_DAILY_ENTRIES) {
+                        return@write WriteOutcome("Error: 今日记忆已达上限（$MAX_DAILY_ENTRIES 条）。请精简而不是继续追加。")
+                    }
+                    val id = origin?.let { MemoryLifecycle.newId() }
+                    val marker = "<!-- $timestamp -->" + if (id == null) "" else " <!-- minis-memory:$id -->"
+                    val entry = "$marker\n$content\n\n"
+                    if (id != null) {
+                        MemoryLifecycle.enroll(dir, fileName, id, entry, now, ttlDays, origin, autoArchive)
+                    }
+                    val prefix = existing.substring(0, bodyStart)
+                    val headerForNewFile = if (!file.exists()) initialHeader else ""
+                    // Keep the original BOM, header, keys and line endings exactly as read.
+                    val separator = if (header != null && !prefix.endsWith('\n') && !prefix.endsWith('\r')) "\n" else ""
+                    val newContent = prefix + separator + headerForNewFile + entry + body
+                    writeLifecycleAtomic(file, newContent)
+                    val newRevision = Digest.sha256Hex(newContent).take(16)
+                    Log.i(TAG, "Memory written to $fileName (${content.length} chars, revision $newRevision)")
+                    indexForEmbeddingsAsync(file)
+                    WriteOutcome("Memory saved to $fileName (${content.length} chars, revision $newRevision)")
+                }?.message ?: "Error writing memory: cannot read existing diary safely"
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to write memory", e)
             "Error writing memory: ${e.message}"
         }
     }
 
+    private data class WriteOutcome(val message: String)
+
+    private fun normalizeEntry(text: String): String = text.lines().joinToString("\n") { it.trimEnd() }.trim()
+
+    private fun hasUtf8Bom(file: File): Boolean = file.isFile && file.inputStream().use {
+        it.read() == 0xEF && it.read() == 0xBB && it.read() == 0xBF
+    }
+
+    internal fun todayFileName(): String = "${IsoTime.formatLocalDate(clock())}.md"
+
     /** [T-memory-revision] 今日日志文件当前 revision（不存在返回 null）。 */
-    fun currentDailyRevision(): String? {
-        val file = File(memoryDir, "${IsoTime.formatLocalDate()}.md")
-        if (!file.exists()) return null
-        return Digest.sha256Hex(file.readText()).take(16)
+    fun currentDailyRevision(): String? = MemoryLifecycle.locked(memoryDir) { dir ->
+        val file = MemoryLifecycle.snapshotFiles(dir, todayFileName()).diary ?: return@locked null
+        file.inputStream().use { Digest.sha256Hex(it).take(16) }
     }
 
     // -- memory_get --
@@ -320,34 +353,23 @@ class MemoryRepository(private val memoryDir: File) {
      * @return search results with context lines
      */
     fun getMemory(keywords: String, scope: String): String {
+        if (scope == "archive") return getArchivedMemory(keywords)
+        val now = clock()
         val keywordList = keywords.trim()
             .lowercase()
             .split(Regex("\\s+"))
             .filter { it.isNotEmpty() }
 
-        val filesToSearch = mutableListOf<Pair<String, File>>() // label to file
+        return MemorySources.withScope(memoryDir, now, includeStanding = true) { sources ->
+            val files = sources.filter { source ->
+                source.name != LearnedPrefsStore.FILE_NAME && (source.name != GLOBAL_FILE || scope == "all")
+            }.sortedWith(compareByDescending<MemorySources.Source> { it.name == GLOBAL_FILE }.thenByDescending { it.name })
+            searchMemory(files, keywordList)
+        } ?: "No memory files found."
+    }
 
-        if (scope == "all") {
-            val globalFile = File(memoryDir, GLOBAL_FILE)
-            if (globalFile.exists() && globalFile.length() > 0) {
-                filesToSearch.add(GLOBAL_FILE to globalFile)
-            }
-        }
-
-        // Daily logs sorted descending
-        val dailyFiles = memoryDir.listFiles()
-            ?.filter { it.extension == "md" && it.name != GLOBAL_FILE && it.name != LearnedPrefsStore.FILE_NAME }
-            ?.sortedByDescending { it.name }
-            ?: emptyList()
-
-        for (file in dailyFiles) {
-            filesToSearch.add(file.name to file)
-        }
-
-        if (filesToSearch.isEmpty()) {
-            return "No memory files found."
-        }
-
+    private fun searchMemory(files: List<MemorySources.Source>, keywordList: List<String>): String {
+        if (files.isEmpty()) return "No memory files found."
         val results = mutableListOf<String>()
         var totalLines = 0
         // [T-memory-get-truncate-android] UTF-8 byte tally — see
@@ -366,10 +388,10 @@ class MemoryRepository(private val memoryDir: File) {
         // to flood agent context.
         val lineCap = if (keywordList.isEmpty()) MAX_DUMP_LINES else MAX_SEARCH_LINES
 
-        for ((label, file) in filesToSearch) {
+        for (file in files) {
             if (totalLines >= lineCap || byteCapHit) break
-            val content = try { file.readText() } catch (_: Exception) { continue }
-            if (content.isEmpty()) continue
+            val label = file.name
+            val content = file.view()?.text ?: continue
             val budget = lineCap - totalLines
 
             val entry: String? = if (keywordList.isEmpty()) {
@@ -465,6 +487,32 @@ class MemoryRepository(private val memoryDir: File) {
         return results.joinToString("\n\n") + truncatedNote
     }
 
+    private fun getArchivedMemory(keywords: String): String {
+        val result = StringBuilder()
+        var bytes = 0
+        for ((token, body, status) in MemoryDiaryManagement.archive(memoryDir, clock(), keywords)) {
+            val section = "[${status.name.lowercase()} · entry_id=$token]\n$body\n\n"
+            bytes += section.toByteArray(Charsets.UTF_8).size
+            if (bytes > MAX_OUTPUT_BYTES) return result.append("[Archive output truncated; use more specific keywords.]").toString()
+            result.append(section)
+        }
+        return result.toString().trimEnd().ifEmpty { "No expired or archived entries matched." }
+    }
+
+    internal fun archivedEntries(query: String, limit: Int): List<MemoryDiaryManagement.ArchiveEntry> =
+        MemoryDiaryManagement.archive(memoryDir, clock(), query, limit).toList()
+
+    /** Entry tokens are relative to this repository, and cannot select another chat or filesystem path. */
+    internal fun restoreArchivedMemory(token: String): Boolean {
+        val (date, id) = token.split(':', limit = 2).takeIf { it.size == 2 } ?: return false
+        if (!MemoryDiaryFormat.id.matches(id)) return false
+        val source = "$date.md"
+        if (!MemoryDiaryFormat.dateFile.matches(source)) return false
+        val restored = MemoryLifecycle.restore(memoryDir, source, id, clock())
+        if (restored) indexForEmbeddingsAsync(File(memoryDir, source), invalidate = false)
+        return restored
+    }
+
     // -- System Prompt Fragment --
 
     /**
@@ -493,8 +541,11 @@ class MemoryRepository(private val memoryDir: File) {
      * caller's live-recall fold (null falls back to the DIAG_TASK_KEYWORDS
      * vocabulary inside the gate).
      */
-    internal fun loadRecentDailyFragments(recallQuery: String? = null): MemoryFragmentBuilder.DailyInjection =
-        fragments.loadRecentDailyFragments(recallQuery)
+    internal fun loadRecentDailyFragments(
+        recallQuery: String? = null,
+        now: Long = clock(),
+        log: Boolean = true,
+    ): MemoryFragmentBuilder.DailyInjection = fragments.loadRecentDailyFragments(recallQuery, now, log)
 
     // -- File Management (for Settings UI) --
 
@@ -531,7 +582,7 @@ class MemoryRepository(private val memoryDir: File) {
             ?: emptyList()
 
         for (file in dailyFiles) {
-            val content = try { file.readText() } catch (_: Exception) { "" }
+            val content = readFile(file.name)
             items.add(MemoryFileInfo(
                 name = file.name,
                 isGlobal = false,
@@ -555,6 +606,7 @@ class MemoryRepository(private val memoryDir: File) {
     }
 
     fun readFile(name: String): String {
+        if (MemoryDiaryFormat.dateFile.matches(name)) return MemoryLifecycle.read(memoryDir, name)?.text.orEmpty()
         val file = File(memoryDir, name)
         return if (file.exists()) try { file.readText() } catch (_: Exception) { "" } else ""
     }
@@ -562,15 +614,38 @@ class MemoryRepository(private val memoryDir: File) {
     fun saveFile(name: String, content: String) {
         if (name == LearnedPrefsStore.FILE_NAME) return
         val file = File(memoryDir, name)
-        writeTextAtomic(file, content)
+        withWritableMemoryFile(name) { writeTextAtomic(it, content) }
         indexForEmbeddingsAsync(file)
     }
 
+    private fun <T> withWritableMemoryFile(name: String, mutate: (File) -> T): T {
+        if (!MemoryDiaryFormat.dateFile.matches(name)) return mutate(File(memoryDir, name))
+        return MemoryLifecycle.locked(memoryDir) { dir ->
+            MemoryRestoreJournal.recover(dir, name)
+            mutate(MemoryLifecycle.child(dir, name) ?: throw IOException("Invalid diary path"))
+        }
+    }
+
     fun deleteFile(name: String): Boolean {
-        if (name == GLOBAL_FILE) return false // Cannot delete GLOBAL.md
-        if (name == LearnedPrefsStore.FILE_NAME) return false
-        val deleted = File(memoryDir, name).delete()
+        if (name == GLOBAL_FILE || name == LearnedPrefsStore.FILE_NAME) return false
+        val deleted = runCatching {
+            if (!MemoryDiaryFormat.dateFile.matches(name)) {
+                withWritableMemoryFile(name) { it.delete() }
+            } else {
+                // [P3-7] The lifecycle sidecar must go WITH the diary: it
+                // otherwise outlives the file, so the archive/restore
+                // listings keep seeing the entry and a recreated file with
+                // the same name would inherit stale lifecycle state.
+                MemoryLifecycle.locked(memoryDir) { dir ->
+                    MemoryRestoreJournal.recover(dir, name)
+                    val removed = MemoryLifecycle.child(dir, name)?.takeIf { it.isFile }?.delete() == true
+                    MemoryLifecycle.sidecar(dir, name)?.delete()
+                    removed
+                }
+            }
+        }.getOrDefault(false)
         if (deleted) {
+            MemoryLifecycle.invalidateRecall()
             // [#27] Vectors outlive the file otherwise — a deleted diary
             // would stay semantically recallable, and there is no file left
             // for a re-index to drop the rows.
@@ -597,102 +672,16 @@ class MemoryRepository(private val memoryDir: File) {
         data class IOError(val message: String) : EntryMutationResult()
     }
 
-    /**
-     * Remove a memory_write entry whose body matches [writtenContent] from
-     * today's or yesterday's daily log. Mirrors iOS
-     * `MemoryWriteDetailView.revokeEntry()`.
-     *
-     * Each entry on disk is `<!-- YYYY-MM-DD HH:mm:ss -->\n{body}\n\n`. The
-     * comment marker is the canonical entry boundary; we split on it via
-     * regex, locate the entry whose trimmed body equals the trimmed
-     * [writtenContent], then erase the entire range (marker + body +
-     * trailing whitespace).
-     *
-     * Scope is intentionally limited to today + yesterday to match iOS — older
-     * entries are presumed already syndicated into the model's longer-term
-     * memory and shouldn't be silently mutated by an undo button.
-     */
-    fun revokeEntry(writtenContent: String): EntryMutationResult {
-        val trimmedTarget = writtenContent.trim()
-        val candidates = candidateDateStrings()
-        val markerRegex = Regex("""<!-- \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} -->\n""")
+    /** Explicit revoke still applies only to today/yesterday. */
+    fun revokeEntry(writtenContent: String): EntryMutationResult = editRecent(writtenContent, null)
 
-        for (dateStr in candidates) {
-            val file = File(memoryDir, "$dateStr.md")
-            if (!file.exists()) continue
-            val content = try { file.readText() } catch (_: Exception) { continue }
+    /** A user edit promotes the revised body out of automatic lifecycle management. */
+    fun replaceEntryBody(oldContent: String, newContent: String): EntryMutationResult = editRecent(oldContent, newContent)
 
-            val matches = markerRegex.findAll(content).toList()
-            if (matches.isEmpty()) continue
-
-            for ((i, match) in matches.withIndex()) {
-                val bodyStart = match.range.last + 1
-                val entryEnd = matches.getOrNull(i + 1)?.range?.first ?: content.length
-                val body = content.substring(bodyStart, entryEnd)
-                if (body.trim() != trimmedTarget) continue
-
-                val newContent = content.removeRange(match.range.first, entryEnd)
-                return try {
-                    writeTextAtomic(file, newContent)
-                    Log.i(TAG, "Revoked memory entry from $dateStr.md")
-                    indexForEmbeddingsAsync(file)
-                    EntryMutationResult.Success(dateStr)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to write $dateStr.md after revoke", e)
-                    EntryMutationResult.IOError(e.message ?: "Unknown I/O error")
-                }
-            }
+    private fun editRecent(original: String, replacement: String?): EntryMutationResult =
+        MemoryDiaryManagement.editRecent(memoryDir, clock(), original, replacement).also {
+            if (it is EntryMutationResult.Success) indexForEmbeddingsAsync(File(memoryDir, "${it.dateStr}.md"))
         }
-        return EntryMutationResult.NotFound
-    }
-
-    /**
-     * Replace the body of an existing memory_write entry whose body matches
-     * [oldContent], substituting [newContent]. Same scoping/matching rules as
-     * [revokeEntry]. Mirrors iOS `MemoryWriteDetailView.replaceEntryInLog()`.
-     */
-    fun replaceEntryBody(oldContent: String, newContent: String): EntryMutationResult {
-        val trimmedOld = oldContent.trim()
-        val trimmedNew = newContent.trim()
-        val candidates = candidateDateStrings()
-        val markerRegex = Regex("""<!-- \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} -->\n""")
-
-        for (dateStr in candidates) {
-            val file = File(memoryDir, "$dateStr.md")
-            if (!file.exists()) continue
-            val content = try { file.readText() } catch (_: Exception) { continue }
-
-            val matches = markerRegex.findAll(content).toList()
-            if (matches.isEmpty()) continue
-
-            for ((i, match) in matches.withIndex()) {
-                val bodyStart = match.range.last + 1
-                val entryEnd = matches.getOrNull(i + 1)?.range?.first ?: content.length
-                val body = content.substring(bodyStart, entryEnd)
-                if (body.trim() != trimmedOld) continue
-
-                // iOS replaces with `trimmed + "\n\n"` so the on-disk
-                // separator between entries stays uniform.
-                val replacement = "$trimmedNew\n\n"
-                val newFileContent = content.replaceRange(bodyStart, entryEnd, replacement)
-                return try {
-                    writeTextAtomic(file, newFileContent)
-                    Log.i(TAG, "Replaced memory entry body in $dateStr.md")
-                    indexForEmbeddingsAsync(file)
-                    EntryMutationResult.Success(dateStr)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to write $dateStr.md after edit", e)
-                    EntryMutationResult.IOError(e.message ?: "Unknown I/O error")
-                }
-            }
-        }
-        return EntryMutationResult.NotFound
-    }
-
-    private fun candidateDateStrings(): List<String> {
-        val now = System.currentTimeMillis()
-        return listOf(IsoTime.formatLocalDate(now), IsoTime.formatLocalDate(now - 86400_000L))
-    }
 
     // -- Internal --
 
@@ -704,8 +693,9 @@ class MemoryRepository(private val memoryDir: File) {
      * a candidate (its full text rides in the system prompt), so its vectors
      * would never be read.
      */
-    private fun indexForEmbeddingsAsync(file: File) {
+    private fun indexForEmbeddingsAsync(file: File, invalidate: Boolean = true) {
         if (file.name == GLOBAL_FILE) return
+        if (invalidate) MemoryLifecycle.invalidateRecall()
         runCatching {
             com.openminis.app.data.memory.MemoryEmbeddingRuntime.indexerOrNull()?.indexFileAsync(file)
         }

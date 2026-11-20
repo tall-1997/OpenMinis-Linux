@@ -1,205 +1,125 @@
 package com.openminis.app.ui.chat
 
 import com.openminis.app.logging.AppLogger
+import java.io.File
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
-/**
- * [T-compaction-transaction] The durable half of a compaction.
- *
- * WHY: before this, compaction was a purely in-memory state machine
- * (`_isCompacting` / `compactJob` / `_cachedLatestMarker`). A process death
- * between "the summarizer answered (paid for)" and "the marker landed" left no
- * evidence at all: the next launch saw "compaction never happened" and paid for
- * the same summary again, with nothing in the UI or the logs to explain it.
- *
- * The transaction is bracket-first, the same shape dsh uses:
- *   start  → summary → end
- * with an unmatched `start` meaning "a summary attempt was in flight and never
- * settled". `interrupted` is recorded by the NEXT launch when it finds one, so
- * the record is honest about which side of the crash it stands on.
- *
- * Deliberately NOT a lock: Android has no second writer that could race a
- * compaction, and a stale marker that blocks compaction forever would be worse
- * than the duplicate it prevents. This is evidence, and it feeds the retry
- * authorization below.
- */
+/** Journal attempts without making the journal a prerequisite for a Room commit. */
 internal object CompactionTransaction {
+    const val FAILURE_COOLDOWN_MS = 30_000L
 
-    /** Monotonic per-session counter of settled attempts (any outcome). */
-    private val generations = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.atomic.AtomicInteger>()
+    private data class RetryState(val generation: Int = 0, val failedAtMs: Long? = null)
 
-    /** Id of the attempt currently open in this process, if any. */
-    @Volatile
-    internal var openId: String? = null
+    // The UI checks cooldown without blocking on journal I/O or recovery scans.
+    private val retries = ConcurrentHashMap<String, RetryState>()
+    private val openAttempts = HashMap<String, String>()
 
-    internal fun newId(): String = java.util.UUID.randomUUID().toString()
+    fun generationOf(sessionId: String): Int = retries[sessionId]?.generation ?: 0
 
-    /**
-     * [T-compaction-transaction] Retry authorization.
-     *
-     * The old rule was a boolean (`succeeded`), which let a caller retry a
-     * failed compaction immediately and pay again without anything having
-     * changed. A retry is now authorized only when the attempt actually
-     * advanced something — here, when the summary generation for this session
-     * moved. A failure that produced no advance leaves the generation where it
-     * was, so an unconditional retry loop cannot burn calls.
-     */
-    fun generationOf(sessionId: String): Int =
-        generations[sessionId]?.get() ?: 0
+    private fun advanceGeneration(sessionId: String): Int = checkNotNull(retries.compute(sessionId) { _, state ->
+        RetryState(generation = (state?.generation ?: 0) + 1)
+    }).generation
 
-    fun advanceGeneration(sessionId: String): Int =
-        generations.getOrPut(sessionId) { java.util.concurrent.atomic.AtomicInteger(0) }
-            .incrementAndGet()
+    fun retryAuthorized(sessionId: String, before: Int): Boolean = generationOf(sessionId) > before
 
-    /** True when [before] is older than the current generation: a retry may proceed. */
-    fun retryAuthorized(sessionId: String, before: Int): Boolean =
-        generationOf(sessionId) > before
+    fun retryAllowedNow(sessionId: String, nowMs: Long): Boolean = cooldownRemainingMs(sessionId, nowMs) == 0L
 
-    /** [T-compaction-transaction] Last failure per session: (generation, atMs). */
-    private val lastFailure =
-        java.util.concurrent.ConcurrentHashMap<String, Pair<Int, Long>>()
-
-    /**
-     * [T-compaction-transaction] May a new attempt start now?
-     *
-     * A blind retry burns a summary call to learn nothing. The rule is: after a
-     * failure, wait [FAILURE_COOLDOWN_MS] unless the generation moved (i.e. a
-     * different attempt settled and changed the boundary). That is what stops a
-     * broken summarizer from being re-entered by every user tap, while a
-     * genuinely new situation is never blocked.
-     */
-    fun retryAllowedNow(sessionId: String, nowMs: Long): Boolean {
-        val failed = lastFailure[sessionId] ?: return true
-        if (generationOf(sessionId) != failed.first) return true
-        // [T-compaction-cooldown-monotonic] A backwards wall clock (NTP fix,
-        // manual change, emulator skew) must not lock the retry out for the whole
-        // skew: a negative gap counts as expired, exactly like an elapsed one.
-        return nowMs < failed.second || nowMs - failed.second >= FAILURE_COOLDOWN_MS
+    fun cooldownRemainingMs(sessionId: String, nowMs: Long): Long {
+        val failedAt = retries[sessionId]?.failedAtMs ?: return 0L
+        // A backwards wall clock must not lock the session out until it catches up.
+        if (nowMs < failedAt) return 0L
+        return (FAILURE_COOLDOWN_MS - (nowMs - failedAt)).coerceAtLeast(0L)
     }
 
-    /** [T-compaction-transaction] Record a failed attempt at the given clock. */
-    fun markFailed(sessionId: String, nowMs: Long) {
-        lastFailure[sessionId] = generationOf(sessionId) to nowMs
+    private fun markFailed(sessionId: String, nowMs: Long) {
+        retries.compute(sessionId) { _, state -> (state ?: RetryState()).copy(failedAtMs = nowMs) }
     }
 
-    /** [T-compaction-transaction] Gap before an unchanged failure may retry. */
-    const val FAILURE_COOLDOWN_MS: Long = 30_000L
+    @Synchronized
+    fun begin(
+        filesDir: File?, sessionId: String, anchorIdx: Int, rangeMessages: Int, rangeChars: Int,
+    ): String {
+        val id = UUID.randomUUID().toString()
+        openAttempts[id] = sessionId
+        SessionJournal.record(
+            filesDir, sessionId, SessionJournal.COMPACTION_START,
+            mapOf("compactionId" to id, "anchorIdx" to anchorIdx, "rangeMessages" to rangeMessages, "rangeChars" to rangeChars),
+        )
+        return id
+    }
 
+    @Synchronized
+    fun settle(
+        filesDir: File?, sessionId: String, attemptId: String, summaryChars: Int, coveredCount: Int, markerId: String,
+    ) {
+        if (openAttempts[attemptId] != sessionId) return
+        openAttempts.remove(attemptId)
+        val generation = advanceGeneration(sessionId)
+        SessionJournal.record(
+            filesDir, sessionId, SessionJournal.COMPACTION_END,
+            mapOf(
+                "compactionId" to attemptId, "summaryChars" to summaryChars, "coveredCount" to coveredCount,
+                "markerId" to markerId, "generation" to generation,
+            ),
+        )
+    }
+
+    @Synchronized
+    fun abandon(filesDir: File?, sessionId: String, attemptId: String, reason: String, nowMs: Long) {
+        if (openAttempts[attemptId] != sessionId) return
+        openAttempts.remove(attemptId)
+        if (reason != REASON_CANCELLED) markFailed(sessionId, nowMs)
+        recordInterruption(filesDir, sessionId, attemptId, reason)
+    }
+
+    /** Do not report another live ViewModel's attempt as a process death. */
+    @Synchronized
+    fun recoverInterrupted(filesDir: File, sessionId: String): Int {
+        if (sessionId.isBlank()) return 0
+        val interrupted = SessionJournal.interruptedCompactions(filesDir, sessionId)
+            .map { it.optString("compactionId") }
+            .filterNot(openAttempts::containsKey)
+        for (id in interrupted) {
+            recordInterruption(filesDir, sessionId, id, "process died before the attempt settled")
+        }
+        return interrupted.size
+    }
+
+    private fun recordInterruption(filesDir: File?, sessionId: String, attemptId: String, reason: String) {
+        SessionJournal.record(
+            filesDir, sessionId, SessionJournal.COMPACTION_INTERRUPTED,
+            mapOf("compactionId" to attemptId, "reason" to reason),
+        )
+    }
+
+    @Synchronized
     internal fun resetForTest() {
-        generations.clear()
-        lastFailure.clear()
-        openId = null
+        retries.clear()
+        openAttempts.clear()
     }
 }
 
-/**
- * [T-compaction-transaction] Start marker. Returns the attempt id so the same
- * call's summary/end can be correlated (and so a crash can be matched).
- */
-internal fun ChatViewModel.beginCompactionJournal(
-    sessionId: String,
-    anchorIdx: Int,
-    rangeMessages: Int,
-    rangeChars: Int,
-): String {
-    val id = CompactionTransaction.newId()
-    CompactionTransaction.openId = id
-    runCatching {
-        SessionJournal.record(
-            filesDir = context.filesDir,
-            sessionId = sessionId,
-            kind = SessionJournal.COMPACTION_START,
-            fields = mapOf(
-                "compactionId" to id,
-                "anchorIdx" to anchorIdx,
-                "rangeMessages" to rangeMessages,
-                "rangeChars" to rangeChars,
-            ),
-        )
-    }
-    return id
-}
-
-/** [T-compaction-transaction] The summary settled; the marker is about to land. */
-internal fun ChatViewModel.settleCompactionJournal(
-    sessionId: String,
-    attemptId: String,
-    summaryChars: Int,
-    coveredCount: Int,
-    markerId: String,
-) {
-    CompactionTransaction.openId = null
-    val generation = CompactionTransaction.advanceGeneration(sessionId)
-    runCatching {
-        SessionJournal.record(
-            filesDir = context.filesDir,
-            sessionId = sessionId,
-            kind = SessionJournal.COMPACTION_END,
-            fields = mapOf(
-                "compactionId" to attemptId,
-                "summaryChars" to summaryChars,
-                "coveredCount" to coveredCount,
-                "markerId" to markerId,
-                "generation" to generation,
-            ),
-        )
-    }
-}
-
-/** [T-compaction-transaction] The attempt ended without a usable summary. */
-internal fun ChatViewModel.abandonCompactionJournal(
-    sessionId: String,
-    attemptId: String,
-    reason: String,
-) {
-    CompactionTransaction.openId = null
-    // [T-compaction-transaction] A user cancel is not a failure: the next tap
-    // must run immediately. Every other abandon (no summary, no anchor, marker
-    // write failed, timeout, provider error) arms the cooldown so an unchanged
-    // failure cannot be re-entered by the next tap and pay again.
-    if (reason != REASON_CANCELLED) {
-        CompactionTransaction.markFailed(sessionId, System.currentTimeMillis())
-    }
-    runCatching {
-        SessionJournal.record(
-            filesDir = context.filesDir,
-            sessionId = sessionId,
-            kind = SessionJournal.COMPACTION_INTERRUPTED,
-            fields = mapOf("compactionId" to attemptId, "reason" to reason),
-        )
-    }
-}
-
-/** [T-compaction-transaction] Reason string that means the user cancelled. */
 internal const val REASON_CANCELLED = "cancelled"
 
-/**
- * [T-compaction-transaction] Report attempts that opened and never closed —
- * i.e. a process died mid-compaction. Called on resume, not on every turn.
- */
+internal fun ChatViewModel.beginCompactionJournal(
+    sessionId: String, anchorIdx: Int, rangeMessages: Int, rangeChars: Int,
+): String = CompactionTransaction.begin(compactionJournalDir(), sessionId, anchorIdx, rangeMessages, rangeChars)
+
+internal fun ChatViewModel.settleCompactionJournal(
+    sessionId: String, attemptId: String, summaryChars: Int, coveredCount: Int, markerId: String,
+) = CompactionTransaction.settle(compactionJournalDir(), sessionId, attemptId, summaryChars, coveredCount, markerId)
+
+internal fun ChatViewModel.abandonCompactionJournal(sessionId: String, attemptId: String, reason: String) =
+    CompactionTransaction.abandon(compactionJournalDir(), sessionId, attemptId, reason, System.currentTimeMillis())
+
+private fun ChatViewModel.compactionJournalDir(): File? = runCatching { context.filesDir }.getOrNull()
+
 internal fun ChatViewModel.reportInterruptedCompactions(sessionId: String) {
-    // [T-session-journal-sid-capture] The caller captures the owner BEFORE
-    // launching the detached scan. Re-reading the live session here would
-    // attribute B's interrupted records to A after a fast switch, while A's
-    // own stayed unreported.
-    val sid = sessionId.ifEmpty { realSessionId.ifEmpty { activeSessionId } }
-    if (sid.isEmpty()) return
     runCatching {
-        val interrupted = SessionJournal.interruptedCompactions(context.filesDir, sid)
-        if (interrupted.isEmpty()) return@runCatching
-        AppLogger.info(
-            ChatViewModel.TAG,
-            "[Compact] ${interrupted.size} interrupted compaction attempt(s) recovered from the journal",
-        )
-        for (e in interrupted) {
-            SessionJournal.record(
-                filesDir = context.filesDir,
-                sessionId = sid,
-                kind = SessionJournal.COMPACTION_INTERRUPTED,
-                fields = mapOf(
-                    "compactionId" to e.optString("compactionId"),
-                    "reason" to "process died before the summary settled",
-                ),
-            )
+        val count = CompactionTransaction.recoverInterrupted(context.filesDir, sessionId)
+        if (count > 0) {
+            AppLogger.info(ChatViewModel.TAG, "[Compact] $count interrupted compaction attempt(s) recovered from the journal")
         }
     }
 }

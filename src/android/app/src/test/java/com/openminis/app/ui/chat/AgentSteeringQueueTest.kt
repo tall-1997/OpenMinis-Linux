@@ -1,5 +1,7 @@
 package com.openminis.app.ui.chat
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -161,6 +163,45 @@ class AgentSteeringQueueTest {
         queue.clear()
         assertTrue(queue.isEmpty)
         assertNull(queue.drainOne())
+    }
+
+    @Test
+    fun steeringSwitchBeforeClaimLeavesTheUnsentEntriesQueued() = runBlocking {
+        val queue = AgentSteeringQueue(QueueMode.ALL)
+        val first = queue.offer("first")!!
+        assertNull(persistSteeringQueueBatch(queue, { false }) { error("must not append to a different owner") })
+        assertEquals(listOf(first), queue.drainAll())
+    }
+
+    @Test
+    fun steeringSwitchDuringAppendDoesNotBindOrRequeueCommittedRows() = runBlocking {
+        val queue = AgentSteeringQueue(QueueMode.ALL)
+        val first = queue.offer("first")!!
+        val owner = MutableStateFlow("old")
+        val written = mutableListOf<Pair<String, SteeringEntry>>()
+        val committed = persistSteeringQueueBatch(queue, { owner.value == "old" }) { entries ->
+            owner.value = "new"
+            written.addAll(entries.map { "old" to it })
+            listOf("db-old")
+        }
+        assertNull(committed)
+        assertEquals(listOf("old" to first), written)
+        assertTrue(queue.isEmpty)
+    }
+
+    @Test
+    fun aFailedSteeringBatchRestoresItsOrderAheadOfNewOffers() = runBlocking {
+        val queue = AgentSteeringQueue(QueueMode.ALL)
+        queue.offer("first")
+        queue.offer("second")
+        val thrown = runCatching {
+            persistSteeringQueueBatch(queue, { true }) {
+                queue.offer("new")
+                throw java.io.IOException("local fake write failed")
+            }
+        }.exceptionOrNull()
+        assertTrue(thrown is java.io.IOException)
+        assertEquals(listOf("first", "second", "new"), queue.drainAll().map { it.text })
     }
 
     // -- P1-7: the session stamp must re-stamp, never clear --

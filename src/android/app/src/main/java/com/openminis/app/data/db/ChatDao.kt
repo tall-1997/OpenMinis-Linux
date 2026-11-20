@@ -2,12 +2,14 @@ package com.openminis.app.data.db
 
 import androidx.room.ColumnInfo
 import androidx.room.Dao
+import androidx.room.Embedded
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.RawQuery
 import androidx.room.Transaction
 import androidx.sqlite.db.SupportSQLiteQuery
+import com.openminis.app.data.body.ResourceLimits
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -31,6 +33,14 @@ FROM messages
 
 /** Retries for the UNIQUE (session_id, sort_order) race in [appendMessage]. */
 private const val MAX_SORT_RETRIES = 4
+
+/** An exact inline size, with only small bodies carried in the metadata page. */
+data class RequestHistoryRow(
+    @Embedded val row: MessageEntity,
+    @ColumnInfo(name = "inline_size") val inlineSize: Long?,
+    @ColumnInfo(name = "inline_parts") val inlineParts: ByteArray?,
+    @ColumnInfo(name = "reasoning_size") val reasoningSize: Long?,
+)
 
 data class MessageBodyMeta(
     val id: String,
@@ -135,7 +145,7 @@ data class StubPreviewTailRow(
 )
 
 @Dao
-interface ChatDao : MessageHeadDao, ChatTruncationDao, SessionBindingDao, UsageStatsDao {
+interface ChatDao : MessageHeadDao, ChatTruncationDao, SessionBindingDao, UsageStatsDao, CompactCoverageDao {
     // Sessions
     @Query("SELECT * FROM sessions ORDER BY updated_at DESC")
     fun observeSessions(): Flow<List<ChatSessionEntity>>
@@ -276,11 +286,7 @@ interface ChatDao : MessageHeadDao, ChatTruncationDao, SessionBindingDao, UsageS
     @Query("UPDATE sessions SET folder_id = NULL WHERE folder_id = :folderId")
     suspend fun clearFolderForSessions(folderId: String)
 
-    // Messages
-    // [Wave3-fix-6] The unbounded `loadMessages(sessionId)` query was deleted:
-    // its only caller (ChatRepository.loadMessages) has thrown "unbounded load
-    // disabled" for a long time. Page with loadMessagesPage /
-    // loadMessagesTail / loadMessagesTailRaw instead.
+    // Messages: always page; use exact bounded hydration for requests.
 
     @Query("$SAFE_MESSAGE_FROM WHERE id = :messageId AND session_id = :sessionId LIMIT 1")
     suspend fun getMessage(sessionId: String, messageId: String): MessageEntity?
@@ -363,22 +369,7 @@ interface ChatDao : MessageHeadDao, ChatTruncationDao, SessionBindingDao, UsageS
 
     @Query("$SAFE_MESSAGE_FROM WHERE session_id = :sessionId AND role = :role ORDER BY sort_order DESC LIMIT 1")
     suspend fun lastMessageByRole(sessionId: String, role: String): MessageEntity?
-    /**
-     * [T-android-huge-session-load-oom] Tail-bounded variant of [loadMessages].
-     *
-     * A 4562-message / 5.4M-char session crashed the process: loading EVERY row
-     * kept three full copies alive at once (raw MessageEntity list + the
-     * toChatMessages UI transform + the toLLMMessage history rebuild), pushing
-     * RSS to 2.3GB -> GC storm -> Scudo OOM -> SIGABRT restart loop. The UI tail
-     * window (`uiMessages` cap 200) and the request-boundary `ContextPolicy`
-     * only bound what is RENDERED and SENT - nothing bounded what loadSession
-     * KEPT.
-     *
-     * [offset] must be non-negative; callers pass `max(0, total - limit)` so the
-     * query selects the LAST [limit] rows. The list arrives in sort_order ASC
-     * (same order as [loadMessages]). When total <= limit the offset is 0 and
-     * this degrades to the full history - identical to [loadMessages].
-     */
+    /** Display-only tail page in ascending sort order. */
     @Query("""
         $SAFE_MESSAGE_FROM
         WHERE session_id = :sessionId
@@ -387,18 +378,23 @@ interface ChatDao : MessageHeadDao, ChatTruncationDao, SessionBindingDao, UsageS
     """)
     suspend fun loadMessagesTail(sessionId: String, limit: Int, offset: Int): List<MessageEntity>
 
-    /** Full request-side body projection. Callers must page and hydrate boundedly. */
-    @Query("""
-        SELECT id, session_id, role, parts_json, created_at, token_usage, sort_order,
-               reasoning_content, stream_interrupt_count, updated_at, error_info,
-               model_id, model_display_name, provider_type, provider_instance_id,
-               body_bytes, body_ref, body_sha, preview
-        FROM messages
-        WHERE session_id = :sessionId
-        ORDER BY sort_order ASC
-        LIMIT :limit OFFSET :offset
-    """)
-    suspend fun loadMessagesTailRaw(sessionId: String, limit: Int, offset: Int): List<MessageEntity>
+    @Query("""SELECT id, session_id, role, '' AS parts_json, created_at, token_usage, sort_order,
+        CASE WHEN length(CAST(reasoning_content AS BLOB)) <= ${ResourceLimits.INLINE_BODY_BYTES} THEN reasoning_content END AS reasoning_content,
+        stream_interrupt_count, updated_at, error_info, model_id, model_display_name, provider_type, provider_instance_id,
+        body_bytes, body_ref, body_sha, NULL AS preview, length(CAST(reasoning_content AS BLOB)) AS reasoning_size,
+        CASE WHEN body_ref IS NULL THEN length(CAST(parts_json AS BLOB)) END AS inline_size,
+        CASE WHEN body_ref IS NULL AND length(CAST(parts_json AS BLOB)) <= ${ResourceLimits.INLINE_BODY_BYTES}
+            THEN CAST(parts_json AS BLOB) END AS inline_parts
+        FROM messages WHERE session_id = :sessionId AND sort_order < :before ORDER BY sort_order DESC LIMIT :limit""")
+    suspend fun loadRequestHistoryRows(sessionId: String, before: Long, limit: Int): List<RequestHistoryRow>
+
+    @Query("SELECT substr(CAST(reasoning_content AS BLOB), :offset, MIN(:count, ${ResourceLimits.SQL_CELL_BYTES})) FROM messages WHERE session_id = :sessionId AND id = :id")
+    suspend fun loadRequestReasoningChunk(sessionId: String, id: String, offset: Int, count: Int): ByteArray?
+
+    @Query("""SELECT CASE WHEN version < 2 AND TRIM(summary) <> '' THEN
+        COALESCE(NULLIF(TRIM(first_kept_message_id), ''), NULLIF(TRIM(boundary_message_id), '')) END
+        FROM compact_markers WHERE session_id = :sessionId ORDER BY created_at DESC LIMIT 1""")
+    suspend fun requestLegacyKeepId(sessionId: String): String?
 
     // [Wave3-fix-5] `observeMessages(sessionId): Flow<...>` (a LIMIT 200
     // hot-projection Flow) was deleted: it had zero collectors in the whole

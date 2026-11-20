@@ -38,11 +38,13 @@ import com.openminis.app.provider.ProviderHeaderStore
  * 调用点手写 `customEndpointHeadersFor(...).ifEmpty { headersFor(...) }`，否则
  * 两条路径会再次漂移（model_use 缺兜底就是 400 的根因）。
  */
-internal fun ChatViewModel.providerExtraHeaders(instanceId: String?): Map<String, String> {
+internal fun ChatViewModel.providerExtraHeaders(
+    instanceId: String?,
+    persistedSessionId: String = activeSessionId,
+): Map<String, String> {
     val id = instanceId ?: return emptyMap()
     val instance = providerRepository.instance(id) ?: return emptyMap()
     val user = ProviderHeaderStore.headersFor(instance.id)
-    val persistedSessionId = realSessionId.ifEmpty { sessionId }
     // [F2 GH#347] One shared helper for both lanes: custom endpoint (opt-in) with
     // the official `*.opencode.ai` host as fallback. Keeping this call and
     // ModelUseOffloadHandler's call on the SAME function is the whole point —

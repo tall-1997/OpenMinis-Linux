@@ -1,46 +1,57 @@
 package com.openminis.app.ui.chat
 
-/**
- * [T-token-scan-memo] Performance roadmap §4-P1: token estimation re-scans
- * every character of every historical message on each call — send-time gates,
- * in-loop policy checks, and progressive-trim level decisions all walk the
- * full history — and the ToolUse branch calls `input.toString()` per part, a
- * linear copy of multi-KB JSON arguments (the real dominant cost on long
- * tool-heavy sessions).
- *
- * Both inputs are immutable for their lifetime: messages are data classes and
- * a streamed delta appends a NEW String instance; tool args settle as a NEW
- * JSONObject when the call completes. So per-reference memoization is
- * structurally safe — the same reference always scans to the same value, and
- * a "changed" history always produces new keys. No version counter to drift,
- * no list-mutability trap (`agentHistory` is a mutableListOf mutated in
- * place, so an identity-based whole-estimate cache would serve stale totals).
- *
- * `WeakHashMap` keys on equality (String's is content equality — two distinct
- * instances with the same text hit the same value, which is exactly the
- * arithmetic identity), and entries are collected when the referenced objects
- * are dropped from history, so long sessions cannot leak.
- */
+import com.openminis.app.data.ContextTokenMeter
+import org.json.JSONObject
+import java.util.WeakHashMap
+
 internal object TokenScanMemo {
+    private val neutralizedTexts = NeutralizedTextMemo()
 
-    private val toolUseJson =
-        java.util.Collections.synchronizedMap(java.util.WeakHashMap<Any, String>())
+    /** Only the fixed request projection is cacheable. Never key a history or a caller's transform. */
+    fun neutralized(text: String): String = neutralizedTexts.get(text)
 
-    private val textScans =
-        java.util.Collections.synchronizedMap(java.util.WeakHashMap<String, Long>())
+    /** Legacy callers with a still-mutable input must reserialize even after nested changes. */
+    fun toolUseInputJson(input: JSONObject): String = input.toString() ?: "{}"
 
-    /** Memoizes `input.toString()` per object — multi-KB JSON args copied once. */
-    internal fun toolUseInputJson(input: Any): String =
-        toolUseJson[input] ?: input.toString().also { toolUseJson[input] = it }
+    fun mixedTokens(text: String): Long = ContextTokenMeter.rawTextTokens(text).toLong()
+}
 
-    /** Memoizes the ASCII/CJK token scan per text reference. */
-    internal fun mixedTokens(text: String): Long {
-        textScans[text]?.let { return it }
-        var ascii = 0
-        var other = 0
-        for (c in text) if (c.code < 128) ascii++ else other++
-        val total = ascii / 4L + other * 3L / 5L
-        textScans[text] = total
-        return total
+internal class NeutralizedTextMemo(
+    private val maxEntries: Int = 128,
+    private val maxOutputChars: Int = 16_384,
+) {
+    private sealed interface Outcome {
+        data object Unchanged : Outcome
+        data class Changed(val text: String) : Outcome
     }
+
+    private val entries = WeakHashMap<String, Outcome>()
+
+    fun get(text: String): String {
+        when (val hit = synchronized(entries) { entries[text] }) {
+            Outcome.Unchanged -> return text
+            is Outcome.Changed -> return hit.text
+            null -> Unit
+        }
+        val result = neutralizeUntrustedTags(text)
+        val outcome = when {
+            // The original string as a strong value would make its weak key immortal.
+            result == text -> Outcome.Unchanged
+            result.length <= maxOutputChars -> Outcome.Changed(result)
+            else -> return result
+        }
+        if (maxEntries > 0) synchronized(entries) {
+            if (entries.size >= maxEntries && !entries.containsKey(text)) {
+                val keys = entries.keys.iterator()
+                if (keys.hasNext()) {
+                    keys.next()
+                    keys.remove()
+                }
+            }
+            entries[text] = outcome
+        }
+        return if (outcome === Outcome.Unchanged) text else result
+    }
+
+    internal val size: Int get() = synchronized(entries) { entries.size }
 }

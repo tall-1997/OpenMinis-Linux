@@ -38,6 +38,7 @@ internal class MemoryFragmentBuilder(
     private val learnedPrefs: LearnedPrefsStore,
     /** Stat-only file fingerprint (exists + mtime + size), injected from [MemoryRepository]. */
     private val fingerprint: (File) -> String?,
+    private val clock: () -> Long = System::currentTimeMillis,
 ) {
 
     /**
@@ -67,14 +68,7 @@ internal class MemoryFragmentBuilder(
     private var globalFragCacheKey: String? = null
     @Volatile
     private var globalFragCacheValue: String? = null
-    // [T-daily-recall-gate] The cache stores the RAW per-day full texts, not
-    // the injected fragments: the relevance gate + budget in [MemoryDailyGate]
-    // run per call on top of the cached raw list, so a per-turn query change
-    // never needs a re-read while the injected output still tracks the query.
-    @Volatile
-    private var dailyRawCacheKey: String? = null
-    @Volatile
-    private var dailyRawCacheValue: List<MemoryDailyGate.RawDay> = emptyList()
+    // Daily logs are projected against the current lifecycle clock on every build.
 
     // [T-memory-instruction-dedupe] Raw GLOBAL.md body memo, keyed like the
     // fragment cache. Dedupe compares bodies across scopes, and the rendered
@@ -186,30 +180,8 @@ internal class MemoryFragmentBuilder(
      * tail) handed down from the prompt builder — a plain state read, zero
      * network, zero engine calls.
      */
-    fun loadRecentDailyFragments(recallQuery: String? = null): DailyInjection {
-        val now = System.currentTimeMillis()
-        // [T-prompt-cache] Stat-only key: today's date + fingerprint of each
-        // candidate file in the 30-day lookback window. 30 stats are ~0.5 ms
-        // vs. reading + parsing 7 files on every turn. The cached value is the
-        // RAW window; see the field comment for why the gate runs outside it.
-        val todayStr = IsoTime.formatLocalDate(now)
-        val keyBuilder = StringBuilder().append(todayStr)
-        for (dayOffset in 0 until MemoryRepository.MAX_LOOKBACK_DAYS) {
-            val dateStr = IsoTime.formatLocalDate(now - dayOffset.toLong() * 86400_000L)
-            val fp = fingerprint(File(memoryDir, "$dateStr.md")) ?: "-"
-            keyBuilder.append('|').append(fp)
-        }
-        val key = keyBuilder.toString()
-        val raw = if (dailyRawCacheKey == key) {
-            dailyRawCacheValue
-        } else {
-            val fresh = loadRecentDailyRawUncached(now)
-            dailyRawCacheKey = key
-            dailyRawCacheValue = fresh
-            fresh
-        }
-        return injectDaily(raw, recallQuery, todayStr)
-    }
+    fun loadRecentDailyFragments(recallQuery: String? = null, now: Long = clock(), log: Boolean = true): DailyInjection =
+        injectDaily(loadRecentDailyRawUncached(now), recallQuery, IsoTime.formatLocalDate(now), log)
 
     /**
      * [T-daily-recall-gate] Reads the raw window: up to
@@ -219,41 +191,15 @@ internal class MemoryFragmentBuilder(
      * admitted entry, inside [MemoryDailyGate]).
      */
     internal fun loadRecentDailyRawUncached(now: Long): List<MemoryDailyGate.RawDay> {
-        // [T-memory-supersedes] Resolve replacements ONCE for the window, before
-        // admitting anything. A day whose file declares `supersedes: <other>`
-        // retires that other day everywhere — prompt, index and recall — so the
-        // set is computed from the same files this function is about to read.
-        // [T-memory-window-single-read] One pass: read each candidate day once,
-        // keep (date, offset, content), then decide supersedes/eligibility from
-        // that text. The previous shape read the whole window twice.
-        val scanned = ArrayList<Triple<String, Int, Triple<File, Long, String>>>()
-        var scanOffset =0
-        while (scanOffset < MemoryRepository.MAX_LOOKBACK_DAYS) {
-            val ds = IsoTime.formatLocalDate(now - scanOffset.toLong() *86400_000L)
-            val f = File(memoryDir, "$ds.md")
-            if (f.exists()) {
-                val content = readTextResilient(f, "daily-memory") ?: ""
-                if (content.isNotEmpty()) scanned += Triple(ds, scanOffset, Triple(f, f.lastModified(), content))
-            }
-            scanOffset++
-        }
-        val superseded = MemoryMetadataParser.supersededIds(
-            scanned.map { (ds, _, payload) -> ds to payload.third },
-        )
-        val raw = mutableListOf<MemoryDailyGate.RawDay>()
-        for ((dateStr, dayOffset, payload) in scanned) {
-            if (raw.size >= MemoryRepository.MAX_RECENT_FILES) break
-            val (file, modifiedAt, content) = payload
-            if (dateStr in superseded) continue
-            // [T-memory-frontmatter] A disabled or expired file must not reach the
-            // model; the same decision feeds the gate, the budget and the index.
-            if (!MemoryMetadataParser.isEligible(content, now, modifiedAt)) continue
-            // [T-memory-frontmatter-strip] Inject the BODY, never the metadata block.
-            raw.add(
-                MemoryDailyGate.RawDay(dateStr, dayOffset, MemoryMetadataParser.strip(content)),
-            )
-        }
-        return raw
+        val today = java.time.LocalDate.parse(IsoTime.formatLocalDate(now))
+        return MemorySources.withScope(memoryDir, now) { sources ->
+            val byName = sources.associateBy { it.name }
+            (0 until MemoryRepository.MAX_LOOKBACK_DAYS).asSequence().mapNotNull { offset ->
+                val date = today.minusDays(offset.toLong()).toString()
+                val view = byName["$date.md"]?.view() ?: return@mapNotNull null
+                MemoryDailyGate.RawDay(date, offset, view.text, view.lines())
+            }.take(MemoryRepository.MAX_RECENT_FILES).toList()
+        }.orEmpty()
     }
 
     /**
@@ -268,9 +214,10 @@ internal class MemoryFragmentBuilder(
         raw: List<MemoryDailyGate.RawDay>,
         recallQuery: String?,
         todayStr: String,
+        log: Boolean,
     ): DailyInjection {
         val result = MemoryDailyGate.gate(raw, recallQuery, todayStr, DAILY_INJECT_BUDGET_CHARS)
-        if (raw.isNotEmpty()) {
+        if (log && raw.isNotEmpty()) {
             // [XSessionDiag] Hypothesis 3 follow-up: these fragments are
             // injected into EVERY session's system prompt, so a task described
             // in a previous session's daily log is visible to a brand-new
@@ -301,13 +248,9 @@ internal class MemoryFragmentBuilder(
             )
         }
         val fragments = result.fragments.map { day ->
-            day.copy(
-                text = MemoryAuthority.withEnvelope(
-                    day.text,
-                    MemoryTrust.UNVERIFIED_CANDIDATE,
-                    MemoryOrigin.AGENT,
-                ),
-            )
+            val wrapped = MemoryAuthority.withEnvelope(day.text, MemoryTrust.UNVERIFIED_CANDIDATE, MemoryOrigin.AGENT)
+            val prefixChars = wrapped.length - day.text.length
+            day.copy(text = wrapped, visibleEntries = day.visibleEntries.map { it.shifted(prefixChars) })
         }
         return DailyInjection(
             fragments = fragments,

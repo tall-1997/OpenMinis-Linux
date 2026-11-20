@@ -1,6 +1,7 @@
 package com.openminis.app.ui.chat
 
 import com.openminis.app.data.model.AgentContentPart
+import kotlinx.coroutines.CancellationException
 import com.openminis.app.data.model.LLMMessage
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -220,6 +221,13 @@ class PostAnchorTailTest {
         assertTrue(result.notice!!.content.contains(" older rounds dropped "))
     }
 
+    @Test(expected = CancellationException::class)
+    fun digestCancellationPropagates() {
+        PostAnchorTail.apply(postAnchor(5, resultChars = { 6000 }), PostAnchorTail.Budget(4_000, digest = {
+            throw CancellationException("test cancellation")
+        }))
+    }
+
     @Test
     fun digestReceivesExactlyTheDroppedRounds() {
         val input = postAnchor(5, resultChars = { 6000 })
@@ -273,6 +281,18 @@ class PostAnchorTailTest {
         assertEquals(2, groups.size)
         assertEquals(2, groups[0].size)
         assertEquals(1, groups[1].size)
+    }
+
+    @Test
+    fun `a user interruption cannot cut off the result of a shared tool step`() {
+        val first = toolRound(1)
+        val last = toolRound(2)
+        val interleaved = listOf(userText("start"), first[0], userText("steer here"), first[1])
+        val history = interleaved + last
+        assertEquals(listOf(interleaved, last), PostAnchorTail.splitRounds(history))
+        val result = PostAnchorTail.apply(history, PostAnchorTail.Budget(1, estimate = { 10 }))
+        assertEquals(interleaved.size, result.droppedMessages)
+        assertEquals(last, result.kept.drop(1))
     }
 
     @Test

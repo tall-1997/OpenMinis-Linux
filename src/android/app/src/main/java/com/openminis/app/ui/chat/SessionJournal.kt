@@ -114,6 +114,7 @@ internal object SessionJournal {
         summaryChars: Int,
         markerId: String?,
         droppedRounds: Int,
+        runId: String? = null,
     ) {
         record(
             filesDir,
@@ -121,6 +122,7 @@ internal object SessionJournal {
             REQUEST_ASSEMBLED,
             mapOf(
                 "turn" to turn,
+                "runId" to runId,
                 "messages" to messages.size,
                 "estTokens" to estimatedTokens,
                 "providerTokens" to providerTokens,
@@ -177,11 +179,11 @@ internal object SessionJournal {
      * always lands on a line boundary and costs one read of the kept tail.
      */
     private val fileLocks = java.util.concurrent.ConcurrentHashMap<String, Any>()
-    
+
     /** [T-session-journal-lock] One lock per journal file (trim vs append). */
     private fun lockFor(target: java.io.File): Any =
         fileLocks.getOrPut(target.absolutePath) { Any() }
-    
+
     private fun trim(target: java.io.File) {
         runCatching {
             val length = target.length()
@@ -291,7 +293,7 @@ internal object SessionJournal {
         val joined = newest.optString("digests", "")
         return if (joined.isEmpty()) emptyList() else joined.split(',')
     }
-    
+
     /**
      * [T-session-journal-consistency] First index where the recorded request
      * and [actual] disagree.
@@ -313,7 +315,7 @@ internal object SessionJournal {
         }
         return if (recorded.size == actualDigests.size) -1 else common
     }
-    
+
     /** Test seam. */
     internal fun resetSeqForTest() {
         seq.set(0)

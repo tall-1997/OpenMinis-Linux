@@ -5,105 +5,79 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
-import java.io.File
-import java.nio.file.Files
+import org.junit.rules.TemporaryFolder
 
-/**
- * [T-compaction-transaction] The two durable facts a crash can leave behind:
- * an unmatched `compaction/start` (a paid-for attempt that never settled) and
- * the generation counter that alone authorizes a retry.
- *
- * Deliberately exercises the STORAGE layer (SessionJournal + the counter) rather
- * than the ViewModel extension functions: those need a live `ChatViewModel`,
- * a DB and a coroutine scope, and a test that only passes when all three exist
- * would pin the wiring but not the contract. The wiring itself is guarded by the
- * architecture test that asserts `beginCompactionJournal(` / `settleCompactionJournal(`
- * are called in `ChatViewModelCompactExt`.
- */
 class CompactionTransactionTest {
-
-    private lateinit var dir: File
+    @get:Rule val tmp = TemporaryFolder()
 
     @Before
     fun setUp() {
-        dir = Files.createTempDirectory("compact-tx").toFile()
         SessionJournal.resetSeqForTest()
         CompactionTransaction.resetForTest()
     }
 
     @After
-    fun tearDown() {
-        CompactionTransaction.resetForTest()
-        dir.deleteRecursively()
-    }
+    fun tearDown() = CompactionTransaction.resetForTest()
 
     @Test
-    fun anOpenStartIsReportedUntilItCloses() {
+    fun aLiveAttemptIsNotRecoveredAndSettlesOnlyOnce() {
         val sid = "tx-1"
-        SessionJournal.record(
-            dir, sid, SessionJournal.COMPACTION_START,
-            mapOf("compactionId" to "c1", "anchorIdx" to 12, "rangeMessages" to 30),
-        )
-        assertEquals(1, SessionJournal.interruptedCompactions(dir, sid).size)
-
-        SessionJournal.record(
-            dir, sid, SessionJournal.COMPACTION_END,
-            mapOf("compactionId" to "c1", "coveredCount" to 30, "markerId" to "m1"),
-        )
-        assertTrue(SessionJournal.interruptedCompactions(dir, sid).isEmpty())
-        assertEquals(null, CompactionTransaction.openId)
-    }
-
-    @Test
-    fun anAbandonedAttemptIsClosedButDoesNotAdvanceTheGeneration() {
-        val sid = "tx-2"
         val before = CompactionTransaction.generationOf(sid)
-        SessionJournal.record(
-            dir, sid, SessionJournal.COMPACTION_START, mapOf("compactionId" to "c2"),
-        )
-        SessionJournal.record(
-            dir, sid, SessionJournal.COMPACTION_INTERRUPTED,
-            mapOf("compactionId" to "c2", "reason" to "no usable summary"),
-        )
-
-        assertTrue(SessionJournal.interruptedCompactions(dir, sid).isEmpty())
-        assertEquals(before, CompactionTransaction.generationOf(sid))
-        assertFalse("a failed attempt must not authorize a retry", CompactionTransaction.retryAuthorized(sid, before))
-    }
-
-    @Test
-    fun onlyASettledAttemptAdvancesTheRetryGeneration() {
-        val sid = "tx-3"
-        val before = CompactionTransaction.generationOf(sid)
-        assertFalse(CompactionTransaction.retryAuthorized(sid, before))
-
-        // A settle is the only place the generation moves.
-        val generation = CompactionTransaction.advanceGeneration(sid)
-        assertEquals(before + 1, generation)
+        val attempt = CompactionTransaction.begin(tmp.root, sid, 12, 13, 100)
+        assertEquals(1, SessionJournal.interruptedCompactions(tmp.root, sid).size)
+        assertEquals(0, CompactionTransaction.recoverInterrupted(tmp.root, sid))
+        CompactionTransaction.settle(tmp.root, sid, attempt, 20, 13, "m1")
+        CompactionTransaction.abandon(tmp.root, sid, attempt, "late failure", 20L)
+        CompactionTransaction.settle(tmp.root, sid, attempt, 20, 13, "m1")
+        assertEquals(before + 1, CompactionTransaction.generationOf(sid))
         assertTrue(CompactionTransaction.retryAuthorized(sid, before))
-        assertFalse("the generation does not move twice for one attempt", CompactionTransaction.retryAuthorized(sid, generation))
+        assertTrue(CompactionTransaction.retryAllowedNow(sid, 20L))
+        val events = SessionJournal.tail(tmp.root, sid)
+        assertEquals(listOf(SessionJournal.COMPACTION_START, SessionJournal.COMPACTION_END), events.map { it.getString("kind") })
+        assertEquals("m1", events.last().getString("markerId"))
+        assertEquals(13, events.last().getInt("coveredCount"))
+        assertTrue(SessionJournal.interruptedCompactions(tmp.root, sid).isEmpty())
     }
 
     @Test
-    fun generationsArePerSessionAndMonotonic() {
-        CompactionTransaction.advanceGeneration("a")
-        CompactionTransaction.advanceGeneration("a")
-        CompactionTransaction.advanceGeneration("b")
+    fun attemptsCannotSettleOrCoolDownTheWrongSession() {
+        val a = CompactionTransaction.begin(tmp.root, "a", 0, 1, 100)
+        val b = CompactionTransaction.begin(tmp.root, "b", 1, 2, 100)
+        CompactionTransaction.abandon(tmp.root, "b", a, "wrong owner", 100L)
+        CompactionTransaction.settle(tmp.root, "b", a, 20, 1, "wrong-owner")
+        assertEquals(0, CompactionTransaction.generationOf("b"))
+        assertEquals(a, SessionJournal.interruptedCompactions(tmp.root, "a").single().getString("compactionId"))
+        assertEquals(b, SessionJournal.interruptedCompactions(tmp.root, "b").single().getString("compactionId"))
 
-        assertEquals(2, CompactionTransaction.generationOf("a"))
-        assertEquals(1, CompactionTransaction.generationOf("b"))
-        // An unknown session starts at zero, so its first settle is a real move.
-        assertEquals(0, CompactionTransaction.generationOf("never-seen"))
+        CompactionTransaction.abandon(tmp.root, "a", a, "marker not persisted", 1_000L)
+        CompactionTransaction.abandon(tmp.root, "b", b, REASON_CANCELLED, 1_000L)
+        assertEquals(0, CompactionTransaction.generationOf("a"))
+        assertFalse(CompactionTransaction.retryAuthorized("a", 0))
+        assertFalse(CompactionTransaction.retryAllowedNow("a", 1_001L))
+        assertTrue(CompactionTransaction.retryAllowedNow("a", 999L))
+        assertTrue(CompactionTransaction.retryAllowedNow("a", 1_000L + CompactionTransaction.FAILURE_COOLDOWN_MS))
+        assertTrue(CompactionTransaction.retryAllowedNow("b", 1_001L))
+        assertTrue(SessionJournal.interruptedCompactions(tmp.root, "a").isEmpty())
+        assertTrue(SessionJournal.interruptedCompactions(tmp.root, "b").isEmpty())
+    }
+
+    @Test
+    fun aLostAttemptIsReportedOnceWithoutFabricatingGeneration() {
+        val sid = "recovered"
+        CompactionTransaction.begin(tmp.root, sid, 0, 1, 100)
+        CompactionTransaction.resetForTest() // Simulates a process that no longer owns the open attempt.
+        assertEquals(1, CompactionTransaction.recoverInterrupted(tmp.root, sid))
+        assertEquals(0, CompactionTransaction.recoverInterrupted(tmp.root, sid))
+        assertFalse(CompactionTransaction.retryAuthorized(sid, 0))
+        assertTrue(SessionJournal.interruptedCompactions(tmp.root, sid).isEmpty())
     }
 
     @Test
     fun aMissingFilesDirIsNeverFatal() {
-        // A process without storage must still be able to compact: the journal
-        // is evidence, not a precondition.
-        val id = CompactionTransaction.newId()
-        SessionJournal.record(null, "s", SessionJournal.COMPACTION_START, mapOf("compactionId" to id))
-        CompactionTransaction.advanceGeneration("s")
-        assertTrue(CompactionTransaction.generationOf("s") > 0)
+        val attempt = CompactionTransaction.begin(null, "s", 0, 1, 100)
+        CompactionTransaction.settle(null, "s", attempt, 20, 1, "m1")
+        assertEquals(1, CompactionTransaction.generationOf("s"))
     }
 }

@@ -178,40 +178,27 @@ class ToolResultAgingTest {
             keepRecent = 1,
             minChars = 1_200,
         )
-        val folded = plan.messages[0].contentParts[0] as AgentContentPart.ToolResult
-        assertTrue(folded.imageData!!.contentEquals(bytes))
-        assertEquals("image/png", folded.imageMimeType)
-        assertEquals("/var/minis/attachments/shot.png", folded.imageLinuxPath)
+        assertEquals(0, plan.agedCount)
+        assertSame(withImage, plan.messages[0].contentParts[0])
     }
 
     // -------------------------------------------------------------- content
 
     @Test
     fun `a result just over the head does not repeat head and tail`() {
-        // [T-age-head-and-tail] 241–320 chars must not render the same span
-        // twice; the tail fragment only appears once it cannot overlap.
         val body = "a".repeat(150) + "b".repeat(150)
         val text = ToolResultAging.placeholder("shell_execute", body)
         assertFalse(text.contains("[tail]"))
+        assertTrue(text.contains(body))
     }
 
     @Test
-    fun `placeholder keeps a readable path so the model can page it back`() {
-        val spill = "/var/minis/workspace/tool-spill/tool_abc123.txt"
-        val body = "line1\nline2\n" + "q".repeat(6_000) + "\n[full output: $spill]\n"
-        val text = ToolResultAging.placeholder("shell_execute", body)
-        assertTrue(text.startsWith(ToolResultAging.MARKER))
-        assertTrue(text.contains(spill))
-        assertTrue(text.contains("full output: $spill"))
-        // Folded text is strictly shorter than the original.
-        assertTrue(text.length < body.length)
-    }
-
-    @Test
-    fun `placeholder without a path tells the model to re-run the tool`() {
-        val text = ToolResultAging.placeholder("grep", "m".repeat(3_000))
+    fun `placeholder without a verified path never suggests a rerun`() {
+        val text = ToolResultAging.placeholder("shell_execute", "m".repeat(3_000))
         assertFalse(text.contains("/var/minis/"))
-        assertTrue(text.contains("re-run this tool"))
+        assertFalse(text.contains("re-run"))
+        assertTrue(text.contains("no verified recovery path"))
+        assertTrue(text.length < 3_000)
     }
 
     @Test
@@ -387,26 +374,21 @@ class ToolResultAgingTest {
         val cut = ToolResultAging.tailOf("z".repeat(10) + "😘".repeat(200), limit = 5)
         assertFalse("must not start on a lone low surrogate", Character.isLowSurrogate(cut.first()))
     }
-    
+
     @Test
-    fun thePlaceholderAddressesThePassageNotJustTheFile() {
-        // [T-age-placeholder-offset] A path alone forces the model to read the
-        // whole spill to find text it already had in context; the offset is what
-        // makes the fold reversible without a full re-read.
-        val content = "x".repeat(400) + " /var/minis/workspace/tool-spill/out.txt " + "y".repeat(400)
-        val plain = ToolResultAging.placeholder("shell_execute", content)
-        val addressed = ToolResultAging.placeholder("shell_execute", content, spillOffset =0)
-        assertTrue(addressed.contains("offset 0"))
- // [T-age-offset-honest] No length claim: content is the preview, so a
- // quoted length would truncate a follow-up file_read of the spill file.
- assertFalse(addressed.contains("length "))
-        assertTrue(addressed.length > plain.length)
-    }
-    
-    @Test
-    fun withoutAPathThereIsNoOffsetToClaim() {
-        val content = "z".repeat(400)
-        val text = ToolResultAging.placeholder("grep", content, spillOffset =0)
-        assertFalse(text.contains("offset"))
+    fun `verified spill advice uses a line offset and does not claim a length`() {
+        val path = "/var/minis/workspace/tool-spill/out.txt"
+        val body = com.openminis.app.tools.ToolOutputSpill.formatPreview(
+            "shell_execute", path, "header\n" + "x".repeat(20_000) + "\nend",
+        )
+        val history = listOf(msg(result("t", 0).copy(content = body)))
+        val plain = contents(ToolResultAging.age(history, keepRecent = 0).messages).single()
+        val addressed = contents(ToolResultAging.age(history, keepRecent = 0, verifiedSpillPaths = setOf(path)).messages).single()
+        assertFalse(plain.contains("offset"))
+        assertFalse(plain.contains(path))
+        assertTrue(addressed.contains("full output: $path"))
+        assertTrue(addressed.contains("offset 1"))
+        assertFalse(addressed.contains("length "))
+        assertTrue(addressed.length < body.length)
     }
 }

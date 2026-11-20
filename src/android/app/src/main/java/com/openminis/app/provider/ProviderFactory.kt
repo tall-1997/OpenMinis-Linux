@@ -3,6 +3,7 @@ package com.openminis.app.provider
 import android.content.Context
 import com.openminis.app.auth.OpenAIOAuthManager
 import com.openminis.app.data.model.LLMModel
+import com.openminis.app.data.model.ModelAttributionSnapshot
 import com.openminis.app.data.model.ProviderCredential
 import com.openminis.app.data.model.ProviderInstance
 import com.openminis.app.data.model.ProviderType
@@ -11,6 +12,8 @@ import com.openminis.app.network.ConnectionWarmup
 import com.openminis.app.provider.anthropic.AnthropicProvider
 import com.openminis.app.provider.gemini.GeminiProvider
 import com.openminis.app.provider.openai.OpenAIProvider
+import com.openminis.app.util.Digest
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 object ProviderFactory {
     /**
@@ -59,7 +62,24 @@ object ProviderFactory {
 
     internal const val CACHE_CAP = 64
 
+    private data class Origin(val instanceId: String, val providerType: ProviderType, val contextRouteId: String?)
+
+    // Retain the actual client's provenance even if the LRU evicts it mid-run.
+    private val origins = java.util.Collections.synchronizedMap(java.util.WeakHashMap<LLMProvider, Origin>())
+
+    internal fun requestAttribution(provider: LLMProvider): ModelAttributionSnapshot {
+        val model = provider.model
+        val origin = origins[provider]
+        // One-shot endpoint overrides are mutable and not part of the factory-bound route.
+        val overridesEndpoint = (provider as? OpenAIProvider)?.absoluteEndpointOverride?.startsWith('/') == true
+        return ModelAttributionSnapshot(
+            model.id, model.displayName, origin?.providerType?.name.orEmpty(), origin?.instanceId,
+            contextRouteId = origin?.contextRouteId?.takeUnless { overridesEndpoint },
+        )
+    }
+
     fun create(instance: ProviderInstance, apiKey: String, model: LLMModel, context: Context? = null): LLMProvider {
+        val config = instance.copy()
         // [GH#221] 用户自定义请求头存在 ProviderHeaderStore（不改 Room schema）。
         // memo key 带上 header 指纹：保存后内容一变就是新 key，下一次发送
         // 重建 provider；内容相同的旧缓存继续复用。
@@ -68,18 +88,24 @@ object ProviderFactory {
         // 加载：冷启动时 MinisApp 的 IO 预热协程可能还没完成，这里会拿到空
         // map —— 这是可接受的。预热完成后 header 指纹进入 memo key，下一次
         // create 自然重建带用户头的 provider（首个请求可能不带，之后都带）。
-        val userHeaders = ProviderHeaderStore.headersFor(instance.id)
+        val userHeaders = ProviderHeaderStore.headersFor(config.id)
         // [GH#258][GH#287] 用户 CA 的 generation 必须进 memo key：TLS socket
         // factory 在 provider 构造时就固化进 OkHttpClient（构造函数里 build），
         // 只清配置缓存不重建 provider 的话，导入/删除 CA 后仍会复用旧信任链，
         // 直到进程重启。generation 变化 → 新 key → 下一次 create 重建 client；
         // Settings 的导入/删除入口另外调用 invalidateAll() 立即丢弃旧条目。
-        val key = instance.id + "|" + model.hashCode() + "|" +
-            ProviderKeyGate.fingerprint(apiKey) + "|" + instance.hashCode() +
+        // A 32-bit instance hash can collide across different relay paths (Aa vs BB).
+        // This discriminator is for the in-memory provider memo only, not the persisted identity.
+        val routeConfig = config.customBaseURL?.let(Digest::sha256Hex) ?: "-"
+        val oauthContext = config.credentialType == ProviderCredential.oauth && context != null
+        val key = config.id + "|" + model.hashCode() + "|" +
+            ProviderKeyGate.fingerprint(apiKey) + "|" + config.hashCode() +
+            "|route=$routeConfig:${config.providerType.name}:${config.credentialType.name}:" +
+            "${config.appendV1Suffix}:${config.useResponsesAPI}:${config.azureMode}:$oauthContext" +
             "|h" + userHeaders.hashCode() + "|ca" + AppTrustStore.generation
         cache[key]?.let { return it }
         val genAtEntry = generation.get()
-        val built = createUncached(instance, apiKey, model, context, userHeaders)
+        val built = createUncached(config, apiKey, model, context, userHeaders)
         // Build runs OUTSIDE the lock (OkHttpClient construction is slow); the
         // generation re-check + cap + put run INSIDE it, and every invalidator
         // bumps the generation under the same lock. Without that, a check-then-put
@@ -392,6 +418,61 @@ object ProviderFactory {
         // (null on the official direct path); ConnectionWarmup resolves the
         // host and fires a debounced HEAD into the shared pool.
         ConnectionWarmup.warmAsync(basePath, instance.providerType)
+        origins[provider] = Origin(instance.id, instance.providerType, contextRouteId(provider, instance, basePath, context != null))
         return provider
+    }
+
+    /** Use the serving client's dialect and immutable constructor endpoint, not a later settings read. */
+    private fun contextRouteId(
+        provider: LLMProvider,
+        instance: ProviderInstance,
+        effectiveBase: String?,
+        hasContext: Boolean,
+    ): String? = when (provider) {
+        is OpenAIProvider -> {
+            val chat = provider.usesChatCompletionsAPI
+            val path = if (chat) "/chat/completions" else "/responses"
+            when {
+                provider.isOAuth && !chat -> routeDigest("codex-responses", "https://chatgpt.com/backend-api/codex/responses")
+                instance.azureMode && (instance.providerType == ProviderType.openAI || instance.providerType == ProviderType.openAIResponses) -> {
+                    val endpoint = azureContextEndpoint(instance.customBaseURL, path)
+                    routeDigest("azure$path", endpoint ?: provider.basePath + path, allowAzureVersion = endpoint != null)
+                }
+                else -> routeDigest("openai$path", provider.basePath + path)
+            }
+        }
+        is AnthropicProvider -> {
+            val configured = effectiveBase ?: "https://api.anthropic.com"
+            val base = configured.trimEnd('/').removeSuffix("/v1").trimEnd('/')
+            val isRelay = configured != "https://api.anthropic.com"
+            routeDigest("anthropic-messages:${provider.isOAuth}:$isRelay", "$base/v1/messages")
+        }
+        is GeminiProvider -> {
+            val oauth = hasContext && instance.credentialType == ProviderCredential.oauth
+            val base = effectiveBase ?: "https://generativelanguage.googleapis.com/v1beta"
+            // The model ID is already a separate part of the context usage identity.
+            routeDigest("gemini-stream-content:$oauth", "$base/models/")
+        }
+        else -> null
+    }
+
+    // Mirror OpenAIProvider.azureUrl; the deployment/model id is bound separately by the anchor.
+    private fun azureContextEndpoint(raw: String?, path: String): String? {
+        val value = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val queryStart = value.indexOf('?').let { if (it < 0) value.length else it }
+        val resource = value.substring(0, queryStart).trimEnd('/').removeSuffix("/v1").trimEnd('/').removeSuffix("/openai")
+        return "$resource/openai/deployments/{model}$path${value.substring(queryStart)}"
+    }
+
+    private val azureApiVersion = Regex("(?:[0-9]{4}-[0-9]{2}-[0-9]{2}(?:-preview)?|preview)")
+
+    private fun routeDigest(dialect: String, endpoint: String, allowAzureVersion: Boolean = false): String? {
+        val url = endpoint.toHttpUrlOrNull() ?: return null
+        if (url.username.isNotEmpty() || url.password.isNotEmpty() || url.fragment != null) return null
+        // Never persist credential-derived identity from a query string. Azure's API version is routing metadata.
+        if (url.query != null && (!allowAzureVersion || url.querySize != 1 ||
+                url.queryParameter("api-version")?.let(azureApiVersion::matches) != true)
+        ) return null
+        return Digest.sha256Hex("context-route-v1\n$dialect\n$url")
     }
 }

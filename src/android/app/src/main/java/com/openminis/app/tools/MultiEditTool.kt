@@ -47,10 +47,10 @@ object MultiEditTool {
             val path = args.optString("path", "")
             if (path.isBlank()) return ToolExecutionResult("Error: path required", false, toolTitle = toolTitle)
             if (PRootKernel.isLinuxPathUnderReadOnlyMount(path)) {
-                return ToolExecutionResult("Error: $path is read-only mounted", false, toolTitle = toolTitle)
+                return ToolExecutionResult("Error: $path is read-only mounted", false, toolTitle = toolTitle, notSent = true)
             }
             WritePathGuard.denyReason(path)?.let {
-                return ToolExecutionResult(it, false, toolTitle = toolTitle)
+                return ToolExecutionResult(it, false, toolTitle = toolTitle, notSent = true)
             }
             val edits = coerceEdits(args)
             if (edits.length() == 0) {
@@ -75,7 +75,7 @@ object MultiEditTool {
             ).takeIf { !it.ok }?.let { d ->
                 return ToolExecutionResult(
                     d.modelMessage ?: "Error: multi_edit refused by prior-read gate",
-                    false, toolTitle = toolTitle,
+                    false, toolTitle = toolTitle, notSent = true,
                 )
             }
             com.openminis.app.data.repository.MemoryRepository

@@ -1,5 +1,12 @@
 package com.openminis.app.tools
 
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.test.core.app.ApplicationProvider
+import com.openminis.app.sandbox.SessionWorkspace
+import com.openminis.app.ssh.SshWorkspaceBindings
+import kotlinx.coroutines.runBlocking
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -8,6 +15,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 import java.io.File
 
 /**
@@ -115,6 +125,16 @@ class ToolOutputSpillRoundTripTest {
         assertNull(ToolOutputSpill.sourcePathForTool("shell_execute", """{"command":"echo /var/minis/workspace/tool-spill/a.txt"}"""))
         assertNull(ToolOutputSpill.sourcePathForTool("shell_execute", """{"command":"ls /var/minis/workspace/tool-spill"}"""))
         assertNull(ToolOutputSpill.sourcePathForTool("grep", """{"pattern":"tool-spill/a.txt"}"""))
+    }
+
+    @Test
+    fun `shell ranges of one spill do not turn unrelated output into readback`() {
+        val guest = "/var/minis/workspace/tool-spill/a.txt"
+        assertEquals(guest, ToolOutputSpill.commandSpillReadPath("tail -c +4097 '$guest' | head -c 24000"))
+        assertEquals(guest, ToolOutputSpill.commandSpillReadPath("busybox head --lines=100 -- ./tool-spill/a.txt"))
+        assertNull(ToolOutputSpill.commandSpillReadPath("cat /var/minis/workspace/other.txt '$guest'"))
+        assertNull(ToolOutputSpill.commandSpillReadPath("cat '$guest' | head /var/minis/workspace/other.txt"))
+        assertNull(ToolOutputSpill.commandSpillReadPath("cat '$guest' > /var/minis/workspace/copy.txt"))
     }
 
     @Test
@@ -228,5 +248,94 @@ class ToolOutputSpillRoundTripTest {
             "atomic writes must not leave temp artifacts behind",
             dir.listFiles()!!.none { it.name.endsWith(".minis-tmp") },
         )
+    }
+}
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35], application = android.app.Application::class)
+class ToolOutputSpillSessionTest {
+    @get:Rule
+    val tmp = TemporaryFolder()
+
+    private val context by lazy {
+        object : ContextWrapper(ApplicationProvider.getApplicationContext<Context>()) {
+            override fun getFilesDir(): File = tmp.root
+        }
+    }
+    private val session = java.util.UUID.randomUUID().toString()
+
+    @Test
+    fun `session writer and file read share one spill with complete Unicode text`() {
+        val lines = (1..300).map { "line-$it " + "\u7532\uD83D\uDE00".repeat(25) }
+        val raw = lines.joinToString("\n")
+        val preview = ToolOutputPolicy.apply(raw, "session-1", context, session, "shell_execute")
+        val path = requireNotNull(ToolOutputSpill.parseGuestPath(preview))
+        val file = requireNotNull(ToolOutputSpill.hostFile(context, session, path))
+        assertEquals(raw, file.readText())
+        assertNull(ToolOutputSpill.hostFile(context, "unrelated-session", path))
+        assertEquals(preview, ToolOutputPolicy.apply(preview, "second-exit", context, session, "shell_execute"))
+
+        val args = JSONObject().put("path", "tool-spill/${file.name}").put("offset", 150).put("lines", 3).toString()
+        val page = FileReadTool.execute(args, session, context)
+        assertTrue(page.output, page.success)
+        assertEquals(lines.subList(149, 152).joinToString("\n"), page.output.substringAfter('\n'))
+
+        val readback = ToolOutputPolicy.apply(
+            file.readText(), "session-2", context, session, "file_read",
+            sourcePath = ToolOutputSpill.sourcePathForTool("file_read", args),
+        )
+        assertEquals(path, ToolOutputSpill.parseGuestPath(readback))
+        assertTrue(readback.contains("NOT being offloaded again"))
+        assertEquals(listOf(file.name), file.parentFile!!.list()!!.toList())
+    }
+
+    @Test
+    fun `failed workspace write and unreadable readback never advertise a path`() {
+        val workspace = SessionWorkspace.hostDir(context.filesDir, session, "workspace")
+        assertTrue(workspace.mkdirs())
+        File(workspace, "tool-spill").writeText("occupied")
+        val text = "x".repeat(20_000)
+        val capped = ToolOutputSpill.maybeSpill(context, session, "web_fetch", "failed", text)
+        val readback = ToolOutputSpill.maybeSpill(
+            context, session, "file_read", "failed-readback", text, "/var/minis/workspace/tool-spill/missing.txt",
+        )
+        for (preview in listOf(capped, readback)) {
+            assertTrue(preview.contains("could not be saved or verified"))
+            assertTrue(preview.length < 3_500)
+            assertNull(ToolOutputSpill.parseGuestPath(preview))
+        }
+    }
+
+    @Test
+    fun `SSH workspace cannot publish a link to an excluded local file tool`() {
+        val bindings = SshWorkspaceBindings.forContext(context)
+        bindings.bind(session, "remote-host")
+        try {
+            val preview = ToolOutputPolicy.apply("x".repeat(17_000), "remote", context, session, "shell_execute")
+            assertTrue(preview.contains("could not be saved or verified"))
+            assertNull(ToolOutputSpill.parseGuestPath(preview))
+            assertFalse(SessionWorkspace.hostDir(context.filesDir, session, "workspace").exists())
+        } finally {
+            bindings.unbind(session)
+        }
+    }
+
+    @Test
+    fun `WebFetch and ExecuteCode both use the session threshold and spill full output`() = runBlocking {
+        val url = "https://example.test/page"
+        val prefix = "URL: $url\n\n"
+        val boundary = "x".repeat(ToolOutputSpill.LIMIT - prefix.length)
+        assertEquals(prefix + boundary, WebFetchTool.presentResponse(url, boundary, session, context))
+        val webPreview = WebFetchTool.presentResponse(url, boundary + "!", session, context)
+        val webPath = requireNotNull(ToolOutputSpill.parseGuestPath(webPreview))
+        assertEquals(prefix + boundary + "!", ToolOutputSpill.hostFile(context, session, webPath)?.readText())
+
+        val code = JSONObject().put("code", "for (var i = 0; i < 2200; i++) print('line-' + i)").toString()
+        val result = ExecuteCodeTool.execute(code, { _, _ -> error("no nested calls") }, session, context)
+        assertTrue(result.output, result.success)
+        val codePath = requireNotNull(ToolOutputSpill.parseGuestPath(result.output))
+        assertEquals((0 until 2200).joinToString("") { "line-$it\n" }, ToolOutputSpill.hostFile(context, session, codePath)?.readText())
+        assertTrue(result.output.endsWith("line-2199\n"))
+        assertTrue(result.output.length < 3_500)
     }
 }

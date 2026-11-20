@@ -25,13 +25,16 @@ internal class StreamPhaseReport {
         firstTokenAtNanos = 0L
     }
 
-    fun onChunk(chunk: LLMStreamChunk) {
+    /** True only for the first chunk that proves model progress in this attempt. */
+    fun onChunk(chunk: LLMStreamChunk): Boolean {
         val chunkAt = System.nanoTime()
         if (chunk is LLMStreamChunk.Started) {
             if (headersAtNanos == 0L) headersAtNanos = chunkAt
         } else if (firstTokenAtNanos == 0L && chunk.countsAsFirstTokenProgress()) {
             firstTokenAtNanos = chunkAt
+            return true
         }
+        return false
     }
 
     fun logSuccess(turn: Int, sessionId: String, modelId: String) {

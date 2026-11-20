@@ -68,14 +68,14 @@ class TokenMeterTest {
         // post-mortem has to compare against.
         val live = TokenMeter.pressure(providerTokens =5_000, estimatedTokens =8_000)
     }
-    
+
     @Test
     fun anEventWithoutTokenFieldsIsNotASnapshot() {
         // A request event written by an older build must not be read as zero.
         assertEquals(null, TokenMeter.fromJournalSnapshot(null))
         assertEquals(null, TokenMeter.fromJournalSnapshot(org.json.JSONObject().put("turn",3)))
     }
-    
+
     @Test
     fun breakdownCountsEveryPartKindAndImagesByWeight() {
         val messages = listOf(
@@ -126,7 +126,7 @@ class TokenMeterTest {
         assertEquals(0L, b.totalChars)
         assertEquals(0, TokenMeter.pressure(0, 0))
     }
-    
+
     @Test
     fun theSnapshotAgreesWithTheDisplayPrecedence() {
         val event = org.json.JSONObject()

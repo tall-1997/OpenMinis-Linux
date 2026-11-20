@@ -46,4 +46,6 @@ data class ModelAttributionSnapshot(
      * through it, so a deleted instance costs nothing.
      */
     val providerInstanceId: String?,
+    /** Opaque local context-usage identity for the serving endpoint and protocol; not a billing column. */
+    val contextRouteId: String? = null,
 )

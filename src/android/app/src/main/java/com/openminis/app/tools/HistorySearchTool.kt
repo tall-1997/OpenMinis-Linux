@@ -2,64 +2,51 @@ package com.openminis.app.tools
 
 import android.content.Context
 import com.openminis.app.MinisApp
+import com.openminis.app.data.body.ResourceLimits
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
 import com.openminis.app.data.repository.ChatRepository
-import com.openminis.app.data.repository.compactBoundaryMs
-import com.openminis.app.data.repository.messageText
+import com.openminis.app.data.repository.HistoryBody
+import com.openminis.app.data.repository.HistoryScope
+import com.openminis.app.data.repository.SessionHistory
+import com.openminis.app.util.SecretMasking
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * [T-history-retrieval] Read-only retrieval over THIS session's earlier
- * messages, including history compaction has already folded out of context.
- *
- * WHY this exists: after compaction the folded rounds leave the request, and
- * the only substitute was [com.openminis.app.ui.chat.DroppedRoundDigest] — a
- * digest the HOST chose at a fixed budget. When the model needed "what did we
- * decide about X before the boundary" the digest either covered it or did not,
- * and there was no way to ask for a specific memory. Deer-flow's
- * `task_continuity` solves the same problem with `history_search` +
- * `history_read`; this is that pair, scoped to one session.
- *
- * Contract, deliberately strict so a caller can verify a hit:
- *  - results carry `excerpt_start` / `excerpt_end` in the SAME code-point
- *    coordinates `history_read` uses, so reading at `excerpt_start` returns
- *    text that begins with the excerpt;
- *  - `history_read` pages by code point, never splitting a surrogate pair;
- *  - both sides mask credentials and never invent text (verbatim slices only).
- *
- * Read-only by construction: no repository write, no model call.
- *
- * Both entry points are `suspend`, matching [SessionLookupTool]: tool dispatch
- * already runs inside the agent loop's coroutine, so a blocking bridge would
- * have parked a thread on every search.
- */
+/** Same-session retrieval only. Offsets are code points in the shared, redacted transcript text. */
 object HistorySearchTool {
-
     const val SEARCH = "history_search"
     const val READ = "history_read"
 
+    internal fun handles(name: String): Boolean = name == SEARCH || name == READ
+
     private const val SEARCH_LIMIT_DEFAULT = 6
     private const val SEARCH_LIMIT_MAX = 8
-    private const val EXCERPT_CHARS =600
-    
-    /** [T-history-query-cap] Query characters inspected when deriving keywords. */
-    private const val QUERY_CHAR_CAP =1_200
-    
-    /** Search terms kept; more terms only widen the OR without improving recall. */
-    private const val KEYWORD_LIMIT =8
+    private const val EXCERPT_CHARS = 600
+    private const val QUERY_CHAR_CAP = 1_200
+    private const val KEYWORD_LIMIT = 8
     private const val PAGE_CHARS = 4_000
-
+    private const val MAX_SEARCH_ROWS = 512
+    private const val ROWS_PER_QUERY = 32
+    private const val MAX_SEARCH_BYTES = 4L * ResourceLimits.MAX_DECLARED_UNCOMPRESSED
+    // Control characters may cost six characters after JSON escaping. Leave room
+    // for metadata so the generic output policy cannot turn valid JSON into a spill notice.
+    private const val MAX_JSON_TEXT = 12_000
+    private const val MAX_ID_CHARS = 128
+    private val latinTerm = Regex("[A-Za-z0-9_]{2,}")
 
     fun searchDefinition(): AgentToolDefinition = AgentToolDefinition(
         name = SEARCH,
-        description = "Search this conversation's earlier messages, including history that " +
-            "compaction has already folded out of your context. Returns at most 8 hits with " +
-            "message_id, role, excerpt, and excerpt_start/excerpt_end code-point offsets. " +
-            "Call history_read with the same message_id and offset to read the full text. " +
-            "Use this when you need an exact earlier decision, command, or file path that is " +
-            "no longer in your context.",
+        description = "Search earlier messages in this conversation only. With a compaction marker, " +
+            "searches only the folded region. Returns up to 8 hits with message_id, role, excerpt, " +
+            "and excerpt_start/excerpt_end code-point offsets. Call history_read at that offset for more text. " +
+            "Hits marked preview_only come from stored tool previews. Nonzero preview_only_rows or unavailable_rows " +
+            "indicate incomplete coverage, even when no hits were found.",
         parameters = mapOf(
             "tool_title" to AgentToolParam("string", "Short status, e.g. 'Find migration decision'."),
             "query" to AgentToolParam("string", "Keywords to match. CJK runs are split into bigrams."),
@@ -72,257 +59,222 @@ object HistorySearchTool {
 
     fun readDefinition(): AgentToolDefinition = AgentToolDefinition(
         name = READ,
-        description = "Read one earlier message by message_id from history_search, starting at a " +
-            "code-point offset and returning up to 4000 characters. The response carries " +
-            "next_offset when more text remains and truncated=false when it does not. " +
-            "Pass offset=0 to read from the beginning.",
+        description = "Read one message from this session's searchable history by message_id. " +
+            "Returns up to 4000 code points from offset. With preview_only, the full tool output is unavailable " +
+            "through history and a null next_offset means only the end of the stored preview. " +
+            "Credentials and host-only data are excluded.",
         parameters = mapOf(
             "tool_title" to AgentToolParam("string", "Short status, e.g. 'Read that message'."),
-            "message_id" to AgentToolParam("string", "id returned by history_search."),
+            "message_id" to AgentToolParam("string", "ID returned by history_search."),
             "offset" to AgentToolParam("integer", "Code-point offset to start at (default 0)."),
         ),
         required = listOf("tool_title", "message_id"),
         propertyOrdering = listOf("tool_title", "message_id", "offset"),
     )
 
-    /**
-     * Split a query into search keywords. Latin words stay whole; a CJK run is
-     * split into bigrams because the table has no tokenizer and a single
-     * character matches almost everything.
-     */
     internal fun keywords(query: String): List<String> {
-        // [T-history-query-cap] A query can be a pasted document. Scanning it
-        // whole costs a megabyte of transient substrings to keep eight of them,
-        // so cap the input the way MemoryRecallEngine does.
-        val capped = if (query.length <= QUERY_CHAR_CAP) query else query.take(QUERY_CHAR_CAP)
-        val out = LinkedHashSet<String>()
-        for (m in Regex("[A-Za-z0-9_]{2,}").findAll(capped)) {
-            // Lowercased for MATCHING only; the locator is case-insensitive, so a
-            // hit on README is still located in the original bytes.
+        val capped = query.take(QUERY_CHAR_CAP)
+        val out = linkedSetOf<String>()
+        for (m in latinTerm.findAll(capped)) {
             out += m.value.lowercase()
             if (out.size >= KEYWORD_LIMIT) return out.toList()
         }
-        val run = StringBuilder()
-        fun flush() {
-            val s = run.toString()
-            if (s.length ==1) out += s
-            for (i in 0 until s.length -1) {
-                out += s.substring(i, i +2)
-                if (out.size >= KEYWORD_LIMIT) break
+        var runStart = 0
+        for (end in 0..capped.length) {
+            val ch = capped.getOrNull(end)
+            if (ch != null && (ch.code in 0x4E00..0x9FFF || ch.code in 0x3040..0x30FF)) continue
+            if (end - runStart == 1) out += capped.substring(runStart, end)
+            for (i in runStart until end - 1) {
+                out += capped.substring(i, i + 2)
+                if (out.size >= KEYWORD_LIMIT) return out.toList()
             }
-            run.setLength(0)
+            if (out.size >= KEYWORD_LIMIT) break
+            runStart = end + 1
         }
-        for (ch in capped) {
-            if (ch.code in 0x4E00..0x9FFF || ch.code in 0x3040..0x30FF) {
-                run.append(ch)
-                if (run.length >64) flush()
-            } else {
-                flush()
-            }
-        }
-        flush()
-        return out.take(KEYWORD_LIMIT).toList()
+        return out.toList()
     }
 
-    /** [T-history-case-insensitive] Code-point compare that ignores case. */
-    private fun sameCodePointIgnoringCase(a: Int, b: Int): Boolean =
-        a == b || Character.toLowerCase(a) == Character.toLowerCase(b)
+    internal fun excerptAt(text: String, needle: String, width: Int = EXCERPT_CHARS): Triple<String, Int, Int>? {
+        if (needle.isEmpty()) return null
+        val match = text.indexOf(needle, ignoreCase = true)
+        if (match < 0) return null
+        val size = text.codePointCount(0, text.length)
+        val found = text.codePointCount(0, match)
+        val start = (found - width / 2).coerceIn(0, (size - width).coerceAtLeast(0))
+        val end = minOf(size, start + width)
+        val from = text.offsetByCodePoints(0, start)
+        return Triple(text.substring(from, text.offsetByCodePoints(from, end - start)), start, end)
+    }
 
-    /**
-     * Locate [needle] in [text] by code point, returning a centred excerpt and
-     * its exact code-point offsets. When the hit sits near either end the
-     * window slides instead of shrinking, so a caller always gets a full-width
-     * excerpt when the source is long enough.
-     */
-    internal fun excerptAt(
-        text: String,
-        needle: String,
-        width: Int = EXCERPT_CHARS,
-    ): Triple<String, Int, Int>? {
-        if (text.isEmpty() || needle.isEmpty()) return null
-        val hay = text.codePoints().toArray()
-        val pin = needle.codePoints().toArray()
-        if (pin.isEmpty() || pin.size > hay.size) return null
-        // [T-history-case-insensitive] Keywords are matched with
-        // contains(ignoreCase = true), so the locator MUST use the same rule.
-        // Comparing code points exactly dropped every hit whose case differed
-        // (README, TODO, CamelCase identifiers, file names) - the most common
-        // things a developer asks history for - and the caller then reported
-        // "no match", which reads as "this never happened".
-        var found = -1
-        outer@ for (start in 0..(hay.size - pin.size)) {
-            for (k in pin.indices) {
-                if (!sameCodePointIgnoringCase(hay[start + k], pin[k])) continue@outer
+    internal fun page(text: String, offset: Int, limit: Int = PAGE_CHARS): Triple<String, Int?, Boolean> {
+        val size = text.codePointCount(0, text.length)
+        val start = offset.coerceIn(0, size)
+        val end = start + minOf(limit, size - start)
+        val from = text.offsetByCodePoints(0, start)
+        val next = end.takeIf { it < size }
+        return Triple(text.substring(from, text.offsetByCodePoints(from, end - start)), next, next != null)
+    }
+
+    private fun repo(context: Context): ChatRepository? = (context.applicationContext as? MinisApp)?.chatRepositoryOrNull
+
+    suspend fun executeSearch(argsJson: String, sessionId: String, context: Context): ToolExecutionResult =
+        executeSearch(argsJson, sessionId, repo(context))
+
+    suspend fun executeRead(argsJson: String, sessionId: String, context: Context): ToolExecutionResult =
+        executeRead(argsJson, sessionId, repo(context))
+
+    internal suspend fun executeSearch(argsJson: String, sessionId: String, repo: ChatRepository?): ToolExecutionResult =
+        execute(SEARCH, argsJson, sessionId, repo) search@{ args, title, history ->
+            val query = args.opt("query") as? String
+            val words = keywords(query.orEmpty())
+            if (words.isEmpty()) return@search error(title, "A query with searchable words is required.", ToolErrorCode.INVALID_ARGUMENTS)
+            val role = (args.opt("role") as? String)?.trim()?.lowercase()
+            if (args.has("role") && role !in setOf("user", "assistant", "tool")) {
+                return@search error(title, "Role must be user, assistant, or tool.", ToolErrorCode.INVALID_ARGUMENTS)
             }
-            found = start
-            break
-        }
-        if (found < 0) return null
-        var from = (found - width / 2).coerceAtLeast(0)
-        var to = (from + width).coerceAtMost(hay.size)
-        if (to - from < width) {
-            from = (to - width).coerceAtLeast(0)
-            to = (from + width).coerceAtMost(hay.size)
-        }
-        return Triple(String(hay, from, to - from), from, to)
-    }
-
-    /** Code-point safe slice with an explicit next offset (null = end). */
-    internal fun page(
-        text: String,
-        offset: Int,
-        limit: Int = PAGE_CHARS,
-    ): Triple<String, Int?, Boolean> {
-        val cps = text.codePoints().toArray()
-        val from = offset.coerceIn(0, cps.size)
-        val to = (from + limit).coerceAtMost(cps.size)
-        // [T-history-retrieval] `next_offset` is only meaningful while text
-        // REMAINS after this page. Returning the page end on the final page
-        // would tell the caller to read again for nothing, so the offset is
-        // null exactly when the page reached the end.
-        val hasMore = to < cps.size
-        val next = if (hasMore) to else null
-        return Triple(String(cps, from, to - from), next, hasMore)
-    }
-
-    private fun repo(context: Context): ChatRepository? =
-        (context.applicationContext as? MinisApp)?.chatRepositoryOrNull
-
-    suspend fun executeSearch(
-        argsJson: String,
-        sessionId: String,
-        context: Context,
-    ): ToolExecutionResult {
-        val args = runCatching { JSONObject(argsJson) }.getOrDefault(JSONObject())
-        val toolTitle = args.optString("tool_title", SEARCH)
-        val repo = repo(context)
-            ?: return ToolExecutionResult("Error: chat store is not ready.", false, toolTitle = toolTitle)
-        val query = args.optString("query", "").trim()
-        if (query.isEmpty()) {
-            return ToolExecutionResult("Error: 'query' is required.", false, toolTitle = toolTitle)
-        }
-        val words = keywords(query)
-        if (words.isEmpty()) {
-            return ToolExecutionResult("Error: query has no searchable terms.", false, toolTitle = toolTitle)
-        }
-        val role = args.optString("role", "").trim().lowercase()
-            .takeIf { it in setOf("user", "assistant", "tool") }
-        val limit = args.optInt("limit", SEARCH_LIMIT_DEFAULT).coerceIn(1, SEARCH_LIMIT_MAX)
-        return try {
-            // [T-history-marker-scope] Restrict to history compaction folded
-            // OUT of the request. Without the cutoff this tool also returned the
-            // messages the model is already reading, which spends a hit slot on
-            // something it can see directly and makes "found in history"
-            // indistinguishable from "it is right above". No marker at all
-            // means nothing has been folded, so the whole session stays visible
-            // (searching an uncompacted chat is still useful).
-            val boundaryMs = repo.compactBoundaryMs(sessionId)
-            // Over-fetch, then filter by role and excerpt: a hit whose excerpt
-            // cannot be located is not a usable hit and must not consume a slot.
-            val matches = repo.searchMessages(
-                sessionIds = listOf(sessionId),
-                keywords = words,
-                limit = limit * 4,
-                startMs = null,
-                endMs = boundaryMs,
-            )
+            val limit = args.optInt("limit", SEARCH_LIMIT_DEFAULT).coerceIn(1, SEARCH_LIMIT_MAX)
+            val scope = history.scope()
+            if (scope == HistoryScope.Unavailable) return@search unavailable(title)
             val hits = JSONArray()
-            for (m in matches) {
-                if (role != null && m.role != role) continue
-                // [T-history-retrieval] One row at a time. The old code loaded the
-                // whole page (every part body in the session) to locate a handful
-                // of excerpts; the single-row query costs O(1) per surviving hit.
-                val text = repo.messageText(sessionId, m.messageId) ?: continue
-                val needle = words.firstOrNull { text.contains(it, ignoreCase = true) } ?: continue
-                val found = excerptAt(text, needle) ?: continue
-                hits.put(
-                    JSONObject()
-                        .put("message_id", m.messageId)
-                        .put("role", m.role)
-                        .put("excerpt", com.openminis.app.util.SecretMasking.mask(found.first))
-                        .put("excerpt_start", found.second)
-                        .put("excerpt_end", found.third),
-                )
-                if (hits.length() >= limit) break
-            }
-            if (hits.length() == 0) {
-                // [T-history-marker-scope] Say WHERE it looked. "No match" after
-                // a silent scope change reads as "this never happened", which is
-                // a worse failure than no answer: the model concludes the work
-                // was not done.
-                val scope = if (boundaryMs == null) {
-                    "this session"
-                } else {
-                    "the compacted part of this session (the active region is already in context)"
+            var previewOnlyRows = 0
+            var unavailableRows = 0
+            var hitChars = 0
+            var before = Long.MAX_VALUE
+            var rowsLeft = MAX_SEARCH_ROWS
+            var bytesLeft = MAX_SEARCH_BYTES
+            var exhausted = false
+            var outputLimited = false
+            scan@while (rowsLeft > 0) {
+                val rows = history.rows(scope, before, role, minOf(rowsLeft, ROWS_PER_QUERY))
+                if (rows.isEmpty()) {
+                    exhausted = true
+                    break
                 }
-                ToolExecutionResult(
-                    "No message in $scope matched " +
-                        words.joinToString(", ") + ". Try fewer or different keywords.",
-                    true,
-                    toolTitle = toolTitle,
-                )
-            } else {
-                ToolExecutionResult(
-                    JSONObject().put("hits", hits).put("count", hits.length()).toString(2),
-                    true,
-                    toolTitle = toolTitle,
-                )
+                for (row in rows) {
+                    currentCoroutineContext().ensureActive()
+                    rowsLeft--
+                    var overBudget = false
+                    val body = history.body(scope, row) { size ->
+                        overBudget = size > bytesLeft
+                        if (!overBudget) bytesLeft -= size
+                        !overBudget
+                    }
+                    if (overBudget) break@scan
+                    val message = when (body) {
+                        HistoryBody.Unavailable -> {
+                            // An unreadable user-role carrier could contain tool results.
+                            unavailableRows++
+                            continue
+                        }
+                        HistoryBody.NoText -> continue
+                        is HistoryBody.Text -> body
+                    }
+                    if (role != null && role != message.role) continue
+                    // Count before matching: an omitted middle may hold the only hit.
+                    if (message.previewOnly) previewOnlyRows++
+                    if (message.messageId.length > MAX_ID_CHARS) continue
+                    val text = safeTranscript(message.text)
+                    val (excerpt, start, end) = words.firstNotNullOfOrNull { excerptAt(text, it) } ?: continue
+                    val hit = JSONObject().put("message_id", message.messageId).put("role", message.role)
+                        .put("excerpt", excerpt).put("excerpt_start", start).put("excerpt_end", end)
+                    if (message.previewOnly) hit.put("preview_only", true)
+                    hitChars += hit.toString().length + 1
+                    if (hitChars > MAX_JSON_TEXT) {
+                        outputLimited = true
+                        break@scan
+                    }
+                    hits.put(hit)
+                    if (hits.length() >= limit) break@scan
+                }
+                before = rows.last().sortOrder.toLong()
             }
-                } catch (e: kotlinx.coroutines.CancellationException) {
-        // [T-history-cancel] A cancelled query is not a tool failure: rethrow so
-        // structured concurrency can unwind instead of logging a bogus failure.
-        throw e
-        } catch (e: Exception) {
-
-            ToolExecutionResult("Error: ${e.message}", false, toolTitle = toolTitle)
+            if (history.scope() != scope) return@search unavailable(title)
+            val output = JSONObject().put("hits", hits).put("count", hits.length())
+                .put("scope", if (scope is HistoryScope.Folded) "folded" else "session")
+                .put("truncated", unavailableRows > 0 || previewOnlyRows > 0 || outputLimited || (!exhausted && hits.length() < limit))
+                .put("preview_only_rows", previewOnlyRows)
+                .put("unavailable_rows", unavailableRows)
+            if (unavailableRows > 0 || previewOnlyRows > 0) {
+                output.put("coverage_note", buildString {
+                    if (unavailableRows > 0) append("Some message bodies were unavailable and could not be searched.")
+                    if (previewOnlyRows > 0) {
+                        if (isNotEmpty()) append(' ')
+                        append("Some tool outputs were searched as previews only. Their full text is unavailable in history.")
+                    }
+                })
+            }
+            ToolExecutionResult(output.toString(), true, toolTitle = title)
         }
-    }
 
-    suspend fun executeRead(
+    internal suspend fun executeRead(argsJson: String, sessionId: String, repo: ChatRepository?): ToolExecutionResult =
+        execute(READ, argsJson, sessionId, repo) read@{ args, title, history ->
+            val id = (args.opt("message_id") as? String)?.trim().orEmpty()
+            if (id.isEmpty() || id.length > MAX_ID_CHARS) {
+                return@read error(title, "A valid message_id is required.", ToolErrorCode.INVALID_ARGUMENTS)
+            }
+            val offset = if (args.has("offset")) (args.opt("offset") as? Number)?.toString()?.toIntOrNull() else 0
+            if (offset == null || offset < 0) {
+                return@read error(title, "Offset must be a non-negative integer.", ToolErrorCode.INVALID_ARGUMENTS)
+            }
+            val scope = history.scope()
+            val row = history.row(scope, id) ?: return@read notFound(title)
+            val message = history.body(scope, row) as? HistoryBody.Text ?: return@read notFound(title)
+            if (history.scope() != scope) return@read notFound(title)
+            val text = safeTranscript(message.text)
+            if (offset > text.codePointCount(0, text.length)) {
+                val detail = if (message.previewOnly) {
+                    "Offset is outside the stored preview. The full tool output is unavailable in history."
+                } else "Offset is beyond the end of the message."
+                return@read error(title, detail, ToolErrorCode.INVALID_ARGUMENTS)
+            }
+            var cap = PAGE_CHARS
+            var (body, next, truncated) = page(text, offset, cap)
+            while (JSONObject.quote(body).length > MAX_JSON_TEXT) {
+                cap /= 2
+                val smaller = page(text, offset, cap)
+                body = smaller.first
+                next = smaller.second
+                truncated = smaller.third
+            }
+            val output = JSONObject().put("message_id", message.messageId).put("role", message.role)
+                .put("offset", offset).put("text", body).put("next_offset", next ?: JSONObject.NULL)
+                .put("truncated", truncated || message.previewOnly)
+            if (message.previewOnly) {
+                output.put("preview_only", true)
+                    .put("coverage_note", "Only the stored preview is available. A null next_offset is the end of the preview, not the full tool output.")
+            }
+            ToolExecutionResult(output.toString(), true, toolTitle = title)
+        }
+
+    private suspend fun execute(
+        name: String,
         argsJson: String,
         sessionId: String,
-        context: Context,
+        repo: ChatRepository?,
+        action: suspend (JSONObject, String, SessionHistory) -> ToolExecutionResult,
     ): ToolExecutionResult {
-        val args = runCatching { JSONObject(argsJson) }.getOrDefault(JSONObject())
-        val toolTitle = args.optString("tool_title", READ)
-        val repo = repo(context)
-            ?: return ToolExecutionResult("Error: chat store is not ready.", false, toolTitle = toolTitle)
-        val id = args.optString("message_id", "").trim()
-        if (id.isEmpty()) {
-            return ToolExecutionResult("Error: 'message_id' is required.", false, toolTitle = toolTitle)
+        if (repo == null || sessionId.isBlank()) return unavailable(name)
+        val args = try {
+            JSONObject(argsJson)
+        } catch (_: Exception) {
+            return error(name, "Invalid history arguments.", ToolErrorCode.INVALID_ARGUMENTS)
+        } catch (_: StackOverflowError) {
+            return error(name, "Invalid history arguments.", ToolErrorCode.INVALID_ARGUMENTS)
         }
-        val offset = args.optInt("offset", 0).coerceAtLeast(0)
+        val title = safeTranscript((args.opt("tool_title") as? String).orEmpty()).take(100).ifBlank { name }
         return try {
-            // [T-history-retrieval] Single-row read: a page scan here was the
-            // largest allocation this tool could make.
-            val text = repo.messageText(sessionId, id)
-            if (text.isNullOrBlank()) {
-                ToolExecutionResult(
-                    "Error: message $id not found in this session.",
-                    false,
-                    toolTitle = toolTitle,
-                )
-            } else {
-                val (body, next, truncated) = page(text, offset)
-                ToolExecutionResult(
-                    JSONObject()
-                        .put("message_id", id)
-                        .put("offset", offset)
-                        .put("text", com.openminis.app.util.SecretMasking.mask(body))
-                        .put("next_offset", next ?: JSONObject.NULL)
-                        .put("truncated", truncated)
-                        .toString(2),
-                    true,
-                    toolTitle = toolTitle,
-                )
-            }
-                } catch (e: kotlinx.coroutines.CancellationException) {
-        // [T-history-cancel] A cancelled query is not a tool failure: rethrow so
-        // structured concurrency can unwind instead of logging a bogus failure.
-        throw e
-        } catch (e: Exception) {
-
-            ToolExecutionResult("Error: ${e.message}", false, toolTitle = toolTitle)
+            withContext(Dispatchers.IO) { action(args, title, SessionHistory(repo, sessionId)) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            unavailable(title) // Do not expose DB diagnostics, paths, or input in error output.
         }
     }
+
+    private fun safeTranscript(text: String): String = SecretMasking.mask(ToolOutputPolicy.redactEnvVars(text))
+    private fun error(title: String, detail: String, code: ToolErrorCode) =
+        ToolExecutionResult("Error: $detail", false, errorCode = code, toolTitle = title)
+
+    private fun unavailable(title: String) = error(title, "This session's history is unavailable.", ToolErrorCode.EXECUTION_FAILED)
+    private fun notFound(title: String) = error(title, "Message not available in this session's searchable history.", ToolErrorCode.NOT_FOUND)
 }

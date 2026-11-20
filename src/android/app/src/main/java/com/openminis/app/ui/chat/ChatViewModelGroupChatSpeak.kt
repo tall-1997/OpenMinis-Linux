@@ -18,6 +18,7 @@ import com.openminis.app.tools.GroupChat
 import com.openminis.app.tools.SubAgentKind
 import com.openminis.app.tools.ToolCallPreflight
 import com.openminis.app.tools.ToolExecutionResult
+import com.openminis.app.tools.ToolReceiptScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
@@ -48,11 +49,13 @@ internal suspend fun ChatViewModel.speakModel(
     firstTokenTimeoutMs: Long? = null,
     // [GH#221] Per-instance user headers + OpenCode session header.
     extraHeaders: Map<String, String> = emptyMap(),
+    receiptScope: ToolReceiptScope? = null,
     onStatus: suspend (AssistantBlock) -> Unit,
 ): String {
     val history = mutableListOf(LLMMessage(role = LLMMessage.Role.USER, content = user))
     val report = StringBuilder()
     var lastThinking = ""
+    var previousReceiptProof: String? = null
     // [group-chat-empty-fix] 轮次上限 3→6，另加 3 分钟总时长兜底：以前工具密集的发言跑满 3 轮只剩思考兑底；思考档不降级，靠预算记账给正文留位置。
     val deadline = android.os.SystemClock.elapsedRealtime() + 180_000L
     var round = 0
@@ -137,12 +140,15 @@ internal suspend fun ChatViewModel.speakModel(
         }
         val assistantParts = mutableListOf<AgentContentPart>()
         if (text.isNotEmpty()) assistantParts += AgentContentPart.Text(text)
-        calls.forEach { (callId, name, args) ->
+        val uniqueCalls = calls.distinctBy { it.first }
+        uniqueCalls.forEach { (callId, name, args) ->
             assistantParts += AgentContentPart.ToolUse(callId, name, input = args)
         }
         history += LLMMessage(role = LLMMessage.Role.ASSISTANT, content = text, contentParts = assistantParts)
         val results = mutableListOf<AgentContentPart>()
-        for ((callId, name, args) in calls) {
+        val batchScope = receiptScope?.afterLocal(previousReceiptProof)
+        var batchProof: String? = null
+        for ((callId, name, args) in uniqueCalls) {
             onStatus(toolStatus(callId, name, ToolBlockStatus.RUNNING, args.toString()))
             // [GH#61/#83/#146][GH#119] Same shared preflight as the main loop and
             // sub-agents. Group chat used to `executeTool(args.toString())`
@@ -167,18 +173,23 @@ internal suspend fun ChatViewModel.speakModel(
             }
             val argsJson = (preflight as ToolCallPreflight.Outcome.Ready).argsStr
             onStatus(toolStatus(callId, name, ToolBlockStatus.RUNNING, argsJson))
-            val denied = DiscussionGraph.denyExecution(name, argsJson)
-            val result = if (denied != null) {
-                ToolExecutionResult(denied, false)
-            } else if (toolGate != null) {
-                // [F1 GH#343] Pass the real call id (was ""), so parallel-group
-                // speakers no longer overwrite one shared `tool.txt` spill file.
-                toolGate.withLock { executeTool(name, argsJson, callId) }
-            } else {
-                executeTool(name, argsJson, callId)
+            val dispatch: suspend () -> ToolExecutionResult = {
+                executeTool(name, argsJson, callId, receiptScope = batchScope, nestedRefusal = { nestedName, nestedArgs ->
+                    DiscussionGraph.denyExecution(nestedName, nestedArgs)?.let {
+                        ToolExecutionResult(it, false, errorCode = com.openminis.app.tools.ToolErrorCode.PERMISSION_DENIED)
+                    }
+                })
             }
+            val result = if (toolGate != null) toolGate.withLock { dispatch() } else dispatch()
+            if (result.receiptProof != null) batchProof = result.receiptProof
+            onStatus(toolStatus(callId, name, when {
+                result.success -> ToolBlockStatus.SUCCESS
+                result.timedOut -> ToolBlockStatus.TIMEOUT
+                else -> ToolBlockStatus.FAILED
+            }, result.output))
             results += AgentContentPart.ToolResult(callId, name, result.output, isError = !result.success)
         }
+        if (batchProof != null) previousReceiptProof = batchProof
         history += LLMMessage(role = LLMMessage.Role.USER, content = "", contentParts = results)
     }
     return GroupChat.recoverUtterance(report.toString(), lastThinking)

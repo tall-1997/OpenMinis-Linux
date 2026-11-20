@@ -1,139 +1,106 @@
 package com.openminis.app.data.repository
 
-import org.json.JSONObject
+import com.openminis.app.util.Digest
 import java.io.File
+import org.json.JSONArray
+import org.json.JSONObject
 
-/**
- * [T-memory-usage-ledger] `mark_memory_used`: the counts that make "was this
- * memory ever actually delivered?" answerable.
- *
- * WHY separate from [MemoryRecallEngine.acceptRecallBatch]: that one counts
- * *recall* (the engine proposed it), and its counter feeds the anti-nag streak.
- * This one counts *delivery to the model* — a hit that was cut by the fragment
- * cap, or filtered by `recallFreshHits`, was never shown and must not look
- * used. Conflating the two is how a memory earns credit for an answer it never
- * appeared in.
- *
- * Storage mirrors the recall-count sidecar: one small JSON file, atomic write,
- * corrupt file → empty (never an exception into the prompt path).
- */
+/** Per-chat recall-line statistics, separate from the authoritative entry lifecycle. */
 internal object MemoryUsageLedger {
-
-    internal const val FILE = "memory-usage.json"
-
-    private val counts = java.util.concurrent.ConcurrentHashMap<String, Int>()
-
-    internal fun file(memoryDir: File): File = File(memoryDir, FILE)
-
-    /** Key identity matches the recall/render path: `day:line`. */
-    internal fun keyOf(day: String, line: String): String = "$day:${line.trim()}"
-
-    /** Prime the cache from disk; safe to call more than once. */
-    fun load(memoryDir: File?) {
-        if (memoryDir == null) return
-        val text = runCatching { file(memoryDir).readText(Charsets.UTF_8) }.getOrNull() ?: return
-        val obj = runCatching { JSONObject(text) }.getOrNull() ?: return
-        val keys = obj.keys()
-        while (keys.hasNext()) {
-            val k = keys.next()
-            val v = obj.optInt(k, 0)
-            if (k.isNotBlank() && v > 0) counts[k] = v
-        }
-    }
-
-    /**
-     * [T-memory-usage-ledger] Record that these hits reached the model.
-     *
-     * One disk write per delivery, not per hit — the prompt path already pays
-     * one save for the recall counts and a second per-hit write would show up
-     * as jank in a long turn.
-     */
-    fun markUsed(memoryDir: File?, hits: List<Pair<String, String>>) {
-        if (memoryDir == null || hits.isEmpty()) return
-        for ((day, line) in hits) {
-            val key = keyOf(day, line)
-            counts[key] = (counts[key] ?: 0) + 1
-        }
-        save(memoryDir)
-    }
-
-    /**
-     * [T-memory-usage-ui] Read the delivered-line counters from ONE session's
-     * file, without touching the request-path cache.
-     *
-     * The sheet needs a number for the open chat only; [snapshot] is the global
-     * cache primed by whichever request ran last, which can belong to another
-     * session. Reading the file keeps the two apart and stays a pure read.
-     */
-    fun summaryFor(memoryDir: java.io.File?): Pair<Int, Int> {
-        if (memoryDir == null) return 0 to 0
-        val target = runCatching { file(memoryDir) }.getOrNull() ?: return 0 to 0
-        if (!target.isFile) return 0 to 0
-        val obj = runCatching { JSONObject(target.readText(Charsets.UTF_8)) }.getOrNull()
-            ?: return 0 to 0
-        var lines = 0
-        var shown = 0
-        val keys = obj.keys()
-        while (keys.hasNext()) {
-            val key = keys.next()
-            val count = obj.optInt(key, 0)
-            if (count <= 0) continue
-            lines += 1
-            shown += count
-        }
-        return lines to shown
-    }
-
-    /** Delivery count for one line, 0 when it was never shown. */
-    fun countOf(day: String, line: String): Int = counts[keyOf(day, line)] ?: 0
-
-    /** Snapshot for diagnostics / a future ranking signal. */
-    fun snapshot(): Map<String, Int> = HashMap(counts)
-
-    /** [T-memory-usage-cap] Keys older than this many days are dropped. */
-    private const val RETENTION_DAYS = 30L
-    
-    /** [T-memory-usage-cap] Hard cap; the oldest days are evicted first. */
+    private const val LEGACY_FILE = "memory-usage.json"
+    private const val VERIFIED_FILE = ".memory-usage-v2.json"
+    private const val RETENTION_MS = 30 * MemoryLifecycle.DAY_MS
     private const val MAX_KEYS = 5_000
-    
-    /**
-     * [T-memory-usage-cap] Keep the ledger bounded.
-     *
-     * The key is `day:line`, so the map grows with every distinct delivered line
-     * forever, and the whole map is rewritten on each delivery. Pruning by the
-     * day prefix is exact (the key starts with it) and keeps the file small.
-     */
-    private fun prune(nowMs: Long) {
-        val cutoff = java.time.LocalDate.now()
-            .minusDays(RETENTION_DAYS)
-            .toString()
-        val stale = counts.keys.filter { key ->
-            val day = key.substringBefore(':', "")
-            day.isNotEmpty() && day < cutoff
-        }
-        stale.forEach { counts.remove(it) }
-        if (counts.size <= MAX_KEYS) return
-        val excess = counts.size - MAX_KEYS
-        counts.keys.sorted().take(excess).forEach { counts.remove(it) }
-    }
-    
-    private fun save(memoryDir: File) {
-        prune(System.currentTimeMillis())
+    private const val TURN_WINDOW = 64
+    private const val MAX_LINES_PER_TURN = 128
+    private val opaqueKey = Regex("[0-9a-f]{64}")
+
+    private data class Count(val shown: Int, val lastShownAt: Long)
+    private data class Receipt(val turn: String, val keys: Set<String>)
+    private data class Snapshot(val lines: Map<String, Count>, val receipts: List<Receipt>)
+
+    internal fun lineKey(shared: Boolean, source: String, line: String): String =
+        Digest.sha256Hex("$shared\u0000$source\u0000${line.trim()}")
+
+    internal fun verifiedFile(sessionDirectory: File): File = File(sessionDirectory, VERIFIED_FILE)
+
+    /** Called only by successful request settlement. Read/modify/write belongs to the consuming chat, not the diary's owner. */
+    fun recordVerified(sessionDirectory: File, turnKey: String, lines: Set<String>, deliveredAt: Long) {
+        if (turnKey.isBlank() || lines.isEmpty() || lines.any { !opaqueKey.matches(it) }) return
+        val turn = Digest.sha256Hex(turnKey)
         runCatching {
-            val obj = JSONObject()
-            counts.forEach { (k, v) -> if (v > 0) obj.put(k, v) }
-            val target = file(memoryDir)
-            val tmp = File(target.parentFile, "${target.name}.tmp")
-            tmp.writeText(obj.toString(), Charsets.UTF_8)
-            java.nio.file.Files.move(
-                tmp.toPath(), target.toPath(),
-                java.nio.file.StandardCopyOption.REPLACE_EXISTING,
-            )
+            MemoryLifecycle.locked(sessionDirectory) { dir ->
+                val file = MemoryLifecycle.child(dir, VERIFIED_FILE) ?: return@locked
+                val previous = readVerified(file)
+                val seen = previous.receipts.firstOrNull { it.turn == turn }?.keys.orEmpty()
+                val added = lines - seen
+                if (added.isEmpty()) return@locked
+                val counts = previous.lines.toMutableMap()
+                for (key in added) {
+                    val old = counts[key]
+                    counts[key] = Count(increment(old?.shown ?: 0), maxOf(old?.lastShownAt ?: deliveredAt, deliveredAt))
+                }
+                counts.entries.removeIf { (_, count) -> count.lastShownAt < deliveredAt - RETENTION_MS }
+                val kept = counts.entries.sortedByDescending { it.value.lastShownAt }.take(MAX_KEYS).associate { it.toPair() }
+                val rows = JSONObject()
+                for ((key, count) in kept) rows.put(key, JSONObject().put("shown", count.shown).put("at", count.lastShownAt))
+                val receipts = (previous.receipts.filterNot { it.turn == turn } + Receipt(turn, seen + added)).takeLast(TURN_WINDOW)
+                val turns = JSONArray()
+                for (receipt in receipts) {
+                    val keys = receipt.keys.filter { it in kept }.takeLast(MAX_LINES_PER_TURN)
+                    if (keys.isNotEmpty()) turns.put(JSONObject().put("turn", receipt.turn).put("lines", JSONArray(keys)))
+                }
+                writeLifecycleAtomic(file, JSONObject().put("version", 2).put("lines", rows).put("turns", turns).toString())
+            }
         }
     }
 
-    /** Test seam. */
-    internal fun resetForTest() {
-        counts.clear()
+    /** Model-facing labels report only the new, verified counters. No disk writes from summaries. */
+    fun verifiedSummaryFor(sessionDirectory: File): Pair<Int, Int> = runCatching {
+        MemoryLifecycle.locked(sessionDirectory) { dir ->
+            summarize(readVerified(MemoryLifecycle.child(dir, VERIFIED_FILE) ?: return@locked 0 to 0).lines.values.map { it.shown })
+        }
+    }.getOrDefault(0 to 0)
+
+    /** Read-only compatibility for #401's flat historical counters. These are not delivery evidence. */
+    fun summaryFor(memoryDir: File?): Pair<Int, Int> = runCatching {
+        if (memoryDir == null) return 0 to 0
+        MemoryLifecycle.locked(memoryDir) { dir ->
+            val file = MemoryLifecycle.child(dir, LEGACY_FILE)?.takeIf { it.isFile } ?: return@locked 0 to 0
+            val old = JSONObject(file.readText())
+            summarize(old.keys().asSequence().map { old.optInt(it, 0) }.toList())
+        }
+    }.getOrDefault(0 to 0)
+
+    private fun readVerified(file: File): Snapshot = runCatching {
+        val json = JSONObject(file.readText())
+        require(json.getInt("version") == 2)
+        val rows = json.getJSONObject("lines")
+        val counts = buildMap {
+            for (key in rows.keys()) {
+                if (!opaqueKey.matches(key)) continue
+                val row = rows.optJSONObject(key) ?: continue
+                val shown = row.optInt("shown", 0)
+                if (shown > 0) put(key, Count(shown, row.getLong("at")))
+            }
+        }
+        val turns = json.getJSONArray("turns")
+        val receipts = (maxOf(0, turns.length() - TURN_WINDOW) until turns.length()).mapNotNull { i ->
+            val row = turns.optJSONObject(i) ?: return@mapNotNull null
+            val turn = row.optString("turn")
+            if (!opaqueKey.matches(turn)) return@mapNotNull null
+            val keys = row.getJSONArray("lines")
+            Receipt(turn, (0 until minOf(keys.length(), MAX_LINES_PER_TURN)).mapNotNullTo(HashSet()) { j ->
+                keys.optString(j).takeIf { it in counts }
+            })
+        }
+        Snapshot(counts, receipts)
+    }.getOrElse { Snapshot(emptyMap(), emptyList()) }
+
+    private fun increment(count: Int): Int = if (count < Int.MAX_VALUE) count + 1 else count
+
+    private fun summarize(values: Collection<Int>): Pair<Int, Int> {
+        val positive = values.filter { it > 0 }
+        return positive.size to positive.sumOf { it.toLong() }.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
     }
 }

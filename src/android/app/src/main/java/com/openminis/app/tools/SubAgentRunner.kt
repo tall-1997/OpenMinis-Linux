@@ -45,29 +45,13 @@ object SubAgentRunner {
     /** Fraction at which the agent is ordered to stop calling tools and write up. */
     private const val FORCE_FRACTION = 0.95
 
-    /** Cap on a single tool-result / report chunk kept in history (tail kept).
-     *  Generous: truncation here is a last-resort runaway guard, not a
-     *  content policy — the coordinator asked for full reports.
-     *  [T-subagent-report-spill] internal so tests can pin the budget. */
-    internal const val MAX_REPORT_CHARS = 64_000
-
-    /**
-     * [T-subagent-memory-cap] timeline 的硬上限。
-     *
-     * `report` 早就有 64KB 上限（[truncate]），但 `timeline` 一直无界：每轮
-     * 每条工具调用都会 append 一行。多个子代理并行跑长任务时，N 份无界
-     * StringBuilder 是 OOM 的直接来源 —— 每个 agent 各自持有完整工具轨迹，
-     * 而轨迹只用于最终报告里的一段摘要。
-     *
-     * 保留最近的 [TIMELINE_MAX_CHARS] 字符：最新的工具调用序列才是有用的
-     * （用户和模型关心"刚才做了什么"），早期步骤在报告正文里已经有结论。
-     */
+    /** Limit the buffered trace independently of the final report's spill threshold. */
     private const val TIMELINE_MAX_CHARS = 16_000
 
     /** 超出上限时按比例裁到这么多，避免每轮都裁剪一次（摊销）。 */
     private const val TIMELINE_TRIM_TO = 12_000
 
-    suspend fun run(
+    internal suspend fun run(
         provider: LLMProvider,
         modelDisplayName: String,
         userPrompt: String,
@@ -79,7 +63,7 @@ object SubAgentRunner {
         // executeTool so spill files (and any outcome attribution) are keyed per
         // call. Without it every parallel lane shared one filename and silently
         // overwrote its siblings' spilled output.
-        executeTool: suspend (name: String, argsJson: String, toolCallId: String) -> ToolExecutionResult,
+        executeTool: suspend (name: String, argsJson: String, toolCallId: String, scope: ToolReceiptScope?) -> ToolExecutionResult,
         onStep: suspend (turn: Int, toolName: String) -> Unit = { _, _ -> },
         onUi: suspend (UiEvent) -> Unit = {},
         kind: String = SubAgentKind.WORKER,
@@ -120,12 +104,15 @@ object SubAgentRunner {
         // coordinator does. Null = the session has no rules; the worker prompt
         // is then byte-identical to before.
         sessionRules: String? = null,
+        // Workspace context for final reports, independent of role lookup and history spilling.
+        reportContext: Context? = roleContext,
         // [T-untrusted-tag-neutralization] Request-time projection the parent
         // applies to its own history (remote-content tool results get framework
         // markers escaped); lanes with browser/web tools have the same spoofing
         // surface, so the parent passes its projection here. Identity default =
         // lanes whose caller has no projection (none today).
         historySanitizer: (List<LLMMessage>) -> List<LLMMessage> = { it },
+        receiptScope: ToolReceiptScope? = null,
     ): ToolExecutionResult {
         val briefed = SubAgentBrief.wrap(userPrompt, kind = kind, role = role, writePaths = writePaths)
         // Defensive: duplicate tool names reach providers as duplicate schemas
@@ -144,11 +131,7 @@ object SubAgentRunner {
         val history = mutableListOf(
             LLMMessage(role = LLMMessage.Role.USER, content = briefed),
         )
-        // [T-subagent-report-spill] One session-keyed spiller shared by the
-        // final-report truncation and the history compactor's recoverable
-        // stubs. Deterministic file name (content hash), so the per-turn
-        // re-compaction rewrites its own file instead of accumulating one
-        // spill per turn.
+        // The history compactor reuses the same content-keyed file across turns.
         val sessionSpill: (nameKey: String, content: String) -> String? =
             { nameKey, content -> spillToSession(roleContext, sessionId, nameKey, content) }
         // Turn budget is whatever the coordinator assigned (auto-sized or
@@ -161,8 +144,14 @@ object SubAgentRunner {
         )
         val report = StringBuilder()
         val timeline = StringBuilder()
+        fun finishReport(footer: String = "", success: Boolean = true): ToolExecutionResult =
+            ToolExecutionResult(
+                composeOutput(report.toString(), timeline.toString(), footer, sessionId, reportContext),
+                success,
+            )
         var warned = false
         var forced = false
+        var previousReceiptProof: String? = null
 
         try {
             var turn = 0
@@ -173,12 +162,7 @@ object SubAgentRunner {
                 // the budget stops itself; the wave continues with the rest.
                 if (tokenBudget != null && tokenBudget.exhausted) {
                     runCatching { onStep(turn, "token budget exhausted") }
-                    val partial = report.toString().trim()
-                    val footer = "(stopped: shared token budget exhausted at $turn/$turns turns)"
-                    return ToolExecutionResult(
-                        composeOutput(partial, timeline.toString(), footer, spillFullReport = { sessionSpill("subagent-report", it) }),
-                        true,
-                    )
+                    return finishReport("(stopped: shared token budget exhausted at $turn/$turns turns)")
                 }
                 turn++
                 runCatching { onStep(turn, "") }
@@ -212,6 +196,8 @@ object SubAgentRunner {
                 val sendHistory = historySanitizer(
                     SubAgentHistoryCompactor.compact(
                         history,
+                        systemPrompt = system,
+                        tools = dedupedTools,
                         spill = { _, content -> sessionSpill("history", content) },
                     ),
                 )
@@ -317,28 +303,18 @@ object SubAgentRunner {
 
                 if (toolCalls.isEmpty()) {
                     runCatching { onStep(turn, "done") }
-                    return ToolExecutionResult(
-                        composeOutput(report.toString(), timeline.toString(), spillFullReport = { sessionSpill("subagent-report", it) }),
-                        true,
-                    )
+                    return finishReport()
                 }
 
                 val assistantParts = mutableListOf<AgentContentPart>()
                 if (text.isNotEmpty()) assistantParts.add(AgentContentPart.Text(text))
-                for ((id, name, args) in toolCalls) {
-                    assistantParts.add(AgentContentPart.ToolUse(id, name, input = args))
-                }
-                history.add(
-                    LLMMessage(
-                        role = LLMMessage.Role.ASSISTANT,
-                        content = text,
-                        contentParts = assistantParts,
-                    ),
-                )
 
                 val resultParts = mutableListOf<AgentContentPart>()
-                for ((id, name, args) in toolCalls) {
+                val batchScope = receiptScope?.afterLocal(previousReceiptProof)
+                var batchProof: String? = null
+                for ((id, name, args) in toolCalls.distinctBy { it.first }) {
                     if (SubAgentKind.isSpawnTool(name) || SubAgentKind.blocks(kind, name)) {
+                        assistantParts.add(AgentContentPart.ToolUse(id, name, input = args))
                         runCatching { onStep(turn, "$name · blocked") }
                         runCatching {
                             onUi(UiEvent.ToolDone(id, name, false, "子代理不能再派生子代理，也不能使用被禁止的工具。"))
@@ -371,6 +347,7 @@ object SubAgentRunner {
                         turnFinishReason = turnFinishReason,
                     )
                     if (preflight is ToolCallPreflight.Outcome.Rejected) {
+                        assistantParts.add(AgentContentPart.ToolUse(id, name, input = args))
                         runCatching { onStep(turn, "$name · blocked") }
                         runCatching { onUi(UiEvent.ToolDone(id, name, false, preflight.modelMessage)) }
                         timeline.append("- turn $turn: $name (blocked: invalid or truncated arguments)\n")
@@ -385,6 +362,16 @@ object SubAgentRunner {
                         continue
                     }
                     val argsJson = (preflight as ToolCallPreflight.Outcome.Ready).argsStr
+                    assistantParts.add(AgentContentPart.ToolUse.fromInputJson(id, name, argsJson))
+                    if (SubAgentKind.isReadOnly(kind) &&
+                        com.openminis.app.security.ToolAliases.canonical(name) == "memory_get" &&
+                        !memoryGetIsSearch(argsJson)
+                    ) {
+                        val denied = "Error: explore/plan memory_get is read-only; restore is not allowed."
+                        runCatching { onUi(UiEvent.ToolDone(id, name, false, denied)) }
+                        resultParts.add(AgentContentPart.ToolResult(id, name, denied, isError = true))
+                        continue
+                    }
                     // [T-subagent-browser-readonly-actions] browser_use is
                     // allow-listed for read-only kinds, but its mutating
                     // actions are not read-only. Same shape as the shell gate.
@@ -430,12 +417,13 @@ object SubAgentRunner {
                     val result = try {
                         // [F1 GH#343] Pass the call id (not a session id) — it is
                         // the per-call identity executeTool keys its spill on.
-                        executeTool(name, argsJson, id)
+                        executeTool(name, argsJson, id, batchScope)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
                         ToolExecutionResult("Error: ${e.message ?: e.javaClass.simpleName}", false)
                     }
+                    if (result.receiptProof != null) batchProof = result.receiptProof
                     runCatching { onUi(UiEvent.ToolDone(id, name, result.success, result.output)) }
                     runCatching {
                         onStep(turn, buildString {
@@ -458,6 +446,14 @@ object SubAgentRunner {
                         ),
                     )
                 }
+                if (batchProof != null) previousReceiptProof = batchProof
+                history.add(
+                    LLMMessage(
+                        role = LLMMessage.Role.ASSISTANT,
+                        content = text,
+                        contentParts = assistantParts,
+                    ),
+                )
                 history.add(
                     LLMMessage(
                         role = LLMMessage.Role.USER,
@@ -498,41 +494,26 @@ object SubAgentRunner {
             // Loop ended at the budget (95% force message, or a stubborn agent
             // kept calling tools to the last turn). Hand back the accumulated
             // partial report instead of a bare "hit the cap" string.
-            val partial = report.toString().trim()
-            val footer = if (partial.isNotEmpty()) {
+            val footer = if (report.isNotBlank()) {
                 "(reached the $turns-turn budget — partial report above)"
             } else {
                 "(sub-agent reached the $turns-turn budget with no findings to report)"
             }
-            return ToolExecutionResult(
-                composeOutput(partial, timeline.toString(), footer, spillFullReport = { sessionSpill("subagent-report", it) }),
-                true,
-            )
+            return finishReport(footer)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            return ToolExecutionResult(
-                composeOutput(
-                    report.toString(),
-                    timeline.toString(),
-                    "Sub-agent failed: ${e.message ?: e.javaClass.simpleName}",
-                    spillFullReport = { sessionSpill("subagent-report", it) },
-                ),
-                false,
-            )
+            return finishReport("Sub-agent failed: ${e.message ?: e.javaClass.simpleName}", success = false)
         }
     }
 
-    /**
-     * [spillFullReport] is invoked at most once, only when the composed output
-     * exceeds [MAX_REPORT_CHARS]; it returns the guest path the full report
-     * was spilled to (or null when no session wiring / the write failed).
-     */
-    fun composeOutput(
+    /** Compose the report once, then use the same spill policy as the parent tool exit. */
+    internal fun composeOutput(
         report: String,
         timeline: String,
         footer: String = "",
-        spillFullReport: ((String) -> String?)? = null,
+        sessionId: String? = null,
+        context: Context? = null,
     ): String {
         val body = report.trim()
         val trace = timeline.trim()
@@ -553,7 +534,8 @@ object SubAgentRunner {
             }
             if (isEmpty()) append("(sub-agent finished with empty output)")
         }
-        return truncate(composed, spillFullReport)
+        if (composed.length <= ToolOutputSpill.LIMIT) return composed
+        return ToolOutputPolicy.apply(composed, "subagent-report", context, sessionId, "sub_agent_report")
     }
 
     /**
@@ -562,6 +544,8 @@ object SubAgentRunner {
      */
     fun cardStep(output: String): String {
         val text = output.trim()
+        // Keep the host's readback link and any spill-failure notice on the detail card.
+        if (text.length <= ToolOutputSpill.LIMIT && ToolOutputSpill.isOffloadPlaceholder(text)) return text
         val marker = "## Report"
         val at = text.indexOf(marker)
         if (at >= 0) {
@@ -617,56 +601,7 @@ object SubAgentRunner {
     }
 
     /**
-     * Head chars of an over-cap composed output kept alongside the tail.
-     * [T-subagent-report-spill] The old form was `"…(truncated)\n" +
-     * takeLast(MAX_REPORT_CHARS)`: the head of the report (the Trace, the
-     * opening findings, everything the sub-agent confirmed FIRST) vanished
-     * with no count and no recovery path. Reports are tail-heavy, so the tail
-     * stays the bulk — but the head is preserved too, and the note is
-     * explicit: the spill path when the full report was persisted, otherwise
-     * the exact omitted char count.
-     */
-    private const val REPORT_HEAD_CHARS = 8_000
-
-    /** Reserved room for the truncation note inside [MAX_REPORT_CHARS]. */
-    private const val TRUNCATION_NOTE_BUDGET = 160
-
-    private fun truncate(text: String, spillFullReport: ((String) -> String?)? = null): String {
-        if (text.length <= MAX_REPORT_CHARS) return text
-        // [T-subagent-report-spill] Spill FIRST so the note can point at the
-        // full report; the hook is null (or fails) when no session wiring
-        // exists, and the honest omitted-count note is the fallback.
-        val spillPath = spillFullReport?.invoke(text)
-        val head = ToolOutputTruncator.sliceHead(text, REPORT_HEAD_CHARS)
-        val tail = ToolOutputTruncator.sliceTail(
-            text,
-            MAX_REPORT_CHARS - head.length - TRUNCATION_NOTE_BUDGET,
-        )
-        val omitted = text.length - head.length - tail.length
-        // [T-subagent-report-spill][T-unified-exit-passthrough] The composed
-        // output starts with the `[tool-output-spill]` placeholder prefix so
-        // the dispatch boundary's unified exit (ToolOutputSpill.planFor →
-        // isOffloadPlaceholder → PASSTHROUGH) does NOT re-plan a body that
-        // already carries its own recoverable spill — the old free-form note
-        // got re-planned as WRITE and shrunk an already-spilled report to the
-        // ~10.3k preview again. The head/tail content itself is untouched.
-        val note = if (spillPath != null) {
-            "(truncated — full report at $spillPath)"
-        } else {
-            "(truncated — $omitted chars omitted between the preserved head and tail excerpts)"
-        }
-        return buildString {
-            if (spillPath != null) append("[tool-output-spill] sub_agent_report produced ")
-                .append(text.length)
-                .append(" chars.\n")
-            append(head)
-            append("\n\n…").append(note).append("…\n\n")
-            append(tail)
-        }
-    }
-
-    /**
-     * [T-subagent-report-spill] Spill [content] into the session's tool-spill
+     * [T-subagent-history-spill] Spill [content] into the session's tool-spill
      * workspace under a deterministic, content-hashed name: the same content
      * always lands in the SAME file, so the per-turn history-compaction
      * re-spill rewrites its own file instead of accumulating one spill per

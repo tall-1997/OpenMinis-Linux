@@ -146,6 +146,9 @@ fun MemoryManagementScreen(
             )
         }
         EmbeddingRecallSection()
+        SettingsSection(header = stringResource(R.string.memory_section_diary)) {
+            com.openminis.app.ui.chat.MemoryArchiveRow(memoryRepository)
+        }
         Spacer(modifier = Modifier.height(16.dp))
 
         if (files.isEmpty()) {

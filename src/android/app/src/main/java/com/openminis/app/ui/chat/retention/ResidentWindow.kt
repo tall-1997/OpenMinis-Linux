@@ -29,9 +29,8 @@ internal object ResidentWindow {
      * size each message exactly once per pass instead of re-serializing the
      * whole remaining suffix at every candidate cut.
      *
-     * [AgentContentPart.ToolUse.input] is the only part whose size requires
-     * *serializing* (a `JSONObject` has no cached length), which is why the
-     * old `byteCut` — `bytesOf(subList(cut, size))` inside the candidate
+     * [AgentContentPart.ToolUse.inputJson] reuses a published snapshot and
+     * serializes only live inputs. The old `byteCut` called `bytesOf` inside the
      * loop — re-stringified every tool input O(candidates) times. On a
      * session with a multi-megabyte tool argument that stalled the main
      * thread for seconds during `loadSession`'s history rebuild and ANR'd
@@ -48,7 +47,7 @@ internal object ResidentWindow {
                     is AgentContentPart.Text -> part.text.length.toLong() * 2
                     is AgentContentPart.ToolResult ->
                         part.content.length.toLong() * 2 + (part.imageData?.size?.toLong() ?: 0L)
-                    is AgentContentPart.ToolUse -> part.input.toString().length.toLong() * 2
+                    is AgentContentPart.ToolUse -> part.inputJson.length.toLong() * 2
                     is AgentContentPart.ImageData -> part.data.size.toLong()
                 }
             }
@@ -104,31 +103,7 @@ internal object ResidentWindow {
         return 0
     }
 
-    /**
-     * Precompute every legal cut in one right-to-left pass.
-     *
-     * Forward rule (the original [isLegalBoundary]): walking the suffix, a
-     * ToolResult must match an earlier ToolUse with the same id/name; at the
-     * end, any unmatched use is allowed only in the final assistant message.
-     *
-     * Backward recurrence while extending the suffix to the left:
-     *  - a ToolResult can only match a use to its LEFT, so it joins
-     *    [pendingResults] and waits;
-     *  - a ToolUse first tries to consume a waiting result to its right;
-     *    otherwise it is unmatched, and it is "bad" unless it sits in the
-     *    final assistant message.
-     *
-     * A cut is legal iff no result is still waiting and no non-final use is
-     * unmatched. Results waiting at the current message boundary stay in the
-     * state when extending further left — an earlier use may still match them.
-     */
-    /**
-     * [T-tool-pairing-single-authority] Delegates to [ToolPairingCore] so the
-     * trimming path, the post-anchor budget and the request repair can never
-     * disagree about which cuts are legal. The previous in-file fold keyed on
-     * `"$id\u0000$name"`, which split the Responses combined id
-     * (`call_id|fc_id`) from its result and produced phantom orphans.
-     */
+    /** Precompute pairing-safe suffix boundaries, including normalized Responses ids. */
     internal fun legalBoundaries(history: List<LLMMessage>): BooleanArray =
         ToolPairingCore.legalCuts(history)
 

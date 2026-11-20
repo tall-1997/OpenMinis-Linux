@@ -179,12 +179,11 @@ class MemoryRecallEngineHybridTest {
     @Test
     fun `hybrid semantic hits obey the repeat cap across turns`() = runBlocking {
         val dir = tempDir()
-        // A semantic-only line: it does not exist on disk, so keyword FTS can
-        // never match it — the streak cap below is exercised by the semantic
-        // path alone.
-        val support = FakeSupport(listOf(hit("2026-11-01.md", "部署脚本在服务器上", 0.9f)))
+        val line = "部署脚本在服务器上"
+        File(dir, "2026-11-01.md").writeText(line)
+        val support = FakeSupport(listOf(hit("2026-11-01.md", line, 0.9f)))
         val engine = engineWith(dir, support)
-        val query = "服务器部署的问题"
+        val query = "rollback"
         repeat(MemoryRecallEngine.RECALL_REPEAT_CAP) {
             val hits = engine.recallForPromptHybrid(query)
             assertTrue(

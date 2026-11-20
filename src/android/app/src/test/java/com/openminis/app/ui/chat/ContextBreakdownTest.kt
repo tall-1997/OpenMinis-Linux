@@ -1,17 +1,16 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.data.ContextTokenEstimate
+import com.openminis.app.data.ContextTokenMeter
+import com.openminis.app.data.model.AgentContentPart
+import com.openminis.app.data.model.AgentToolDefinition
+import com.openminis.app.data.model.LLMMessage
+import com.openminis.app.provider.api.ChatRequest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * [#25] Pure core of the context-usage breakdown. Runs on the JVM test
- * classpath only: the estimator is [ContextBreakdownMath.sectionTokens]
- * (BPETokenizer's codepoint heuristic — no vocab loaded in unit tests), and
- * no Android type is touched. The tests pin the contract the sheet relies
- * on: blocks sum EXACTLY to the reported total, and that sum stays within
- * the documented ±10% tolerance of an independently measured whole.
- */
+/** Tests the estimated composition separately from the verified request total. */
 class ContextBreakdownTest {
 
     private val sections = listOf(
@@ -133,5 +132,68 @@ class ContextBreakdownTest {
             breakdown.blocks.map { it.key },
         )
         assertEquals(historyTokens + pendingAttachments, breakdown.totalTokens)
+    }
+
+    @Test
+    fun `projection supplies the total window and allowance while blocks stay on the raw ruler`() {
+        val system = "Use only the listed tools."
+        val tools = listOf(AgentToolDefinition("lookup", "Find an item", emptyMap()))
+        val image = AgentContentPart.ImageData(byteArrayOf(1), "image/png")
+        val tail = LLMMessage(
+            LLMMessage.Role.USER, "keep this", contentParts = listOf(AgentContentPart.Text("keep this"), image),
+        )
+        val request = ChatRequest(listOf(tail), system, maxTokens = 0, tools = tools)
+        val estimate = ContextTokenEstimate(tokens = 4_800, measuredPrefixTokens = 3_250)
+        val breakdown = ContextBreakdownMath.forRequest(
+            sections = listOf(ContextBlockKey.SYSTEM_TOOLS to system), request, estimate,
+            windowTokens = 10_000, maxOutputTokens = 5_200, pendingAttachmentTokens = 1_500,
+        )
+        val blocks = breakdown.blocks.associateBy { it.key }
+        val base = ContextTokenMeter.rawRequestTokens(emptyList(), system, tools)
+        assertEquals(base, blocks.getValue(ContextBlockKey.SYSTEM_TOOLS).tokens)
+        assertEquals(1_503, blocks.getValue(ContextBlockKey.HISTORY).tokens)
+        assertEquals(1_500, blocks.getValue(ContextBlockKey.PENDING_ATTACHMENTS).tokens)
+        assertEquals(base + 3_003, breakdown.totalTokens)
+        assertEquals(4_800L, breakdown.contextUsage.usedTokens)
+        assertEquals(3_250L, breakdown.contextUsage.measuredPrefixTokens)
+        assertEquals(10_000L, breakdown.contextUsage.windowTokens)
+        assertEquals(5_200, breakdown.maxOutputTokens)
+    }
+
+    @Test
+    fun `output allowance never exceeds known remaining context even below the old floor`() {
+        assertEquals(1_000, projectedOutputAllowance(8_192, 31_000, 32_000))
+        assertEquals(1, projectedOutputAllowance(8_192, 31_999, 32_000))
+        assertEquals(0, projectedOutputAllowance(8_192, 32_000, 32_000))
+        assertEquals(0, projectedOutputAllowance(8_192, Int.MAX_VALUE, 32_000))
+    }
+
+    @Test
+    fun `output allowance retains the model ceiling when the window is unknown or has spare room`() {
+        assertEquals(8_192, projectedOutputAllowance(8_192, 31_000, 0))
+        assertEquals(8_192, projectedOutputAllowance(8_192, 1_000, 32_000))
+        assertEquals(4_000, projectedOutputAllowance(8_192, -1, 4_000))
+    }
+
+    @Test
+    fun `breakdown uses projected provider head and refreshed tail`() {
+        val head = "System and tools"
+        val standing = "Standing memory"
+        val stable = "$head\n\n$standing"
+        val tail = "\n\nFresh daily memory"
+        val prefix = "Provider identification\n\n"
+        val sections = listOf(
+            ContextBlockKey.SYSTEM_TOOLS to head,
+            ContextBlockKey.MEMORY to standing,
+            ContextBlockKey.RUNTIME_TAIL to "\n\nOld daily memory",
+        )
+        val assembled = MemoryDeliveryPrompt("$stable\n\nOld daily memory", daily = null, stablePrefixLen = stable.length)
+        val projected = MemoryDeliveryPrompt(prefix + stable + tail, daily = null, stablePrefixLen = prefix.length + stable.length)
+        assertEquals(
+            listOf(ContextBlockKey.SYSTEM_TOOLS to prefix + head, ContextBlockKey.MEMORY to standing, ContextBlockKey.RUNTIME_TAIL to tail),
+            projectedContextSections(sections, assembled, projected),
+        )
+        val rewritten = projected.copy(prompt = "Entirely new system", stablePrefixLen = -1)
+        assertEquals(listOf(ContextBlockKey.SYSTEM_TOOLS to rewritten.prompt), projectedContextSections(sections, assembled, rewritten))
     }
 }

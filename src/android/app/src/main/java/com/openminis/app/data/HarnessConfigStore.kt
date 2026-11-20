@@ -1,9 +1,9 @@
  package com.openminis.app.data
- 
+
  import com.openminis.app.agent.HarnessConfig
  import org.json.JSONObject
  import java.io.File
- 
+
  /**
   * [T-harness-config-store] Per-MODEL context-budget overrides.
   *
@@ -24,18 +24,18 @@
   * or invalid files fall back to the shipped defaults and never break a turn.
   */
  internal object HarnessConfigStore {
- 
+
     internal const val DIR = "harness-config"
 
     /** [T-harness-config-store] Ladder bounds for the UI stepper. */
     internal const val MIN_TAIL_BUDGET = 8_000
     internal const val MAX_TAIL_BUDGET = 60_000
     internal const val TAIL_BUDGET_STEP = 2_000
-    
+
     private const val CACHE_MAX = 32
-    
+
     private class Entry(val modifiedAtMs: Long, val config: HarnessConfig)
-    
+
     private val cache = java.util.Collections.synchronizedMap(
         object : LinkedHashMap<String, Entry>(16,0.75f, true) {
             override fun removeEldestEntry(
@@ -43,15 +43,15 @@
             ): Boolean = size > CACHE_MAX
         },
     )
-    
+
     /** Filesystem-safe key for one model entry. */
     internal fun keyOf(entryId: String?): String? =
         entryId?.trim()?.takeIf { it.isNotEmpty() }
             ?.replace(Regex("[^A-Za-z0-9._-]"), "_")
-    
+
     internal fun file(filesDir: File, entryId: String): File =
         File(File(filesDir, DIR), keyOf(entryId) + ".json")
-    
+
     /** The stored override for this model, or the shipped defaults. */
     fun forModel(filesDir: File?, entryId: String?): HarnessConfig {
         val key = keyOf(entryId) ?: return HarnessConfig.DEFAULT
@@ -71,14 +71,14 @@
         synchronized(cache) { cache[key] = Entry(modified, config) }
         return config
     }
-    
+
     /** True when this model carries a stored override. */
     fun hasOverride(filesDir: File?, entryId: String?): Boolean {
         val key = keyOf(entryId) ?: return false
         if (filesDir == null) return false
         return runCatching { file(filesDir, key).isFile }.getOrDefault(false)
     }
-    
+
     /**
      * Persist an override for this model. Passing null restores the defaults.
      * Returns true when the stored state matches the request afterwards.
@@ -106,7 +106,7 @@
             true
         }.getOrDefault(false)
     }
-    
+
     /** Serialize every field, so a future addition is a visible diff. */
     internal fun toJson(config: HarnessConfig): String = JSONObject()
         .put("v", 1)
@@ -121,7 +121,7 @@
         .put("digestMaxChars", config.digestMaxChars)
         .put("ledgerMaxEntries", config.ledgerMaxEntries)
         .toString()
-    
+
     /**
      * Parse a stored override. Every field falls back to the shipped default
      * individually, so a file written by an older build still loads.
@@ -142,10 +142,9 @@
             ledgerMaxEntries = obj.optInt("ledgerMaxEntries", d.ledgerMaxEntries),
         )
     }
-    
+
     /** Test seam. */
     internal fun clearForTest() {
         synchronized(cache) { cache.clear() }
     }
  }
- 

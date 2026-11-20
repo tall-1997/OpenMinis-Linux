@@ -45,9 +45,9 @@ class GenerationRunLifecycleTest {
         val runId = GenerationRunLifecycle.start(context, "s-escape", "model-x", "anchor-1")
         assertEquals("RUNNING", statusOf(runId))
 
-        val closed = GenerationRunLifecycle.closeOpen(context, listOf("s-escape"))
+        val closed = GenerationRunLifecycle.closeOpen(context, runId)
 
-        assertEquals("exactly one escaped row is closed", 1, closed)
+        assertTrue("the escaped row is closed", closed)
         assertEquals("FAILED", statusOf(runId))
         assertFalse(
             "a FAILED run must not surface as an interruption hint",
@@ -60,9 +60,7 @@ class GenerationRunLifecycleTest {
         val runId = GenerationRunLifecycle.start(context, "s-done", "model-x")
         GenerationRunLifecycle.succeeded(context, runId)
 
-        val closed = GenerationRunLifecycle.closeOpen(context, listOf("s-done"))
-
-        assertEquals("nothing left RUNNING, so nothing to close", 0, closed)
+        assertFalse(GenerationRunLifecycle.closeOpen(context, runId))
         assertEquals("DONE", statusOf(runId))
     }
 
@@ -71,37 +69,33 @@ class GenerationRunLifecycleTest {
         val runId = GenerationRunLifecycle.start(context, "s-cap", "model-x")
         GenerationRunLifecycle.failed(context, runId)
 
-        assertEquals(0, GenerationRunLifecycle.closeOpen(context, listOf("s-cap")))
+        assertFalse(GenerationRunLifecycle.closeOpen(context, runId))
         assertEquals("FAILED", statusOf(runId))
     }
 
     @Test
-    fun anotherSessionsEscapedRunIsLeftAlone() {
+    fun onlyTheFinishedRunIsClosedEvenWithAReplacementInTheSameChat() {
         val mine = GenerationRunLifecycle.start(context, "s-mine", "model-x")
         val other = GenerationRunLifecycle.start(context, "s-other", "model-x")
+        val replacement = GenerationRunLifecycle.start(context, "s-mine", "model-y")
 
-        val closed = GenerationRunLifecycle.closeOpen(context, listOf("s-mine"))
-
-        assertEquals(1, closed)
+        assertTrue(GenerationRunLifecycle.closeOpen(context, mine))
         assertEquals("FAILED", statusOf(mine))
-        assertEquals(
-            "a run in a different chat is not this wrapper's to close",
-            "RUNNING",
-            statusOf(other),
-        )
+        assertEquals("RUNNING", statusOf(other))
+        assertEquals("RUNNING", statusOf(replacement))
     }
 
     @Test
     fun closingTwiceIsIdempotent() {
-        GenerationRunLifecycle.start(context, "s-twice", "model-x")
-        assertEquals(1, GenerationRunLifecycle.closeOpen(context, listOf("s-twice")))
-        assertEquals(0, GenerationRunLifecycle.closeOpen(context, listOf("s-twice")))
+        val runId = GenerationRunLifecycle.start(context, "s-twice", "model-x")
+        assertTrue(GenerationRunLifecycle.closeOpen(context, runId))
+        assertFalse(GenerationRunLifecycle.closeOpen(context, runId))
     }
 
     @Test
-    fun anEmptySessionSetTouchesNothing() {
+    fun aMissingRunIdTouchesNothing() {
         val runId = GenerationRunLifecycle.start(context, "s-empty", "model-x")
-        assertEquals(0, GenerationRunLifecycle.closeOpen(context, emptyList()))
+        assertFalse(GenerationRunLifecycle.closeOpen(context, "missing-id"))
         assertEquals("RUNNING", statusOf(runId))
     }
 

@@ -57,7 +57,7 @@ class MemoryRecallEngineSharedTest {
         File(sharedDir, "2026-10-20.md").writeText("shared only\n")
         val isolated = MemoryRecallEngine({ sessionDir }).also { it.loadRecallCounts() }
         assertTrue(isolated.recall("shared").isEmpty())
-        assertNull(isolated.recallCountsSnapshot()["2026-10-20:shared only"])
+        assertNull(isolated.recallCountsSnapshot()[MemoryRecallEngine.recallCountKey("2026-10-20", "shared only")])
     }
 
     @Test

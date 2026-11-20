@@ -21,7 +21,6 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.first
@@ -208,14 +207,17 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
          * loop keeps thinking. Results are collected later with `check_agent`.
          */
         background: Boolean = false,
+        delivery: com.openminis.app.tools.ToolReceiptDispatch.Delivery? = null,
     ): ToolExecutionResult {
         if (!multiAgentSettings.enabled.value) {
+            delivery?.notSent()
             return ToolExecutionResult("Multi-agent dispatch is disabled in Settings → Multi-agent.", false)
         }
         // [T-android-subagent-depth-leak] The authoritative test is the coroutine-scoped
         // lane marker (cannot leak, self-repairs). The depth counter is only a stale-state
         // detector — gating on it once bricked the session until app kill after a stopped dispatch.
         if (kotlin.coroutines.coroutineContext[SubAgentLane] != null) {
+            delivery?.notSent()
             return ToolExecutionResult("Error: sub-agents cannot spawn further sub-agents.", false)
         }
         if (subAgentDepth.get() > 0) {
@@ -227,6 +229,7 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
         }
         val spawns = parseSubAgentBatch(argsJson, com.openminis.app.data.ToolLimitPrefs.subagentMaxTurns())
         if (spawns.isEmpty()) {
+            delivery?.notSent()
             return ToolExecutionResult(
                 if (argsJson.isBlank() || !argsJson.trim().startsWith("{"))
                     "Error: invalid spawn_agent arguments"
@@ -266,6 +269,15 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
         // add() must not abort the dispatch: runCatching, board stays
         // best-effort, the wave is the deliverable.
         val ownerSession = subAgentOwnerSid("", realSessionId, sessionId, activeSessionId)
+        // Retry/rotation, background, and parallel workers operate on the same
+        // user request. A lane's transient tracker/batch id is not a resend key.
+        // Each slot belongs to the claimed wave, not to the worker's tracker or retry attempt.
+        val receiptScopes = spawns.indices.map { i ->
+            delivery?.let { admitted ->
+                val key = admitted.key
+                key.scope.child("worker", "${key.operationSha}:$i", "${admitted.instanceSha}:$i")
+            }
+        }
         val autoPlan = spawns.size > 1 || detached
         val planIds: List<String?> = if (autoPlan) {
             spawns.mapIndexed { i, s ->
@@ -298,6 +310,8 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
                 )
             },
         )
+        // Registration is the host accepting the wave, not any worker's promise of success.
+        delivery?.accepted()
         if (detached) {
             return launchDetachedSubAgentBatch(
                 batch = batch,
@@ -307,7 +321,8 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
                 writerTotal = writerTotal,
                 sem = sem,
                 sharedBudget = sharedBudget,
-            )
+                receiptScopes = receiptScopes,
+            ).also { delivery?.completed(it) }
         }
         if (spawns.size == 1) {
             val total = waveSize.coerceAtLeast(1)
@@ -332,7 +347,8 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
                             tokenBudget = sharedBudget,
                             batchId = batch.id,
                             batchSession = ownerSession,
-                        )
+                            receiptScope = receiptScopes[0],
+                        ).copy(deliveryAccepted = true).also { delivery?.completed(it) }
                     }
                 } catch (e: CancellationException) {
                     throw e
@@ -363,6 +379,7 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
                                 tokenBudget = sharedBudget,
                                 batchId = batch.id,
                                 batchSession = ownerSession,
+                                receiptScope = receiptScopes[i],
                             )
                         }
                     } catch (e: CancellationException) {
@@ -398,7 +415,8 @@ internal suspend fun ChatViewModel.executeRunSubAgent(
             output = body,
             success = results.any { it.success },
             toolTitle = "子代理 ${spawns.size}",
-        )
+            deliveryAccepted = true,
+        ).also { delivery?.completed(it) }
     }
 
 /** [T-subagent-background] Detached wave: parent loop keeps thinking while lanes run on viewModelScope; registry persists lane state so process death surfaces `stopped`, not a silent gap. */
@@ -410,8 +428,9 @@ private fun ChatViewModel.launchDetachedSubAgentBatch(
         writerTotal: Int,
         sem: Semaphore,
         sharedBudget: SubAgentTokenBudget?,
+        receiptScopes: List<com.openminis.app.tools.ToolReceiptScope?>,
     ): ToolExecutionResult {
-        viewModelScope.launch(SupervisorJob() + Dispatchers.Default) {
+        viewModelScope.launch(Dispatchers.Default) {
             try {
                 supervisorScope {
                     spawns.mapIndexed { i, spawn ->
@@ -431,6 +450,7 @@ private fun ChatViewModel.launchDetachedSubAgentBatch(
                                         tokenBudget = sharedBudget,
                                         batchId = batch.id,
                                         batchSession = ownerSession,
+                                        receiptScope = receiptScopes[i],
                                     )
                                 }
                             } catch (e: CancellationException) {
@@ -488,6 +508,7 @@ private suspend fun ChatViewModel.runOneSubAgent(
         tokenBudget: SubAgentTokenBudget? = null,
         batchId: String? = null,
         batchSession: String = "",
+        receiptScope: com.openminis.app.tools.ToolReceiptScope?,
     ): ToolExecutionResult {
         val ownerSession = subAgentOwnerSid(batchSession, realSessionId, sessionId, activeSessionId)
         val outcome = try {
@@ -504,6 +525,7 @@ private suspend fun ChatViewModel.runOneSubAgent(
                 tokenBudget = tokenBudget,
                 batchId = batchId,
                 batchSession = ownerSession,
+                receiptScope = receiptScope,
             )
         } catch (e: CancellationException) {
             recordLaneOutcome(ownerSession, batchId, index, null, stopped = true, error = e.message)

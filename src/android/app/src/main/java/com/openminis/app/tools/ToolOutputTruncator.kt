@@ -59,7 +59,8 @@ object ToolOutputTruncator {
      * Line count with pi semantics: split on '\n', and a TRAILING newline ends
      * the last line instead of starting an empty one. Empty text has 0 lines.
      */
-    fun totalLines(text: String): Int = splitLinesForCounting(text).size
+    fun totalLines(text: String): Int =
+        text.count { it == '\n' } + if (text.isNotEmpty() && !text.endsWith('\n')) 1 else 0
 
     /** pi `splitLinesForCounting`: no trailing-newline phantom line. */
     internal fun splitLinesForCounting(content: String): List<String> {
@@ -117,6 +118,20 @@ object ToolOutputTruncator {
         } else {
             text.substring(start)
         }
+    }
+
+    internal data class PreviewSlices(val head: String, val tail: String, val omittedChars: Int)
+
+    /** Keep both ends within the given UTF-16 budgets, without overlap or broken surrogate pairs. */
+    internal fun previewSlices(text: String, headChars: Int, tailChars: Int): PreviewSlices {
+        val headLimit = headChars.coerceAtLeast(0)
+        val tailLimit = tailChars.coerceAtLeast(0)
+        if (text.length.toLong() <= headLimit.toLong() + tailLimit) {
+            return PreviewSlices(text, "", 0)
+        }
+        val head = sliceHead(text, headLimit)
+        val tail = sliceTail(text, tailLimit)
+        return PreviewSlices(head, tail, text.length - head.length - tail.length)
     }
 
     /**

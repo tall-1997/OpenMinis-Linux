@@ -1,6 +1,7 @@
 package com.openminis.app.security
 
 import com.openminis.app.sandbox.GuestWorkloadPolicy
+import com.openminis.app.tools.memoryGetIsSearch
 import org.json.JSONObject
 import java.security.MessageDigest
 import java.util.concurrent.CopyOnWriteArrayList
@@ -93,7 +94,7 @@ class SecurityGateImpl : SecurityGate {
         val READ_ONLY_TOOLS = setOf(
             "file_read", "list_dir", "grep", "grep_source", "glob",
             "web_search", "web_fetch", "search_sessions", "read_session",
-            "memory_get", "recall_memory", "read_image", "describe_image",
+            "read_image", "describe_image",
             "code_graph", "ocr_image", "get_screen_time",
         )
         val WRITE_TOOLS = setOf(
@@ -108,8 +109,7 @@ class SecurityGateImpl : SecurityGate {
         val COORDINATOR_TOOLS = setOf(
             "spawn_agent", "run_subagent", "dispatch_agents", "wolfpack_run",
             "agent_plan", "agent_report", "task_mandate", "goal", "update_goal", "cronjob", "ask_user_question", "invoke_skill",
-            "skill_manage", "memory_write", "memory_get", "save_memory",
-            "recall_memory", "ask_reasoning",
+            "skill_manage", "memory_write", "save_memory", "ask_reasoning",
         )
         val SAFE_COMMANDS = setOf(
             "ls", "cat", "pwd", "whoami", "id", "echo", "grep", "rg", "egrep", "fgrep",
@@ -164,8 +164,13 @@ class SecurityGateImpl : SecurityGate {
             "spawn_agent", "run_subagent", "dispatch_agents", "wolfpack_run" ->
                 GateCommand(name, toolArgs, Capability.SYSTEM, Reversibility.REVERSIBLE, "派发子代理")
             "agent_plan", "agent_report", "task_mandate", "cronjob", "invoke_skill", "skill_manage", "ask_reasoning",
-            "memory_write", "memory_get", "ask_user_question",
+            "memory_write", "ask_user_question",
             -> GateCommand(name, toolArgs, Capability.SYSTEM, Reversibility.REVERSIBLE, "会话协调工具")
+            "memory_get" -> if (memoryGetIsSearch(toolArgs)) {
+                GateCommand(name, toolArgs, Capability.SYSTEM, Reversibility.REVERSIBLE, "Read-only memory search")
+            } else {
+                GateCommand(name, toolArgs, Capability.SYSTEM, Reversibility.REVERSIBLE, "Restoring archived memory changes this session's memory")
+            }
         // [T-android-jobs-registry] start/kill = sandbox execution; list/output = reads.
         "background_job" -> classifyJob(name, toolArgs)
         // [T-android-agent-terminal] agent PTYs share the PRoot trust domain.
@@ -271,7 +276,9 @@ class SecurityGateImpl : SecurityGate {
         // [1] Always pass: read-only tools (unless mode==DENY_ALL).
         // [#31] ASK_ALL (strict asking) also exempts itself: every call,
         // reads included, goes to the user.
-        if ((cmd.toolName in READ_ONLY_TOOLS || (cmd.toolName == "browser_use" && isBrowserReadOnlyAction(cmd))) &&
+        val memoryMutation = cmd.toolName == "memory_get" && !memoryGetIsSearch(cmd.toolArgs)
+        if ((cmd.toolName in READ_ONLY_TOOLS || (cmd.toolName == "memory_get" && !memoryMutation) ||
+                (cmd.toolName == "browser_use" && isBrowserReadOnlyAction(cmd))) &&
             mode != PermissionMode.DENY_ALL && mode != PermissionMode.ASK_ALL
         ) {
             return Decision.Allow("只读工具自动放行")
@@ -331,7 +338,7 @@ class SecurityGateImpl : SecurityGate {
             return Decision.Denied("当前为拒绝全部模式")
         }
         if (mode == PermissionMode.READ_ONLY || mode == PermissionMode.PLAN) {
-            if (cmd.toolName in WRITE_TOOLS || cmd.toolName in SHELL_TOOLS ||
+            if (cmd.toolName in WRITE_TOOLS || cmd.toolName in SHELL_TOOLS || memoryMutation ||
                 cmd.toolName == "mcp" ||
                 (cmd.toolName == "ssh_exec" && !isSshReadOnlyAction(cmd)) ||
                 (cmd.toolName == "browser_use" && !isBrowserReadOnlyAction(cmd)) ||

@@ -5,6 +5,7 @@ import com.openminis.app.network.withDohDns
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
@@ -26,9 +27,8 @@ import java.util.concurrent.TimeUnit
  *    later request; stateful servers reject a re-`initialize`, so the
  *    handshake happens exactly once per client instance.
  *  - `MCP-Protocol-Version` is declared on every post-initialize request.
- *  - Connect phase is bounded (15s) with ONE retry — nothing was sent, so
- *    the retry cannot double-execute a tool call. Post-send failures are
- *    never retried (tools/call may be non-idempotent).
+ *  - Observation requests may retry a connection failure once. A potentially
+ *    mutating tools/call is sent once, with no redirects or transport retry.
  *  - OAuth servers get `Authorization: Bearer <token>` from [oauthToken];
  *    HTTP 401 surfaces as AUTH_REQUIRED so the agent can point the user at
  *    Settings → MCP re-authorization.
@@ -71,6 +71,10 @@ class McpHttpClient(
     }
 
     private val lock = Any()
+    private val singleSendHttp by lazy {
+        http.newBuilder().retryOnConnectionFailure(false)
+            .followRedirects(false).followSslRedirects(false).build()
+    }
 
     @Volatile private var sessionId: String? = null
     @Volatile private var initialized = false
@@ -195,7 +199,15 @@ class McpHttpClient(
      * or JSON-RPC level failures.
      */
     private fun post(payload: JSONObject, wantId: Int?): JSONObject? {
-        val body = payload.toString().toRequestBody(JSON_MEDIA)
+        val sideEffecting = payload.optString("method") == "tools/call"
+        val encoded = payload.toString().toRequestBody(JSON_MEDIA)
+        val body = if (sideEffecting) object : RequestBody() {
+            override fun contentType() = encoded.contentType()
+            override fun contentLength() = encoded.contentLength()
+            override fun isOneShot() = true
+            override fun writeTo(sink: okio.BufferedSink) = encoded.writeTo(sink)
+        } else encoded
+        val client = if (sideEffecting) singleSendHttp else http
         var connectAttempts = 0
         while (true) {
             connectAttempts++
@@ -216,7 +228,7 @@ class McpHttpClient(
             if (initialized) builder.header("MCP-Protocol-Version", negotiatedVersion)
 
             try {
-                http.newCall(builder.build()).execute().use { resp ->
+                client.newCall(builder.build()).execute().use { resp ->
                     if (resp.code == 401 && oauthConfigured) {
                         throw McpError(
                             McpError.AUTH_REQUIRED,
@@ -269,12 +281,16 @@ class McpHttpClient(
             } catch (e: McpError) {
                 throw e
             } catch (e: ConnectException) {
-                // Connect-phase only retry: nothing reached the server.
-                if (connectAttempts < 2) continue
-                throw McpError(McpError.CONNECTION_ERROR, "connect failed: ${e.message}")
+                if (!sideEffecting && connectAttempts < 2) continue
+                // A distinct code marks connect-phase failures: the receipt
+                // layer can prove the request never reached the server.
+                throw McpError("CONNECT_FAILED", "connect failed: ${e.message}")
             } catch (e: java.net.SocketTimeoutException) {
                 val msg = e.message ?: ""
-                if (msg.contains("connect", true) && connectAttempts < 2) continue
+                if (!sideEffecting && msg.contains("connect", true) && connectAttempts < 2) continue
+                // A connect-phase timeout proves the TCP connection never
+                // completed; a read-phase timeout stays delivery-uncertain.
+                if (msg.contains("connect", true)) throw McpError("CONNECT_FAILED", "connect timed out: $msg")
                 throw McpError(McpError.TIMEOUT, "timed out: $msg")
             } catch (e: IOException) {
                 throw McpError(McpError.CONNECTION_ERROR, e.message ?: e.javaClass.simpleName)

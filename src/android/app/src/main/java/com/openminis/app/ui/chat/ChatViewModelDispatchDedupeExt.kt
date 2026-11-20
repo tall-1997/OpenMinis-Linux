@@ -2,6 +2,15 @@ package com.openminis.app.ui.chat
 
 import com.openminis.app.tools.SubAgentBatchRegistry
 import com.openminis.app.tools.ToolExecutionResult
+import com.openminis.app.tools.ToolReceiptDispatch
+import kotlinx.coroutines.sync.Semaphore
+
+internal data class SpawnDispatchOptions(
+    val limiter: Semaphore? = null,
+    val parallelWriters: Int = 1,
+    val waveIndex: Int = 0,
+    val waveSize: Int = 1,
+)
 
 /**
  * [T-dispatch-idempotence] Spawns a sub-agent wave at most once per identity.
@@ -24,22 +33,36 @@ internal suspend fun ChatViewModel.executeRunSubAgentDeduped(
     toolBlocks: MutableList<AssistantBlock>? = null,
     assistantId: String = "",
     currentText: String = "",
+    options: SpawnDispatchOptions,
+    delivery: ToolReceiptDispatch.Delivery?,
 ): ToolExecutionResult {
-    // [T-task-mandate] Checked before anything is spawned: a wave outside the
-    // declared scope is refused by the host, not argued with in the prompt.
-    scopeRefusal(argsJson)?.let { refusal -> return refusal }
+    scopeRefusal(argsJson)?.let { refusal ->
+        delivery?.notSent()
+        return refusal
+    }
     val fingerprint = SubAgentBatchRegistry.fingerprintOf(argsJson)
     val duplicate = SubAgentBatchRegistry.findLiveDuplicate(activeSessionId, context, fingerprint)
     if (duplicate != null) {
+        delivery?.notSent()
         val running = duplicate.lanes.count { !it.finished }
         return ToolExecutionResult(
             "Not dispatched again: an identical wave is already in flight " +
                 "(batch ${duplicate.id.take(8)}, $running of ${duplicate.lanes.size} lanes running). " +
                 "Collect its results with check_agent instead of re-dispatching the same briefs.",
-            true,
+            false,
         )
     }
-    return executeRunSubAgent(argsJson, toolId, toolBlocks, assistantId, currentText)
+    return executeRunSubAgent(
+        argsJson, toolId, toolBlocks, assistantId, currentText,
+        limiter = options.limiter, parallelWriters = options.parallelWriters,
+        waveIndex = options.waveIndex, waveSize = options.waveSize, delivery = delivery,
+    )
+}
+
+internal fun ChatViewModel.spawnDispatchArgs(canonical: String, args: String): String = when (canonical) {
+    com.openminis.app.tools.DispatchAgentsTool.NAME -> com.openminis.app.tools.DispatchAgentsTool.toSpawnArgs(args, context)
+    com.openminis.app.tools.WolfpackTool.NAME -> com.openminis.app.tools.WolfpackTool.toSpawnArgs(args)
+    else -> args
 }
 
 /**

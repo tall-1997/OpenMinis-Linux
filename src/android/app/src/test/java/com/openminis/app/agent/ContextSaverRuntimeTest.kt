@@ -5,6 +5,7 @@ import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -85,10 +86,9 @@ class ContextSaverRuntimeTest {
     }
 
     @Test
-    fun `char floor fires when usage was never reported`() {
+    fun `request meter fires when usage was never reported`() {
         ContextSaverRuntime.modeOverride = ContextSaverPrefs.Mode.BALANCED
-        // 20 x 8000 chars ≈ 53k tokens by the 3-chars/token floor → passes 30k
-        // even though reportedTokens is 0 (fresh session, no usage chunk yet).
+        // 20 x 8000 ASCII chars = 40k raw tokens, even without a usage report.
         val history = history(20)
         val out = ContextSaverRuntime.age(history, windowTokens = 0, reportedTokens = 0)
         assertTrue(agedCount(out) > 0)
@@ -97,12 +97,9 @@ class ContextSaverRuntimeTest {
     @Test
     fun `absolute ceiling fires on a wide window where the relative trigger cannot`() {
         ContextSaverRuntime.modeOverride = ContextSaverPrefs.Mode.BALANCED
-        // A 200k window puts the window-relative trigger far above 48k tokens, so
-        // before [T-absolute-age-ceiling] a 48k-token request was never folded —
-        // exactly the real session in the 2026-11-05 log (prompt_tokens=48,440,
-        // 138 tool results, +4.5s to first token).
+        // 26k estimated tokens cross the absolute ceiling but not the 30k relative trigger.
         val wide = 200_000
-        val history = history(20) // 20 x 8000 chars ≈ 53k tokens
+        val history = history(13)
         val out = ContextSaverRuntime.age(history, windowTokens = wide, reportedTokens = 0)
         assertTrue(
             "history above the absolute ceiling must fold even when far below the window",
@@ -157,5 +154,52 @@ class ContextSaverRuntimeTest {
         assertEquals(0, ContextSaverRuntime.stats.value.aged)
         assertEquals(0L, ContextSaverRuntime.stats.value.savedChars)
         if (twice === once) assertSame(once, twice)
+    }
+
+    @Test
+    fun `parts mirror does not spuriously trigger folding`() {
+        val history = history(8).map { message ->
+            message.copy(content = (message.contentParts.single() as AgentContentPart.ToolResult).content)
+        }
+        assertSame(history, ContextSaverRuntime.age(history, windowTokens = 0, reportedTokens = 0))
+        assertEquals(0, ContextSaverRuntime.stats.value.aged)
+    }
+
+    @Test
+    fun `the resolved aging ceiling and ruler agree at the verification and projection gates`() {
+        ContextSaverRuntime.modeOverride = ContextSaverPrefs.Mode.BALANCED
+        val history = history(8).map { message ->
+            message.copy(content = (message.contentParts.single() as AgentContentPart.ToolResult).content)
+        }
+        val window = 200_000
+        // The mirrored content is free: 16k tokens plus tool names, not two copies of the payload.
+        val below = HarnessConfig.DEFAULT.copy(absoluteAgeTokens = 16_100)
+        val at = below.copy(absoluteAgeTokens = 16_000)
+        val slower = at.copy(agingCharsPerToken = 6)
+        assertFalse(ContextSaverRuntime.willAge(history, window, 0, below))
+        assertSame(history, ContextSaverRuntime.planAge(history, window, 0, config = below).messages)
+        assertTrue(ContextSaverRuntime.willAge(history, window, 0, at))
+        assertEquals(2, ContextSaverRuntime.planAge(history, window, 0, config = at).stats.aged)
+        assertFalse(ContextSaverRuntime.willAge(history, window, 0, slower))
+        assertSame(history, ContextSaverRuntime.planAge(history, window, 0, config = slower).messages)
+        // A real usage report is not scaled by the history ruler.
+        assertTrue(ContextSaverRuntime.willAge(history, window, 40_000, slower))
+        assertEquals(2, ContextSaverRuntime.planAge(history, window, 40_000, config = slower).stats.aged)
+    }
+
+    @Test
+    fun `pure preview uses the protected suffix and only publishes on demand`() {
+        val history = history(10)
+        val initialStats = ContextSaverRuntime.stats.value
+        val projection = ContextSaverRuntime.planAge(history, 0, 40_000, keepRecentOverride = 8)
+
+        assertEquals(2, agedCount(projection.messages))
+        assertEquals(2, projection.stats.aged)
+        assertEquals(initialStats, ContextSaverRuntime.stats.value)
+        val preview = ContextSaverRuntime.age(history, 0, 40_000, publish = false, keepRecentOverride = 8)
+        assertEquals(projection.messages, preview)
+        assertEquals(initialStats, ContextSaverRuntime.stats.value)
+        ContextSaverRuntime.recordProjection(projection.stats)
+        assertEquals(projection.stats, ContextSaverRuntime.stats.value)
     }
 }

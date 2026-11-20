@@ -40,9 +40,17 @@ object MemoryIndex {
     /** Chars of the first entry kept as a preview. */
     internal const val PREVIEW_CHARS = 80
 
-    private val DAILY = Regex("""^\d{4}-\d{2}-\d{2}\.md$""")
+    private val ENTRY_MARK = MemoryDiaryFormat.marker
 
-    private val ENTRY_MARK = Regex("""(?m)^<!-- \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} -->""")
+    internal data class TrackedFragment(val text: String, val entries: List<MemoryDeliverySpan> = emptyList())
+
+    /** The note follows existing rows; all entry offsets remain relative to the original prefix. */
+    internal fun appendBudgetNote(toc: TrackedFragment?, note: String?): TrackedFragment? = when {
+        note.isNullOrBlank() -> toc
+        toc == null -> TrackedFragment(note)
+        else -> toc.copy(text = "${toc.text}\n$note")
+    }
+    private data class IndexedDay(val row: Row, val previewRef: MemoryEntryRef?)
 
     data class Row(
         /** `YYYY-MM-DD`, also the sort key. */
@@ -69,63 +77,61 @@ object MemoryIndex {
         sharedDir: File?,
         excludeDates: Set<String>,
         maxRows: Int = MAX_ROWS,
-        /** [T-memory-frontmatter] Clock for TTL eligibility; injectable for tests. */
-        nowMs: Long = System.currentTimeMillis(),
-    ): List<Row> {
-        val candidates = ArrayList<Triple<File, String, Boolean>>()
-        // Shared first, session second: a later put() replaces the shared row.
-        for ((dir, shared) in listOf(sharedDir to true, sessionDir to false)) {
-            val files = dir?.listFiles() ?: continue
-            for (file in files) {
-                if (!file.isFile || !DAILY.matches(file.name)) continue
-                val text = runCatching { file.readText() }.getOrNull() ?: continue
-                if (text.isBlank()) continue
-                candidates += Triple(file, text, shared)
+        now: Long = System.currentTimeMillis(),
+    ): List<Row> = indexedDays(sessionDir, sharedDir, excludeDates, now).take(maxRows).map { it.row }
+
+    private fun indexedDays(
+        sessionDir: File?,
+        sharedDir: File?,
+        excludeDates: Set<String>,
+        now: Long,
+    ): List<IndexedDay> {
+        val byDate = LinkedHashMap<String, IndexedDay>()
+        // The first visible copy wins, as in recall. Excluded dates still participate in file governance.
+        for ((dir, shared) in listOf(sessionDir to false, sharedDir to true)) {
+            if (dir == null) continue
+            MemorySources.withScope(dir, now, loadBody = { name ->
+                val date = name.removeSuffix(".md")
+                MemoryDiaryFormat.dateFile.matches(name) && date !in excludeDates && date !in byDate
+            }) { sources ->
+                for (source in sources) {
+                    if (!MemoryDiaryFormat.dateFile.matches(source.name)) continue
+                    val date = source.name.removeSuffix(".md")
+                    if (date in excludeDates || date in byDate) continue
+                    val view = source.view() ?: continue
+                    val entries = ENTRY_MARK.findAll(view.text).count()
+                    val (preview, ref) = previewOf(view)
+                    byDate[date] = IndexedDay(Row(date, entries, preview, shared), ref)
+                }
             }
         }
-        // [T-memory-index-single-read] One read per file serves BOTH the metadata
-        // decisions and the row build; reading the directory twice (once here, once
-        // inside a supersede scan) doubled the prompt-path IO for no gain.
-        val superseded = MemoryMetadataParser.supersededIds(
-            candidates.map { (file, text, _) -> file.name.removeSuffix(".md") to text },
-        )
-        val byDate = LinkedHashMap<String, Row>()
-        for ((file, text, shared) in candidates) {
-            val date = file.name.removeSuffix(".md")
-            if (date in superseded) continue
-            if (!MemoryMetadataParser.isEligible(text, nowMs, file.lastModified())) continue
-            byDate[date] = Row(
-                date = date,
-                entries = ENTRY_MARK.findAll(text).count(),
-                // [T-memory-frontmatter-strip] Preview the BODY: the metadata block is
-                // not memory content, and a new day's first line is `---`.
-                preview = previewOf(MemoryMetadataParser.strip(text)),
-                shared = shared,
-            )
-        }
-        val sorted = byDate.values.sortedByDescending { it.date }
-        return sorted.filter { it.date !in excludeDates }.take(maxRows)
+        return byDate.values.sortedByDescending { it.row.date }
     }
-    
-    /** First line that is neither a timestamp marker nor a heading. */
-    private fun previewOf(text: String): String {
-        for (line in text.lineSequence()) {
-            val trimmed = line.trim()
-            if (trimmed.isEmpty()) continue
-            if (ENTRY_MARK.matches(trimmed)) continue
-            val cleaned = trimmed.removePrefix("#").trim()
-            if (cleaned.isEmpty()) continue
-            return if (cleaned.length <= PREVIEW_CHARS) cleaned else cleaned.take(PREVIEW_CHARS) + "…"
+
+    private fun previewOf(view: MemoryLifecycle.View): Pair<String, MemoryEntryRef?> {
+        for (owned in view.lines()) {
+            if (owned.isSedimentCaption()) continue
+            val (line, entry) = owned
+            val trimmed = line.removePrefix("\uFEFF").trim()
+            if (trimmed.isEmpty() || ENTRY_MARK.matches(trimmed)) continue
+            val cleaned = MemoryAuthority.stripForgedTag(trimmed.removePrefix("#").trim())
+            if (cleaned.isEmpty() || cleaned.startsWith("<!--")) continue
+            val preview = if (cleaned.length <= PREVIEW_CHARS) cleaned else memoryTextPrefix(cleaned, PREVIEW_CHARS) + "…"
+            return preview to entry?.ref
         }
-        return ""
+        return "" to null
     }
 
     /** Renders [rows]; returns null when there is nothing to index. */
-    fun render(rows: List<Row>, omitted: Int = 0): String? {
+    fun render(rows: List<Row>, omitted: Int = 0): String? =
+        renderTracked(rows.map { IndexedDay(it, null) }, omitted)?.text
+
+    private fun renderTracked(rows: List<IndexedDay>, omitted: Int): TrackedFragment? {
         if (rows.isEmpty()) return null
-        return buildString {
+        val spans = mutableListOf<MemoryDeliverySpan>()
+        val text = buildString {
             append("Older diary days (index only — call memory_get with a keyword to read one):\n")
-            for (row in rows) {
+            for ((row, ref) in rows) {
                 append("- ")
                 append(row.date)
                 append(" (")
@@ -133,13 +139,20 @@ object MemoryIndex {
                 append(if (row.entries == 1) " entry" else " entries")
                 append(if (row.shared) " · shared" else " · this chat")
                 append("): ")
-                if (row.preview.isNotEmpty()) append('"').append(row.preview).append('"')
+                if (row.preview.isNotEmpty()) {
+                    append('"')
+                    val start = length
+                    append(row.preview)
+                    if (ref != null) spans += MemoryDeliverySpan(ref, start, length)
+                    append('"')
+                }
                 appendLine()
             }
             if (omitted > 0) {
                 append("… (").append(omitted).append(" older day(s) not listed; memory_get can still search them)")
             }
         }.trimEnd()
+        return TrackedFragment(text, spans)
     }
 
     /**
@@ -151,21 +164,20 @@ object MemoryIndex {
         sharedDir: File?,
         excludeDates: Set<String>,
         maxRows: Int = MAX_ROWS,
-    ): String? {
-        // [T-memory-index-single-pass] One scan, not two. The old body called
-        // rows() twice — once for the page and once at Int.MAX_VALUE purely to
-        // learn how many rows were hidden — and each call now also reads and
-        // parses frontmatter for every daily file in both scopes. Computing the
-        // total from the same List keeps the omitted count exact with half the
-        // IO and half the parsing.
-        val all = rows(sessionDir, sharedDir, excludeDates, Int.MAX_VALUE)
-        if (all.isEmpty()) return null
-        val page = all.take(maxRows.coerceAtLeast(1))
-        val body = render(page, (all.size - page.size).coerceAtLeast(0)) ?: return null
-        return MemoryAuthority.withEnvelope(
-            body,
-            MemoryTrust.UNVERIFIED_CANDIDATE,
-            MemoryOrigin.AGENT,
-        )
+    ): String? = fragmentWithEntries(sessionDir, sharedDir, excludeDates, maxRows)?.text
+
+    internal fun fragmentWithEntries(
+        sessionDir: File?,
+        sharedDir: File?,
+        excludeDates: Set<String>,
+        maxRows: Int = MAX_ROWS,
+        now: Long = System.currentTimeMillis(),
+    ): TrackedFragment? {
+        val all = indexedDays(sessionDir, sharedDir, excludeDates, now)
+        val shown = all.take(maxRows)
+        val body = renderTracked(shown, all.size - shown.size) ?: return null
+        val text = MemoryAuthority.withEnvelope(body.text, MemoryTrust.UNVERIFIED_CANDIDATE, MemoryOrigin.AGENT)
+        val prefix = text.length - body.text.length
+        return body.copy(text = text, entries = body.entries.map { it.shifted(prefix) })
     }
 }

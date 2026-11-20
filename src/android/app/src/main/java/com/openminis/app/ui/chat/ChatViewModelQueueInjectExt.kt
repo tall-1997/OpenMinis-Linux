@@ -2,298 +2,102 @@ package com.openminis.app.ui.chat
 
 import android.util.Log
 import com.openminis.app.R
-import com.openminis.app.logging.AppLogger
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
-import kotlinx.coroutines.flow.update
+import com.openminis.app.service.ActiveRunContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
+
+private const val INTERRUPTED_TURN_BRIDGE =
+    "(Interrupted mid-task by a new user message. Decide based on the new message and overall context " +
+        "whether the prior task should continue — do not forget or abandon it unless the user explicitly " +
+        "says to stop, or the new message makes clear it is no longer needed.)"
 
 internal suspend fun ChatViewModel.injectQueuedPromptsAsNewTurn(
     finishedAssistantId: String,
     finishedAccumulatedText: String,
     finishedAllToolBlocks: List<AssistantBlock>,
     uiBatcher: UiUpdateBatcher,
+    expectedSessionId: String? = null,
 ): ChatViewModel.InjectedTurn? {
-    // [T-android-queue-atomic-mutation] CAS claim shared with drainQueuedPrompts
-    // — see the note there for why a read-then-clear lost prompts (and re-sent
-    // drained ones) across the Main/IO boundary.
-    val queued = claimPromptQueue() ?: return null
-    // [T-android-queue-atomic-mutation] The claim ALREADY emptied the queue:
-    // any exception between here and the placeholder removal would silently
-    // swallow the user's words (the dashed placeholders would stay forever).
-    // Catch, surface honestly, drop the stale placeholders — the prompts are
-    // NOT restored (retrying a throwing prepare would loop forever).
+    val run = ActiveRunContext.current()
+    val queued = _promptQueue.value.takeIf { it.isNotEmpty() } ?: return null
+    val sid = queuedTurnSession(expectedSessionId, run) ?: return null
     try {
-
-    // [T-android-queued-message-duplicated-on-inject] REMOVE the queued
-    // placeholder bubbles (the ones enqueuePrompt added with
-    // id="queued_msg_…") for the prompts we're injecting. Step (c) below
-    // appends a single combined user bubble (id=userEntity.id) for the same
-    // text — so flipping isQueued=false and KEEPING the placeholders (the
-    // old behaviour) rendered the message TWICE: once as the un-queued
-    // placeholder, once as the injected bubble. drainQueuedPrompts reuses
-    // its placeholders and never re-appends, so it didn't dupe; this mid-
-    // loop inject path appends a fresh bubble, so the placeholders must go.
-    val queuedIds = queued.map { it.id }.toSet()
-    val msgsAfterUnqueue = _messages.value.filterNot { m ->
-        m.queuedPromptId != null && queuedIds.contains(m.queuedPromptId)
-    }
-
-    // Build the combined user message from all queued prompts.
-    val sid = ensureSession()
-    val combinedAttachments = queued.flatMap { it.attachments }
-    val prepared = prepareUserAttachments(combinedAttachments, sid)
-
-    val combinedParts = mutableListOf<AgentContentPart>()
-    val combinedText = StringBuilder()
-    for (prompt in queued) {
-        if (prompt.text.isNotEmpty()) {
-            if (combinedText.isNotEmpty()) combinedText.append("\n\n")
-            combinedText.append(prompt.text)
-            combinedParts.add(AgentContentPart.Text(prompt.text))
+        val prepared = prepareQueuedTurn(queued, sid, run) ?: return null
+        val userId = persistQueuedTurn(queued, prepared, sid, run) ?: return null
+        if (!ownsQueuedTurn(sid, run)) return null
+        val queuedIds = queued.mapTo(hashSetOf()) { it.id }
+        val newAssistantId = "assistant_${System.currentTimeMillis()}"
+        // Wait out any coalesced isStreaming=true updates to the retired bubble.
+        uiBatcher.seal(finishedAssistantId)
+        val bound = withContext(Dispatchers.Main.immediate) {
+            if (!ownsQueuedTurn(sid, run)) return@withContext false
+            consumeQueuedPaste(prepared)
+            _messages.update { messages -> messages.filterNot { it.queuedPromptId in queuedIds } }
+            updateAssistantMessage(
+                finishedAssistantId, finishedAccumulatedText, false, finishedAllToolBlocks,
+                isAwaitingModelResponse = false,
+            )
+            val nextAssistant = ChatMessage(
+                id = newAssistantId, role = "assistant", content = "", isStreaming = true,
+                isAwaitingModelResponse = true, thinkingLevel = _thinkingLevel.value,
+            )
+            _messages.update { trimLoadedWindow(it + prepared.bubble(userId) + nextAssistant) }
+            notePersistedUiRow(userId, userId)
+            // Keep the fresh user turn distinct from a preceding user-role tool result.
+            appendBoundedHistoryAll(listOf(
+                LLMMessage(
+                    role = LLMMessage.Role.ASSISTANT,
+                    content = INTERRUPTED_TURN_BRIDGE,
+                    contentParts = listOf(AgentContentPart.Text(INTERRUPTED_TURN_BRIDGE)),
+                ),
+                prepared.message(userId),
+            ))
+            true
         }
-    }
-    prepared.imageParts.forEachIndexed { idx, part ->
-        val path = prepared.imageUploadPaths.getOrNull(idx)
-        if (path != null) combinedParts.add(AgentContentPart.Text("[attached image: $path]"))
-        combinedParts.add(AgentContentPart.ImageData(part.data, part.mimeType, linuxPath = path, noVisionPlaceholder = visionPlaceholderFor(path)))
-    }
-    prepared.attachedFilesXml?.let { combinedParts.add(AgentContentPart.Text(it)) }
-
-    // Guard: every queued prompt produced no content (no text, no
-    // image). An empty user msg is a 400 from every provider.
-    //
-    // [T-android-queue-empty-claims-honest] The CAS claim above ALREADY
-    // emptied the queue, so "skip — the caller falls through to a normal
-    // next-turn dispatch" was wishful thinking: there was nothing left to
-    // dispatch, the user's queued words were silently lost, and the dashed
-    // placeholder bubbles stayed in the transcript forever
-    // (msgsAfterUnqueue was computed but never committed). Surface the loss
-    // honestly: drop the stale placeholders and show an inline error.
-    // Re-queueing would loop forever — revoked attachment URIs fail
-    // deterministically.
-    if (combinedParts.isEmpty()) {
-        AppLogger.warning(
-            ChatViewModel.TAG_STREAM,
-            "injectQueuedPromptsAsNewTurn: ${queued.size} queued prompt(s) produced no content, dropping honestly",
-        )
-        withContext(Dispatchers.Main.immediate) {
-            val queuedIds = queued.map { it.id }.toSet()
-            _messages.value = _messages.value.filterNot { m ->
-                m.queuedPromptId != null && queuedIds.contains(m.queuedPromptId)
-            }
-        }
-        setInlineError(
-            context.getString(R.string.queue_dropped_no_content),
-        )
-        return null
-    }
-
-    // Bridge entry into agentHistory ONLY (not persisted). The tail
-    // before this call is user(tool_result); without the bridge the
-    // queued user message becomes two consecutive user roles and the
-    // provider merges them — exactly the regression iOS hit at #579.
-    // Empty/whitespace-only bridge text would itself be merged out by
-    // some sanitizers; keep a small visible string for parity with iOS.
-    appendBoundedHistory(
-        LLMMessage(
-            role = LLMMessage.Role.ASSISTANT,
-            content = "(Interrupted mid-task by a new user message. Decide based on the new message and overall context whether the prior task should continue — do not forget or abandon it unless the user explicitly says to stop, or the new message makes clear it is no longer needed.)",
-            contentParts = listOf(
-                AgentContentPart.Text("(Interrupted mid-task by a new user message. Decide based on the new message and overall context whether the prior task should continue — do not forget or abandon it unless the user explicitly says to stop, or the new message makes clear it is no longer needed.)"),
-            ),
-        ),
-    )
-
-    // Persist the queued user message as its own DB row + append to
-    // agentHistory so the next API call carries it.
-    val userText = combinedText.toString()
-    // [T-android-paste-mediaref] Queued prompts carry markers too.
-    //
-    // sendMessage hands off to enqueuePrompt whenever a turn is already
-    // streaming, and it no longer expands markers before doing so — so
-    // without this the queued row would persist a literal `[Pasted#3]` and
-    // the model would receive the marker instead of the text.
-    val queuedPaste = buildPastedParts(userText, sid)
-    if (queuedPaste != null) {
-        _pastedTexts.value = _pastedTexts.value.filterNot { it.id in queuedPaste.consumedIds }
-    }
-    val userPartsJson = buildUserPartsJson(
-        userText,
-        prepared.mediaRefPartsJson,
-        prepared.attachedFilesXml,
-        bodyPartsJson = queuedPaste?.partsJson,
-    )
-    val userEntity = chatRepository.appendMessage(sid, "user", userPartsJson)
-    appendBoundedHistory(
-        LLMMessage(
-            role = LLMMessage.Role.USER,
-            // Expanded for the model; the persisted row above stays small.
-            content = queuedPaste?.modelText ?: userText,
-            imageParts = prepared.imageParts,
-            contentParts = queuedPaste?.let { p ->
-                // Replace the whole LEADING RUN of text parts with the one
-                // expanded body, then keep everything after it.
-                //
-                // Not "index 0": each queued prompt contributes its own text
-                // part, and combinedText joined them with blank lines —
-                // p.modelText is the expansion of that join, so it stands
-                // for all of them. The image and <user-attached-files> parts
-                // that follow must survive untouched.
-                val bodyCount = combinedParts.takeWhile { it is AgentContentPart.Text }.size
-                listOf(AgentContentPart.Text(p.modelText)) + combinedParts.drop(bodyCount)
-            } ?: combinedParts,
-            dbMessageId = userEntity.id,
-        ),
-    )
-
-    // Finalize the just-finished assistant bubble in the UI on Main:
-    // (a) un-queue the queued chat bubbles, (b) flush the side-channel
-    // delta into the canonical row and clear isStreaming /
-    // isAwaitingModelResponse, then (c) append the freshly-created
-    // queued user ChatMessage + a NEW empty assistant placeholder so
-    // the next iteration's streaming writes target the new bubble.
-    val newAssistantId = "assistant_${System.currentTimeMillis()}"
-    // [T-android-batcher-seal] Retire the finished bubble in the batcher
-    // BEFORE sealing it on Main below — a coalesced isStreaming=true push
-    // landing after the seal would resurrect the old thinking box.
-    uiBatcher.seal(finishedAssistantId)
-    withContext(Dispatchers.Main) {
-        // (a) + (b) one emit: build the post-finalize list.
-        _messages.value = msgsAfterUnqueue
-        updateAssistantMessage(
-            finishedAssistantId,
-            finishedAccumulatedText,
-            false,
-            finishedAllToolBlocks,
-            isAwaitingModelResponse = false,
-        )
-        // (c) — append the queued user bubble + the new assistant
-        // placeholder. Mirrors sendMessage's user-bubble append shape so
-        // attachments / images / file chips render the same.
-        //
-        // [T-android-paste-queued-bubble] The persisted row folds each
-        // `[Pasted#N]` marker into its own `Pasted#N.txt` mediaRef, so the
-        // painted content must not keep the literal marker: the paste
-        // renders as the SAME tappable file chip a fresh send gets, and
-        // tapping it opens FilePreviewScreen (the FILE_PREVIEW route) with
-        // the full text from disk. The pre-fix bubble showed the literal
-        // marker with no chip and no way to view what was pasted.
-        val queuedBubbleText = queuedPaste?.let { p ->
-            stripConsumedPasteMarkers(userText, p.consumedIds)
-        } ?: userText
-        val queuedUserMsg = ChatMessage(
-            id = userEntity.id,
-            role = "user",
-            content = queuedBubbleText,
-            imageUris = prepared.imageUris,
-            attachmentNames = prepared.attachmentNames + (queuedPaste?.uiNames ?: emptyList()),
-            attachmentUris = prepared.nonImageUris + (queuedPaste?.uiUris ?: emptyList()),
-            sourceDbIds = listOf(userEntity.id),
-        )
-        val nextAssistantMsg = ChatMessage(
-            id = newAssistantId,
-            role = "assistant",
-            content = "",
-            isStreaming = true,
-            isAwaitingModelResponse = true,
-            thinkingLevel = _thinkingLevel.value,
-        )
-        _messages.value = trimLoadedWindow(_messages.value + queuedUserMsg + nextAssistantMsg)
-        notePersistedUiRow(userEntity.id, userEntity.id)
-        // Note: ChatScreen's `lastUserAppendMs` (the trailing-row
-        // ScrollPin send-grace window) is updated reactively by
-        // ChatScreen's `LaunchedEffect(messages.size)` user-send hook
-        // when messages.size grows — appending the queuedUserMsg above
-        // bumps the size, so the pin window opens just like a normal
-        // send. No direct write needed from here (and we couldn't —
-        // `lastUserAppendMs` lives in ChatScreen's composition scope).
-    }
-
-    AppLogger.info(
-        ChatViewModel.TAG_STREAM,
-        "injectQueuedPromptsAsNewTurn: injected ${queued.size} queued prompt(s) as new turn, " +
-            "finishedId=$finishedAssistantId newId=$newAssistantId",
-    )
-    return ChatViewModel.InjectedTurn(newAssistantId)
-    } catch (e: kotlinx.coroutines.CancellationException) {
+        return ChatViewModel.InjectedTurn(newAssistantId).takeIf { bound && ownsQueuedTurn(sid, run) }
+    } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        // [T-android-queue-atomic-mutation] The claim already emptied the
-        // queue — an exception here (prepareUserAttachments on a broken URI,
-        // a DB write failure) must not silently swallow the user's words and
-        // leave the dashed placeholders forever. Drop the placeholders and
-        // surface the loss; do NOT re-queue (a throwing prepare would loop).
-        AppLogger.error(
-            ChatViewModel.TAG_STREAM,
-            "injectQueuedPromptsAsNewTurn failed after claim: ${e.javaClass.simpleName}: ${e.message}",
-        )
+        Log.e(ChatViewModel.TAG, "Queued injection stopped: ${e.javaClass.simpleName}")
         withContext(Dispatchers.Main.immediate) {
-            val queuedIds = queued.map { it.id }.toSet()
-            _messages.value = _messages.value.filterNot { m ->
-                m.queuedPromptId != null && queuedIds.contains(m.queuedPromptId)
-            }
+            if (ownsQueuedTurn(sid, run)) setInlineError(context.getString(R.string.error_empty_response_generic))
         }
-        setInlineError(context.getString(R.string.queue_dropped_no_content))
         return null
     }
 }
 
-/**
- * [T-android-queued-message-interrupt-thinking] Guard for the stream
- * collector's thinking-phase cut: a queued prompt arrived while the model
- * is STILL reasoning (no reply text, no tool call yet). Once text or a
- * tool call has been emitted the reply has visibly started — the cut must
- * NOT fire there (the tool-close boundary or the post-loop drain picks the
- * prompt up in seconds).
- */
+/** Keep the thinking-phase cut separate from turns that have started answering or calling a tool. */
 internal fun ChatViewModel.hasQueuedPromptDuringPureThinking(
     toolCalls: List<*>,
     turnTextSb: CharSequence,
 ): Boolean = toolCalls.isEmpty() && turnTextSb.isEmpty() && _promptQueue.value.isNotEmpty()
 
-/**
- * [T-android-queued-message-interrupt-*] Shared drain for both mid-loop
- * queued-prompt injection sites — the post-tool-result boundary and the
- * thinking-phase cut: claim the queue and inject it as a standalone user
- * turn (bridge + persisted row + fresh assistant bubble; see
- * injectQueuedPromptsAsNewTurn), returning the new bubble's id.
- *
- * Null = the queue was drained by a concurrent path or the prompts
- * produced no content; the caller falls through to its normal boundary
- * handling so the loop can't spin on an empty claim.
- */
+/** Shared standalone injection for the post-tool and the thinking-phase boundaries. */
 internal suspend fun ChatViewModel.drainQueueIntoStandaloneTurn(
     finishedAssistantId: String,
     finishedAccumulatedText: String,
     finishedAllToolBlocks: List<AssistantBlock>,
     uiBatcher: UiUpdateBatcher,
-): String? = try {
-    injectQueuedPromptsAsNewTurn(
-        finishedAssistantId = finishedAssistantId,
-        finishedAccumulatedText = finishedAccumulatedText,
-        finishedAllToolBlocks = finishedAllToolBlocks,
-        uiBatcher = uiBatcher,
-    )?.newAssistantId
-} catch (e: Exception) {
-    Log.e(ChatViewModel.TAG, "injectQueuedPromptsAsNewTurn failed", e)
-    null
-}
+    expectedSessionId: String? = null,
+): String? = injectQueuedPromptsAsNewTurn(
+    finishedAssistantId, finishedAccumulatedText, finishedAllToolBlocks, uiBatcher, expectedSessionId,
+)?.newAssistantId
 
 /**
  * [T-android-queued-message-interrupt-thinking] Success-path cleanup for
  * the deliberate thinking-phase cut: settle the partial thinking block
  * (first text or a tool call normally ends the reasoning phase and records
  * the duration process cards sum — a deliberate cut is the same kind of
- * phase end), close the generation run, and clear lingering auto-retry UI
- * state. The stream attempt itself was healthy, so nothing here is an
- * error path.
+ * phase end) and clear lingering auto-retry UI state. The loop still owns
+ * its generation record while it handles the next user turn.
  */
 internal fun ChatViewModel.settleInterruptedThinkingTurn(
     turn: Int,
     allToolBlocks: MutableList<AssistantBlock>,
-    generationRunId: String,
 ) {
     val thinkIdx = allToolBlocks.indexOfFirst { it.kind == "thinking" && it.id == "thinking_$turn" }
     if (thinkIdx >= 0 && allToolBlocks[thinkIdx].toolStatus != ToolBlockStatus.SUCCESS) {
@@ -302,91 +106,51 @@ internal fun ChatViewModel.settleInterruptedThinkingTurn(
             durationMs = settleThinkingDurationMs(allToolBlocks[thinkIdx]),
         )
     }
-    com.openminis.app.agent.GenerationRunLifecycle.succeeded(context, generationRunId)
     if (_autoRetryAttempt.value != 0 || _autoRetryCountdown.value != 0) {
         _autoRetryAttempt.value = 0
         _autoRetryCountdown.value = 0
     }
 }
 
-    /**
-     * [T-android-queued-message-edit #37] Rewrite a queued prompt's text in
-     * place. Queue position and attachments ([QueuedPrompt.attachments]) are
-     * untouched — only [QueuedPrompt.text] changes — and the queued
-     * placeholder bubble (id="queued_msg_…", queuedPromptId=[promptId]) is
-     * refreshed in the same pass so the dashed row shows the new text
-     * immediately.
-     *
-     * Memory-only by design: [_promptQueue] never touches the DB (see
-     * [enqueuePrompt]); the edited text is persisted for real when the queue
-     * is later drained / injected as a user row (injectQueuedPromptsAsNewTurn
-     * reads [QueuedPrompt.text] at claim time, so whatever the queue holds
-     * when the boundary fires is what gets sent).
-     *
-     * Accepts the queued *prompt* id (ChatMessage.queuedPromptId), matching
-     * the withdraw flow's granularity. Returns true when a matching prompt
-     * was found and updated; false when the id is unknown — a concurrent
-     * drain (claimPromptQueue CAS-clears the queue) or withdraw raced the
-     * edit, and the caller's dialog outlived its row.
-     *
-     * A blank edit is rejected while the prompt carries no attachments
-     * (returning false): the drain path skips content-less prompts, so an
-     * empty-text edit would silently send nothing. With attachments, a blank
-     * text is legal (image-only queued prompts already exist).
-     */
-    internal fun ChatViewModel.editQueued(promptId: String, newText: String): Boolean {
-        val trimmed = newText.trim()
-        var updated = false
-        _promptQueue.update { queue ->
-            val idx = queue.indexOfFirst { it.id == promptId }
-            if (idx < 0) return@update queue
-            val prompt = queue[idx]
-            if (trimmed.isBlank() && prompt.attachments.isEmpty()) return@update queue
-            updated = true
-            queue.toMutableList().apply { this[idx] = prompt.copy(text = trimmed) }
-        }
-        // [steering-commit-ui] Steering placeholders reuse the isQueued/
-        // queuedPromptId conventions, so the queued-bubble edit affordance
-        // must reach them too — update the steering entry itself (blank edits
-        // are rejected by the queue primitive, same as attachment-less
-        // _promptQueue edits).
-        if (!updated && promptId.startsWith("steer_")) {
-            updated = steeringState().queue.updateText(promptId, trimmed)
-        }
-        if (!updated) return false
-        _messages.value = _messages.value.map { m ->
-            if (m.queuedPromptId == promptId) m.copy(content = trimmed) else m
-        }
-        Log.i("ChatViewModel", "Edited queued prompt (${trimmed.length}ch), queue=${_promptQueue.value.size}")
-        return true
+/** Rewrite the text of a queued prompt without changing its position or attachments. */
+internal fun ChatViewModel.editQueued(promptId: String, newText: String): Boolean {
+    val trimmed = newText.trim()
+    var updated = false
+    _promptQueue.update { queue ->
+        val idx = queue.indexOfFirst { it.id == promptId }
+        if (idx < 0) return@update queue
+        val prompt = queue[idx]
+        if (trimmed.isBlank() && prompt.attachments.isEmpty()) return@update queue
+        updated = true
+        queue.toMutableList().apply { this[idx] = prompt.copy(text = trimmed) }
     }
-
-    /**
-     * [T-steering-queued-messages] Queued-message lifecycle (moved here from
-     * ChatViewModel.kt when the steering placeholder lifecycle landed —
-     * ChatViewModel.kt is at its architecture-ratchet ceiling and the queued
-     * bubble ops belong with the queue they drain). Steering placeholders
-     * (queuedPromptId `steer_…`, owned by the steering queue) route to
-     * [ChatViewModel.withdrawSteeringPlaceholder]; _promptQueue-owned
-     * bubbles keep the original behaviour.
-     */
-
-    /** Remove a queued prompt and its chat message by prompt id. */
-    fun ChatViewModel.removeQueuedPrompt(promptId: String) {
-        _promptQueue.update { queue -> queue.filterNot { it.id == promptId } }
-        _messages.value = _messages.value.filterNot { it.queuedPromptId == promptId }
+    if (!updated && promptId.startsWith("steer_")) {
+        updated = steeringState().queue.updateText(promptId, trimmed)
     }
-
-    /** Withdraw a queued message before it gets injected into the agent loop. */
-    fun ChatViewModel.withdrawQueuedMessage(messageId: String) {
-        if (withdrawSteeringPlaceholder(messageId)) {
-            Log.i("ChatViewModel", "Withdrew steering placeholder")
-            return
-        }
-        val msg = _messages.value.firstOrNull { it.id == messageId } ?: return
-        if (!msg.isQueued) return
-        val pid = msg.queuedPromptId ?: return
-        _promptQueue.update { queue -> queue.filterNot { it.id == pid } }
-        _messages.value = _messages.value.filterNot { it.id == messageId }
-        Log.i("ChatViewModel", "Withdrew queued message, queue=${_promptQueue.value.size}")
+    if (!updated) return false
+    _messages.value = _messages.value.map { m ->
+        if (m.queuedPromptId == promptId) m.copy(content = trimmed) else m
     }
+    Log.i("ChatViewModel", "Edited queued prompt (${trimmed.length}ch), queue=${_promptQueue.value.size}")
+    return true
+}
+
+/** Remove a queued prompt and its chat message by prompt id. */
+fun ChatViewModel.removeQueuedPrompt(promptId: String) {
+    _promptQueue.update { queue -> queue.filterNot { it.id == promptId } }
+    _messages.value = _messages.value.filterNot { it.queuedPromptId == promptId }
+}
+
+/** Withdraw a queued message before it gets injected into the agent loop. */
+fun ChatViewModel.withdrawQueuedMessage(messageId: String) {
+    if (withdrawSteeringPlaceholder(messageId)) {
+        Log.i("ChatViewModel", "Withdrew steering placeholder")
+        return
+    }
+    val msg = _messages.value.firstOrNull { it.id == messageId } ?: return
+    if (!msg.isQueued) return
+    val pid = msg.queuedPromptId ?: return
+    _promptQueue.update { queue -> queue.filterNot { it.id == pid } }
+    _messages.value = _messages.value.filterNot { it.id == messageId }
+    Log.i("ChatViewModel", "Withdrew queued message, queue=${_promptQueue.value.size}")
+}

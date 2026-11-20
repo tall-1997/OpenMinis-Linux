@@ -31,7 +31,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
 import com.openminis.app.agent.ContextSaverRuntime
+import com.openminis.app.data.repository.MemoryUsageLedger
 import com.openminis.app.i18n.uppercaseForDisplay
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Session Token Usage bottom sheet — mirrors iOS `TokenUsageSheet` and uses
@@ -63,29 +67,43 @@ fun TokenUsageSheet(
     viewModel: ChatViewModel,
     onDismiss: () -> Unit,
 ) {
-    var stats by remember { mutableStateOf<ChatViewModel.SessionTokenStats?>(null) }
-    val contextUsage by viewModel.contextUsage.collectAsStateWithLifecycle()
-    val contextWindow = viewModel.currentModelContextWindow
-    val maxOutput = viewModel.currentModelMaxOutputTokens
-    val thinking = remember { viewModel.thinkingInfo() }
+    val session = viewModel.activeSessionId
+    var stats by remember(viewModel, session) { mutableStateOf<ChatViewModel.SessionTokenStats?>(null) }
+    val modelEntry by viewModel.activeEntryId.collectAsStateWithLifecycle()
+    val modelGroup by viewModel.selectedGroupId.collectAsStateWithLifecycle()
+    val summary by viewModel.compactSummary.collectAsStateWithLifecycle()
+    val messages by viewModel.messages.collectAsStateWithLifecycle()
+    val streaming by viewModel.isStreaming.collectAsStateWithLifecycle()
+    val memoryEnabled by viewModel.memoryEnabled.collectAsStateWithLifecycle()
+    val attachments by viewModel.attachments.collectAsStateWithLifecycle()
+    val markerId = viewModel._cachedLatestMarker?.id
+    val thinking = remember(viewModel, modelEntry) { viewModel.thinkingInfo() }
     // [T-cache-hit-rate] 最近一轮的缓存命中率（0..1，无真实 usage 时为 null）。
     val lastCacheHitRate by viewModel.lastCacheHitRate.collectAsStateWithLifecycle()
     // [T-tool-result-aging] Latest fold stats from the send path.
     val saver by ContextSaverRuntime.stats.collectAsStateWithLifecycle()
-    // [#25] Per-block context breakdown (merged from the former standalone
-    // ContextUsageSheet). Sheet-local state per the data-flow convention:
-    // filled once on open, no live subscription — the prompt composition only
-    // changes at request boundaries.
-    val breakdownState = remember { mutableStateOf<ContextBreakdown?>(null) }
+    // The previous projection stops being current when the visible transcript or route changes.
+    val breakdownState = remember(viewModel, session, modelEntry, modelGroup, summary, markerId, messages, streaming, memoryEnabled, attachments) {
+        mutableStateOf<ContextBreakdown?>(null)
+    }
     val breakdown by breakdownState
 
-    LaunchedEffect(Unit) {
-        // Recompute the context rows on open: contextUsage is a snapshot that
-        // otherwise only updates at turn boundaries, so the sheet could show a
-        // pre-compaction reading ([T-android-compact-stale-usage]).
-        viewModel.refreshContextUsage()
-        stats = viewModel.loadSessionTokenStats()
-        breakdownState.value = runCatching { viewModel.buildContextBreakdown() }.getOrNull()
+    var memoryUsage by remember(viewModel, session) { mutableStateOf(0 to 0) }
+    val filesDir = viewModel.context.filesDir
+    LaunchedEffect(viewModel, session, streaming) {
+        memoryUsage = withContext(Dispatchers.IO) {
+            memoryUsageSessionDirectory(filesDir, session)?.let(MemoryUsageLedger::verifiedSummaryFor) ?: (0 to 0)
+        }
+    }
+    LaunchedEffect(viewModel, session) { stats = viewModel.loadSessionTokenStats() }
+    LaunchedEffect(breakdownState) {
+        try {
+            breakdownState.value = viewModel.buildContextBreakdown()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // Leave the projected counts unknown; historical usage is a separate ledger.
+        }
     }
 
     StandardChatSheet(
@@ -111,39 +129,27 @@ fun TokenUsageSheet(
             val yesText = stringResource(R.string.common_yes)
             val noText = stringResource(R.string.common_no)
             StatSection(title = stringResource(R.string.token_usage_section_context)) {
-                // Water-level progress bar: the real reported ratio when the
-                // provider has answered at least once, else the block-sum
-                // estimate from the breakdown (same fallback ladder the
-                // former standalone sheet used).
-                val ratio = if (contextUsage.known) {
-                    contextUsage.ratio
-                } else {
-                    breakdown?.let { b ->
-                        if (b.windowTokens > 0) {
-                            (b.totalTokens.toFloat() / b.windowTokens).coerceIn(0f, 1f)
-                        } else {
-                            0f
-                        }
-                    } ?: 0f
-                }
+                val projectedUsage = breakdown?.contextUsage
                 LinearProgressIndicator(
-                    progress = { ratio },
+                    progress = { projectedUsage?.ratio ?: 0f },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 StatRow(
                     stringResource(R.string.token_usage_context_used),
-                    formatTokens(
-                        if (contextUsage.known) {
-                            contextUsage.usedTokens.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-                        } else s?.context ?: 0,
-                    ),
+                    projectedUsage?.usedTokens?.let(::formatTokens) ?: "?",
                 )
-                contextWindow?.let { StatRow(stringResource(R.string.token_usage_context_window), formatTokens(it)) }
+                if (projectedUsage?.known == true) {
+                    StatRow(stringResource(R.string.token_usage_context_window), formatTokens(projectedUsage.windowTokens))
+                }
                 StatRow(
                     stringResource(R.string.token_usage_context_percent),
-                    if (contextUsage.known) "${(contextUsage.ratio * 100).toInt()}%" else "?",
+                    if (projectedUsage?.known == true) "${(projectedUsage.ratio * 100).toInt()}%" else "?",
                 )
-                maxOutput?.let { StatRow(stringResource(R.string.token_usage_max_output), formatTokens(it)) }
+                breakdown?.let { snapshot ->
+                    if (snapshot.windowTokens > 0 || snapshot.maxOutputTokens > 0) {
+                        StatRow(stringResource(R.string.token_usage_max_output), formatTokens(snapshot.maxOutputTokens))
+                    }
+                }
                 // [#25] Per-block composition of the next request — the
                 // unique payload of the former ContextUsageSheet, largest
                 // block first so the dominant cost sits on top.
@@ -257,17 +263,13 @@ fun TokenUsageSheet(
                 )
             }
             StatSection(title = stringResource(R.string.token_usage_section_memory)) {
-                // [T-memory-usage-ui] "Did the memory system put anything in front of
-                // the model?" Only this chat's own ledger is read, and a session that
-                // never delivered memory shows "—" rather than a misleading 0.
-                val memory = remember(breakdown) { viewModel.memoryUsageSummary() }
                 StatRow(
                     stringResource(R.string.token_usage_memory_lines),
-                    if (memory.first > 0) memory.first.toString() else "—",
+                    if (memoryUsage.first > 0) memoryUsage.first.toString() else "—",
                 )
                 StatRow(
                     stringResource(R.string.token_usage_memory_shown),
-                    if (memory.first > 0) memory.second.toString() else "—",
+                    if (memoryUsage.first > 0) memoryUsage.second.toString() else "—",
                 )
             }
         }

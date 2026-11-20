@@ -1,6 +1,7 @@
 package com.openminis.app.ui.chat
 
 import androidx.lifecycle.viewModelScope
+import com.openminis.app.data.repository.toReceiptHistoryRows
 import com.openminis.app.logging.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -128,22 +129,16 @@ internal suspend fun ChatViewModel.loadOlderPage(pages: Int = 1): Boolean {
                     break
                 }
                 val pageRows = withContext(Dispatchers.IO) {
-                    chatRepository.hydrateDisplayRows(
-                        loadSortRange(
-                            SortRange(
-                                loadStart,
-                                // [T-history-batch-pages] The FIRST page keeps the
-                                // inclusive end (`before + 1`) so the painted
-                                // boundary row rides into the known-set dedupe at
-                                // merge time. Pages AFTER the first must NOT
-                                // re-fetch the previous page's minimum row — its
-                                // noteBoundsSorts already made it the new cursor —
-                                // so a blind inclusive end duplicated the internal
-                                // boundary row on screen (round-3 F2).
-                                if (page == 0 || before == Int.MAX_VALUE) before + 1 else before,
-                            ),
+                    val raw = loadSortRange(
+                        SortRange(
+                            loadStart,
+                            // The first page includes the painted boundary;
+                            // later pages must not re-fetch that overlap.
+                            if (page == 0 && before < Int.MAX_VALUE) before + 1 else before,
                         ),
                     )
+                    reconcileReceiptRows(sessionId, raw.toReceiptHistoryRows())
+                    chatRepository.hydrateDisplayRows(raw)
                 }
                 if (pageRows.isEmpty()) break
                 // [T-history-batch-pages] Convert NOW and accumulate ChatMessage
@@ -271,18 +266,16 @@ private suspend fun ChatViewModel.drainMissingTail() {
         // between (that race produced duplicated and reordered rows).
         timeline.mutationMutex.withLock {
             val rows = withContext(Dispatchers.IO) {
-                chatRepository.hydrateDisplayRows(
-                    // Include the already-painted boundary row so a
-                    // toolUse immediately before this chunk can be paired
-                    // with its toolResult inside toChatMessages(). The
-                    // overlap is removed by sourceDbIds below.
-                    loadSortRange(
-                        SortRange(
-                            if (missing.startInclusive > Int.MIN_VALUE) missing.startInclusive - 1 else missing.startInclusive,
-                            chunkEnd,
-                        ),
+                // Include the already-painted boundary row; its tool result
+                // may arrive in this chunk. UI dedupe removes the overlap.
+                val raw = loadSortRange(
+                    SortRange(
+                        if (missing.startInclusive > Int.MIN_VALUE) missing.startInclusive - 1 else missing.startInclusive,
+                        chunkEnd,
                     ),
                 )
+                reconcileReceiptRows(sessionId, raw.toReceiptHistoryRows())
+                chatRepository.hydrateDisplayRows(raw)
             }
             if (rows.isEmpty()) {
                 // [T-android-timeline-ledger] A hydrate can legitimately

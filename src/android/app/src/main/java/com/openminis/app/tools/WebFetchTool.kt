@@ -17,18 +17,6 @@ object WebFetchTool {
     const val NAME = "web_fetch"
 
     /**
-     * [T-webfetch-spill] Preview trigger threshold, not a loss point. The old
-     * `htmlToText(raw).take(MAX_OUTPUT)` silently discarded everything past
-     * 8k chars of a fetched page — a plain substring cap with no spill file,
-     * no coverage note and no recovery path, i.e. exactly the silent-loss
-     * shape [ToolOutputSpill] exists to prevent. The threshold still triggers
-     * the bounded preview; the FULL text now lands in the session workspace
-     * (via [ToolOutputSpill.offloadFullOutput]) so the model can `file_read`
-     * the rest.
-     */
-    internal const val MAX_OUTPUT = 8_000
-
-    /**
      * [T-bounded-body-read] Never buffer a whole response. `body.string()` reads
      * the ENTIRE body into memory (a 50 MB download from a link the model pasted
      * became a 50 MB String, then three more copies through the regex passes)
@@ -72,16 +60,7 @@ object WebFetchTool {
     fun execute(argsJson: String): ToolExecutionResult =
         execute(argsJson, sessionId = null, context = null)
 
-    /**
-     * [T-webfetch-spill] Session-aware form. When the converted text exceeds
-     * [MAX_OUTPUT], the FULL text is spilled into the session's tool-spill
-     * workspace and the result becomes a head+tail preview plus the spill
-     * path (the [ToolOutputSpill] placeholder shape), mirroring how every
-     * other oversized tool output is handled. When the spill is impossible
-     * (no session, or the write failed), the full text is returned instead of
-     * silently dropped: the unified exit still caps and spills it, so the
-     * model loses nothing quietly.
-     */
+    /** The session-aware form presents the entire converted response through the shared output policy. */
     fun execute(argsJson: String, sessionId: String?, context: android.content.Context?): ToolExecutionResult {
         val toolTitle = try { JSONObject(argsJson).optString("tool_title", NAME) } catch (_: Exception) { NAME }
         return try {
@@ -107,38 +86,25 @@ object WebFetchTool {
                 // whole — the byte cap bounds the worst case by the server,
                 // not by the page.
                 val raw = readBodyBounded(resp.body, MAX_FETCH_BYTES)
-                val converted = htmlToText(raw)
-                val text = if (converted.length <= MAX_OUTPUT) {
-                    converted
-                } else {
-                    // [T-webfetch-spill] Over the trigger: spill the FULL text
-                    // into the session workspace and preview head+tail + path.
-                    val guestPath = if (context != null && !sessionId.isNullOrBlank()) {
-                        ToolOutputSpill.offloadFullOutput(context, sessionId, NAME, converted)
-                    } else {
-                        null
-                    }
-                    presentOverCap(converted, guestPath)
-                }
-                ToolExecutionResult("URL: $finalUrl\n\n$text", true, toolTitle = toolTitle)
+                val text = presentResponse(finalUrl, htmlToText(raw), sessionId, context)
+                ToolExecutionResult(text, true, toolTitle = toolTitle)
             }
         } catch (e: Exception) {
             ToolExecutionResult("Error fetching URL: ${e.message}", false, toolTitle = toolTitle)
         }
     }
 
-    /**
-     * [T-webfetch-spill] Pure over-cap decision so a plain-JVM test can pin
-     * it: with a spill file the body is the shared [ToolOutputSpill] preview
-     * (placeholder shape, path, head+tail); without one the FULL text is
-     * deferred to the unified exit rather than dropped.
-     */
-    internal fun presentOverCap(converted: String, guestPath: String?): String =
-        if (guestPath != null) {
-            ToolOutputSpill.formatPreview(NAME, guestPath, converted)
-        } else {
-            converted
-        }
+    /** Include the URL in the spill itself, so the shared envelope starts at offset 0. */
+    internal fun presentResponse(
+        finalUrl: String,
+        converted: String,
+        sessionId: String?,
+        context: android.content.Context?,
+    ): String {
+        val text = "URL: $finalUrl\n\n$converted"
+        if (context == null || sessionId.isNullOrBlank() || text.length <= ToolOutputSpill.LIMIT) return text
+        return ToolOutputPolicy.apply(text, NAME, context, sessionId, NAME)
+    }
 
     internal fun htmlToText(raw: String): String {
         var s = raw

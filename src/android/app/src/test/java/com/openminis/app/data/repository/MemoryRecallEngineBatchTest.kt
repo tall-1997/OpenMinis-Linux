@@ -28,20 +28,23 @@ class MemoryRecallEngineBatchTest {
     )
 
     @Test
-    fun onePromptBuildWritesTheSidecarOnce() {
+    fun renderingIsPureAndDeliveryWritesTheSidecarOnce() {
         val engine = engine()
-        engine.formatAsPromptFragment(
+        val rendered = engine.formatAsPromptFragmentWithHits(
             listOf(
                 hit("2026-11-04.md", "line one"),
                 hit("2026-11-04.md", "line two"),
                 hit("2026-11-03.md", "line three"),
             ),
         )
-        assertEquals("one build, one write", 1, engine.saveCountForTest)
+        assertEquals("rendering is not delivery", 0, engine.saveCountForTest)
+        assertTrue(engine.recallCountsSnapshot().isEmpty())
+        engine.acceptRecallBatch(rendered.included.map { it.source to it.line })
+        assertEquals("one accepted batch, one write", 1, engine.saveCountForTest)
         val snapshot = engine.recallCountsSnapshot()
-        assertEquals(1, snapshot["2026-11-04:line one"])
-        assertEquals(1, snapshot["2026-11-04:line two"])
-        assertEquals(1, snapshot["2026-11-03:line three"])
+        assertEquals(1, snapshot[MemoryRecallEngine.recallCountKey("2026-11-04", "line one")])
+        assertEquals(1, snapshot[MemoryRecallEngine.recallCountKey("2026-11-04", "line two")])
+        assertEquals(1, snapshot[MemoryRecallEngine.recallCountKey("2026-11-03", "line three")])
     }
 
     @Test

@@ -8,6 +8,8 @@ import com.openminis.app.data.db.MessageEntity
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.ThinkingLevel
+import com.openminis.app.data.repository.latestUsableCompactMarker
+import com.openminis.app.data.repository.toReceiptHistoryRows
 import com.openminis.app.provider.ProviderFactory
 import com.openminis.app.service.SessionActivityTracker
 import kotlinx.coroutines.Dispatchers
@@ -221,19 +223,9 @@ internal fun ChatViewModel.loadSession() {
         // of the tail window (sessionId-keyed). The runCatching shape is the
         // original query's error policy, moved verbatim into the task.
         val markerDeferred = async(Dispatchers.IO) {
-            runCatching { chatRepository.dao.latestCompactMarker(sessionId) }
+            runCatching { chatRepository.latestUsableCompactMarker(sessionId) }
                 .onFailure { Log.w(ChatViewModel.TAG, "latestCompactMarker failed: ${it.message}") }
                 .getOrNull()
-        }
-        val tokenSid = realSessionId.ifEmpty { sessionId }
-        val tokenUsagesDeferred = async(Dispatchers.IO) {
-            chatRepository.sessionTokenUsages(tokenSid)
-                .asReversed()
-                .firstNotNullOfOrNull { json ->
-                    runCatching {
-                        org.json.JSONObject(json).optLong("latestContextTokens", 0L)
-                    }.getOrNull()?.takeIf { it > 0L }
-                }
         }
         val session = sessionDeferred.await() ?: return@launch
 
@@ -337,6 +329,7 @@ internal fun ChatViewModel.loadSession() {
         val tHangDiagBeforeLoad = System.currentTimeMillis()
         data class LoadedSessionData(
             val messages: List<com.openminis.app.data.db.MessageEntity>,
+            val receiptRows: List<com.openminis.app.data.repository.ReceiptHistoryRow>,
             val ordered: List<ChatMessage>,
             val llmHistory: List<LLMMessage>,
             val totalMessages: Int,
@@ -413,6 +406,7 @@ internal fun ChatViewModel.loadSession() {
             )
             LoadedSessionData(
                 messages = rows,
+                receiptRows = dbRows.toReceiptHistoryRows(),
                 ordered = chatUi,
                 llmHistory = llm,
                 totalMessages = totalMessages,
@@ -560,7 +554,10 @@ internal fun ChatViewModel.loadSession() {
         // runs later, and a fast session switch would otherwise write B's
         // interrupted records into A's journal while A's own stay unreported.
         val journalSid = realSessionId.ifEmpty { sessionId }
-        viewModelScope.launch(Dispatchers.IO) { reportInterruptedCompactions(journalSid) }
+        viewModelScope.launch(Dispatchers.IO) {
+            reportInterruptedCompactions(journalSid)
+            logLegacyToolReceiptDiagnostics(journalSid)
+        }
         if (marker == null) {
             val oldest = loaded.llmOldestSortOrder
             if (oldest != null) {
@@ -731,24 +728,23 @@ internal fun ChatViewModel.loadSession() {
             }
         }
 
-        // Restore the last provider-reported context size on cold open. Without
-        // this, the menu ring stays `?` until the next model call even though
-        // the session has persisted an exact latestContextTokens value.
-        // [P1-15] The usage read + parse were launched concurrently at the top
-        // of the restore (independent of the session row and the tail window).
-        // [T-entry-first-frame] The await + refreshContextUsage (a full
-        // per-part char walk over agentHistory) and the log-only instruction
-        // drift replay move OFF the pre-first-frame critical path: content is
-        // already published at this point, so these state refreshes continue
-        // asynchronously.
+        // After first paint, use a restored anchor only when the projected prefix still matches.
         if (!isDraft) {
+            val receiptRows = loaded.receiptRows
+            val loadEpoch = snapshotResumeEpoch()
             viewModelScope.launch(Dispatchers.IO) {
-                val restoredContext = tokenUsagesDeferred.await()
-                if (restoredContext != null) {
-                    _lastTurnContextTokens.value = restoredContext
-                        .coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                reconcileReceiptRows(sessionId, receiptRows)
+                val provider = currentProvider
+                if (provider == null) refreshContextUsage()
+                else {
+                    val projection = projectChatRequest(
+                        provider, buildMemoryDeliveryPrompt(publish = false),
+                        agentHistorySnapshot(), agentTools, requestThinkingLevel(provider),
+                    )
+                    if (provider === currentProvider && loadEpoch == snapshotResumeEpoch() && !_isStreaming.value) {
+                        refreshContextUsage(projection.estimate, projection.window)
+                    }
                 }
-                refreshContextUsage()
                 checkInstructionSnapshotDrift()
             }
         } else {

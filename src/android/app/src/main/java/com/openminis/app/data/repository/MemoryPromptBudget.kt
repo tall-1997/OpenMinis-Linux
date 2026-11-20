@@ -125,7 +125,7 @@ object MemoryPromptBudget {
                         if (fragment.truncatable) TRUNCATION_MARKER else RULES_TRUNCATION_MARKER
                     val head = remaining - marker.length
                     if (head >= MIN_TRUNCATED_CHARS) {
-                        val cut = fragment.text.take(head) + marker
+                        val cut = memoryTextPrefix(fragment.text, head) + marker
                         replacement[fragment.key] = fragment.copy(text = cut)
                         admitted += fragment.key
                         truncated += fragment.key

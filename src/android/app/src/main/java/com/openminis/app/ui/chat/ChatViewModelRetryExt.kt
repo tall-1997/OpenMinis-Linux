@@ -95,7 +95,7 @@ fun ChatViewModel.retryLast() {
         // mid-turn process kill or any commit path memory missed; the DB is
         // authoritative. Rebuild FIRST, then run the pop/GC steps below on
         // the rebuilt (authoritative) history.
-        rebuildAgentHistoryFromDatabase(sid)
+        if (!rebuildAgentHistoryFromDatabase(sid)) return@launch
 
         // 2. Pop ONLY a trailing assistant entry from agentHistory (mirrors
         //    iOS retry() :2107-2109). If the tail is already user(tool_result),
@@ -201,8 +201,7 @@ fun ChatViewModel.retryLast() {
         // [P0-5] Prompt assembly does disk I/O (skills/MCP reloads, memory
         // fragments) — keep it off the main dispatcher. All inputs are
         // StateFlow reads / pure helpers; written fields are @Volatile.
-        val baseSystemPrompt = withContext(Dispatchers.Default) { buildSystemPrompt() }
-        val systemPrompt = wrapSystemPromptForOAuth(provider, baseSystemPrompt)
+        val systemPrompt = withContext(Dispatchers.IO) { buildMemoryDeliveryPrompt() }
 
         // _isStreaming was already set synchronously at the top.
         streamLaunched = true

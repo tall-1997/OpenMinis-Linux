@@ -1,10 +1,10 @@
  package com.openminis.app.agent
- 
+
  import org.junit.Assert.assertEquals
  import org.junit.Assert.assertThrows
  import org.junit.Assert.assertTrue
  import org.junit.Test
- 
+
  /**
   * [T-harness-config] Three contracts worth pinning:
   *1. the shipped defaults reproduce the legacy literals EXACTLY (a config layer
@@ -17,7 +17,7 @@
   * numbers into the next). So there is no install/current state to test here.
   */
  class HarnessConfigTest {
- 
+
     @Test
     fun defaultsMatchTheLegacyLiterals() {
         val c = HarnessConfig.DEFAULT
@@ -32,7 +32,7 @@
         assertEquals(3_000, c.digestMaxChars)
         assertEquals(600, c.ledgerMaxEntries)
     }
-    
+
     @Test
     fun thePerWindowFormulaMatchesTheShippedNumbers() {
         val c = HarnessConfig.DEFAULT
@@ -41,14 +41,14 @@
         assertEquals(44_800, c.postAnchorBudgetFor(128_000))
         assertEquals(60_000, c.postAnchorBudgetFor(200_000))
     }
-    
+
     @Test
     fun aZeroOrNegativeWindowFallsBackToTheCeiling() {
         val c = HarnessConfig.DEFAULT
         assertEquals(60_000, c.postAnchorBudgetFor(0))
         assertEquals(60_000, c.postAnchorBudgetFor(-1))
     }
-    
+
     @Test
     fun aTinyWindowStillLeavesRoomForTheNotice() {
         // [T-harness-config-floor] A2K window scales the ceiling to700 tokens,
@@ -60,7 +60,7 @@
         assertTrue(budget > c.noticeReserveTokens)
         assertTrue(c.effectiveTailBudget(budget) >= 1)
     }
-    
+
     @Test
     fun effectiveTailBudgetSubtractsTheReserveAndNeverReachesZero() {
         val c = HarnessConfig.DEFAULT
@@ -68,7 +68,7 @@
         assertEquals(1, c.effectiveTailBudget(100))
         assertEquals(1, c.effectiveTailBudget(0))
     }
-    
+
     @Test
     fun everyInvalidCombinationIsRejected() {
         val bad = listOf(
@@ -88,12 +88,12 @@
         val thrown = bad.count { cfg -> runCatching { cfg.validated() }.isFailure }
         assertEquals(bad.size, thrown)
     }
-    
+
     @Test
     fun theShippedDefaultsValidate() {
         assertEquals(HarnessConfig.DEFAULT, HarnessConfig.DEFAULT.validated())
     }
-    
+
     @Test
     fun aTighterReserveIsHonouredByBothTailPaths() {
         val tight = HarnessConfig(noticeReserveTokens =500)
@@ -101,4 +101,3 @@
         assertTrue(tight.effectiveTailBudget(60_000) > HarnessConfig.DEFAULT.effectiveTailBudget(60_000))
     }
  }
- 

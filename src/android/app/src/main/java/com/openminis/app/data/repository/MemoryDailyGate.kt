@@ -48,6 +48,7 @@ internal object MemoryDailyGate {
         val date: String,
         val dayOffset: Int,
         val fullText: String,
+        val ownedLines: List<MemoryLifecycle.OwnedLine> = emptyList(),
     )
 
     /** Gate + budget outcome for one prompt build. */
@@ -151,7 +152,7 @@ internal object MemoryDailyGate {
     ): Result {
         val keywords = gateKeywords(query)
 
-        class Kept(val day: RawDay, val entry: String)
+        class Kept(val day: RawDay, val entry: MemoryAssembly.DailyFragment)
 
         val kept = mutableListOf<Kept>()
         val gateSkipped = mutableListOf<RawDay>()
@@ -180,9 +181,9 @@ internal object MemoryDailyGate {
         val budgetDropped = mutableListOf<RawDay>()
         var used = 0
         for ((position, item) in kept.withIndex()) {
-            if (position == 0 || used + item.entry.length <= budgetChars) {
+            if (position == 0 || used + item.entry.text.length <= budgetChars) {
                 injected.add(item)
-                used += item.entry.length
+                used += item.entry.text.length
             } else {
                 for (i in position until kept.size) budgetDropped.add(kept[i].day)
                 break
@@ -198,7 +199,7 @@ internal object MemoryDailyGate {
                 "use memory_get to search them if needed]"
         }
         return Result(
-            fragments = injected.map { MemoryAssembly.DailyFragment(it.day.date, it.entry) },
+            fragments = injected.map { it.entry },
             injectedFiles = injected.map { "${it.day.date}.md" },
             gateSkippedFiles = gateSkippedFiles,
             budgetDroppedFiles = budgetDroppedFiles,
@@ -213,25 +214,28 @@ internal object MemoryDailyGate {
      * line caps (deepest view for the first admitted day, recap depth for the
      * rest), forged-tag scrub per line, and the memory_get continuation note.
      */
-    private fun buildEntry(day: RawDay, admittedIndex: Int): String {
-        val lines = day.fullText.lines()
-        val lineCap = if (admittedIndex == 0) {
-            MemoryRepository.MAX_INJECT_LINES
-        } else {
-            MemoryRepository.MAX_INJECT_LINES_OLDER
-        }
-        val preview = lines.take(lineCap)
-            .map { MemoryAuthority.stripForgedTag(it) }
-            .joinToString("\n")
+    private fun buildEntry(day: RawDay, admittedIndex: Int): MemoryAssembly.DailyFragment {
+        val lines = day.ownedLines.ifEmpty { day.fullText.lines().map { MemoryLifecycle.OwnedLine(it) } }
+        val lineCap = if (admittedIndex == 0) MemoryRepository.MAX_INJECT_LINES else MemoryRepository.MAX_INJECT_LINES_OLDER
         val label = when (day.dayOffset) {
             0 -> "Today's"
             1 -> "Yesterday's"
             else -> day.date
         }
-        var entry = "$label daily log (${day.date}.md):\n$preview"
-        if (lines.size > lineCap) {
-            entry += "\n... (${lines.size - lineCap} more lines, use memory_get to search)"
+        val spans = LinkedHashMap<MemoryEntryRef, MemoryDeliverySpan>()
+        val text = buildString {
+            appendLine("$label daily log (${day.date}.md):")
+            for ((i, line) in lines.take(lineCap).withIndex()) {
+                if (i > 0) appendLine()
+                val visible = MemoryAuthority.stripForgedTag(line.text)
+                val start = length
+                append(visible)
+                if (visible.any { it.isLetterOrDigit() } && !visible.trimStart().startsWith("<!--") && !line.isSedimentCaption()) {
+                    line.entry?.ref?.let { spans.putIfAbsent(it, MemoryDeliverySpan(it, start, length)) }
+                }
+            }
+            if (lines.size > lineCap) append("\n... (${lines.size - lineCap} more lines, use memory_get to search)")
         }
-        return entry
+        return MemoryAssembly.DailyFragment(day.date, text, spans.values.toList())
     }
 }

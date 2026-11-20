@@ -1,10 +1,10 @@
  package com.openminis.app.ui.chat
- 
+
  import com.openminis.app.ProductionSources
  import org.junit.Assert.assertFalse
  import org.junit.Assert.assertTrue
  import org.junit.Test
- 
+
  /**
   * [T-session-title-not-model-input] G12 as an assertion.
   *
@@ -21,13 +21,13 @@
   * does.
   */
  class TitleNotInModelInputTest {
- 
+
     /** Every production file allowed to touch the outgoing history. */
     private val titleSources = listOf(
         "ui/chat/ChatViewModelTitleExt.kt",
         "ui/chat/TitlePromptLocale.kt",
     )
-    
+
     @Test
     fun theTitlePathNeverWritesToTheAgentHistory() {
         for (rel in titleSources) {
@@ -39,13 +39,13 @@
             )
         }
     }
-    
+
     @Test
     fun theTitleIsOnlyEverPublishedThroughTheUiState() {
         val src = ProductionSources.read("ui/chat/ChatViewModelTitleExt.kt")
         assertTrue("the title must reach the UI state", src.contains("_sessionTitle.value ="))
     }
-    
+
     @Test
     fun theTitlePromptIsBuiltFromMessagesNotFromTheHistoryList() {
         // The prompt input is _messages (the UI projection). Reading agentHistory
@@ -55,4 +55,3 @@
         assertFalse(src.contains("effectiveAgentHistory()"))
     }
  }
- 

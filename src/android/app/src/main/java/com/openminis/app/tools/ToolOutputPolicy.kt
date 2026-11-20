@@ -32,8 +32,7 @@ object ToolOutputPolicy {
      * 半个 emoji（孤立的高低代理符）。这里把边界回退到码点边界，
      * 保证 head/tail 预览不会切碎任何非 BMP 字符。
      *
-     * [T-tool-output-single-mechanism] internal because [ToolOutputSpill] — the
-     * one preview builder now — slices its head/tail through this.
+     * Legacy bounded substring; spill previews use [ToolOutputTruncator] instead.
      */
     internal fun safeSubstring(s: String, start: Int, endExclusive: Int): String {
         val startIdx = start.coerceIn(0, s.length)
@@ -67,9 +66,13 @@ object ToolOutputPolicy {
         // Kelivo 式结构化脱敏：JSON 里字符串值经转义后纯文本 replace 会漏
         // （引号逃逸），先解析再递归替换每个字符串值，命中面完整得多。
         runCatching {
-            val node = org.json.JSONTokener(text).nextValue()
-            if (node is org.json.JSONObject || node is org.json.JSONArray) {
-                return redactNode(node, sensitive, depth = 0).toString()
+            val tokens = org.json.JSONTokener(text)
+            val node = tokens.nextValue()
+            if ((node is org.json.JSONObject || node is org.json.JSONArray) && tokens.nextClean() == '\u0000') {
+                val redacted = redactNode(node, sensitive, depth = 0).toString()
+                // No substitution means no reserialization: keep whitespace,
+                // line boundaries and offsets identical to the original text.
+                return if (redacted != node.toString()) redacted else text
             }
         }
         // 非 JSON 输出：退回纯文本替换。

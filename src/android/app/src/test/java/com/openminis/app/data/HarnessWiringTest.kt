@@ -24,35 +24,28 @@ class HarnessWiringTest {
     @Test
     fun compactionOpensAndClosesATransaction() {
         val compact = src("ui/chat/ChatViewModelCompactExt.kt")
-        assertTrue(
-            "a compaction must open its journal bracket",
-            compact.contains("beginCompactionJournal("),
-        )
-        assertTrue(
-            "a settled compaction must close it and advance the generation",
-            compact.contains("settleCompactionJournal("),
-        )
-        assertTrue(
-            "every failure path must abandon the bracket",
-            compact.contains("abandonCompactionJournal("),
-        )
-        assertTrue(
-            "a failed attempt must not be re-entered blindly",
-            compact.contains("retryAllowedNow("),
-        )
+        val start = compact.indexOf("beginCompactionJournal(sid,")
+        val summarize = compact.indexOf("val outcome = runTwoShotCompact(")
+        val commit = compact.indexOf("chatRepository.commitCompactPrefix(")
+        val settle = compact.indexOf("settleCompactionJournal(sid, journalId,")
+        assertTrue("journal opens before generation", start in 0 until summarize)
+        assertTrue("settlement follows a real marker commit", commit > summarize && settle > commit)
+        assertTrue("failure paths abandon the same session's attempt in finally",
+            compact.contains("if (!succeeded) attemptId?.let { abandonCompactionJournal(sid, it, failureReason) }"))
+        val cooldown = compact.indexOf("retryAllowedNow(sid,")
+        assertTrue("cooldown precedes opening the attempt", cooldown in 0 until start)
     }
 
     @Test
     fun theClockRunsOnEveryRequestPathNotOnlyCompactedOnes() {
-        val history = src("ui/chat/ChatViewModelAgentHistoryExt.kt")
-        // Two call sites: the compacted path and the plain path. A single one
-        // means a fresh session (the motivating case) never gets a timestamp.
-        val sites = Regex("applyRequestClockNote\\(").findAll(history).count()
-        assertTrue("expected >= 2 clock call sites, found $sites", sites >= 2)
-        assertTrue(
-            "the clock must be gated on forRequest so measurement builds stay pure",
-            history.contains("if (forRequest) applyRequestClockNote("),
-        )
+        val dispatch = src("ui/chat/ChatViewModelDispatchProjection.kt")
+        val projection = src("ui/chat/ChatViewModelRequestProjection.kt")
+        val loop = src("ui/chat/ChatViewModelAgentLoopExt.kt")
+        assertTrue(dispatch.contains("requestClockNote(sessionId, history)"))
+        assertTrue(dispatch.contains("clockNote = clock"))
+        assertTrue(projection.contains(".withRequestReminder(clockNote?.text)"))
+        assertTrue(loop.contains("if (streamPhase.onChunk(chunk)) projection.markModelProgress(loopSessionId)"))
+        assertFalse(projection.contains(".confirm("))
     }
 
     @Test
@@ -75,58 +68,54 @@ class HarnessWiringTest {
         assertTrue(dispatch.contains("HistorySearchTool.SEARCH"))
         assertTrue(dispatch.contains("HistorySearchTool.READ"))
         val repo = src("data/repository/ChatRepositoryHistory.kt")
-        assertTrue(
-            "a single-row read must hydrate the BodyStore stub",
-            repo.contains("hydrateDisplayRows("),
-        )
+        assertTrue(repo.contains("readExact("))
+        assertFalse(repo.contains("hydrateDisplayRows("))
     }
 
     @Test
-    fun mutatingToolsWriteAReceiptAndCancelledOnesCloseIt() {
-        // The receipt contract lives in ChatViewModelToolReceiptExt (extracted to
-        // keep the tool-turn file under its line cap), so the guard points there.
-        val exec = src("ui/chat/ChatViewModelToolReceiptExt.kt")
-        assertTrue(exec.contains("ToolReceiptStore.begin("))
-        assertTrue(exec.contains("ToolReceiptStore.settle("))
-        assertTrue(
-            "a throwing dispatch must abandon its open receipt",
-            exec.contains("ToolReceiptStore.abandon("),
-        )
-        assertTrue(
-            "the operation id is what a conflict is judged on",
-            exec.contains("opId = call.id"),
-        )
+    fun durableDispatchOwnsAuthorizationAndJournalBracketsTheAdapter() {
+        val exec = src("ui/chat/ChatViewModelExecuteToolExt.kt")
+        val adapter = exec.substringAfter("val dispatch:").substringBefore("val result = if (needsToolReceipt")
+        val useAt = adapter.indexOf("recordToolUseJournal(")
+        val dispatchAt = adapter.indexOf("executeToolDispatched(")
+        val resultAt = adapter.indexOf("recordToolResultJournal(")
+        assertTrue(useAt >= 0 && dispatchAt > useAt && resultAt > dispatchAt)
+        assertTrue(exec.contains("ToolReceiptDispatch(toolReceiptStore()).run(key, toolId, authorize, dispatch)"))
+        assertTrue(exec.contains("SecurityGateHolder.intercept(context, canonical, argsJson, sessionId)"))
+        assertFalse(exec.contains("LegacyToolReceiptStore"))
         val turn = src("ui/chat/ChatViewModelToolTurnExec.kt")
-        val seam = src("ui/chat/ChatViewModelToolReceiptExt.kt")
-        assertTrue("the call must be journaled before dispatch", seam.contains("recordToolCallJournal("))
-        assertTrue("the result must be journaled after dispatch", seam.contains("recordToolResultJournal("))
-        assertTrue("the dispatch must go through the receipt seam", turn.contains("dispatchWithReceipt("))
+        assertTrue(turn.contains("receiptScope = ctx.receiptScope"))
+        assertTrue(turn.contains("expectedSessionId = ctx.activeSessionId, journalTurn = ctx.turn"))
+        assertFalse(turn.contains("dispatchWithReceipt("))
     }
-    
+
     @Test
     fun theJournalRecordsTheFinalImageBudgetedHistory() {
-        // [T-session-journal-final] The digest sequence must describe the request
-        // that actually left the device, so the image budget is applied FIRST.
+        val projection = src("ui/chat/ChatViewModelRequestProjection.kt")
         val journal = src("ui/chat/ChatViewModelJournalExt.kt")
-        val fn = journal.substringAfter("fun ChatViewModel.finalizeRequestHistory")
-        val budgetAt = fn.indexOf("applyRequestImageBudget(history)")
-        val recordAt = fn.indexOf("recordRequestJournal(turn, it)")
-        assertTrue("image budget must run before the journal write", budgetAt >= 0 && recordAt > budgetAt)
         val loop = src("ui/chat/ChatViewModelAgentLoopExt.kt")
-        assertTrue("the loop must journal through the finalizer", loop.contains("finalizeRequestHistory(turn,"))
+        assertTrue(projection.contains("val stableMessages = applyRequestImageBudget("))
+        assertTrue(projection.contains("ChatRequest(addReminders(stableMessages)"))
+        assertTrue(journal.contains("projection.outboundRequest.messages"))
+        val gate = loop.indexOf("when (inLoopContextCheck(projection,")
+        val record = loop.indexOf("journal.recordRequestJournal(turn, projection)")
+        val send = loop.indexOf("currentProvider.streamMessage(", record)
+        assertTrue("journal the final projection only after the gate and before dispatch", gate >= 0 && record > gate && send > record)
+        assertFalse("journal must not budget images a second time", journal.contains("applyRequestImageBudget("))
     }
-    
+
     @Test
     fun theCompactionCooldownUsesItsOwnMessage() {
         // [T-compaction-cooldown-message] A suppressed retry means the previous
         // attempt FAILED and nothing is running: saying "already in progress"
         // described a job that does not exist.
         val ext = src("ui/chat/ChatViewModelCompactExt.kt")
-        val branch = ext.substringAfter("retry suppressed").take(1500)
-        assertTrue("new cooldown message missing: " + branch.take(200), branch.contains("vm_compact_retry_cooldown"))
+        val branch = ext.substringAfter("if (!CompactionTransaction.retryAllowedNow(sid, nowMs)) {")
+            .substringBefore("val stages = compactStagePlan()")
+        assertTrue("new cooldown message missing", branch.contains("vm_compact_retry_cooldown"))
         assertFalse("already-running string leaked into the cooldown branch", branch.contains("vm_compact_already_running"))
     }
-    
+
     @Test
     fun theLoopGuardHonoursTheSettingsSwitch() {
         // [T-guard-stop-policy] A switch with no reader is a dead toggle.
@@ -135,18 +124,19 @@ class HarnessWiringTest {
         val screen = src("ui/settings/ToolLimitsSettingsScreen.kt")
         assertTrue(screen.contains("GuardPrefs.setStopEnabled("))
     }
-    
+
     @Test
     fun thePerModelBudgetIsResolvedAndPersisted() {
         // [T-harness-config-resolve] Resolution per assembly + a real writer, or
         // the knob is unreachable exactly like the deleted first attempt.
         val history = src("ui/chat/ChatViewModelAgentHistoryExt.kt")
-        assertTrue(history.contains("val harness = activeHarnessConfig()"))
-        assertTrue(history.contains("budgetTokensForWindow(windowTokens, applyTailBudget, harness)"))
+        assertTrue(history.contains("harnessConfig: HarnessConfig = activeHarnessConfig()"))
+        assertTrue(history.contains("detachedTailStartForWindow(history, windowTokens, applyTailBudget, harnessConfig)"))
+        assertTrue(history.contains("config = harnessConfig"))
         val screen = src("ui/settings/ModelEntryDetailScreen.kt")
         assertTrue(screen.contains("HarnessConfigStore.save("))
-        val sheet = src("ui/chat/TokenUsageSheet.kt")
-        assertTrue(sheet.contains("memoryUsageSummary()"))
+        val projection = src("ui/chat/ChatViewModelRequestProjection.kt")
+        assertTrue(projection.contains("activeHarnessConfig(requestEntryId(attribution))"))
+        assertTrue(projection.contains("harnessConfig = harnessConfig"))
     }
 }
-

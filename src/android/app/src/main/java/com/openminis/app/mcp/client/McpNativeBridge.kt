@@ -210,10 +210,7 @@ object McpNativeBridge {
             )
         }
         val result = client.callTool(tool, arguments)
-        // [T-mcp-output-limit] Bound the model-facing text at the MCP boundary
-        // (pi mcp/src/output-limit.ts): middle cut past 20KB with head/tail and
-        // a token-estimate warning, full text spilled into THIS session's
-        // workspace so the model can page it with file_read offset/limit.
+        // Use the shared spill preview for text, preserving media descriptors separately.
         return McpJsonRpc.formatCallResult(
             result,
             McpJsonRpc.McpResultContext(
@@ -224,24 +221,15 @@ object McpNativeBridge {
         )
     }
 
-    /**
-     * [T-mcp-output-limit] The pi `saveOutput` callback: persist the FULL text
-     * into the session tool-spill workspace and hand back the guest path the
-     * model can read with offset/limit. Null saver when there is no session —
-     * the preview is then bounded without a read-back path (pi behavior).
-     * Throws inside when the write fails, so the preview carries the reason.
-     */
+    /** The shared writer returns null if the full text is not readable in this session. */
     private fun mcpOutputSaver(
         context: Context,
         sessionId: String,
         server: String,
         tool: String,
-    ): ((String) -> String)? {
+    ): ((String) -> String?)? {
         if (sessionId.isBlank()) return null
-        return { full ->
-            ToolOutputSpill.offloadFullOutput(context, sessionId, "mcp-$server-$tool", full)
-                ?: throw java.io.IOException("could not write the MCP output file to the session workspace")
-        }
+        return { full -> ToolOutputSpill.offloadFullOutput(context, sessionId, "mcp-$server-$tool", full) }
     }
 
     /** Drop the cached client for [server] (config changed / process died). */

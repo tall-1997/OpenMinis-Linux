@@ -1,5 +1,11 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.util.SecretMasking
+import com.openminis.app.util.TextClip
+
+private fun safeHandoverText(text: String, limit: Int): String =
+    TextClip.safeTake(WorkingMemoryArgs.oneLine(SecretMasking.mask(text)), limit)
+
 /**
  * [T-working-memory-ledger] Host-maintained per-session ledger of tool work,
  * rendered ONLY when the postAnchor tail budget evicts rounds that were never
@@ -70,18 +76,9 @@ internal class WorkingMemoryLedger {
                 turn = turn,
                 tool = tool,
                 argsDigest = argsDigest,
-                argsSummary = com.openminis.app.util.TextClip.safeTake(
-                    argsSummary,
-                    ARGS_SUMMARY_CHARS,
-                ),
-                // [T-working-memory-frame-safe] The line is committed inside
-                // a <system-reminder> frame; raw tool output can contain a
-                // closing tag or newlines that would end the frame early and
-                // leak subsequent lines into user-visible previews.
-                resultHead = com.openminis.app.util.TextClip.safeTake(
-                    WorkingMemoryArgs.oneLine(resultHead),
-                    RESULT_HEAD_CHARS,
-                ),
+                argsSummary = safeHandoverText(argsSummary, ARGS_SUMMARY_CHARS),
+                // Mask before clipping so a credential crossing the preview boundary is still recognized.
+                resultHead = safeHandoverText(resultHead, RESULT_HEAD_CHARS),
             ),
         )
         delivered.add(false)
@@ -155,14 +152,8 @@ internal class WorkingMemoryLedger {
                     turn = e.turn,
                     tool = e.tool,
                     argsDigest = e.argsDigest,
-                    argsSummary = com.openminis.app.util.TextClip.safeTake(
-                        e.argsSummary,
-                        ARGS_SUMMARY_CHARS,
-                    ),
-                    resultHead = com.openminis.app.util.TextClip.safeTake(
-                        WorkingMemoryArgs.oneLine(e.resultHead),
-                        RESULT_HEAD_CHARS,
-                    ),
+                    argsSummary = safeHandoverText(e.argsSummary, ARGS_SUMMARY_CHARS),
+                    resultHead = safeHandoverText(e.resultHead, RESULT_HEAD_CHARS),
                 ),
             )
             delivered.add(false)

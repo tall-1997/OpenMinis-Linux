@@ -29,6 +29,10 @@ data class LLMMessage(
      * reasoning_content once `thinking` is enabled.
      */
     val reasoningContent: String? = null,
+    /** Local context-estimation metadata; never included in a provider request. */
+    val contextUsageAnchor: ContextUsageAnchor? = null,
+    /** The host authored this USER-role reminder; it does not open a user turn. */
+    val isHostGenerated: Boolean = false,
 ) {
     enum class Role(val value: String) {
         USER("user"),

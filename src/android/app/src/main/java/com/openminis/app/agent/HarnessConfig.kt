@@ -111,7 +111,7 @@ internal data class HarnessConfig(
     companion object {
         /** Shipped defaults; every literal above mirrors a pre-existing constant. */
         val DEFAULT: HarnessConfig = HarnessConfig()
-        
+
         /**
          * [T-harness-config-no-global] The active configuration is the shipped
          * default, always.

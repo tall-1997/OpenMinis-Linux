@@ -71,7 +71,14 @@ open class BodyStore(private val root: File) {
         }
     }
 
-    fun read(ref: String, maxBytes: Int = ResourceLimits.SQL_CELL_BYTES): ByteArray? {
+    fun read(ref: String, maxBytes: Int = ResourceLimits.SQL_CELL_BYTES): ByteArray? = readBody(ref, maxBytes)
+
+    /** Check the row's admission limit against the file header before reading its payload. */
+    internal fun readExact(ref: String, expectedBytes: Int): ByteArray? = readBody(ref, expectedBytes, expectedBytes)
+
+    internal fun verifyExact(ref: String, expectedBytes: Int): Boolean = readBody(ref, 0, expectedBytes) != null
+
+    private fun readBody(ref: String, maxBytes: Int, expectedBytes: Int? = null): ByteArray? {
         if (ref.length != 64 || ref.any { it !in '0'..'9' && it !in 'a'..'f' }) return null
         val file = File(root, ref)
         if (!file.isFile) return null
@@ -97,7 +104,7 @@ open class BodyStore(private val root: File) {
         // [Wave3-fix-7] RAW only: DEFLATE payloads were never written by any
         // build path that survives, and the inflate side channel is gone.
         if (codec != CODEC_RAW) return null
-        if (uncompressed != stored) return null
+        if (uncompressed != stored || (expectedBytes != null && uncompressed != expectedBytes)) return null
         val bounded = maxBytes.coerceIn(0, uncompressed)
         val reservation = bounded.toLong() + IO_CHUNK_BYTES
         if (!Admission.tryAdmit(reservation)) return null

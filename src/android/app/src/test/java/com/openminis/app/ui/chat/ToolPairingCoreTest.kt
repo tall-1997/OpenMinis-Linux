@@ -70,6 +70,15 @@ class ToolPairingCoreTest {
     }
 
     @Test
+    fun aCutCannotReassignAnEarlierResultToAReusedId() {
+        val history = listOf(user("go"), assistant(use("c1")), assistant(use("c1"), result("c1")))
+        val legal = ToolPairingCore.legalCuts(history)
+        assertTrue(legal[1])
+        assertFalse("the result belongs to the first call, not the in-flight reuse", legal[2])
+        assertTrue(ToolPairingCore.hasPendingUse(listOf(carrier("c1"), assistant(use("c1")))))
+    }
+
+    @Test
     fun aResultBeforeItsCallIsNotBalanced() {
         val history = listOf(carrier("c1"), assistant(use("c1")))
         val legal = ToolPairingCore.legalCuts(history)

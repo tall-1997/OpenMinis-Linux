@@ -1,11 +1,14 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.data.CompactSliceBoundaries
 import com.openminis.app.data.model.LLMMessage
 
 /**
  * [T-compact-reduced-retry] Oldest slice of a failed compaction range for the
- * last-resort reduced retry. `null` for small ranges — a 5-message
- * "transcript" does not need slicing, it just needs the truncation fallback.
+ * last-resort reduced retry. `null` for small ranges — a small "transcript"
+ * has no safe prefix to retry, so the caller keeps the whole history and
+ * reports the failure (no truncation fallback: a failed compaction never
+ * silently drops rounds).
  *
  * [T-compact-reduced-anchor] Returns the OLDEST part, not the newest. A
  * summary replaces everything up to the marker anchor, so whatever is
@@ -17,13 +20,15 @@ import com.openminis.app.data.model.LLMMessage
  */
 internal fun reducedCompactRetryInput(messages: List<LLMMessage>): List<LLMMessage>? {
     if (messages.size < 12) return null
-    return messages.take((messages.size * 3 / 5).coerceAtLeast(8))
+    val target = (messages.size * 3 / 5).coerceAtLeast(8)
+    val end = CompactSliceBoundaries(messages, protectPending = true).atOrBefore(target)
+    return if (end in 1 until messages.size) messages.take(end) else null
 }
 
 internal fun coveredCountFor(outcome: CompactOutcome, rangeSize: Int): Int? {
     if (!outcome.succeeded) return null
-    if (rangeSize <= 0) return null
-    return outcome.coveredMessages.coerceIn(1, rangeSize)
+    if (outcome.summary.isBlank()) return null
+    return outcome.coveredMessages.takeIf { it in 1..rangeSize }
 }
 
 /**
@@ -54,7 +59,7 @@ internal fun cappedCompactEnd(
     estimate: (LLMMessage) -> Int = WalkBack::estimateMessageTokens,
 ): Int {
     if (end <= start) return end
-    var total = 0
+    var total = 0L
     var i = start
     while (i <= end) {
         val cost = estimate(history[i]).coerceAtLeast(0)

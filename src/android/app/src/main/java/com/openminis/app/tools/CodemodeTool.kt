@@ -94,7 +94,7 @@ object CodemodeTool {
         val toolTitle = args.optString("tool_title", NAME).ifBlank { NAME }
         val code = args.optString("code").ifBlank { args.optString("script") }
         if (code.isBlank()) {
-            return ToolExecutionResult("code required", false, toolTitle = toolTitle)
+            return ToolExecutionResult("code required", false, toolTitle = toolTitle, notSent = true)
         }
         val timeoutSeconds = args.optLong("timeout_seconds", DEFAULT_TIMEOUT_S)
             .coerceIn(1L, MAX_TIMEOUT_S)
@@ -131,6 +131,9 @@ object CodemodeTool {
                         // the UI renders the TIMEOUT status from this flag
                         // (ChatViewModelToolTurnExec result.timedOut), not from the code.
                         timedOut = run.timedOut,
+                        // The sandbox executed the script to a terminal failure
+                        // (error, budget, or watchdog kill) — settle the receipt.
+                        deliveryAccepted = true,
                     )
                     valueJson == null -> ToolExecutionResult(
                         "(no return value after ${run.toolCalls} tool calls) — a codemode script must `return` its result.",

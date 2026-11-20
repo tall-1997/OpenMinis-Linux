@@ -122,7 +122,7 @@ object SupervisorRunStore {
         return loaded
     }
 
-    private fun saveLocked(sessionId: String, context: Context?, runs: List<RunRecord>) {
+    private fun saveLocked(sessionId: String, context: Context?, runs: List<RunRecord>, required: Boolean = false) {
         val k = key(sessionId)
         val trimmed = runs.take(MAX_RUNS)
         val f = file(context, k)
@@ -133,6 +133,7 @@ object SupervisorRunStore {
         }
         if (AtomicFileWrite.write(f, encode(trimmed)) == null) {
             AppLogger.error(TAG, "run store persist failed for $k (${f.absolutePath})")
+            if (required) throw java.io.IOException("Could not checkpoint supervisor run")
         }
         memory[k] = trimmed.toMutableList()
     }
@@ -141,20 +142,32 @@ object SupervisorRunStore {
     // [T-supervisor-runstore-io] Lock, memory map and disk move together onto the
     // IO dispatcher: mutual exclusion and persist-before-return ordering unchanged,
     // only the thread they run on leaves Main.
-    suspend fun start(sessionId: String, context: Context?, objective: String, maxWorkerTurns: Int): RunRecord = withContext(Dispatchers.IO) {
+    suspend fun start(
+        sessionId: String, context: Context?, objective: String, maxWorkerTurns: Int,
+        recovery: RunRecord? = null,
+        objectiveRowId: String? = null,
+    ): RunRecord = withContext(Dispatchers.IO) {
         val k = key(sessionId)
         lock(k).withLock {
+            val head = loadLocked(k, context).firstOrNull()
+            val prior = if (recovery != null) {
+                head?.takeIf { it.id == recovery.id && recovery.sessionId == k && it.state == STATE_INTERRUPTED }
+                    ?: throw java.io.IOException("Supervisor recovery no longer matches this session")
+            } else head?.takeIf { it.id == objectiveRowId }
+            val id = prior?.id ?: objectiveRowId?.takeIf { it.isNotBlank() }
+                ?: if (context == null) UUID.randomUUID().toString() else throw java.io.IOException("Missing supervisor objective row")
             val record = RunRecord(
+                id = id,
                 sessionId = k,
                 objective = objective.trim().take(MAX_OBJECTIVE_CHARS),
-                workerTurns = 0,
-                rounds = emptyList(),
+                workerTurns = prior?.workerTurns ?: 0,
+                rounds = prior?.rounds.orEmpty(),
                 state = STATE_RUNNING,
                 doneSummary = null,
                 createdAt = System.currentTimeMillis(),
                 updatedAt = System.currentTimeMillis(),
             )
-            saveLocked(k, context, listOf(record))
+            saveLocked(k, context, listOf(record), required = true)
             record
         }
     }
@@ -177,12 +190,13 @@ object SupervisorRunStore {
                 atMs = System.currentTimeMillis(),
             )
             val updated = head.copy(
-                rounds = head.rounds + round,
+                rounds = (head.rounds + round).takeLast(400),
                 workerTurns = head.workerTurns + 1,
                 updatedAt = System.currentTimeMillis(),
             )
-            runs[0] = updated
-            saveLocked(k, context, runs)
+            // The next worker receipt scope uses this checkpoint. A failed
+            // write must stop the run before it can advance to another scope.
+            saveLocked(k, context, listOf(updated) + runs.drop(1), required = true)
         }
     }
 

@@ -94,7 +94,7 @@ internal object TokenMeter {
             estimatedTokens = estimated,
         )
     }
-    
+
  /** pi-ported empirical weight of one image, in characters. */
     // [T-token-meter-image-weight] One source: ContextTokenEstimator already
     // defines this number, and a second literal is how every duplicated
@@ -111,7 +111,7 @@ internal object TokenMeter {
                 when (part) {
                     is AgentContentPart.Text -> messageChars += part.text.length
                     is AgentContentPart.ToolUse ->
-                        toolUseChars += TokenScanMemo.toolUseInputJson(part.input).length
+                        toolUseChars += part.inputJson.length
                     is AgentContentPart.ToolResult -> toolResultChars += part.content.length
                     is AgentContentPart.ImageData -> images += 1
                 }

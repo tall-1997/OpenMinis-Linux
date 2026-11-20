@@ -1,6 +1,7 @@
 package com.openminis.app.agent
 
 import com.openminis.app.data.ContextSaverPrefs
+import com.openminis.app.data.ContextTokenMeter
 import com.openminis.app.data.model.LLMMessage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -13,18 +14,14 @@ import kotlinx.coroutines.flow.asStateFlow
  *
  * Deliberately an object rather than a ChatViewModel field:
  *
- *  - The decision reads exactly three inputs (mode pref, model context window,
- *    provider-reported usage). Nothing here needs the ViewModel, a repository,
- *    or a CoroutineScope — keeping it out of `ChatViewModel` is what lets the
- *    send path stay a single-line call at the history seam.
+ *  - The decision uses the mode, model window, reported usage and current history.
+ *    Nothing here needs a ViewModel, repository or CoroutineScope.
  *  - The stats are display-only. Two ViewModels alive at once (a chat + a
  *    sub-agent host) simply overwrite the same "last request" reading, which is
  *    the same granularity the cache-hit-rate row already uses.
  *
- * Gate order is cheapest-first so a short session pays one enum read and one
- * integer compare, and the returned list is the SAME instance in that case —
- * the outgoing JSON is byte-identical to no-feature-at-all, which keeps provider
- * prefix caching intact.
+ * The mode and reported-usage checks run before any history scan. If nothing
+ * needs folding, the same list is returned and provider prefix caching is intact.
  */
 object ContextSaverRuntime {
 
@@ -37,6 +34,8 @@ object ContextSaverRuntime {
         val triggerTokens: Int = 0,
     )
 
+    data class AgeProjection(val messages: List<LLMMessage>, val stats: Stats)
+
     private val _stats = MutableStateFlow(Stats())
     val stats: StateFlow<Stats> = _stats.asStateFlow()
 
@@ -48,16 +47,11 @@ object ContextSaverRuntime {
     @Volatile
     internal var modeOverride: ContextSaverPrefs.Mode? = null
 
-    /**
-     * Mixed CJK + code runs ~3 chars/token; this is a floor gate, not an
-     * accounting figure, so the cheap constant beats re-walking the history
-     * with a real estimator. Public: the Token Usage sheet divides
-     * [Stats.savedChars] by it, and two literals would drift.
-     */
+    /** Display-only conversion for [Stats.savedChars], separate from request metering. */
     const val CHARS_PER_TOKEN = 3L
 
-    /** [T-harness-config] The shipped ruler; `HarnessConfig` owns the live value. */
-    internal const val DEFAULT_CHARS_PER_TOKEN = 3L
+    /** Baseline for applying the aging-only ruler relative to the request meter. */
+    internal const val DEFAULT_CHARS_PER_TOKEN = CHARS_PER_TOKEN
 
     /**
      * [T-absolute-age-ceiling] Floor that makes aging fire even on a huge window.
@@ -86,44 +80,78 @@ object ContextSaverRuntime {
      *
      * @param windowTokens the model's effective context window (0 = unknown).
      * @param reportedTokens input tokens reported by the previous API call.
+     * @param publish false for preview-only projections that must not update stats.
+     * @param verifiedSpillPaths caller-verified recovery paths; this method performs no I/O.
+     * @param keepRecentOverride optional shared recency boundary with other projections.
      * @return the history to send; the input instance when nothing folded.
      */
     internal fun age(
         history: List<LLMMessage>,
         windowTokens: Int,
         reportedTokens: Int,
+        publish: Boolean = true,
+        verifiedSpillPaths: Set<String> = emptySet(),
+        keepRecentOverride: Int? = null,
         config: HarnessConfig = HarnessConfig.current(),
     ): List<LLMMessage> {
+        val projection = planAge(history, windowTokens, reportedTokens, verifiedSpillPaths, keepRecentOverride, config)
+        if (publish) recordProjection(projection.stats)
+        return projection.messages
+    }
+
+    /** Gate spill verification on the same inputs used by [planAge]. */
+    internal fun willAge(
+        history: List<LLMMessage>,
+        windowTokens: Int,
+        reportedTokens: Int,
+        config: HarnessConfig = HarnessConfig.current(),
+    ): Boolean {
+        val mode = modeOverride ?: ContextSaverPrefs.mode()
+        if (mode == ContextSaverPrefs.Mode.OFF) return false
+        return crossesTrigger(history, reportedTokens, ContextSaverPrefs.triggerTokens(mode, windowTokens), config)
+    }
+
+    /** Project without publishing; call [recordProjection] only when sending the request. */
+    internal fun planAge(
+        history: List<LLMMessage>,
+        windowTokens: Int,
+        reportedTokens: Int,
+        verifiedSpillPaths: Set<String> = emptySet(),
+        keepRecentOverride: Int? = null,
+        config: HarnessConfig = HarnessConfig.current(),
+    ): AgeProjection {
         val mode = modeOverride ?: ContextSaverPrefs.mode()
         if (mode == ContextSaverPrefs.Mode.OFF) {
-            publish(Stats(mode = mode.id))
-            return history
+            return AgeProjection(history, Stats(mode = mode.id))
         }
-        // [T-harness-config] Both numbers are policy, not constants: a per-session
-        // override must be able to move the ceiling and the ruler together.
-        // [T-harness-config-resolve] Resolved by the caller for this model.
         val trigger = ContextSaverPrefs.triggerTokens(mode, windowTokens)
-        val floorTokens = (ToolResultAging.totalChars(history) / config.agingCharsPerToken).toInt()
-        // [T-absolute-age-ceiling] Three ways in: the API reported a big request,
-        // the history alone is above the window-relative trigger, or it is above
-        // the absolute ceiling (which fires on wide windows where the relative
-        // trigger can never be met).
-        if (reportedTokens < trigger && floorTokens < trigger &&
-            floorTokens < config.absoluteAgeTokens
-        ) {
-            publish(Stats(mode = mode.id, triggerTokens = trigger))
-            return history
+        if (!crossesTrigger(history, reportedTokens, trigger, config)) {
+            return AgeProjection(history, Stats(mode = mode.id, triggerTokens = trigger))
         }
-        val plan = ToolResultAging.age(history, mode.keepRecent, mode.minChars)
-        publish(
-            Stats(
-                mode = mode.id,
-                aged = plan.agedCount,
-                savedChars = plan.savedChars,
-                triggerTokens = trigger,
-            ),
+        val plan = ToolResultAging.age(
+            messages = history,
+            keepRecent = keepRecentOverride ?: mode.keepRecent,
+            minChars = mode.minChars,
+            verifiedSpillPaths = verifiedSpillPaths,
         )
-        return if (plan.changed) plan.messages else history
+        return AgeProjection(
+            messages = plan.messages,
+            stats = Stats(mode.id, plan.agedCount, plan.savedChars, trigger),
+        )
+    }
+
+    private fun crossesTrigger(
+        history: List<LLMMessage>,
+        reportedTokens: Int,
+        trigger: Int,
+        config: HarnessConfig,
+    ): Boolean {
+        if (reportedTokens >= trigger) return true
+        val rawTokens = ContextTokenMeter.rawMessagesTokens(history).toLong()
+        // Scale the local meter only for this gate. The default ratio is 1,
+        // and using the meter avoids counting mirrored content or ignoring media.
+        val historyTokens = rawTokens * DEFAULT_CHARS_PER_TOKEN / config.agingCharsPerToken
+        return historyTokens >= minOf(trigger, config.absoluteAgeTokens)
     }
 
     /** Test seam: reset the published stats and the pinned level between cases. */
@@ -132,7 +160,7 @@ object ContextSaverRuntime {
         _stats.value = Stats()
     }
 
-    private fun publish(stats: Stats) {
+    fun recordProjection(stats: Stats) {
         // data-class equality: skip the StateFlow write (and any recomposition)
         // when this request folded nothing new — the steady state of a long chat.
         if (_stats.value != stats) _stats.value = stats

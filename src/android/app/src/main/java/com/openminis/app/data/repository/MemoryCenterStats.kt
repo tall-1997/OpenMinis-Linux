@@ -60,22 +60,24 @@ object MemoryCenterStats {
             ?.take(MAX_SESSION_DIRS)
             .orEmpty()
 
-        for (session in sessions) {
+        val sessionMemories = sessions.map { session ->
             blockedRepeats += jsonKeyCount(File(session, FAILURE_LEDGER))
-            val memory = File(session, "memory")
-            recalled += jsonKeyCount(File(memory, RECALL_SIDECAR))
-            if (scanned >= MAX_FILES_SCANNED) continue
-            val diaries = memory.listFiles()
-                ?.filter { it.isFile && DAILY.matches(it.name) }
-                .orEmpty()
-            for (diary in diaries) {
+            File(session, "memory").also { recalled += jsonKeyCount(File(it, RECALL_SIDECAR)) }
+        }
+        for (memory in sessionMemories + shared) {
+            if (scanned >= MAX_FILES_SCANNED) break
+            val diaries = memory.listFiles().orEmpty().filter { it.isFile && DAILY.matches(it.name) }
+            for (file in diaries) {
                 if (scanned >= MAX_FILES_SCANNED) break
                 scanned += 1
-                val text = runCatching { diary.readText() }.getOrNull() ?: continue
-                var index = text.indexOf(SEDIMENT_MARKER)
-                while (index >= 0) {
-                    sediments += 1
-                    index = text.indexOf(SEDIMENT_MARKER, index + SEDIMENT_MARKER.length)
+                val diary = MemoryLifecycle.read(memory, file.name) ?: continue
+                recalled += diary.managed().count { it.state.usage > 0 }
+                if (memory != shared) {
+                    var index = diary.text.indexOf(SEDIMENT_MARKER)
+                    while (index >= 0) {
+                        sediments += 1
+                        index = diary.text.indexOf(SEDIMENT_MARKER, index + SEDIMENT_MARKER.length)
+                    }
                 }
             }
         }

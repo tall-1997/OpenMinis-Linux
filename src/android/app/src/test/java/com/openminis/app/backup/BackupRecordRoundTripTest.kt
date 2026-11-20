@@ -1,6 +1,9 @@
 package com.openminis.app.backup
 
+import com.openminis.app.data.CompactAssets
+import com.openminis.app.data.db.CompactMarkerEntity
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
@@ -140,6 +143,51 @@ class BackupRecordRoundTripTest {
         assertEquals(stamp, millisOf(fromIso, "updatedAt"))
         assertEquals(stamp, millisOf(fromMillis, "updatedAt"))
         assertNull(millisOf(fromIso, "absent"))
+    }
+
+    @Test
+    fun `compact marker round trip keeps validated assets and precise undo ordering`() {
+        val earlier = CompactMarkerEntity("early", "s1", "first", Int.MAX_VALUE, 2, 1_755_000_000_111L,
+            lastCompactedMessageId = "m2", version = 2, assetsJson = CompactAssets(reads = listOf("/root/a.txt")).encode())
+        val newer = earlier.copy(id = "late", summary = "second", createdAt = earlier.createdAt + 1,
+            lastCompactedMessageId = "m4", assetsJson = CompactAssets(reads = listOf("/root/a.txt", "/root/b.txt")).encode())
+        val earlyRecord = markerRecord(earlier).jsonObject
+        val lateRecord = markerRecord(newer).jsonObject
+        assertEquals(earlyRecord["createdAt"], lateRecord["createdAt"])
+        assertEquals(earlier, compactMarkerFromRecord(earlyRecord))
+        assertEquals(newer, compactMarkerFromRecord(lateRecord))
+    }
+
+    @Test
+    fun `older or malformed asset records still import the legacy summary`() {
+        val record = BackupFormat.json.parseToJsonElement(
+            """{"id":"m","sessionId":"s","summary":"old","createdAt":123,"firstKeptMessageId":"m3"}""",
+        ).jsonObject
+        val legacy = checkNotNull(compactMarkerFromRecord(record))
+        assertEquals(1, legacy.version)
+        assertEquals(123L, legacy.createdAt)
+        assertEquals("m3", legacy.firstKeptMessageId)
+        assertNull(legacy.assetsJson)
+        val bad = JsonObject(record + ("assetsJson" to JsonPrimitive("""{"files":["/root/../escape"]}""")))
+        assertEquals(legacy, compactMarkerFromRecord(bad))
+    }
+
+    /**
+     * [P3-2] Pre-version packages (iOS, older Android) carry no `version`
+     * field. A lastCompactedMessageId-only row must import as v1 — the
+     * baseline resolution path handles it — not be upgraded to v2 by
+     * inference from the id's presence.
+     */
+    @Test
+    fun `a pre-version package does not infer v2 from lastCompactedMessageId`() {
+        val record = BackupFormat.json.parseToJsonElement(
+            """{"id":"m","sessionId":"s","summary":"old","createdAt":123,"lastCompactedMessageId":"m9"}""",
+        ).jsonObject
+        val imported = checkNotNull(compactMarkerFromRecord(record))
+        assertEquals(1, imported.version)
+        assertEquals("m9", imported.lastCompactedMessageId)
+        // An explicit version is trusted verbatim, so this build's exports round-trip.
+        assertEquals(2, checkNotNull(compactMarkerFromRecord(JsonObject(record + ("version" to JsonPrimitive(2))))).version)
     }
 
     // Mirrors of the exporter's record builders. Kept here rather than calling
