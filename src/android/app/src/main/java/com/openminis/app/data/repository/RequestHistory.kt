@@ -1,6 +1,7 @@
 package com.openminis.app.data.repository
 
 import androidx.room.withTransaction
+import com.openminis.app.data.ContextTokenMeter
 import com.openminis.app.data.body.ResourceLimits
 import com.openminis.app.data.compactPairKey
 import com.openminis.app.data.db.MessageEntity
@@ -22,20 +23,31 @@ private val REQUEST_BODY_SIZES = 1L..ResourceLimits.MAX_DECLARED_UNCOMPRESSED.to
 
 internal class RequestHistoryUnavailable(message: String) : IllegalStateException(message)
 
-internal suspend fun ChatRepository.readRequestHistoryTail(sessionId: String, limit: Int): ChatRepository.SessionTail {
-    require(limit >= 0)
+internal suspend fun ChatRepository.readRequestHistoryTail(
+    sessionId: String,
+    limit: Int,
+    maxTokens: Int? = null,
+): ChatRepository.SessionTail {
+    require(limit >=0)
+    require(maxTokens == null || maxTokens >=0)
     // The count, keyset pages, and chunks of an editable inline body must
     // agree on one snapshot. Production repositories always own a Room DB.
-    return db?.withTransaction { readRequestSuffix(sessionId, limit) } ?: readRequestSuffix(sessionId, limit)
+    return db?.withTransaction { readRequestSuffix(sessionId, limit, maxTokens) }
+        ?: readRequestSuffix(sessionId, limit, maxTokens)
 }
 
-private suspend fun ChatRepository.readRequestSuffix(sessionId: String, limit: Int): ChatRepository.SessionTail {
+private suspend fun ChatRepository.readRequestSuffix(
+    sessionId: String,
+    limit: Int,
+    maxTokens: Int?,
+): ChatRepository.SessionTail {
     val total = dao.messageCountForSession(sessionId)
     val target = minOf(total, limit)
     val newest = ArrayList<RequestEntry>()
     val store = bodyStore()
     var before = Long.MAX_VALUE
     var remaining = REQUEST_HISTORY_MAX_BYTES
+    var remainingTokens = maxTokens ?: Int.MAX_VALUE
     scan@ while (newest.size < target) {
         val page = dao.loadRequestHistoryRows(sessionId, before, minOf(REQUEST_HISTORY_PAGE_SIZE, target - newest.size))
         if (page.isEmpty()) throw RequestHistoryUnavailable("Persisted request history changed while loading.")
@@ -45,7 +57,7 @@ private suspend fun ChatRepository.readRequestSuffix(sessionId: String, limit: I
             val ref = row.bodyRef
             val size = (if (ref == null) meta.inlineSize else row.bodyBytes)
                 ?.takeIf { it in REQUEST_BODY_SIZES } ?: row.unavailable("invalid body size")
-            val reasoningSize = meta.reasoningSize ?: 0L
+            val reasoningSize = meta.reasoningSize ?:0L
             if (reasoningSize > ResourceLimits.MAX_DECLARED_UNCOMPRESSED) row.unavailable("invalid reasoning size")
             val bytes = size + reasoningSize
             if (bytes > remaining) break@scan
@@ -65,8 +77,15 @@ private suspend fun ChatRepository.readRequestSuffix(sessionId: String, limit: I
                     dao.loadRequestReasoningChunk(sessionId, row.id, offset, count)
                 })
             } else row.reasoningContent
+            val rowTokens = if (maxTokens == null)0 else ContextTokenMeter.rawTextTokens(raw) +
+                ContextTokenMeter.rawTextTokens(reasoning.orEmpty())
+            if (maxTokens != null && newest.isNotEmpty() && rowTokens > remainingTokens) break@scan
             newest += row.copy(partsJson = raw, reasoningContent = reasoning).requestEntry()
             remaining -= bytes
+            if (maxTokens != null) {
+                remainingTokens = (remainingTokens - rowTokens).coerceAtLeast(0)
+                if (remainingTokens ==0) break@scan
+            }
             before = row.sortOrder.toLong()
         }
     }

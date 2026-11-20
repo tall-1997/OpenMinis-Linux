@@ -5,6 +5,8 @@ import com.openminis.app.MinisApp
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.AgentToolParam
 import com.openminis.app.data.repository.ChatRepository
+import com.openminis.app.data.repository.loadMessagePageFull
+import com.openminis.app.data.repository.readFullMessageText
 import com.openminis.app.sandbox.SessionAccessAudit
 import com.openminis.app.sandbox.SessionAccessPolicy
 import com.openminis.app.util.IsoTime
@@ -22,9 +24,10 @@ object SessionLookupTool {
 
     private const val SEARCH_LIMIT_DEFAULT = 8
     private const val SEARCH_LIMIT_MAX = 20
-    private const val READ_LIMIT_DEFAULT = 24
-    private const val READ_LIMIT_MAX = 40
-    private const val READ_CHARS = 600
+    private const val READ_LIMIT_DEFAULT =12
+    private const val READ_LIMIT_MAX =24
+    private const val READ_CHARS =2_000
+    private const val READ_FULL_CHARS =4_000
 
     fun searchDefinition(): AgentToolDefinition = AgentToolDefinition(
         name = SEARCH,
@@ -45,17 +48,19 @@ object SessionLookupTool {
 
     fun readDefinition(): AgentToolDefinition = AgentToolDefinition(
         name = READ,
-        description = "Read a paginated transcript of one past chat session by session_id " +
-            "from search_sessions. Each message is capped at 600 characters. " +
-            "Use offset to page. Do not dump secrets or API keys if they appear.",
+        description = "Read a paginated transcript of one chat session. Each row returns message_id; " +
+            "pass message_id and message_offset to continue reading that exact message. Offloaded large bodies " +
+            "are resolved from storage, not replaced by a placeholder. Do not dump secrets or API keys.",
         parameters = mapOf(
             "tool_title" to AgentToolParam("string", "Short status, e.g. 'Read backup session'."),
             "session_id" to AgentToolParam("string", "Session id returned by search_sessions."),
-            "limit" to AgentToolParam("integer", "Messages to return (default 24, max 40)."),
-            "offset" to AgentToolParam("integer", "Skip this many visible messages (default 0)."),
+            "message_id" to AgentToolParam("string", "Optional exact message to read; enables message_offset."),
+            "message_offset" to AgentToolParam("integer", "Code-point offset inside message_id (default0)."),
+            "limit" to AgentToolParam("integer", "Messages to return (default12, max24)."),
+            "offset" to AgentToolParam("integer", "Skip this many visible messages (default0)."),
         ),
         required = listOf("tool_title", "session_id"),
-        propertyOrdering = listOf("tool_title", "session_id", "limit", "offset"),
+        propertyOrdering = listOf("tool_title", "session_id", "message_id", "message_offset", "limit", "offset"),
     )
 
     suspend fun executeSearch(argsJson: String, currentSessionId: String, context: Context): ToolExecutionResult {
@@ -143,9 +148,7 @@ object SessionLookupTool {
         if (sessionId.isEmpty()) {
             return ToolExecutionResult("Error: session_id is required.", false, toolTitle = toolTitle)
         }
-        // [T-android-session-read-boundary] Reading another chat's transcript is
-        // exactly what this boundary exists for: it needs the user's `session_read`
-        // grant. The attempt is audited either way, granted or not.
+        // [T-android-session-read-boundary] Reading another chat requires the user grant.
         if (SessionAccessPolicy.isForeign(currentSessionId, sessionId)) {
             val granted = SessionAccessPolicy.isCrossSessionGranted(currentSessionId)
             SessionAccessAudit.record(currentSessionId, READ, sessionId, granted, granted)
@@ -163,39 +166,58 @@ object SessionLookupTool {
         }
         val repo = repo(context)
             ?: return ToolExecutionResult("Error: chat store is not ready.", false, toolTitle = toolTitle)
-        val limit = args.optInt("limit", READ_LIMIT_DEFAULT).coerceIn(1, READ_LIMIT_MAX)
-        val offset = args.optInt("offset", 0).coerceAtLeast(0)
+        val messageId = args.optString("message_id", "").trim()
         return try {
             val json = run {
-                val meta = repo.querySessionsMeta(listOf(sessionId), null, 1, null, null).firstOrNull()
-                val page = repo.loadMessagePage(sessionId, offset, limit, READ_CHARS)
-                val total = repo.messageCount(sessionId)
-                JSONObject()
-                    .put("session_id", sessionId)
-                    .put("title", meta?.title ?: "")
-                    .put("offset", offset)
-                    .put("returned", page.size)
-                    .put("total_messages", total)
-                    .put("has_more", offset + page.size < total)
-                    .put("messages", JSONArray().also { arr ->
-                        page.forEach { m ->
-                            arr.put(
-                                JSONObject()
-                                    .put("role", m.role)
-                                    .put("text", m.text)
-                                    .put("truncated", m.truncated)
-                                    .put("created_at", iso(m.createdAt)),
-                            )
-                        }
-                    })
+                if (messageId.isNotEmpty()) {
+                    val item = repo.readFullMessageText(sessionId, messageId)
+                        ?: return@run JSONObject().put("error", "Message not found in this session.")
+                    val offset = args.optInt("message_offset",0).coerceAtLeast(0)
+                    val (text, next, truncated) = HistorySearchTool.page(item.text, offset, READ_FULL_CHARS)
+                    JSONObject()
+                        .put("session_id", sessionId)
+                        .put("message_id", item.messageId)
+                        .put("role", item.role)
+                        .put("message_offset", offset)
+                        .put("text", text)
+                        .put("next_offset", next ?: JSONObject.NULL)
+                        .put("truncated", truncated)
+                } else {
+                    val meta = repo.querySessionsMeta(listOf(sessionId), null,1, null, null).firstOrNull()
+                    val limit = args.optInt("limit", READ_LIMIT_DEFAULT).coerceIn(1, READ_LIMIT_MAX)
+                    val offset = args.optInt("offset",0).coerceAtLeast(0)
+                    val page = repo.loadMessagePage(sessionId, offset, limit, READ_CHARS)
+                    val total = repo.messageCount(sessionId)
+                    JSONObject()
+                        .put("session_id", sessionId)
+                        .put("title", meta?.title ?: "")
+                        .put("offset", offset)
+                        .put("returned", page.size)
+                        .put("total_messages", total)
+                        .put("has_more", offset + page.size < total)
+                        .put("messages", JSONArray().also { arr ->
+                            page.forEach { m ->
+                                arr.put(
+                                    JSONObject()
+                                        .put("message_id", m.messageId)
+                                        .put("role", m.role)
+                                        .put("text", m.text)
+                                        .put("truncated", m.truncated)
+                                        .put("text_offset",0)
+                                        .put("body_offloaded", m.bodyOffloaded)
+                                        .put("next_text_offset", if (m.truncated) READ_CHARS else JSONObject.NULL)
+                                        .put("created_at", iso(m.createdAt)),
+                                    )
+                            }
+                        })
+                }
             }
-            ToolExecutionResult(json.toString(), true, toolTitle = toolTitle)
+            ToolExecutionResult(json.toString(), !json.has("error"), toolTitle = toolTitle)
         } catch (e: Exception) {
             ToolExecutionResult("Error: ${e.message ?: e.javaClass.simpleName}", false, toolTitle = toolTitle)
         }
     }
-
-    fun splitQuery(raw: String): List<String> =
+    fun splitQuery(raw: String) =
         raw.trim().split(Regex("\\s+")).map { it.trim() }.filter { it.length >= 2 }.take(8)
 
     private fun parseArgs(argsJson: String): JSONObject =

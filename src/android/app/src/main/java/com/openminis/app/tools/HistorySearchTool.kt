@@ -51,10 +51,11 @@ object HistorySearchTool {
             "tool_title" to AgentToolParam("string", "Short status, e.g. 'Find migration decision'."),
             "query" to AgentToolParam("string", "Keywords to match. CJK runs are split into bigrams."),
             "role" to AgentToolParam("string", "Optional filter: 'user', 'assistant', or 'tool'."),
+            "scope" to AgentToolParam("string", "Optional 'folded' or 'all'; all includes the active region."),
             "limit" to AgentToolParam("integer", "Max hits (default 6, max 8)."),
         ),
         required = listOf("tool_title", "query"),
-        propertyOrdering = listOf("tool_title", "query", "role", "limit"),
+        propertyOrdering = listOf("tool_title", "query", "role", "scope", "limit"),
     )
 
     fun readDefinition(): AgentToolDefinition = AgentToolDefinition(
@@ -133,7 +134,11 @@ object HistorySearchTool {
                 return@search error(title, "Role must be user, assistant, or tool.", ToolErrorCode.INVALID_ARGUMENTS)
             }
             val limit = args.optInt("limit", SEARCH_LIMIT_DEFAULT).coerceIn(1, SEARCH_LIMIT_MAX)
-            val scope = history.scope()
+            val requestedScope = (args.opt("scope") as? String)?.trim()?.lowercase()
+            if (args.has("scope") && requestedScope !in setOf("folded", "all")) {
+                return@search error(title, "Scope must be folded or all.", ToolErrorCode.INVALID_ARGUMENTS)
+            }
+            val scope = if (requestedScope == "all") HistoryScope.WholeSession else history.scope()
             if (scope == HistoryScope.Unavailable) return@search unavailable(title)
             val hits = JSONArray()
             var previewOnlyRows = 0
@@ -216,10 +221,16 @@ object HistorySearchTool {
             if (offset == null || offset < 0) {
                 return@read error(title, "Offset must be a non-negative integer.", ToolErrorCode.INVALID_ARGUMENTS)
             }
-            val scope = history.scope()
-            val row = history.row(scope, id) ?: return@read notFound(title)
+            var scope = history.scope()
+            if (scope == HistoryScope.Unavailable) return@read notFound(title)
+            var row = history.row(scope, id)
+            if (row == null && scope != HistoryScope.WholeSession) {
+                scope = HistoryScope.WholeSession
+                row = history.row(scope, id)
+            }
+            if (row == null) return@read notFound(title)
             val message = history.body(scope, row) as? HistoryBody.Text ?: return@read notFound(title)
-            if (history.scope() != scope) return@read notFound(title)
+            if (scope is HistoryScope.Folded && history.scope() != scope) return@read notFound(title)
             val text = safeTranscript(message.text)
             if (offset > text.codePointCount(0, text.length)) {
                 val detail = if (message.previewOnly) {
