@@ -9,7 +9,12 @@ import kotlinx.coroutines.withContext
 
 private const val MAX_IN_LOOP_COMPACTIONS = 3
 
-/** The token threshold and coverage gate answer different questions. Both must pass. */
+/**
+ * Token pressure alone decides compaction. Coverage gaps are represented by a
+ * bounded history digest in the request; they must not force a paid compaction
+ * while the request is below the configured threshold.
+ */
+@Suppress("UNUSED_PARAMETER")
 internal fun projectedCapacity(
     policy: ContextPolicy,
     tokens: Int,
@@ -17,11 +22,14 @@ internal fun projectedCapacity(
     hasCoverageGap: Boolean,
     bypassSoftThreshold: Boolean = false,
 ): ContextPolicy.CheckResult {
-    if (hasCoverageGap || (window > 0 && tokens >= window)) {
-        return if (policy.compactThreshold > 0 && !bypassSoftThreshold) ContextPolicy.CheckResult.NEEDS_COMPACT
-        else ContextPolicy.CheckResult.EXHAUSTED
+    if (window >0 && tokens >= window) {
+        return if (policy.compactThreshold >0 && !bypassSoftThreshold) {
+            ContextPolicy.CheckResult.NEEDS_COMPACT
+        } else {
+            ContextPolicy.CheckResult.EXHAUSTED
+        }
     }
-    if (bypassSoftThreshold || window <= 0) return ContextPolicy.CheckResult.OK
+    if (bypassSoftThreshold || window <=0) return ContextPolicy.CheckResult.OK
     return policy.check(tokens, window)
 }
 

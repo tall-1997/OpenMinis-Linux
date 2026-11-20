@@ -30,6 +30,8 @@ internal suspend fun ChatViewModel.checkContextBeforeSend(
             }
         }
         val sid = activeSessionId
+        // Token pressure, not a coverage gap, decides pre-send compaction.
+        // The dispatch rebuild supplies the bounded request history and digest.
         val history = agentHistorySnapshot()
         val compact = requestCompactStateFor(history, sid)
         projectChatRequest(
