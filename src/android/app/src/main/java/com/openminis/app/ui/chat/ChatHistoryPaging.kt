@@ -105,7 +105,10 @@ internal suspend fun ChatViewModel.loadSplitTurnPrefix(beforeSortOrder: Int): Li
     return loadSortRange(SortRange(start, beforeSortOrder))
 }
 
-internal suspend fun ChatViewModel.collectDigestLines(beforeSortOrder: Int): List<HistoryDigest.Line> {
+internal suspend fun ChatViewModel.collectDigestLines(
+    beforeSortOrder: Int,
+    sessionId: String = this.sessionId,
+): List<HistoryDigest.Line> {
     val newestFirst = ArrayList<HistoryDigest.Line>()
     var used = 0
     var cursor = beforeSortOrder

@@ -274,7 +274,14 @@ internal fun ChatViewModel.sendMessage(
         if (!skipContextCheck && !internalGoalRun && editingId == null && revertStageFlow.value == null &&
             !groupChatEnabled.value && !provider.model.isPureVideoGenerator
         ) {
-            val action = checkContextBeforeSend(provider, trimmed, currentAttachments)
+            val action = try {
+                checkContextBeforeSend(provider, trimmed, currentAttachments)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                setInlineError(e.message ?: "Cannot restore the request history.")
+                return@launch
+            }
             if (!_isStreaming.value || activeSessionId != sendSession || snapshotResumeEpoch() != sendEpoch) return@launch
             if (action != ChatViewModel.PreSendContextAction.PROCEED) {
                 pendingSendText = text

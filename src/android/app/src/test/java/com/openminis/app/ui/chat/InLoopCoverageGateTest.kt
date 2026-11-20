@@ -4,36 +4,52 @@ import com.openminis.app.data.ContextPolicy
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** [T-request-coverage-gate] Token size and prefix coverage answer different questions. */
+/** Coverage gaps are digest material; only token pressure may request compaction. */
 class InLoopCoverageGateTest {
-    private val policy = ContextPolicy.forContextWindow(100_000, 50)
+    private val policy = ContextPolicy.forContextWindow(100_000,50)
 
     @Test
     fun `under threshold with full coverage proceeds`() {
         assertEquals(
             ContextPolicy.CheckResult.OK,
-            projectedCapacity(policy, 10_000, 100_000, hasCoverageGap = false),
+            projectedCapacity(policy,10_000,100_000, hasCoverageGap = false),
         )
     }
 
     @Test
-    fun `a coverage gap blocks the request even when the payload is small`() {
+    fun `a coverage gap alone does not force compaction below the threshold`() {
+        assertEquals(
+            ContextPolicy.CheckResult.OK,
+            projectedCapacity(policy,10_000,100_000, hasCoverageGap = true),
+        )
+        assertEquals(
+            ContextPolicy.CheckResult.OK,
+            projectedCapacity(policy,10_000,100_000, hasCoverageGap = true, bypassSoftThreshold = true),
+        )
+    }
+
+    @Test
+    fun `reaching the token threshold requests compaction even with a coverage gap`() {
+        val threshold = policy.compactThreshold
+        assertEquals(
+            ContextPolicy.CheckResult.OK,
+            projectedCapacity(policy, threshold -1,100_000, hasCoverageGap = true),
+        )
         assertEquals(
             ContextPolicy.CheckResult.NEEDS_COMPACT,
-            projectedCapacity(policy, 1_000, 100_000, hasCoverageGap = true),
+            projectedCapacity(policy, threshold,100_000, hasCoverageGap = true),
         )
-        // With the soft path unavailable (compaction disabled), the gap is a hard stop.
         assertEquals(
-            ContextPolicy.CheckResult.EXHAUSTED,
-            projectedCapacity(policy, 1_000, 100_000, hasCoverageGap = true, bypassSoftThreshold = true),
+            ContextPolicy.CheckResult.NEEDS_COMPACT,
+            projectedCapacity(policy, threshold +1,100_000, hasCoverageGap = true),
         )
     }
 
     @Test
-    fun `at the window the request stops even with the soft bypass`() {
+    fun `the hard window still stops even with the soft bypass`() {
         assertEquals(
             ContextPolicy.CheckResult.EXHAUSTED,
-            projectedCapacity(policy, 100_000, 100_000, hasCoverageGap = false, bypassSoftThreshold = true),
+            projectedCapacity(policy,100_000,100_000, hasCoverageGap = false, bypassSoftThreshold = true),
         )
     }
 }

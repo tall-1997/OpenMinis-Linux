@@ -178,4 +178,23 @@ class RequestHistoryRoomTest {
         val failure = runCatching { repo.loadRequestHistory(sid, 1) }.exceptionOrNull()
         assertTrue(failure is RequestHistoryUnavailable)
     }
+
+    @Test
+    fun aUiTailShorterThanTheRequestHistoryMustNotInventACoverageGap() = runBlocking {
+        repeat(600) { row(it, text("row $it")) }
+
+        val uiTail = repo.loadRequestHistory(sid, 500)
+        assertEquals("m100", uiTail.messages.first().id)
+        assertTrue(
+            "A500-row UI tail leaves older persisted rows before its first resident id",
+            repo.requestCompactState(sid, uiTail.messages.first().id).hasCoverageGap,
+        )
+
+        val requestHistory = repo.loadRequestHistory(sid, 4_000)
+        assertEquals("m0", requestHistory.messages.first().id)
+        assertFalse(
+            "The request history already admits the complete session; no compact gap exists",
+            repo.requestCompactState(sid, requestHistory.messages.first().id).hasCoverageGap,
+        )
+    }
 }

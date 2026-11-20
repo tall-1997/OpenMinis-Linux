@@ -242,11 +242,37 @@ internal fun ChatViewModel.trimAgentHistory() {
 internal fun ChatViewModel.ownsTranscript(sid: String, epoch: Long, run: ActiveRun? = ActiveRunContext.current()): Boolean =
     activeSessionId == sid && snapshotResumeEpoch() == epoch && run?.isStopped != true
 
-private data class RebuiltAgentHistory(
+/**
+ * One bounded, decoded request-history snapshot. Pure read: the caller owns
+ * publication, receipt reconciliation and any live-state mutation.
+ */
+internal data class RequestHistorySnapshot(
     val rows: List<LLMMessage>,
+    val receiptRows: List<com.openminis.app.data.repository.ReceiptHistoryRow>,
     val startOffset: Int,
     val digest: List<HistoryDigest.Line>,
+    val digestOmitted: Int,
 )
+
+/** The same authoritative history the next dispatch will send, without publishing it. */
+internal suspend fun ChatViewModel.requestHistorySnapshot(sid: String): RequestHistorySnapshot {
+    val tail = chatRepository.loadRequestHistory(sid, ChatViewModel.MAX_AGENT_HISTORY_MESSAGES)
+    val parsed = tail.messages.map { toLLMMessage(it) }
+    val cut = ResidentWindow.byteCut(parsed)
+    val firstLoadedSort = tail.messages.firstOrNull()?.sortOrder
+    val prefixLines = if (firstLoadedSort == null) emptyList() else collectDigestLines(firstLoadedSort, sid)
+    val prefixCount = if (firstLoadedSort == null) 0 else chatRepository.dao.countMessagesBeforeSort(sid, firstLoadedSort)
+    val cutLines = (0 until cut).map { i ->
+        val line = HistoryDigest.fromMessage(parsed[i])
+        line.copy(text = HistoryDigest.clip(line.role, line.text))
+    }
+    val allDigest = prefixLines + cutLines
+    val digest = HistoryDigest.retainNewest(allDigest)
+    val omitted = (prefixCount - prefixLines.size).coerceAtLeast(0) + (allDigest.size - digest.size)
+    return RequestHistorySnapshot(
+        parsed.drop(cut), tail.messages.toReceiptHistoryRows(), tail.firstMessageOffset + cut, digest, omitted,
+    )
+}
 
 /** Complete fallible reads and decoding before replacing the live history. */
 internal suspend fun ChatViewModel.rebuildAgentHistoryFromDatabase(
@@ -256,21 +282,17 @@ internal suspend fun ChatViewModel.rebuildAgentHistoryFromDatabase(
     val run = ActiveRunContext.current()
     try {
         return publishOwnedHistory({ ownsTranscript(sid, epoch, run) }, load = {
-            val tail = chatRepository.loadRequestHistory(sid, ChatViewModel.MAX_AGENT_HISTORY_MESSAGES)
-            reconcileReceiptRows(sid, tail.messages.toReceiptHistoryRows())
-            val parsed = tail.messages.map { toLLMMessage(it) }
-            val cut = ResidentWindow.byteCut(parsed)
-            val digest = (0 until cut).map { i ->
-                val line = HistoryDigest.fromMessage(parsed[i])
-                line.copy(text = HistoryDigest.clip(line.role, line.text))
-            }
-            RebuiltAgentHistory(parsed.drop(cut), tail.firstMessageOffset + cut, digest)
-        }) { rebuilt ->
+            val snapshot = requestHistorySnapshot(sid)
+            reconcileReceiptRows(sid, snapshot.receiptRows)
+            snapshot
+        }) { snapshot ->
             agentHistory.clear()
-            agentHistory.addAll(rebuilt.rows)
-            llmHistoryStartOffset = rebuilt.startOffset
+            agentHistory.addAll(snapshot.rows)
+            llmHistoryStartOffset = snapshot.startOffset
             toolLoopDetector.reset()
-            rememberDigestLines(rebuilt.digest)
+            llmDigestLines.clear()
+            llmDigestLines.addAll(snapshot.digest)
+            llmDigestOmitted = snapshot.digestOmitted
         }
     } catch (e: RequestHistoryUnavailable) {
         // Run entry points already surface terminal errors and stop their queue drain.
