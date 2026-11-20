@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -23,11 +25,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.openminis.app.ui.components.SectionDesign
 import com.openminis.app.R
 import com.openminis.app.data.repository.MCPRepository
 import com.openminis.app.plugins.LocalToolPluginStore
 import com.openminis.app.plugins.OnlinePluginStore
 import com.openminis.app.plugins.PluginRegistry
+import com.openminis.app.ui.theme.IosBlue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -68,14 +72,19 @@ fun PluginMarketScreen(
 
     SettingsScaffold(
         title = stringResource(R.string.plugin_market_title),
-        onBack = null,
+        onBack = onBack,
     ) {
         if (status.isNotBlank()) {
             Text(
                 status,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp),
+                modifier = Modifier.padding(
+                    start = SectionDesign.HeaderInset,
+                    end = SectionDesign.HeaderInset,
+                    top = SectionDesign.HeaderToCardGap,
+                    bottom = SectionDesign.CardToFooterGap,
+                ),
             )
         }
 
@@ -110,7 +119,10 @@ fun PluginMarketScreen(
                     else stringResource(R.string.plugin_market_empty),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    modifier = Modifier.padding(
+                        horizontal = SectionDesign.RowHorizontalPadding,
+                        vertical = SectionDesign.RowVerticalPadding,
+                    ),
                 )
             }
             plugins.forEachIndexed { index, plugin ->
@@ -167,7 +179,10 @@ fun PluginMarketScreen(
                     stringResource(R.string.plugin_market_local_empty),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    modifier = Modifier.padding(
+                        horizontal = SectionDesign.RowHorizontalPadding,
+                        vertical = SectionDesign.RowVerticalPadding,
+                    ),
                 )
             }
             localTools.forEachIndexed { index, tool ->
@@ -186,6 +201,8 @@ fun PluginMarketScreen(
                 )
             }
             SettingsRow(
+                icon = Icons.Default.Add,
+                iconColor = IosBlue,
                 title = stringResource(R.string.plugin_market_local_add),
                 subtitle = stringResource(R.string.plugin_market_local_add_hint),
                 onClick = {
@@ -225,7 +242,7 @@ fun PluginMarketScreen(
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     TextButton(onClick = { keyTarget = null }) {
-                        Text(stringResource(android.R.string.cancel))
+                        Text(stringResource(R.string.common_cancel))
                     }
                     TextButton(
                         onClick = {
