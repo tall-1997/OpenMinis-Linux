@@ -733,18 +733,27 @@ internal fun ChatViewModel.loadSession() {
             val receiptRows = loaded.receiptRows
             val loadEpoch = snapshotResumeEpoch()
             viewModelScope.launch(Dispatchers.IO) {
-                reconcileReceiptRows(sessionId, receiptRows)
-                val provider = currentProvider
-                if (provider == null) refreshContextUsage()
-                else {
-                    val projection = projectChatRequest(
-                        provider, buildMemoryDeliveryPrompt(publish = false),
-                        agentHistorySnapshot(), agentTools, requestThinkingLevel(provider),
-                    )
-                    if (provider === currentProvider && loadEpoch == snapshotResumeEpoch() && !_isStreaming.value) {
-                        refreshContextUsage(projection.estimate, projection.window)
-                    }
-                }
+                runSessionContextEstimate(
+                    estimate = {
+                        reconcileReceiptRows(sessionId, receiptRows)
+                        val provider = currentProvider
+                        provider to provider?.let {
+                            projectChatRequest(
+                                it, buildMemoryDeliveryPrompt(publish = false),
+                                agentHistorySnapshot(), agentTools, requestThinkingLevel(it),
+                            )
+                        }
+                    },
+                    publish = { (provider, projection) ->
+                        if (provider === currentProvider && loadEpoch == snapshotResumeEpoch() && !_isStreaming.value) {
+                            if (projection == null) refreshContextUsage()
+                            else refreshContextUsage(projection.estimate, projection.window)
+                        }
+                    },
+                    reportFailure = {
+                        Log.w(ChatViewModel.TAG, "Session context estimate unavailable: ${it.javaClass.simpleName}")
+                    },
+                )
                 checkInstructionSnapshotDrift()
             }
         } else {

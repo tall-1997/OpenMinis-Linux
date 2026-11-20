@@ -41,6 +41,64 @@ class AnthropicProviderTest {
         server.shutdown()
     }
 
+    @Test
+    fun `API key system prompts never read OAuth build metadata`() {
+        val apiKeyProvider = AnthropicProvider(
+            apiKey = "test-key",
+            oauthIdentifierPromptProvider = { error("API-key transport must not read OAuth configuration") },
+        )
+        assertNull(apiKeyProvider.resolveSystemPrompt(null))
+        assertNull(apiKeyProvider.resolveSystemPrompt(""))
+        val blocks = checkNotNull(apiKeyProvider.resolveSystemPrompt("session rules"))
+        assertEquals(1, blocks.length())
+        assertEquals("session rules", blocks.getJSONObject(0).getString("text"))
+    }
+
+    @Test
+    fun `unconfigured OAuth fails as a provider error before either transport sends`() = runBlocking {
+        val messages = listOf(LLMMessage(LLMMessage.Role.USER, "Hi"))
+        for (identifier in listOf(null, "", " \t\n")) {
+            val oauthProvider = AnthropicProvider(
+                apiKey = "test-oauth-token",
+                basePath = server.url("/").toString().trimEnd('/'),
+                isOAuth = true,
+                oauthIdentifierPromptProvider = { identifier },
+            )
+            for (prompt in listOf(null, "", "session rules")) {
+                val direct = runCatching { oauthProvider.resolveSystemPrompt(prompt) }.exceptionOrNull()
+                assertTrue("Missing identifier should be an actionable provider error", direct is LLMError.ProviderError)
+                assertTrue(direct?.message.orEmpty().contains("ANTHROPIC_OAUTH_IDENTIFIER_PROMPT"))
+            }
+            val single = runCatching { oauthProvider.sendMessage(messages, "session rules", 1024) }.exceptionOrNull()
+            val stream = runCatching { oauthProvider.streamMessage(messages, "session rules", 1024).toList() }.exceptionOrNull()
+            assertTrue(single is LLMError.ProviderError)
+            assertTrue(stream is LLMError.ProviderError)
+        }
+        assertEquals("Configuration failures must not reach HTTP", 0, server.requestCount)
+    }
+
+    @Test
+    fun `configured OAuth sends its uncached identity as the first system block`() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setBody("""{"content":[{"type":"text","text":"ok"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}""")
+                .setHeader("Content-Type", "application/json"),
+        )
+        val oauthProvider = AnthropicProvider(
+            apiKey = "test-oauth-token",
+            basePath = server.url("/").toString().trimEnd('/'),
+            isOAuth = true,
+            oauthIdentifierPromptProvider = { "fixture OAuth identity" },
+        )
+
+        oauthProvider.sendMessage(listOf(LLMMessage(LLMMessage.Role.USER, "Hi")), null, 1024)
+
+        val request = JSONObject(server.takeRequestOrThrow().body.readUtf8())
+        val system = request.getJSONArray("system")
+        assertEquals("fixture OAuth identity", system.getJSONObject(0).getString("text"))
+        assertTrue(!system.getJSONObject(0).has("cache_control"))
+    }
+
     // -- sendMessage response parsing --
 
     @Test

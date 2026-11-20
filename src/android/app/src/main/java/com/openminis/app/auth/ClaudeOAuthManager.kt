@@ -42,26 +42,19 @@ class ClaudeOAuthManager(context: Context, instanceId: String) : OAuthManager(co
         private const val TAG = "ClaudeOAuth"
 
         /**
-         * System prompt prefix required by Anthropic for Claude Code OAuth
-         * credentials.
-         *
-         * The value is not hardcoded: it is supplied at build time via the
-         * `ANTHROPIC_OAUTH_IDENTIFIER_PROMPT` BuildConfig field, populated from
-         * `app/provider-customization.properties`. That file is tracked in the private
-         * repo (filled in) but excluded from the public mirror, which ships
-         * only `provider-customization.properties.example` with an empty value. Reading
-         * it without a configured value throws — by design — the first time an
-         * OAuth (Claude Code) request needs the prompt.
+         * Optional Claude Code OAuth prefix from app/provider-customization.properties.
+         * Public builds may leave it unset. Previews remain available; the provider
+         * validates this requirement only when an OAuth request is actually built.
          */
-        val ANTHROPIC_OAUTH_IDENTIFIER_PROMPT: String
-            get() = BuildConfig.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT.ifEmpty {
-                throw IllegalStateException(
-                    "ANTHROPIC_OAUTH_IDENTIFIER_PROMPT is not configured. Copy "
-                        + "app/provider-customization.properties.example to "
-                        + "app/provider-customization.properties and set "
-                        + "ANTHROPIC_OAUTH_IDENTIFIER_PROMPT before using Claude Code OAuth."
-                )
-            }
+        fun identifierPromptOrNull(): String? =
+            BuildConfig.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT.takeIf { it.isNotBlank() }
+
+        /** Call from OAuth request construction, never from session previews. */
+        internal fun requireIdentifierPrompt(identifier: String?): String =
+            identifier?.takeIf { it.isNotBlank() } ?: throw com.openminis.app.data.model.LLMError.ProviderError(
+                "This build is missing the Claude Code OAuth identifier. Use an API key, or configure " +
+                    "ANTHROPIC_OAUTH_IDENTIFIER_PROMPT in app/provider-customization.properties and rebuild.",
+            )
 
         /**
          * How long before expiry we proactively refresh. Mirrors iOS
