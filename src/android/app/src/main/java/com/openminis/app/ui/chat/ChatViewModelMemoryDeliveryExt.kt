@@ -13,7 +13,6 @@ import com.openminis.app.data.repository.MemoryRecallEngine
 import com.openminis.app.data.repository.MemoryRepository
 import com.openminis.app.data.repository.MemoryUsageLedger
 import com.openminis.app.provider.LLMProvider
-import com.openminis.app.provider.anthropic.AnthropicProvider
 import com.openminis.app.sandbox.SessionWorkspace
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -138,11 +137,22 @@ internal fun ChatViewModel.wrapMemoryDeliveryPromptForOAuth(
     build: MemoryDeliveryPrompt,
     publish: Boolean = true,
 ): MemoryDeliveryPrompt {
-    val identifier = ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
-    if ((provider as? AnthropicProvider)?.isOAuth != true || build.prompt.startsWith(identifier)) return build
-    val prefix = "$identifier\n\n"
-    val wrapped = if (publish) wrapSystemPromptForOAuth(provider, build.prompt) ?: return build else prefix + build.prompt
-    return MemoryDeliveryPrompt(wrapped, build.daily?.prefixed(prefix, wrapped), shiftedStablePrefix(build.stablePrefixLen, prefix.length))
+    val wrapped = build.withOAuthPrefix(provider)
+    if (publish && wrapped !== build) {
+        systemPromptStablePrefixLen = shiftedStablePrefix(systemPromptStablePrefixLen, wrapped.prompt.length - build.prompt.length)
+    }
+    return wrapped
+}
+
+/** The same optional projection is used by session entry, previews and dispatch. */
+internal fun MemoryDeliveryPrompt.withOAuthPrefix(
+    provider: LLMProvider,
+    identifierProvider: () -> String? = ClaudeOAuthManager::identifierPromptOrNull,
+): MemoryDeliveryPrompt {
+    val prefix = oauthIdentifierPrefix(provider, identifierProvider) ?: return this
+    if (prompt.startsWith(prefix)) return this
+    val wrapped = prefix + prompt
+    return MemoryDeliveryPrompt(wrapped, daily?.prefixed(prefix, wrapped), shiftedStablePrefix(stablePrefixLen, prefix.length))
 }
 
 private fun shiftedStablePrefix(value: Int, offset: Int): Int = if (value < 0) value else value + offset

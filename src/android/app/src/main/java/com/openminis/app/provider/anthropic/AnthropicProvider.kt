@@ -65,9 +65,8 @@ class AnthropicProvider(
      * 头（Host/Content-Length 等在存储层已被拒绝）。空 map = 行为不变。
      */
     private val extraHeaders: Map<String, String> = emptyMap(),
-    private val oauthIdentifierPromptProvider: () -> String = {
-        com.openminis.app.auth.ClaudeOAuthManager.ANTHROPIC_OAUTH_IDENTIFIER_PROMPT
-    },
+    private val oauthIdentifierPromptProvider: () -> String? =
+        com.openminis.app.auth.ClaudeOAuthManager::identifierPromptOrNull,
     private val forceThinkingEnabled: Boolean = false, // [OpenMinis#311] force thinking
 ) : LLMProvider {
     override val name = "Anthropic"
@@ -434,11 +433,12 @@ class AnthropicProvider(
      * four breakpoints Anthropic honors.
      */
     internal fun resolveSystemPrompt(userPrompt: String?, systemStablePrefixLen: Int = -1): JSONArray? {
-        if (userPrompt == null) return null
-        if (!isOAuth && userPrompt.isEmpty()) return null
-        val prefix = if (isOAuth) oauthIdentifierPromptProvider() else ""
+        if (!isOAuth && userPrompt.isNullOrEmpty()) return null
+        val prefix = if (isOAuth) {
+            com.openminis.app.auth.ClaudeOAuthManager.requireIdentifierPrompt(oauthIdentifierPromptProvider())
+        } else ""
         val arr = JSONArray()
-        for (block in systemCacheBlocks(userPrompt, systemStablePrefixLen, isOAuth, prefix)) {
+        for (block in systemCacheBlocks(userPrompt.orEmpty(), systemStablePrefixLen, isOAuth, prefix)) {
             arr.put(
                 JSONObject().apply {
                     put("type", "text")
