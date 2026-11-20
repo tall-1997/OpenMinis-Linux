@@ -123,7 +123,11 @@ object ActionGuard {
      * and the call is a permitted read).
      */
     fun beforeCall(sessionId: String?, tool: String, argsJson: String): GuardVerdict {
-        val guard = guards.getOrPut(sessionKey(sessionId)) { LoopGuard() }
+        val guard = guards.getOrPut(sessionKey(sessionId)) {
+            // [T-guard-stop-policy] The settings switch decides whether the last
+            // rung stops the session or is one more reminder.
+            LoopGuard().apply { stopEnabled = com.openminis.app.data.GuardPrefs.stopEnabled() }
+        }
         val args = parseArgs(argsJson)
         val read = isRead(tool)
         guard.stopped?.let { stopped ->
@@ -167,7 +171,11 @@ object ActionGuard {
         noEffect: Boolean = false,
         unchanged: Boolean = false,
     ): String? {
-        val guard = guards.getOrPut(sessionKey(sessionId)) { LoopGuard() }
+        val guard = guards.getOrPut(sessionKey(sessionId)) {
+            // [T-guard-stop-policy] The settings switch decides whether the last
+            // rung stops the session or is one more reminder.
+            LoopGuard().apply { stopEnabled = com.openminis.app.data.GuardPrefs.stopEnabled() }
+        }
         if (guard.stopped != null) return null
         val args = parseArgs(argsJson)
         if (ok && OutwardPacing.isOutward(tool, args)) {
@@ -180,7 +188,12 @@ object ActionGuard {
             else -> Outcome.Effective
         }
         val hit = guard.record(signature(tool, args), ok, outcome) ?: return null
-        return LoopGuard.message(hit.first, hit.second, stop = hit.first.stopAt <= hit.second)
+        // [T-loop-guard-stop-policy] `stop` must describe what ACTUALLY happened,
+        // not whether the count reached the last rung. With the stop policy off,
+        // the last rung is one more reminder — reporting it as "Refused:" would
+        // tell the model a call was blocked that in fact ran.
+        val didStop = guard.stopped == hit.first
+        return LoopGuard.message(hit.first, hit.second, stop = didStop)
     }
 
     /**

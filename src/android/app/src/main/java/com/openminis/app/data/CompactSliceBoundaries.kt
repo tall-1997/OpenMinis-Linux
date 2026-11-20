@@ -17,17 +17,19 @@ internal class CompactSliceBoundaries(history: List<LLMMessage>, protectPending:
         history.forEachIndexed { index, message ->
             for (part in message.contentParts) {
                 when (part) {
-                    is AgentContentPart.ToolUse -> if (message.role == LLMMessage.Role.ASSISTANT) {
+                    is AgentContentPart.ToolUse -> {
                         val key = compactPairKey(part.id, part.name)
                         if (key != null) pending.getOrPut(key, ::ArrayDeque).addLast(index)
                         else if (protectPending) crossing[index + 1]++
-                    } else Unit
-                    is AgentContentPart.ToolResult -> if (message.role == LLMMessage.Role.USER) {
+                    }
+                    is AgentContentPart.ToolResult -> {
                         val key = compactPairKey(part.id, part.name)
                         val uses = key?.let { pending[it] }
                         if (uses == null) {
                             // A legacy boundary may leave a result whose use
-                            // is before the selected source. Do not claim it.
+                            // is before the source. Only the repository's
+                            // explicit text projection can retire a Stop;
+                            // every remaining tool result still needs its use.
                             if (protectPending) crossing[index + 1]++
                             continue
                         }
@@ -35,7 +37,7 @@ internal class CompactSliceBoundaries(history: List<LLMMessage>, protectPending:
                         if (uses.isEmpty()) pending.remove(key)
                         crossing[start + 1]++
                         crossing[index + 1]--
-                    } else Unit
+                    }
                     else -> Unit
                 }
             }

@@ -1,10 +1,16 @@
 package com.openminis.app.data
 
+import com.openminis.app.agent.HarnessConfig
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
-import com.openminis.app.ui.chat.ChatViewModel
+import com.openminis.app.ui.chat.WalkBack
+import com.openminis.app.ui.chat.assembleDetachedCompactHistory
 import com.openminis.app.ui.chat.buildDetachedCompactHistory
+import com.openminis.app.ui.chat.detachedTailSize
+import com.openminis.app.ui.chat.detachedTailStartForWindow
 import com.openminis.app.ui.chat.dropOrphanedToolParts
+import com.openminis.app.ui.chat.evictedStateNote
+import com.openminis.app.ui.chat.SessionStateSnapshot
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -90,6 +96,7 @@ class CompactDetachedAnchorTest {
         val out = buildDetachedCompactHistory("<summary/>", h, tailSize = 60)
         assertEquals("<summary/>", out.first().content)
         assertEquals(LLMMessage.Role.USER, out.first().role)
+        assertEquals(listOf(AgentContentPart.Text("<summary/>")), out.first().contentParts)
         assertEquals(h, out.drop(1))
     }
 
@@ -112,9 +119,10 @@ class CompactDetachedAnchorTest {
             user(2), useMsg("call_2"), resultMsg("call_2"),
             user(3),
         )
-        // tailSize=3 → rawCut=4 → lands on assistant tool_use → walk back to u2 (index 3).
-        val out = buildDetachedCompactHistory("<summary/>", h, tailSize = 3)
+        // tailSize=2 puts the raw cut on the carrier; its call must remain in the suffix.
+        val out = buildDetachedCompactHistory("<summary/>", h, tailSize = 2)
         assertEquals(LLMMessage.Role.USER, out.first().role)
+        assertEquals(h.drop(4), out.drop(1))
         val (uses, results) = toolIds(out)
         assertEquals("every kept use must keep its result", uses, results)
     }
@@ -198,6 +206,94 @@ class CompactDetachedAnchorTest {
         val noticeAt = first.indexOf("[detached compact boundary:")
         val closeAt = first.indexOf("</context-summary>")
         assertTrue(noticeAt in 0 until closeAt)
+    }
+
+    @Test
+    fun `detached tail size is token bounded not a fixed count`() {
+        // [T-detached-tail-budget] 60 spill-sized tool results = ~240k tokens.
+        // A 128k-window tail budget (35% = 44.8k) must not keep all 60.
+        val h = (0 until 60).map { i ->
+            LLMMessage(
+                role = LLMMessage.Role.USER,
+                content = "",
+                contentParts = listOf(
+                    AgentContentPart.ToolResult("c$i", "shell_execute", "x".repeat(16_000)),
+                ),
+            )
+        }
+        val size = detachedTailSize(h, 44_800)
+        assertTrue("expected a bounded tail, got $size", size in 1..20)
+        val kept = h.takeLast(size)
+        val tokens = kept.sumOf { WalkBack.estimateMessageTokens(it) }
+        assertTrue("tail tokens=$tokens", tokens <= 44_800)
+    }
+
+    @Test
+    fun `detached tail size always keeps the newest entry`() {
+        val h = (0 until 5).map { i ->
+            LLMMessage(
+                role = LLMMessage.Role.ASSISTANT,
+                content = "",
+                contentParts = listOf(
+                    AgentContentPart.ToolResult("c$i", "shell_execute", "x".repeat(80_000)),
+                ),
+            )
+        }
+        assertEquals(1, detachedTailSize(h, 100))
+    }
+
+    @Test
+    fun `single user autonomous run keeps a bounded legal tail`() {
+        // [T-detached-tail-pairing] One user turn + 300 tool rounds: the old
+        // safeTailStart walked back to the only real user (index 0), shipping
+        // the whole history regardless of tailSize.
+        val h = mutableListOf(user(1))
+        repeat(300) { i ->
+            h.add(useMsg("c$i"))
+            h.add(resultMsg("c$i"))
+        }
+        val out = buildDetachedCompactHistory("<summary/>", h, tailSize = 10)
+        assertTrue("bounded tail, got ${out.size}", out.size <= 12)
+        assertEquals(LLMMessage.Role.USER, out.first().role)
+        val (uses, results) = toolIds(out)
+        assertEquals(uses, results)
+    }
+
+    @Test
+    fun `the formal detached path keeps uncovered rows while the budgeted path keeps the paired step`() {
+        val state = user(4).copy(content = "<system-reminder>\n${SessionStateSnapshot.MARKER}\ncurrent plan\n</system-reminder>")
+        val newest = resultMsg("last").let { row ->
+            row.copy(contentParts = listOf((row.contentParts.single() as AgentContentPart.ToolResult).copy(content = "x".repeat(1_000))))
+        }
+        val raw = listOf(asst(1), user(2), state, useMsg("last|fc_last"), newest)
+        val config = HarnessConfig.DEFAULT.copy(postAnchorBudgetTokens = 300, noticeReserveTokens = 100)
+        val envelope = "<context-summary>\nprior coverage\n<context-assets>known file</context-assets>\n</context-summary>"
+        val fullCut = detachedTailStartForWindow(raw, 32_000, applyTailBudget = false, config = config)
+        val full = assembleDetachedCompactHistory(envelope, raw, fullCut, config)
+        assertEquals(0, fullCut)
+        assertEquals(envelope, full.first().content)
+        assertEquals(raw, full.drop(1))
+
+        val budgetCut = detachedTailStartForWindow(raw, 32_000, applyTailBudget = true, config = config)
+        assertEquals(3, budgetCut)
+        val recovered = evictedStateNote(raw, -1, raw.drop(budgetCut))
+        assertEquals(state, recovered)
+        val budgeted = assembleDetachedCompactHistory(envelope, raw, budgetCut, config, recovered)
+        assertEquals(raw.takeLast(2), budgeted.drop(1))
+        assertTrue(budgeted.first().content.contains("3 earlier messages are not in this request"))
+        assertTrue(budgeted.first().content.contains("<context-assets>known file</context-assets>"))
+        assertTrue(budgeted.first().content.contains("current plan"))
+        assertEquals(budgeted, dropOrphanedToolParts(budgeted))
+    }
+
+    @Test
+    fun `a fitting newer step does not pull an oversized older pair back into the tail`() {
+        val olderCall = useMsg("older").copy(reasoningContent = "x".repeat(20_000))
+        val history = listOf(user(1), olderCall, resultMsg("older"), useMsg("new"), resultMsg("new"))
+        val config = HarnessConfig.DEFAULT.copy(postAnchorBudgetTokens = 300, noticeReserveTokens = 100)
+        val cut = detachedTailStartForWindow(history, 32_000, applyTailBudget = true, config = config)
+        assertEquals(3, cut)
+        assertEquals(history.takeLast(2), assembleDetachedCompactHistory("<summary/>", history, cut, config).drop(1))
     }
 
     @Test

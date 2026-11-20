@@ -2,14 +2,17 @@ package com.openminis.app.data.repository
 
 import androidx.room.withTransaction
 import com.openminis.app.data.CompactSliceBoundaries
+import com.openminis.app.data.LEGACY_ORPHAN_STOP_NOTE
 import com.openminis.app.data.body.ResourceLimits
 import com.openminis.app.data.compactPairKey
 import com.openminis.app.data.db.CompactMarkerEntity
 import com.openminis.app.data.db.CompactSourceRow
+import com.openminis.app.data.isAttestedLegacyStopCarrier
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.pruneStaleCompactMarkers
 import com.openminis.app.util.Digest
+import com.openminis.app.util.SecretMasking
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import java.nio.charset.CharacterCodingException
@@ -70,16 +73,23 @@ private fun CompactMarkerEntity?.coveredBoundary(): PreviousBoundary? {
     return lastCompactedMessageId?.takeIf(String::isNotBlank)?.let { PreviousBoundary(it, inclusive = false) }
 }
 
-/** Indexed metadata-only check used by the request guard, including on first compact. */
-internal suspend fun ChatRepository.hasUncoveredCompactPrefix(sessionId: String, firstResidentDbId: String?): Boolean =
+internal data class RequestCompactState(val marker: CompactMarkerView?, val hasCoverageGap: Boolean)
+
+/** Coverage may only be credited to the same marker the request will actually carry. */
+internal suspend fun ChatRepository.requestCompactState(sessionId: String, firstResidentDbId: String?): RequestCompactState =
     checkNotNull(db).withTransaction {
-        val boundary = dao.latestCompactMarker(sessionId)?.coveredBoundary()
-        val start = boundary?.let { b ->
-            dao.compactOrderForId(sessionId, b.id)?.toLong()?.plus(if (b.inclusive) 0L else 1L)
-        } ?: START_OF_SESSION
+        val marker = dao.latestCompactMarker(sessionId)
+        val boundary = marker.coveredBoundary()
+        val anchorOrder = boundary?.let { dao.compactOrderForId(sessionId, it.id) }
+        val start = if (boundary != null && anchorOrder != null) {
+            anchorOrder.toLong() + if (boundary.inclusive) 0L else 1L
+        } else START_OF_SESSION
         val end = firstResidentDbId?.let { dao.compactOrderForId(sessionId, it)?.toLong() } ?: Long.MAX_VALUE
-        dao.hasCompactSourceRows(sessionId, start, end)
+        RequestCompactState(marker?.toView()?.takeIf { anchorOrder != null }, dao.hasCompactSourceRows(sessionId, start, end))
     }
+
+internal suspend fun ChatRepository.hasUncoveredCompactPrefix(sessionId: String, firstResidentDbId: String?): Boolean =
+    requestCompactState(sessionId, firstResidentDbId).hasCoverageGap
 
 internal suspend fun ChatRepository.compactOrderForId(sessionId: String, id: String): Int? =
     dao.compactOrderForId(sessionId, id)
@@ -251,6 +261,7 @@ private fun projectHistoricalToolCalls(
 
     decoded.forEachIndexed { rowIndex, row ->
         if (row.realUser) inTurn.clear()
+        val legacyStop = row.message.isAttestedLegacyStopCarrier()
         row.message.contentParts.forEachIndexed partLoop@{ partIndex, part ->
             when {
                 row.message.role == LLMMessage.Role.ASSISTANT && part is AgentContentPart.ToolUse -> {
@@ -265,7 +276,11 @@ private fun projectHistoricalToolCalls(
                     val key = compactPairKey(part.id, part.name) ?: return@partLoop
                     val call = next(inTurn[key]) ?: next(pending[key])
                     call?.matched = true
-                    parts[rowIndex][partIndex] = part.copy(id = call?.localId ?: "compact-unmatched-$rowIndex-$partIndex")
+                    if (call == null && legacyStop) {
+                        parts[rowIndex][partIndex] = AgentContentPart.Text(LEGACY_ORPHAN_STOP_NOTE)
+                    } else {
+                        parts[rowIndex][partIndex] = part.copy(id = call?.localId ?: "compact-unmatched-$rowIndex-$partIndex")
+                    }
                 }
             }
         }
@@ -280,7 +295,8 @@ private fun projectHistoricalToolCalls(
         )
         if (firstRetired == null) firstRetired = call.row
     }
-    return HistoricalToolProjection(decoded.mapIndexed { index, row -> row.message.copy(contentParts = parts[index]) }, firstRetired)
+    val messages = decoded.mapIndexed { index, row -> row.message.copy(contentParts = parts[index]) }
+    return HistoricalToolProjection(messages, firstRetired)
 }
 
 /** Validate the exact covered prefix and any later retirement evidence before publishing a marker. */
@@ -292,6 +308,10 @@ internal suspend fun ChatRepository.commitCompactPrefix(
     mergeAssets: (String?, List<LLMMessage>, List<List<String>>) -> String?,
 ): CompactMarkerEntity {
     require(coveredCount in 1..source.messages.size && summary.isNotBlank())
+    // Use one redacted derivative for the marker and its new chunk. The caller
+    // also uses the committed summary for sediment, not the raw model answer.
+    val redactedSummary = SecretMasking.mask(summary)
+    require(redactedSummary.isNotBlank())
     require(CompactSliceBoundaries(source.messages, protectPending = true).isClosed(coveredCount)) {
         "Compaction cannot cover a partial tool round."
     }
@@ -329,7 +349,7 @@ internal suspend fun ChatRepository.commitCompactPrefix(
         ) {
             throw CompactSourceChanged("Conversation rows changed while summarizing. Retry compaction.")
         }
-        reduceCompactMarker(source, coveredCount, summary, appendChunks, mergeAssets).also {
+        reduceCompactMarker(source, coveredCount, redactedSummary, appendChunks, mergeAssets).also {
             dao.insertCompactMarker(it)
         }
     }

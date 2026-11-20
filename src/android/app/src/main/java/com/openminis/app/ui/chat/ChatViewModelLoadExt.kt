@@ -541,6 +541,23 @@ internal fun ChatViewModel.loadSession() {
         _compactSummary.value = marker?.summary
         if (marker != null) stateHydrationPending = true  // [T-state-hydration] compacted history
         _cachedLatestMarker = marker
+        // [T-compaction-transaction] A process that died mid-compaction left an
+        // unmatched `compaction/start`. Report it once at load so the user and
+        // the logs can explain a "compaction silently did nothing" session
+        // instead of the harness silently retrying and paying twice.
+        // [T-session-journal-off-main] Nothing below depends on this scan: the
+        // interruptions are correlated by `compactionId`, not by write order, and
+        // the only effect is another journal line plus a log entry. Running it in
+        // a detached IO scope keeps the first frame of the restored transcript
+        // from waiting on a journal read.
+        // [T-session-journal-sid-capture] Capture the owner NOW: this coroutine
+        // runs later, and a fast session switch would otherwise write B's
+        // interrupted records into A's journal while A's own stay unreported.
+        val journalSid = realSessionId.ifEmpty { sessionId }
+        viewModelScope.launch(Dispatchers.IO) {
+            reportInterruptedCompactions(journalSid)
+            logLegacyToolReceiptDiagnostics(journalSid)
+        }
         if (marker == null) {
             val oldest = loaded.llmOldestSortOrder
             if (oldest != null) {

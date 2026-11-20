@@ -11,6 +11,7 @@ import com.openminis.app.data.repository.MemoryLifecycle
 import com.openminis.app.data.repository.MemoryPromptBudget
 import com.openminis.app.data.repository.MemoryRecallEngine
 import com.openminis.app.data.repository.MemoryRepository
+import com.openminis.app.data.repository.MemoryUsageLedger
 import com.openminis.app.provider.LLMProvider
 import com.openminis.app.provider.anthropic.AnthropicProvider
 import com.openminis.app.sandbox.SessionWorkspace
@@ -188,13 +189,13 @@ internal data class RecallReminder(
     val hits: List<MemoryRecallEngine.RecallHit>,
     val sessionId: String,
     val projectedAt: Long,
+    val turnId: String? = null,
 ) {
-    fun deliveredIn(actual: List<LLMMessage>): Boolean = actual.any { message ->
-        message.role == LLMMessage.Role.USER && if (message.contentParts.isEmpty()) {
-            // Other host reminders may be appended after the recall block.
-            val delimited = "\n\n${message.content}\n\n"
-            "\n\n$framed\n\n" in delimited
-        } else message.contentParts.any { it is AgentContentPart.Text && it.text == framed }
+    fun deliveredIn(actual: List<LLMMessage>): Boolean = actual.any { carrier ->
+        carrier.role == LLMMessage.Role.USER && if (carrier.contentParts.isEmpty()) {
+            // Other host reminders may follow this carrier or be appended to its text.
+            "\n\n$framed\n\n" in "\n\n${carrier.content}\n\n"
+        } else carrier.contentParts.any { it is AgentContentPart.Text && it.text == framed }
     }
 }
 
@@ -243,9 +244,10 @@ internal suspend fun ChatViewModel.recordSuccessfulMemoryDelivery(
 ) {
     if (realUserMessageId.isNullOrBlank() || (daily?.spans.isNullOrEmpty() && recall == null)) return
     val deliveredAt = System.currentTimeMillis()
+    val filesDir = context.filesDir
     withContext(Dispatchers.IO) {
         val deliveredRecall = persistSuccessfulMemoryDelivery(
-            daily, actualSystemPrompt, actualRequestHistory, recall, realUserMessageId, deliveredAt,
+            daily, actualSystemPrompt, actualRequestHistory, recall, realUserMessageId, deliveredAt, filesDir,
         ) ?: return@withContext
         if (deliveredRecall.sessionId == noticesSessionId) {
             announcedRecallKeys.addAll(deliveredRecall.hits.map { it.announcementKey })
@@ -262,17 +264,40 @@ internal fun persistSuccessfulMemoryDelivery(
     recall: RecallReminder?,
     realUserMessageId: String?,
     deliveredAt: Long,
+    filesDir: java.io.File? = null,
 ): RecallReminder? {
     val userId = realUserMessageId?.takeIf { it.isNotBlank() } ?: return null
     val session = (daily?.sessionId ?: recall?.sessionId)?.takeIf { it.isNotBlank() } ?: return null
     val turn = "$session\u0000$userId"
     val refs = daily?.deliveredIn(actualSystemPrompt).orEmpty()
-    val deliveredRecall = recall?.takeIf { it.sessionId == session && it.deliveredIn(actualRequestHistory) }
+    val deliveredRecall = recall?.takeIf {
+        it.sessionId == session && it.turnId == userId && it.deliveredIn(actualRequestHistory)
+    }
     val recallRefs = deliveredRecall?.hits?.mapNotNullTo(HashSet()) { it.ref }.orEmpty()
-    if (daily?.projectedAt != null) {
+    if (daily?.projectedAt != null && daily.projectedAt == deliveredRecall?.projectedAt) {
         MemoryLifecycle.recordDelivery(refs + recallRefs, turn, deliveredAt, selectedAt = daily.projectedAt)
-    } else if (deliveredRecall != null) {
-        MemoryLifecycle.recordDelivery(recallRefs, turn, deliveredAt, selectedAt = deliveredRecall.projectedAt)
+    } else {
+        if (daily?.projectedAt != null) MemoryLifecycle.recordDelivery(refs, turn, deliveredAt, selectedAt = daily.projectedAt)
+        if (deliveredRecall != null) {
+            MemoryLifecycle.recordDelivery(recallRefs, turn, deliveredAt, selectedAt = deliveredRecall.projectedAt)
+        }
+    }
+    if (filesDir != null && deliveredRecall != null) {
+        val usageDir = memoryUsageSessionDirectory(filesDir, session)
+        if (usageDir != null) {
+            val shared = runCatching { MemoryIndex.sharedDir(filesDir).canonicalFile }.getOrNull()
+            val lines = deliveredRecall.hits.mapNotNullTo(HashSet()) { hit ->
+                val directory = hit.directory ?: return@mapNotNullTo null
+                MemoryUsageLedger.lineKey(directory == shared, hit.source, hit.line)
+            }
+            MemoryUsageLedger.recordVerified(usageDir, turn, lines, deliveredAt)
+        }
     }
     return deliveredRecall
+}
+
+/** The consuming chat owns the counters, even when recall reads from shared memory. */
+internal fun memoryUsageSessionDirectory(filesDir: java.io.File, session: String): java.io.File? {
+    if (!SessionWorkspace.isSafeId(session) || ':' in session) return null
+    return SessionWorkspace.base(filesDir, session)
 }

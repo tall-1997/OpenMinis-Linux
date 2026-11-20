@@ -41,6 +41,9 @@ internal object ChatSessionRetention {
             File(dir, MARKER_FILE).writeText(
                 "retain=true\nreason=$reason\nts=${System.currentTimeMillis()}\n",
             )
+            // [T-working-memory-persist] /clear starts a fresh transcript:
+            // undelivered handover from the old one must not be re-injected.
+            if (reason == "clear") WorkingMemoryStore.delete(filesDir, sessionId)
             // Best-effort logging: this marker is also written from JVM tests
             // where AppLogger has no application context.
             runCatching {

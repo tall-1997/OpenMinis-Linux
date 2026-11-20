@@ -1,6 +1,7 @@
 package com.openminis.app.ui.chat
 
 import com.openminis.app.data.BPETokenizer
+import com.openminis.app.data.ContextPolicy
 import com.openminis.app.data.ContextTokenEstimate
 import com.openminis.app.data.ContextTokenMeter
 import com.openminis.app.data.UsageState
@@ -23,14 +24,24 @@ internal fun ChatViewModel.estimateMessagesTokens(
     return if (calibrated) calibratedContextTokens(currentModelSnapshot(), raw) else raw
 }
 
-/**
- * Compatibility estimate for callers without a dispatch projection. The unbudgeted
- * effective slice protects unsummarized history; a previous real usage is not a floor.
- */
-internal fun ChatViewModel.contextTokensForPolicy(): Int = maxOf(
-    estimateAgentHistoryTokens(),
-    estimateMessagesTokens(effectiveAgentHistoryUncounted(applyProgressiveTrim = false, applyTailBudget = false)),
-)
+internal enum class PolicyMeasurement { UNBUDGETED, REQUEST }
+
+/** Fallback for a history-only probe. Dispatch checks the final projection in both tiers. */
+internal fun policyMeasurementMode(window: Int?, compactPercent: Int): PolicyMeasurement =
+    if (window != null && ContextPolicy.forContextWindow(window, compactPercent).compactThreshold == 0) {
+        PolicyMeasurement.REQUEST
+    } else {
+        PolicyMeasurement.UNBUDGETED
+    }
+
+internal fun ChatViewModel.contextTokensForPolicy(): Int = when (
+    policyMeasurementMode(effectiveContextWindowTokens(), effectiveCompactPercent())
+) {
+    PolicyMeasurement.UNBUDGETED -> estimateMessagesTokens(
+        effectiveAgentHistoryUncounted(applyProgressiveTrim = false, applyTailBudget = false),
+    )
+    PolicyMeasurement.REQUEST -> estimateAgentHistoryTokens()
+}
 
 /** Without the system/tools/projected history we cannot prove an anchor still matches. */
 fun ChatViewModel.refreshContextUsage() = refreshContextUsage(
@@ -175,4 +186,3 @@ internal fun ChatViewModel.countPartTokens(part: AgentContentPart): Int = when (
     }
     is AgentContentPart.ImageData -> BPETokenizer.countImageTokens(part.data)
 }
-

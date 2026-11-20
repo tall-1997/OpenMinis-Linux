@@ -50,6 +50,9 @@ object ContextSaverRuntime {
     /** Display-only conversion for [Stats.savedChars], separate from request metering. */
     const val CHARS_PER_TOKEN = 3L
 
+    /** Baseline for applying the aging-only ruler relative to the request meter. */
+    internal const val DEFAULT_CHARS_PER_TOKEN = CHARS_PER_TOKEN
+
     /**
      * [T-absolute-age-ceiling] Floor that makes aging fire even on a huge window.
      *
@@ -69,6 +72,9 @@ object ContextSaverRuntime {
      */
     const val ABSOLUTE_AGE_TOKENS = 24_000
 
+    /** [T-harness-config] The shipped ceiling; `HarnessConfig` owns the live value. */
+    internal const val DEFAULT_ABSOLUTE_AGE_TOKENS = 24_000
+
     /**
      * Apply the configured saving level to [history] for one outgoing request.
      *
@@ -79,56 +85,48 @@ object ContextSaverRuntime {
      * @param keepRecentOverride optional shared recency boundary with other projections.
      * @return the history to send; the input instance when nothing folded.
      */
-    fun age(
+    internal fun age(
         history: List<LLMMessage>,
         windowTokens: Int,
         reportedTokens: Int,
         publish: Boolean = true,
         verifiedSpillPaths: Set<String> = emptySet(),
         keepRecentOverride: Int? = null,
+        config: HarnessConfig = HarnessConfig.current(),
     ): List<LLMMessage> {
-        val projection = planAge(history, windowTokens, reportedTokens, verifiedSpillPaths, keepRecentOverride)
+        val projection = planAge(history, windowTokens, reportedTokens, verifiedSpillPaths, keepRecentOverride, config)
         if (publish) recordProjection(projection.stats)
         return projection.messages
     }
 
-    /**
-     * Whether [planAge] could fold anything for this request — the request
-     * projector's gate for spill-path verification, so the disk I/O of path
-     * checks runs only when the aging tier will actually project. Mirrors
-     * planAge's trigger exactly: window-relative, or the absolute history
-     * ceiling, or OFF means never.
-     */
-    fun willAge(history: List<LLMMessage>, windowTokens: Int, reportedTokens: Int): Boolean {
+    /** Gate spill verification on the same inputs used by [planAge]. */
+    internal fun willAge(
+        history: List<LLMMessage>,
+        windowTokens: Int,
+        reportedTokens: Int,
+        config: HarnessConfig = HarnessConfig.current(),
+    ): Boolean {
         val mode = modeOverride ?: ContextSaverPrefs.mode()
         if (mode == ContextSaverPrefs.Mode.OFF) return false
-        val trigger = ContextSaverPrefs.triggerTokens(mode, windowTokens)
-        if (reportedTokens >= trigger) return true
-        return ContextTokenMeter.rawMessagesTokens(history) >= minOf(trigger, ABSOLUTE_AGE_TOKENS)
+        return crossesTrigger(history, reportedTokens, ContextSaverPrefs.triggerTokens(mode, windowTokens), config)
     }
 
     /** Project without publishing; call [recordProjection] only when sending the request. */
-    fun planAge(
+    internal fun planAge(
         history: List<LLMMessage>,
         windowTokens: Int,
         reportedTokens: Int,
         verifiedSpillPaths: Set<String> = emptySet(),
         keepRecentOverride: Int? = null,
+        config: HarnessConfig = HarnessConfig.current(),
     ): AgeProjection {
         val mode = modeOverride ?: ContextSaverPrefs.mode()
         if (mode == ContextSaverPrefs.Mode.OFF) {
             return AgeProjection(history, Stats(mode = mode.id))
         }
         val trigger = ContextSaverPrefs.triggerTokens(mode, windowTokens)
-        // [T-absolute-age-ceiling] Three ways in: the API reported a big request,
-        // the history alone is above the window-relative trigger, or it is above
-        // the absolute ceiling (which fires on wide windows where the relative
-        // trigger can never be met).
-        if (reportedTokens < trigger) {
-            val historyTokens = ContextTokenMeter.rawMessagesTokens(history)
-            if (historyTokens < minOf(trigger, ABSOLUTE_AGE_TOKENS)) {
-                return AgeProjection(history, Stats(mode = mode.id, triggerTokens = trigger))
-            }
+        if (!crossesTrigger(history, reportedTokens, trigger, config)) {
+            return AgeProjection(history, Stats(mode = mode.id, triggerTokens = trigger))
         }
         val plan = ToolResultAging.age(
             messages = history,
@@ -140,6 +138,20 @@ object ContextSaverRuntime {
             messages = plan.messages,
             stats = Stats(mode.id, plan.agedCount, plan.savedChars, trigger),
         )
+    }
+
+    private fun crossesTrigger(
+        history: List<LLMMessage>,
+        reportedTokens: Int,
+        trigger: Int,
+        config: HarnessConfig,
+    ): Boolean {
+        if (reportedTokens >= trigger) return true
+        val rawTokens = ContextTokenMeter.rawMessagesTokens(history).toLong()
+        // Scale the local meter only for this gate. The default ratio is 1,
+        // and using the meter avoids counting mirrored content or ignoring media.
+        val historyTokens = rawTokens * DEFAULT_CHARS_PER_TOKEN / config.agingCharsPerToken
+        return historyTokens >= minOf(trigger, config.absoluteAgeTokens)
     }
 
     /** Test seam: reset the published stats and the pinned level between cases. */

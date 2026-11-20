@@ -2540,9 +2540,9 @@
     <string name="code_editor_status_size">%1$d linii · %2$d znaków</string>
     <string name="code_editor_undo">Cofnij</string>
     <string name="code_editor_wrap">Przełącz zawijanie wierszy</string>
-    <string name="compact_progress_fallback">Kompaktowanie (%1$d/%2$d) modelem zapasowym %3$s… %4$d s. Po niepowodzeniu starszy kontekst zostaje przycięty.</string>
+    <string name="compact_progress_fallback">Kompaktowanie (%1$d/%2$d) modelem zapasowym %3$s… %4$d s. Po niepowodzeniu kontekst pozostaje bez zmian.</string>
     <string name="compact_progress_session">Kompaktowanie (%1$d/%2$d) bieżącym modelem %3$s… %4$d s. Po niepowodzeniu działa zapasowy albo jedna ponowna próba.</string>
-    <string name="compact_progress_session_retry">Kompaktowanie (%1$d/%2$d), ponowna próba bieżącego modelu %3$s… %4$d s. Brak zapasowego. Po niepowodzeniu starszy kontekst zostaje przycięty.</string>
+    <string name="compact_progress_session_retry">Kompaktowanie (%1$d/%2$d), ponowna próba bieżącego modelu %3$s… %4$d s. Brak zapasowego. Po niepowodzeniu kontekst pozostaje bez zmian.</string>
     <string name="composer_expand_editor">Rozwiń edytor</string>
     <string name="config_affects_later">To może wpłynąć na późniejsze wywołania narzędzi.</string>
     <string name="config_reversible">Da się odwrócić, ale warto rzucić okiem.</string>
@@ -2729,7 +2729,7 @@
     <string name="model_group_models_plain">%1$d modeli</string>
     <!-- backfill: strings.xml -->
     <string name="model_groups_compact_fallback">Zapasowe kompaktowanie</string>
-    <string name="model_groups_compact_fallback_footer">Bieżący model próbuje raz. Po niepowodzeniu zapasowy próbuje raz. Bez zapasowego bieżący model jest ponawiany raz. Dwa niepowodzenia przycinają starszy kontekst.</string>
+    <string name="model_groups_compact_fallback_footer">Bieżący model próbuje raz. Po niepowodzeniu zapasowy próbuje raz. Bez zapasowego bieżący model jest ponawiany raz. Jeśli kompresja się nie powiedzie, kontekst pozostaje bez zmian.</string>
     <string name="model_groups_default_primary">Domyślny główny</string>
     <string name="model_groups_defaults">Domyślne</string>
     <!-- backfill: strings_settings.xml -->
@@ -3331,4 +3331,19 @@
     <string name="process_card_thinking_now">Myślenie…</string>
     <string name="appearance_show_turn_changes_card_title">Karta zmian tury</string>
     <string name="appearance_show_turn_changes_card_subtitle">Pokazuje w każdej turze kartę plików zmienionych przez asystenta, ze statystyką linii i jednym dotknięciem cofania. Domyślnie wyłączona.</string>
+    <string name="vm_compact_retry_cooldown">Ostatnia kompresja nie powiodła się. Ponów próbę za %1$d s.</string>
+    <string name="guard_stop_section">Strażnik pętli</string>
+    <string name="guard_stop_title">Zatrzymaj przy powtórzeniach</string>
+    <string name="guard_stop_on">Może zatrzymać sesję</string>
+    <string name="guard_stop_off">Nigdy nie zatrzymuje sesji</string>
+    <string name="guard_stop_footer">Gdy włączone, strażnik zatrzymuje sesję, gdy ta sama czynność powtarza się zbyt często. Gdy wyłączone, tylko przypomina modelowi, co pomaga podczas długiego oczekiwania, np. na kompilację.</string>
+    <string name="token_usage_section_memory">Pamięć</string>
+    <string name="token_usage_memory_lines">Dostarczone wiersze</string>
+    <string name="token_usage_memory_shown">Liczba wyświetleń</string>
+    <string name="modeldetail_section_context_budget">Budżet kontekstu</string>
+    <string name="modeldetail_context_budget_footer">Ile ostatniej rozmowy przetrwa kompresję. Automatyczny skaluje się do okna modelu; własna wartość dotyczy tylko tego modelu.</string>
+    <string name="modeldetail_tail_budget_custom">Własny budżet końcówki</string>
+    <string name="modeldetail_tail_budget">Budżet końcówki</string>
+    <string name="modeldetail_tail_budget_state_auto">Automatyczny (skaluje się z oknem, do 60k)</string>
+    <string name="modeldetail_tail_budget_state_specific">Własny dla tego modelu</string>
 </resources>

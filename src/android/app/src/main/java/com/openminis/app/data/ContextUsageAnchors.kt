@@ -6,6 +6,7 @@ import com.openminis.app.data.model.LLMUsage
 import com.openminis.app.data.model.ModelAttributionSnapshot
 import com.openminis.app.data.model.ProviderType
 import com.openminis.app.provider.api.ChatRequest
+import com.openminis.app.util.Digest
 
 /** Frozen before dispatch so neither failover nor a later history rewrite can change the sample. */
 internal class ContextUsageAttempt internal constructor(
@@ -14,8 +15,6 @@ internal class ContextUsageAttempt internal constructor(
     internal val prefixLength: Int,
     internal val prefixFingerprint: String?,
     internal val rawRequestTokens: Int,
-    /** [T-anchor-persisted-fingerprint] Request-local appended bytes the measurement includes but persistence will not. */
-    internal val requestLocalTokens: Int = 0,
 )
 
 /** Total for the projected request; a measured prefix is never re-scaled. */
@@ -26,36 +25,27 @@ internal fun captureContextUsageAttempt(
     modelSnapshot: ModelAttributionSnapshot?,
     markerId: String?,
     rawRequestTokens: Int = ContextTokenMeter.rawRequestTokens(request),
-    /**
-     * Fingerprint over the persisted form (request-local appends stripped).
-     * The projector computes it where it knows exactly what it appended; null
-     * falls back to hashing the request as-is.
-     */
-    fingerprintOverride: String? = null,
-    requestLocalTokens: Int = 0,
+    hasRequestLocalContext: Boolean = false,
 ): ContextUsageAttempt = ContextUsageAttempt(
     modelSnapshot = modelSnapshot,
     markerId = markerId,
     prefixLength = request.messages.size,
-    prefixFingerprint = fingerprintOverride ?: if (modelSnapshot?.contextUsageIdentity() != null && markerId?.isBlank() != true) {
-        ContextTokenMeter.requestFingerprint(request)
+    prefixFingerprint = if (!hasRequestLocalContext && modelSnapshot?.contextUsageIdentity() != null && markerId?.isBlank() != true) {
+        requestContextFingerprint(request)
     } else null,
     rawRequestTokens = rawRequestTokens,
-    requestLocalTokens = requestLocalTokens,
 )
 
 /** Call only for the accepted attempt, with that attempt's input usage (not the billing ledger). */
 internal fun settleContextUsageAttempt(attempt: ContextUsageAttempt, usage: LLMUsage?): ContextUsageAnchor? {
     val model = attempt.modelSnapshot ?: return null
-    val fingerprint = attempt.prefixFingerprint ?: return null
     val identity = model.contextUsageIdentity() ?: return null
     val actual = reportedRequestInputTokens(usage, anthropic = identity.provider == ProviderType.anthropic) ?: return null
     TokenUsageCalibration.observe(identity.calibrationKey(), attempt.rawRequestTokens, actual)
-    // The measured input includes bytes that never persist (recall reminder,
-    // receipt notice, stall nudge). Store the persisted-prefix size so the next
-    // request's anchor comparison is apples-to-apples.
-    val prefixInput = (actual - attempt.requestLocalTokens).takeIf { it > 0 } ?: return null
-    return ContextUsageAnchor(model, attempt.markerId, attempt.prefixLength, fingerprint, prefixInput)
+    // A provider total can't prove the stable prefix when request-only text
+    // was appended. A local estimate of that text isn't in provider units.
+    val fingerprint = attempt.prefixFingerprint ?: return null
+    return ContextUsageAnchor(model, attempt.markerId, attempt.prefixLength, fingerprint, actual)
 }
 
 /** Provider-reported occupied input, separate from the existing fresh/cache billing buckets. */
@@ -88,10 +78,8 @@ internal fun estimateProjectedContext(
     // projection. Do not move them to an older user just because we hash a prefix.
     val imageIndex = if (request.imageParts.isEmpty()) -1 else messages.indexOfLast { it.role == LLMMessage.Role.USER }
     val prefixImages = if (imageIndex in 0 until index) request.imageParts else emptyList()
-    val fingerprint = ContextTokenMeter.requestFingerprint(
-        messages.subList(0, index), request.systemPrompt, request.tools, prefixImages,
-    )
-    if (anchor.prefixFingerprint != fingerprint) {
+    val prefix = request.copy(messages = messages.subList(0, index), imageParts = prefixImages)
+    if (anchor.prefixFingerprint != requestContextFingerprint(prefix)) {
         return ContextTokenEstimate(calibratedContextTokens(modelSnapshot, rawRequestTokens))
     }
 
@@ -103,6 +91,11 @@ internal fun estimateProjectedContext(
     val total = (anchor.inputTokens.toLong() + suffix).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
     return ContextTokenEstimate(total, measuredPrefixTokens = anchor.inputTokens)
 }
+
+/** Several adapters echo prior reasoning only when effective thinking is enabled. */
+private fun requestContextFingerprint(request: ChatRequest): String = Digest.sha256Hex(
+    "context-input-v3:${request.thinkingLevel.name}:${ContextTokenMeter.requestFingerprint(request)}",
+)
 
 internal fun calibratedContextTokens(modelSnapshot: ModelAttributionSnapshot?, rawTokens: Int): Int {
     if (rawTokens <= 0) return 0

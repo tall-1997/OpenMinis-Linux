@@ -114,6 +114,40 @@ class ChatViewModelTurnPersistExtTest {
     }
 
     @Test
+    fun `only completed calls enter the pair even when the provider omits the start event`() {
+        val calls = listOf(Triple("complete", "file_read", JSONObject().put("path", "before")))
+        validateCompletedToolCalls(calls)
+        val parts = completedToolTurnParts(
+            renderedParts = listOf(AgentContentPart.Text("reply"), AgentContentPart.ToolUse("started", "file_read", JSONObject())),
+            toolCalls = calls,
+            inputs = mapOf("complete" to """{"path":"after"}"""),
+            signatures = mapOf("complete" to "provider-signature"),
+            text = "reply",
+        )
+        val use = parts.filterIsInstance<AgentContentPart.ToolUse>().single()
+        assertEquals("complete", use.id)
+        assertEquals("after", use.input.getString("path"))
+        assertEquals("provider-signature", use.thoughtSignature)
+        assertEquals("reply", (parts.first() as AgentContentPart.Text).text)
+        val plan = ToolTurnPlan(emptyList(), emptyMap(), emptyMap())
+        val results = assembleTurnResultParts(calls, plan, ToolTurnExecution(java.util.concurrent.ConcurrentHashMap()))
+        val result = results.single() as AgentContentPart.ToolResult
+        assertTrue(result.isError)
+        assertTrue(result.content.contains("outcome is unknown"))
+        assertNull(result.receiptProof)
+        assertEquals("complete", JSONArray(completeToolTurnResultJson(parts, results)).getJSONObject(0)
+            .getJSONObject("value").getString("toolUseId"))
+        assertTrue(runCatching { completeToolTurnResultJson(parts, emptyList()) }.exceptionOrNull() is IllegalStateException)
+    }
+
+    @Test
+    fun `conflicting provider identities are rejected before planning a tool turn`() {
+        val call = Triple("same|first", "file_read", JSONObject())
+        val different = Triple("same|second", "file_read", JSONObject())
+        assertTrue(runCatching { validateCompletedToolCalls(listOf(call, different)) }.exceptionOrNull() is IllegalStateException)
+    }
+
+    @Test
     fun `invalid persisted tool arguments are not published as raw JSON`() {
         val restored = readTranscriptToolUse(JSONObject().put("input", "{bad").put("thoughtSignature", JSONObject.NULL))
         assertEquals("{}", restored.inputJsonSnapshot)

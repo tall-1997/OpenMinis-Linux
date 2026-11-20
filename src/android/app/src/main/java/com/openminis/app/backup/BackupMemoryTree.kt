@@ -54,13 +54,18 @@ internal object BackupMemoryTree {
         var entries = 0
         var bytes = 0L
         val pairs = JSONObject()
+        val markdownTimes = JSONObject()
         if (source.isDirectory) MemoryLifecycle.locked(source) { root ->
             for (file in treeFiles(root)) {
                 val rel = file.relativeTo(root).invariantSeparatorsPath
                 if (rel == PAIRS || isMemoryTemp(rel) || BackupDiaryPairs.isInternalRestorePath(rel)) continue
                 val member = BackupDiaryPairs.globalMember(rel)
                 if (member == null) {
-                    file.copyTo(File(dest, rel), overwrite = true)
+                    val out = File(dest, rel)
+                    if (BackupDiaryPairs.isMemoryMarkdown(rel)) {
+                        BackupDiaryPairs.copyWithTime(file, out)
+                        markdownTimes.put(rel, out.lastModified())
+                    } else file.copyTo(out, overwrite = true)
                     entries++
                     bytes += file.length()
                 } else if (member.member == BackupDiaryPairs.Member.DIARY) {
@@ -83,11 +88,13 @@ internal object BackupMemoryTree {
                                 throw java.io.IOException("Diary pair changed size")
                             }
                             MemoryLifecycle.validateBackupPair(diary, metadata, requireMatchingEntries = false)
-                            diary.copyTo(body, overwrite = true)
-                            metadata?.copyTo(sidecar, overwrite = true)
+                            BackupDiaryPairs.copyWithTime(diary, body)
+                            metadata?.let { BackupDiaryPairs.copyWithTime(it, sidecar) }
                             pairs.put(member.source, JSONObject().apply {
                                 put("diary", BackupDiaryPairs.fingerprint(diary))
                                 put("metadata", metadata?.let(BackupDiaryPairs::fingerprint) ?: BackupDiaryPairs.NO_METADATA)
+                                put("diary_mtime_ms", diary.lastModified())
+                                metadata?.let { put("metadata_mtime_ms", it.lastModified()) }
                             })
                             listOfNotNull(body, sidecar.takeIf { metadata != null })
                         }
@@ -107,7 +114,10 @@ internal object BackupMemoryTree {
                 }
             }
         }
-        if (source.isDirectory) File(dest, PAIRS).writeText(JSONObject().put("version", 1).put("pairs", pairs).toString())
+        if (source.isDirectory) {
+            val inventory = JSONObject().put("version", 1).put("pairs", pairs).put("markdown_mtime_ms", markdownTimes)
+            File(dest, PAIRS).writeText(inventory.toString())
+        }
         return BackupManifest.CategoryStat(entries, bytes, encrypted = false)
     }
 
@@ -121,16 +131,18 @@ internal object BackupMemoryTree {
         val report = BackupImporter.CategoryReport(BackupCategory.MEMORY.key)
         if (!src.isDirectory) return report
         val inventory = File(src, PAIRS)
-        val bound = if (!BackupDiaryPairs.exists(inventory)) null else try {
+        val descriptor = if (!BackupDiaryPairs.exists(inventory)) null else try {
             require(inventory.isFile && inventory.canonicalFile == inventory.absoluteFile)
-            JSONObject(inventory.readText()).let { descriptor ->
-                require(descriptor.getInt("version") == 1)
-                descriptor.getJSONObject("pairs")
+            JSONObject(inventory.readText()).also {
+                require(it.getInt("version") == 1)
+                it.getJSONObject("pairs")
             }
         } catch (_: Exception) {
             report.rejectedPaths++
             JSONObject() // An invalid inventory is not a legacy package.
         }
+        val bound = descriptor?.optJSONObject("pairs") ?: descriptor?.let { JSONObject() }
+        val markdownTimes = descriptor?.optJSONObject("markdown_mtime_ms")
         val diarySources = linkedSetOf<String>()
         bound?.keys()?.forEach { diarySources += it }
         MemoryLifecycle.locked(dest) { destRoot ->
@@ -147,7 +159,15 @@ internal object BackupMemoryTree {
                     report.rejectedPaths++
                     continue
                 }
-                file.copyTo(out, overwrite = true)
+                if (BackupDiaryPairs.isMemoryMarkdown(rel)) {
+                    try {
+                        BackupDiaryPairs.restoreMarkdown(file, out, markdownTimes?.mtime(rel))
+                    } catch (e: Exception) {
+                        report.rejectedPaths++
+                        AppLogger.warning("Restore", "Kept previous memory file $rel: ${e.javaClass.simpleName}")
+                        continue
+                    }
+                } else file.copyTo(out, overwrite = true)
                 report.filesWritten++
                 report.bytesWritten += file.length()
             }
@@ -160,7 +180,9 @@ internal object BackupMemoryTree {
                 val sidecar = metadata(src, source).takeIf(BackupDiaryPairs::exists)
                 require(sidecar == null || sidecar.isFile && sidecar.canonicalFile == sidecar.absoluteFile)
                 val binding = bound?.getJSONObject(source)
-                BackupDiaryPairs.publish(dest, source, body, sidecar, legacy = bound == null) { staged ->
+                BackupDiaryPairs.publish(dest, source, body, sidecar, legacy = bound == null,
+                    diaryMtimeMs = binding?.mtime("diary_mtime_ms"), metadataMtimeMs = binding?.mtime("metadata_mtime_ms"),
+                ) { staged ->
                     if (binding == null) return@publish
                     BackupDiaryPairs.verify(checkNotNull(staged.diary), binding.getString("diary"))
                     val hash = binding.getString("metadata")
@@ -177,9 +199,12 @@ internal object BackupMemoryTree {
         return report
     }
 
+    private fun JSONObject.mtime(key: String): Long? = if (isNull(key)) null else getLong(key)
+
     private fun treeFiles(root: File): Sequence<File> = root.walkTopDown().onEnter { directory ->
-        directory == root || !BackupDiaryPairs.isInternalRestorePath(directory.relativeTo(root).invariantSeparatorsPath)
-    }.filter { it.isFile }
+        !Files.isSymbolicLink(directory.toPath()) &&
+            (directory == root || !BackupDiaryPairs.isInternalRestorePath(directory.relativeTo(root).invariantSeparatorsPath))
+    }.filter { Files.isRegularFile(it.toPath(), java.nio.file.LinkOption.NOFOLLOW_LINKS) }
 
     private fun clearPairOutputs(body: File, sidecar: File) {
         Files.deleteIfExists(body.toPath())

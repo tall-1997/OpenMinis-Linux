@@ -1,5 +1,7 @@
 package com.openminis.app.data.repository
 
+import com.openminis.app.data.isStoredUserStopNote
+
 /**
  * [T-android-session-paused-badge-hardkill] The interrupted-tail predicate
  * over a raw `parts_json` string, matching ChatViewModel.loadSession's
@@ -82,7 +84,7 @@ internal fun isInterruptedTail(role: String, partsJson: String): Boolean {
                 arr.optJSONObject(0)?.takeIf { it.optString("type") == "text" }
                     ?.optString("value")
                     ?.contains("The user stopped the previous response") == true
-            allToolResults || isContinueReminder
+            allToolResults || isContinueReminder || isStoredUserStopNote(arr)
         }
         "ASSISTANT" -> types.any { it == "toolUse" }
         else -> false

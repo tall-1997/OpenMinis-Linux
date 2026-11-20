@@ -2,6 +2,8 @@ package com.openminis.app.ui.chat
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
@@ -76,6 +78,40 @@ class UiUpdateBatcherTest {
         } finally {
             batcher.stop()
         }
+    }
+
+    @Test
+    fun cancellingTheProducerDiscardsPendingUpdates() = runTest {
+        val applied = mutableListOf<String>()
+        val consumer = StandardTestDispatcher(testScheduler)
+        val producer = launch {
+            withRunUiBatcher(update = { _, text, _, _, _ -> applied += text }, consumerDispatcher = consumer) { batcher ->
+                batcher.enqueue("assistant", "pending text", true, emptyList())
+                awaitCancellation()
+            }
+        }
+        runCurrent()
+        producer.cancelAndJoin()
+        advanceTimeBy(400L)
+        runCurrent()
+        assertEquals(emptyList<String>(), applied)
+    }
+
+    @Test
+    fun aFailedProducerDoesNotLeaveAConsumerPushingIntoTheUi() = runTest {
+        val applied = mutableListOf<String>()
+        val consumer = StandardTestDispatcher(testScheduler)
+        val failure = runCatching {
+            withRunUiBatcher(update = { _, text, _, _, _ -> applied += text }, consumerDispatcher = consumer) { batcher ->
+                batcher.enqueue("assistant", "pending text", true, emptyList())
+                runCurrent()
+                error("provider failed")
+            }
+        }.exceptionOrNull()
+        assertEquals("provider failed", failure?.message)
+        advanceTimeBy(400L)
+        runCurrent()
+        assertEquals(emptyList<String>(), applied)
     }
 
     @Test

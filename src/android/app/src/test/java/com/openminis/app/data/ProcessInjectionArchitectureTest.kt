@@ -28,7 +28,9 @@ class ProcessInjectionArchitectureTest {
             loop.contains("processInjectedSystemPrompt("),
         )
         assertTrue("notices are committed once", loop.contains("commitSessionNoticesOnce("))
-        assertTrue("the agent loop uses the shared request projector", loop.contains("projectChatRequest("))
+        val dispatch = ProductionSources.read("ui/chat/ChatViewModelDispatchProjection.kt")
+        assertTrue("the agent loop uses the shared request projector",
+            loop.contains("buildDispatchProjection(") && dispatch.contains("projectChatRequest("))
         val notes = ProductionSources.read("ui/chat/ChatViewModelHiddenNote.kt")
         assertTrue("goal is announced once", notes.contains("goalAnnouncedSha"))
         assertFalse("recall must not be pinned in transcript history before dispatch", notes.contains("newRecallReminder("))
@@ -45,8 +47,8 @@ class ProcessInjectionArchitectureTest {
         assertFalse(projector.contains("commitHiddenUserNote("))
         assertFalse("Preview never starts semantic prefetch", projector.contains("prefetchSemanticRecallForRequest("))
         assertTrue(projector.contains("turnId = memoryRecallTurnIdForHistory(history)"))
-        val loop = ProductionSources.read("ui/chat/ChatViewModelAgentLoopExt.kt")
-        assertTrue(loop.contains("prefetchSemanticRecallForRequest(history)"))
+        val dispatch = ProductionSources.read("ui/chat/ChatViewModelDispatchProjection.kt")
+        assertTrue(dispatch.contains("prefetchSemanticRecallForRequest(history)"))
     }
 
     @Test
@@ -64,7 +66,8 @@ class ProcessInjectionArchitectureTest {
     fun `the hidden-note helper persists once`() {
         val note = ProductionSources.read("ui/chat/ChatViewModelHiddenNote.kt")
         assertTrue(note.contains("internal suspend fun ChatViewModel.commitHiddenUserNote("))
-        assertTrue("persisted so a reload does not re-inject", note.contains("chatRepository.appendMessage"))
+        assertTrue("persisted so a reload does not re-inject", note.contains("chatRepository.appendTurnRows"))
+        assertTrue("recheck ownership before inserting", note.contains("ownsWrite = ::ownsNote"))
         assertTrue("never rendered as a user bubble", note.contains("notePersistedUiRow(null"))
     }
 }

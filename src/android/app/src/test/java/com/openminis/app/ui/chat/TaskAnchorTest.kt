@@ -86,8 +86,24 @@ class TaskAnchorTest {
         assertFalse(TaskAnchor.isSubstantive("continue"))
         assertFalse(TaskAnchor.isSubstantive("ok!"))
         assertFalse(TaskAnchor.isSubstantive("   "))
+        // [T-task-anchor-ack] Two-letter acks must not replace the task.
+        for (ack in listOf("no", "yes", "hi", "thanks", "收到", "谢谢", "明白了", "行吧", "thanks!")) {
+            assertFalse("ack '$ack' is not a task", TaskAnchor.isSubstantive(ack))
+        }
         assertTrue(TaskAnchor.isSubstantive("实现登录重试"))
         assertTrue(TaskAnchor.isSubstantive("fix the login retry"))
+        assertTrue(TaskAnchor.isSubstantive("ls /var/minis"))
+    }
+
+    @Test
+    fun `ack now does not replace the task anchor`() {
+        val out = TaskAnchor.fragment(
+            anchorFromDb = "migrate module A",
+            firstUserInWindow = "migrate module A",
+            latestUserInWindow = "谢谢",
+        )!!
+        assertTrue(out.contains("migrate module A"))
+        assertFalse(out.contains("谢谢"))
     }
 
     @Test

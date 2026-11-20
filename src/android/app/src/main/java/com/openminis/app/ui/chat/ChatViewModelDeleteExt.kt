@@ -82,7 +82,7 @@ fun ChatViewModel.deleteFromMessage(messageId: String) {
 
         // Rebuild agentHistory from what survived, so the next turn is
         // built on the truncated conversation rather than a stale list.
-        val tail = awaitBoundedHistoryRebuild(sid)
+        val tail = awaitBoundedHistoryRebuild(sid) ?: return@launch
         // Drop the auto-trim digest too. llmDigestLines summarizes rows that
         // trimAgentHistory evicted from the model window; after a truncation
         // some of those rows no longer exist and the window boundary moved, so

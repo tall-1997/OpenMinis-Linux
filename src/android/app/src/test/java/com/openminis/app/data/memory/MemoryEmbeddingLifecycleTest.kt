@@ -104,6 +104,51 @@ class MemoryEmbeddingLifecycleTest {
         assertNull(managed.state.lastUsedAt)
     }
 
+    @Test fun fileGovernanceRevalidatesStoredVectorsAndFinishedPrefetchInTheSameTurn() = runBlocking {
+        val root = tmp.newFolder("file-governance")
+        val start = 1_798_200_000_000L
+        var now = start
+        val source = "2026-10-22.md"
+        val diary = File(root, source).apply {
+            writeText("\uFEFF---\r\nttl_days: 1\r\ntype: hiddenheader\r\n---\r\nkiwifruit private vector\r\n")
+            assertTrue(setLastModified(start - MemoryLifecycle.DAY_MS + 5))
+        }
+        val dao = FakeDao()
+        val embedded = mutableListOf<String>()
+        val indexer = MemoryEmbeddingIndexer(object : EmbeddingProvider {
+            override suspend fun embed(texts: List<String>): List<FloatArray> {
+                embedded += texts
+                return texts.map { floatArrayOf(1f, 0f) }
+            }
+        }, "model", dao, this, clock = { now })
+        indexer.indexFileNow(root, diary)
+        assertEquals(listOf("kiwifruit private vector"), embedded)
+        val support = object : MemoryEmbeddingSupport {
+            override suspend fun semanticHits(query: String, limit: Int, scopes: Collection<String>) = indexer.semanticHits(query, limit, scopes)
+            override fun backfillAsync(dirs: List<File>) = Unit
+        }
+        val engine = MemoryRecallEngine({ root }, embeddingSupport = support, clock = { now })
+        val query = "zzzz qqqq" // No BM25 token or bigram appears in the candidate.
+        val turn = "wire-turn"
+        engine.prefetchSemanticForTest(query, turn)
+        assertEquals("kiwifruit private vector", engine.recallCandidatesForDelivery(query, now, turn).single().line)
+        assertTrue(engine.recallCandidatesForDelivery(query, now, "other-turn").isEmpty())
+        val corrector = File(root, "correction.md")
+        corrector.writeText("---\nsupersedes: $source\n---\nreplacement\n")
+        assertTrue(indexer.semanticHits(query, 4, listOf(root.canonicalPath)).isEmpty())
+        assertTrue(engine.recallCandidatesForDelivery(query, now, turn).isEmpty())
+        corrector.writeText("---\ndisabled: true\nsupersedes: $source\n---\nreplacement\n")
+        assertTrue(engine.recallCandidatesForDelivery(query, now, turn).isEmpty())
+        assertTrue(corrector.delete())
+        assertEquals("kiwifruit private vector", engine.recallCandidatesForDelivery(query, now, turn).single().line)
+        now += 6 // Cross file TTL while the same completed prefetch is still fresh and SQLite has the old vector.
+        assertEquals(1, dao.count())
+        assertTrue(indexer.semanticHits(query, 4, listOf(root.canonicalPath)).isEmpty())
+        assertTrue(engine.recallCandidatesForDelivery(query, now, turn).isEmpty())
+        indexer.indexFileNow(root, diary)
+        assertEquals(0, dao.count())
+    }
+
     private class FakeDao : MemoryEmbeddingDao {
         private val entries = LinkedHashMap<String, MemoryEmbeddingEntity>()
         override suspend fun upsertAll(items: List<MemoryEmbeddingEntity>) { items.forEach { entries[it.memoryId] = it } }

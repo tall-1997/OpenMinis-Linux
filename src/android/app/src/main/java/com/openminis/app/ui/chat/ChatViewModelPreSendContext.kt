@@ -29,12 +29,15 @@ internal suspend fun ChatViewModel.checkContextBeforeSend(
                 } else add(AgentContentPart.Text(attachment.fileName))
             }
         }
+        val sid = activeSessionId
         val history = agentHistorySnapshot()
+        val compact = requestCompactStateFor(history, sid)
         projectChatRequest(
             provider, buildMemoryDeliveryPrompt(publish = false),
             history + LLMMessage(LLMMessage.Role.USER, expanded, contentParts = parts),
             agentTools, requestThinkingLevel(provider),
-            uncoveredBeforeResident = hasRequestHistoryGap(history),
+            uncoveredBeforeResident = compact.hasCoverageGap,
+            requestSessionId = sid, marker = compact.marker,
         )
     }
     return when (projected.capacity()) {

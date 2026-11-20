@@ -2,6 +2,7 @@ package com.openminis.app.ui.chat.retention
 
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
+import com.openminis.app.ui.chat.ToolPairingCore
 
 /**
  * The model-context retention rule, and the reason the chat surface is not
@@ -102,58 +103,9 @@ internal object ResidentWindow {
         return 0
     }
 
-    /**
-     * Precompute every legal cut in one right-to-left pass.
-     *
-     * Forward rule (the original [isLegalBoundary]): walking the suffix, a
-     * ToolResult must match an earlier ToolUse with the same id/name; at the
-     * end, any unmatched use is allowed only in the final assistant message.
-     *
-     * Backward recurrence while extending the suffix to the left:
-     *  - a ToolResult can only match a use to its LEFT, so it joins
-     *    [pendingResults] and waits;
-     *  - a ToolUse first tries to consume a waiting result to its right;
-     *    otherwise it is unmatched, and it is "bad" unless it sits in the
-     *    final assistant message.
-     *
-     * A cut is legal iff no result is still waiting and no non-final use is
-     * unmatched. Results waiting at the current message boundary stay in the
-     * state when extending further left — an earlier use may still match them.
-     */
-    private fun legalBoundaries(history: List<LLMMessage>): BooleanArray {
-        val n = history.size
-        val legal = BooleanArray(n + 1)
-        val pendingResults = HashMap<String, Int>()
-        var badUses = 0
-        for (i in n - 1 downTo 0) {
-            val message = history[i]
-            val inFlightTurn = i == n - 1 && message.role == LLMMessage.Role.ASSISTANT
-            val parts = message.contentParts
-            for (p in parts.asReversed()) {
-                when (p) {
-                    is AgentContentPart.ToolResult -> {
-                        val key = toolKey(p.id, p.name)
-                        pendingResults[key] = (pendingResults[key] ?: 0) + 1
-                    }
-                    is AgentContentPart.ToolUse -> {
-                        val key = toolKey(p.id, p.name)
-                        val waiting = pendingResults[key] ?: 0
-                        if (waiting > 0) {
-                            if (waiting == 1) pendingResults.remove(key) else pendingResults[key] = waiting - 1
-                        } else if (!inFlightTurn) {
-                            badUses++
-                        }
-                    }
-                    else -> Unit
-                }
-            }
-            legal[i] = pendingResults.isEmpty() && badUses == 0
-        }
-        legal[n] = false
-        return legal
-    }
-
-    private fun toolKey(id: String, name: String): String = "$id\u0000$name"
+    /** Precompute pairing-safe suffix boundaries, including normalized Responses ids. */
+    internal fun legalBoundaries(history: List<LLMMessage>): BooleanArray =
+        ToolPairingCore.legalCuts(history)
 
     /** First legal cut index >= [from], or null. Built once, O(1) per query. */
     private fun firstLegal(legal: BooleanArray, from: Int): Int? {

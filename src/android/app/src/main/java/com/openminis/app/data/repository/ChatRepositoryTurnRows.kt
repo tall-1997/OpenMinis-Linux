@@ -12,6 +12,7 @@ data class PendingTurnRow(
     val tokenUsage: String? = null,
     val reasoningContent: String? = null,
     val modelSnapshot: ModelAttributionSnapshot? = null,
+    val errorInfo: String? = null,
 )
 
 /**
@@ -24,19 +25,36 @@ data class PendingTurnRow(
  * transaction opens; inside it only inserts and the same per-row preview
  * bookkeeping appendMessage performs are allowed.
  */
-suspend fun ChatRepository.appendTurnRows(sessionId: String, rows: List<PendingTurnRow>): List<MessageEntity> {
-    if (rows.isEmpty()) return emptyList()
-    val stored = rows.map { row -> row to storeBody(row.partsJson) }
+suspend fun ChatRepository.appendTurnRows(
+    sessionId: String,
+    rows: List<PendingTurnRow>,
+    ownsWrite: () -> Boolean = { true },
+): List<MessageEntity> {
+    if (rows.isEmpty() || !ownsWrite()) return emptyList()
+    val store = bodyStore()
+    val stored = rows.map { row ->
+        val body = storeBody(row.partsJson, requireOffload = true)
+        // A cache hit in BodyStore.put can reuse a damaged file. A logical
+        // turn is not committed until each body can be recovered in full.
+        body.ref?.let { ref ->
+            check(store?.verifyExact(ref, body.bodyBytes.toInt()) == true) {
+                "Unable to verify oversized message body"
+            }
+        }
+        row to body
+    }
     val now = System.currentTimeMillis()
     val dbRef = db
     if (dbRef == null) {
         // Sequential fallback for repositories built without a database
         // handle (JVM tests); production always passes one.
+        if (!ownsWrite()) return emptyList()
         val inserted = stored.map { (row, body) -> insertTurnRow(sessionId, row, body, now) }
         updateSessionPreviewAfterTurn(sessionId, stored, now)
         return inserted
     }
     return dbRef.withTransaction {
+        if (!ownsWrite()) return@withTransaction emptyList()
         val inserted = stored.map { (row, body) -> insertTurnRow(sessionId, row, body, now) }
         updateSessionPreviewAfterTurn(sessionId, stored, now)
         inserted
@@ -65,7 +83,7 @@ private suspend fun ChatRepository.insertTurnRow(
     sessionId = sessionId,
     role = row.role,
     partsJson = body.inline,
-    errorInfo = null,
+    errorInfo = row.errorInfo,
     bodyBytes = body.bodyBytes,
     bodyRef = body.ref,
     bodySha = body.sha,

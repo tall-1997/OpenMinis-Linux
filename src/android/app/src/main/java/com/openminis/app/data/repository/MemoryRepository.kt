@@ -224,8 +224,17 @@ class MemoryRepository(
      * 非空时先校验现有文件内容哈希，不匹配返回 MEMORY_CONFLICT，不覆盖并发更新。
      * 写入成功返回新 revision（哈希前 16 位）。
      */
-    fun writeMemory(content: String, expectedRevision: String? = null): String =
-        writeEntry(content, expectedRevision, null, null, autoArchive = false, pin = false)
+    /** File-level schema fields apply only when creating a day file. */
+    fun writeMemory(
+        content: String,
+        expectedRevision: String? = null,
+        type: String? = null,
+        scope: String? = null,
+        ttlDays: Int? = null,
+    ): String = writeEntry(
+        content, expectedRevision, null, null, autoArchive = false, pin = false,
+        initialHeader = MemoryMetadataParser.frontmatterFor(type = type ?: "daily", scope = scope, ttlDays = ttlDays),
+    )
 
     /** Only host tool/sedimentation writes enroll entries, including durable notes for usage tracking. */
     internal fun writeHostMemory(
@@ -237,7 +246,9 @@ class MemoryRepository(
         pin: Boolean = false,
     ): String {
         if (ttlDays != null && (!autoArchive || ttlDays !in 1..MemoryLifecycle.MAX_TTL_DAYS)) return "Error: Invalid ttl_days"
-        return writeEntry(content, expectedRevision, origin, ttlDays, autoArchive, pin)
+        return writeEntry(content, expectedRevision, origin, ttlDays, autoArchive, pin,
+            initialHeader = MemoryMetadataParser.frontmatterFor(type = "daily"),
+        )
     }
 
     private fun writeEntry(
@@ -247,6 +258,7 @@ class MemoryRepository(
         ttlDays: Int?,
         autoArchive: Boolean,
         pin: Boolean,
+        initialHeader: String,
     ): String {
         if (content.isBlank()) return "Error: Missing required 'content' parameter"
         val contentBytes = content.toByteArray(Charsets.UTF_8).size
@@ -274,10 +286,13 @@ class MemoryRepository(
                             return@write WriteOutcome("Error: MEMORY_CONFLICT — 日志文件已被并发更新（期望 revision $expectedRevision，实际 ${actual.take(16)}…）。请先 memory_get 重新读取后再写。")
                         }
                     }
-                    val blocks = MemoryDiaryFormat.blocks(existing)
+                    val header = MemoryMetadataParser.header(existing)
+                    val bodyStart = header?.bodyStart ?: if (existing.startsWith('\uFEFF')) 1 else 0
+                    val body = existing.substring(bodyStart)
+                    val blocks = MemoryDiaryFormat.blocks(body)
                     val diary = if (blocks.any { it.id != null }) MemoryLifecycle.read(dir, fileName) else null
                     val exactManaged = diary?.managed()?.firstOrNull { normalizeEntry(it.body) == normalizedNew }
-                    if (exactManaged != null || existing.isNotBlank() && ENTRY_MARK.split(existing).any { normalizeEntry(it) == normalizedNew }) {
+                    if (exactManaged != null || body.isNotBlank() && ENTRY_MARK.split(body).any { normalizeEntry(it) == normalizedNew }) {
                         if ((pin || origin == MemoryEntryOrigin.MEMORY_WRITE && !autoArchive) && exactManaged != null &&
                             MemoryLifecycle.pin(dir, fileName, exactManaged.ref.id, now)
                         ) {
@@ -295,8 +310,11 @@ class MemoryRepository(
                     if (id != null) {
                         MemoryLifecycle.enroll(dir, fileName, id, entry, now, ttlDays, origin, autoArchive)
                     }
-                    val newContent = (if (existing.startsWith('\uFEFF')) "\uFEFF" else "") +
-                        entry + existing.removePrefix("\uFEFF")
+                    val prefix = existing.substring(0, bodyStart)
+                    val headerForNewFile = if (!file.exists()) initialHeader else ""
+                    // Keep the original BOM, header, keys and line endings exactly as read.
+                    val separator = if (header != null && !prefix.endsWith('\n') && !prefix.endsWith('\r')) "\n" else ""
+                    val newContent = prefix + separator + headerForNewFile + entry + body
                     writeLifecycleAtomic(file, newContent)
                     val newRevision = Digest.sha256Hex(newContent).take(16)
                     Log.i(TAG, "Memory written to $fileName (${content.length} chars, revision $newRevision)")
@@ -342,29 +360,16 @@ class MemoryRepository(
             .split(Regex("\\s+"))
             .filter { it.isNotEmpty() }
 
-        val filesToSearch = mutableListOf<Pair<String, File>>() // label to file
+        return MemorySources.withScope(memoryDir, now, includeStanding = true) { sources ->
+            val files = sources.filter { source ->
+                source.name != LearnedPrefsStore.FILE_NAME && (source.name != GLOBAL_FILE || scope == "all")
+            }.sortedWith(compareByDescending<MemorySources.Source> { it.name == GLOBAL_FILE }.thenByDescending { it.name })
+            searchMemory(files, keywordList)
+        } ?: "No memory files found."
+    }
 
-        if (scope == "all") {
-            val globalFile = File(memoryDir, GLOBAL_FILE)
-            if (globalFile.exists() && globalFile.length() > 0) {
-                filesToSearch.add(GLOBAL_FILE to globalFile)
-            }
-        }
-
-        // Daily logs sorted descending
-        val dailyFiles = memoryDir.listFiles()
-            ?.filter { it.extension == "md" && it.name != GLOBAL_FILE && it.name != LearnedPrefsStore.FILE_NAME }
-            ?.sortedByDescending { it.name }
-            ?: emptyList()
-
-        for (file in dailyFiles) {
-            filesToSearch.add(file.name to file)
-        }
-
-        if (filesToSearch.isEmpty()) {
-            return "No memory files found."
-        }
-
+    private fun searchMemory(files: List<MemorySources.Source>, keywordList: List<String>): String {
+        if (files.isEmpty()) return "No memory files found."
         val results = mutableListOf<String>()
         var totalLines = 0
         // [T-memory-get-truncate-android] UTF-8 byte tally — see
@@ -383,10 +388,10 @@ class MemoryRepository(
         // to flood agent context.
         val lineCap = if (keywordList.isEmpty()) MAX_DUMP_LINES else MAX_SEARCH_LINES
 
-        for ((label, file) in filesToSearch) {
+        for (file in files) {
             if (totalLines >= lineCap || byteCapHit) break
-            val content = MemoryLifecycle.read(memoryDir, file.name)?.active(now)?.text ?: continue
-            if (content.isBlank()) continue
+            val label = file.name
+            val content = file.view()?.text ?: continue
             val budget = lineCap - totalLines
 
             val entry: String? = if (keywordList.isEmpty()) {

@@ -2532,9 +2532,9 @@
     <string name="code_editor_status_size">%1$d 行 · %2$d 文字</string>
     <string name="code_editor_undo">元に戻す</string>
     <string name="code_editor_wrap">折り返しを切り替え</string>
-    <string name="compact_progress_fallback">圧縮中 (%1$d/%2$d)、フォールバックモデル %3$s を使用中… %4$d 秒。失敗した場合は古いコンテキストを切り詰めます。</string>
+    <string name="compact_progress_fallback">圧縮中 (%1$d/%2$d)、フォールバックモデル %3$s を使用中… %4$d 秒。失敗した場合もコンテキストは変更されません。</string>
     <string name="compact_progress_session">圧縮中 (%1$d/%2$d)、現在のモデル %3$s を使用中… %4$d 秒。失敗した場合はフォールバックまたは 1 回だけの再試行を実行します。</string>
-    <string name="compact_progress_session_retry">圧縮中 (%1$d/%2$d)、現在のモデル %3$s を再試行中… %4$d 秒。フォールバックは未設定です。失敗した場合は古いコンテキストを切り詰めます。</string>
+    <string name="compact_progress_session_retry">圧縮中 (%1$d/%2$d)、現在のモデル %3$s を再試行中… %4$d 秒。フォールバックは未設定です。失敗した場合もコンテキストは変更されません。</string>
     <string name="composer_expand_editor">エディタを広げる</string>
     <string name="config_affects_later">この変更は、これ以降のツール呼び出しに影響する可能性があります。</string>
     <string name="config_reversible">元に戻せますが、一度確認しておく価値があります。</string>
@@ -2721,7 +2721,7 @@
     <string name="model_group_models_plain">%1$d 個のモデル</string>
     <!-- backfill: strings.xml -->
     <string name="model_groups_compact_fallback">コンパクトフォールバック</string>
-    <string name="model_groups_compact_fallback_footer">現在のモデルで 1 回圧縮を試みます。失敗したらフォールバックを 1 回試します。フォールバックがなければ現在のモデルを 1 回再試行します。2 回失敗すると古いコンテキストを切り詰めます。</string>
+    <string name="model_groups_compact_fallback_footer">現在のモデルで 1 回圧縮を試みます。失敗したらフォールバックを 1 回試します。フォールバックがなければ現在のモデルを 1 回再試行します。圧縮に失敗してもコンテキストは変更されません。</string>
     <string name="model_groups_default_primary">デフォルトのメイン</string>
     <string name="model_groups_defaults">デフォルト</string>
     <!-- backfill: strings_settings.xml -->
@@ -3323,4 +3323,19 @@
     <string name="process_card_thinking_now">思考中…</string>
     <string name="appearance_show_turn_changes_card_title">ターン変更カード</string>
     <string name="appearance_show_turn_changes_card_subtitle">アシスタントが変更したファイルを行数統計つきでターンごとに表示し、ワンタップで元に戻せます。デフォルトはオフです。</string>
+    <string name="vm_compact_retry_cooldown">前回の圧縮に失敗しました。%1$d 秒後に再試行できます。</string>
+    <string name="guard_stop_section">ループガード</string>
+    <string name="guard_stop_title">繰り返し時に停止</string>
+    <string name="guard_stop_on">セッションを停止できる</string>
+    <string name="guard_stop_off">セッションを停止しない</string>
+    <string name="guard_stop_footer">オンの場合、同じ操作が繰り返されるとセッションを停止します。オフの場合、モデルへの注意のみを行い、ビルド待ちなどの長い待機に適しています。</string>
+    <string name="token_usage_section_memory">メモリ</string>
+    <string name="token_usage_memory_lines">配信された行</string>
+    <string name="token_usage_memory_shown">表示回数</string>
+    <string name="modeldetail_section_context_budget">コンテキスト予算</string>
+    <string name="modeldetail_context_budget_footer">圧縮後に残す直近の会話量。自動はモデルのウィンドウに合わせて調整され、カスタム値はこのモデルだけに適用されます。</string>
+    <string name="modeldetail_tail_budget_custom">カスタム末尾予算</string>
+    <string name="modeldetail_tail_budget">末尾予算</string>
+    <string name="modeldetail_tail_budget_state_auto">自動（ウィンドウに合わせて調整、最大60k）</string>
+    <string name="modeldetail_tail_budget_state_specific">このモデル専用</string>
 </resources>

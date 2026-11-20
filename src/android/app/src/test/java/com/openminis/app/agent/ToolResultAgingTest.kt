@@ -185,6 +185,14 @@ class ToolResultAgingTest {
     // -------------------------------------------------------------- content
 
     @Test
+    fun `a result just over the head does not repeat head and tail`() {
+        val body = "a".repeat(150) + "b".repeat(150)
+        val text = ToolResultAging.placeholder("shell_execute", body)
+        assertFalse(text.contains("[tail]"))
+        assertTrue(text.contains(body))
+    }
+
+    @Test
     fun `placeholder without a verified path never suggests a rerun`() {
         val text = ToolResultAging.placeholder("shell_execute", "m".repeat(3_000))
         assertFalse(text.contains("/var/minis/"))
@@ -301,6 +309,19 @@ class ToolResultAgingTest {
     // ------------------------------------------------- round-coherent keep
 
     @Test
+    fun `keepRecent zero folds every eligible result without crashing`() {
+        // [T-age-zero-keep] keep=0 is the OFF-mode shape; the round-coherent
+        // index must not read live[scanned] out of bounds.
+        val history = listOf(
+            msg(result("a", 4_000)),
+            msg(result("b", 4_000), result("c", 4_000)),
+        )
+        val plan = ToolResultAging.age(history, keepRecent = 0, minChars = 1_200)
+        assertEquals(3, plan.agedCount)
+        assertTrue(contents(plan.messages).all { ToolResultAging.isAged(it) })
+    }
+
+    @Test
     fun `keep window never splits one parallel round`() {
         // One assistant turn fanned out into 3 calls. keepRecent = 1 would
         // fold b1/b2 and keep b3; the round-coherent rule keeps the whole
@@ -352,5 +373,22 @@ class ToolResultAgingTest {
         assertEquals("a b c", ToolResultAging.tailOf("a  b\t\nc"))
         val cut = ToolResultAging.tailOf("z".repeat(10) + "😘".repeat(200), limit = 5)
         assertFalse("must not start on a lone low surrogate", Character.isLowSurrogate(cut.first()))
+    }
+
+    @Test
+    fun `verified spill advice uses a line offset and does not claim a length`() {
+        val path = "/var/minis/workspace/tool-spill/out.txt"
+        val body = com.openminis.app.tools.ToolOutputSpill.formatPreview(
+            "shell_execute", path, "header\n" + "x".repeat(20_000) + "\nend",
+        )
+        val history = listOf(msg(result("t", 0).copy(content = body)))
+        val plain = contents(ToolResultAging.age(history, keepRecent = 0).messages).single()
+        val addressed = contents(ToolResultAging.age(history, keepRecent = 0, verifiedSpillPaths = setOf(path)).messages).single()
+        assertFalse(plain.contains("offset"))
+        assertFalse(plain.contains(path))
+        assertTrue(addressed.contains("full output: $path"))
+        assertTrue(addressed.contains("offset 1"))
+        assertFalse(addressed.contains("length "))
+        assertTrue(addressed.length < body.length)
     }
 }

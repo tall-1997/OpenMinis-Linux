@@ -12,6 +12,7 @@ import org.json.JSONObject
 
 private val receiptExemptObservations = setOf(
     "file_read", "list_dir", "grep", "glob", "read_image", "get_screen_time", "search_sessions", "read_session",
+    HistorySearchTool.SEARCH, HistorySearchTool.READ,
 )
 
 /** Match MemoryTools' search default; only a known search may use the read-only fast paths. */

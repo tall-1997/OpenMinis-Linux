@@ -31,6 +31,7 @@ internal fun ChatViewModel.sendMessage(
     text: String,
     skipContextCheck: Boolean,
     internalGoalRun: Boolean = false,
+    skipInitialCompaction: Boolean = skipContextCheck && !internalGoalRun,
 ) {
     // [T-android-paste-mediaref] `[Pasted#N]` markers are NOT expanded here
     // any more.
@@ -389,9 +390,10 @@ internal fun ChatViewModel.sendMessage(
                 .hostDir(context.filesDir, activeSessionId, "workspace")
             dir.absolutePath.takeIf { dir.isDirectory }
         }.getOrNull()
+        // The shared request projection adds the clock after the DB rebuild.
         val modelBody = com.openminis.app.agent.MessageTransformerChain.applyUser(
-            modelBodyRaw,
-            com.openminis.app.agent.UserTransformContext(workspaceHint = workspaceHint),
+            modelBodyRaw, com.openminis.app.agent.UserTransformContext(workspaceHint = workspaceHint),
+            includeClock = false,
         )
 
         val userContentParts = mutableListOf<AgentContentPart>()
@@ -514,7 +516,7 @@ internal fun ChatViewModel.sendMessage(
                             fallbackProviders = fallbackProviders,
                             fallbackStrategy = activeFallbackStrategy,
                             goalExecutionRun = internalGoalRun,
-                            skipInitialCompaction = skipContextCheck && !internalGoalRun,
+                            skipInitialCompaction = skipInitialCompaction,
                         )
                         AppLogger.info(ChatViewModel.TAG_STREAM, "send runAgentLoop RETURN normal")
                         // Drain any prompts the user queued while this loop was running.

@@ -7,8 +7,8 @@ import com.openminis.app.data.authority.MemoryTrust
 import com.openminis.app.data.authority.MemoryOrigin
 import com.openminis.app.data.memory.MemoryEmbeddingIndexer
 import com.openminis.app.data.memory.MemoryEmbeddingSupport
+import com.openminis.app.util.Digest
 import com.openminis.app.util.IsoTime
-import com.openminis.app.evolution.LearnedPrefsStore
 import android.util.Log
 import java.io.File
 import java.time.LocalDate
@@ -16,9 +16,12 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 
 /**
@@ -50,6 +53,8 @@ class MemoryRecallEngine(
      */
     private val embeddingSupport: MemoryEmbeddingSupport? = null,
     private val clock: () -> Long = System::currentTimeMillis,
+    /** Resolve at recall time so a cached engine also picks up a new reranker. */
+    private val rerankerProvider: () -> MemoryReranker = { MemoryRerankerRegistry.active() },
 ) {
 
     companion object {
@@ -61,7 +66,9 @@ class MemoryRecallEngine(
         internal const val MAX_HITS_PER_FILE = 2
         private const val RECENCY_WINDOW_DAYS = 30L
         private const val RECALL_COUNTS_FILE = ".recall-counts.json"
-        private val protectedSources = setOf(MemoryRepository.GLOBAL_FILE, "SOUL.md", "PERSONA.md", "AGENTS.md", LearnedPrefsStore.FILE_NAME)
+        private val opaqueCountKey = Regex("v2:[0-9a-f]{64}")
+
+        internal fun recallCountKey(day: String, line: String): String = "v2:" + Digest.sha256Hex("$day:${line.trim()}")
         // BM25 parameters (standard defaults) for the keyword score.
         private const val BM25_K1 = 1.2
         private const val BM25_B = 0.75
@@ -145,15 +152,16 @@ class MemoryRecallEngine(
     /** recallCount — persisted to a JSON sidecar so the boost survives restarts. */
     private val recallCounts = ConcurrentHashMap<String, AtomicInteger>()
 
-    /** [T-memory-recall-memo] (query, hits) of the most recent recall, or null. */
-    @Volatile
-    private var memo: Pair<String, List<RecallHit>>? = null
-
     // ── [T-memory-embedding-wiring] semantic prefetch cache ────────────────
 
     private data class PrefetchKey(val query: String, val turnId: String?, val version: Long)
     private class PrefetchAttempt(val key: PrefetchKey)
-    private data class PrefetchResult(val key: PrefetchKey, val hits: List<RecallHit>, val completedAt: Long)
+    private data class PrefetchResult(
+        val key: PrefetchKey,
+        val hits: List<RecallHit>,
+        val completedAt: Long,
+        val retrySoon: Boolean,
+    )
 
     private val prefetchLock = Any()
     @Volatile private var prefetched: PrefetchResult? = null
@@ -172,9 +180,11 @@ class MemoryRecallEngine(
         val directory: File? = null,
         val entryId: String? = null,
         val restoredAt: Long? = null,
+        val entryDigest: String? = null,
     ) {
-        internal val ref: MemoryEntryRef? get() = directory?.let { dir -> entryId?.let { MemoryEntryRef(dir, source, it) } }
-        internal val announcementKey: String get() = "v2:" + com.openminis.app.util.Digest.sha256Hex(
+        internal val ref: MemoryEntryRef? get() = if (directory != null && entryId != null && entryDigest != null)
+            MemoryEntryRef(directory, source, entryId, entryDigest) else null
+        internal val announcementKey: String get() = "v2:" + Digest.sha256Hex(
             "$directory\u0000$source\u0000${entryId ?: line}\u0000$restoredAt",
         )
     }
@@ -238,17 +248,11 @@ class MemoryRecallEngine(
      */
     fun recall(query: String): List<RecallHit> = recallAt(query, clock())
 
-    private fun recallAt(query: String, now: Long): List<RecallHit> {
+    private fun recallAt(query: String, now: Long, sources: Map<String, MemorySources.Visible>? = null): List<RecallHit> {
         val keywords = extractKeywords(query)
         if (keywords.isEmpty()) return emptyList()
-        // An active diary can change at a TTL/idle boundary with no Markdown edit.
-        // Retain the existing single-query memo only for scopes with no lifecycle data.
-        val memoEligible = !MemoryLifecycle.hasMetadata(memoryDirProvider()) &&
-            sharedDirProvider?.invoke()?.let { !MemoryLifecycle.hasMetadata(it) } != false
-        if (memoEligible) memo?.let { (lastQuery, hits) ->
-            if (lastQuery == query && currentRecallHits(hits, now).size == hits.size) return hits
-        }
-
+        // A file or its replacement can expire without changing any of the previous hits.
+        // A query-only memo would miss a previously hidden file becoming eligible again.
         val today = LocalDate.parse(IsoTime.formatLocalDate(now))
 
         // ── pass 1: collect candidate lines (hygiene-filtered) ─────────────
@@ -257,34 +261,13 @@ class MemoryRecallEngine(
             val isHeadline: Boolean, val kwTokens: List<String>, val entry: MemoryLifecycle.Managed?,
         )
         val raws = mutableListOf<Raw>()
-
-        for ((file, view) in scanMemoryFiles(now)) {
-            val relName = file.name
-            val directory = file.parentFile ?: continue
-            val lines = view.lines()
-            val dayStr = dayKeyOf(relName)
-            var inHtmlComment = false
-
-            for ((line, entry) in lines) {
-                val trimmed = line.trim()
-                if (trimmed.isEmpty()) continue
-                if (inHtmlComment) {
-                    if (trimmed.contains("-->")) inHtmlComment = false
-                    continue
-                }
-                if (trimmed.startsWith("<!--")) {
-                    if (!trimmed.contains("-->")) inHtmlComment = true
-                    continue
-                }
-                // Separator / decoration lines ("---", "===", pure punctuation).
-                if (trimmed.none { it.isLetterOrDigit() }) continue
-
-                val kwTokens = keywords.filter { trimmed.contains(it, ignoreCase = true) }
+        for ((directory, name, view) in (sources ?: MemorySources.recallSources(fileScopes(), now)).values) {
+            val day = dayKeyOf(name)
+            for ((line, entry) in MemorySources.recallLines(view)) {
+                val kwTokens = keywords.filter { line.contains(it, ignoreCase = true) }
                 if (kwTokens.isEmpty()) continue
-                // Headline / bullet / section lines are higher signal than body prose.
-                val isHeadline = trimmed.startsWith("#") || trimmed.startsWith("-") ||
-                    trimmed.startsWith("*") || trimmed.startsWith(">")
-                raws.add(Raw(relName, directory, trimmed, dayStr, isHeadline, kwTokens, entry))
+                val isHeadline = line.startsWith("#") || line.startsWith("-") || line.startsWith("*") || line.startsWith(">")
+                raws.add(Raw(name, directory, line, day, isHeadline, kwTokens, entry))
             }
         }
         if (raws.isEmpty()) return emptyList()
@@ -337,7 +320,7 @@ class MemoryRecallEngine(
                 (if (r.isHeadline) HEADLINE_BONUS else 0.0)
             // [T-memory-recall-explain] Human-readable breakdown for callers
             // that surface *why* an entry matched (Settings → Memory debug).
-            val rc = r.entry?.state?.usage ?: recallCounts["${r.day}:${r.line}"]?.get() ?: 0
+            val rc = r.entry?.state?.usage ?: recallCounts[recallCountKey(r.day, r.line)]?.get() ?: 0
             val detail = "bm25=${"%.2f".format(kw)} recency=${"%.2f".format(recency)}"
             RecallHit(
                 source = r.file,
@@ -347,9 +330,10 @@ class MemoryRecallEngine(
                 recallCount = rc,
                 archived = false,
                 scoreDetail = detail,
-                directory = r.directory.canonicalFile,
+                directory = r.directory,
                 entryId = r.entry?.ref?.id,
                 restoredAt = r.entry?.state?.restoredAt,
+                entryDigest = r.entry?.ref?.digest,
             )
         }
 
@@ -367,8 +351,10 @@ class MemoryRecallEngine(
             if (used > MAX_HITS_PER_FILE) continue
             merged += hit
         }
-        memo = query to merged
-        return merged
+        // The reranker can reorder, never replace, add or remove picks.
+        return runCatching { rerankerProvider().rerank(query, merged.toList()) }.getOrNull()
+            ?.takeIf { it.size == merged.size && it.toSet() == merged.toSet() }
+            ?: merged
     }
 
     /**
@@ -383,22 +369,13 @@ class MemoryRecallEngine(
         acceptRecallBatch(listOf(source to line))
     }
 
-    /**
-     * [T-memory-recall-io] Accept several entries with ONE sidecar write.
-     *
-     * Keys must match [recall]'s `rcKey` exactly (`"$day:$trimmed"`), which is
-     * why [source] arrives as the file name and is mapped through [dayKeyOf]
-     * here rather than by the caller.
-     */
+    /** Legacy recall counter, never used as a delivery receipt. One write per batch. */
     fun acceptRecallBatch(hits: List<Pair<String, String>>) {
         if (hits.isEmpty()) return
         for ((source, line) in hits) {
-            val key = "${dayKeyOf(source)}:${line.trim()}"
-            val count = recallCounts.getOrPut(key) { AtomicInteger(0) }.incrementAndGet()
-            Log.d(TAG, "accepted recall: $source line=${line.take(40)}… count=$count")
+            val key = recallCountKey(dayKeyOf(source), line)
+            recallCounts.getOrPut(key) { AtomicInteger(0) }.incrementAndGet()
         }
-        // [T-memory-recall-persist] Persist the bumps (atomic sidecar JSON) so a
-        // process restart does not wipe the accumulated boost.
         saveRecallCounts()
     }
 
@@ -416,7 +393,9 @@ class MemoryRecallEngine(
             while (keys.hasNext()) {
                 val k = keys.next()
                 val v = obj.optInt(k, 0)
-                if (k.isNotBlank() && v > 0) recallCounts.put(k, AtomicInteger(v))
+                if (k.isBlank() || v <= 0) continue
+                val key = if (opaqueCountKey.matches(k)) k else recallCountKey(k.substringBefore(':'), k.substringAfter(':', ""))
+                recallCounts.merge(key, AtomicInteger(v)) { a, b -> if (a.get() >= b.get()) a else b }
             }
         } catch (_: Exception) {
             Log.w(TAG, "recall-counts sidecar unreadable, starting fresh")
@@ -424,13 +403,18 @@ class MemoryRecallEngine(
     }
 
     fun saveRecallCounts() {
-        val file = recallCountsFile()
-        val obj = org.json.JSONObject()
-        recallCounts.forEach { (k, v) -> if (v.get() > 0) obj.put(k, v.get()) }
-        writeTextAtomic(file, obj.toString())
+        // [T-memory-recall-save-safe] Bookkeeping on the prompt path: a full disk
+        // or a failed atomic move must not surface as a provider failure and kill
+        // the reply (every sibling ledger already swallows).
+        runCatching {
+            val file = recallCountsFile()
+            val obj = org.json.JSONObject()
+            recallCounts.forEach { (k, v) -> if (v.get() >0) obj.put(k, v.get()) }
+            writeTextAtomic(file, obj.toString())
+        }
         // [T-memory-recall-io] Test seam: proves the prompt path writes once per
         // build instead of once per hit.
-        saveCountForTest += 1
+        saveCountForTest +=1
     }
 
     /** [T-memory-recall-io] Number of sidecar writes performed by this instance. */
@@ -441,41 +425,23 @@ class MemoryRecallEngine(
     internal fun recallCountsSnapshot(): Map<String, Int> =
         recallCounts.entries.associate { it.key to it.value.get() }.toSortedMap()
 
-    private fun scanMemoryFiles(now: Long): Sequence<Pair<File, MemoryLifecycle.View>> = sequence {
-        val visibleNames = HashSet<String>()
-        // Like the TOC, only a visible session copy shadows the shared one.
-        for (directory in listOfNotNull(memoryDirProvider(), sharedDirProvider?.invoke())) {
-            val files = directory.listFiles().orEmpty().sortedByDescending { it.lastModified() }
-            for (file in files) {
-                if (!file.isFile || !isRecallSource(file.name) || file.name in visibleNames) continue
-                val view = MemoryLifecycle.read(directory, file.name)?.active(now) ?: continue
-                if (view.hasVisibleText()) {
-                    visibleNames.add(file.name)
-                    yield(file to view)
-                }
-            }
-        }
-    }
+    private fun fileScopes(): List<File> = listOfNotNull(memoryDirProvider(), sharedDirProvider?.invoke())
 
-    private fun isRecallSource(name: String): Boolean = name.endsWith(".md") && name !in protectedSources
-
-    private fun currentRecallHits(hits: List<RecallHit>, now: Long = clock()): List<RecallHit> {
-        val lines = HashMap<Pair<File, String>, List<MemoryLifecycle.OwnedLine>>()
+    private fun currentRecallHits(hits: List<RecallHit>, now: Long): List<RecallHit> {
+        val names = hits.filter { it.directory != null }.mapTo(HashSet()) { it.source }
+        if (names.isEmpty()) return hits
+        val sources = MemorySources.recallSources(fileScopes(), now, names)
+        val lines = sources.mapValues { (_, source) -> MemorySources.recallLines(source.view) }
         return hits.filter { hit ->
             val dir = hit.directory ?: return@filter true // Pure rendering callers can supply fixture hits.
-            lines.getOrPut(dir to hit.source) { activeLines(dir, hit.source, now) }.any { (line, entry) ->
-                entry?.ref?.id == hit.entryId && entry?.state?.restoredAt == hit.restoredAt && matchesRecallLine(line, hit.line)
+            sources[hit.source]?.directory == dir && lines[hit.source].orEmpty().any { (line, entry) ->
+                entry?.ref == hit.ref && entry?.state?.restoredAt == hit.restoredAt && matchesRecallLine(line, hit.line)
             }
         }
     }
 
-    private fun activeLines(dir: File, source: String, now: Long): List<MemoryLifecycle.OwnedLine> =
-        MemoryLifecycle.read(dir, source)?.active(now)?.lines().orEmpty()
-
-    private fun matchesRecallLine(actual: String, hit: String): Boolean {
-        val text = actual.trim()
-        return text == hit || memoryTextPrefix(text, MemoryEmbeddingIndexer.MAX_LINE_CHARS) == hit
-    }
+    private fun matchesRecallLine(actual: String, hit: String): Boolean =
+        actual == hit || memoryTextPrefix(actual, MemoryEmbeddingIndexer.MAX_LINE_CHARS) == hit
 
     /** [T-recall-delivery-accounting] Rendered fragment plus exactly the hits it carries. */
     data class RenderedFragment(
@@ -491,12 +457,16 @@ class MemoryRecallEngine(
      * whole candidate list permanently suppressed every hit cut by the cap —
      * a memory never shown could never be announced again.
      */
-    fun formatAsPromptFragmentWithHits(hits: List<RecallHit>, now: Long = clock()): RenderedFragment {
+    fun formatAsPromptFragmentWithHits(hits: List<RecallHit>, now: Long = clock()): RenderedFragment =
+        renderCurrentHits(currentRecallHits(hits, now))
+
+    /** Request projection has already revalidated this snapshot with [recallCandidatesForDelivery]. */
+    internal fun renderCurrentHits(hits: List<RecallHit>): RenderedFragment {
         if (hits.isEmpty()) return RenderedFragment("", emptyList())
         val included = ArrayList<RecallHit>(hits.size)
         val body = buildString {
             append("## Recalled relevant memories\n")
-            for (hit in currentRecallHits(hits, now)) {
+            for (hit in hits) {
                 val snippet = clipForPrompt(hit.line)
                 if (snippet.isBlank()) continue
                 val row = "- **${hit.source}**: $snippet\n"
@@ -615,54 +585,58 @@ class MemoryRecallEngine(
      * [recallForPromptCached].
      */
     private suspend fun recallHybridUnaccounted(query: String): List<RecallHit> {
-        val fts = recall(query)
-        val support = embeddingSupport ?: return fts
-        val fileScopes = buildList {
-            add(memoryDirProvider())
-            sharedDirProvider?.invoke()?.let { add(it) }
-        }
-        val semantic = runCatching {
-            support.semanticHits(query, RECALL_LIMIT, fileScopes.map { it.absolutePath })
-        }.getOrNull().orEmpty()
-        runCatching { support.backfillAsync(fileScopes) }
-        val eligible = resolveSemanticHits(semantic, fileScopes)
-        val activeFts = currentRecallHits(fts)
-        val candidates = eligible.associateBy { it.source to it.line }
-        return SemanticRecallFusion.merge(
-            fts = activeFts,
-            semantic = eligible,
-            limit = RECALL_LIMIT,
-            perFileCap = MAX_HITS_PER_FILE,
-            archiveCutoff = null,
-            dayKeyOf = { dayKeyOf(it) },
-        ).map { hit ->
-            if (hit.directory != null) hit else {
-                val candidate = candidates[hit.source to hit.line]
-                val dir = candidate?.scope?.let(::File)
-                val owner = dir?.let { activeLines(it, hit.source, clock()).firstOrNull { line -> matchesRecallLine(line.text, hit.line) }?.entry }
-                hit.copy(directory = dir, entryId = owner?.ref?.id, recallCount = owner?.state?.usage ?: 0, restoredAt = owner?.state?.restoredAt)
-            }
-        }.let { currentRecallHits(it) }
+        val semantic = fetchSemantic(query)
+        return mergeCurrentRecall(query, clock(), semantic)
     }
 
-    private fun resolveSemanticHits(
-        hits: List<MemoryEmbeddingSupport.SemanticHit>,
-        scopes: List<File>,
-    ): List<MemoryEmbeddingSupport.SemanticHit> {
-        val dirs = scopes.mapNotNull { runCatching { it.canonicalFile }.getOrNull() }
-        val now = clock()
-        val views = HashMap<String, Pair<File, List<MemoryLifecycle.OwnedLine>>?>()
-        return hits.mapNotNull { hit ->
-            if (!isRecallSource(hit.source)) return@mapNotNull null
-            val (dir, eligible) = views.getOrPut(hit.source) {
-                dirs.firstNotNullOfOrNull { scope ->
-                    val view = MemoryLifecycle.read(scope, hit.source)?.active(now) ?: return@firstNotNullOfOrNull null
-                    if (view.hasVisibleText()) scope to view.lines() else null
-                }
-            } ?: return@mapNotNull null
-            if (hit.scope != null && hit.scope != dir.path) return@mapNotNull null
-            if (eligible.none { matchesRecallLine(it.text, hit.line) }) return@mapNotNull null
-            MemoryEmbeddingSupport.SemanticHit(hit.source, hit.line, hit.score, dir.path)
+    private suspend fun fetchSemantic(query: String): List<MemoryEmbeddingSupport.SemanticHit> {
+        val support = embeddingSupport ?: return emptyList()
+        val context = currentCoroutineContext()
+        context.ensureActive()
+        val scopes = fileScopes()
+        val hits = try {
+            support.semanticHits(query, RECALL_LIMIT, scopes.map { it.absolutePath })
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            emptyList()
+        }
+        context.ensureActive()
+        try {
+            support.backfillAsync(scopes)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // Backfill is opportunistic and must not suppress a usable lookup.
+        }
+        context.ensureActive()
+        return hits.take(RECALL_LIMIT)
+    }
+
+    /** Build one ranked snapshot; consumption only revalidates its shortlisted hits. */
+    private fun mergeCurrentRecall(query: String, now: Long, semantic: List<MemoryEmbeddingSupport.SemanticHit>): List<RecallHit> {
+        if (semantic.isEmpty()) return recallAt(query, now)
+        val sources = MemorySources.recallSources(fileScopes(), now)
+        val fts = recallAt(query, now, sources)
+        val lines = HashMap<String, List<MemoryLifecycle.OwnedLine>>()
+        val resolved = semantic.mapNotNull { hit ->
+            val source = sources[hit.source] ?: return@mapNotNull null
+            if (hit.scope != null && hit.scope != source.directory.path) return@mapNotNull null
+            val line = lines.getOrPut(hit.source) { MemorySources.recallLines(source.view) }
+                .firstOrNull { matchesRecallLine(it.text, hit.line) } ?: return@mapNotNull null
+            hit to line.entry
+        }
+        val owners = resolved.associate { (hit, owner) -> (hit.source to hit.line) to owner }
+        return SemanticRecallFusion.merge(
+            fts = fts, semantic = resolved.map { it.first }, limit = RECALL_LIMIT,
+            perFileCap = MAX_HITS_PER_FILE, archiveCutoff = null, dayKeyOf = ::dayKeyOf,
+        ).map { hit ->
+            if (hit.directory != null) hit else {
+                val owner = owners[hit.source to hit.line]
+                hit.copy(directory = sources.getValue(hit.source).directory, entryId = owner?.ref?.id,
+                    recallCount = owner?.state?.usage ?: 0, restoredAt = owner?.state?.restoredAt,
+                    entryDigest = owner?.ref?.digest)
+            }
         }
     }
 
@@ -673,30 +647,47 @@ class MemoryRecallEngine(
 
     private fun startPrefetch(query: String, turnId: String?): kotlinx.coroutines.Job? {
         if (embeddingSupport == null || query.isBlank()) return null
-        val key = PrefetchKey(query, turnId, MemoryLifecycle.recallGeneration())
         val attempt = synchronized(prefetchLock) {
-            if (prefetchInFlight?.key == key || recentPrefetch(key, clock()) != null) return null
+            val key = PrefetchKey(query, turnId, MemoryLifecycle.recallGeneration())
+            if (prefetchInFlight?.key == key || recentPrefetch(key) != null) return null
             PrefetchAttempt(key).also { prefetchInFlight = it }
         }
-        return prefetchScope.launch { fillPrefetch(attempt) }
+        return prefetchScope.launch {
+            try {
+                fillPrefetch(attempt)
+            } finally {
+                synchronized(prefetchLock) {
+                    if (prefetchInFlight === attempt) prefetchInFlight = null
+                }
+            }
+        }
     }
 
-    private fun recentPrefetch(key: PrefetchKey, now: Long): PrefetchResult? = prefetched?.takeIf {
-        // Failed/empty lookups may be retried on the next real turn, on a content/index change,
-        // or after a short backoff in a long-running turn. No preview starts that retry.
-        val lifetime = if (it.hits.isEmpty()) 5_000L else 30_000L
-        it.key == key && now - it.completedAt in 0 until lifetime
+    private fun recentPrefetch(key: PrefetchKey): PrefetchResult? = prefetched?.takeIf {
+        // Failed/empty vector lookups back off briefly even if BM25 returned candidates.
+        val lifetime = if (it.retrySoon) 5_000L else 30_000L
+        it.key == key && clock() - it.completedAt in 0 until lifetime
     }
 
     private suspend fun fillPrefetch(attempt: PrefetchAttempt) {
-        val hits = runCatching { recallHybridUnaccounted(attempt.key.query) }
-            .onFailure { Log.d(TAG, "semantic prefetch failed silently: ${it.message}") }.getOrNull().orEmpty()
+        val context = currentCoroutineContext()
+        val query = attempt.key.query
+        val (hits, retrySoon) = try {
+            val semantic = fetchSemantic(query)
+            val hits = mergeCurrentRecall(query, clock(), semantic)
+            hits to (semantic.isEmpty() || hits.isEmpty())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.d(TAG, "semantic prefetch failed: ${e.javaClass.simpleName}")
+            emptyList<RecallHit>() to true
+        }
         synchronized(prefetchLock) {
+            context.ensureActive()
             // An older completion must not clobber a more recent request or keep a stale generation.
             if (prefetchInFlight !== attempt) return
-            prefetchInFlight = null
             if (MemoryLifecycle.recallGeneration() == attempt.key.version) {
-                prefetched = PrefetchResult(attempt.key, hits, clock())
+                prefetched = PrefetchResult(attempt.key, hits, clock(), retrySoon)
             }
         }
     }
@@ -705,18 +696,22 @@ class MemoryRecallEngine(
     fun recallForPromptCached(query: String): List<RecallHit> {
         val key = PrefetchKey(query, null, MemoryLifecycle.recallGeneration())
         val hit = synchronized(prefetchLock) {
-            recentPrefetch(key, clock())?.also { prefetched = null }
+            recentPrefetch(key)?.also { prefetched = null }
         }
-        return if (hit != null) applyStreakFilter(currentRecallHits(hit.hits)) else recallForPrompt(query)
+        return applyStreakFilter(currentPrefetchHits(hit, clock()) ?: recall(query))
+    }
+
+    private fun currentPrefetchHits(result: PrefetchResult?, now: Long): List<RecallHit>? {
+        if (result == null || result.hits.isEmpty()) return null
+        val active = currentRecallHits(result.hits, now)
+        return active.takeIf { it.size == result.hits.size && result.key.version == MemoryLifecycle.recallGeneration() }
     }
 
     /** Dispatch/preview read: do not consume prefetch, start network, or advance anti-nag counters. */
     internal fun recallCandidatesForDelivery(query: String, now: Long, turnId: String? = null): List<RecallHit> {
         val key = PrefetchKey(query, turnId, MemoryLifecycle.recallGeneration())
-        val snapshot = recentPrefetch(key, now)?.hits ?: return recallAt(query, now)
-        val active = currentRecallHits(snapshot, now)
-        return if (active.size == snapshot.size && active.isNotEmpty() && key.version == MemoryLifecycle.recallGeneration()) active
-        else recallAt(query, now)
+        // Cache age uses the lookup clock. The earlier projection clock is for visibility only.
+        return currentPrefetchHits(recentPrefetch(key), now) ?: recallAt(query, now)
     }
 
     /** Await the same scheduling/dedup path as a real request. */

@@ -27,9 +27,11 @@ import kotlinx.coroutines.withContext
  * prompt drain after cancel uses the same plumbing as a fresh send.
  */
 internal fun ChatViewModel.resumeQueueAfterCancel() {
+    val sid = activeSessionId
+    val epoch = snapshotResumeEpoch()
     viewModelScope.launch {
         kotlinx.coroutines.delay(200)
-        if (_promptQueue.value.isEmpty()) return@launch
+        if (!ownsTranscript(sid, epoch) || _promptQueue.value.isEmpty()) return@launch
         if (_isStreaming.value) return@launch
         // [T-android-compact-queued-drain] Defer while a compact is in
         // flight — draining would mutate agentHistory mid-marker-write.
@@ -81,6 +83,7 @@ internal fun ChatViewModel.resumeQueueAfterCancel() {
         // fragments) — keep it off the main dispatcher. All inputs are
         // StateFlow reads / pure helpers; written fields are @Volatile.
         val systemPrompt = withContext(Dispatchers.IO) { buildMemoryDeliveryPrompt() }
+        if (!ownsTranscript(sid, epoch) || _isStreaming.value || _promptQueue.value.isEmpty()) return@launch
 
         // T145: claim the streaming flag synchronously before launching
         // the streamJob so a concurrent send/retry tap is rejected by the

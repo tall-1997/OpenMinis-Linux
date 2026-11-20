@@ -2538,9 +2538,9 @@
     <string name="code_editor_status_size">%1$d baris · %2$d karakter</string>
     <string name="code_editor_undo">Urungkan</string>
     <string name="code_editor_wrap">Ubah pelipatan baris</string>
-    <string name="compact_progress_fallback">Memadatkan (%1$d/%2$d) dengan model cadangan %3$s… %4$d dtk. Jika gagal, konteks lama dipotong.</string>
+    <string name="compact_progress_fallback">Memadatkan (%1$d/%2$d) dengan model cadangan %3$s… %4$d dtk. Jika gagal, konteks tidak berubah.</string>
     <string name="compact_progress_session">Memadatkan (%1$d/%2$d) dengan model saat ini %3$s… %4$d dtk. Jika gagal, cadangan atau satu percobaan ulang dijalankan.</string>
-    <string name="compact_progress_session_retry">Memadatkan (%1$d/%2$d), mencoba ulang model saat ini %3$s… %4$d dtk. Tidak ada cadangan. Jika gagal, konteks lama dipotong.</string>
+    <string name="compact_progress_session_retry">Memadatkan (%1$d/%2$d), mencoba ulang model saat ini %3$s… %4$d dtk. Tidak ada cadangan. Jika gagal, konteks tidak berubah.</string>
     <string name="composer_expand_editor">Perluas editor</string>
     <string name="config_affects_later">Ini bisa mempengaruhi pemanggilan alat berikutnya.</string>
     <string name="config_reversible">Bisa dibatalkan, tapi layak dilihat sekilas.</string>
@@ -2727,7 +2727,7 @@
     <string name="model_group_models_plain">%1$d model</string>
     <!-- backfill: strings.xml -->
     <string name="model_groups_compact_fallback">Cadangan pemadatan</string>
-    <string name="model_groups_compact_fallback_footer">Model saat ini mencoba sekali. Jika gagal, cadangan mencoba sekali. Tanpa cadangan, model saat ini dicoba ulang sekali. Dua kegagalan memotong konteks lama.</string>
+    <string name="model_groups_compact_fallback_footer">Model saat ini mencoba sekali. Jika gagal, cadangan mencoba sekali. Tanpa cadangan, model saat ini dicoba ulang sekali. Jika pemadatan gagal, konteks tidak berubah.</string>
     <string name="model_groups_default_primary">Utama bawaan</string>
     <string name="model_groups_defaults">Bawaan</string>
     <!-- backfill: strings_settings.xml -->
@@ -3329,4 +3329,19 @@
     <string name="process_card_thinking_now">Berpikir…</string>
     <string name="appearance_show_turn_changes_card_title">Kartu perubahan giliran</string>
     <string name="appearance_show_turn_changes_card_subtitle">Menampilkan kartu per giliran yang mencantumkan file yang diubah asisten, statistik baris, dan undo satu ketukan. Nonaktif secara default.</string>
+    <string name="vm_compact_retry_cooldown">Kompresi terakhir gagal. Anda dapat mencoba lagi dalam %1$d s.</string>
+    <string name="guard_stop_section">Pengaman perulangan</string>
+    <string name="guard_stop_title">Berhenti saat berulang</string>
+    <string name="guard_stop_on">Dapat menghentikan sesi</string>
+    <string name="guard_stop_off">Tidak pernah menghentikan sesi</string>
+    <string name="guard_stop_footer">Jika aktif, pengaman menghentikan sesi setelah tindakan yang sama berulang terlalu sering. Jika nonaktif, pengaman hanya mengingatkan model, berguna saat menunggu lama seperti proses build.</string>
+    <string name="token_usage_section_memory">Memori</string>
+    <string name="token_usage_memory_lines">Baris terkirim</string>
+    <string name="token_usage_memory_shown">Jumlah tampil</string>
+    <string name="modeldetail_section_context_budget">Anggaran konteks</string>
+    <string name="modeldetail_context_budget_footer">Seberapa banyak percakapan terbaru yang bertahan setelah kompresi. Otomatis mengikuti jendela model; nilai khusus hanya berlaku untuk model ini.</string>
+    <string name="modeldetail_tail_budget_custom">Anggaran ekor khusus</string>
+    <string name="modeldetail_tail_budget">Anggaran ekor</string>
+    <string name="modeldetail_tail_budget_state_auto">Otomatis (mengikuti jendela, maksimal 60k)</string>
+    <string name="modeldetail_tail_budget_state_specific">Khusus untuk model ini</string>
 </resources>

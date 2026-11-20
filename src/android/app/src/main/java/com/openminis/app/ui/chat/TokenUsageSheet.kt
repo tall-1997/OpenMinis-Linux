@@ -31,8 +31,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
 import com.openminis.app.agent.ContextSaverRuntime
+import com.openminis.app.data.repository.MemoryUsageLedger
 import com.openminis.app.i18n.uppercaseForDisplay
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Session Token Usage bottom sheet — mirrors iOS `TokenUsageSheet` and uses
@@ -85,6 +88,13 @@ fun TokenUsageSheet(
     }
     val breakdown by breakdownState
 
+    var memoryUsage by remember(viewModel, session) { mutableStateOf(0 to 0) }
+    val filesDir = viewModel.context.filesDir
+    LaunchedEffect(viewModel, session, streaming) {
+        memoryUsage = withContext(Dispatchers.IO) {
+            memoryUsageSessionDirectory(filesDir, session)?.let(MemoryUsageLedger::verifiedSummaryFor) ?: (0 to 0)
+        }
+    }
     LaunchedEffect(viewModel, session) { stats = viewModel.loadSessionTokenStats() }
     LaunchedEffect(breakdownState) {
         try {
@@ -250,6 +260,16 @@ fun TokenUsageSheet(
                 StatRow(
                     stringResource(R.string.token_usage_saver_saved),
                     if (saver.savedChars > 0) "≈" + formatTokens(saver.savedChars / ContextSaverRuntime.CHARS_PER_TOKEN) else "—",
+                )
+            }
+            StatSection(title = stringResource(R.string.token_usage_section_memory)) {
+                StatRow(
+                    stringResource(R.string.token_usage_memory_lines),
+                    if (memoryUsage.first > 0) memoryUsage.first.toString() else "—",
+                )
+                StatRow(
+                    stringResource(R.string.token_usage_memory_shown),
+                    if (memoryUsage.first > 0) memoryUsage.second.toString() else "—",
                 )
             }
         }

@@ -1,148 +1,105 @@
 package com.openminis.app.ui.chat
 
 import com.openminis.app.data.model.AgentContentPart
-import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.ContextUsageAnchor
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.LLMUsage
 import com.openminis.app.data.model.ModelAttributionSnapshot
 import com.openminis.app.data.model.ThinkingLevel
-import com.openminis.app.data.repository.ChatRepository
 import com.openminis.app.data.repository.PendingTurnRow
 import com.openminis.app.data.repository.appendTurnRows
-import com.openminis.app.provider.LLMProvider
+import com.openminis.app.provider.ToolPairing
 import com.openminis.app.provider.selectableThinkingLevels
 import com.openminis.app.service.ActiveRun
-import com.openminis.app.tools.SubAgentKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
-/**
- * [T-retry-projection-reuse] Per-turn projection cache: a stream retry re-enters
- * dispatchTurn with an unchanged transcript; re-running the projection would
- * re-hash the whole payload and re-read the DB/file for gap + receipts on every
- * attempt. Reuse when nothing the projection consumes has moved — any real
- * change (steering, compaction via the marker id, adoption, tool set, thinking,
- * stall seed) fails one of the identity checks and forces a fresh projection.
- */
-internal class DispatchProjectionCache {
-    private var cached: ProjectedChatRequest? = null
-    private var stamp: Triple<Int, LLMMessage?, LLMMessage?>? = null
-    private var markerId: String? = null
-    private var stallNote: String? = null
-    private var prompt: MemoryDeliveryPrompt? = null
-    private var tools: List<AgentToolDefinition>? = null
-    private var provider: LLMProvider? = null
-    private var thinking: ThinkingLevel? = null
-
-    fun reuse(
-        history: List<LLMMessage>,
-        markerNow: String?,
-        stall: String?,
-        promptRef: MemoryDeliveryPrompt?,
-        toolsRef: List<AgentToolDefinition>,
-        providerRef: LLMProvider,
-        thinkingLevel: ThinkingLevel,
-    ): ProjectedChatRequest? = cached?.takeIf {
-        stamp == Triple(history.size, history.firstOrNull(), history.lastOrNull()) &&
-            markerId == markerNow &&
-            stallNote == stall &&
-            prompt === promptRef &&
-            tools === toolsRef &&
-            provider === providerRef &&
-            thinking == thinkingLevel
-    }
-
-    fun store(
-        projection: ProjectedChatRequest,
-        history: List<LLMMessage>,
-        markerNow: String?,
-        stall: String?,
-        promptRef: MemoryDeliveryPrompt?,
-        toolsRef: List<AgentToolDefinition>,
-        providerRef: LLMProvider,
-        thinkingLevel: ThinkingLevel,
-    ) {
-        cached = projection
-        stamp = Triple(history.size, history.firstOrNull(), history.lastOrNull())
-        markerId = markerNow
-        stallNote = stall
-        prompt = promptRef
-        tools = toolsRef
-        provider = providerRef
-        thinking = thinkingLevel
-    }
-}
-
-/**
- * Phase 3 of the tool turn: assemble resultParts in the model's emission order
- * (see dispatchTurn) — phase 2 may reorder EXECUTION, never the transcript.
- */
+/** Phase 3 keeps emission order even if the execution lanes finished out of order. */
 internal fun assembleTurnResultParts(
     toolCalls: List<Triple<String, String, JSONObject>>,
     plan: ToolTurnPlan,
     execution: ToolTurnExecution,
-): MutableList<AgentContentPart> {
-    val resultParts = mutableListOf<AgentContentPart>()
-    for ((id, name, _) in toolCalls) {
-        val refused = plan.refusedParts[id]
-        val executed = execution.executedParts[id]
-        when {
-            refused != null -> resultParts.add(refused)
-            executed != null -> resultParts.add(executed)
-            SubAgentKind.isSpawnTool(name) -> {
-                // A spawn call whose peer result never landed (fan-out
-                // interrupted) still needs a tool_result so the
-                // tool_use/tool_result pairing stays balanced.
-                resultParts.add(
-                    AgentContentPart.ToolResult(
-                        id = id, name = name,
-                        content = "Error: this spawn call's result is missing — the wave was " +
-                            "collected without a report for this call. Re-issue the dispatch.",
-                        isError = true,
-                    ),
-                )
-            }
-        }
-    }
-    return resultParts
+): MutableList<AgentContentPart> = toolCalls.mapTo(mutableListOf()) { (id, name, _) ->
+    plan.refusedParts[id] ?: execution.executedParts[id] ?: AgentContentPart.ToolResult(
+        id = id,
+        name = name,
+        content = "No result was recorded for this call. Its outcome is unknown; verify it before retrying.",
+        isError = true,
+    )
 }
 
-/**
- * The tool turn's two rows — assistant(tool_use) and user(tool_result) — are
- * one logical turn. Writing them through two independent appendMessage
- * transactions left a crash window that stranded a tool_use without its
- * result: compact pairing could no longer close a prefix through that turn,
- * receipt reconciliation saw a dispatched call with no result row to settle,
- * and the persisted history was permanently half-of-a-round.
- *
- * [ChatRepository.appendTurnRows] commits both rows in ONE Room transaction;
- * this wrapper takes the persistence permit ONCE (it does not nest) around
- * the whole pair, then performs the same UI/history bookkeeping the two
- * single-row writers performed, only after the transaction succeeded.
- */
+/** An ambiguous call identity cannot be dispatched or stored as a verifiable pair. */
+internal fun validateCompletedToolCalls(toolCalls: List<Triple<String, String, JSONObject>>) {
+    val ids = HashSet<String>(toolCalls.size)
+    check(toolCalls.all { (id, name, _) ->
+        val key = ToolPairing.key(id)
+        key.isNotBlank() && name.isNotBlank() && ids.add(key)
+    }) { "The provider returned tool calls with missing or ambiguous identities. No tools from this turn were sent." }
+}
+
+/** The completed stream events own the calls. UI blocks only supply their position among text parts. */
+internal fun completedToolTurnParts(
+    renderedParts: List<AgentContentPart>,
+    toolCalls: List<Triple<String, String, JSONObject>>,
+    inputs: Map<String, String>,
+    signatures: Map<String, String>,
+    text: String,
+): List<AgentContentPart> {
+    val pending = toolCalls.associateTo(LinkedHashMap()) { (id, name, args) ->
+        id to AgentContentPart.ToolUse.fromInputJson(id, name, inputs[id] ?: args.toString(), signatures[id])
+    }
+    // Some providers stream generated image links without emitting a text block.
+    // Keep the complete turn text in that case, as in the live transcript.
+    val renderedText = renderedParts.filterIsInstance<AgentContentPart.Text>().joinToString("") { it.text }
+    return buildList {
+        if (renderedText != text && text.isNotEmpty()) add(AgentContentPart.Text(text))
+        for (part in renderedParts) {
+            when (part) {
+                is AgentContentPart.Text -> if (renderedText == text) add(part)
+                is AgentContentPart.ToolUse -> pending.remove(part.id)?.let(::add)
+                else -> Unit
+            }
+        }
+        addAll(pending.values)
+    }
+}
+
+/** Reject an impossible pair before a serializer can omit or deduplicate a half. */
+internal fun completeToolTurnResultJson(
+    turnParts: List<AgentContentPart>,
+    resultParts: List<AgentContentPart>,
+): String {
+    val calls = turnParts.filterIsInstance<AgentContentPart.ToolUse>()
+    val results = resultParts.filterIsInstance<AgentContentPart.ToolResult>()
+    val expected = calls.map { it.id to it.name }
+    val actual = results.map { it.id to it.name }
+    check(calls.isNotEmpty() && calls.all { ToolPairing.key(it.id).isNotBlank() && it.name.isNotBlank() } &&
+        calls.map { it.id }.toSet().size == calls.size && expected.toSet() == actual.toSet() && calls.size == resultParts.size
+    ) { "The tool turn was not saved because its calls and results did not match." }
+    return checkNotNull(buildToolResultPartsJson(resultParts))
+}
+
+/** The persistence fence owns both rows, then publishes the same pair to resident history. */
 internal suspend fun ChatViewModel.persistToolTurnPairForRun(
     run: ActiveRun,
     turnParts: List<AgentContentPart>,
     blockMeta: Map<String, AssistantBlock>,
     lastUsage: LLMUsage?,
     turnReasoningContent: String?,
-    assistantText: String?,
-    agentHistory: MutableList<LLMMessage>,
+    assistantText: String,
     resultParts: List<AgentContentPart>,
     targetSessionId: String,
-    uiMessageId: String?,
+    expectedEpoch: Long,
+    uiMessageId: String,
     requestedLevel: ThinkingLevel?,
     modelSnapshot: ModelAttributionSnapshot?,
     contextUsageAnchor: ContextUsageAnchor?,
-): Pair<String?, String?> = run.withPersistencePermit {
+): Pair<String, String>? = run.withPersistencePermit {
+    if (!ownsTranscript(targetSessionId, expectedEpoch, run)) return@withPersistencePermit null
     withContext(NonCancellable) {
         val anchor = turnContextUsageAnchor(lastUsage, modelSnapshot, contextUsageAnchor)
-        // [T-thinking-dual-ledger] Same resolution contract as
-        // persistAssistantTurnForRun: reasoning evidence and the requested tier
-        // are both in scope here; the writer stays a dumb writer.
         val thinkingUsage = requestedLevel?.let {
             resolveTurnThinkingUsage(
                 requestedLevel = it,
@@ -153,43 +110,36 @@ internal suspend fun ChatViewModel.persistToolTurnPairForRun(
         val assistantRow = PendingTurnRow(
             role = "assistant",
             partsJson = buildAssistantPartsJson(turnParts, blockMeta),
-            tokenUsage = buildTurnTokenUsageJson(
-                lastUsage, run.streamRate.takeDurationMs(), thinkingUsage, anchor,
-            ),
+            tokenUsage = buildTurnTokenUsageJson(lastUsage, run.streamRate.takeDurationMs(), thinkingUsage, anchor),
             reasoningContent = turnReasoningContent,
             modelSnapshot = modelSnapshot ?: anchor?.modelSnapshot ?: currentModelSnapshot(),
         )
-        val resultJson = buildToolResultPartsJson(resultParts)
-        val rows = if (resultJson == null) {
-            // No result parts to pair (defensive): fall back to the assistant
-            // row alone rather than persisting an empty user carrier.
-            listOf(assistantRow)
-        } else {
-            listOf(
-                assistantRow,
-                PendingTurnRow(role = "user", partsJson = resultJson),
-            )
+        val resultRow = PendingTurnRow("user", completeToolTurnResultJson(turnParts, resultParts))
+        val persisted = chatRepository.appendTurnRows(targetSessionId, listOf(assistantRow, resultRow)) {
+            ownsTranscript(targetSessionId, expectedEpoch, run)
         }
-        val assistantBeforeWrite = agentHistory.lastOrNull()
-        val persisted = chatRepository.appendTurnRows(targetSessionId, rows)
-        val assistantDbId = persisted.getOrNull(0)?.id
-        val toolResultDbId = persisted.getOrNull(1)?.id
-        if (assistantDbId != null) {
-            withContext(Dispatchers.Main.immediate) { notePersistedUiRow(uiMessageId, assistantDbId) }
-            if (assistantText != null) run.markAssistantTurnPersisted(assistantText)
-            if (agentHistory.lastOrNull() === assistantBeforeWrite && assistantBeforeWrite?.role == LLMMessage.Role.ASSISTANT &&
-                assistantBeforeWrite.dbMessageId == null
-            ) {
-                backfillPersistedAssistantTurn(agentHistory, assistantDbId, anchor, turnParts)
+        if (persisted.isEmpty()) return@withContext null
+        val (assistant, result) = persisted
+        run.markAssistantTurnPersisted(assistantText)
+        val currentToolId = run.currentToolSnapshot()?.callId
+        if (resultParts.any { it is AgentContentPart.ToolResult && it.id == currentToolId }) run.setCurrentTool(null, null)
+        withContext(Dispatchers.Main.immediate) {
+            if (ownsTranscript(targetSessionId, expectedEpoch, run = null)) {
+                // A Stop can await this permit. Keep the committed IDs even if it cancelled the producer.
+                val assistantMessage = LLMMessage(
+                    role = LLMMessage.Role.ASSISTANT,
+                    content = turnParts.filterIsInstance<AgentContentPart.Text>().joinToString("") { it.text },
+                    contentParts = turnParts,
+                    reasoningContent = turnReasoningContent,
+                    dbMessageId = assistant.id,
+                    contextUsageAnchor = anchor,
+                )
+                val resultMessage = LLMMessage(LLMMessage.Role.USER, "", contentParts = resultParts, dbMessageId = result.id)
+                appendBoundedHistoryAll(listOf(assistantMessage, resultMessage))
+                notePersistedUiRow(uiMessageId, assistant.id)
+                notePersistedUiRow(uiMessageId, result.id)
             }
         }
-        if (toolResultDbId != null) {
-            withContext(Dispatchers.Main.immediate) { notePersistedUiRow(uiMessageId, toolResultDbId) }
-            val currentToolId = run.currentToolSnapshot()?.callId
-            val resultIds = resultParts.filterIsInstance<AgentContentPart.ToolResult>().mapTo(mutableSetOf()) { it.id }
-            if (currentToolId != null && currentToolId in resultIds) run.setCurrentTool(null, null)
-        }
-        assistantDbId to toolResultDbId
-        }
-    } ?: (null to null)
-
+        assistant.id to result.id
+    }
+}

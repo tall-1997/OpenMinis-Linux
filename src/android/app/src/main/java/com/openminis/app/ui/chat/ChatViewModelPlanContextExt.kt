@@ -36,16 +36,19 @@ internal fun ChatViewModel.newRecallReminder(
     if (!_memoryEnabled.value || query == null) return null
     val session = activeSessionId
     val now = daily?.projectedAt ?: System.currentTimeMillis()
-    val engine = recallEngineForLiveRecall() ?: return null
+    val memoryDir = liveRecallMemoryDir(session)
+    val engine = recallEngineForLiveRecall(memoryDir) ?: return null
     val residentRefs = daily?.entryRefs.orEmpty()
+    val residentDir = runCatching { memoryDir.canonicalFile }.getOrNull()
     val hits = engine.recallCandidatesForDelivery(query, now, turnId).filterNot { hit ->
         val ref = hit.ref
-        if (ref != null) ref in residentRefs else hit.source in daily?.residentSources.orEmpty()
+        if (ref != null) ref in residentRefs
+        else hit.directory == residentDir && hit.source in daily?.residentSources.orEmpty()
     }
     val announced = if (noticesSessionId == session) announcedRecallKeys else emptySet()
-    val rendered = engine.formatAsPromptFragmentWithHits(recallFreshHits(hits, announced) { it.announcementKey }, now)
+    val rendered = engine.renderCurrentHits(recallFreshHits(hits, announced) { it.announcementKey })
     if (rendered.text.isBlank()) return null
-    return RecallReminder("<system-reminder>\n${rendered.text}\n</system-reminder>", rendered.included, session, now)
+    return RecallReminder("<system-reminder>\n${rendered.text}\n</system-reminder>", rendered.included, session, now, turnId)
 }
 
 /**
@@ -120,19 +123,15 @@ internal fun memoryRecallQuery(userText: String): String? {
     return stripped
 }
 
-/**
- * [T-memory-embedding-wiring] The engine behind live recall, in ONE place.
- * Same construction for render and prefetch ⇒ same [MemoryRecallEngineCache]
- * key ⇒ the same instance holds the prefetch cache the render will consume.
- */
-internal fun ChatViewModel.recallEngineForLiveRecall(): com.openminis.app.data.repository.MemoryRecallEngine? {
+/** Shared by projection and real-turn prefetch; resolution uses the captured session. */
+private fun ChatViewModel.liveRecallMemoryDir(session: String): java.io.File =
+    com.openminis.app.sandbox.SessionWorkspace.memoryDir(context.filesDir, session)
+
+internal fun ChatViewModel.recallEngineForLiveRecall(
+    memoryDir: java.io.File = liveRecallMemoryDir(activeSessionId),
+): com.openminis.app.data.repository.MemoryRecallEngine? {
     return com.openminis.app.data.repository.MemoryRecallEngineCache.forSession(
-        memoryDir = com.openminis.app.sandbox.SessionWorkspace.memoryDir(
-            context.filesDir,
-            com.openminis.app.sandbox.ExecutionCoordinator.ownerSessionId(
-                realSessionId.ifEmpty { sessionId },
-            ),
-        ),
+        memoryDir = memoryDir,
         // [T-memory-shared-recall] The app-wide directory joins recall, so a
         // lesson recorded in another chat is reachable from this one.
         sharedDir = com.openminis.app.data.repository.MemoryIndex.sharedDir(context.filesDir),
@@ -172,15 +171,15 @@ internal fun ChatViewModel.prefetchSemanticRecallForRequest(history: List<LLMMes
     val turnId = memoryRecallTurnIdForHistory(history) ?: return
     val query = memoryRecallQueryForHistory(history) ?: return
     val session = activeSessionId
+    val memoryDir = liveRecallMemoryDir(session)
     viewModelScope.launch(Dispatchers.IO) {
         runCatching {
-            if (session == activeSessionId && _memoryEnabled.value) recallEngineForLiveRecall()?.prefetchSemantic(query, turnId)
+            if (session == activeSessionId && _memoryEnabled.value) {
+                recallEngineForLiveRecall(memoryDir)?.prefetchSemantic(query, turnId)
+            }
         }
     }
 }
-
-
-private const val ASSISTANT_TAIL_CHARS = 400
 
 private const val MIN_QUERY_CHARS = 4
 

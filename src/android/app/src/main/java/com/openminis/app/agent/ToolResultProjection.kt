@@ -132,7 +132,9 @@ object ToolResultProjection {
             append(tail)
             if (verifiedSpillPath != null) {
                 append("\nfull output: ").append(verifiedSpillPath)
-                append(" — page with file_read (offset/lines), or a shell range read for a long line.")
+                // file_read uses 1-based line offsets, not character offsets into a preview.
+                append(" — page with file_read (start at offset 1, set lines as needed),")
+                append(" or a shell range read for a long line.")
             } else {
                 append("\nFull output omitted from this request; no verified recovery path is available.")
                 append(" This projection does not change conversation history.")

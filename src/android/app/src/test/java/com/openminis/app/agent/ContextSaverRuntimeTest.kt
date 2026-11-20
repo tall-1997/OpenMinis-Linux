@@ -5,6 +5,7 @@ import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -162,6 +163,28 @@ class ContextSaverRuntimeTest {
         }
         assertSame(history, ContextSaverRuntime.age(history, windowTokens = 0, reportedTokens = 0))
         assertEquals(0, ContextSaverRuntime.stats.value.aged)
+    }
+
+    @Test
+    fun `the resolved aging ceiling and ruler agree at the verification and projection gates`() {
+        ContextSaverRuntime.modeOverride = ContextSaverPrefs.Mode.BALANCED
+        val history = history(8).map { message ->
+            message.copy(content = (message.contentParts.single() as AgentContentPart.ToolResult).content)
+        }
+        val window = 200_000
+        // The mirrored content is free: 16k tokens plus tool names, not two copies of the payload.
+        val below = HarnessConfig.DEFAULT.copy(absoluteAgeTokens = 16_100)
+        val at = below.copy(absoluteAgeTokens = 16_000)
+        val slower = at.copy(agingCharsPerToken = 6)
+        assertFalse(ContextSaverRuntime.willAge(history, window, 0, below))
+        assertSame(history, ContextSaverRuntime.planAge(history, window, 0, config = below).messages)
+        assertTrue(ContextSaverRuntime.willAge(history, window, 0, at))
+        assertEquals(2, ContextSaverRuntime.planAge(history, window, 0, config = at).stats.aged)
+        assertFalse(ContextSaverRuntime.willAge(history, window, 0, slower))
+        assertSame(history, ContextSaverRuntime.planAge(history, window, 0, config = slower).messages)
+        // A real usage report is not scaled by the history ruler.
+        assertTrue(ContextSaverRuntime.willAge(history, window, 40_000, slower))
+        assertEquals(2, ContextSaverRuntime.planAge(history, window, 40_000, config = slower).stats.aged)
     }
 
     @Test

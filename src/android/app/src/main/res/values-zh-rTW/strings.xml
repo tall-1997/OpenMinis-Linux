@@ -2595,9 +2595,9 @@
     <string name="code_editor_status_size">%1$d 行 · %2$d 個字元</string>
     <string name="code_editor_undo">復原</string>
     <string name="code_editor_wrap">切換自動換行</string>
-    <string name="compact_progress_fallback">正在壓縮（%1$d/%2$d），使用備援模型 %3$s… %4$d 秒。若失敗，較早的上下文會被截斷。</string>
+    <string name="compact_progress_fallback">正在壓縮（%1$d/%2$d），使用備援模型 %3$s… %4$d 秒。若失敗，上下文將保持不變。</string>
     <string name="compact_progress_session">正在壓縮（%1$d/%2$d），使用目前模型 %3$s… %4$d 秒。若失敗，會改用備援或一次性重試。</string>
-    <string name="compact_progress_session_retry">正在壓縮（%1$d/%2$d），重試目前模型 %3$s… %4$d 秒。未設定備援。若失敗，較早的上下文會被截斷。</string>
+    <string name="compact_progress_session_retry">正在壓縮（%1$d/%2$d），重試目前模型 %3$s… %4$d 秒。未設定備援。若失敗，上下文將保持不變。</string>
     <string name="composer_expand_editor">展開編輯器</string>
     <string name="config_affects_later">這項變更可能影響之後的工具呼叫。</string>
     <string name="config_reversible">可以還原，但值得先看一眼。</string>
@@ -2762,7 +2762,7 @@
     <string name="model_group_models_plain">%1$d 個模型</string>
     <!-- backfill: strings.xml -->
     <string name="model_groups_compact_fallback">壓縮備援</string>
-    <string name="model_groups_compact_fallback_footer">目前模型先壓一次。失敗後備援模型再壓一次；未設定備援則用目前模型再試一次。兩次都失敗就截斷較早的上下文。</string>
+    <string name="model_groups_compact_fallback_footer">目前模型先壓一次。失敗後備援模型再壓一次；未設定備援則用目前模型再試一次。兩次都失敗也保持上下文不變。</string>
     <string name="model_groups_default_primary">預設主模型</string>
     <string name="model_groups_defaults">預設值</string>
     <!-- backfill: strings_settings.xml -->
@@ -3321,4 +3321,19 @@
     <string name="process_card_thinking_now">思考中</string>
     <string name="appearance_show_turn_changes_card_title">本輪改動卡片</string>
     <string name="appearance_show_turn_changes_card_subtitle">在對話中顯示每輪的改動卡片，列出助手修改的檔案、行數統計，並支援一鍵撤銷。預設關閉，保持對話簡潔。</string>
+    <string name="vm_compact_retry_cooldown">上次壓縮失敗。%1$d 秒後可重試。</string>
+    <string name="guard_stop_section">迴圈保護</string>
+    <string name="guard_stop_title">重複操作時停止</string>
+    <string name="guard_stop_on">可以停止工作階段</string>
+    <string name="guard_stop_off">永不停止工作階段</string>
+    <string name="guard_stop_footer">開啟後，同一操作重複過多時由迴圈保護停止工作階段；關閉後只提醒模型，適合編譯等長時間等待。</string>
+    <string name="token_usage_section_memory">記憶</string>
+    <string name="token_usage_memory_lines">已投遞行數</string>
+    <string name="token_usage_memory_shown">顯示次數</string>
+    <string name="modeldetail_section_context_budget">上下文預算</string>
+    <string name="modeldetail_context_budget_footer">壓縮後保留多少最近對話。自動依模型視窗縮放；自訂值只對目前模型生效。</string>
+    <string name="modeldetail_tail_budget_custom">自訂尾部預算</string>
+    <string name="modeldetail_tail_budget">尾部預算</string>
+    <string name="modeldetail_tail_budget_state_auto">自動（依視窗縮放，最多 60k）</string>
+    <string name="modeldetail_tail_budget_state_specific">目前模型自訂</string>
 </resources>

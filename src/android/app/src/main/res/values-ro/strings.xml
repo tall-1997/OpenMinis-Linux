@@ -2537,9 +2537,9 @@
     <string name="code_editor_status_size">%1$d linii · %2$d caractere</string>
     <string name="code_editor_undo">Anulează</string>
     <string name="code_editor_wrap">Comută împachetarea liniilor</string>
-    <string name="compact_progress_fallback">Se compactează (%1$d/%2$d) cu modelul de rezervă %3$s… %4$d s. Dacă eșuează, contextul vechi este trunchiat.</string>
+    <string name="compact_progress_fallback">Se compactează (%1$d/%2$d) cu modelul de rezervă %3$s… %4$d s. Dacă eșuează, contextul rămâne neschimbat.</string>
     <string name="compact_progress_session">Se compactează (%1$d/%2$d) cu modelul curent %3$s… %4$d s. Dacă eșuează, rulează rezerva sau o singură reîncercare.</string>
-    <string name="compact_progress_session_retry">Se compactează (%1$d/%2$d), se reîncearcă modelul curent %3$s… %4$d s. Fără rezervă setată. Dacă eșuează, contextul vechi este trunchiat.</string>
+    <string name="compact_progress_session_retry">Se compactează (%1$d/%2$d), se reîncearcă modelul curent %3$s… %4$d s. Fără rezervă setată. Dacă eșuează, contextul rămâne neschimbat.</string>
     <string name="composer_expand_editor">Extinde editorul</string>
     <string name="config_affects_later">Poate afecta apelurile de instrumente ulterioare.</string>
     <string name="config_reversible">Reversibil, dar merită o privire rapidă.</string>
@@ -2726,7 +2726,7 @@
     <string name="model_group_models_plain">%1$d modele</string>
     <!-- backfill: strings.xml -->
     <string name="model_groups_compact_fallback">Rezervă de compactare</string>
-    <string name="model_groups_compact_fallback_footer">Modelul curent încearcă o dată. Dacă eșuează, rezerva încearcă o dată. Fără rezervă, modelul curent se reîncearcă o dată. Două eșecuri trunchiază contextul vechi.</string>
+    <string name="model_groups_compact_fallback_footer">Modelul curent încearcă o dată. Dacă eșuează, rezerva încearcă o dată. Fără rezervă, modelul curent se reîncearcă o dată. Dacă compactarea eșuează, contextul rămâne neschimbat.</string>
     <string name="model_groups_default_primary">Principal implicit</string>
     <string name="model_groups_defaults">Implicite</string>
     <!-- backfill: strings_settings.xml -->
@@ -3328,4 +3328,19 @@
     <string name="process_card_thinking_now">Se gândește…</string>
     <string name="appearance_show_turn_changes_card_title">Cardul modificărilor turei</string>
     <string name="appearance_show_turn_changes_card_subtitle">Afișează la fiecare tură un card cu fișierele modificate de asistent, statistici pe linii și anulare dintr-o atingere. Dezactivat în mod implicit.</string>
+    <string name="vm_compact_retry_cooldown">Ultima compactare a eșuat. Puteți reîncerca în %1$d s.</string>
+    <string name="guard_stop_section">Protecție bucle</string>
+    <string name="guard_stop_title">Oprește la repetări</string>
+    <string name="guard_stop_on">Poate opri sesiunea</string>
+    <string name="guard_stop_off">Nu oprește niciodată sesiunea</string>
+    <string name="guard_stop_footer">Când este activ, protecția oprește sesiunea după ce aceeași acțiune se repetă prea des. Când este inactiv, doar îi reamintește modelului, util la așteptări lungi precum o compilare.</string>
+    <string name="token_usage_section_memory">Memorie</string>
+    <string name="token_usage_memory_lines">Linii livrate</string>
+    <string name="token_usage_memory_shown">Număr afișări</string>
+    <string name="modeldetail_section_context_budget">Buget de context</string>
+    <string name="modeldetail_context_budget_footer">Cât din conversația recentă supraviețuiește compactării. Automat se adaptează ferestrei modelului; o valoare personalizată se aplică doar acestui model.</string>
+    <string name="modeldetail_tail_budget_custom">Buget final personalizat</string>
+    <string name="modeldetail_tail_budget">Buget final</string>
+    <string name="modeldetail_tail_budget_state_auto">Automat (se adaptează ferestrei, până la 60k)</string>
+    <string name="modeldetail_tail_budget_state_specific">Personalizat pentru acest model</string>
 </resources>

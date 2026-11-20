@@ -7,6 +7,7 @@ import java.io.File
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
+import java.nio.file.attribute.FileTime
 
 /** Paths and input verification shared by the session index and the portable global memory tree. */
 internal object BackupDiaryPairs {
@@ -71,8 +72,8 @@ internal object BackupDiaryPairs {
         Files.createDirectories(stagingRoot.toPath())
         val stage = Files.createTempDirectory(stagingRoot.toPath(), "${MemoryRestoreJournal.DIRECTORY_PREFIX}stage-").toFile()
         try {
-            val diary = files.diary?.copyTo(File(stage, source)) ?: throw IOException("Missing diary")
-            val metadata = files.metadata?.copyTo(File(stage, "$source.json"))
+            val diary = files.diary?.let { copyWithTime(it, File(stage, source)) } ?: throw IOException("Missing diary")
+            val metadata = files.metadata?.let { copyWithTime(it, File(stage, "$source.json")) }
             return use(MemoryRestoreJournal.PairFiles(diary, metadata))
         } finally {
             stage.deleteRecursively()
@@ -81,12 +82,45 @@ internal object BackupDiaryPairs {
 
     fun exists(file: File): Boolean = Files.exists(file.toPath(), NOFOLLOW_LINKS)
 
+    internal fun isMemoryMarkdown(relative: String): Boolean = '/' !in relative && relative.endsWith(".md")
+
+    internal fun isSessionMemoryMarkdown(relative: String): Boolean =
+        relative.startsWith("$MEMORY/") && isMemoryMarkdown(relative.removePrefix("$MEMORY/"))
+
+    internal fun copyWithTime(source: File, target: File, mtimeMs: Long? = null): File {
+        val time = mtimeMs?.let(FileTime::fromMillis) ?: Files.getLastModifiedTime(source.toPath(), NOFOLLOW_LINKS)
+        source.copyTo(target, overwrite = true)
+        Files.setLastModifiedTime(target.toPath(), time)
+        return target
+    }
+
+    internal fun restoreTime(file: File, mtimeMs: Long?) {
+        if (mtimeMs != null) Files.setLastModifiedTime(file.toPath(), FileTime.fromMillis(mtimeMs))
+    }
+
+    /** Publish a standalone Markdown source only after its bytes and timestamp are staged. */
+    internal fun restoreMarkdown(source: File, target: File, mtimeMs: Long? = null) {
+        val parent = checkNotNull(target.parentFile)
+        Files.createDirectories(parent.toPath())
+        val temp = Files.createTempFile(parent.toPath(), ".memory-", ".minis-tmp")
+        try {
+            copyWithTime(source, temp.toFile(), mtimeMs)
+            Files.move(temp, target.toPath(), java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+            MemoryLifecycle.invalidateRecall()
+        } finally {
+            Files.deleteIfExists(temp)
+        }
+    }
+
     fun publish(
         directory: File,
         source: String,
         diary: File,
         metadata: File?,
         legacy: Boolean,
+        diaryMtimeMs: Long? = null,
+        metadataMtimeMs: Long? = null,
         verify: (MemoryRestoreJournal.PairFiles) -> Unit = {},
     ) {
         MemoryLifecycle.locked(directory) { dir ->
@@ -95,7 +129,10 @@ internal object BackupDiaryPairs {
                 ?: throw IOException("Invalid lifecycle staging directory")
             withSnapshot(MemoryRestoreJournal.PairFiles(diary, metadata), source, staging) { staged ->
                 verify(staged)
-                MemoryLifecycle.validateBackupPair(checkNotNull(staged.diary), staged.metadata, requireMatchingEntries = legacy)
+                val body = checkNotNull(staged.diary)
+                MemoryLifecycle.validateBackupPair(body, staged.metadata, requireMatchingEntries = legacy)
+                restoreTime(body, diaryMtimeMs)
+                staged.metadata?.let { restoreTime(it, metadataMtimeMs) }
                 MemoryRestoreJournal.publish(dir, source, staged)
             }
         }

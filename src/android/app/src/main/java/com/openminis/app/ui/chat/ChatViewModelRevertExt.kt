@@ -98,7 +98,7 @@ internal suspend fun ChatViewModel.commitStagedRevertBeforeSend(sid: String): Bo
         // truncated DB before the new turn assembles its context — the same
         // leak class as [T-edit-digest-leak]. The digest and compact markers
         // describe rows that no longer exist.
-        awaitBoundedHistoryRebuild(sid)
+        awaitBoundedHistoryRebuild(sid) ?: return false
         llmDigestLines.clear()
         llmDigestOmitted = 0
         reconcileCompactMarkersAfterTruncation(sid)

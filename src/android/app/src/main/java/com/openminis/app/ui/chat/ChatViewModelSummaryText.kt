@@ -3,6 +3,8 @@ package com.openminis.app.ui.chat
 import com.openminis.app.data.CompactAssets
 import com.openminis.app.data.body.ResourceLimits
 import com.openminis.app.data.display.DisplayParts
+import com.openminis.app.data.isLegacyStopCarrier
+import com.openminis.app.data.isLegacyStopResult
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.repository.CompactDecodedRow
@@ -34,6 +36,7 @@ internal fun decodeCompactMessage(id: String, role: String, raw: String, mediaRo
     }
     val isUser = messageRole == LLMMessage.Role.USER
     val data = parseCompactJson(raw) as? JsonArray ?: return null
+    val legacyStop = isUser && data.isLegacyStopCarrier()
     val parts = ArrayList<AgentContentPart>()
     val uploads = LinkedHashSet<String>()
     var realUser = false
@@ -79,7 +82,7 @@ internal fun decodeCompactMessage(id: String, role: String, raw: String, mediaRo
                 parts += AgentContentPart.ToolResult(
                     id = callId,
                     name = name,
-                    content = if (ToolAliases.canonical(name) in LOCAL_RESULT_PREVIEWS) {
+                    content = if (legacyStop || ToolAliases.canonical(name) in LOCAL_RESULT_PREVIEWS) {
                         compactExcerpt(value.string("output").orEmpty(), 500)
                     } else "",
                     isError = (value["success"] as? JsonPrimitive)?.takeUnless { it.isString }?.booleanOrNull != true,
@@ -113,7 +116,10 @@ internal fun decodeCompactMessage(id: String, role: String, raw: String, mediaRo
         }
     }
     return CompactDecodedRow(
-        LLMMessage(messageRole, text, contentParts = parts, dbMessageId = id),
+        LLMMessage(
+            messageRole, text, contentParts = parts, dbMessageId = id,
+            isHostGenerated = if (resultCarrier) legacyStop else hostGenerated,
+        ),
         realUser = realUser && !resultCarrier && !hostGenerated,
         completedAssistant = assistantText && !assistantCall && !hostGenerated,
         uploads = if (!resultCarrier && !hostGenerated) uploads.toList() else emptyList(),
@@ -243,7 +249,9 @@ internal fun buildConversationTextForSummary(history: List<LLMMessage>): String 
                 is AgentContentPart.ToolResult -> {
                     append("  [result ").append(compactTranscriptLine(part.name, 120))
                         .append(if (part.isError) ": failed] " else ": succeeded] ")
-                    if (ToolAliases.canonical(part.name) in LOCAL_RESULT_PREVIEWS) {
+                    if (msg.isHostGenerated && part.isLegacyStopResult()) {
+                        append("user cancelled; outcome unknown")
+                    } else if (ToolAliases.canonical(part.name) in LOCAL_RESULT_PREVIEWS) {
                         append("untrusted tool data: ").append(compactTranscriptLine(part.content, 500))
                     } else {
                         append("external or unclassified output omitted")

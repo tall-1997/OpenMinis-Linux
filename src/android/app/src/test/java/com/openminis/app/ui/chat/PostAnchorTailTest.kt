@@ -1,6 +1,7 @@
 package com.openminis.app.ui.chat
 
 import com.openminis.app.data.model.AgentContentPart
+import kotlinx.coroutines.CancellationException
 import com.openminis.app.data.model.LLMMessage
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -220,6 +221,13 @@ class PostAnchorTailTest {
         assertTrue(result.notice!!.content.contains(" older rounds dropped "))
     }
 
+    @Test(expected = CancellationException::class)
+    fun digestCancellationPropagates() {
+        PostAnchorTail.apply(postAnchor(5, resultChars = { 6000 }), PostAnchorTail.Budget(4_000, digest = {
+            throw CancellationException("test cancellation")
+        }))
+    }
+
     @Test
     fun digestReceivesExactlyTheDroppedRounds() {
         val input = postAnchor(5, resultChars = { 6000 })
@@ -273,5 +281,45 @@ class PostAnchorTailTest {
         assertEquals(2, groups.size)
         assertEquals(2, groups[0].size)
         assertEquals(1, groups[1].size)
+    }
+
+    @Test
+    fun `a user interruption cannot cut off the result of a shared tool step`() {
+        val first = toolRound(1)
+        val last = toolRound(2)
+        val interleaved = listOf(userText("start"), first[0], userText("steer here"), first[1])
+        val history = interleaved + last
+        assertEquals(listOf(interleaved, last), PostAnchorTail.splitRounds(history))
+        val result = PostAnchorTail.apply(history, PostAnchorTail.Budget(1, estimate = { 10 }))
+        assertEquals(interleaved.size, result.droppedMessages)
+        assertEquals(last, result.kept.drop(1))
+    }
+
+    @Test
+    fun `one user turn with many tool steps is split and bounded`() {
+        // [T-postanchor-intra-round-split] The old splitRounds returned ONE
+        // group for this exact shape, so apply() skipped the budget and the
+        // whole 300-step round was shipped.
+        val messages = ArrayList<LLMMessage>()
+        messages += userText("do 100 things")
+        repeat(100) { messages += toolRound(it, resultChars = 1_000) }
+        assertEquals(100, PostAnchorTail.splitRounds(messages).size)
+
+        val result = PostAnchorTail.apply(
+            messages,
+            PostAnchorTail.Budget(4_000, WalkBack::estimateMessageTokens),
+        )
+        assertTrue("budget must drop old steps", result.droppedRounds > 0)
+        assertTrue(result.kept.size < messages.size)
+        assertTrue(result.kept.first().content.startsWith("[context window: "))
+        val keptUseIds = result.kept.flatMap { it.contentParts }
+            .filterIsInstance<AgentContentPart.ToolUse>().map { it.id }.toSet()
+        val keptResultIds = result.kept.flatMap { it.contentParts }
+            .filterIsInstance<AgentContentPart.ToolResult>().map { it.id }.toSet()
+        assertEquals(keptUseIds, keptResultIds)
+        assertTrue(
+            "newest step is always kept",
+            result.kept.any { it.contentParts.any { p -> p is AgentContentPart.ToolUse && p.id == "call_99" } },
+        )
     }
 }

@@ -33,13 +33,25 @@ class MemoryRecallEnginePersistTest {
 
         val sidecar = File(dir, ".recall-counts.json")
         assertTrue("sidecar must exist after acceptRecall", sidecar.isFile)
-        assertTrue("sidecar must carry the bumped key", sidecar.readText().contains("安静模式"))
+        val key = MemoryRecallEngine.recallCountKey("2026-10-03", "用户偏好：安静模式")
+        assertTrue("sidecar must carry the bumped key", sidecar.readText().contains(key))
+        assertTrue("new writes must not carry source text", !sidecar.readText().contains("安静模式"))
 
         // A brand-new engine (process restart) loads the persisted counts.
         val e2 = MemoryRecallEngine.fromDir(dir)!!
-        val snapshot = e2.recallCountsSnapshot()
-        val key = snapshot.keys.first { it.contains("安静模式") }
-        assertEquals(2, snapshot[key])
+        assertEquals(2, e2.recallCountsSnapshot()[key])
+    }
+
+    @Test
+    fun oldFlatKeysAreStillReadableAndNeverRewrittenInPlainText() {
+        val dir = tempDir()
+        val sidecar = File(dir, ".recall-counts.json")
+        sidecar.writeText("""{"2026-10-03:用户偏好：安静模式":4}""")
+        val engine = engineWith(dir)
+        assertEquals(4, engine.recall("安静模式").single().recallCount)
+        engine.acceptRecall("2026-10-03.md", "用户偏好：安静模式")
+        assertTrue(!sidecar.readText().contains("安静模式"))
+        assertEquals(5, MemoryRecallEngine.fromDir(dir)!!.recall("安静模式").single().recallCount)
     }
 
     @Test

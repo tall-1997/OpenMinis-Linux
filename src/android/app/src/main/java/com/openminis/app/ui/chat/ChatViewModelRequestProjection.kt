@@ -1,13 +1,16 @@
 package com.openminis.app.ui.chat
 
 import com.openminis.app.agent.ContextSaverRuntime
+import com.openminis.app.agent.HarnessConfig
 import com.openminis.app.agent.ToolResultProjection
 import com.openminis.app.data.ContextPolicy
 import com.openminis.app.data.ContextSaverPrefs
 import com.openminis.app.data.ContextTokenEstimate
 import com.openminis.app.data.ContextTokenMeter
+import com.openminis.app.data.ContextUsageAttempt
+import com.openminis.app.data.OutboundMaskPrefs
 import com.openminis.app.data.calibratedContextTokens
-import com.openminis.app.data.contextUsageIdentity
+import com.openminis.app.data.captureContextUsageAttempt
 import com.openminis.app.data.estimateProjectedContext
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.AgentToolDefinition
@@ -15,12 +18,16 @@ import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.ModelAttributionSnapshot
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.data.model.ToolIdNormalization
-import com.openminis.app.data.repository.hasUncoveredCompactPrefix
+import com.openminis.app.data.repository.CompactMarkerView
+import com.openminis.app.data.repository.RequestCompactState
+import com.openminis.app.data.repository.requestCompactState
 import com.openminis.app.data.repository.toView
 import com.openminis.app.provider.ImageBudget
 import com.openminis.app.provider.LLMProvider
 import com.openminis.app.provider.ProviderFactory
 import com.openminis.app.provider.api.ChatRequest
+import com.openminis.app.provider.openai.OpenAIProvider
+import com.openminis.app.provider.projectOutboundRequest
 import com.openminis.app.tools.ToolOutputSpill
 
 internal data class ProjectedChatRequest(
@@ -36,17 +43,19 @@ internal data class ProjectedChatRequest(
     val hasCoverageGap: Boolean,
     val agingStats: ContextSaverRuntime.Stats,
     val imageElision: ImageBudget.RequestBudgetPlan?,
-    /**
-     * [T-anchor-persisted-fingerprint] Fingerprint over the request WITHOUT its
-     * request-local appended text (recall reminder, receipt notice, stall
-     * nudge). Those bytes ride one request and never persist, so hashing them
-     * made the next request's prefix fingerprint永远不匹配 and silently killed
-     * the measured-prefix anchor on the default (memory-on) configuration.
-     */
-    val anchorFingerprint: String? = null,
-    /** Metered tokens the request-local appends added on top of the persisted form. */
-    val requestLocalTokens: Int = 0,
-)
+    val hasRequestLocalContext: Boolean = false,
+    val clockNote: RequestClockNote? = null,
+    val pairingRepair: PairingRepair? = null,
+    val carriesChatContext: Boolean = true,
+    val summaryChars: Int = 0,
+    val outboundMask: Boolean = false,
+    val outboundRequest: ChatRequest = request,
+) {
+    // A retry of the same immutable projection need not hash the request again.
+    val usageAttempt: ContextUsageAttempt? by lazy {
+        if (carriesChatContext) captureContextUsageAttempt(outboundRequest, model, markerId, rawTokens, hasRequestLocalContext) else null
+    }
+}
 
 internal fun ChatViewModel.requestContextWindow(provider: LLMProvider, model: ModelAttributionSnapshot): Int {
     val config = providerRepository.config.value
@@ -68,7 +77,8 @@ internal fun ChatViewModel.requestEntryId(model: ModelAttributionSnapshot): Stri
 internal fun ChatViewModel.requestThinkingLevel(provider: LLMProvider): ThinkingLevel {
     val model = ProviderFactory.requestAttribution(provider)
     val forced = model.providerInstanceId?.let { providerRepository.instance(it)?.forceThinkingEnabled } == true
-    return if (forced || provider.model.supportsReasoning != false) _thinkingLevel.value else ThinkingLevel.OFF
+    val requested = if (forced || provider.model.supportsReasoning != false) _thinkingLevel.value else ThinkingLevel.OFF
+    return provider.clampThinkingLevel(requested)
 }
 
 internal fun ChatViewModel.publishRequestProjection(projection: ProjectedChatRequest) {
@@ -77,11 +87,11 @@ internal fun ChatViewModel.publishRequestProjection(projection: ProjectedChatReq
     refreshContextUsage(projection.estimate, projection.window)
 }
 
-/** A coverage check is separate from the token estimate; a smaller request does not prove coverage. */
-internal suspend fun ChatViewModel.hasRequestHistoryGap(history: List<LLMMessage>): Boolean {
-    if (llmHistoryStartOffset <= 0) return false
-    return chatRepository.hasUncoveredCompactPrefix(activeSessionId, history.firstNotNullOfOrNull { it.dbMessageId })
-}
+/** The Room marker and its coverage belong to the same read, not to the display cache. */
+internal suspend fun ChatViewModel.requestCompactStateFor(
+    history: List<LLMMessage>,
+    sessionId: String,
+): RequestCompactState = chatRepository.requestCompactState(sessionId, history.firstNotNullOfOrNull { it.dbMessageId })
 
 /**
  * Shared by the read-only composer estimate and each real attempt. Input is a stable transcript
@@ -98,48 +108,61 @@ internal fun ChatViewModel.projectChatRequest(
     receiptNotice: String? = null,
     uncoveredBeforeResident: Boolean = false,
     persistImageSpillover: Boolean = false,
+    requestSessionId: String = activeSessionId,
+    clockNote: RequestClockNote? = null,
+    attribution: ModelAttributionSnapshot = ProviderFactory.requestAttribution(provider),
+    harnessConfig: HarnessConfig = activeHarnessConfig(requestEntryId(attribution)),
+    window: Int = requestContextWindow(provider, attribution),
+    policy: ContextPolicy = ContextPolicy.forContextWindow(window, effectiveCompactPercent()),
+    historyDigest: String? = HistoryDigest.render(llmDigestLines, llmDigestOmitted),
+    saverMode: ContextSaverPrefs.Mode = ContextSaverPrefs.mode(),
+    outboundMask: Boolean = OutboundMaskPrefs.isEnabled,
+    marker: CompactMarkerView? = _cachedLatestMarker?.toView(),
 ): ProjectedChatRequest {
-    val attribution = ProviderFactory.requestAttribution(provider)
-    val window = requestContextWindow(provider, attribution)
-    val policy = ContextPolicy.forContextWindow(window, effectiveCompactPercent())
-    val marker = _cachedLatestMarker?.toView()
+    // Codex image generation has its own instructions and only forwards the last user text.
+    if ((provider as? OpenAIProvider)?.isCodexImageModel == true) {
+        val input = history.lastOrNull { it.role == LLMMessage.Role.USER }
+        val request = ChatRequest(listOfNotNull(input), maxTokens = 0)
+        val outbound = projectOutboundRequest(request, outboundMask)
+        val raw = ContextTokenMeter.rawRequestTokens(outbound)
+        return ProjectedChatRequest(
+            request, null, null, attribution, marker?.id, window, policy, raw,
+            ContextTokenEstimate(raw), false, ContextSaverRuntime.Stats(), null,
+            carriesChatContext = false, outboundMask = outboundMask, outboundRequest = outbound,
+        )
+    }
     val memoryQuery = memoryRecallQueryForHistory(history)
     val prompt = basePrompt?.let {
         projectMemoryDeliveryPrompt(wrapMemoryDeliveryPromptForOAuth(provider, it, publish = false), query = memoryQuery)
     }
     val recall = newRecallReminder(prompt?.daily, query = memoryQuery, turnId = memoryRecallTurnIdForHistory(history))
-    val untrustedCleaned = neutralizeRemoteToolResults(history.withoutStoredRecallReminders())
     // The marker does not cover the active tail. Preserve it through the local reducers;
     // the dispatch gate checks the resulting payload and any actual gap in resident history.
     val assembled = effectiveAgentHistoryUncounted(
-        history = untrustedCleaned,
+        history = history.withoutStoredRecallReminders(),
         windowTokens = window,
         marker = marker,
         applyTailBudget = false,
+        forRequest = persistImageSpillover,
+        harnessConfig = harnessConfig,
     )
-    val repaired = dropOrphanedToolParts(assembled)
-    val scrubbed = TextifiedImageGuard.scrub(repaired).history
-    val cleaned = HistoryDigest.inject(scrubbed, HistoryDigest.render(llmDigestLines, llmDigestOmitted))
-        .map(::projectAssistantText)
-        .withMemoryRecallReminder(recall)
-        .withRequestReminder(receiptNotice)
-        .let { applyStallNudge(it, stallNote) }
-    val normalized = ToolIdNormalization.normalizeMessages(cleaned)
-    val mode = ContextSaverPrefs.mode()
-    val keepRecent = if (mode == ContextSaverPrefs.Mode.OFF) ToolResultProjection.DEFAULT_KEEP_RECENT else mode.keepRecent
-    val pressure = calibratedContextTokens(attribution, ContextTokenMeter.rawRequestTokens(normalized, prompt?.prompt, tools))
-    // Path verification does disk I/O (workspace resolution, canRead): run it
-    // only when a tier will actually project something, and only for results
-    // OUTSIDE the protected recent suffix — a candidate check, never a
-    // full-history scan. The workspace resolver is built once per request.
+    // A legacy marker may have removed the matching call from this projection.
+    val repair = repairToolPairing(neutralizeRemoteToolResults(projectLegacyOrphanedStops(assembled)))
+    val scrubbed = TextifiedImageGuard.scrub(repair.history).history
+    val normalized = ToolIdNormalization.normalizeMessages(
+        HistoryDigest.inject(scrubbed, historyDigest).map(::projectAssistantText),
+    )
+    val placedClock = clockNote?.takeIf { it.sessionId == requestSessionId && normalized.any { m -> m.role == LLMMessage.Role.USER } }
+    fun addReminders(messages: List<LLMMessage>): List<LLMMessage> = appendRequestReminders(messages, recall, receiptNotice, placedClock, stallNote)
+    val keepRecent = if (saverMode == ContextSaverPrefs.Mode.OFF) ToolResultProjection.DEFAULT_KEEP_RECENT else saverMode.keepRecent
+    val pressure = calibratedContextTokens(attribution, ContextTokenMeter.rawRequestTokens(addReminders(normalized), prompt?.prompt, tools))
     val microTriggerTokens = (policy.compactThreshold * MICRO_TRIGGER_FRACTION_OF_COMPACT).toInt()
-    val pruningLikely = pressure >= microTriggerTokens || ContextSaverRuntime.willAge(normalized, window, pressure)
-    val verifiedPaths = if (pruningLikely) {
-        verifiedRequestSpillPaths(normalized, ToolResultProjection.protectedSuffixStart(normalized, keepRecent))
-    } else {
-        emptySet()
-    }
-    val aged = ContextSaverRuntime.planAge(normalized, window, pressure, verifiedPaths, keepRecent)
+    val prunable = (microTriggerTokens > 0 && pressure >= microTriggerTokens) ||
+        ContextSaverRuntime.willAge(normalized, window, pressure, config = harnessConfig)
+    val verifiedPaths = if (prunable) {
+        verifiedRequestSpillPaths(normalized, ToolResultProjection.protectedSuffixStart(normalized, keepRecent), requestSessionId)
+    } else emptySet()
+    val aged = ContextSaverRuntime.planAge(normalized, window, pressure, verifiedPaths, keepRecent, config = harnessConfig)
     val pruned = microPruneOldToolResults(
         history = aged.messages,
         usedTokens = pressure.toLong(),
@@ -149,21 +172,24 @@ internal fun ChatViewModel.projectChatRequest(
         verifiedSpillPaths = verifiedPaths,
     )
     var imageElision: ImageBudget.RequestBudgetPlan? = null
-    val imagesBudgeted = applyRequestImageBudget(pruned, persistImageSpillover) { imageElision = it }
-    val request = ChatRequest(imagesBudgeted, prompt?.prompt, maxTokens = 0, tools = tools, thinkingLevel = thinking)
-    val raw = ContextTokenMeter.rawRequestTokens(request)
-    // [T-anchor-persisted-fingerprint] The anchor must describe the PERSISTED
-    // prefix: recall reminders, the receipt notice and the stall nudge ride one
-    // request and never persist, so they are stripped before fingerprinting and
-    // their metered size is settled out of the measured input.
-    val persistedForm = request.messages.withoutRequestLocalAppends(recall, receiptNotice, stallNote)
-    val anchorEligible = attribution.contextUsageIdentity() != null && marker?.id?.isBlank() != true
-    val anchorFingerprint = if (anchorEligible) {
-        ContextTokenMeter.requestFingerprint(persistedForm, request.systemPrompt, request.tools, request.imageParts)
-    } else null
-    val requestLocalTokens = if (anchorFingerprint != null) {
-        (raw - ContextTokenMeter.rawRequestTokens(persistedForm, request.systemPrompt, request.tools)).coerceAtLeast(0)
-    } else 0
+    val stableMessages = applyRequestImageBudget(pruned, persistImageSpillover && activeSessionId == requestSessionId) { imageElision = it }
+    val request = ChatRequest(addReminders(stableMessages), prompt?.prompt, maxTokens = 0, tools = tools, thinkingLevel = thinking)
+    val outbound = projectOutboundRequest(request, outboundMask)
+    val raw = ContextTokenMeter.rawRequestTokens(outbound)
+    val hasRequestLocalContext = request.messages !== stableMessages
+    // Model the pre-reminder rows under the same privacy policy as the full request.
+    val stableOutbound = if (hasRequestLocalContext) {
+        projectOutboundRequest(request.copy(messages = stableMessages), outboundMask)
+    } else outbound
+    val stableRaw = if (stableOutbound === outbound) raw else ContextTokenMeter.rawRequestTokens(stableOutbound)
+    val requestLocalTokens = (raw - stableRaw).coerceAtLeast(0)
+    val stableEstimate = estimateProjectedContext(stableOutbound, attribution, marker?.id, stableRaw)
+    val estimate = if (stableEstimate.measuredPrefixTokens == null) {
+        ContextTokenEstimate(calibratedContextTokens(attribution, raw))
+    } else {
+        val extra = calibratedContextTokens(attribution, requestLocalTokens)
+        stableEstimate.copy(tokens = (stableEstimate.tokens.toLong() + extra).coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+    }
     return ProjectedChatRequest(
         request = request,
         prompt = prompt,
@@ -173,49 +199,38 @@ internal fun ChatViewModel.projectChatRequest(
         window = window,
         policy = policy,
         rawTokens = raw,
-        estimate = estimateProjectedContext(request, attribution, marker?.id, raw),
+        estimate = estimate,
         hasCoverageGap = uncoveredBeforeResident,
         agingStats = aged.stats,
         imageElision = imageElision,
-        anchorFingerprint = anchorFingerprint,
-        requestLocalTokens = requestLocalTokens,
+        hasRequestLocalContext = hasRequestLocalContext,
+        clockNote = placedClock,
+        pairingRepair = repair.takeIf { it.changed },
+        summaryChars = marker?.summary?.length ?: 0,
+        outboundMask = outboundMask,
+        outboundRequest = outbound,
     )
 }
 
-/**
- * Exact inverse of the request-local appends the projector made: the stall
- * nudge, receipt notice and recall reminder all end up appended to the last
- * user row's content and parts tail (the stall row merges into it during
- * normalization). Removing exactly those texts reconstructs the persisted form
- * the next request's prefix will project.
- */
-private fun List<LLMMessage>.withoutRequestLocalAppends(
+/** Do not infer the original rows by stripping matching text from a projected request. */
+internal fun appendRequestReminders(
+    messages: List<LLMMessage>,
     recall: RecallReminder?,
     receiptNotice: String?,
+    clockNote: RequestClockNote?,
     stallNote: String?,
 ): List<LLMMessage> {
-    // ASSEMBLY order: recall rides in first, then the receipt notice, and the
-    // stall nudge merges last — the strip below walks them LIFO from the tail.
-    val appended = buildList {
-        if (recall != null) add(recall.framed)
-        if (receiptNotice != null) add("<system-reminder>\n$receiptNotice\n</system-reminder>")
-        if (stallNote != null) add(stallNote)
-    }
-    if (appended.isEmpty()) return this
-    val index = indexOfLast { it.role == LLMMessage.Role.USER }
-    if (index < 0) return this
-    val row = this[index]
-    var parts = row.contentParts
-    var content = row.content
-    for (text in appended.asReversed()) {
-        val last = parts.lastOrNull()
-        if (last is AgentContentPart.Text && last.text == text) parts = parts.dropLast(1)
-        val suffix = "\n\n" + text
-        if (content.endsWith(suffix)) content = content.removeSuffix(suffix)
-    }
-    val rebuilt = row.copy(content = content, contentParts = parts)
-    if (rebuilt == row) return this
-    return toMutableList().also { it[index] = rebuilt }
+    val reminded = messages.withMemoryRecallReminder(recall)
+        .withRequestReminder(receiptNotice?.takeIf { it.isNotBlank() }?.let { "<system-reminder>\n$it\n</system-reminder>" })
+        .withRequestReminder(clockNote?.text)
+    if (stallNote.isNullOrBlank()) return reminded
+    if (reminded.lastOrNull()?.role == LLMMessage.Role.USER) return reminded.withRequestReminder(stallNote)
+    return reminded + LLMMessage(
+        role = LLMMessage.Role.USER,
+        content = stallNote,
+        contentParts = listOf(AgentContentPart.Text(stallNote)),
+        isHostGenerated = true,
+    )
 }
 
 private fun projectAssistantText(message: LLMMessage): LLMMessage {
@@ -228,30 +243,32 @@ private fun projectAssistantText(message: LLMMessage): LLMMessage {
     return if (text == message.content && parts == message.contentParts) message else message.copy(content = text, contentParts = parts)
 }
 
-private fun List<LLMMessage>.withRequestReminder(notice: String?): List<LLMMessage> {
-    if (notice.isNullOrBlank()) return this
+private fun List<LLMMessage>.withRequestReminder(text: String?): List<LLMMessage> {
+    if (text.isNullOrBlank()) return this
     val index = indexOfLast { it.role == LLMMessage.Role.USER }
     if (index < 0) return this
-    return toMutableList().apply { this[index] = appendUserText(this[index], "<system-reminder>\n$notice\n</system-reminder>") }
+    return toMutableList().apply { this[index] = appendUserText(this[index], text) }
 }
 
-/**
- * Verify only the declared spill references the two tiers could actually
- * project: everything from [candidatesStart] to the end. The chat read gate
- * and one workspace resolver per request replace the per-path rebuilds.
- */
-private fun ChatViewModel.verifiedRequestSpillPaths(messages: List<LLMMessage>, candidatesStart: Int): Set<String> {
-    if (!ToolOutputSpill.canReadInChat(context, activeSessionId)) return emptySet()
-    val filesDir = context.filesDir
-    val resolver = com.openminis.app.sandbox.PathResolver.forSessionLayout(filesDir, activeSessionId)
-    val seen = HashSet<String>()
-    return buildSet {
-        for (index in candidatesStart until messages.size) {
-            for (result in messages[index].contentParts) {
-                if (result !is AgentContentPart.ToolResult) continue
-                val path = ToolResultProjection.spillPathForRecovery(result.content, result.name) ?: continue
-                if (seen.add(path) && ToolOutputSpill.hostFile(resolver, filesDir, activeSessionId, path) != null) add(path)
-            }
+/** Only the prefix outside the protected suffix is eligible for folding. */
+internal fun requestSpillCandidates(messages: List<LLMMessage>, protectedFrom: Int): Sequence<String> =
+    messages.asSequence().take(protectedFrom).flatMap { it.contentParts.asSequence() }
+        .filterIsInstance<AgentContentPart.ToolResult>()
+        .filterNot {
+            it.isError || it.imageData != null || it.imageMimeType != null || it.imageLinuxPath != null ||
+                ToolResultProjection.isProjected(it.content)
         }
-    }
+        .mapNotNull { ToolResultProjection.spillPathForRecovery(it.content, it.name) }
+        .distinct()
+
+private fun ChatViewModel.verifiedRequestSpillPaths(
+    messages: List<LLMMessage>,
+    protectedFrom: Int,
+    sessionId: String,
+): Set<String> {
+    val candidates = requestSpillCandidates(messages, protectedFrom).iterator()
+    if (!candidates.hasNext() || !ToolOutputSpill.canReadInChat(context, sessionId)) return emptySet()
+    val filesDir = context.filesDir
+    val resolver = com.openminis.app.sandbox.PathResolver.forSessionLayout(filesDir, sessionId)
+    return candidates.asSequence().filter { ToolOutputSpill.hostFile(resolver, filesDir, sessionId, it) != null }.toSet()
 }

@@ -79,7 +79,7 @@ class BackupFileTreeExporter(
             if (isBackupArtifact(rel)) continue
             val diaryMember = if (category == BackupCategory.CHATS) BackupDiaryPairs.sessionMember(rel) else null
             if (category == BackupCategory.CHATS && (BackupDiaryPairs.isInternalRestorePath(rel) ||
-                    BackupMemoryTree.isMemoryTemp(rel) && (rel.startsWith("memory/") ||
+                    BackupMemoryTree.isMemoryTemp(rel) && ('/' !in rel || rel.startsWith("memory/") ||
                     rel.startsWith("${MemoryLifecycle.SIDECAR_DIR}/")))) continue
             if (diaryMember?.member == BackupDiaryPairs.Member.METADATA) continue
 
@@ -97,7 +97,9 @@ class BackupFileTreeExporter(
             if (diaryMember?.member == BackupDiaryPairs.Member.DIARY) {
                 exportSessionDiary(entry, logicalPrefix, logicalPath, sessionId, result)
             } else if (inSnapshot(entry, result)) {
-                writeFile(entry, logicalPath, sessionId, category, result)
+                val memoryMtime = if (category == BackupCategory.CHATS && BackupDiaryPairs.isSessionMemoryMarkdown(rel))
+                    entry.lastModified() else null
+                writeFile(entry, logicalPath, sessionId, category, result, memoryMtime)
             }
         }
         return result
@@ -131,12 +133,15 @@ class BackupFileTreeExporter(
                 } else BackupDiaryPairs.withSnapshot(pair, file.name, blobStore.stagingRoot) { staged ->
                     val members = listOfNotNull(checkNotNull(staged.diary) to logicalPath, staged.metadata?.let { it to sidecarPath })
                     val sizes = members.map { it.first.length() }
+                    val mtimes = members.map { it.first.lastModified() } // The blob store moves these staged files.
                     if (cap != null && sizes.any { it > cap }) throw java.io.IOException("Diary pair changed size")
                     MemoryLifecycle.validateBackupPair(checkNotNull(staged.diary), staged.metadata, requireMatchingEntries = false)
                     val hashes = blobStore.addDiaryPair(members, sessionId)
                     members.indices.map { i ->
-                        val index = BackupFileIndexEntry.file(members[i].second, sizes[i], hashes[i], category)
-                        if (i == 0) index.copy(memoryPair = hashes.getOrNull(1) ?: BackupDiaryPairs.NO_METADATA) else index
+                        BackupFileIndexEntry.file(members[i].second, sizes[i], hashes[i], category).copy(
+                            memoryPair = if (i == 0) hashes.getOrNull(1) ?: BackupDiaryPairs.NO_METADATA else null,
+                            memoryMtimeMs = mtimes[i],
+                        )
                     }
                 }
             }
@@ -157,16 +162,17 @@ class BackupFileTreeExporter(
         }
     }
 
-    private fun writeFile(file: File, path: String, sessionId: String?, category: BackupCategory, result: Result): Boolean =
-        when (val outcome = addFile(file, path, sessionId)) {
+    private fun writeFile(
+        file: File, path: String, sessionId: String?, category: BackupCategory, result: Result, memoryMtime: Long?,
+    ): Boolean = when (val outcome = addFile(file, path, sessionId)) {
             is BackupBlobStore.Outcome.Stored -> {
-                fileIndex.write(BackupFileIndexEntry.file(path, outcome.size, outcome.sha256, category))
+                fileIndex.write(BackupFileIndexEntry.file(path, outcome.size, outcome.sha256, category).copy(memoryMtimeMs = memoryMtime))
                 result.filesIncluded += 1
                 result.bytesIncluded += outcome.size
                 true
             }
             is BackupBlobStore.Outcome.Duplicate -> {
-                fileIndex.write(BackupFileIndexEntry.file(path, outcome.size, outcome.sha256, category))
+                fileIndex.write(BackupFileIndexEntry.file(path, outcome.size, outcome.sha256, category).copy(memoryMtimeMs = memoryMtime))
                 result.filesIncluded += 1
                 true
             }

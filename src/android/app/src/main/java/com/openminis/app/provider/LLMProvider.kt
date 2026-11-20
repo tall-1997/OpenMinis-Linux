@@ -203,7 +203,10 @@ interface LLMProvider : ModelProvider {
         thinkingLevel: ThinkingLevel = ThinkingLevel.OFF,
         systemStablePrefixLen: Int = -1,
         extraHeaders: Map<String, String> = emptyMap(),
+        expectedOutboundMask: Boolean? = null,
     ): Flow<LLMStreamChunk> {
+        val maskEnabled = com.openminis.app.data.OutboundMaskPrefs.isEnabled
+        if (expectedOutboundMask != null && expectedOutboundMask != maskEnabled) throw OutboundPrivacyChanged()
         val level = clampThinkingLevel(thinkingLevel)
         val instanceId = SamplingIdentity.of(this)
         val first = SamplingPolicy.wire(instanceId, model.id, temperature, level.isEnabled)
@@ -219,7 +222,9 @@ interface LLMProvider : ModelProvider {
         // [#28] Outbound privacy masking — the public entry is the single
         // choke point every streaming caller passes through. Masked once
         // before the retry loop so every attempt sees identical bytes.
-        val (outMessages, outSystem) = maskOutboundIfEnabled(messages, systemPrompt)
+        val (outMessages, outSystem) = maskOutboundIfEnabled(messages, systemPrompt, maskEnabled)
+        // A text replacement can move the cache split; never apply the old offset to masked text.
+        val outboundStablePrefixLen = if (outSystem == systemPrompt) systemStablePrefixLen else -1
         // channelFlow: [ProviderKeyGate.withPermit] uses withContext(HeldKeys),
         // which is a different coroutine than the collector. Regular `flow { emit }`
         // forbids that (IllegalStateException: Flow invariant is violated).
@@ -231,7 +236,7 @@ interface LLMProvider : ModelProvider {
                 try {
                     val inner = streamMessageClamped(
                         outMessages, outSystem, maxTokens, temp, imageParts, tools, level,
-                        systemStablePrefixLen, effectiveHeaders,
+                        outboundStablePrefixLen, effectiveHeaders,
                     )
                     val key = callGateKey
                     if (key.isBlank()) {
@@ -357,12 +362,22 @@ interface LLMProvider : ModelProvider {
 private fun maskOutboundIfEnabled(
     messages: List<LLMMessage>,
     systemPrompt: String?,
+    enabled: Boolean = com.openminis.app.data.OutboundMaskPrefs.isEnabled,
 ): Pair<List<LLMMessage>, String?> =
-    if (com.openminis.app.data.OutboundMaskPrefs.isEnabled) {
+    if (enabled) {
         com.openminis.app.security.OutboundMasker.maskPayload(messages, systemPrompt)
     } else {
         messages to systemPrompt
     }
+
+/** Reuse the same transformation for context accounting and the provider adapter input. */
+internal fun projectOutboundRequest(request: ChatRequest, maskEnabled: Boolean): ChatRequest {
+    val (messages, systemPrompt) = maskOutboundIfEnabled(request.messages, request.systemPrompt, maskEnabled)
+    return if (messages === request.messages && systemPrompt === request.systemPrompt) request
+    else request.copy(messages = messages, systemPrompt = systemPrompt)
+}
+
+internal class OutboundPrivacyChanged : RuntimeException("Outbound privacy setting changed before dispatch")
 
 /**
  * [T-android-empty-stream-retry] Detect a silently-truncated stream.

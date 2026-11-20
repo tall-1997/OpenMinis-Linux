@@ -3,14 +3,20 @@ package com.openminis.app.data.repository
 import android.app.Application
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.openminis.app.data.body.ResourceLimits
 import com.openminis.app.data.db.AppDatabase
 import com.openminis.app.data.db.ChatSessionEntity
+import com.openminis.app.util.Digest
+import java.io.File
+import java.io.RandomAccessFile
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -28,6 +34,7 @@ class ChatRepositoryTurnRowsTest {
     private lateinit var repo: ChatRepository
     private val sid = "turn-pair-session"
     private val dao get() = db.chatDao()
+    @get:Rule val tmp = TemporaryFolder()
 
     @Before
     fun setUp() = runBlocking {
@@ -58,8 +65,10 @@ class ChatRepositoryTurnRowsTest {
         assertEquals("user", rows[1].role)
         assertEquals(rows[0].createdAt, rows[1].createdAt)
         assertEquals(rows[0].sortOrder + 1, rows[1].sortOrder)
-        val tail = dao.loadMessagesTailRaw(sid, 10, 0)
-        assertEquals(listOf("assistant", "user"), tail.sortedBy { it.sortOrder }.map { it.role })
+        val tail = repo.loadRequestHistory(sid, 10).messages
+        assertEquals(rows.map { it.id }, tail.map { it.id })
+        assertEquals(listOf("assistant", "user"), tail.map { it.role })
+        assertEquals(listOf(assistantRow().partsJson, resultRow().partsJson), tail.map { it.partsJson })
         assertTrue(dao.getSession(sid)!!.updatedAt >= rows[0].createdAt)
     }
 
@@ -76,6 +85,47 @@ class ChatRepositoryTurnRowsTest {
         val failure = runCatching { repo.appendTurnRows(sid, listOf(assistantRow(), resultRow())) }.exceptionOrNull()
         assertTrue(failure?.message.orEmpty().contains("simulated crash"))
         assertEquals(0, dao.messageCountForSession(sid))
+    }
+
+    private fun largeResultRow(): PendingTurnRow = resultRow().let { row ->
+        row.copy(partsJson = row.partsJson.replace("\"ok\"", "\"${"x".repeat(ResourceLimits.INLINE_BODY_BYTES)}\""))
+    }
+
+    @Test
+    fun unavailableBodyStoreCannotCommitEitherHalfOrAdvancePreview() = runBlocking {
+        File(tmp.root, "bodies").writeText("not a directory")
+        val repo = ChatRepository(dao, db.goalDao(), filesDir = tmp.root, db = db)
+        val originalSession = dao.getSession(sid)
+        val failure = runCatching { repo.appendTurnRows(sid, listOf(assistantRow(), largeResultRow())) }.exceptionOrNull()
+        assertTrue(failure?.message.orEmpty().contains("body directory unavailable"))
+        assertEquals(0, dao.messageCountForSession(sid))
+        assertEquals(originalSession, dao.getSession(sid))
+    }
+
+    @Test
+    fun corruptCachedBodyCannotBeReusedAsACompleteToolPair() = runBlocking {
+        val repo = ChatRepository(dao, db.goalDao(), filesDir = tmp.root, db = db)
+        val result = largeResultRow()
+        val staged = repo.storeBody(result.partsJson, requireOffload = true)
+        assertEquals(Digest.sha256Hex(result.partsJson.toByteArray()), staged.ref)
+        RandomAccessFile(File(tmp.root, "bodies/${staged.ref}"), "rw").use { blob ->
+            blob.seek(blob.length() - 1)
+            blob.write(0)
+        }
+        val failure = runCatching { repo.appendTurnRows(sid, listOf(assistantRow(), result)) }.exceptionOrNull()
+        assertTrue(failure?.message.orEmpty().contains("Unable to verify oversized message body"))
+        assertEquals(0, dao.messageCountForSession(sid))
+    }
+
+    @Test
+    fun validOffloadedResultIsRecoverableInFullAfterAtomicCommit() = runBlocking {
+        val repo = ChatRepository(dao, db.goalDao(), filesDir = tmp.root, db = db)
+        val pair = listOf(assistantRow(), largeResultRow())
+        val saved = repo.appendTurnRows(sid, pair)
+        assertTrue(saved.last().bodyRef != null)
+        val recovered = repo.loadRequestHistory(sid, 2).messages
+        assertEquals(saved.map { it.id }, recovered.map { it.id })
+        assertEquals(pair.map { it.partsJson }, recovered.map { it.partsJson })
     }
 
     @Test

@@ -5,8 +5,13 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.openminis.app.agent.InterruptedTailDetector
+import com.openminis.app.agent.InterruptedTailShape
 import com.openminis.app.data.CompactAssets
 import com.openminis.app.data.CompactSliceBoundaries
+import com.openminis.app.data.LEGACY_ORPHAN_STOP_NOTE
+import com.openminis.app.data.USER_STOP_NOTE
+import com.openminis.app.data.isStoredUserStopNote
 import com.openminis.app.data.body.ResourceLimits
 import com.openminis.app.data.db.AppDatabase
 import com.openminis.app.data.db.AppMigrations
@@ -17,11 +22,16 @@ import com.openminis.app.data.db.PersistedMessageStatus
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.MediaRef
 import com.openminis.app.ui.chat.ChatCompactAssets
+import com.openminis.app.ui.chat.ChatViewModel
 import com.openminis.app.ui.chat.buildCompactSummaryEnvelope
 import com.openminis.app.ui.chat.buildCompactSummaryInput
 import com.openminis.app.ui.chat.buildDetachedCompactHistory
 import com.openminis.app.ui.chat.buildMediaRefPartJson
 import com.openminis.app.ui.chat.decodeCompactMessage
+import com.openminis.app.ui.chat.mapStoredLLMMessage
+import com.openminis.app.ui.chat.persistUserStop
+import com.openminis.app.ui.chat.projectLegacyOrphanedStops
+import com.openminis.app.ui.chat.repairToolPairing
 import java.io.File
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
@@ -72,6 +82,14 @@ class CompactPrefixPersistenceTest {
     private fun toolResult(id: String): String = JSONArray().put(JSONObject().put("type", "toolResult")
         .put("value", JSONObject().put("toolUseId", id).put("name", "file_read")
             .put("success", true).put("output", "contents"))).toString()
+
+    private fun cancelledValue(id: String, name: String = "browser_use", output: String = ChatViewModel.CANCELLED_MARKER) =
+        JSONObject().put("toolUseId", id).put("name", name).put("success", false).put("output", output)
+            .put("snapshot", JSONObject().put("type", "text").put("text", output))
+
+    private fun resultParts(vararg values: JSONObject): String = JSONArray().apply {
+        values.forEach { put(JSONObject().put("type", "toolResult").put("value", it)) }
+    }.toString()
 
     private suspend fun load(throughId: String? = null, allowTerminatedTail: Boolean = true) =
         repo.loadCompactSource(sid, throughId, allowTerminatedTail) { row, raw ->
@@ -135,6 +153,20 @@ class CompactPrefixPersistenceTest {
         dao.deleteCompactMarker(second.id)
         assertEquals(first, dao.latestCompactMarker(sid))
         assertEquals(listOf("/root/old"), CompactAssets.decode(dao.latestCompactMarker(sid)?.assetsJson).reads)
+    }
+
+    @Test
+    fun committedSummaryAndNewChunkUseTheSameMaskedText() = runBlocking {
+        row(0, parts = text("local test transcript"))
+        row(1, parts = text("unsummarized suffix"))
+        val dummy = "sk-local-fixture-123456"
+        val marker = repo.commitCompactPrefix(
+            load(), 1, "Summary mentioned $dummy", { _, summary -> summary }, ChatCompactAssets::merge,
+        )
+        assertEquals("Summary mentioned [redacted]", marker.summary)
+        assertEquals(marker.summary, marker.summaryChunks)
+        assertEquals(marker, dao.latestCompactMarker(sid))
+        assertEquals(listOf("m1"), load().messages.map { it.dbMessageId })
     }
 
     @Test
@@ -239,6 +271,154 @@ class CompactPrefixPersistenceTest {
     }
 
     @Test
+    fun userStopWithoutCommittedToolRoundReopensAndCompactsAsText() = runBlocking {
+        row(0, parts = text("Read the test file"))
+        val saved = repo.persistUserStop(sid, "I started to respond.")
+        val reloadedRows = repo.loadRequestHistory(sid, 10).messages
+        val reloaded = reloadedRows.map { mapStoredLLMMessage(it, mediaFile = { name -> File(tmp.root, name) }) }
+        assertEquals(listOf("user", "assistant", "user"), reloadedRows.map { it.role })
+        assertEquals(saved, reloaded.drop(1))
+        assertEquals(PersistedMessageStatus.INTERRUPTED_INFO, reloadedRows[1].errorInfo)
+        assertEquals(USER_STOP_NOTE, reloaded.last().content)
+        assertTrue(reloaded.last().isHostGenerated)
+        assertTrue(isStoredUserStopNote(JSONArray(reloadedRows.last().partsJson)))
+        assertEquals(InterruptedTailShape.CONTINUE_REMINDER, InterruptedTailDetector.classify(reloaded.last()))
+        assertTrue(sid in repo.interruptedSessionIds())
+        assertTrue(reloaded.flatMap { it.contentParts }.all { it is AgentContentPart.Text })
+        assertEquals(reloaded, repairToolPairing(reloaded).history)
+
+        val source = load()
+        assertEquals(3, source.closedCount())
+        assertTrue(buildCompactSummaryInput(source.messages, null).messages.single().content.contains("user stopped"))
+        val marker = commit(source, source.closedCount(), "The user stopped this response.")
+        assertEquals(saved.last().dbMessageId, marker.lastCompactedMessageId)
+        assertNull(marker.assetsJson)
+        assertFalse(repo.hasUncoveredCompactPrefix(sid, null))
+    }
+
+    @Test
+    fun stopLosingOwnershipBeforeTheRoomWriteDoesNotAppendEitherRow() = runBlocking {
+        row(0, parts = text("Existing user turn"))
+        val originalSession = dao.getSession(sid)
+        var ownerChecks = 0
+        val saved = repo.persistUserStop(sid, "Partial answer from a stale Stop", ownsWrite = { ++ownerChecks == 1 })
+        assertEquals(emptyList<Any>(), saved)
+        assertEquals(2, ownerChecks)
+        assertEquals(listOf("m0"), repo.loadRequestHistory(sid, 10).messages.map { it.id })
+        assertEquals(originalSession, dao.getSession(sid))
+        assertFalse(sid in repo.interruptedSessionIds())
+    }
+
+    @Test
+    fun toolOnlyStopKeepsSettledPairAndDoesNotDuplicateAssistantText() = runBlocking {
+        row(0, parts = text("Read the test file"))
+        row(1, "assistant", toolUse("already-read", "/root/already-read"))
+        row(2, parts = toolResult("already-read"))
+
+        val saved = repo.persistUserStop(sid, "", capturedAssistantDbIds = listOf("m1", "m2"))
+        assertEquals(USER_STOP_NOTE, saved.single().content)
+        val reloaded = repo.loadRequestHistory(sid, 10).messages
+        assertEquals(4, reloaded.size)
+        assertEquals(PersistedMessageStatus.INTERRUPTED_INFO, reloaded[1].errorInfo)
+        assertTrue(sid in repo.interruptedSessionIds())
+        val source = load()
+        assertFalse(CompactSliceBoundaries(source.messages, protectPending = true).isClosed(2))
+        assertEquals(4, source.closedCount())
+        val marker = commit(source, source.closedCount(), "Read one file, then the user stopped the response.")
+        assertEquals(listOf("/root/already-read"), CompactAssets.decode(marker.assetsJson).reads)
+    }
+
+    @Test
+    fun legacyStopAfterOldMarkerCanBeSummarizedAndSentWithoutToolEvidence() = runBlocking {
+        row(0, "assistant", toolUse("call", "/root/no-read-evidence"))
+        val legacy = cancelledValue("other", output = "[cancelled by user]").apply { remove("snapshot") }
+        val raw = resultParts(cancelledValue("call", "file_read"), legacy)
+        row(1, parts = raw)
+        // Existing legacy marker predates the new pairing guard and bisects this round.
+        dao.insertCompactMarker(CompactMarkerEntity("legacy-stop", sid, "old summary", 1, 1, 11, firstKeptMessageId = "m1"))
+        assertTrue(repo.hasUncoveredCompactPrefix(sid, null))
+        val source = load(allowTerminatedTail = false)
+        assertEquals(listOf("m1"), source.messages.map { it.dbMessageId })
+        assertEquals(listOf(AgentContentPart.Text(LEGACY_ORPHAN_STOP_NOTE), AgentContentPart.Text(LEGACY_ORPHAN_STOP_NOTE)),
+            source.messages.single().contentParts)
+        assertEquals(1, source.closedCount())
+        val summaryInput = buildCompactSummaryInput(source.messages, source.previousSummary).messages.single().content
+        assertTrue(summaryInput.contains("user cancelled an operation"))
+        assertFalse(summaryInput.contains("[result "))
+        assertFalse(summaryInput.contains("/root/no-read-evidence"))
+
+        val rows = repo.loadRequestHistory(sid, 10).messages
+        val history = rows.map { mapStoredLLMMessage(it, mediaFile = { name -> File(tmp.root, name) }) }
+        val full = projectLegacyOrphanedStops(history)
+        assertTrue(full.last().contentParts.first() is AgentContentPart.ToolResult)
+        // Slice the original full history as the legacy marker does, before pairing repair.
+        val wire = repairToolPairing(projectLegacyOrphanedStops(history.drop(1)))
+        assertFalse(wire.changed)
+        assertEquals("m1", wire.history.single().dbMessageId)
+        assertTrue(wire.history.single().isHostGenerated)
+        assertEquals(source.messages.single().contentParts, wire.history.single().contentParts)
+        val marker = commit(source, 1, "The user cancelled; no tool outcome established.")
+        assertEquals("m1", marker.lastCompactedMessageId)
+        assertNull(marker.assetsJson)
+        assertEquals(raw, dao.loadRawPartsJson("m1"))
+        assertFalse(repo.hasUncoveredCompactPrefix(sid, null))
+    }
+
+    @Test
+    fun legacyStopWithARealPairStillRequiresBothHalvesAndDoesNotConsumeLaterReuse() = runBlocking {
+        row(0, "assistant", toolUse("call|fc_one", "/root/cancelled"))
+        row(1, parts = resultParts(cancelledValue("call", "file_read"), cancelledValue("second", "file_read")))
+        row(2, "assistant", toolUse("second", "/root/reused"))
+        val source = load(allowTerminatedTail = false)
+        assertEquals(2, source.closedCount())
+        assertFalse(CompactSliceBoundaries(source.messages, protectPending = true).isClosed(1))
+        assertTrue(source.messages[1].contentParts[0] is AgentContentPart.ToolResult)
+        assertEquals(AgentContentPart.Text(LEGACY_ORPHAN_STOP_NOTE), source.messages[1].contentParts[1])
+        val prompt = buildCompactSummaryInput(source.messages.take(2), null).messages.single().content
+        assertTrue(prompt.contains("user cancelled; outcome unknown"))
+        assertTrue(runCatching { commit(source, 1, "one half") }.exceptionOrNull() is IllegalArgumentException)
+        assertNull(commit(source, 2, "One cancelled call; a separate stop has no known outcome.").assetsJson)
+        assertEquals(0, load(allowTerminatedTail = false).closedCount())
+
+        val wire = projectLegacyOrphanedStops(repo.loadRequestHistory(sid, 10).messages.map {
+            mapStoredLLMMessage(it, mediaFile = { name -> File(tmp.root, name) })
+        })
+        assertTrue(wire[1].contentParts[0] is AgentContentPart.ToolResult)
+        assertEquals(AgentContentPart.Text(LEGACY_ORPHAN_STOP_NOTE), wire[1].contentParts[1])
+        assertFalse(repairToolPairing(wire).changed)
+    }
+
+    @Test
+    fun nonStopOrphanResultsStillBlockCoverageAndNeverBecomeExecutionEvidence() = runBlocking {
+        row(0, parts = text("Earlier user turn"))
+        val variants = listOf(
+            toolResult("ordinary"),
+            resultParts(cancelledValue("success").put("success", true)),
+            resultParts(cancelledValue("lookalike", "file_read", ChatViewModel.CANCELLED_MARKER + " extra output")),
+            resultParts(cancelledValue("untyped").put("success", "false")),
+            resultParts(cancelledValue("proof").put("receiptProof", "not-a-stop-proof")),
+            resultParts(cancelledValue("snapshot").put("snapshot", JSONObject().put("type", "text").put("text", "other"))),
+            resultParts(cancelledValue("mixed"), cancelledValue("unclassified", "unknown_tool", "error")),
+        )
+        for (raw in variants) {
+            row(1, parts = raw)
+            row(2, parts = text("Later user turn"))
+            val source = load()
+            assertEquals(1, source.closedCount())
+            assertTrue(source.messages[1].contentParts.all { it is AgentContentPart.ToolResult })
+            val wire = projectLegacyOrphanedStops(repo.loadRequestHistory(sid, 10).messages.map {
+                mapStoredLLMMessage(it, mediaFile = { name -> File(tmp.root, name) })
+            })
+            assertTrue(repairToolPairing(wire).history.flatMap { it.contentParts }.all { it is AgentContentPart.Text })
+            assertFalse(repairToolPairing(wire).history.any { it.content == LEGACY_ORPHAN_STOP_NOTE })
+            assertTrue(runCatching { commit(source, source.messages.size, "false coverage") }.exceptionOrNull() is IllegalArgumentException)
+            assertNull(dao.latestCompactMarker(sid))
+            dao.deleteMessageById("m1")
+            dao.deleteMessageById("m2")
+        }
+    }
+
+    @Test
     fun historicalOrphanAdvancesAtExplicitBoundWithoutCreatingEvidenceOrChangingRows() = runBlocking {
         val original = toolUse("old", "/root/never-confirmed")
         row(0, "assistant", original)
@@ -340,6 +520,10 @@ class CompactPrefixPersistenceTest {
         val source = load()
         assertEquals("old summary", source.previousSummary)
         assertEquals(listOf("m2", "m3"), source.messages.map { it.dbMessageId })
+        val dispatch = repo.requestCompactState(sid, "m2")
+        assertFalse(dispatch.hasCoverageGap)
+        assertEquals(legacy.toView(), dispatch.marker)
+        assertTrue(repo.requestCompactState(sid, "m3").hasCoverageGap)
         val invalid = legacy.copy(id = "invalid", version = 2, createdAt = 12,
             firstKeptMessageId = null, lastCompactedMessageId = "missing")
         dao.insertCompactMarker(invalid)

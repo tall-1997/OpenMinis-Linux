@@ -1,12 +1,10 @@
 package com.openminis.app.ui.chat
 
 import android.util.Log
-import androidx.lifecycle.viewModelScope
 import com.openminis.app.R
 import com.openminis.app.data.ContextUsageAttempt
 import com.openminis.app.data.GroupRoutingState
 import com.openminis.app.data.ToolLimitPrefs
-import com.openminis.app.data.captureContextUsageAttempt
 import com.openminis.app.data.reportedRequestInputTokens
 import com.openminis.app.data.settleContextUsageAttempt
 import com.openminis.app.data.model.AgentContentPart
@@ -20,6 +18,7 @@ import com.openminis.app.data.model.ContextUsageAnchor
 import com.openminis.app.data.model.ModelAttributionSnapshot
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.provider.LLMProvider
+import com.openminis.app.provider.OutboundPrivacyChanged
 import com.openminis.app.provider.countsAsFirstTokenProgress
 import com.openminis.app.provider.streamStallWatchdog
 import com.openminis.app.tools.SubAgentKind
@@ -54,29 +53,20 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     goalExecutionRun: Boolean = false,
     /** [T-android-instant-thinking] send 路径已预插占位气泡，复用其 id。 */
     overrideAssistantId: String? = null,
+    journal: ChatRunJournal,
+    loopResumeEpoch: Long,
+    generationRunId: String,
+    uiBatcher: UiUpdateBatcher,
 ) {
-    // Room is the transcript authority: rebuild right before the first request so UI paging,
-    // cold-open tail limits and the resident hot-cache cannot hide older user instructions;
-    // restores raw BodyStore bodies (the current user row is already persisted by sendMessage).
-    withContext(Dispatchers.IO) {
-        rebuildAgentHistoryFromDatabase(activeSessionId)
-    }
-    // [T-android-resume-banner-race] Snapshot the resume epoch at run start: every `_canResume = true`
-    // the tail emits must land while this snapshot is current — a newer send bumps the epoch, so a
-    // tail outliving its replacement drops the raise instead of re-showing the resume banner.
-    val loopResumeEpoch = snapshotResumeEpoch()
+    val loopSessionId = journal.sessionId
+    val activeRun = com.openminis.app.service.ActiveRunContext.current()
+    fun ownsLoop() = ownsTranscript(loopSessionId, loopResumeEpoch, activeRun)
+    if (!ownsLoop()) return
     // [T-android-model-switch-midrun-adopt] Epoch this run last acted on (var:
     // resolveModelSwitch reassigns it on mid-run adoption, so the fallback writeback below
     // may still persist the ADOPTED model).
     var loopModelEpoch = snapshotModelSelectionEpoch()
     AppLogger.info(ChatViewModel.TAG_STREAM, "runAgentLoop ENTER provider=${provider.javaClass.simpleName} historySize=${agentHistory.size}")
-    // [T-generation-run] 每轮生成落账：崩溃后可定位半截流归属哪个会话/模型。成功时 succeeded()；
-    // 失败路径不落 FINISH，留 RUNNING 由 GenerationRunLifecycle.closeOpen()（runAgentLoop
-    // 包裹层）或下次启动扫描收尾。
-    val runAnchor = agentHistory.lastOrNull { it.dbMessageId != null }?.dbMessageId.orEmpty()
-    val generationRunId = com.openminis.app.agent.GenerationRunLifecycle.start(
-        context, activeSessionId, provider.model.displayName, runAnchor,
-    )
     // [T-android-mem-probe-trust] Log the send-path context shape once per run. Extracted to
     // ChatViewModelCtxShape.kt (architecture ceiling; the counting pass is pure and JVM-tested
     // there). [T-thinking-dual-ledger] The line carries the requested thinking tier; the
@@ -97,8 +87,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     var accumulatedText = ""
     var mayBypassInitialCompaction = skipInitialCompaction
     var receiptUserTurnId = agentHistory.lastOrNull(::receiptUserRow)?.dbMessageId
-    val activeRun = com.openminis.app.service.ActiveRunContext.current()
-    activeRun?.associateSession(activeSessionId)
+    activeRun?.associateSession(loopSessionId)
     activeRun?.attachAssistantMessage(assistantId)
     // T94 fix 2: throttle text-delta UI updates to ~20fps (50ms).
     var lastUiUpdateMs = 0L
@@ -127,7 +116,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // Accumulate tool inputs across all turns (so persist includes all, not just current turn)
     val allToolInputs = mutableMapOf<String, String>()
     val goalManager = com.openminis.app.goal.GoalManager(chatRepository)
-    val goalSessionId = activeSessionId
+    val goalSessionId = loopSessionId
     var goalMountedForCurrentRequest = false
     var goalContinuations = 0
     // [T-subagent-background] Bounded nudges for uncollected detached waves.
@@ -135,9 +124,6 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // [T-plan-close-nudge] Same bounded shape, for an unreconciled plan board.
     var planCloseNudges = 0
     var goalRunRequested = goalExecutionRun
-    // [T-perf-ui-batch] Non-text mutations batch through a 200ms window on Dispatchers.Default.
-    val uiBatcher = UiUpdateBatcher(viewModelScope, ::updateAssistantMessage)
-    uiBatcher.start()
     // [T-android-stream-drop-autocontinue] Per-run budget of silent
     // auto-continuations after a relay-side stream cut (see the
     // turnFinishReason == null branch below).
@@ -180,6 +166,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // end. Set false by every break path that ISN'T "past MAX_AGENT_TURNS" — without
     // it the post-loop tail slapped a fake turn-limit error everywhere.
     var loopExitedNormally = false
+    var completedReply = false
     // [T-android-auto-compact-inloop] In-loop guard compactions in THIS runAgentLoop —
     // bounds compact-thrash: once the cap is hit, a still-over-threshold history stops
     // the turn. Mirrors iOS maxInLoopCompactions.
@@ -219,6 +206,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         receiptUserTurnId = agentHistory.lastOrNull(::receiptUserRow)?.dbMessageId
         mayBypassInitialCompaction = false
         assistantId = newAssistantId
+        activeRun?.attachAssistantMessage(newAssistantId)
         accumulatedText = ""
         allToolBlocks.clear()
         allToolInputs.clear()
@@ -230,6 +218,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     var activeSystemPrompt = systemPrompt
     agentTurns@ for (turn in 0 until maxTurns) {
         currentCoroutineContext().ensureActive()
+        if (!ownsLoop()) return
         // Mark where this turn's blocks start in allToolBlocks so we persist only the NEW
         // parts from this turn. Matches iOS's per-turn RawMessage persistence.
         var turnStartedAtMs = System.currentTimeMillis()
@@ -359,8 +348,11 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             dispatched = null
             mayBypassInitialCompaction = false
             val freshAssistantId = "assistant_${System.currentTimeMillis()}_$turn"
+            uiBatcher.seal(assistantId)
+            if (!ownsLoop()) return
             sealCompactedBubbleAndSwap(assistantId, messageTextSnapshot(), allToolBlocks, freshAssistantId, turnThinkingLevel)
             assistantId = freshAssistantId
+            activeRun?.attachAssistantMessage(freshAssistantId)
             accumulatedText = ""
             allToolBlocks.clear()
             // [T-compact-retry-rebase] The seal+swap rewound the list to EMPTY but the
@@ -402,8 +394,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         suspend fun compactForSilentOverflow(details: String): Boolean =
             runOverflowCompaction(details)
         // Keep event handling in its own coroutine state machine.
-        suspend fun consumeStreamChunk(chunk: LLMStreamChunk, streamPhase: StreamPhaseReport) {
-            streamPhase.onChunk(chunk)
+        suspend fun consumeStreamChunk(chunk: LLMStreamChunk) {
             // [T-stream-trace-live] 运行时轨迹录制（日志页开关控制，默认关）。
             com.openminis.app.provider.StreamTraceRecorder.record(chunk)
             when (chunk) {
@@ -762,7 +753,9 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         }
 
         suspend fun dispatchTurn(): Boolean {
+            var privacyRefreshes = 0
             while (!collectDone) {
+                if (!ownsLoop()) return false
                 // [T-android-model-switch-midrun-adopt] See resolveModelSwitch.
                 resolveModelSwitch(loopModelEpoch, currentProvider)?.let { adopted ->
                     currentProvider = adopted.provider
@@ -788,6 +781,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     val requestGoalState = withContext(Dispatchers.IO) {
                         goalManager.get(goalSessionId)
                     }
+                    if (!ownsLoop()) return false
                     val goalMount = com.openminis.app.goal.goalMount(requestGoalState, goalManager::continuationPrompt)
                     goalMountedForCurrentRequest = goalMount.canContinue
                     // [T-p1-instruction-snapshot] Freeze the instruction values this request is built on.
@@ -801,78 +795,59 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                         return false
                     }
                     commitSessionNoticesOnce(goalObjective = requestGoalState?.objective.orEmpty(),
-                        goalPrompt = goalMount.prompt, goalCanContinue = goalMount.canContinue)
-                    drainSteeringIntoRun(assistantId, accumulatedText, allToolBlocks, uiBatcher) {
+                        goalPrompt = goalMount.prompt, goalCanContinue = goalMount.canContinue, expectedSessionId = loopSessionId)
+                    if (!ownsLoop()) return false
+                    val beforeSteering = assistantId
+                    drainSteeringIntoRun(assistantId, accumulatedText, allToolBlocks, uiBatcher, expectedSessionId = loopSessionId) {
                         swapLoopStateToInjectedBubble(it)
                         turnStartBlockIndex = 0
-                        receiptUserTurnId = agentHistory.lastOrNull(::receiptUserRow)?.dbMessageId
-                        mayBypassInitialCompaction = false
                     }
+                    if (assistantId != beforeSteering) activeSystemPrompt = refreshRunPromptForInjectedTurn(activeSystemPrompt, loopSessionId)
+                    if (!ownsLoop()) return false
                     val tools = agentTools
                     declareToolSetDeltaIfChanged(tools)
-                    val history = agentHistorySnapshot()
-                    val thinking = requestThinkingLevel(currentProvider)
-                    val markerNow = _cachedLatestMarker?.id
-                    val projection = projectionCache.reuse(
-                        history, markerNow, stallResumeContext, activeSystemPrompt, agentTools, currentProvider, thinking,
-                    ) ?: run {
-                        // [T-recall-turn-binding] The real attempt is the only prefetch
-                        // trigger: estimates read the completed cache but never launch IO.
-                        prefetchSemanticRecallForRequest(history)
-                        projectChatRequest(
-                            currentProvider, activeSystemPrompt, history, tools, thinking,
-                            stallNote = stallResumeContext,
-                            // [T-receipt-notice-session] Session-level: a pending receipt
-                            // from ANY prior user turn must warn this request, not only
-                            // ones anchored to the current turn id.
-                            receiptNotice = pendingToolReceiptNotice(goalSessionId),
-                            uncoveredBeforeResident = hasRequestHistoryGap(history),
-                            persistImageSpillover = true,
-                        ).also {
-                            projectionCache.store(
-                                it, history, markerNow, stallResumeContext,
-                                activeSystemPrompt, agentTools, currentProvider, thinking,
-                            )
-                        }
-                    }
+                    if (!ownsLoop()) return false
+                    val projection = buildDispatchProjection(
+                        projectionCache, loopSessionId, currentProvider, activeSystemPrompt, tools, stallResumeContext,
+                    ) ?: return false
                     when (inLoopContextCheck(projection, inLoopCompactions, mayBypassInitialCompaction)) {
                         ChatViewModel.InLoopContextAction.PROCEED -> Unit
                         ChatViewModel.InLoopContextAction.COMPACTED -> {
+                            if (!ownsLoop()) return false
                             inLoopCompactions++
                             rebaseAfterCompaction()
                             continue
                         }
                         ChatViewModel.InLoopContextAction.STOP -> {
+                            if (!ownsLoop()) return false
                             stopAtContextLimit(assistantId, accumulatedText, allToolBlocks, loopResumeEpoch)
                             return false
                         }
                     }
-                    mayBypassInitialCompaction = false
                     lastUsage = null
                     turnFinishReason = null
                     turnRefusalCategory = null
                     turnRefusalExplanation = null
                     dispatched = projection
                     val request = projection.request
-                    usageAttempt = captureContextUsageAttempt(
-                        request, projection.model, projection.markerId, projection.rawTokens,
-                        fingerprintOverride = projection.anchorFingerprint,
-                        requestLocalTokens = projection.requestLocalTokens,
-                    )
+                    usageAttempt = projection.usageAttempt
+                    journal.recordRequestJournal(turn, projection)
+                    if (!ownsLoop()) return false
                     publishRequestProjection(projection)
                     val firstEventTimeoutMs = GroupRoutingState.resolveFirstEventTimeoutMs(
                         providerRepository, _selectedGroupId.value, request.thinkingLevel.isEnabled,
                     )
                     val streamIdleTimeoutMs = firstEventTimeoutMs * 2
                     streamPhase.startAttempt()
-                    currentProvider.streamMessage(
+                    val stream = currentProvider.streamMessage(
                         request.messages, request.systemPrompt,
                         dynamicMaxTokens(currentProvider, projection.estimate.tokens, projection.window),
                         temperature = samplingTemperature(requestEntryId(projection.model)),
                         tools = request.tools,
                         thinkingLevel = request.thinkingLevel,
                         systemStablePrefixLen = projection.prompt?.stablePrefixLen ?: -1,
-                        extraHeaders = providerExtraHeaders(projection.model.providerInstanceId),
+                        extraHeaders = providerExtraHeaders(projection.model.providerInstanceId, loopSessionId),
+                        expectedOutboundMask = projection.outboundMask,
                     ).streamStallWatchdog(
                         firstTimeoutMs = firstEventTimeoutMs,
                         idleTimeoutMs = streamIdleTimeoutMs,
@@ -880,9 +855,15 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                         firstContentTimeoutMs = firstEventTimeoutMs,
                         firstContentReason = "connected (stream established) but no first token " +
                             "within ${firstEventTimeoutMs / 1000}s — retrying",
-                    ).collect { chunk ->
-                        consumeStreamChunk(chunk, streamPhase)
+                    )
+                    mayBypassInitialCompaction = false
+                    stream.collect { chunk ->
+                        if (!ownsLoop()) throw CancellationException("Run no longer owns the transcript")
+                        if (streamPhase.onChunk(chunk)) projection.markModelProgress(loopSessionId)
+                        consumeStreamChunk(chunk)
                     }
+                    uiBatcher.flush()
+                    if (!ownsLoop()) return false
                     // [T-stall-echo-strip] Stream finished: resolve any seed-aligned bytes the
                     // stripper still holds (and its final echo determination) before the finalize
                     // snapshot below — otherwise a short resumed reply would never surface.
@@ -938,8 +919,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     lastFileToolInputMs = 0L
                     lastOtherToolInputMs = 0L
                     collectDone = true
-                    streamPhase.logSuccess(turn, activeSessionId, currentProvider.model.id)
-                    com.openminis.app.agent.GenerationRunLifecycle.succeeded(context, generationRunId)
+                    streamPhase.logSuccess(turn, loopSessionId, currentProvider.model.id)
                     // Distinguish an empty truncation (retry) from a delivered natural stop (do not retry).
                     val win = projection.window
                     val measuredInput = reportedRequestInputTokens(
@@ -976,15 +956,22 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                         _autoRetryCountdown.value = 0
                     }
                     // [T-first-event-watchdog] The operator cancels itself; no cleanup needed.
+                } catch (e: OutboundPrivacyChanged) {
+                    if (privacyRefreshes++ > 0) throw e
+                    projectionCache.clear()
                 } catch (e: QueuedPromptInterrupt) {
                     // [T-android-queued-message-interrupt-thinking] Deliberate cut,
                     // NOT a provider failure — must precede the generic catch.
-                    settleInterruptedThinkingTurn(turn, allToolBlocks, generationRunId)
+                    settleInterruptedThinkingTurn(turn, allToolBlocks)
                     stallResumeContext = null
                     queuedPromptInterrupted = true
                     break
                 } catch (e: Exception) {
-                    if (e is CancellationException && e.cause == null) { CancellationDiagnostic.log(provider.model.displayName, activeSessionId, e, _isStreaming.value); throw e }  // [T-cancel-diag] record timeline, real job cancellation
+                    currentCoroutineContext().ensureActive()
+                    if (!ownsLoop()) return false
+                    if (e is CancellationException && e.cause == null) { CancellationDiagnostic.log(provider.model.displayName, loopSessionId, e, _isStreaming.value); throw e }
+                    uiBatcher.flush()
+                    if (!ownsLoop()) return false
                     val actual = CanceledIoClassification.asTransientStall(unwrapFlowException(e), turnTextSb.isNotEmpty()) ?: unwrapFlowException(e)
                     streamPhase.logFailure(turn, actual)
                     val isRateLimit = actual is com.openminis.app.data.model.LLMError.RateLimited
@@ -1211,6 +1198,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             loopExitedNormally = true
             break
         }
+        if (!ownsLoop()) return
 
         // [T-android-queued-message-interrupt-thinking] The thinking-phase
         // cut landed here: skip normal bookkeeping and inject as a standalone
@@ -1218,10 +1206,11 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         // row and render below the prompt it preceded on every reload.
         if (queuedPromptInterrupted) {
             if (turn == 0) generateSessionTitleIfNeeded()
-            val handled = drainQueueIntoStandaloneTurn(assistantId, accumulatedText, allToolBlocks, uiBatcher)
+            val handled = drainQueueIntoStandaloneTurn(assistantId, accumulatedText, allToolBlocks, uiBatcher, expectedSessionId = loopSessionId)
+            if (!ownsLoop()) return
             if (handled != null) {
                 swapLoopStateToInjectedBubble(handled)
-                activeSystemPrompt = refreshRunPromptForInjectedTurn(activeSystemPrompt)
+                activeSystemPrompt = refreshRunPromptForInjectedTurn(activeSystemPrompt, loopSessionId)
                 continue
             }
             // null = queue drained concurrently / no content — the normal
@@ -1237,17 +1226,6 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         accumulatedText += turnText
         activeRun?.updateAssistantText(accumulatedText)
 
-        // Build assistant contentParts for history
-        val assistantParts = mutableListOf<AgentContentPart>()
-        if (turnText.isNotEmpty()) {
-            assistantParts.add(AgentContentPart.Text(turnText))
-        }
-        for ((id, name, args) in toolCalls) {
-            // [T-android-gemini3-thoughtsig / #179] Attach the captured Gemini
-            // 3.x signature so it round-trips through persistence and replay.
-            assistantParts.add(AgentContentPart.ToolUse(id, name, args, thoughtSignature = toolCallSignatures[id]))
-        }
-
         // Map toolUseId -> input JSON string for persistence (accumulated across turns)
         toolCalls.forEach { (id, _, args) -> allToolInputs[id] = args.toString() }
         val toolInputMap = allToolInputs
@@ -1259,10 +1237,10 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         val turnReasoningContent: String? = turnReasoningBlob
             ?: turnThinking.toString().takeIf { it.isNotEmpty() } // fallback: no blob arrived
 
-        appendBoundedHistory(LLMMessage(
+        if (toolCalls.isEmpty()) appendBoundedHistory(LLMMessage(
             role = LLMMessage.Role.ASSISTANT,
             content = turnText,
-            contentParts = assistantParts,
+            contentParts = if (turnText.isEmpty()) emptyList() else listOf(AgentContentPart.Text(turnText)),
             reasoningContent = turnReasoningContent,
         ))
         // [port-upstream-1.16][T-b13-empty-fallback] A turn with content ends
@@ -1664,6 +1642,8 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             // P2-3: exiting with pending steering — re-route it onto the
             // post-run prompt dispatch (no-op when the queue is empty).
             drainToPromptQueueFallback()
+            completedReply = !isEmptyTurn && !emptyTurnFallbackUsed &&
+                eligibleContextReceipt(turnFinishReason, hasVisibleContent, hasTools = false)
             loopExitedNormally = true
             break
         }
@@ -1681,7 +1661,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         // [T-truncated-tool-call-reject] finish_reason=length/max_tokens 由 ToolCallPreflight 统一拒绝。
         val turnCtx = ToolTurnContext(
             ledger = toolExecutionLedger,
-            activeSessionId = activeSessionId,
+            activeSessionId = loopSessionId,
             assistantId = assistantId,
             accumulatedText = accumulatedText,
             turn = turn,
@@ -1697,12 +1677,14 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             // projected request, never an attempt counter or a live UI bubble.
             receiptAfterResultId = receiptAfterResultRowId(dispatched?.request?.messages.orEmpty(), receiptUserTurnId),
         )
+        validateCompletedToolCalls(toolCalls)
         val plan = preflightToolTurn(turnCtx, toolCalls)
-        // [T-repaired-args-snapshot] Every call whose arguments were successfully
-        // parsed publishes its repaired snapshot here — including calls later
-        // refused by guard/duplicate checks — so the persisted transcript and the
-        // token estimate see the same bytes the executor ran.
-        plan.repairedArgsById.forEach { (id, args) -> toolInputMap[id] = args }
+        toolInputMap.putAll(plan.repairedArgsById)
+        if (!ownsLoop()) return
+        val turnParts = completedToolTurnParts(
+            buildTurnParts(allToolBlocks, turnStartBlockIndex, toolInputMap),
+            toolCalls, toolInputMap, toolCallSignatures, turnText,
+        )
         val execution = executePlannedToolTurn(turnCtx, plan)
 
         // ---- Phase 3: assemble resultParts in emission order ----
@@ -1712,46 +1694,26 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         ToolRepeatTracker.applyHint(repeatTracker, toolCalls, resultParts)
 
         currentCoroutineContext().ensureActive()
-        if (activeRun?.isStopped == true) { loopExitedNormally = true; break }
-        // Update UI with tool statuses. Mark as awaiting the next model
-        // response so "Minis is thinking" shows during the network gap
-        // between tool results being sent and the next turn's first chunk.
-        // Mirrors iOS isAwaitingModelResponse.
-        withContext(Dispatchers.Main) {
-            updateAssistantMessage(
-                assistantId, accumulatedText, true, allToolBlocks,
-                isAwaitingModelResponse = true,
-            )
-        }
-
-        // [T-atomic-tool-turn] 持久化本轮 assistant+tools 为一笔事务：两行要么
-        // 都在，要么都不在，中间崩溃不会留下只有 tool_use 的半轮卡住压缩配对
-        // 与回执对账。许可只取一次（不可嵌套），UI/历史回填在事务成功后进行。
-        val turnParts = buildTurnParts(allToolBlocks, turnStartBlockIndex, toolInputMap)
+        if (!ownsLoop()) return
+        // [T-atomic-tool-turn] Only committed calls and results enter request history.
         val (assistantDbId, toolResultDbId) = persistToolTurnPairForRun(
             checkNotNull(activeRun) { "Agent loop has no persistence owner" },
             turnParts,
             allToolBlocks.filter { it.kind == "tool_use" }.associateBy { it.id },
-            lastUsage, turnReasoningContent, accumulatedText, agentHistory, resultParts,
+            lastUsage, turnReasoningContent, accumulatedText, resultParts,
             targetSessionId = goalSessionId,
+            expectedEpoch = loopResumeEpoch,
             uiMessageId = assistantId,
             requestedLevel = requestedThinking,
             modelSnapshot = servedModel,
             contextUsageAnchor = contextUsageAnchor,
-        )
-        if (activeRun?.isStopped == true) { loopExitedNormally = true; break }
-        if (assistantDbId != null && toolResultDbId != null) {
-            reconcilePersistedToolTurn(goalSessionId, receiptUserTurnId, assistantDbId, toolResultDbId, turnParts, resultParts)
+        ) ?: return
+        if (!ownsLoop()) return
+        reconcilePersistedToolTurn(goalSessionId, receiptUserTurnId, assistantDbId, toolResultDbId, turnParts, resultParts)
+        withContext(Dispatchers.Main.immediate) {
+            if (ownsLoop()) updateAssistantMessage(assistantId, accumulatedText, true, allToolBlocks, isAwaitingModelResponse = true)
         }
-        if (activeRun?.isStopped == true) { loopExitedNormally = true; break }
-
-        // 工具结果进入历史。
-        appendBoundedHistory(LLMMessage(
-            role = LLMMessage.Role.USER,
-            content = "",
-            contentParts = resultParts,
-            dbMessageId = toolResultDbId,
-        ))
+        if (!ownsLoop()) return
         val turnUsageTokens = (lastUsage?.inputTokens ?: 0).toLong() + (lastUsage?.outputTokens ?: 0).toLong()
         val goalUsageResult = if (goalMountedForCurrentRequest) runCatching {
             goalManager.recordUsage(
@@ -1770,37 +1732,33 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             break
         }
 
-        // [T-no-mid-task-speech] No stall nudge rides the loop: a synthetic USER turn
-        // makes the model stop and answer in prose (what ZCode/DeepSeek-Harness avoid);
-        // repeated calls still get the hint INSIDE the tool result (ToolLoopDetector), never as a turn.
+        // [T-no-mid-task-speech] No stall nudge; repeats get a hint inside the tool result.
 
         if (turn == 0) generateSessionTitleIfNeeded()  // auto-title after first exchange
 
-    // [T-android-queued-message-interrupt-on-toolclose] 工具结果边界上的排队消息会打断运行计划。
-        // starts a standalone turn. See drainQueueIntoStandaloneTurn.
+    // [T-android-queued-message-interrupt-on-toolclose] queue at a tool boundary -> standalone turn.
         if (_promptQueue.value.isNotEmpty()) {
             AppLogger.info(
                 ChatViewModel.TAG_STREAM,
                 "📨[QueueInterrupt] turn=$turn ${_promptQueue.value.size} queued prompt(s) — interrupting after current tool call to start a standalone turn",
             )
-            val handled = drainQueueIntoStandaloneTurn(assistantId, accumulatedText, allToolBlocks, uiBatcher)
+            val handled = drainQueueIntoStandaloneTurn(assistantId, accumulatedText, allToolBlocks, uiBatcher, expectedSessionId = loopSessionId)
+            if (!ownsLoop()) return
             if (handled != null) {
                 swapLoopStateToInjectedBubble(handled)
-                activeSystemPrompt = refreshRunPromptForInjectedTurn(activeSystemPrompt)
+                activeSystemPrompt = refreshRunPromptForInjectedTurn(activeSystemPrompt, loopSessionId)
                 continue
             }
             // null = empty-after-build / drain rejected; fall through to normal next-turn dispatch so the queue doesn't pin the loop.
         }
     }
-    uiBatcher.flush()
-    uiBatcher.stop()
+    if (!ownsLoop()) return
     if (!loopExitedNormally) {
         AppLogger.warning(
             ChatViewModel.TAG_STREAM,
             "runAgentLoop EXIT — hit turn cap=$maxTurns, finalizing as resumable",
         )
         // [T-generation-run] Not a clean finish — close the ledger so the launch scan reserves ABANDONED for a process that actually died.
-        com.openminis.app.agent.GenerationRunLifecycle.failed(context, generationRunId)
         withContext(Dispatchers.Main) {
             finalizeAtTurnLimit(assistantId, accumulatedText, allToolBlocks, loopResumeEpoch)
         }
@@ -1818,11 +1776,12 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     // does NOT fire: there is no complete reply, and user scripts treat OnResponse as
     // "the answer is final" (notify, sync out, downstream automation). Cancellation
     // normally exits the loop first; the isActive guard closes the race where it lands here.
-    if (currentCoroutineContext().isActive) {
+    if (completedReply && currentCoroutineContext().isActive && ownsLoop()) {
+        com.openminis.app.agent.GenerationRunLifecycle.succeeded(context, generationRunId)
         runCatching {
             com.openminis.app.agent.lifecycle.LifecycleHooks.fire(
                 com.openminis.app.agent.lifecycle.LifecycleHooks.LifecycleEvent.RESPONSE,
-                realSessionId.ifEmpty { sessionId },
+                loopSessionId,
                 accumulatedText.takeLast(500),
             )
         }

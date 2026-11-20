@@ -13,10 +13,13 @@ internal suspend fun ChatViewModel.generateCompactSummaryWithSplitting(
     previousSummary: String?,
     attempt: ChatViewModel.CompactAttempt,
     callBudget: Int,
+    sessionWindowTokens: Int? = null,
 ): String = summarizeCompactStage(
     messages = messages,
     previousSummary = previousSummary,
-    tokenBudget = ChatViewModel.compactSegmentTokenBudget(attempt.model.contextWindowTokens),
+    tokenBudget = ChatViewModel.compactSegmentTokenBudget(
+        minOf(attempt.model.contextWindowTokens, sessionWindowTokens ?: Int.MAX_VALUE),
+    ),
     callBudget = callBudget,
 ) { input, depth ->
     val spent = compactCallsIssued.incrementAndGet()

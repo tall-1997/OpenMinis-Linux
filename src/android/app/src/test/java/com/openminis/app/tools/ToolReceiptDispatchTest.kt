@@ -369,6 +369,11 @@ class ToolReceiptDispatchTest {
         )
     }
 
+    @Test fun `session history search and read do not claim durable receipts`() {
+        assertFalse(needsToolReceipt(HistorySearchTool.SEARCH, """{"query":"migration"}"""))
+        assertFalse(needsToolReceipt(HistorySearchTool.READ, """{"message_id":"prior-message","offset":0}"""))
+    }
+
     @Test fun `observational terminal and collect operations remain pollable without exempting mutations`() {
         for (action in listOf("read", "list")) {
             assertTrue(isReceiptPolling("agent_terminal", """{"action":"$action"}"""))

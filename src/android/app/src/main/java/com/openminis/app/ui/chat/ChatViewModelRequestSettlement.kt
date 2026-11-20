@@ -27,7 +27,9 @@ internal suspend fun ChatViewModel.acceptRequestProjection(
     usage: LLMUsage?,
     realUserId: String?,
 ): ContextUsageAnchor? {
-    val request = projection.request
+    // The Codex image route serializes its own instructions and does not carry chat memory.
+    if (!projection.carriesChatContext) return null
+    val request = projection.outboundRequest
     val actual = reportedRequestInputTokens(usage, provider is AnthropicProvider)
     // [T-anchor-route-guard] A parallel provider offload can mutate the cached
     // client between the projection snapshot and settlement. The measured input
@@ -50,7 +52,7 @@ internal suspend fun ChatViewModel.acceptRequestProjection(
     PromptCacheWarmCoordinator.onStreamTurnSucceeded(
         provider, request.messages, request.systemPrompt, request.tools, request.thinkingLevel,
         usage, isBusy = { _isStreaming.value },
-        replayable = projection.prompt?.daily?.let { it.end > it.start } != true && projection.recall == null,
+        replayable = projection.prompt?.daily?.let { it.end > it.start } != true && !projection.hasRequestLocalContext,
     )
     return anchor
 }

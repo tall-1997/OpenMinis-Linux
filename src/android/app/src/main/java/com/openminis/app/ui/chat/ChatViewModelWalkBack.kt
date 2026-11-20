@@ -110,12 +110,17 @@ internal object WalkBack {
         var acceptedPriorIdx: Int? = null
         var acceptedUserTextTurns = 0
         var acceptedMessageCount = 0
-        // Scan only the messages reached by the backward walk, once each.
+        // Accumulate only the messages reached by this backward walk.
         var candidateTokens = 0L
         var i = anchorIdx
         while (i >= 0) {
             val msg = history[i]
-            if (maxEstimatedTokens != null) candidateTokens += estimateMessageTokens(msg)
+            if (maxEstimatedTokens != null) {
+                candidateTokens += estimateMessageTokens(msg)
+                if (candidateTokens > maxEstimatedTokens) {
+                    return WalkBackResult(acceptedPriorIdx, acceptedUserTextTurns, acceptedMessageCount, STOP_TOKEN_BUDGET_WOULD_EXCEED)
+                }
+            }
             if (msg.role != LLMMessage.Role.USER) {
                 i -= 1
                 continue
@@ -135,23 +140,6 @@ internal object WalkBack {
             if (msg.contentParts.any { it is AgentContentPart.ToolResult }) {
                 i -= 1
                 continue
-            }
-            // [T-compact-token-budget-first] Token budget decides BEFORE the
-            // message cap: in an agent-dense session the anchor can sit behind
-            // 100+ tool rounds with zero user-text turns, and letting the
-            // message cap return first made preAnchor permanently empty — the
-            // work memory between the summary and the tail simply vanished
-            // (observed live: 605-message run, 432 rounds dropped by the tail
-            // budget, walkBack returning 0 turns every request). The token
-            // estimate covers the same risk the cap guarded against (a few
-            // huge tool results), with an actual budget instead of a count.
-            if (maxEstimatedTokens != null && candidateTokens > maxEstimatedTokens) {
-                return WalkBackResult(
-                    priorIdx = acceptedPriorIdx,
-                    userTextTurnsFound = acceptedUserTextTurns,
-                    messageCount = acceptedMessageCount,
-                    stopReason = STOP_TOKEN_BUDGET_WOULD_EXCEED,
-                )
             }
             val candidateMessageCount = anchorIdx - i + 1
             if (candidateMessageCount > maxMessages && maxEstimatedTokens == null) {

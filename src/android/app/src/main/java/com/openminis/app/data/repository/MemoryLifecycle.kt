@@ -14,7 +14,7 @@ import java.nio.file.StandardCopyOption.REPLACE_EXISTING
 import java.util.UUID
 
 /** A diary ID is meaningful only within its host scope and source file. */
-internal data class MemoryEntryRef(val directory: File, val source: String, val id: String)
+internal data class MemoryEntryRef(val directory: File, val source: String, val id: String, val digest: String)
 
 /** Half-open UTF-16 range of actual entry content, not its heading or timestamp. */
 internal data class MemoryDeliverySpan(val ref: MemoryEntryRef, val start: Int, val end: Int) {
@@ -130,12 +130,13 @@ internal object MemoryLifecycle {
             return entries.associate { it.entry.ref.id to (it.end - bom) }
         }
 
-        fun active(now: Long): View {
-            if (entries.isEmpty()) return View(text)
+        fun active(now: Long, bodyStart: Int = 0): View {
+            if (entries.isEmpty()) return View(text.substring(bodyStart))
             val bodyRanges = mutableListOf<Pair<IntRange, Managed>>()
             val view = buildString {
-                var from = 0
+                var from = bodyStart
                 for ((block, entry, end) in entries) {
+                    if (block.start < bodyStart) continue
                     append(text, from, block.start)
                     if (entry.state.status(now) == Status.ACTIVE) {
                         // Keep the legacy timestamp in the view, never expose the internal ID as prompt text.
@@ -165,8 +166,6 @@ internal object MemoryLifecycle {
     private val recallGeneration = java.util.concurrent.atomic.AtomicLong()
     fun recallGeneration(): Long = recallGeneration.get()
     fun invalidateRecall() { recallGeneration.incrementAndGet() }
-
-    fun hasMetadata(dir: File): Boolean = runCatching { metadataDirectory(dir.canonicalFile).exists() }.getOrDefault(true)
 
     private fun lockFor(dir: File): Any = locks[(dir.path.hashCode() and Int.MAX_VALUE) % locks.size]
 
@@ -220,29 +219,38 @@ internal object MemoryLifecycle {
         }
     }
 
+    internal fun sourceFiles(dir: File, source: String): MemoryRestoreJournal.PairFiles =
+        if (MemoryDiaryFormat.dateFile.matches(source)) snapshotFiles(dir, source)
+        else MemoryRestoreJournal.PairFiles(child(dir, source)?.takeIf { it.isFile }, null)
+
     fun read(directory: File, source: String): Diary? = try {
         locked(directory) { dir ->
-            val pair = if (MemoryDiaryFormat.dateFile.matches(source)) snapshotFiles(dir, source)
-                else MemoryRestoreJournal.PairFiles(child(dir, source)?.takeIf { it.isFile }, null)
+            val pair = sourceFiles(dir, source)
             val text = pair.diary?.readText() ?: return@locked null
-            val sidecar = pair.metadata ?: return@locked Diary(text)
-            val states = try {
-                readStates(sidecar)
-            } catch (e: Exception) {
-                // Invalid metadata never grants lifecycle authority over Markdown.
-                android.util.Log.w("MemoryLifecycle", "Ignoring unreadable lifecycle metadata for $source: ${e.message}")
-                return@locked Diary(text)
-            }
-            match(dir, source, text, states)
+            projectDiary(dir, source, text, pair.metadata)
         }
     } catch (e: Exception) {
         android.util.Log.w("MemoryLifecycle", "Cannot read diary projection for $source: ${e.message}")
         null
     }
 
+    /** Caller holds the scope lock and has already read the raw Markdown. */
+    internal fun projectDiary(dir: File, source: String, text: String, sidecar: File?): Diary {
+        if (sidecar == null) return Diary(text)
+        val states = try {
+            readStates(sidecar)
+        } catch (e: Exception) {
+            // Invalid metadata never grants lifecycle authority over Markdown.
+            android.util.Log.w("MemoryLifecycle", "Ignoring unreadable lifecycle metadata for $source: ${e.message}")
+            return Diary(text)
+        }
+        return match(dir, source, text, states)
+    }
+
     private fun match(dir: File, source: String, text: String, states: Map<String, State>): Diary {
         if (states.isEmpty()) return Diary(text)
-        val blocks = MemoryDiaryFormat.blocks(text)
+        val bodyStart = MemoryMetadataParser.header(text)?.bodyStart ?: 0
+        val blocks = MemoryDiaryFormat.blocks(text).filter { it.start >= bodyStart }
         val counts = blocks.mapNotNull { it.id }.groupingBy { it }.eachCount()
         return Diary(text, blocks.mapNotNull { block ->
             val id = block.id ?: return@mapNotNull null
@@ -252,7 +260,7 @@ internal object MemoryLifecycle {
             if (end < block.bodyStart + 2 || !text.regionMatches(end - 2, "\n\n", 0, 2)) return@mapNotNull null
             if (Digest.sha256Hex(text.substring(block.start, end)) != state.digest) return@mapNotNull null
             val body = text.substring(block.bodyStart, end - 2)
-            Diary.Match(block, Managed(MemoryEntryRef(dir, source, id), state, body), end)
+            Diary.Match(block, Managed(MemoryEntryRef(dir, source, id, state.digest), state, body), end)
         })
     }
 
@@ -310,11 +318,11 @@ internal object MemoryLifecycle {
         for ((location, entries) in refs.groupBy { it.directory to it.source }) {
             val (dir, source) = location
             try {
-                val ids = entries.mapTo(HashSet()) { it.id }
+                val selected = entries.associateBy { it.id }
                 mutate(dir, source) { matched, states ->
                     var changed = false
                     for ((ref, state) in matched) {
-                        if (ref.id !in ids || receipt in state.receipts || state.status(selectedAt) != Status.ACTIVE ||
+                        if (selected[ref.id]?.digest != ref.digest || receipt in state.receipts || state.status(selectedAt) != Status.ACTIVE ||
                             selectedAt < maxOf(state.createdAt, state.restoredAt ?: state.createdAt)
                         ) continue
                         states[ref.id] = state.copy(

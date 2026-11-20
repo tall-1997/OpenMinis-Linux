@@ -191,21 +191,15 @@ internal class MemoryFragmentBuilder(
      * admitted entry, inside [MemoryDailyGate]).
      */
     internal fun loadRecentDailyRawUncached(now: Long): List<MemoryDailyGate.RawDay> {
-        val raw = mutableListOf<MemoryDailyGate.RawDay>()
-        var dayOffset = 0
         val today = java.time.LocalDate.parse(IsoTime.formatLocalDate(now))
-        while (raw.size < MemoryRepository.MAX_RECENT_FILES &&
-            dayOffset < MemoryRepository.MAX_LOOKBACK_DAYS
-        ) {
-            val dateStr = today.minusDays(dayOffset.toLong()).toString()
-            val file = File(memoryDir, "$dateStr.md")
-            val view = if (file.isFile) MemoryLifecycle.read(memoryDir, file.name)?.active(now) else null
-            if (view != null && view.hasVisibleText()) {
-                raw.add(MemoryDailyGate.RawDay(dateStr, dayOffset, view.text, view.lines()))
-            }
-            dayOffset++
-        }
-        return raw
+        return MemorySources.withScope(memoryDir, now) { sources ->
+            val byName = sources.associateBy { it.name }
+            (0 until MemoryRepository.MAX_LOOKBACK_DAYS).asSequence().mapNotNull { offset ->
+                val date = today.minusDays(offset.toLong()).toString()
+                val view = byName["$date.md"]?.view() ?: return@mapNotNull null
+                MemoryDailyGate.RawDay(date, offset, view.text, view.lines())
+            }.take(MemoryRepository.MAX_RECENT_FILES).toList()
+        }.orEmpty()
     }
 
     /**

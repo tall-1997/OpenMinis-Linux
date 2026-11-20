@@ -311,10 +311,22 @@ object BackupZip {
                             sink.write(buf, 0, n)
                         }
                     }
+                    // Old global memory packages have no mtime inventory. Only the direct
+                    // Markdown member's ZIP time is a valid fallback; blob times are not.
+                    if (entry.name.endsWith(".md") && entry.time != -1L && isMemoryMarkdownEntry(entry.name)) {
+                        BackupDiaryPairs.restoreTime(out, entry.time)
+                    }
                     onProgress?.invoke(entry.name)
                 }
                 zis.closeEntry()
             }
+        }
+    }
+
+    private fun isMemoryMarkdownEntry(name: String): Boolean {
+        val parts = name.replace('\\', '/').split('/').filter { it.isNotEmpty() }
+        return parts.size in 3..4 && parts.takeLast(3).let {
+            it[0] == "data" && it[1] == "memory" && BackupDiaryPairs.isMemoryMarkdown(it[2])
         }
     }
 

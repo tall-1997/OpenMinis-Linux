@@ -10,7 +10,9 @@ import com.openminis.app.data.model.ModelAttributionSnapshot
 import com.openminis.app.data.model.ProviderCredential
 import com.openminis.app.data.model.ProviderInstance
 import com.openminis.app.data.model.ProviderType
+import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.provider.ProviderFactory
+import com.openminis.app.provider.projectOutboundRequest
 import com.openminis.app.provider.api.ChatRequest
 import com.openminis.app.provider.openai.OpenAIProvider
 import com.openminis.app.ui.chat.buildTurnTokenUsageJson
@@ -78,6 +80,38 @@ class ContextUsageAnchorsTest {
         assertEquals((raw * 1.9).toInt(), estimateProjectedContext(successful, model, null).tokens)
         assertEquals(raw, estimateProjectedContext(successful, model.copy(providerInstanceId = "other"), null).tokens)
         assertNull(settleContextUsageAttempt(captureContextUsageAttempt(successful, model.copy(providerInstanceId = null), null), LLMUsage(1, 0, latestContextTokens = 1)))
+    }
+
+    @Test
+    fun `transient reminders calibrate the whole sample but cannot prove stable input`() {
+        val stable = request(user("Durable input ".repeat(100)))
+        val local = stable.copy(messages = stable.messages + user("Temporary recovery reminder ".repeat(20)))
+        val raw = ContextTokenMeter.rawRequestTokens(local)
+        val usage = LLMUsage(7, 13, latestContextTokens = raw * 3)
+        val attempt = captureContextUsageAttempt(local, model, "marker", hasRequestLocalContext = true)
+        assertNull(settleContextUsageAttempt(attempt, usage))
+        assertEquals(1.6, TokenUsageCalibration.scale(checkNotNull(model.contextUsageIdentity()).calibrationKey()), 1e-9)
+        val billing = JSONObject(checkNotNull(buildTurnTokenUsageJson(usage)))
+        assertEquals(usage.latestContextTokens, billing.getInt("latestContextTokens"))
+        assertEquals(7, billing.getInt("inputTokens"))
+        assertFalse(billing.has("contextUsageAnchor"))
+    }
+
+    @Test
+    fun `a privacy or effective thinking change invalidates the measured prefix`() {
+        val replyWithReasoning = assistant("earlier answer").copy(reasoningContent = "prior reasoning ".repeat(100))
+        val plain = request(user("Contact test@example.org"), replyWithReasoning, user("next question"))
+            .copy(thinkingLevel = ThinkingLevel.LOW)
+        val masked = projectOutboundRequest(plain, maskEnabled = true)
+        assertEquals("Contact [masked-email]", masked.messages.first().content)
+        assertEquals("Contact test@example.org", plain.messages.first().content)
+        val usage = LLMUsage(0, 0, latestContextTokens = 900)
+        val anchor = checkNotNull(settleContextUsageAttempt(captureContextUsageAttempt(masked, model, null), usage))
+        val producing = assistant("answer").copy(contextUsageAnchor = anchor)
+        val maskedNext = masked.copy(messages = masked.messages + producing)
+        assertEquals(900, estimateProjectedContext(maskedNext, model, null).measuredPrefixTokens)
+        assertNull(estimateProjectedContext(plain.copy(messages = plain.messages + producing), model, null).measuredPrefixTokens)
+        assertNull(estimateProjectedContext(maskedNext.copy(thinkingLevel = ThinkingLevel.OFF), model, null).measuredPrefixTokens)
     }
 
     @Test

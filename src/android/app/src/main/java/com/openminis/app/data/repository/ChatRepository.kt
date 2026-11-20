@@ -309,38 +309,9 @@ class ChatRepository(
     suspend fun loadMessagesTail(sessionId: String, limit: Int): List<com.openminis.app.data.db.MessageEntity> =
         loadSessionTail(sessionId, limit = limit).messages
 
-    /**
-     * Request-side transcript rows. Unlike [loadSessionTail], this bypasses the
-     * SAFE_MESSAGE_FROM projection and never applies DisplayParts.shrink: the
-     * model must receive the persisted body, while the UI may receive a compact
-     * rendering projection of the same row.
-     */
-    suspend fun loadRequestHistory(
-        sessionId: String,
-        limit: Int,
-    ): List<com.openminis.app.data.db.MessageEntity> {
-        val total = dao.messageCountForSession(sessionId)
-        if (total <= 0) return emptyList()
-        val start = (total - limit).coerceAtLeast(0)
-        val pageSize = 50
-        val store = filesDir?.let { BodyStore(File(it, "bodies")) }
-        val rows = ArrayList<com.openminis.app.data.db.MessageEntity>(limit.coerceAtMost(total))
-        var offset = start
-        while (offset < total && rows.size < limit) {
-            val page = dao.loadMessagesTailRaw(
-                sessionId,
-                minOf(pageSize, limit - rows.size),
-                offset,
-            )
-            if (page.isEmpty()) break
-            for (row in page) {
-                val raw = if (row.bodyRef.isNullOrBlank()) null else readDisplayBody(row, store)
-                rows.add(if (raw.isNullOrBlank() || raw == row.partsJson) row else row.copy(partsJson = raw))
-            }
-            offset += page.size
-        }
-        return rows
-    }
+    /** Exact request bodies in a bounded, contiguous DB suffix; never a display projection. */
+    internal suspend fun loadRequestHistory(sessionId: String, limit: Int): SessionTail =
+        readRequestHistoryTail(sessionId, limit)
 
     /**
      * [T-android-huge-session-load-oom] Bounded heads for title generation,
@@ -1149,7 +1120,7 @@ class ChatRepository(
      * those collapse markdown for a 100-char single-line preview, while
      * this preserves the full text the offload caller wants to inspect.
      */
-    private fun extractTextForOffload(partsJson: String): String {
+    internal fun extractTextForOffload(partsJson: String): String {
         return try {
             val arr = org.json.JSONArray(partsJson)
             val texts = mutableListOf<String>()

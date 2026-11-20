@@ -2,9 +2,9 @@ package com.openminis.app.ui.chat
 
 import android.util.Log
 import androidx.lifecycle.viewModelScope
-import com.openminis.app.logging.AppLogger
-import com.openminis.app.data.model.AgentContentPart
+import com.openminis.app.data.USER_STOP_NOTE
 import com.openminis.app.data.model.LLMMessage
+import com.openminis.app.logging.AppLogger
 import com.openminis.app.service.SessionActivityTracker
 import com.openminis.app.service.SessionConcurrencyManager
 import kotlinx.coroutines.CancellationException
@@ -48,6 +48,8 @@ fun ChatViewModel.resume() {
     // behind the input bar.
     _forceScrollToBottom.tryEmit(Unit)
 
+    val sid = activeSessionId
+    val epoch = snapshotResumeEpoch()
     viewModelScope.launch {
         // Rebuild agentHistory from the DB before continuing — a fresh
         // sendMessage() does exactly this (rebuildAgentHistoryFromDatabase),
@@ -57,32 +59,22 @@ fun ChatViewModel.resume() {
         // partial in-memory tail, or any path committed rows the in-memory
         // list missed. The DB is the authoritative store; trusting memory
         // here is how a resume picks up an old, pre-interruption context.
-        rebuildAgentHistoryFromDatabase(activeSessionId)
-        // If history ends with assistant (Case 2: text-cancel committed a
-        // partial assistant turn), append a continue reminder as a user
-        // message. If it ends with user tool_result (Case 1), it's already
-        // a valid starting point for the next API call — no reminder needed.
-        val historyEndsWithAssistant =
-            agentHistory.lastOrNull()?.role == LLMMessage.Role.ASSISTANT
-        if (historyEndsWithAssistant) {
+        if (!rebuildAgentHistoryFromDatabase(sid, epoch)) {
+            if (ownsTranscript(sid, epoch)) raiseCanResume(epoch)
+            return@launch
+        }
+        if (!ownsTranscript(sid, epoch)) return@launch
+        // A Stop note records an interruption, not consent to continue.
+        // Add that intent only here, after the user actually taps Resume.
+        val tail = agentHistory.lastOrNull()
+        if (tail?.role == LLMMessage.Role.ASSISTANT ||
+            (tail?.isHostGenerated == true && tail.content == USER_STOP_NOTE)
+        ) {
             val reminder =
-                "<system-reminder>The user stopped the previous response but now wants to continue. Pick up exactly where you left off.</system-reminder>"
-            val parts = listOf<AgentContentPart>(AgentContentPart.Text(reminder))
-            appendBoundedHistory(
-                LLMMessage(
-                    role = LLMMessage.Role.USER,
-                    content = reminder,
-                    contentParts = parts,
-                    isHostGenerated = true,
-                )
-            )
-            val sid = activeSessionId
-            withContext(Dispatchers.IO) {
-                val partsJson = hostReminderPartsJson(escapeJson(reminder))
-                val persisted = chatRepository.appendMessage(sid, "user", partsJson)
-                withContext(Dispatchers.Main.immediate) {
-                    notePersistedUiRow(null, persisted.id)
-                }
+                "The user stopped the previous response but now wants to continue. Pick up exactly where you left off."
+            if (!commitHiddenUserNote(reminder, sid, expectedEpoch = epoch)) {
+                if (ownsTranscript(sid, epoch)) raiseCanResume(epoch)
+                return@launch
             }
         }
 
@@ -90,8 +82,9 @@ fun ChatViewModel.resume() {
         // fragments) — keep it off the main dispatcher. All inputs are
         // StateFlow reads / pure helpers; written fields are @Volatile.
         val systemPrompt = withContext(Dispatchers.IO) { buildMemoryDeliveryPrompt() }
+        if (!ownsTranscript(sid, epoch)) return@launch
 
-        AppLogger.info(ChatViewModel.TAG_STREAM, "resume _isStreaming=true (sid=$activeSessionId)")
+        AppLogger.info(ChatViewModel.TAG_STREAM, "resume _isStreaming=true (sid=$sid)")
         _isStreaming.value = true
         streamJob = launchActiveRun(activeSessionId, Dispatchers.IO, ownerSessionIds = setOf(activeSessionId, sessionId, realSessionId), beforeStart = { streamJob = it }) {
             AppLogger.info(ChatViewModel.TAG_STREAM, "resume streamJob ENTER sid=$activeSessionId")

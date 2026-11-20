@@ -43,6 +43,21 @@ data class UserTransformContext(
     val nowMillis: Long = System.currentTimeMillis(),
     /** Set when the session's user-made workspace path is resolvable on the host. */
     val workspaceHint: String? = null,
+    /**
+     * [T-time-context-interval] Owning session, so the clock can throttle
+     * itself per session (a new chat must not inherit the previous chat's
+     * "already stamped" state). Null disables the interval path and leaves the
+     * keyword path working, which is what JVM tests that do not model a
+     * session rely on.
+     */
+    val sessionId: String? = null,
+    /**
+     * [T-time-context-interval] Epoch millis of the newest model-visible
+     * message BEFORE this one, used to report elapsed time. Null = unknown
+     * (first message of a session), which suppresses the elapsed line instead
+     * of printing a fabricated one.
+     */
+    val previousMessageAtMs: Long? = null,
 )
 
 object MessageTransformerChain {
@@ -105,9 +120,11 @@ object MessageTransformerChain {
      * still guard re-application when a caller hands us an already-enriched
      * text (see each transformer's skip marker).
      */
-    fun applyUser(text: String, context: UserTransformContext): String {
+    fun applyUser(text: String, context: UserTransformContext, includeClock: Boolean = true): String {
         val expanded = expandResourceReferences(text)
-        val additions = userTransformers.mapNotNull { it.transformUser(expanded, context) }
+        val additions = userTransformers.mapNotNull {
+            if (includeClock || it !== TimeReminder) it.transformUser(expanded, context) else null
+        }
         if (expanded == text && additions.isEmpty()) return text
         if (additions.isEmpty()) return expanded
         return expanded + "\n\n" + additions.joinToString("\n\n")
@@ -152,38 +169,36 @@ object MessageTransformerChain {
         override fun transformForDisplay(text: String): String = ReasoningTagStrip.stripForDisplay(text)
     }
 
-    /**
-     * [T-time-reminder] Injects the wall-clock time into the LATEST user
-     * message. Long agent turns (multi-tool, queued prompts, goal
-     * continuations) can run far past the moment the user sent the text; a
-     * model answering "what's the weather now" or "remind me in an hour"
-     * without knowing the current time answers from the conversation's start.
-     * The system prompt's Runtime context only updates when the prompt is
-     * rebuilt, so this catches intra-loop drift.
-     */
+    // The send path defers the clock to the shared request projector. Keep the pure
+    // keyword transformer for standalone callers of the chain.
     private object TimeReminder : UserMessageTransformer {
         override val id = "time-reminder"
 
-        private val format = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+        override fun transformUser(text: String, context: UserTransformContext): String? =
+            if (text.contains(CLOCK_HEAD) || !hasTimeHint(text)) null
+            else renderClockNote(clockStamp(context.nowMillis), context.nowMillis, context.previousMessageAtMs)
+    }
 
-        override fun transformUser(text: String, context: UserTransformContext): String? {
-            // [T-user-transformers-wired] Idempotency sentinel: already stamped
-            // once this request — never stamp twice (cross-hour retries would
-            // otherwise accumulate conflicting timestamps).
-            if (text.contains("<system-note>当前时间")) return null
-            // Skip for messages that clearly aren't time-sensitive
-            // (pure code/file operations don't benefit from a clock stamp).
-            val needsTime = TIME_SENSITIVE_HINTS.any { hint -> text.contains(hint, ignoreCase = true) }
-            if (!needsTime) return null
-            val now = java.time.Instant.ofEpochMilli(context.nowMillis)
-                .atZone(java.util.TimeZone.getDefault().toZoneId())
-            return "<system-note>当前时间: ${format.format(now)}</system-note>"
+    private const val CLOCK_HEAD = "<system-note>当前时间"
+    private val clockFormat = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
+    private val timeHints = listOf(
+        "现在", "now", "today", "今天", "几点", "时间", "weather", "天气",
+        "remind", "提醒", "schedule", "安排", "分钟", "小时", "minute", "hour",
+    )
+
+    internal fun hasTimeHint(text: String): Boolean = timeHints.any { text.contains(it, ignoreCase = true) }
+
+    internal fun clockStamp(nowMs: Long): String = clockFormat.format(
+        java.time.Instant.ofEpochMilli(nowMs).atZone(java.time.ZoneId.systemDefault()),
+    )
+
+    internal fun renderClockNote(stamp: String, nowMs: Long, previousAtMs: Long?): String = buildString {
+        append(CLOCK_HEAD).append(": ").append(stamp)
+        if (previousAtMs != null && previousAtMs in 1..nowMs) {
+            append(" (since previous message: ")
+            append(TimeContextGate.formatElapsed(nowMs - previousAtMs)).append(')')
         }
-
-        private val TIME_SENSITIVE_HINTS = listOf(
-            "现在", "now", "today", "今天", "几点", "时间", "weather", "天气",
-            "remind", "提醒", "schedule", "安排", "分钟", "小时", "minute", "hour",
-        )
+        append("</system-note>")
     }
 
     /**

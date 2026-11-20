@@ -7,10 +7,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** The successful pass's exact prefix, not the originally requested upper bound. */
-internal data class CompactOutcome(val summary: String, val coveredMessages: Int)
+/** A successful pass describes only the exact prefix submitted to it. */
+internal data class CompactOutcome(val summary: String, val coveredMessages: Int, val succeeded: Boolean = true)
 
-/** Try every configured stage on the full input, then on the oldest complete prefix. */
+internal class CompactStageTimeout(attemptLabel: String, timeoutMs: Long) :
+    IllegalStateException("Compaction with $attemptLabel timed out after ${timeoutMs / 1_000}s.")
+
+/** Try every configured stage on the full input, then on the oldest closed prefix. */
 internal suspend fun runCompactPasses(
     messages: List<LLMMessage>,
     previousSummary: String?,
@@ -43,6 +46,8 @@ internal suspend fun ChatViewModel.runTwoShotCompact(
     previousSummary: String?,
     stages: List<ChatViewModel.CompactAttempt>,
     timeoutMs: Long,
+    sessionId: String = activeSessionId,
+    sessionWindowTokens: Int? = null,
 ): CompactOutcome = runCompactPasses(messages, previousSummary, stages.size) { input, existing, index, reduced ->
     val stage = stages[index]
     val stageNo = index + 1
@@ -71,19 +76,21 @@ internal suspend fun ChatViewModel.runTwoShotCompact(
         else -> " If no attempt succeeds, unsummarized history stays active."
     }
     withContext(Dispatchers.Main) {
+        if (activeSessionId != sessionId) throw CancellationException("Compaction session changed")
         if (reduced && index == 0) {
             appendSystemInfo("Full compaction failed. Retrying the oldest complete prefix (${input.size}/${messages.size}).", "compact")
         }
         appendSystemInfo(headline, "compact")
     }
+    val stageTimeout = minOf(timeoutMs, 120_000L)
     try {
-        val stageTimeout = minOf(timeoutMs, 120_000L)
-        withTimeoutOrNull(stageTimeout) { generateCompactSummaryWithSplitting(input, existing, stage, callBudget) }
-            ?: error("Compaction with ${stage.label} timed out after ${stageTimeout / 1_000}s.")
+        withTimeoutOrNull(stageTimeout) {
+            generateCompactSummaryWithSplitting(input, existing, stage, callBudget, sessionWindowTokens)
+        } ?: throw CompactStageTimeout(stage.label, stageTimeout)
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        AppLogger.warning(ChatViewModel.TAG, "[Compact] stage ${stage.kind} failed: ${e.message}")
+        AppLogger.warning(ChatViewModel.TAG, "[Compact] stage ${stage.kind} failed: ${e.javaClass.simpleName}")
         throw e
     }
 }

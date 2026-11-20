@@ -52,7 +52,7 @@ class MemoryRecallAuthorityTest {
         assertEquals(
             "acceptRecall must key on the stored line, not the scrubbed one",
             1,
-            snapshot["2026-11-04:$forgedLine"],
+            snapshot[MemoryRecallEngine.recallCountKey("2026-11-04", forgedLine)],
         )
     }
 

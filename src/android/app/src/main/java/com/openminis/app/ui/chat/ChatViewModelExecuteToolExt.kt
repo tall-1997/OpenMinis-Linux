@@ -7,6 +7,7 @@ import com.openminis.app.tools.FileEditTool
 import com.openminis.app.tools.FileCheckpointTool
 import com.openminis.app.tools.FileReadTool
 import com.openminis.app.tools.FileWriteTool
+import com.openminis.app.tools.HistorySearchTool
 import com.openminis.app.tools.CronJobTool
 import com.openminis.app.tools.ReadImageTool
 import com.openminis.app.tools.ToolExecutionResult
@@ -20,6 +21,9 @@ import com.openminis.app.tools.WritePathGuard
 import com.openminis.app.service.ActiveRunContext
 import com.openminis.app.security.SecurityGateHolder
 import com.openminis.app.security.ToolAliases
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import org.json.JSONObject
 
 // [T-android-action-guard] Screen-side tools the loop guard owns: repeats,
@@ -94,12 +98,18 @@ internal suspend fun ChatViewModel.executeTool(
     receiptScope: ToolReceiptScope? = null,
     spawnDispatch: SpawnDispatchOptions? = null,
     nestedRefusal: ((String, String) -> ToolExecutionResult?)? = null,
+    expectedSessionId: String? = null,
+    journalTurn: Int? = null,
 ): ToolExecutionResult {
     val canonical = receiptDispatchName(name)
-    val sid = activeSessionId
+    val sid = expectedSessionId ?: activeSessionId
+    fun ownerChanged() = sid != activeSessionId || ActiveRunContext.current()?.isStopped == true
+    fun ownerChangedResult() = ToolExecutionResult("The owning session or run changed before dispatch.", false, notSent = true)
+    if (ownerChanged()) return ownerChangedResult()
     val toolTitle = resolveToolTitle(canonical, argsJson)
     var guardVerdict: com.openminis.app.guard.GuardVerdict? = null
-    val authorize: suspend () -> ToolExecutionResult? = {
+    val authorize: suspend () -> ToolExecutionResult? = authorize@{
+        if (ownerChanged()) return@authorize ownerChangedResult()
         nestedRefusal?.invoke(canonical, argsJson)
             ?: toolAuthorizationRefusal(name, canonical, argsJson, sid, toolTitle) ?: run {
             guardVerdict = if (guardEligible(canonical)) {
@@ -115,16 +125,29 @@ internal suspend fun ChatViewModel.executeTool(
             }
         }
     }
-    val dispatch: suspend (ToolReceiptDispatch.Delivery?) -> ToolExecutionResult = { delivery ->
-        if (sid != activeSessionId || ActiveRunContext.current()?.isStopped == true) {
-            delivery?.notSent()
-            ToolExecutionResult("The owning session or run changed before dispatch.", false)
-        } else {
-            executeToolDispatched(
-                name, canonical, argsJson, toolId, toolBlocks, assistantId, currentText,
-                toolTitle, guardVerdict, delivery, spawnDispatch, nestedRefusal,
-            )
+    val dispatch: suspend (ToolReceiptDispatch.Delivery?) -> ToolExecutionResult = dispatch@{ delivery ->
+        if (!ownerChanged() && journalTurn != null) {
+            // This callback only runs for an authorized dispatch, never for a durable replay.
+            try {
+                recordToolJournalBestEffort { recordToolUseJournal(journalTurn, canonical, argsJson, sessionId = sid) }
+                currentCoroutineContext().ensureActive()
+            } catch (e: CancellationException) {
+                delivery?.notSent() // The adapter has not started.
+                throw e
+            }
         }
+        if (ownerChanged()) {
+            delivery?.notSent()
+            return@dispatch ownerChangedResult()
+        }
+        val dispatched = executeToolDispatched(
+            name, canonical, argsJson, toolId, toolBlocks, assistantId, currentText,
+            toolTitle, guardVerdict, delivery, spawnDispatch, nestedRefusal, sid,
+        )
+        if (journalTurn != null) recordToolJournalBestEffort {
+            recordToolResultJournal(journalTurn, canonical, argsJson, dispatched.success, sessionId = sid)
+        }
+        dispatched
     }
     val result = if (needsToolReceipt(canonical, argsJson)) {
         val key = receiptScope?.takeIf { it.sessionSha == ToolReceiptScope.sessionDigest(sid) }
@@ -133,11 +156,18 @@ internal suspend fun ChatViewModel.executeTool(
     } else {
         authorize() ?: dispatch(null)
     }
+    // Scoped history is read-only and returns a structured result, not a plan mutation.
+    if (HistorySearchTool.handles(canonical)) {
+        return if (ownerChanged()) ToolExecutionResult(
+            "The owning session or run changed while reading history.", false,
+            errorCode = com.openminis.app.tools.ToolErrorCode.STALE_OBSERVATION,
+        ) else result
+    }
     // [T-plan-host-derive] Only actual success can advance the board.
-    if (result.success) {
+    if (result.success && !ownerChanged()) {
         val note = runCatching {
             com.openminis.app.tools.PlanBoardAdvance.reconcileAfterTool(
-                sessionId = activeSessionId,
+                sessionId = sid,
                 context = context,
                 toolName = name,
                 toolTitle = runCatching { org.json.JSONObject(argsJson).optString("tool_title") }.getOrDefault(""),
@@ -152,6 +182,17 @@ internal suspend fun ChatViewModel.executeTool(
         if (!note.isNullOrEmpty()) return result.copy(output = result.output + "\n" + note)
     }
     return result
+}
+
+/** Observability must neither authorize nor prevent a tool dispatch. */
+private suspend fun recordToolJournalBestEffort(record: suspend () -> Unit) {
+    try {
+        record()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        // Journal I/O has no bearing on tool delivery.
+    }
 }
 
 internal fun receiptDispatchName(name: String): String = ToolAliases.canonical(name).let { canonical ->
@@ -199,7 +240,14 @@ private suspend fun ChatViewModel.executeToolDispatched(
     delivery: ToolReceiptDispatch.Delivery?,
     spawnDispatch: SpawnDispatchOptions?,
     nestedRefusal: ((String, String) -> ToolExecutionResult?)?,
+    dispatchSessionId: String,
 ): ToolExecutionResult {
+    // Scoped history is local and already structured/redacted before paging.
+    if (canonical == HistorySearchTool.SEARCH || canonical == HistorySearchTool.READ) {
+        val result = if (canonical == HistorySearchTool.SEARCH) HistorySearchTool.executeSearch(argsJson, dispatchSessionId, context)
+            else HistorySearchTool.executeRead(argsJson, dispatchSessionId, context)
+        return result.copy(deliveryAccepted = true).also { delivery?.completed(it) }
+    }
 
     // [T-android-capability-sets] Predicate registries run ahead of the name
     // subject when. Results flow through the SAME guard/evolution/output tail

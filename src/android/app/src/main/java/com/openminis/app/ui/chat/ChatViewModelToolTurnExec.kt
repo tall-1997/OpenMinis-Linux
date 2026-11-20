@@ -12,6 +12,7 @@ import com.openminis.app.logging.AppLogger
 import com.openminis.app.plugins.LocalToolPluginStore
 import com.openminis.app.service.SessionActivityTracker
 import com.openminis.app.service.ToolOutcome
+import com.openminis.app.tools.HistorySearchTool
 import com.openminis.app.tools.SubAgentKind
 import com.openminis.app.tools.ToolCallLane
 import com.openminis.app.tools.ToolCallLanes
@@ -309,10 +310,12 @@ internal suspend fun ChatViewModel.finalizePlannedCall(
             toolCallId = id,
         )
     }
+    val structuredHistory = result.success && HistorySearchTool.handles(call.canonicalName)
     val outputForLLM = if (postRecord.level == Level.WARNING && postRecord.message != null) {
         AppLogger.debug("ChatViewModel",
             "appending loop-warning to tool result name=$name key=${postRecord.warningKey}")
-        "${result.output}\n\n${postRecord.message}"
+        if (structuredHistory) JSONObject(result.output).put("loop_warning", postRecord.message).toString()
+        else "${result.output}\n\n${postRecord.message}"
     } else {
         result.output
     }
@@ -555,6 +558,7 @@ private suspend fun ChatViewModel.runPlannedCall(
         val result = executeTool(
             call.name, call.argsStr, call.id, ctx.allToolBlocks, ctx.assistantId, ctx.accumulatedText,
             receiptScope = ctx.receiptScope, spawnDispatch = spawnDispatch,
+            expectedSessionId = ctx.activeSessionId, journalTurn = ctx.turn,
         )
         // [T-known-failure] Feed the outcome back into the failure ledger the
         // dispatch gate reads: a success clears the record, a failure arms it
@@ -582,7 +586,8 @@ private suspend fun ChatViewModel.runPlannedCall(
             // able to recognize WHICH file/command this round touched. A
             // hash-only line made the handover unusable and the work repeated.
             argsSummary = WorkingMemoryArgs.summary(call.name, call.argsStr),
-            resultHead = result.output.take(120),
+            resultHead = result.output,
+            filesDir = context.filesDir,
         )
         finalizePlannedCall(ctx, call, result)
     }

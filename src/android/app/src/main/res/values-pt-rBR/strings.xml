@@ -2533,9 +2533,9 @@
     <string name="code_editor_status_size">%1$d linhas · %2$d caracteres</string>
     <string name="code_editor_undo">Desfazer</string>
     <string name="code_editor_wrap">Alternar quebra de linha</string>
-    <string name="compact_progress_fallback">Compactando (%1$d/%2$d) com o modelo reserva %3$s… %4$d s. Se falhar, o contexto antigo é truncado.</string>
+    <string name="compact_progress_fallback">Compactando (%1$d/%2$d) com o modelo reserva %3$s… %4$d s. Se falhar, o contexto permanece inalterado.</string>
     <string name="compact_progress_session">Compactando (%1$d/%2$d) com o modelo atual %3$s… %4$d s. Se falhar, o reserva ou uma nova tentativa única roda.</string>
-    <string name="compact_progress_session_retry">Compactando (%1$d/%2$d), tentando o modelo atual %3$s de novo… %4$d s. Sem reserva definida. Se falhar, o contexto antigo é truncado.</string>
+    <string name="compact_progress_session_retry">Compactando (%1$d/%2$d), tentando o modelo atual %3$s de novo… %4$d s. Sem reserva definida. Se falhar, o contexto permanece inalterado.</string>
     <string name="composer_expand_editor">Expandir editor</string>
     <string name="config_affects_later">Isso pode afetar chamadas de ferramentas posteriores.</string>
     <string name="config_reversible">É reversível, mas vale uma olhada rápida.</string>
@@ -2722,7 +2722,7 @@
     <string name="model_group_models_plain">%1$d modelos</string>
     <!-- backfill: strings.xml -->
     <string name="model_groups_compact_fallback">Reserva de compactação</string>
-    <string name="model_groups_compact_fallback_footer">O modelo atual tenta uma vez. Se falhar, o reserva tenta uma vez. Sem reserva, o modelo atual é tentado mais uma vez. Duas falhas truncam o contexto antigo.</string>
+    <string name="model_groups_compact_fallback_footer">O modelo atual tenta uma vez. Se falhar, o reserva tenta uma vez. Sem reserva, o modelo atual é tentado mais uma vez. Se a compactação falhar, o contexto permanece inalterado.</string>
     <string name="model_groups_default_primary">Principal padrão</string>
     <string name="model_groups_defaults">Padrões</string>
     <!-- backfill: strings_settings.xml -->
@@ -3324,4 +3324,19 @@
     <string name="process_card_thinking_now">Pensando…</string>
     <string name="appearance_show_turn_changes_card_title">Cartão de alterações da rodada</string>
     <string name="appearance_show_turn_changes_card_subtitle">Mostra um cartão por rodada com os arquivos alterados pelo assistente, estatísticas de linhas e desfazer com um toque. Desativado por padrão.</string>
+    <string name="vm_compact_retry_cooldown">A última compactação falhou. Você pode tentar de novo em %1$d s.</string>
+    <string name="guard_stop_section">Proteção de loop</string>
+    <string name="guard_stop_title">Parar em repetições</string>
+    <string name="guard_stop_on">Pode parar a sessão</string>
+    <string name="guard_stop_off">Nunca para a sessão</string>
+    <string name="guard_stop_footer">Quando ativado, a proteção para a sessão após a mesma ação se repetir demais. Quando desativado, apenas avisa o modelo, útil em esperas longas como um build.</string>
+    <string name="token_usage_section_memory">Memória</string>
+    <string name="token_usage_memory_lines">Linhas entregues</string>
+    <string name="token_usage_memory_shown">Vezes exibidas</string>
+    <string name="modeldetail_section_context_budget">Orçamento de contexto</string>
+    <string name="modeldetail_context_budget_footer">Quanto da conversa recente sobrevive à compactação. Automático acompanha a janela do modelo; um valor personalizado vale só para este modelo.</string>
+    <string name="modeldetail_tail_budget_custom">Orçamento final personalizado</string>
+    <string name="modeldetail_tail_budget">Orçamento final</string>
+    <string name="modeldetail_tail_budget_state_auto">Automático (acompanha a janela, até 60k)</string>
+    <string name="modeldetail_tail_budget_state_specific">Personalizado para este modelo</string>
 </resources>

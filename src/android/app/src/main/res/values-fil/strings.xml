@@ -2533,9 +2533,9 @@
     <string name="code_editor_status_size">%1$d linya · %2$d karakter</string>
     <string name="code_editor_undo">I-undo</string>
     <string name="code_editor_wrap">I-toggle ang word wrap</string>
-    <string name="compact_progress_fallback">Nagko-compact (%1$d/%2$d) gamit ang fallback model %3$s… %4$d s. Kapag nabigo, puputulin ang mas lumang context.</string>
+    <string name="compact_progress_fallback">Nagko-compact (%1$d/%2$d) gamit ang fallback model %3$s… %4$d s. Kapag nabigo, hindi mababago ang context.</string>
     <string name="compact_progress_session">Nagko-compact (%1$d/%2$d) gamit ang kasalukuyang model %3$s… %4$d s. Kapag nabigo, tatakbuhin ang fallback o isang retry.</string>
-    <string name="compact_progress_session_retry">Nagko-compact (%1$d/%2$d), sinusubukan muli ang kasalukuyang model %3$s… %4$d s. Walang fallback na nakatakda. Kapag nabigo, puputulin ang mas lumang context.</string>
+    <string name="compact_progress_session_retry">Nagko-compact (%1$d/%2$d), sinusubukan muli ang kasalukuyang model %3$s… %4$d s. Walang fallback na nakatakda. Kapag nabigo, hindi mababago ang context.</string>
     <string name="composer_expand_editor">Palakihin ang editor</string>
     <string name="config_affects_later">Maaaring makaapekto ito sa mga susunod na tool call.</string>
     <string name="config_reversible">Nababawi, pero sulit na tingnan agad.</string>
@@ -2722,7 +2722,7 @@
     <string name="model_group_models_plain">%1$d model</string>
     <!-- backfill: strings.xml -->
     <string name="model_groups_compact_fallback">Compact fallback</string>
-    <string name="model_groups_compact_fallback_footer">Sumusubok nang isang beses ang kasalukuyang model. Kapag nabigo, susubok nang isang beses ang fallback. Kapag walang fallback, isang retry ang kasalukuyang model. Dalawang pagkabigo ay puputol sa mas lumang context.</string>
+    <string name="model_groups_compact_fallback_footer">Sumusubok nang isang beses ang kasalukuyang model. Kapag nabigo, susubok nang isang beses ang fallback. Kapag walang fallback, isang retry ang kasalukuyang model. Kung mabigo ang pag-compact, hindi mababago ang context.</string>
     <string name="model_groups_default_primary">Default primary</string>
     <string name="model_groups_defaults">Defaults</string>
     <!-- backfill: strings_settings.xml -->
@@ -3324,4 +3324,19 @@
     <string name="process_card_thinking_now">Nag-iisip…</string>
     <string name="appearance_show_turn_changes_card_title">Kard ng mga pagbabago sa turn</string>
     <string name="appearance_show_turn_changes_card_subtitle">Nagpapakita ng kada-turn na kard na naglilista ng mga binago ng assistant na file, may line stats at one-tap undo. Nakasara bilang default.</string>
+    <string name="vm_compact_retry_cooldown">Nabigo ang huling compaction. Maaari mong subukan muli sa %1$d s.</string>
+    <string name="guard_stop_section">Pigil sa loop</string>
+    <string name="guard_stop_title">Huminto sa paulit-ulit</string>
+    <string name="guard_stop_on">Maaaring ihinto ang session</string>
+    <string name="guard_stop_off">Hindi kailanman ihihinto ang session</string>
+    <string name="guard_stop_footer">Kapag naka-on, ihihinto ng pigil ang session kapag masyadong madalas umulit ang parehong aksyon. Kapag naka-off, pagpapaalala lang sa modelo, kapaki-pakinabang sa mahabang paghihintay tulad ng build.</string>
+    <string name="token_usage_section_memory">Memorya</string>
+    <string name="token_usage_memory_lines">Mga linyang naipadala</string>
+    <string name="token_usage_memory_shown">Bilang ng pagpapakita</string>
+    <string name="modeldetail_section_context_budget">Badyet sa konteksto</string>
+    <string name="modeldetail_context_budget_footer">Gaano karami ng kamakailang usapan ang natitira pagkatapos ng compaction. Awtomatiko ay umaayon sa window ng modelo; ang custom na halaga ay para lang sa modelong ito.</string>
+    <string name="modeldetail_tail_budget_custom">Sariling badyet sa dulo</string>
+    <string name="modeldetail_tail_budget">Badyet sa dulo</string>
+    <string name="modeldetail_tail_budget_state_auto">Awtomatiko (umaayon sa window, hanggang 60k)</string>
+    <string name="modeldetail_tail_budget_state_specific">Sarili para sa modelong ito</string>
 </resources>

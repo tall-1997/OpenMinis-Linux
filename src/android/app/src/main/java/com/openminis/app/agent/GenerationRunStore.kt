@@ -63,12 +63,13 @@ object GenerationRunStore {
         return runId
     }
 
-    fun finish(context: Context, runId: String, ok: Boolean) {
-        val file = File(dir(context), "$runId.json")
-        if (!file.exists()) return
-        val run = read(file) ?: return
-        write(context, run.copy(status = if (ok) Status.DONE else Status.FAILED, finishedAtMs = System.currentTimeMillis()))
-        trim(dir(context))
+    @Synchronized
+    fun finish(context: Context, runId: String, ok: Boolean): Boolean {
+        val run = read(File(dir(context), "$runId.json")) ?: return false
+        if (run.status != Status.RUNNING) return false
+        val written = write(context, run.copy(status = if (ok) Status.DONE else Status.FAILED, finishedAtMs = System.currentTimeMillis()))
+        if (written) trim(dir(context))
+        return written
     }
 
     /**
@@ -112,7 +113,7 @@ object GenerationRunStore {
             ?: emptyList()
     }
 
-    private fun write(context: Context, run: Run) {
+    private fun write(context: Context, run: Run): Boolean =
         runCatching {
             val dir = dir(context)
             dir.mkdirs()
@@ -127,8 +128,7 @@ object GenerationRunStore {
             File(dir, "${run.runId}.json").writeText(json.toString(2))
         }.onFailure {
             AppLogger.error(TAG, "generation run write failed: ${it.message}")
-        }
-    }
+        }.isSuccess
 
     private fun read(file: File): Run? = runCatching {
         val obj = org.json.JSONObject(file.readText())

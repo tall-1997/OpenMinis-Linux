@@ -1,5 +1,6 @@
 package com.openminis.app.backup
 
+import com.openminis.app.data.repository.MemoryLifecycle
 import com.openminis.app.logging.AppLogger
 import java.io.File
 import java.util.UUID
@@ -147,7 +148,12 @@ object BackupRestoreFiles {
             }
 
             dest.parentFile?.mkdirs()
-            if (writeViaStagedSwap(blob, dest, entry.path)) {
+            val memoryTime = entry.memoryMtimeMs?.takeIf {
+                pairSessionDiaries && BackupDiaryPairs.isSessionMemoryMarkdown(
+                    entry.path.removePrefix("chats/").substringAfter('/', ""),
+                )
+            }
+            if (writeViaStagedSwap(blob, dest, entry.path, memoryTime)) {
                 result.written += 1
                 result.bytes += entry.size
             }
@@ -197,7 +203,9 @@ object BackupRestoreFiles {
         val body = member(diary) ?: return
         val meta = metadata?.let { member(it) ?: return }
         try {
-            BackupDiaryPairs.publish(directory, source, body, meta, legacy = diary.memoryPair == null) { staged ->
+            BackupDiaryPairs.publish(directory, source, body, meta, legacy = diary.memoryPair == null,
+                diaryMtimeMs = diary.memoryMtimeMs, metadataMtimeMs = metadata?.memoryMtimeMs,
+            ) { staged ->
                 BackupDiaryPairs.verify(checkNotNull(staged.diary), checkNotNull(diary.sha256), diary.size)
                 if (metadata != null) BackupDiaryPairs.verify(checkNotNull(staged.metadata), checkNotNull(metadata.sha256), metadata.size)
             }
@@ -223,9 +231,17 @@ object BackupRestoreFiles {
      * atomic, so the destination is either the old bytes or the new ones, never
      * missing (iOS review I2).
      */
-    private fun writeViaStagedSwap(blob: File, dest: File, logicalPath: String): Boolean {
+    private fun writeViaStagedSwap(blob: File, dest: File, logicalPath: String, memoryMtimeMs: Long?): Boolean {
         val staged = File(dest.parentFile, ".restore-${UUID.randomUUID()}.tmp")
         return try {
+            if (memoryMtimeMs != null) {
+                MemoryLifecycle.locked(checkNotNull(dest.parentFile)) { dir ->
+                    val target = MemoryLifecycle.child(dir, dest.name)
+                        ?: throw BackupException("invalid memory path $logicalPath")
+                    BackupDiaryPairs.restoreMarkdown(blob, target, memoryMtimeMs)
+                }
+                return true
+            }
             blob.copyTo(staged, overwrite = true)
             if (!staged.renameTo(dest)) {
                 // Rename can fail across filesystems or if the destination is a

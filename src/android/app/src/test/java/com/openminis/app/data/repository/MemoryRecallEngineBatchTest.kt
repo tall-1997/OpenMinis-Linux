@@ -42,9 +42,9 @@ class MemoryRecallEngineBatchTest {
         engine.acceptRecallBatch(rendered.included.map { it.source to it.line })
         assertEquals("one accepted batch, one write", 1, engine.saveCountForTest)
         val snapshot = engine.recallCountsSnapshot()
-        assertEquals(1, snapshot["2026-11-04:line one"])
-        assertEquals(1, snapshot["2026-11-04:line two"])
-        assertEquals(1, snapshot["2026-11-03:line three"])
+        assertEquals(1, snapshot[MemoryRecallEngine.recallCountKey("2026-11-04", "line one")])
+        assertEquals(1, snapshot[MemoryRecallEngine.recallCountKey("2026-11-04", "line two")])
+        assertEquals(1, snapshot[MemoryRecallEngine.recallCountKey("2026-11-03", "line three")])
     }
 
     @Test

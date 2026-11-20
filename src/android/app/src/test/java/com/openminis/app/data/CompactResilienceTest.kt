@@ -1,7 +1,12 @@
 package com.openminis.app.data
 
+import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.ui.chat.ChatViewModel
+import com.openminis.app.ui.chat.CompactOutcome
+import com.openminis.app.ui.chat.cappedCompactEnd
+import com.openminis.app.ui.chat.coveredCountFor
+import com.openminis.app.ui.chat.maxCompactRangeTokens
 import com.openminis.app.ui.chat.reducedCompactRetryInput
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -92,5 +97,64 @@ class CompactResilienceTest {
         val reduced = reducedCompactRetryInput(twelve)
         assertNotNull(reduced)
         assertEquals(8, reduced!!.size)
+    }
+
+    @Test
+    fun `a failed compaction never yields a covered count`() {
+        // [T-compact-no-wipe-on-failure] The anchor advance decision is pure:
+        // succeeded=false -> null (no marker), success -> covered prefix.
+        assertNull(coveredCountFor(CompactOutcome("failed", 0, succeeded = false), 10))
+        assertEquals(6, coveredCountFor(CompactOutcome("ok", 6), 10))
+        assertNull(coveredCountFor(CompactOutcome("ok", 0), 10))
+        assertNull(coveredCountFor(CompactOutcome("ok", 11), 10))
+        assertNull(coveredCountFor(CompactOutcome(" ", 6), 10))
+        assertNull(coveredCountFor(CompactOutcome("ok", 6), 0))
+    }
+
+    @Test
+    fun `compaction cap scales with the window and call budget`() {
+        // [T-compact-range-cap] 4 leaves × segment (window/5, 8k..32k) = 4 calls.
+        assertEquals(32_000, maxCompactRangeTokens(32_000))   // 4 × 8k
+        assertEquals(102_400, maxCompactRangeTokens(128_000)) // 4 × 25.6k
+        assertEquals(128_000, maxCompactRangeTokens(1_000_000)) // 4 × 32k
+    }
+
+    @Test
+    fun `compaction range is capped to a summarizable prefix`() {
+        // [T-compact-range-cap] A detached anchor starts the range at 0; a
+        // million-token range would exhaust the 6-call budget and fail. The
+        // attempt must cover only a prefix it can finish.
+        val heavy = (1..100).map {
+            LLMMessage(
+                role = LLMMessage.Role.ASSISTANT,
+                content = "",
+                contentParts = listOf(
+                    AgentContentPart.ToolResult("c$it", "shell_execute", "x".repeat(16_000)),
+                ),
+            )
+        }
+        val end = cappedCompactEnd(
+            heavy,
+            start = 0,
+            end = heavy.lastIndex,
+            maxTokens = 20_000,
+            estimate = com.openminis.app.ui.chat.WalkBack::estimateMessageTokens,
+        )
+        assertEquals(4, end) // Five 4,000-token payloads fit exactly.
+        assertTrue(end < heavy.lastIndex)
+    }
+
+    @Test
+    fun `compaction cap always includes the first message`() {
+        val one = listOf(
+            LLMMessage(
+                role = LLMMessage.Role.ASSISTANT,
+                content = "",
+                contentParts = listOf(
+                    AgentContentPart.ToolResult("c", "shell_execute", "x".repeat(400_000)),
+                ),
+            ),
+        )
+        assertEquals(0, cappedCompactEnd(one, 0, 0, maxTokens = 10))
     }
 }

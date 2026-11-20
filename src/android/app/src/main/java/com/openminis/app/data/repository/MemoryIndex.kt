@@ -40,7 +40,6 @@ object MemoryIndex {
     /** Chars of the first entry kept as a preview. */
     internal const val PREVIEW_CHARS = 80
 
-    private val DAILY = MemoryDiaryFormat.dateFile
     private val ENTRY_MARK = MemoryDiaryFormat.marker
 
     internal data class TrackedFragment(val text: String, val entries: List<MemoryDeliverySpan> = emptyList())
@@ -88,18 +87,22 @@ object MemoryIndex {
         now: Long,
     ): List<IndexedDay> {
         val byDate = LinkedHashMap<String, IndexedDay>()
-        // Shared first, session second: a later visible session row replaces the shared row.
-        for ((dir, shared) in listOf(sharedDir to true, sessionDir to false)) {
-            val files = dir?.listFiles() ?: continue
-            for (file in files) {
-                if (!file.isFile || !DAILY.matches(file.name)) continue
-                val date = file.name.removeSuffix(".md")
-                if (date in excludeDates) continue
-                val view = MemoryLifecycle.read(dir, file.name)?.active(now) ?: continue
-                if (!view.hasVisibleText()) continue
-                val entries = ENTRY_MARK.findAll(view.text).count()
-                val (preview, ref) = previewOf(view)
-                byDate[date] = IndexedDay(Row(date, entries, preview, shared), ref)
+        // The first visible copy wins, as in recall. Excluded dates still participate in file governance.
+        for ((dir, shared) in listOf(sessionDir to false, sharedDir to true)) {
+            if (dir == null) continue
+            MemorySources.withScope(dir, now, loadBody = { name ->
+                val date = name.removeSuffix(".md")
+                MemoryDiaryFormat.dateFile.matches(name) && date !in excludeDates && date !in byDate
+            }) { sources ->
+                for (source in sources) {
+                    if (!MemoryDiaryFormat.dateFile.matches(source.name)) continue
+                    val date = source.name.removeSuffix(".md")
+                    if (date in excludeDates || date in byDate) continue
+                    val view = source.view() ?: continue
+                    val entries = ENTRY_MARK.findAll(view.text).count()
+                    val (preview, ref) = previewOf(view)
+                    byDate[date] = IndexedDay(Row(date, entries, preview, shared), ref)
+                }
             }
         }
         return byDate.values.sortedByDescending { it.row.date }

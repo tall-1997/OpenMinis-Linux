@@ -115,6 +115,14 @@ internal suspend fun ChatViewModel.reconcileReceiptRows(
     Unit
 }
 
+/** Aggregate diagnostics for the loaded session, never model-facing or a reconciliation input. */
+internal suspend fun ChatViewModel.logLegacyToolReceiptDiagnostics(sessionId: String) {
+    val diagnostics = legacyToolReceiptDiagnostics(sessionId) ?: return
+    if (activeSessionId == sessionId && diagnostics.unsettled > 0) {
+        android.util.Log.w(ChatViewModel.TAG, "Legacy tool receipt records without a settled result: ${diagnostics.unsettled}")
+    }
+}
+
 internal suspend fun ChatViewModel.pendingToolReceiptNotice(sessionId: String, userTurnId: String? = null): String? {
     if (sessionId.isBlank()) return null
     return toolReceiptNotice(sessionId, ToolReceiptScope.userTurn(sessionId, userTurnId))

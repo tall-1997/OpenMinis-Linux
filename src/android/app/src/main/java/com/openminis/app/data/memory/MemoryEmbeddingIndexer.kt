@@ -3,8 +3,8 @@ package com.openminis.app.data.memory
 import com.openminis.app.data.db.MemoryEmbeddingDao
 import com.openminis.app.data.db.MemoryEmbeddingEntity
 import com.openminis.app.data.repository.MemoryLifecycle
+import com.openminis.app.data.repository.MemorySources
 import com.openminis.app.data.repository.memoryTextPrefix
-import com.openminis.app.evolution.LearnedPrefsStore
 import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicLong
@@ -65,9 +65,12 @@ class MemoryEmbeddingIndexer(
         scope.launch(Dispatchers.IO) {
             runCatching {
                 for (dir in dirs.filter { it.isDirectory }) {
-                    for (file in dir.listFiles().orEmpty()) {
-                        if (isIndexable(file)) indexFileNow(dir, file)
-                    }
+                    val names = dir.listFiles().orEmpty().filter(::isIndexable).map { it.name }
+                    val active = MemorySources.withScope(dir, clock(), loadBody = { true }) { sources ->
+                        sources.associate { it.name to indexableLines(it.view()) }
+                    } ?: continue
+                    val scopeKey = dir.canonicalPath
+                    for (name in names) indexLines(scopeKey, name, active[name].orEmpty())
                 }
             }
         }
@@ -103,10 +106,13 @@ class MemoryEmbeddingIndexer(
     /** Core, blocking; callers run it on IO. */
     suspend fun indexFileNow(dir: File, file: File) {
         if (!isIndexable(file) || file.parentFile?.canonicalFile != dir.canonicalFile) return
-        val text = MemoryLifecycle.read(dir, file.name)?.active(clock())?.text ?: return
-        val scopeKey = runCatching { dir.canonicalPath }.getOrElse { dir.absolutePath }
-        val source = file.name
-        val lines = indexableLines(text).distinctBy { it.line }
+        val lines = MemorySources.withScope(dir, clock(), loadBody = { it == file.name }) { sources ->
+            indexableLines(sources.firstOrNull { it.name == file.name }?.view())
+        } ?: return
+        indexLines(dir.canonicalPath, file.name, lines)
+    }
+
+    private suspend fun indexLines(scopeKey: String, source: String, lines: List<Line>) {
         val ids = lines.map { entryId(scopeKey, source, it.line) }
         val currentIds = ids.toHashSet()
         // Prune even when embeddings for newly added lines are temporarily unavailable.
@@ -168,20 +174,18 @@ class MemoryEmbeddingIndexer(
         val queryVectors = provider.embed(listOf(query)) ?: return emptyList()
         if (queryVectors.isEmpty()) return emptyList()
         val queryVector = queryVectors[0]
-        val scopeSet = HashSet<String>(scopes.size)
+        val scopeSet = LinkedHashSet<String>(scopes.size)
         for (s in scopes) scopeSet.add(runCatching { File(s).canonicalPath }.getOrElse { s })
         val rows = dao.loadForModelInScopes(model, scopeSet, MAX_LOADED_ROWS)
         if (rows.isEmpty()) return emptyList()
+        val sources = MemorySources.recallSources(scopeSet.map(::File), clock(), rows.mapTo(HashSet()) { it.source })
+        val activeLines = HashMap<String, Set<String>>()
         data class Scored(val hit: MemoryEmbeddingSupport.SemanticHit, val score: Float)
         val scored = ArrayList<Scored>(rows.size)
-        val now = clock()
-        val activeLines = HashMap<Pair<String, String>, Set<String>>()
         for (row in rows) {
-            if (row.scope !in scopeSet || row.source in protectedFiles) continue
-            val visible = activeLines.getOrPut(row.scope to row.source) {
-                val view = MemoryLifecycle.read(File(row.scope), row.source)?.active(now)
-                view?.let { indexableLines(it.text).mapTo(HashSet()) { line -> line.line } }.orEmpty()
-            }
+            val source = sources[row.source] ?: continue
+            if (row.scope != source.directory.path) continue
+            val visible = activeLines.getOrPut(row.source) { indexableLines(source.view).mapTo(HashSet()) { it.line } }
             if (row.line !in visible) continue
             val vector = FloatVectorBlob.decode(row.vector) ?: continue
             val score = VectorMath.cosine(queryVector, vector)
@@ -198,24 +202,11 @@ class MemoryEmbeddingIndexer(
 
     // ── line identity ──────────────────────────────────────────────────────
 
-    class Line(val line: String, val isHeadline: Boolean)
+    private data class Line(val line: String)
 
-    /**
-     * The lines of [text] that are worth a vector: non-blank, not the
-     * `<!-- timestamp -->` entry markers, not separator-only decoration.
-     * Headlines (`#`, `-`, `*`, `>` prefixed) are flagged because the recall
-     * engine scores them higher — kept on the row for future weighting.
-     */
-    internal fun indexableLines(text: String): List<Line> =
-        text.lineSequence()
-            .map { it.trim() }
-            .filter { it.isNotEmpty() && !it.startsWith("<!--") }
-            .filter { it.any { c -> c.isLetterOrDigit() } }
-            .map { Line(memoryTextPrefix(it, MAX_LINE_CHARS), isHeadline(it)) }
-            .toList()
-
-    private fun isHeadline(line: String): Boolean =
-        line.startsWith("#") || line.startsWith("-") || line.startsWith("*") || line.startsWith(">")
+    private fun indexableLines(view: MemoryLifecycle.View?): List<Line> =
+        view?.let { MemorySources.recallLines(it).map { owned -> Line(memoryTextPrefix(owned.text, MAX_LINE_CHARS)) } }
+            .orEmpty().distinct()
 
     /** sha-256 hex of `scope|day|line` — stable for an unchanged line. */
     internal fun entryId(scopeKey: String, source: String, line: String): String {
@@ -225,11 +216,9 @@ class MemoryEmbeddingIndexer(
         return digest.joinToString("") { "%02x".format(it) }
     }
 
-    private fun isIndexable(file: File): Boolean =
-        file.isFile && file.extension == "md" && file.name !in protectedFiles
+    private fun isIndexable(file: File): Boolean = file.isFile && MemorySources.isRecallSource(file.name)
 
     companion object {
-        private val protectedFiles = setOf("GLOBAL.md", "SOUL.md", "PERSONA.md", "AGENTS.md", LearnedPrefsStore.FILE_NAME)
 
         /** Recall is line-based; vectors for longer lines are poor signal anyway. */
         internal const val MAX_LINE_CHARS = 500

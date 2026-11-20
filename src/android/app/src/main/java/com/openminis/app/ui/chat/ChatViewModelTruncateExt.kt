@@ -87,7 +87,7 @@ internal suspend fun ChatViewModel.truncateBeforeEdit(messageId: String): Boolea
                 "skipping DB truncation (UI already truncated)",
         )
     }
-    val remaining = awaitBoundedHistoryRebuild(sid)
+    val remaining = awaitBoundedHistoryRebuild(sid) ?: return false
     // [T-edit-digest-leak] Same leak deleteFromMessage fixes: llmDigestLines
     // holds summaries of rows trimAgentHistory evicted from the model window.
     // The user just deleted everything from the edited turn onward, so those

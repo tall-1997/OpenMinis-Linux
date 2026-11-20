@@ -4,6 +4,8 @@ import android.net.Uri
 import android.util.Log
 import com.openminis.app.R
 import com.openminis.app.data.db.MessageEntity
+import com.openminis.app.data.isLegacyStopCarrier
+import com.openminis.app.data.isStoredUserStopNote
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.ContextUsageAnchor
 import com.openminis.app.data.model.LLMMessage
@@ -154,6 +156,7 @@ internal fun ChatViewModel.toChatMessages(
 
         try {
             val array = org.json.JSONArray(entity.partsJson)
+            if (entity.role == "user" && isStoredUserStopNote(array)) return@mapNotNull null
             var textBlockCounter = 0
             for (i in 0 until array.length()) {
                 val obj = array.getJSONObject(i)
@@ -421,9 +424,11 @@ internal fun mapStoredLLMMessage(
     var textContent = ""
     var validParts = true
     var isHostGenerated = false
+    var legacyStop = false
 
     try {
         val array = org.json.JSONArray(entity.partsJson)
+        legacyStop = r == LLMMessage.Role.USER && array.isLegacyStopCarrier()
         for (i in 0 until array.length()) {
             val obj = array.getJSONObject(i)
             when (obj.optString("type")) {
@@ -542,7 +547,7 @@ internal fun mapStoredLLMMessage(
         dbMessageId = entity.id,
         reasoningContent = entity.reasoningContent,
         contextUsageAnchor = if (validParts && contentParts.isNotEmpty()) readAssistantContextUsageAnchor(entity) else null,
-        isHostGenerated = isHostGenerated,
+        isHostGenerated = if (contentParts.any { it is AgentContentPart.ToolResult }) legacyStop else isHostGenerated,
     )
 }
 

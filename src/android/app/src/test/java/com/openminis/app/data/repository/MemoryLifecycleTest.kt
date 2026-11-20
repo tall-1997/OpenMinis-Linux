@@ -119,6 +119,25 @@ class MemoryLifecycleTest {
         assertTrue(MemoryLifecycle.read(dir, source)!!.active(now).text.contains("hand revision"))
     }
 
+    @Test fun aReceiptSelectedBeforeTheBodyWasReplacedCannotRenewTheReplacement() {
+        val dir = tmp.newFolder("digest-bound-receipt")
+        val repo = MemoryRepository(dir) { now }
+        write(repo, "first olive", "\"importance\":\"low\"")
+        val selected = MemoryLifecycle.read(dir, source)!!.managed().single().ref
+        MemoryLifecycle.locked(dir) { root ->
+            val file = File(root, source)
+            val raw = file.readText().replace("first olive", "other olive")
+            val entry = raw.substring(MemoryDiaryFormat.blocks(raw).single().start)
+            MemoryLifecycle.enroll(root, source, selected.id, entry, now, null, MemoryEntryOrigin.MEMORY_WRITE, autoArchive = true)
+            file.writeText(raw)
+        }
+        MemoryLifecycle.recordDelivery(setOf(selected), "real user turn", now + 1, selectedAt = now)
+        val replacement = MemoryLifecycle.read(dir, source)!!.managed().single()
+        assertEquals("other olive", replacement.body)
+        assertEquals(0, replacement.state.usage)
+        assertNull(replacement.state.lastUsedAt)
+    }
+
     @Test fun deleteFileRemovesTheLifecycleSidecarWithTheDiary() {
         val dir = tmp.newFolder("scope")
         val repo = MemoryRepository(dir) { now }

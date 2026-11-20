@@ -1,23 +1,34 @@
 package com.openminis.app.ui.chat
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/**
- * [T-drain-prompt-refresh] Rebuild the run-scoped system prompt when a NEW
- * user turn starts inside a running agent loop (queued prompt drained at a
- * tool boundary).
- *
- * The prompt is otherwise built once per send. A queued prompt is a new user
- * turn: the task anchor, the daily-memory gate and the recall query are all
- * keyed to "the latest user message", so without this rebuild the loop keeps
- * carrying the previous turn's prompt — the correction the user just queued
- * is in history but nothing in the system prompt reflects it.
- *
- * Falls back to [current] when the build fails; a stale prompt must never
- * abort the run.
- */
-internal suspend fun ChatViewModel.refreshRunPromptForInjectedTurn(current: MemoryDeliveryPrompt?): MemoryDeliveryPrompt? =
-    withContext(Dispatchers.IO) {
-        runCatching { buildMemoryDeliveryPrompt() }.getOrNull()
-    } ?: current
+/** Rebuild the memory-delivery prompt after a queued user turn becomes the latest user message. */
+internal suspend fun ChatViewModel.refreshRunPromptForInjectedTurn(
+    current: MemoryDeliveryPrompt?,
+    expectedSessionId: String? = null,
+): MemoryDeliveryPrompt? = rebuildOwnedRunPrompt(current, expectedSessionId ?: activeSessionId, { activeSessionId }) {
+    // The rebuilt prompt carries its own prefix and memory delivery metadata.
+    // Do not publish VM-wide prompt diagnostics from an in-flight rebuild.
+    buildMemoryDeliveryPrompt(publish = false)
+}
+
+internal suspend fun rebuildOwnedRunPrompt(
+    current: MemoryDeliveryPrompt?,
+    expectedSessionId: String,
+    sessionId: () -> String,
+    build: suspend () -> MemoryDeliveryPrompt,
+): MemoryDeliveryPrompt? {
+    if (sessionId() != expectedSessionId) return current
+    val rebuilt = try {
+        withContext(Dispatchers.IO) {
+            if (sessionId() == expectedSessionId) build() else null
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        null
+    }
+    return if (sessionId() == expectedSessionId) rebuilt ?: current else current
+}

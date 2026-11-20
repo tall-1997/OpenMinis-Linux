@@ -44,31 +44,10 @@ internal object GenerationRunLifecycle {
         GenerationRunStore.finish(context, runId, ok = false)
     }
 
-    /**
-     * Closes any run for [sessionIds] that is still RUNNING, as FAILED.
-     *
-     * Called from the run wrapper's `finally`, which is the one point every exit
-     * — return, throw, cancellation — passes through. Returns how many rows were
-     * closed, which is 0 on every path that already recorded its own verdict.
-     *
-     * The session set is captured *before* the run on purpose: a mid-run session
-     * switch must not redirect the write to a chat the ledger never described.
-     */
-    fun closeOpen(context: Context, sessionIds: Collection<String>): Int {
-        if (sessionIds.isEmpty()) return 0
-        val wanted = sessionIds.toSet()
-        var closed = 0
-        for (run in GenerationRunStore.running(context)) {
-            if (run.sessionId !in wanted) continue
-            GenerationRunStore.finish(context, run.runId, ok = false)
-            closed += 1
-            AppLogger.warning(
-                TAG,
-                "[T-generation-run] run ${run.runId} escaped without a verdict " +
-                    "(session=${run.sessionId}, model=${run.modelId}) — recorded FAILED so the " +
-                    "launch scan keeps ABANDONED for genuine process death",
-            )
-        }
+    /** A winding-down run must not settle its replacement, even in the same chat. */
+    fun closeOpen(context: Context, runId: String): Boolean {
+        val closed = GenerationRunStore.finish(context, runId, ok = false)
+        if (closed) AppLogger.info(TAG, "[T-generation-run] closed unfinished run $runId")
         return closed
     }
 }

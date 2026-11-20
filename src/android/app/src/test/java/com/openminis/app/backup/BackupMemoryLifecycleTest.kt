@@ -54,6 +54,81 @@ class BackupMemoryLifecycleTest {
         checkRestored(to)
     }
 
+    @Test fun bothZipTreesPreserveFileTtlAgeHeadersAndPerPathMtimes() {
+        for (asChats in listOf(true, false)) {
+            val fromRoot = tmp.newFolder("mtime-from-$asChats")
+            val toRoot = tmp.newFolder("mtime-to-$asChats")
+            val from = if (asChats) File(fromRoot, "minis-sessions/sid/memory") else BackupMemoryTree.deviceRoot(fromRoot)
+            val to = if (asChats) File(toRoot, "minis-sessions/sid/memory") else BackupMemoryTree.deviceRoot(toRoot)
+            assertTrue(from.mkdirs())
+            val header = "\uFEFF---\r\nttl_days: 1\r\nunknown: kept\r\n---\r\n"
+            val diary = File(from, source).apply { writeText(header + "legacy pear\r\n") }
+            val sidecar = seed(from)
+            val original = diary.readBytes()
+            assertTrue(diary.setLastModified(start - 3 * MemoryLifecycle.DAY_MS + 313))
+            assertTrue(sidecar.setLastModified(start + 517))
+            val first = File(from, "past.md").apply {
+                writeText(header + "matching plum\r\n")
+                assertTrue(setLastModified(diary.lastModified()))
+            }
+            val second = File(from, "present.md").apply {
+                writeBytes(first.readBytes())
+                assertTrue(setLastModified(start + 731))
+            }
+            val packageDir = if (asChats) exportChats(from, "mtime-package-$asChats").first
+                else tmp.newFolder("mtime-package-$asChats").also {
+                    assertEquals(4, BackupMemoryTree.export(from, File(it, "data/memory")).entries)
+                }
+            val archive = File(tmp.root, "mtime-$asChats.minisbak")
+            BackupZip.archive(packageDir, archive)
+            val extracted = tmp.newFolder("mtime-extracted-$asChats")
+            BackupZip.extract(archive, extracted)
+            if (asChats) {
+                val index = File(extracted, "files.index.jsonl").readLines().map {
+                    BackupFormat.json.decodeFromString(BackupFileIndexEntry.serializer(), it)
+                }
+                assertEquals(index.single { it.path.endsWith("/past.md") }.sha256,
+                    index.single { it.path.endsWith("/present.md") }.sha256)
+                assertEquals(4, BackupRestoreFiles.restoreSessionTrees(extracted, index, sessionsRoot(to)).written)
+            } else {
+                assertEquals(4, BackupMemoryTree.restore(File(extracted, "data/memory"), to).filesWritten)
+            }
+            val restored = File(to, source)
+            assertArrayEquals(original, restored.readBytes())
+            assertTrue(restored.readText().startsWith(header))
+            assertEquals(diary.lastModified(), restored.lastModified())
+            assertEquals(sidecar.lastModified(), MemoryLifecycle.sidecar(to.canonicalFile, source)!!.lastModified())
+            assertEquals(first.lastModified(), File(to, first.name).lastModified())
+            assertEquals(second.lastModified(), File(to, second.name).lastModified())
+            val reader = MemoryRepository(to) { start + MemoryLifecycle.DAY_MS }
+            assertTrue(reader.restoreArchivedMemory(reader.archivedEntries("time bound", 1).single().token))
+            assertFalse(reader.getMemory("time bound", "daily").contains("time bound note"))
+            assertFalse(reader.getMemory("legacy pear", "daily").contains("legacy pear"))
+            val active = reader.getMemory("matching plum", "daily")
+            assertFalse(active.contains("past.md"))
+            assertTrue(active.contains("present.md"))
+        }
+    }
+
+    @Test fun legacyGlobalZipWithoutAnInventoryKeepsTheOriginalMarkdownAndItsZipTime() {
+        val staging = tmp.newFolder("old-format")
+        val tree = File(staging, "data/memory").apply { mkdirs() }
+        val body = File(tree, source).apply {
+            writeText("\uFEFF---\r\nttl_days: 1\r\n---\r\nlegacy only\r\n")
+            assertTrue(setLastModified(start - 2 * MemoryLifecycle.DAY_MS))
+        }
+        val archive = File(tmp.root, "old-format.minisbak")
+        BackupZip.archive(staging, archive)
+        val extracted = tmp.newFolder("old-extracted")
+        BackupZip.extract(archive, extracted)
+        val to = BackupMemoryTree.deviceRoot(tmp.newFolder("old-destination"))
+        assertEquals(1, BackupMemoryTree.restore(File(extracted, "data/memory"), to).filesWritten)
+        val restored = File(to, source)
+        assertArrayEquals(body.readBytes(), restored.readBytes())
+        assertEquals(body.lastModified(), restored.lastModified()) // Whole-second ZIP timestamp, no inventory needed.
+        assertFalse(MemoryRepository(to) { start }.getMemory("legacy only", "daily").contains("legacy only"))
+    }
+
     @Test fun cappedSessionPairNeverPublishesEitherMember() {
         for (which in listOf("diary", "metadata")) {
             val from = File(tmp.newFolder("from-$which"), "minis-sessions/sid/memory")
@@ -153,6 +228,10 @@ class BackupMemoryLifecycleTest {
             val to = if (pairedChats) File(toRoot, "minis-sessions/sid/memory") else BackupMemoryTree.deviceRoot(toRoot)
             seed(from, "time bound incoming")
             seed(to)
+            val previousTime = start - 7 * MemoryLifecycle.DAY_MS + 777
+            val incomingTime = start - 5 * MemoryLifecycle.DAY_MS + 313
+            assertTrue(File(to, source).setLastModified(previousTime))
+            assertTrue(File(from, source).setLastModified(incomingTime))
             val before = bytesOf(to)
             val incoming = bytesOf(from)
             val restore: () -> Int = if (pairedChats) {
@@ -178,6 +257,10 @@ class BackupMemoryLifecycleTest {
                 MemoryRestoreJournal.beforeCommitForTest = null
             }
             assertArrayEquals(incoming.first, File(to, source).readBytes()) // The crash did interrupt raw publication.
+            assertEquals(incomingTime, File(to, source).lastModified())
+            MemoryLifecycle.locked(to) { dir ->
+                assertEquals(previousTime, MemoryLifecycle.snapshotFiles(dir, source).diary!!.lastModified())
+            }
             val now = start + MemoryLifecycle.DAY_MS
             val reopened = MemoryRepository(to) { now }
             assertArrayEquals(before.first, reopened.readFile(source).toByteArray())
@@ -187,8 +270,10 @@ class BackupMemoryLifecycleTest {
             if (cutoff == 2) {
                 MemoryRestoreJournal.recoverInterrupted(toRoot)
                 assertUnchanged(to, before) // Startup restores raw bytes for external file readers too.
+                assertEquals(previousTime, File(to, source).lastModified())
             }
             assertEquals(2, restore()) // Retrying directly also recovers a pending pair before committing the new pair.
+            assertEquals(incomingTime, File(to, source).lastModified())
             assertEquals("time bound incoming", reopened.archivedEntries("", 10).single().body)
             assertArrayEquals(incoming.second, bytesOf(to).second)
             assertTrue(MemoryLifecycle.metadataDirectory(to).listFiles().orEmpty().none { it.name.endsWith(".pending") })

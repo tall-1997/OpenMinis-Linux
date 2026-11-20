@@ -353,7 +353,7 @@
     <string name="model_groups_voice_output">语音输出</string>
     <string name="model_groups_vision">视觉输入</string>
     <string name="model_groups_compact_fallback">压缩备用模型</string>
-    <string name="model_groups_compact_fallback_footer">当前模型先压一次。失败后备用模型再压一次；未设置备用则用当前模型再试一次。两次都失败就截断更早上文。</string>
+    <string name="model_groups_compact_fallback_footer">当前模型先压一次。失败后备用模型再压一次；未设置备用则用当前模型再试一次。两次都失败也保持上下文不变。</string>
     <string name="mcp_form_env_insert_app_var">插入应用变量</string>
     <string name="mcp_form_env_clear">清除</string>
     <string name="mcp_form_env_clear_confirm_title">清除环境变量？</string>
@@ -2158,8 +2158,8 @@
     <string name="selection_copy_as_plain_text">复制为纯文本</string>
     <string name="chat_input_placeholder_hint_5">Minis Ultra 可以把 ↩︎ 键设为发送或换行</string>
     <string name="compact_progress_session">正在压缩（%1$d/%2$d）当前模型 %3$s… %4$d 秒。失败后会试备用或再试当前模型一次。</string>
-    <string name="compact_progress_fallback">正在压缩（%1$d/%2$d）备用模型 %3$s… %4$d 秒。再失败将截断更早上文。</string>
-    <string name="compact_progress_session_retry">正在压缩（%1$d/%2$d）重试当前模型 %3$s… %4$d 秒。未设置备用。再失败将截断更早上文。</string>
+    <string name="compact_progress_fallback">正在压缩（%1$d/%2$d）备用模型 %3$s… %4$d 秒。再失败将保持上下文不变。</string>
+    <string name="compact_progress_session_retry">正在压缩（%1$d/%2$d）重试当前模型 %3$s… %4$d 秒。未设置备用。再失败将保持上下文不变。</string>
 <!-- 1.15-linux -->
     <string name="settings_web_search">网络搜索</string>
     <string name="settings_web_search_subtitle">Tavily、博查、Exa、Brave、Jina、智谱、Bing、SearXNG 或自定义</string>
@@ -2959,4 +2959,19 @@
     <string name="process_card_thinking_now">思考中</string>
     <string name="appearance_show_turn_changes_card_title">本轮改动卡片</string>
     <string name="appearance_show_turn_changes_card_subtitle">在对话中显示每轮的改动卡片，列出助手修改的文件、行数统计，并支持一键撤销。默认关闭，保持对话简洁。</string>
+    <string name="vm_compact_retry_cooldown">上次压缩失败。%1$d 秒后可重试。</string>
+    <string name="guard_stop_section">循环保护</string>
+    <string name="guard_stop_title">重复操作时停止</string>
+    <string name="guard_stop_on">可以停止会话</string>
+    <string name="guard_stop_off">永不停止会话</string>
+    <string name="guard_stop_footer">开启后，同一操作重复过多时由循环保护停止会话；关闭后只提醒模型，适合编译等长时间等待。</string>
+    <string name="token_usage_section_memory">记忆</string>
+    <string name="token_usage_memory_lines">已投递行数</string>
+    <string name="token_usage_memory_shown">展示次数</string>
+    <string name="modeldetail_section_context_budget">上下文预算</string>
+    <string name="modeldetail_context_budget_footer">压缩后保留多少最近对话。自动按模型窗口缩放；自定义值只对当前模型生效。</string>
+    <string name="modeldetail_tail_budget_custom">自定义尾部预算</string>
+    <string name="modeldetail_tail_budget">尾部预算</string>
+    <string name="modeldetail_tail_budget_state_auto">自动（随窗口缩放，最多 60k）</string>
+    <string name="modeldetail_tail_budget_state_specific">当前模型自定义</string>
 </resources>

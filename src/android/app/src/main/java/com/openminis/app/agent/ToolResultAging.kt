@@ -4,6 +4,7 @@ import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.tools.ToolOutputSpill
 import com.openminis.app.tools.ToolOutputTruncator
+import com.openminis.app.util.TextClip
 
 /** Request-time folding of old tool text. No persisted history is changed. */
 object ToolResultAging {
@@ -31,7 +32,7 @@ object ToolResultAging {
 
     fun isAged(content: String): Boolean = content.startsWith(MARKER)
 
-    /** Coarse text-only floor for deciding whether to run the pass. */
+    /** Coarse character count; request decisions use the shared token meter instead. */
     fun totalChars(messages: List<LLMMessage>): Long {
         var total = 0L
         for (msg in messages) {
@@ -49,8 +50,9 @@ object ToolResultAging {
     }
 
     /**
-     * Keep the newest [keepRecent] results' complete rounds. The optional
-     * [verifiedSpillPaths] snapshot comes from the caller; this pass does no I/O.
+     * Keep the newest [keepRecent] results' complete rounds. Zero protects no
+     * rounds, but errors, media and already-projected results still do not fold.
+     * The [verifiedSpillPaths] snapshot comes from the caller; this pass does no I/O.
      */
     fun age(
         messages: List<LLMMessage>,
@@ -107,11 +109,8 @@ object ToolResultAging {
     fun tailOf(content: String, limit: Int = TAIL_CHARS): String =
         ToolOutputTruncator.sliceTail(collapseWhitespace(content), limit)
 
-    fun headlineOf(content: String, limit: Int = HEADLINE_CHARS): String {
-        val flat = collapseWhitespace(content)
-        val head = ToolOutputTruncator.sliceHead(flat, limit)
-        return if (head.length < flat.length && limit > 0) "$head…" else head
-    }
+    fun headlineOf(content: String, limit: Int = HEADLINE_CHARS): String =
+        TextClip.safeEllipsize(collapseWhitespace(content), limit)
 
     private fun collapseWhitespace(content: String): String {
         val out = StringBuilder(minOf(content.length, 512))

@@ -1,69 +1,30 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.agent.HarnessConfig
+import com.openminis.app.data.ContextTokenMeter
 import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.LLMMessage
+import com.openminis.app.util.TextClip
+import kotlinx.coroutines.CancellationException
 
-/**
- * [T-android-postanchor-tail-budget] Hard tail window over the v2 compact
- * marker's postAnchor ("active") region.
- *
- * The marker moves only when a compaction runs. In a long agent session the
- * active region therefore grows without bound — 909 stale tool rounds were
- * re-assembled into every single request while the summary that already
- * covers them sat right above. ProgressiveTrim cannot fix this: it strips
- * thinking and stubs old tool outputs but never reduces the message count,
- * so the model kept looping inside a 900-entry tool skeleton.
- *
- * The fix mirrors zcode/codex request-side pruning: walk the newest rounds
- * backward, keep what fits [Budget.budgetTokens], and drop the OLDEST WHOLE
- * rounds. A "round" starts at a USER message that carries no tool result —
- * the same round-boundary rule [WalkBack.bounded] uses — so a tool_use and
- * its tool_result always live in the same group and are dropped together
- * (never an orphan tool_use, the pairing invariant [ChatViewModel
- * .dropOrphanedToolParts] also enforces downstream).
- *
- * Pure JVM, no ViewModel state: the result is a request-assembly artifact.
- * Nothing here touches agentHistory or the database.
- */
+/** Request-only budget for the active region after a compact marker. */
 internal object PostAnchorTail {
-    /**
-     * [T-android-postanchor-tail-budget] Estimated-token ceiling for the
-     * postAnchor tail after a v2 compact marker; older whole rounds are
-     * dropped with a head notice. Request-assembly only, DB untouched.
-     */
     internal const val BUDGET_TOKENS: Int = 60_000
-
-    /** [T-compact-window-scaled-budget] postAnchor share of the window. */
+    internal const val NOTICE_RESERVE_TOKENS: Int = 1_200
     internal const val WINDOW_FRACTION: Double = 0.35
 
-    /**
-     * [T-compact-gate-unblinded] SINGLE source for the production tail budget.
-     *
-     * [applyTailBudget] = false returns [Int.MAX_VALUE] so request assembly
-     * can produce the UN-BUDGETED slice for the compact gate. The gate must
-     * not measure the same cap that does the dropping, or it can never fire
-     * again after the first compact (the capped request sits below the
-     * threshold forever while the unsummarized region keeps growing).
-     */
-    internal fun budgetTokensForWindow(windowTokens: Int?, applyTailBudget: Boolean = true): Int {
-        if (!applyTailBudget) return Int.MAX_VALUE
-        if (windowTokens == null) return BUDGET_TOKENS
-        return minOf(BUDGET_TOKENS, (windowTokens * WINDOW_FRACTION).toInt())
-    }
+    /** The compact gate and formal projection must be able to see all uncovered rows. */
+    internal fun budgetTokensForWindow(
+        windowTokens: Int?,
+        applyTailBudget: Boolean = true,
+        config: HarnessConfig = HarnessConfig.current(),
+    ): Int = if (applyTailBudget) config.postAnchorBudgetFor(windowTokens) else Int.MAX_VALUE
 
-
-    /** Estimated-token budget for the kept postAnchor tail. */
     internal data class Budget(
         val budgetTokens: Int,
         val estimate: (LLMMessage) -> Int = WalkBack::estimateMessageTokens,
-        /**
-         * [T-postanchor-dropped-digest] Optional bounded excerpt of the rounds
-         * being dropped. The summary sits BEFORE the anchor, so it cannot
-         * cover these rounds; without a digest their user instructions and
-         * assistant decisions disappear silently. Returning null keeps the
-         * plain count notice (pure tool traffic with nothing to excerpt).
-         */
         val digest: (dropped: List<LLMMessage>) -> String? = { null },
+        val config: HarnessConfig = HarnessConfig.current(),
     )
 
     internal data class Result(
@@ -77,18 +38,6 @@ internal object PostAnchorTail {
         val hasNotice: Boolean get() = notice != null
     }
 
-    /**
-     * The exact one-line notice injected at the head of the kept slice when
-     * rounds were dropped. N/K are the real dropped-round count and estimated
-     * token weight. Assembly-only artifact — never persisted, and it is
-     * recomputed from scratch on every request so it cannot accumulate.
-     *
-     * [T-postanchor-truthful-notice] It used to claim "the summary above
-     * covers them". That is false: the v2 anchor is the compact boundary, so
-     * every post-anchor round is younger than the summary. The wording now
-     * states the actual contract and points at the two real carriers (the
-     * digest and the working-memory note).
-     */
     internal fun droppedRoundsNotice(droppedRounds: Int, droppedTokens: Int): String =
         "[context window: $droppedRounds older rounds dropped (≈$droppedTokens tokens) — " +
             "the earlier summary does NOT cover them; see the digest and working-memory note, " +
@@ -96,105 +45,93 @@ internal object PostAnchorTail {
 
     private val LLMMessage.isDroppedRoundsNotice: Boolean
         get() = role == LLMMessage.Role.USER &&
-            content.startsWith("[context window: ") &&
-            content.contains(" older rounds dropped (")
+            content.startsWith("[context window: ") && content.contains(" older rounds dropped (")
 
-    /**
-     * Apply the tail budget. The NEWEST round is always kept even when it
-     * alone exceeds the budget (the model must never lose its own current
-     * turn; [ProgressiveTrim.PROTECTED_RECENT_MESSAGES] relies on the same
-     * invariant). With zero or one round the input is returned untouched —
-     * sessions under budget are byte-identical to the previous behavior.
-     */
+    /** Always keep the newest legal group, even when it alone exceeds the budget. */
     fun apply(postAnchor: List<LLMMessage>, budget: Budget): Result {
         if (postAnchor.isEmpty() || budget.budgetTokens <= 0 || budget.budgetTokens == Int.MAX_VALUE) {
             return Result(postAnchor, 0, 0, 0)
         }
         val groups = splitRounds(postAnchor)
-        if (groups.size <= 1) {
-            return Result(postAnchor, 0, 0, 0)
-        }
-
-        // Newest-to-oldest accumulation. The newest group is unconditionally
-        // accepted; each older group is kept only while the running total
-        // still fits the budget. Everything older than the cutoff is dropped
-        // as whole groups — a half-kept round could orphan a tool_use.
+        if (groups.size <= 1) return Result(postAnchor, 0, 0, 0)
+        val effectiveBudget = budget.config.effectiveTailBudget(budget.budgetTokens)
         val costs = LongArray(groups.size) { i ->
             groups[i].sumOf { msg -> budget.estimate(msg).coerceAtLeast(0).toLong() }
         }
-        var total = costs[groups.size - 1]
-        var firstKept = groups.size - 1
-        var i = groups.size - 2
-        while (i >= 0) {
-            val next = total + costs[i]
-            if (next > budget.budgetTokens) break
+        var total = costs.last()
+        var firstKept = groups.lastIndex
+        while (firstKept > 0) {
+            val next = total + costs[firstKept - 1]
+            if (next > effectiveBudget) break
             total = next
-            firstKept = i
-            i -= 1
+            firstKept--
         }
-        val droppedRounds = firstKept
-        if (droppedRounds == 0) {
-            return Result(postAnchor, 0, 0, 0)
-        }
-        var droppedMessages = 0
-        var droppedTokens = 0L
-        val dropped = ArrayList<LLMMessage>()
-        for (g in 0 until droppedRounds) {
-            droppedMessages += groups[g].size
-            droppedTokens += costs[g]
-            dropped.addAll(groups[g])
-        }
-        val noticeTokens = droppedTokens.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-        val noticeText = buildNotice(droppedRounds, noticeTokens, dropped, budget)
-        val keptMessages = ArrayList<LLMMessage>(postAnchor.size - droppedMessages + 1)
-        keptMessages.add(LLMMessage(
-            role = LLMMessage.Role.USER,
-            content = noticeText,
-            contentParts = listOf(AgentContentPart.Text(noticeText)),
-        ))
-        for (g in firstKept until groups.size) {
-            keptMessages.addAll(groups[g])
-        }
-        return Result(keptMessages, droppedRounds, droppedMessages, noticeTokens)
+        if (firstKept == 0) return Result(postAnchor, 0, 0, 0)
+
+        val droppedMessages = (0 until firstKept).sumOf { groups[it].size }
+        val droppedTokens = (0 until firstKept).sumOf { costs[it] }.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+        val notice = withBudgetedDigest(
+            droppedRoundsNotice(firstKept, droppedTokens), postAnchor.subList(0, droppedMessages),
+            budget.config, budget.digest,
+        )
+        val kept = ArrayList<LLMMessage>(postAnchor.size - droppedMessages + 1)
+        kept.add(LLMMessage(LLMMessage.Role.USER, notice, contentParts = listOf(AgentContentPart.Text(notice))))
+        kept.addAll(postAnchor.subList(droppedMessages, postAnchor.size))
+        return Result(kept, firstKept, droppedMessages, droppedTokens)
     }
 
-    /**
-     * Count notice + optional digest of the dropped rounds. The digest is
-     * best-effort: a failure there must never break request assembly, so it
-     * degrades to the count-only notice.
-     */
-    private fun buildNotice(
-        droppedRounds: Int,
-        droppedTokens: Int,
+    /** Both tail modes share the reserve; the meter covers mixed-width excerpts too. */
+    internal fun withBudgetedDigest(
+        base: String,
         dropped: List<LLMMessage>,
-        budget: Budget,
+        config: HarnessConfig,
+        digest: ((List<LLMMessage>) -> String?)?,
     ): String {
-        val base = droppedRoundsNotice(droppedRounds, droppedTokens)
-        val digest = runCatching { budget.digest(dropped) }.getOrNull()
-        return if (digest.isNullOrBlank()) base else base + "\n" + digest
+        if (digest == null || config.noticeReserveTokens <= config.noticeBaseTokens) return base
+        val text = try {
+            digest(dropped)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }?.takeIf { it.isNotBlank() } ?: return base
+        val prefix = "$base\n"
+        if (ContextTokenMeter.rawTextTokens(prefix) >= config.noticeReserveTokens) return base
+        fun fits(excerpt: String): Boolean =
+            ContextTokenMeter.rawTextTokens(prefix + excerpt) <= config.noticeReserveTokens &&
+                ContextTokenMeter.rawTextTokens(excerpt) <= config.noticeReserveTokens - config.noticeBaseTokens
+
+        fun clip(limit: Int): String = if (text.length <= limit) text else TextClip.safeTake(text, limit - 1) + '…'
+        val bounded = clip(config.digestMaxChars)
+        if (fits(bounded)) return prefix + bounded
+        var lo = 0
+        var hi = minOf(config.digestMaxChars, text.lastIndex)
+        while (lo < hi) {
+            val mid = lo + (hi - lo + 1) / 2
+            if (fits(clip(mid))) lo = mid else hi = mid - 1
+        }
+        return if (lo == 0) base else prefix + clip(lo)
     }
 
-    /**
-     * Split into chronological rounds. A new round starts at a USER message
-     * that does NOT carry a tool result (tool results are persisted as
-     * USER-role messages — see [WalkBack.bounded]'s orphan-toolcall note);
-     * everything before the first such boundary forms group 0, which may be
-     * the tail of the pre-anchor round (assistant tool_use first).
-     */
+    /** Permit new user turns and assistant steps, but only at legal pair boundaries. */
     internal fun splitRounds(messages: List<LLMMessage>): List<List<LLMMessage>> {
         if (messages.isEmpty()) return emptyList()
-        val groups = ArrayList<ArrayList<LLMMessage>>()
-        var current = ArrayList<LLMMessage>()
-        groups.add(current)
-        for (msg in messages) {
-            val startsRound = msg.role == LLMMessage.Role.USER &&
-                msg.contentParts.none { it is AgentContentPart.ToolResult }
-            if (startsRound && current.isNotEmpty()) {
-                current = ArrayList()
-                groups.add(current)
+        val legal = ToolPairingCore.legalCuts(messages)
+        val groups = ArrayList<List<LLMMessage>>()
+        var start = 0
+        var hasAssistant = messages.first().role == LLMMessage.Role.ASSISTANT
+        for (i in 1 until messages.size) {
+            val msg = messages[i]
+            val startsRound = msg.canCarryCompactSummary()
+            val startsStep = msg.role == LLMMessage.Role.ASSISTANT && hasAssistant
+            if (legal[i] && (startsRound || startsStep)) {
+                groups.add(messages.subList(start, i))
+                start = i
+                hasAssistant = false
             }
-            current.add(msg)
+            if (msg.role == LLMMessage.Role.ASSISTANT) hasAssistant = true
         }
+        groups.add(messages.subList(start, messages.size))
         return groups
     }
 }

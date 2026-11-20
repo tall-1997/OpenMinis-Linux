@@ -95,7 +95,7 @@ fun ChatViewModel.retryLast() {
         // mid-turn process kill or any commit path memory missed; the DB is
         // authoritative. Rebuild FIRST, then run the pop/GC steps below on
         // the rebuilt (authoritative) history.
-        rebuildAgentHistoryFromDatabase(sid)
+        if (!rebuildAgentHistoryFromDatabase(sid)) return@launch
 
         // 2. Pop ONLY a trailing assistant entry from agentHistory (mirrors
         //    iOS retry() :2107-2109). If the tail is already user(tool_result),

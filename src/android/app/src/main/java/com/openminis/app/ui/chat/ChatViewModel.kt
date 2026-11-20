@@ -89,7 +89,7 @@ class ChatViewModel(
     /** Whether this is a draft session (not yet persisted to DB). */
     internal val isDraft: Boolean = sessionId.startsWith("__new__")
     /** The real session ID, populated on first message for drafts. */
-    internal var realSessionId: String = if (isDraft) "" else sessionId
+    @Volatile internal var realSessionId: String = if (isDraft) "" else sessionId
     /** [T-tool-undo-replay] Turn-card undo state (reverted "msgId\npath" keys). */
     internal val toolUndo = ChatToolUndoController(this)
     /** [T-android-tts-scene-announcements] Speech sink for scene announcements, injected by the UI layer; null = no engine bound yet (degrade to silence). */
@@ -2576,70 +2576,7 @@ class ChatViewModel(
         loadSession()
     }
 
-    /**
-     * Produce the LLM-facing view of agentHistory. Mirrors iOS
-     * `effectiveAgentHistory` (AIChatViewModel.swift:3843-3876):
-     *
-     *   1) No marker / no summary → full agentHistory (zero-copy).
-     *   2) Marker has a `firstKeptMessageId` (compactBefore at boundary) →
-     *      `[summary] + agentHistory[boundaryIdx ...]`. The boundary message
-     *      itself is the first kept entry.
-     *   3) compactAll marker (`firstKeptMessageId = null`) → only summary +
-     *      messages persisted AFTER the marker, located by
-     *      `lastCompactedMessageId`. Messages inserted post-compact (the
-     *      user's follow-up turn + the assistant's response) survive; the
-     *      summary stands in for everything older.
-     *   4) Marker present but no boundary resolvable in current history (e.g.
-     *      the boundary message was deleted) → fall through to full history,
-     *      same safety net iOS uses.
-     *
-     * Critically, we do NOT include `agentHistory[< boundaryIdx]` for case
-     * (2/3) — that's how the model context stays clean after compact.
-     * Earlier behaviour was [summary] + entire agentHistory, which both
-     * over-stuffed the context AND duplicated tool_use/tool_result pairs the
-     * marker had already replaced; that's what made follow-up turns appear
-     * to lose continuity (the model got confused by the dual representation).
-     */
-
-    /**
-     * [T-android-compact-orphan-toolcall] The outgoing history, with tool
-     * call/result pairing repaired. Every request goes through here — see
-     * [dropOrphanedToolParts] for why the sweep exists and what it cannot fix.
-     */
-    internal fun effectiveAgentHistory(): List<LLMMessage> {
-        val repaired = dropOrphanedToolParts(effectiveAgentHistoryUncounted())
-        // [GH#352] A base64 image that entered history as TEXT (instead of an
-        // image content block) blows the model's context window on EVERY
-        // request and bricks the session. Scrub it from the outgoing copy only;
-        // the persisted rows are untouched.
-        val scrubbed = TextifiedImageGuard.scrub(repaired)
-        if (scrubbed.scrubbedParts > 0) {
-            com.openminis.app.logging.AppLogger.warning(
-                TAG,
-                "[GH#352] scrubbed ${scrubbed.scrubbedParts} textified image part(s) " +
-                    "from outbound history (${scrubbed.savedChars} chars saved)",
-            )
-        }
-        val steered = scrubbed.history
-        // Rows trimmed out of the window stay as a clipped excerpt; the digest covers what this process dropped.
-        // [T-message-transformers] 发送前清洗 assistant 文本里的思考残留。
-        val cleaned = HistoryDigest.inject(
-            steered,
-            HistoryDigest.render(llmDigestLines, llmDigestOmitted),
-        ).map { msg ->
-            if (msg.role == com.openminis.app.data.model.LLMMessage.Role.ASSISTANT && msg.content.isNotBlank()) {
-                msg.copy(content = com.openminis.app.agent.MessageTransformerChain.apply(msg.content))
-            } else msg
-        }
-        // [T-tool-result-aging] Fold tool output the model already consumed.
-        return ContextSaverRuntime.age(cleaned, currentModelContextWindow ?: 0, _lastTurnContextTokens.value)
-    }
-
-    // dropOrphanedToolParts lives in ChatViewModelHistoryExt.kt
-
-    /** Latest in-memory compact marker, used by [effectiveAgentHistory] to
-     * resolve boundaries the same way iOS `cachedLatestMarker` does. Refreshed
-     * on every compactAll write and on session reload. */
+    /** Latest durable marker used by [effectiveAgentHistoryUncounted] to resolve coverage. */
     @Volatile
     internal var _cachedLatestMarker: com.openminis.app.data.db.CompactMarkerEntity? = null
 
@@ -2688,13 +2625,14 @@ class ChatViewModel(
         if (alsoEnableAutoCompact) setAutoCompactEnabled(true)
         _showCompactBeforeSendPrompt.value = false
         val text = pendingSendText ?: return
+        val sid = activeSessionId
+        val epoch = snapshotResumeEpoch()
         pendingSendText = null
         viewModelScope.launch {
             val ok = awaitCompaction()
-            if (!ok) {
-                AppLogger.warning(TAG, "[Context] pre-send compaction failed — sending anyway")
-            }
-            sendMessage(text, skipContextCheck = true)
+            if (!ownsTranscript(sid, epoch)) return@launch
+            // A successful compact may cover only one batch. Allow the dispatch gate to finish it.
+            sendMessage(text, skipContextCheck = true, skipInitialCompaction = !ok)
         }
     }
 
@@ -3299,6 +3237,7 @@ class ChatViewModel(
 
     fun clearChat() {
         if (_isStreaming.value) cancelStream()
+        claimResumeEpoch() // Invalidate pending history reads and Stop follow-up writes.
         val sid = activeSessionId
         // [GH#325] /clear is an explicit, user-confirmed action. Record the
         // retention marker BEFORE the wipe so the exit cleanup
@@ -3659,7 +3598,7 @@ class ChatViewModel(
                 }
 
                 // Rebuild only the bounded model context from the persisted tail.
-                awaitBoundedHistoryRebuild(sid)
+                if (!rebuildAgentHistoryFromDatabase(sid)) return@launch
 
                 streamLaunched = runRerunStreamTail(initialProvider, "rerunFromToolBlock")
             } finally {
@@ -3797,7 +3736,7 @@ class ChatViewModel(
                 )
             }
 
-            awaitBoundedHistoryRebuild(sid)
+            if (!rebuildAgentHistoryFromDatabase(sid)) return@launch
             // Digest and compact markers both describe rows this cut may have
             // removed: drop the digest, and revert any marker whose anchor is
             // gone (its summary would otherwise fold deleted text back in).
@@ -4103,12 +4042,14 @@ class ChatViewModel(
     override fun cancelStream() {
         val job = streamJob
         if (job == null || stoppedStreamJob === job) return
+        stoppedStreamJob = job
         // A coroutine may already be completing while its provider stream is
         // still producing callbacks. `isActive` is not a reliable stop guard:
         // cancellation can be observed before the provider unwinds. Use the
         // identity fence above and let ActiveRun.stop() make the operation
         // idempotent while cleanup persists the interrupted turn.
         val stoppedSessionId = activeSessionId
+        val stoppedEpoch = snapshotResumeEpoch()
         val draftSessionId = sessionId
         val persistedSessionId = realSessionId
         val capturedSessionIds = listOf(stoppedSessionId, draftSessionId, persistedSessionId)
@@ -4157,6 +4098,7 @@ class ChatViewModel(
                 finishStoppedRun(
                     run = capturedRun,
                     stoppedSessionId = stoppedSessionId,
+                    stoppedEpoch = stoppedEpoch,
                     capturedSessionIds = capturedSessionIds,
                     capturedAssistantId = capturedAssistantId,
                     capturedModelSnapshot = capturedModelSnapshot,
