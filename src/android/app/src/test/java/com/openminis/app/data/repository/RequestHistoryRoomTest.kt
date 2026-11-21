@@ -197,4 +197,28 @@ class RequestHistoryRoomTest {
             repo.requestCompactState(sid, requestHistory.messages.first().id).hasCoverageGap,
         )
     }
+    @Test
+    fun fullMessageReadHydratesOffloadedBodyInsteadOfStub() = runBlocking {
+        val body = text("full original " + "x".repeat(5_000) + " TAIL")
+        val bytes = body.toByteArray()
+        val store = BodyStore(File(tmp.root, "bodies"))
+        val ref = checkNotNull(store.put(bytes).ref)
+        row(1, text("body stored (${bytes.size} bytes)"), ref = ref, bodyBytes = bytes.size.toLong(), sha = ref)
+
+        val item = checkNotNull(repo.readFullMessageText(sid, "m1"))
+        assertTrue(item.text.contains("TAIL"))
+        val page = repo.loadMessagePageFull(sid,0,1,100).single()
+        assertTrue(page.text.startsWith("full original"))
+        assertTrue(page.truncated)
+    }
+
+    @Test
+    fun requestHistoryHonoursTokenBudgetAndKeepsNewestRows() = runBlocking {
+        repeat(20) { row(it, text("x".repeat(400))) }
+        val tail = repo.loadRequestHistory(sid, Int.MAX_VALUE, maxTokens =500)
+        assertTrue(tail.messages.isNotEmpty())
+        assertTrue(tail.messages.size <20)
+        assertEquals("m19", tail.messages.last().id)
+    }
+
 }

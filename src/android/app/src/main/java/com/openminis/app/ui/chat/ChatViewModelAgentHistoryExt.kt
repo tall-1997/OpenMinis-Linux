@@ -221,13 +221,9 @@ internal fun ChatViewModel.appendBoundedHistoryAll(messages: Collection<LLMMessa
 }
 
 internal fun ChatViewModel.trimAgentHistory() {
+    // The request window decides what the model receives; the resident cache only
+    // has a hard memory guard. The old4,000-row cut is no longer a semantic cap.
     val dropped = ArrayList<LLMMessage>()
-    val byCount = ResidentWindow.countCut(agentHistory, ChatViewModel.MAX_AGENT_HISTORY_MESSAGES)
-    if (byCount > 0) {
-        dropped.addAll(agentHistoryHeadSnapshot(byCount))
-        removeAgentHistoryHead(byCount)
-        llmHistoryStartOffset += byCount
-    }
     val byBytes = ResidentWindow.byteCut(agentHistory)
     if (byBytes > 0) {
         dropped.addAll(agentHistoryHeadSnapshot(byBytes))
@@ -256,7 +252,12 @@ internal data class RequestHistorySnapshot(
 
 /** The same authoritative history the next dispatch will send, without publishing it. */
 internal suspend fun ChatViewModel.requestHistorySnapshot(sid: String): RequestHistorySnapshot {
-    val tail = chatRepository.loadRequestHistory(sid, ChatViewModel.MAX_AGENT_HISTORY_MESSAGES)
+    val window = effectiveContextWindowTokens()
+    val readLimit = if (window == null) ChatViewModel.MAX_AGENT_HISTORY_MESSAGES else Int.MAX_VALUE
+    val tokenBudget = window?.let { w ->
+        (w - maxOf(8_000, w /10)).coerceAtLeast(8_000)
+    }
+    val tail = chatRepository.loadRequestHistory(sid, readLimit, tokenBudget)
     val parsed = tail.messages.map { toLLMMessage(it) }
     val cut = ResidentWindow.byteCut(parsed)
     val firstLoadedSort = tail.messages.firstOrNull()?.sortOrder

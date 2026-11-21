@@ -1,5 +1,4 @@
 package com.openminis.app.data.repository
-
 import androidx.room.withTransaction
 import com.openminis.app.data.body.BodyStore
 import com.openminis.app.data.body.BudgetDecision
@@ -310,8 +309,11 @@ class ChatRepository(
         loadSessionTail(sessionId, limit = limit).messages
 
     /** Exact request bodies in a bounded, contiguous DB suffix; never a display projection. */
-    internal suspend fun loadRequestHistory(sessionId: String, limit: Int): SessionTail =
-        readRequestHistoryTail(sessionId, limit)
+    internal suspend fun loadRequestHistory(
+        sessionId: String,
+        limit: Int,
+        maxTokens: Int? = null,
+    ): SessionTail = readRequestHistoryTail(sessionId, limit, maxTokens)
 
     /**
      * [T-android-huge-session-load-oom] Bounded heads for title generation,
@@ -677,16 +679,15 @@ class ChatRepository(
                         bodyRef = v.bodyRef,
                         bodySha = v.bodySha,
                         preview = messagePreviewCell(storedParts),
-                        // UTF-8 size of the stored cell, same definition as
-                        // storeBody. Offloaded rows report 0 rather than the
-                        // stub's size: message_versions snapshots the row's
-                        // `parts_json` column, and the original body length is
-                        // not among the archived columns (adding it would be a
-                        // schema migration). Hydration is unaffected — it keys
-                        // off bodyRef, not this number.
+                        // UTF-8 size of the stored cell, same definition as storeBody.
+                        // message_versions does not archive body_bytes, so recover an offloaded
+                        // row's size from the verified BodyStore header; otherwise history and
+                        // request reads would reject the restored row as invalid.
                         bodyBytes = if (v.bodyRef == null) {
                             storedParts.toByteArray(Charsets.UTF_8).size.toLong()
-                        } else 0L,
+                        } else {
+                            bodyStore()?.sizeOf(v.bodyRef) ?: 0L
+                        }
                     )
                     dao.insertMessage(row)
                     restoredRows.add(row)
@@ -1082,17 +1083,17 @@ class ChatRepository(
                 // Mark messages that exceeded the cap so the caller can emit
                 // "truncated": true (mirrors iOS SessionsOffloadBridge).
                 truncated = text.length > maxChars,
+                bodyOffloaded = e.bodyRef != null,
             )
         }
     }
-
-    suspend fun messageCount(sessionId: String): Int = dao.messageCountForSession(sessionId)
 
     /**
      * [T-android-sessions-cli-messages-daterange] Count under the same optional
      * range [loadMessagePage] filters by, so `total` and the returned slice
      * always describe the same set.
      */
+    suspend fun messageCount(sessionId: String): Int = dao.messageCountForSession(sessionId)
     suspend fun messageCountInRange(sessionId: String, startMs: Long?, endMs: Long?): Int =
         if (startMs == null && endMs == null) {
             dao.messageCountForSession(sessionId)
@@ -1339,16 +1340,4 @@ data class MessageSearchMatch(
     val role: String,
     val createdAt: Long,
     val snippet: String,
-)
-
-/** T188: a single message in the paginated transcript returned by
- *  `minis-sessions-cli messages`. */
-data class MessagePageItem(
-    val messageId: String,
-    val role: String,
-    val createdAt: Long,
-    val text: String,
-    // [T-android-sessions-cli-full] True when the stored text exceeded the
-    // requested cap and [text] is a prefix. Surfaced as "truncated": true.
-    val truncated: Boolean = false,
 )

@@ -114,7 +114,7 @@ internal class SessionHistory(private val repo: ChatRepository, private val sess
         expected: MessageEntity,
         reserveBytes: (Long) -> Boolean,
     ): BodySource? {
-        if (this.scope() != scope) return null
+        if (scope != HistoryScope.WholeSession && this.scope() != scope) return null
         val row = row(scope, expected.id)?.takeIf { it == expected } ?: return null
         val ref = row.bodyRef
         val supportedSize = 1L..ResourceLimits.MAX_DECLARED_UNCOMPRESSED.toLong()

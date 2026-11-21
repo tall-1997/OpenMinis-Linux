@@ -201,7 +201,7 @@ class HistorySearchToolTest {
         }
         assertEquals(listOf("anchor", "earlier"), history.search("readme").ids())
         assertTrue(history.read("anchor").success)
-        assertEquals(ToolErrorCode.NOT_FOUND, history.read("active").errorCode)
+        assertTrue(history.read("active").success)
         assertEquals(ToolErrorCode.NOT_FOUND, history.read("foreign").errorCode)
     }
 
@@ -216,7 +216,7 @@ class HistorySearchToolTest {
             marker(1).copy(boundaryMessageId = "kept"), marker(1, last = "earlier"), marker(1, firstOrder = 4))) {
             history.marker = old
             assertEquals(listOf("earlier"), history.search("find").ids())
-            assertEquals(ToolErrorCode.NOT_FOUND, history.read("kept").errorCode)
+            assertTrue(history.read("kept").success)
         }
     }
 

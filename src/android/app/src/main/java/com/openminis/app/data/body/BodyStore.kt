@@ -73,6 +73,31 @@ open class BodyStore(private val root: File) {
 
     fun read(ref: String, maxBytes: Int = ResourceLimits.SQL_CELL_BYTES): ByteArray? = readBody(ref, maxBytes)
 
+ /** Declared uncompressed size from a verified header; never reads the payload. */
+ fun sizeOf(ref: String): Long? {
+ if (ref.length !=64 || ref.any { it !in '0'..'9' && it !in 'a'..'f' }) return null
+ val file = File(root, ref)
+ if (!file.isFile) return null
+ val length = file.length()
+ if (length < HEADER || length > HEADER + ResourceLimits.MAX_DECLARED_UNCOMPRESSED.toLong()) return null
+ return try {
+ file.inputStream().use { stream ->
+ val header = ByteArray(HEADER)
+ DataInputStream(stream).readFully(header)
+ val magicOk = header[0] == 'O'.code.toByte() && header[1] == 'M'.code.toByte() &&
+ header[2] == 'B'.code.toByte() && header[3] == '1'.code.toByte()
+ if (!magicOk) return null
+ val uncompressed = intAt(header, 4)
+ val stored = intAt(header, 8)
+ val codec = header[12].toInt() and 0xff
+ if (uncompressed < 0 || uncompressed > ResourceLimits.MAX_DECLARED_UNCOMPRESSED) return null
+ if (stored < 0 || stored.toLong() != length - HEADER || codec != CODEC_RAW) return null
+ if (uncompressed != stored) return null
+ uncompressed.toLong()
+ }
+ } catch (_: Exception) { null }
+ }
+
     /** Check the row's admission limit against the file header before reading its payload. */
     internal fun readExact(ref: String, expectedBytes: Int): ByteArray? = readBody(ref, expectedBytes, expectedBytes)
 

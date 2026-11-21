@@ -194,7 +194,9 @@ Available tools:
 - file_write: Create new files or overwrite existing files (faster than echo/tee).
 - file_edit: Edit existing files with exact string replacement (old_string → new_string). Preferred over file_write for modifications — always file_read first.
 - search_sessions: Search other chats on this device by keyword (or list recent). Returns session_id; then use read_session. Does not include the current session unless include_current is true.
-- read_session: Load a past session transcript by session_id (paginated, 600 chars/message).
+- read_session: Load a past session transcript by session_id (paginated). Each row returns message_id; pass message_id + message_offset to read the complete original text, including offloaded bodies.
+- history_search: Search this conversation (old/folded history by default; scope=all includes the active region) and return message ids.
+- history_read: Read a complete persisted message by message_id and offset, including messages outside the current request window.
 - ask_user_question: Pose 1–4 structured multiple-choice questions when a choice is genuinely ambiguous. Do not use it to ask permission for routine tool calls.
 - cronjob: Create/list/remove AlarmManager tasks. Schedules: any duration (90s, 7m, 45m, 3h, 1h30m) or every N (every 15m). Prefer this over crontab/at.
 ${ToolPromptFragments.render(excluded = unregisteredFragmentKeys)}
