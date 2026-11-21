@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- [T-port-fold-tools] Fold consecutive tool calls. Translations copied from iOS Localizable.xcstrings. -->
+<resources>
+    <string name="tool_fold_setting_title">Pagsamahin ang magkakasunod na tool call</string>
+    <string name="tool_fold_section">Mga tool call</string>
+    <string name="tool_fold_setting_footer">Ipinapakita bilang isang linya ang magkakasunod na tool call. I-tap ito para makita ang bawat call.</string>
+    <string name="tool_fold_ran_n_tools">Nagpatakbo ng %1$d tool</string>
+    <string name="tool_fold_n_failed">%1$d ang pumalya</string>
+    <string name="tool_fold_n_cancelled">%1$d ang kinansela</string>
+    <string name="tool_fold_expand_hint">Ipinapakita ang bawat tool call</string>
+    <string name="tool_fold_collapse_hint">Itinatago ang mga tool call</string>
+</resources>
