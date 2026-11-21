@@ -73,7 +73,6 @@ import com.openminis.app.ui.components.MinisButton
 import com.openminis.app.ui.components.MinisOutlinedButton
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.components.SectionTextField
-import com.openminis.app.ui.components.SettingsRowDivider
 import com.openminis.app.ui.RoutingStrategyUi
 
 /**
