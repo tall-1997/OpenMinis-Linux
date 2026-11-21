@@ -28,4 +28,21 @@ class DriftGuardTest {
         assertTrue(note.contains("Verdict: on-track"))
         assertTrue(note.contains("<goal_context/>"))
     }
+
+    @Test
+    fun customCadenceChangesTheFloorAndTheBucket() {
+        // everyN=5: the first check fires at round 5, not 10.
+        assertEquals(0, DriftGuard.bucketFor(4, 5))
+        assertEquals(5, DriftGuard.bucketFor(5, 5))
+        assertEquals(15, DriftGuard.bucketFor(18, 5))
+        // The note reports the configured cadence, not the shipped 10.
+        val note = DriftGuard.buildNote(DriftGuard.markerFor(5), "", 5, 5)
+        assertTrue(note.contains("## Drift check — 5 tool calls"))
+        assertTrue(note.contains("the last 5 tool calls"))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun nonPositiveCadenceIsRejected() {
+        DriftGuard.bucketFor(50, 0)
+    }
 }

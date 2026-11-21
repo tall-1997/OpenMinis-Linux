@@ -51,7 +51,17 @@ internal object NoticeLedgerStore {
                 put("goalSha", state.goalSha ?: "")
                 put("stateSha", state.stateSha ?: "")
             }
-            file(filesDir, sessionId).writeText(json.toString())
+            // Atomic tmp+rename: a crash mid-write would otherwise leave a
+            // truncated JSON, load() would fall back to the empty State and
+            // every recalled memory would re-inject on the next start — the
+            // exact repeated-injection bug this store exists to prevent.
+            val target = file(filesDir, sessionId)
+            val tmp = File(target.parentFile, "${target.name}.tmp")
+            tmp.writeText(json.toString())
+            if (!tmp.renameTo(target)) {
+                target.writeText(json.toString())
+                tmp.delete()
+            }
         }
     }
 }

@@ -109,15 +109,19 @@ internal suspend fun ChatViewModel.commitSessionNoticesOnce(
     }
     if (goalCanContinue) {
         val ledger = WorkingMemoryStore.ledgerFor(sid, context.filesDir)
-        val bucket = com.openminis.app.goal.DriftGuard.bucketFor(ledger.lastTurn())
-        if (bucket >= com.openminis.app.goal.DriftGuard.MIN_TOOL_CALLS) {
+        // [T-drift-guard-config] Cadence is resolved policy, not a literal.
+        val everyN = com.openminis.app.agent.HarnessConfig.current().driftGuardEveryN
+        val bucket = com.openminis.app.goal.DriftGuard.bucketFor(ledger.lastTurn(), everyN)
+        // bucketFor returns 0 below the cadence, so >0 is the armed gate —
+        // a custom cadence below the shipped floor must still fire.
+        if (bucket > 0) {
             val marker = com.openminis.app.goal.DriftGuard.markerFor(bucket)
             if (agentHistory.none { it.content.contains(marker) }) {
                 // [T-task-checkpoint] Recovery point before every drift check:
                 // the plan board at the last known-good round.
                 com.openminis.app.goal.TaskCheckpointStore.save(context, sid, goalObjective, goalPrompt)
                 val note = com.openminis.app.goal.DriftGuard.buildNote(
-                    marker, goalPrompt ?: goalObjective, bucket,
+                    marker, goalPrompt ?: goalObjective, bucket, everyN,
                 )
                 val committed = commitHiddenUserNote(note, sid)
                 if (!ownsNotices()) return

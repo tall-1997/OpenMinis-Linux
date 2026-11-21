@@ -40,6 +40,10 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
     constructor(repository: ChatRepository) : this(RepositoryGoalPersistence(repository))
 
     companion object {
+        /** Contract fields render verbatim into the per-request goal block,
+         *  so every writer clamps to this ceiling (the P0 plan's contract cap). */
+        internal const val CONTRACT_FIELD_MAX_CHARS = 800
+
         /**
          * Bumped on every successful write, from ANY [GoalManager] instance —
          * the manager is constructed ad-hoc by the slash UI, tool dispatcher
@@ -74,15 +78,30 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
 
     suspend fun get(sessionId: String): SessionGoalEntity? = persistence.load(sessionId)
 
-    /** [T-goal-contract] Write acceptance/constraints/next_step; no state change. */
+    /** [T-goal-contract] Write acceptance/constraints/next_step; no state change.
+     *  Fields are clamped here — the single choke point for ALL contract
+     *  writers — because these strings render into EVERY request prompt:
+     *  an unbounded write would inflate the prompt for the rest of the
+     *  session. Matches the P0 plan's 800-char contract ceiling. */
     suspend fun updateContract(
         sessionId: String,
         acceptance: String? = null,
         constraints: String? = null,
         nextStep: String? = null,
     ): SessionGoalEntity? = locked(sessionId) {
-        persistence.saveContract(sessionId, acceptance, constraints, nextStep, System.currentTimeMillis())
+        persistence.saveContract(
+            sessionId,
+            acceptance?.clampContract(),
+            constraints?.clampContract(),
+            nextStep?.clampContract(),
+            System.currentTimeMillis(),
+        )
         persistence.load(sessionId)?.also { bump() }
+    }
+
+    private fun String.clampContract(): String = when {
+        length <= CONTRACT_FIELD_MAX_CHARS -> this
+        else -> take(CONTRACT_FIELD_MAX_CHARS) + "…[clamped]"
     }
 
     suspend fun createByUser(sessionId: String, objective: String, tokenBudget: Long? = null): SessionGoalEntity =
