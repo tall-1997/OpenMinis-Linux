@@ -26,13 +26,15 @@ internal object GoalDriftReconciler {
 
     /**
      * Tool turns of an unchanged board tolerated before a drift nudge is owed.
-     * Same knob style as [ChatViewModel.MAX_COMPACT_LLM_CALLS]: an internal
-     * const pinned by tests rather than a settings surface — it bounds a
-     * safety net, not a scheduling resource. 8 turns ≈ two plans of three
+     * [STALL_TURNS_BEFORE_NUDGE] is the DEFAULT — the knob is user-configurable
+     * ([GoalDriftPrefs], clamped to [STALL_TURNS_MIN]..[STALL_TURNS_MAX]) and
+     * flows into [nudgeIfOwed] as a parameter. 8 turns ≈ two plans of three
      * steps each going silent; below that, ordinary between-step pauses
      * (reflection turns, user replies) would trip it.
      */
     internal const val STALL_TURNS_BEFORE_NUDGE = 8
+    internal const val STALL_TURNS_MIN = 4
+    internal const val STALL_TURNS_MAX = 32
 
     /** Nudge text must stay bounded even for a runaway objective blob. */
     private const val OBJECTIVE_MAX_LINES = 12
@@ -81,8 +83,12 @@ internal object GoalDriftReconciler {
         state: GoalDriftStore.DriftState,
         objective: String,
         pendingCount: Int,
+        threshold: Int = STALL_TURNS_BEFORE_NUDGE,
     ): String? {
-        if (state.stallTurns < STALL_TURNS_BEFORE_NUDGE) return null
+        // Clamp the user knob: a caller wiring an unvalidated setting must not
+        // be able to disable the net (0/negative) or bury it (huge).
+        val effective = threshold.coerceIn(STALL_TURNS_MIN, STALL_TURNS_MAX)
+        if (state.stallTurns < effective) return null
         if (state.lastBoardSha == null || state.nudgedBoardSha == state.lastBoardSha) return null
         return buildString {
             append("<system-reminder>\n")

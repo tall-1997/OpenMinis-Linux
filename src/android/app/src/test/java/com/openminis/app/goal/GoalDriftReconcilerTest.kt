@@ -181,4 +181,43 @@ class GoalDriftReconcilerTest {
             state.stallTurns,
         )
     }
+
+    // -- user-configurable threshold ([GoalDriftPrefs]) ----------------------
+
+    @Test
+    fun `a user threshold of four speaks at turn four`() {
+        var state = GoalDriftStore.DriftState(lastBoardSha = "fp-1", stallTurns = 0)
+        var spokenAtTurn: Int? = null
+        repeat(6) { index ->
+            state = GoalDriftReconciler.next(state, goalActive = true, fingerprint = "fp-1")
+            val owed = GoalDriftReconciler.nudgeIfOwed(
+                state, objective = "x", pendingCount = 2, threshold = GoalDriftReconciler.STALL_TURNS_MIN,
+            )
+            if (owed != null && spokenAtTurn == null) spokenAtTurn = index + 1
+        }
+        assertEquals("a tightened knob fires earlier", 4, spokenAtTurn)
+    }
+
+    @Test
+    fun `a zero threshold clamps to the minimum`() {
+        val state = GoalDriftStore.DriftState(lastBoardSha = "fp-1", stallTurns = GoalDriftReconciler.STALL_TURNS_MIN)
+        // 0 and negatives must not disable the net: they clamp to MIN(4), so
+        // four silent turns still speak.
+        requireNotNull(
+            GoalDriftReconciler.nudgeIfOwed(state, objective = "x", pendingCount = 2, threshold = 0),
+        )
+    }
+
+    @Test
+    fun `a huge threshold clamps to the maximum`() {
+        val buried = GoalDriftStore.DriftState(lastBoardSha = "fp-1", stallTurns = 99)
+        requireNotNull(
+            GoalDriftReconciler.nudgeIfOwed(buried, objective = "x", pendingCount = 2, threshold = 100),
+            "99 silent turns with threshold=100(→32) must still speak",
+        )
+        val mid = GoalDriftStore.DriftState(lastBoardSha = "fp-1", stallTurns = GoalDriftReconciler.STALL_TURNS_MAX)
+        requireNotNull(
+            GoalDriftReconciler.nudgeIfOwed(mid, objective = "x", pendingCount = 2, threshold = 100),
+        )
+    }
 }

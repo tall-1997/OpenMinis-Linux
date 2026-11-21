@@ -2972,6 +2972,10 @@
     <string name="guard_stop_on">可以停止会话</string>
     <string name="guard_stop_off">永不停止会话</string>
     <string name="guard_stop_footer">开启后，同一操作重复过多时由循环保护停止会话；关闭后只提醒模型，适合编译等长时间等待。</string>
+    <string name="goal_drift_section">目标偏航监督</string>
+    <string name="goal_drift_threshold_title">偏航提醒阈值</string>
+    <string name="goal_drift_threshold_value">%1$d 个工具轮</string>
+    <string name="goal_drift_footer">目标进行中时，计划板连续多少个工具轮没有任何变化，宿主就会提醒模型回到目标。数值越大提醒越少，越小监督越紧。</string>
     <string name="token_usage_section_memory">记忆</string>
     <string name="token_usage_memory_lines">已投递行数</string>
     <string name="token_usage_memory_shown">展示次数</string>

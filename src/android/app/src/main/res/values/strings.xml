@@ -3103,6 +3103,10 @@
     <string name="guard_stop_on">The guard may stop the session</string>
     <string name="guard_stop_off">Never stops the session</string>
     <string name="guard_stop_footer">When on, the guard stops the session once the same action repeats too often. When off it only reminds the model, which helps during long waits such as a build.</string>
+    <string name="goal_drift_section">Goal drift supervision</string>
+    <string name="goal_drift_threshold_title">Drift reminder threshold</string>
+    <string name="goal_drift_threshold_value">%1$d tool turns</string>
+    <string name="goal_drift_footer">While a goal is active, this is how many consecutive tool turns may pass without any plan-board movement before the host reminds the model of its objective. Higher means fewer nudges; lower means tighter supervision.</string>
     <string name="token_usage_section_memory">Memory</string>
     <string name="token_usage_memory_lines">Lines delivered</string>
     <string name="token_usage_memory_shown">Times shown</string>
