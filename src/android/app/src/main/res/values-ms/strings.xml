@@ -635,10 +635,9 @@
     <string name="env_var_privacy_footer">Apabila didayakan, sebarang nilai pemboleh ubah persekitaran yang muncul dalam output shell-execute akan digantikan dengan bentuk bertopeng (cth. `sk-1********ajhks`) sebelum sampai kepada model. Nilai yang lebih pendek daripada 8 aksara menjadi `*` sepenuhnya. Output yang dilihat pengguna dalam sembang kekal tidak berubah.</string>
     <string name="outbound_mask_toggle">Topeng privasi data keluar</string>
     <string name="outbound_mask_footer">Penyamaran bentuk opt-in: rentetan berbentuk kunci (termasuk kod), e-mel dan nombor telefon menjadi pemegang tempat. Kunci API embedding di bawah disimpan teks jelas dalam prefs peribadi. Sejarah peranti tidak berubah.</string>
-    <string name="chat_menu_perm_yoyo">YOLO · automatik penuh</string>
-    <string name="chat_menu_perm_safe_auto">Auto selamat · alat baca sahaja dibenarkan</string>
-    <string name="chat_menu_perm_ask">Tanya · sahkan setiap panggilan</string>
-    <string name="chat_menu_perm_off">Mati · tolak semua alat</string>
+    <string name="chat_menu_perm_yoyo">Akses penuh</string>
+    <string name="chat_menu_perm_safe_auto">Autonomi</string>
+    <string name="chat_menu_perm_ask">Tanya sebelum ubah</string>
     <string name="gate_approval_allow_all">Sentiasa benarkan sesi ini (sasaran semasa)</string>
     <string name="approval_action_allow_all_session">Sentiasa benarkan dalam sesi ini</string>
     <string name="env_var_section_header">Pemboleh Ubah</string>
@@ -3351,4 +3350,13 @@
     <string name="modeldetail_tail_budget_state_auto">Automatik (mengikut tetingkap, sehingga 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Khusus untuk model ini</string>
     <string name="tool_limits_tool_concurrency">Alat baca selari</string>
+ <string name="perm_mode_desc_ask">Bertanya sebelum fail diubah</string>
+ <string name="perm_mode_desc_auto">Bertanya hanya jika ada risiko</string>
+ <string name="perm_mode_desc_full">Kurang pengesahan</string>
+ <string name="perm_full_access_title">Dayakan akses penuh?</string>
+ <string name="perm_full_access_body">Ejen akan membaca, mencipta dan memadam fail, menjalankan arahan terminal, serta menggunakan rangkaian atau aplikasi bersambung tanpa bertanya setiap kali. Tindakan ini boleh menyebabkan data hilang atau bocor, jadi dayakan hanya jika anda mempercayai tugasan itu. Anda boleh kembali bila-bila masa.</string>
+ <string name="perm_full_access_ack">Saya faham risikonya dan bertanggungjawab atas data saya.</string>
+ <string name="perm_full_access_confirm">Dayakan</string>
+ <string name="perm_guarded_risk_reason">Sahkan arahan berisiko</string>
+ <string name="perm_guarded_risk_message">Mod autonomi menilai arahan ini berisiko. Sahkan sekali untuk menjalankannya.</string>
 </resources>

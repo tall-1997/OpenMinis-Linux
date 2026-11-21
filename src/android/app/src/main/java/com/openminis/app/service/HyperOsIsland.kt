@@ -68,6 +68,9 @@ internal object HyperOsIsland {
     // button; the shade row keeps its own two addAction buttons.
     const val ACTION_STOP = "miui.focus.action_stop"
 
+ /** The template cap, in UTF-8 bytes (DshGo XiaomiFocus.PARAM_MAX_BYTES). */
+ const val PARAM_MAX_BYTES =3072
+
     /**
      * Build signals for [isHyperOsHost]. Split out so JVM tests can inject
      * arbitrary manufacturer/brand/fingerprint combos.
@@ -109,7 +112,7 @@ internal object HyperOsIsland {
      * property. Injected values keep this JVM-testable.
      */
     fun islandProtocolCapable(focusProtocolVersion: Int, islandSystemProperty: Boolean): Boolean =
-        focusProtocolVersion >= 3 || islandSystemProperty
+        focusProtocolVersion >=1 || islandSystemProperty
 
     /**
      * `notification_focus_protocol` from Settings.System: 1/2/3 on HyperOS
@@ -235,8 +238,6 @@ internal object HyperOsIsland {
         val baseTitle: String,
         /** OS2 focus-notification supplementary text. */
         val baseContent: String,
-        /** hintInfo (按钮组件3) title — the short status line above the button. */
-        val hintTitle: String,
         /** Same notification id + updatable=true is the official update path. */
         val updatable: Boolean = true,
         /** First appearance renders expanded (大岛); updates stay collapsed. */
@@ -288,16 +289,9 @@ internal object HyperOsIsland {
             .put("bigIslandArea", bigIslandArea)
             .put("smallIslandArea", smallIslandArea)
         val baseInfo = JSONObject()
-            .put("type", 1)
+            .put("type",2)
             .put("title", content.baseTitle)
             .put("content", content.baseContent)
-        val hintInfo = JSONObject()
-            .put("type", 1)
-            .put("title", content.hintTitle)
-            .put(
-                "actionInfo",
-                JSONObject().put("action", ACTION_STOP),
-            )
         val paramV2 = JSONObject()
             .put("protocol", 1)
             .put("business", content.business)
@@ -312,8 +306,7 @@ internal object HyperOsIsland {
             .put("aodPic", PIC_AOD)
             .put("param_island", paramIsland)
             .put("baseInfo", baseInfo)
-            .put("hintInfo", hintInfo)
-        return JSONObject().put("param_v2", paramV2).toString()
+        return clampToProtocolLimit(JSONObject().put("param_v2", paramV2).toString())
     }
 
     // ------------------------------------------------------------------

@@ -138,7 +138,9 @@ internal fun ChatViewModel.editQueued(promptId: String, newText: String): Boolea
 /** Remove a queued prompt and its chat message by prompt id. */
 fun ChatViewModel.removeQueuedPrompt(promptId: String) {
     _promptQueue.update { queue -> queue.filterNot { it.id == promptId } }
-    _messages.value = _messages.value.filterNot { it.queuedPromptId == promptId }
+    // [T-steering-withdraw-hint] A steering entry owns two rows; drop both.
+    if (promptId.startsWith("steer_")) steeringState().queue.remove(promptId)
+    _messages.value = withoutSteeringRows(_messages.value, promptId).filterNot { it.queuedPromptId == promptId }
 }
 
 /** Withdraw a queued message before it gets injected into the agent loop. */

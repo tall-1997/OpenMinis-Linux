@@ -1,121 +1,120 @@
 package com.openminis.app.security
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * [#31] Four-tier session permission: persistence compat read + tier → gate
- * mode mapping + the decision matrix each tier produces at the gate.
+ * [T-perm-three-modes] ZCode-parity session permissions: three tiers, one
+ * legacy-read mapping, and the decision each tier produces at the gate.
  */
 class SessionPermissionModeTest {
 
-    // ── Compat read (persisted `permission_mode` string → tier) ──────────
+    // ---- Compat read (persisted `permission_mode` string -> tier) ----
 
-    @Test
-    fun legacyTokensMapFaithfully() {
-        // The two-tier "ASK" token meant "reads auto-allow, the rest asks" —
-        // exactly today's SAFE_AUTO — so legacy sessions keep their behaviour.
-        assertEquals(SessionPermissionMode.SAFE_AUTO, SessionPermissionMode.fromStored("ASK"))
-        // The strict ask-everything tier has its own token.
-        assertEquals(SessionPermissionMode.ASK, SessionPermissionMode.fromStored("ASK_ALL"))
-        assertEquals(SessionPermissionMode.YOLO, SessionPermissionMode.fromStored("YOLO"))
-        // Historical spelling the two-tier app actually wrote.
-        assertEquals(SessionPermissionMode.YOLO, SessionPermissionMode.fromStored("YOYO"))
-        // Case/whitespace tolerant.
-        assertEquals(SessionPermissionMode.YOLO, SessionPermissionMode.fromStored(" yolo "))
-        assertEquals(SessionPermissionMode.SAFE_AUTO, SessionPermissionMode.fromStored("SAFE_AUTO"))
-        assertEquals(SessionPermissionMode.OFF, SessionPermissionMode.fromStored("OFF"))
+@Test
+    fun everyLegacyTokenMapsToATierNoWiderThanBefore() {
+        // ZCode `yolo` spellings.
+        assertEquals(SessionPermissionMode.FULL_ACCESS, SessionPermissionMode.fromStored("YOLO"))
+        assertEquals(SessionPermissionMode.FULL_ACCESS, SessionPermissionMode.fromStored("YOYO"))
+        assertEquals(SessionPermissionMode.FULL_ACCESS, SessionPermissionMode.fromStored(" yolo "))
+        // [T-perm-no-widening] The two-tier "SAFE_AUTO" / "ASK" tokens meant
+        // "reads auto-allow, everything else asks" - i.e. today's
+        // ASK_BEFORE_CHANGES. Mapping them to AUTONOMOUS would have widened
+        // every historical session and every unattended scheduled run into
+        // "write files without asking".
+        assertEquals(SessionPermissionMode.ASK_BEFORE_CHANGES, SessionPermissionMode.fromStored("SAFE_AUTO"))
+        assertEquals(SessionPermissionMode.ASK_BEFORE_CHANGES, SessionPermissionMode.fromStored("ASK"))
+        // Only the explicit new token selects the autonomous tier.
+        assertEquals(SessionPermissionMode.AUTONOMOUS, SessionPermissionMode.fromStored("AUTONOMOUS"))
+        // ZCode `build` spellings.
+        assertEquals(SessionPermissionMode.ASK_BEFORE_CHANGES, SessionPermissionMode.fromStored("ASK_ALL"))
+        // The retired lockdown tier lands on the strictest remaining tier.
+        assertEquals(SessionPermissionMode.ASK_BEFORE_CHANGES, SessionPermissionMode.fromStored("OFF"))
+        assertEquals(SessionPermissionMode.ASK_BEFORE_CHANGES, SessionPermissionMode.fromStored("DENY_ALL"))
     }
 
-    @Test
+@Test
     fun unknownValuesNeverWidenTheGate() {
-        assertEquals(SessionPermissionMode.ASK, SessionPermissionMode.fromStored(null))
-        assertEquals(SessionPermissionMode.ASK, SessionPermissionMode.fromStored(""))
-        assertEquals(SessionPermissionMode.ASK, SessionPermissionMode.fromStored("   "))
-        // Retired global tokens and garbage land on ASK.
-        assertEquals(SessionPermissionMode.ASK, SessionPermissionMode.fromStored("ALLOW_ALL"))
-        assertEquals(SessionPermissionMode.ASK, SessionPermissionMode.fromStored("READ_ONLY"))
-        assertEquals(SessionPermissionMode.ASK, SessionPermissionMode.fromStored("PLAN"))
-        assertEquals(SessionPermissionMode.ASK, SessionPermissionMode.fromStored("nonsense"))
-        // DENY_ALL was the old spell of the OFF tier — keep reading it back.
-        assertEquals(SessionPermissionMode.OFF, SessionPermissionMode.fromStored("DENY_ALL"))
-    }
-
-    @Test
-    fun storedTokenRoundTrips() {
-        for (tier in SessionPermissionMode.entries) {
-            assertEquals(tier, SessionPermissionMode.fromStored(tier.toStoredToken()))
+        for (raw in listOf(null, "", " ", "ALLOW_ALL", "READ_ONLY", "PLAN", "nonsense")) {
+        assertEquals(
+            "token=$raw must land on the safest tier",
+            SessionPermissionMode.ASK_BEFORE_CHANGES,
+            SessionPermissionMode.fromStored(raw),
+        )
         }
     }
 
-    // ── Tier → gate mode mapping ─────────────────────────────────────────
-
-    @Test
-    fun tierToGateMode() {
-        assertEquals(PermissionMode.DENY_ALL, SessionPermissionMode.OFF.toGateMode())
-        assertEquals(PermissionMode.ASK_ALL, SessionPermissionMode.ASK.toGateMode())
-        assertEquals(PermissionMode.ASK, SessionPermissionMode.SAFE_AUTO.toGateMode())
-        assertEquals(PermissionMode.ALLOW_ALL, SessionPermissionMode.YOLO.toGateMode())
+@Test
+    fun storedTokenRoundTrips() {
+        for (tier in SessionPermissionMode.entries) {
+        assertEquals(tier, SessionPermissionMode.fromStored(tier.toStoredToken()))
+        }
     }
 
-    // ── Four-tier decision matrix at the gate ────────────────────────────
-    // Columns per tier: what a read tool / a write tool / a safe shell
-    // command gets. OFF denies everything; ASK asks for everything;
-    // SAFE_AUTO auto-runs the read-only/safe surface and asks for the rest;
-    // YOLO auto-runs everything except fatal-confirm.
+@Test
+    fun onlyTheTopTierIsAutomaticEverywhere() {
+        assertFalse(SessionPermissionMode.ASK_BEFORE_CHANGES.isAutomatic())
+        assertTrue(SessionPermissionMode.AUTONOMOUS.isAutomatic())
+        assertTrue(SessionPermissionMode.FULL_ACCESS.isAutomatic())
+        assertFalse(SessionPermissionMode.AUTONOMOUS.isFullAccess())
+        assertTrue(SessionPermissionMode.FULL_ACCESS.isFullAccess())
+    }
+
+    // ---- Tier -> gate mode mapping ----
+
+@Test
+    fun tierToGateMode() {
+        assertEquals(PermissionMode.ASK, SessionPermissionMode.ASK_BEFORE_CHANGES.toGateMode())
+        assertEquals(PermissionMode.GUARDED, SessionPermissionMode.AUTONOMOUS.toGateMode())
+        assertEquals(PermissionMode.ALLOW_ALL, SessionPermissionMode.FULL_ACCESS.toGateMode())
+    }
+
+    // ---- Decision matrix at the gate ----
 
     private val gate = SecurityGateImpl()
     private val read = gate.classify("file_read", """{"path":"/var/minis/workspace/a.txt"}""")
     private val write = gate.classify("file_write", """{"path":"/var/minis/workspace/a.txt"}""")
     private val safeShell = gate.classify("shell_exec", """{"command":"ls /var/minis/workspace"}""")
-    private val dangerousShell = gate.classify("shell_exec", """{"command":"rm -rf /var/minis/workspace/x"}""")
+    private val dangerousShell = gate.classify("shell_exec", """{"command":"iptables -F"}""")
+    private val fatal = gate.classify("shell_exec", """{"command":"rm -rf /"}""")
 
-    @Test
-    fun offDeniesEverything() {
-        assertTrue(gate.decide(read, SessionPermissionMode.OFF.toGateMode()) is Decision.Denied)
-        assertTrue(gate.decide(write, SessionPermissionMode.OFF.toGateMode()) is Decision.Denied)
-        assertTrue(gate.decide(safeShell, SessionPermissionMode.OFF.toGateMode()) is Decision.Denied)
+@Test
+    fun askBeforeChangesRunsReadsAndAsksForEveryChange() {
+        val mode = SessionPermissionMode.ASK_BEFORE_CHANGES.toGateMode()
+        assertTrue(gate.decide(read, mode) is Decision.Allow)
+        assertTrue(gate.decide(write, mode) is Decision.NeedConfirm)
+        assertTrue(gate.decide(dangerousShell, mode) is Decision.NeedConfirm)
+        assertTrue("a fatal command is refused outright in the strict tier", gate.decide(fatal, mode) is Decision.Denied)
     }
 
-    @Test
-    fun askPromptsEveryCall() {
-        // Reads included — the strict "每次询问" contract.
-        assertTrue(gate.decide(read, SessionPermissionMode.ASK.toGateMode()) is Decision.NeedConfirm)
-        assertTrue(gate.decide(write, SessionPermissionMode.ASK.toGateMode()) is Decision.NeedConfirm)
-        // Even an argv-safe shell command asks.
-        assertTrue(gate.decide(safeShell, SessionPermissionMode.ASK.toGateMode()) is Decision.NeedConfirm)
+@Test
+    fun autonomousRunsWritesAndOnlyStopsForRisk() {
+        val mode = SessionPermissionMode.AUTONOMOUS.toGateMode()
+        assertTrue(gate.decide(read, mode) is Decision.Allow)
+        assertTrue("自主模式 must not nag on ordinary writes", gate.decide(write, mode) is Decision.Allow)
+        assertTrue(gate.decide(safeShell, mode) is Decision.Allow)
+        val risk = gate.decide(dangerousShell, mode)
+        assertTrue("a risky command still asks", risk is Decision.NeedConfirm)
+        assertEquals("the gate emits an ASCII sentinel the UI localizes", GUARDED_RISK_REASON, (risk as Decision.NeedConfirm).reason)
     }
 
-    @Test
-    fun safeAutoRunsReadsAndSafeShellAsksTheRest() {
-        assertTrue(gate.decide(read, SessionPermissionMode.SAFE_AUTO.toGateMode()) is Decision.Allow)
-        assertTrue(gate.decide(safeShell, SessionPermissionMode.SAFE_AUTO.toGateMode()) is Decision.Allow)
-        assertTrue(gate.decide(write, SessionPermissionMode.SAFE_AUTO.toGateMode()) is Decision.NeedConfirm)
-        assertTrue(gate.decide(dangerousShell, SessionPermissionMode.SAFE_AUTO.toGateMode()) is Decision.NeedConfirm)
+@Test
+    fun fullAccessRunsEverythingButTheFatalSet() {
+        val mode = SessionPermissionMode.FULL_ACCESS.toGateMode()
+        assertTrue(gate.decide(read, mode) is Decision.Allow)
+        assertTrue(gate.decide(write, mode) is Decision.Allow)
+        assertTrue(gate.decide(safeShell, mode) is Decision.Allow)
+        assertTrue(gate.decide(dangerousShell, mode) is Decision.Allow)
+        val d = gate.decide(fatal, mode)
+        assertTrue(d is Decision.NeedConfirm && d.mustPrompt)
     }
 
-    @Test
-    fun yoloAutoRunsWritesAndOnlyConfirmsFatal() {
-        assertTrue(gate.decide(read, SessionPermissionMode.YOLO.toGateMode()) is Decision.Allow)
-        assertTrue(gate.decide(write, SessionPermissionMode.YOLO.toGateMode()) is Decision.Allow)
-        assertTrue(gate.decide(safeShell, SessionPermissionMode.YOLO.toGateMode()) is Decision.Allow)
-        val fatal = gate.classify("shell_exec", """{"command":"rm -rf /"}""")
-        val d = gate.decide(fatal, SessionPermissionMode.YOLO.toGateMode())
-        assertTrue(d is Decision.NeedConfirm && (d as Decision.NeedConfirm).mustPrompt)
-    }
-
-    @Test
-    fun askHardDeniesFatalLikeAsk() {
-        val fatal = gate.classify("shell_exec", """{"command":"rm -rf /"}""")
-        assertTrue(gate.decide(fatal, SessionPermissionMode.ASK.toGateMode()) is Decision.Denied)
-    }
-
-    @Test
-    fun cycleOrderAscendsAutonomy() {
-        assertEquals(SessionPermissionMode.SAFE_AUTO, SessionPermissionMode.ASK.next())
-        assertEquals(SessionPermissionMode.YOLO, SessionPermissionMode.SAFE_AUTO.next())
-        assertEquals(SessionPermissionMode.OFF, SessionPermissionMode.YOLO.next())
-        assertEquals(SessionPermissionMode.ASK, SessionPermissionMode.OFF.next())
+@Test
+    fun cycleAscendsAutonomyAndWrapsToTheSafestTier() {
+        assertEquals(SessionPermissionMode.AUTONOMOUS, SessionPermissionMode.ASK_BEFORE_CHANGES.next())
+        assertEquals(SessionPermissionMode.FULL_ACCESS, SessionPermissionMode.AUTONOMOUS.next())
+        assertEquals(SessionPermissionMode.ASK_BEFORE_CHANGES, SessionPermissionMode.FULL_ACCESS.next())
     }
 }

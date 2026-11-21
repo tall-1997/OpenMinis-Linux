@@ -6,6 +6,10 @@ import android.content.Context
 import androidx.core.app.NotificationCompat
 import com.openminis.app.R
 
+/** [T-island-timeout] A dead run cannot withdraw its row; bound the age so the island stops claiming work. */
+private const val RUNNING_TIMEOUT_MS =10 *60_000L
+private const val COMPLETED_TIMEOUT_MS =15_000L
+
 /**
  * 前台通知各 surface 专属行的构建器（HyperOS 超级岛行、OEM 静默行），以及
  * 它们与普通行/提升行共用的呈现 helper（锁屏替身行、状态栏图标、工具显示标签）。
@@ -112,7 +116,6 @@ internal fun buildHyperOsFocusNotification(
         bigContent = live.islandCaption(),
         baseTitle = titleText,
         baseContent = collapsedText,
-        hintTitle = live.islandCaption(),
     )
     val focusJson = HyperOsIsland.buildFocusParamJson(content)
 
@@ -157,7 +160,6 @@ internal fun buildHyperOsFocusNotification(
     // real label). No Stop once there is nothing left to stop.
     // [T-interrupt-no-pause-button] The "Pause" action was removed here
     // too — see the note above buildHyperOsFocusNotification.
-    val islandActions = mutableMapOf<String, Notification.Action>()
     if (!isCompleted) {
         val stopAction = Notification.Action.Builder(
             launcherIcon,
@@ -165,7 +167,6 @@ internal fun buildHyperOsFocusNotification(
             stopPendingIntent,
         ).build()
         builder.addAction(stopAction)
-        islandActions[HyperOsIsland.ACTION_STOP] = stopAction
     }
 
     HyperOsIsland.attachFocusExtras(
@@ -177,9 +178,10 @@ internal fun buildHyperOsFocusNotification(
             HyperOsIsland.PIC_TICKER to launcherIcon,
             HyperOsIsland.PIC_AOD to launcherIcon,
         ),
-        islandActions = islandActions,
+ islandActions = emptyMap(),
     )
-    return builder.build()
+    builder.setTimeoutAfter(if (isCompleted) COMPLETED_TIMEOUT_MS else RUNNING_TIMEOUT_MS)
+ return builder.build()
 }
 
 internal fun buildOemQuietNotification(
