@@ -213,8 +213,7 @@ class GoalDriftReconcilerTest {
         val buried = GoalDriftStore.DriftState(lastBoardSha = "fp-1", stallTurns = 99)
         requireNotNull(
             GoalDriftReconciler.nudgeIfOwed(buried, objective = "x", pendingCount = 2, threshold = 100),
-            "99 silent turns with threshold=100(→32) must still speak",
-        )
+        ) { "99 silent turns with threshold=100(→32) must still speak" }
         val mid = GoalDriftStore.DriftState(lastBoardSha = "fp-1", stallTurns = GoalDriftReconciler.STALL_TURNS_MAX)
         requireNotNull(
             GoalDriftReconciler.nudgeIfOwed(mid, objective = "x", pendingCount = 2, threshold = 100),
