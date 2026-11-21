@@ -136,7 +136,8 @@ class ThinkingFollowPolicyTest {
     @Test
     fun `production follow observes the live state backed content version`() {
         val followSource = ProductionSources.read("ui/chat/ThinkingAutoFollow.kt")
-        val renderSource = ProductionSources.read("ui/chat/ChatAssistantMessageUI.kt")
+        // [T-android-split-chat] ThinkingBlock now lives in ThinkingBlockUI.kt.
+        val renderSource = ProductionSources.read("ui/chat/ThinkingBlockUI.kt")
 
         assertTrue(
             "recomposition must publish the current block version into Compose state",
