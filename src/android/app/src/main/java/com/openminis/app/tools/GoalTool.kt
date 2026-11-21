@@ -113,20 +113,28 @@ object GoalTool {
                 }
             }
             if (op == "contract") {
-                val current = manager.get(sessionId)
-                    ?: return ToolExecutionResult(
+                // Read-only pre-check for the error path only. The keep-old
+                // resolution happens INSIDE the manager's session lock
+                // (updateContract), so a concurrent contract write between
+                // this read and the update cannot be clobbered by a stale
+                // snapshot (the old pick(current) TOCTOU).
+                if (manager.get(sessionId) == null) {
+                    return ToolExecutionResult(
                         "Goal error: no Goal exists for this session — create one before attaching a contract",
                         false,
                         toolTitle = args.optString("tool_title", "Goal"),
                     )
-                fun pick(key: String, old: String?): String? =
-                    if (args.has(key)) args.optString(key).trim().takeIf { it.isNotEmpty() } else old
+                }
+                // Only keys PRESENT in this call are forwarded; omitted keys
+                // arrive as null and the manager keeps the stored value.
+                fun provided(key: String): String? =
+                    if (args.has(key)) args.optString(key).trim().takeIf { it.isNotEmpty() } else null
                 val updated = manager.updateContract(
                     sessionId,
-                    acceptance = pick("acceptance", current.acceptance),
-                    constraints = pick("constraints", current.constraints),
-                    nextStep = pick("next_step", current.nextStep),
-                ) ?: current
+                    acceptance = provided("acceptance"),
+                    constraints = provided("constraints"),
+                    nextStep = provided("next_step"),
+                ) ?: manager.get(sessionId)
                 return ToolExecutionResult(
                     manager.render(updated),
                     true,
