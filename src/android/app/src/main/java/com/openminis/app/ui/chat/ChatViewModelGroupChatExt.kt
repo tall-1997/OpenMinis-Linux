@@ -46,7 +46,7 @@ internal suspend fun ChatViewModel.runGroupChat(provider: LLMProvider, closing: 
     val persistedUserId = agentHistorySnapshot().lastOrNull(::receiptUserRow)?.dbMessageId
         ?.takeIf { it == user?.sourceDbIds?.singleOrNull() }
     val receiptScope = ToolReceiptScope.userTurn(activeSessionId, persistedUserId)
-    val receiptNotice = if (!closing) pendingToolReceiptNotice(activeSessionId) else null
+    val receiptNotice = if (!closing) pendingToolReceiptNotice(activeSessionId, persistedUserId) else null
     val closingNow = closing || GroupChat.isCloseRequest(userText)
     val prior = if (closingNow) closeRecord() else groupTranscript()
     if (closingNow && prior.isEmpty()) {

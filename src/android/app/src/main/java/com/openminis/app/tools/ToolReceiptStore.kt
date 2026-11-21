@@ -57,6 +57,8 @@ internal class ToolReceiptStore(
     private val maxRecords: Int = MAX_RECORDS,
     private val replace: (File, ByteArray) -> Unit = ::replaceReceiptShard,
     private val syncDirectory: (File) -> Unit = {},
+    /** Injectable clock for age-out settlement; tests advance it. */
+    private val now: () -> Long = System::currentTimeMillis,
 ) {
     init { require(maxRecords in 1..MAX_RECORDS) }
 
@@ -78,6 +80,8 @@ internal class ToolReceiptStore(
         val sequenceSha: String? = null,
         val step: Int = 0,
         val batch: Int = 0,
+        /** Creation clock (ms). 0 = legacy pre-timestamp row — age beyond doubt. */
+        val ts: Long = 0,
     ) {
         val resultRecorded: Boolean get() = pairSha != null || localResult != null
         val lane: String get() = laneSha ?: ToolReceiptScope.MAIN_LANE
@@ -92,6 +96,13 @@ internal class ToolReceiptStore(
     internal data class Pending(val unknown: Int, val acceptedWithoutResult: Int) {
         val hasUnpaired: Boolean get() = unknown > 0 || acceptedWithoutResult > 0
     }
+
+    /** Age beyond doubt: a timestamped record past the ceiling, or a legacy
+     *  pre-timestamp row (ts=0 — journals written before the clock existed).
+     *  Combined with a generation boundary it satisfies the settled-out
+     *  double condition (age + progress evidence). */
+    private fun isStale(record: Record): Boolean =
+        record.ts <= 0 || now() - record.ts >= STALE_MS
 
     private data class Check(val decision: ToolReceiptDecision, val batch: Int = 0)
 
@@ -237,7 +248,25 @@ internal class ToolReceiptStore(
             return null
         }
         if (absent) return Pending(0, 0)
-        return transaction(sessionSha, null) { _, records ->
+        return transaction(sessionSha, null) { file, records ->
+            // [T-receipt-aged-out] Orphans from EARLIER generations whose age is
+            // beyond doubt (timestamp past the ceiling, or a legacy pre-ts row)
+            // are settled out with an audit line. The generation boundary itself
+            // is the progress evidence: the session only reached another user
+            // turn after the earlier cycle completed. Records of the queried
+            // generation are never aged out, however old they are.
+            if (parentSha != null) {
+                val stale = records.values.filter {
+                    it.parentSha != parentSha && it.state == ToolReceiptState.UNKNOWN && isStale(it)
+                }
+                if (stale.isNotEmpty()) {
+                    for (row in stale) records.remove(row.logicalSha)
+                    write(file, records)
+                    com.openminis.app.logging.AppLogger.warning(
+                        TAG, "tool-receipt aged-out ${stale.size} stale orphan(s) from earlier generations",
+                    )
+                }
+            }
             val local = records.values.filter { parentSha == null || it.parentSha == parentSha }
             Pending(local.count { it.state == ToolReceiptState.UNKNOWN },
                 local.count { it.state == ToolReceiptState.ACCEPTED && !it.resultRecorded })
@@ -248,6 +277,7 @@ internal class ToolReceiptStore(
         key.scope.sessionSha, key.scope.parentSha, key.instanceSha(batch), ToolReceiptState.NOT_SENT,
         laneSha = key.scope.laneSha, ownerSha = key.scope.ownerSha, operationSha = key.operationSha,
         sequenceSha = key.scope.sequenceSha, step = key.scope.stepOrdinal, batch = batch,
+        ts = now(),
     )
 
     private fun makeSpace(records: MutableMap<String, Record>): Boolean {
@@ -259,6 +289,11 @@ internal class ToolReceiptStore(
         // exactly the evidence a replay or reconciliation may still need.
         val recyclable = records.values.firstOrNull { it.state == ToolReceiptState.NOT_SENT }
             ?: records.values.firstOrNull { it.resultRecorded }
+            // Last resort before wedging the session: an UNKNOWN whose age is
+            // beyond doubt (stale — past the ceiling or a legacy pre-ts row)
+            // gives way so new calls keep flowing. Freshly-claimed evidence
+            // keeps its permanent pin.
+            ?: records.values.firstOrNull { it.state == ToolReceiptState.UNKNOWN && isStale(it) }
             ?: return false
         records.remove(recyclable.logicalSha)
         return true
@@ -335,6 +370,7 @@ internal class ToolReceiptStore(
                 pairSha = str("pair"), resultRef = str("result_ref"), resultRowSha = str("result_row_sha"),
                 localResult = str("local_result"), laneSha = str("lane"), ownerSha = str("owner"),
                 operationSha = str("operation"), sequenceSha = str("sequence"),
+                ts = row.optLong("ts", 0),
                 step = row.optInt("step", 0), batch = row.optInt("batch", 0),
             )
             require(record.parentSha.isReceiptHash() && record.logicalSha.isReceiptHash())
@@ -369,6 +405,7 @@ internal class ToolReceiptStore(
                 .put("result_row_sha", record.resultRowSha).put("local_result", record.localResult)
                 .put("lane", record.laneSha).put("owner", record.ownerSha).put("operation", record.operationSha)
                 .put("sequence", record.sequenceSha).put("step", record.step).put("batch", record.batch)
+                .put("ts", record.ts)
             // Fields are bounded ASCII. Include one byte per row for the array comma.
             require(row.toString().length + 1 <= MAX_RECORD_BYTES)
             rows.put(row)
@@ -387,6 +424,10 @@ internal class ToolReceiptStore(
 
     companion object {
         internal const val MAX_RECORDS = 1024
+
+        /** [T-receipt-aged-out] Orphan age ceiling before settled-out (6h). */
+        internal const val STALE_MS = 6 * 60 * 60 * 1000L
+        private const val TAG = "ToolReceiptStore"
         private const val MAX_RECORD_BYTES = 1024
         internal const val MAX_SESSION_BYTES = 48 + MAX_RECORDS * MAX_RECORD_BYTES
         private const val LEGACY_MAX_BYTES = 512 * 1024
