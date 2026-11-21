@@ -34,9 +34,8 @@ internal object GoalDriftReconciler {
      */
     internal const val STALL_TURNS_BEFORE_NUDGE = 8
 
-    /** Nudge text must stay bounded even for a runaway objective/criteria blob. */
-    private const val OBJECTIVE_SNIPPET_CHARS = 200
-    private const val ACCEPTANCE_MAX_LINES = 8
+    /** Nudge text must stay bounded even for a runaway objective blob. */
+    private const val OBJECTIVE_MAX_LINES = 12
 
     /**
      * Fingerprint over the board's (id, status) pairs. Any status change —
@@ -81,7 +80,6 @@ internal object GoalDriftReconciler {
     fun nudgeIfOwed(
         state: GoalDriftStore.DriftState,
         objective: String,
-        acceptance: String?,
         pendingCount: Int,
     ): String? {
         if (state.stallTurns < STALL_TURNS_BEFORE_NUDGE) return null
@@ -91,16 +89,13 @@ internal object GoalDriftReconciler {
             append("Goal reconciliation: the session goal is still ACTIVE, but the plan board has not changed ")
             append("for ").append(state.stallTurns).append(" consecutive tool turns (pending steps: ")
             append(pendingCount).append(").\n")
-            append("Objective: \"").append(objective.take(OBJECTIVE_SNIPPET_CHARS)).append("\"\n")
-            if (acceptance.isNullOrBlank()) {
-                append("Acceptance criteria: none recorded — the objective sentence above is the only defined done-check.\n")
-            } else {
-                append("Acceptance criteria:\n")
-                acceptance.lines()
-                    .filter { it.isNotBlank() }
-                    .take(ACCEPTANCE_MAX_LINES)
-                    .forEach { append("- ").append(it.trim()).append('\n') }
-            }
+            // [T-goal-drift-reconciler] The objective IS the definition of done:
+            // acceptance checks ride inside it as lines (no dedicated column),
+            // so render it in full, line-bounded, instead of a one-line snippet.
+            append("Objective — the definition of done for this goal:\n")
+            val lines = objective.lines().filter { it.isNotBlank() }
+            lines.take(OBJECTIVE_MAX_LINES).forEach { append("- ").append(it.trim()).append('\n') }
+            if (lines.size > OBJECTIVE_MAX_LINES) append("- …(truncated)\n")
             append(
                 "Before this turn ends, do exactly one of: (a) name the pending step the recent work advanced " +
                     "and continue it, (b) change course — update the board to match the real path, or (c) call " +

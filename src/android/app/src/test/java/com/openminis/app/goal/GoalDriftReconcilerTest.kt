@@ -106,7 +106,7 @@ class GoalDriftReconcilerTest {
     @Test
     fun `below the threshold nothing is owed`() {
         val state = GoalDriftStore.DriftState(lastBoardSha = "fp-1", stallTurns = GoalDriftReconciler.STALL_TURNS_BEFORE_NUDGE - 1)
-        assertNull(GoalDriftReconciler.nudgeIfOwed(state, objective = "ship it", acceptance = null, pendingCount = 2))
+        assertNull(GoalDriftReconciler.nudgeIfOwed(state, objective = "ship it", pendingCount = 2))
     }
 
     @Test
@@ -114,7 +114,6 @@ class GoalDriftReconcilerTest {
         val text = GoalDriftReconciler.nudgeIfOwed(
             stalled(),
             objective = "migrate the auth module to v2",
-            acceptance = null,
             pendingCount = 3,
         )
         requireNotNull(text)
@@ -126,44 +125,37 @@ class GoalDriftReconcilerTest {
     @Test
     fun `the nudge is delivered once per stalled fingerprint`() {
         val nudged = stalled().copy(nudgedBoardSha = "fp-stalled")
-        assertNull(GoalDriftReconciler.nudgeIfOwed(nudged, objective = "x", acceptance = null, pendingCount = 2))
+        assertNull(GoalDriftReconciler.nudgeIfOwed(nudged, objective = "x", pendingCount = 2))
     }
 
     @Test
     fun `a stalled board with no fingerprint never nudges`() {
         val state = GoalDriftStore.DriftState(lastBoardSha = null, stallTurns = 99)
-        assertNull(GoalDriftReconciler.nudgeIfOwed(state, objective = "x", acceptance = null, pendingCount = 2))
+        assertNull(GoalDriftReconciler.nudgeIfOwed(state, objective = "x", pendingCount = 2))
     }
 
     @Test
-    fun `acceptance criteria are rendered as checked bullets`() {
+    fun `objective lines render as the definition of done`() {
         val text = GoalDriftReconciler.nudgeIfOwed(
             stalled(),
-            objective = "ship it",
-            acceptance = "no regression in unit tests\nschema migrated\nUI reviewed",
+            objective = "ship it\nacceptance: no regression in unit tests\nacceptance: schema migrated\nacceptance: UI reviewed",
             pendingCount = 1,
         )
         requireNotNull(text)
-        assertTrue(text.contains("Acceptance criteria:"))
-        assertTrue(text.contains("- no regression in unit tests"))
-        assertTrue(text.contains("- schema migrated"))
-        assertTrue(text.contains("- UI reviewed"))
+        assertTrue(text.contains("Objective — the definition of done for this goal:"))
+        assertTrue(text.contains("- ship it"))
+        assertTrue(text.contains("- acceptance: no regression in unit tests"))
+        assertTrue(text.contains("- acceptance: schema migrated"))
     }
 
     @Test
-    fun `missing acceptance names the objective as the only done-check`() {
-        val text = GoalDriftReconciler.nudgeIfOwed(stalled(), objective = "x", acceptance = null, pendingCount = 1)
-        requireNotNull(text)
-        assertTrue(text.contains("none recorded"))
-    }
-
-    @Test
-    fun `acceptance bullets are bounded`() {
+    fun `objective lines are bounded in the nudge`() {
         val long = (1..50).joinToString("\n") { "criterion $it" }
-        val text = GoalDriftReconciler.nudgeIfOwed(stalled(), objective = "x", acceptance = long, pendingCount = 1)
+        val text = GoalDriftReconciler.nudgeIfOwed(stalled(), objective = long, pendingCount = 1)
         requireNotNull(text)
-        assertTrue(text.contains("criterion 8"))
-        assertTrue(!text.contains("criterion 9"))
+        assertTrue(text.contains("criterion 12"))
+        assertTrue(!text.contains("criterion 13"))
+        assertTrue(text.contains("(truncated)"))
     }
 
     // -- threshold boundary pins the knob ------------------------------------
@@ -179,7 +171,7 @@ class GoalDriftReconcilerTest {
         var spokenAtTurn: Int? = null
         repeat(10) { index ->
             state = GoalDriftReconciler.next(state, goalActive = true, fingerprint = "fp-1")
-            val owed = GoalDriftReconciler.nudgeIfOwed(state, objective = "x", acceptance = null, pendingCount = 2)
+            val owed = GoalDriftReconciler.nudgeIfOwed(state, objective = "x", pendingCount = 2)
             if (owed != null && spokenAtTurn == null) spokenAtTurn = index + 1
         }
         assertEquals("the first nudge is owed exactly at the threshold", 8, spokenAtTurn)

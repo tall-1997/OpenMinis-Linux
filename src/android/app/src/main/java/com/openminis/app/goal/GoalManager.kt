@@ -71,12 +71,7 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
 
     suspend fun get(sessionId: String): SessionGoalEntity? = persistence.load(sessionId)
 
-    suspend fun createByUser(
-        sessionId: String,
-        objective: String,
-        tokenBudget: Long? = null,
-        acceptance: String? = null,
-    ): SessionGoalEntity =
+    suspend fun createByUser(sessionId: String, objective: String, tokenBudget: Long? = null): SessionGoalEntity =
         locked(sessionId) {
             check(persistence.load(sessionId) == null) { "A Goal already exists for this session" }
             GoalStateMachine.create(
@@ -85,7 +80,7 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
                 tokenBudget,
                 System.currentTimeMillis(),
                 GoalOrigin.USER,
-            ).copy(acceptance = acceptance?.trim()?.takeIf { it.isNotBlank() }).also {
+            ).also {
                 persistence.insert(it)
                 bump()
             }
@@ -111,34 +106,12 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
      * it). A [GoalOrigin.USER] Goal is never overwritten: the human's objective
      * outranks whatever the model inferred.
      */
-    suspend fun createByModel(
-        sessionId: String,
-        objective: String,
-        tokenBudget: Long? = null,
-        acceptance: String? = null,
-    ): SessionGoalEntity = locked(sessionId) {
+    suspend fun createByModel(sessionId: String, objective: String, tokenBudget: Long? = null): SessionGoalEntity = locked(sessionId) {
         val normalized = objective.trim()
-        val normalizedAcceptance = acceptance?.trim()?.takeIf { it.isNotBlank() }
         val existing = persistence.load(sessionId)
         if (existing != null) {
             val sameObjective = existing.objective == normalized
-            if (sameObjective || !supersedableByModel(existing)) {
-                // [T-goal-drift-reconciler] A re-emission of the SAME objective
-                // may still refine its definition of done — record it without
-                // disturbing the idempotent contract, and only for a goal the
-                // model owns (a human's row is sovereign, criteria included).
-                if (sameObjective &&
-                    normalizedAcceptance != null &&
-                    existing.createdBy == GoalOrigin.MODEL &&
-                    existing.acceptance != normalizedAcceptance
-                ) {
-                    return@locked existing.copy(acceptance = normalizedAcceptance, updatedAt = System.currentTimeMillis()).also {
-                        persistence.save(it)
-                        bump()
-                    }
-                }
-                return@locked existing
-            }
+            if (sameObjective || !supersedableByModel(existing)) return@locked existing
             // One row per session: drop the stale model Goal, then write the
             // new task's. (A single UPDATE would need saveState to carry
             // created_at; the delete+insert keeps the fresh start time and is
@@ -151,7 +124,7 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
             tokenBudget,
             System.currentTimeMillis(),
             GoalOrigin.MODEL,
-        ).copy(acceptance = normalizedAcceptance).also {
+        ).also {
             persistence.insert(it)
             bump()
         }
@@ -352,7 +325,6 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
         val nudge = GoalDriftReconciler.nudgeIfOwed(
             updated,
             objective = current.objective,
-            acceptance = current.acceptance,
             pendingCount = plans.count { it.status != "done" },
         )
         val finalState = if (nudge != null) updated.copy(nudgedBoardSha = updated.lastBoardSha) else updated
