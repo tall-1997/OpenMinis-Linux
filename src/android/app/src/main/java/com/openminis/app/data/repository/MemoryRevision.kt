@@ -101,11 +101,13 @@ internal object MemoryRevision {
      * fail a hash comparison but mean opposite things, and only the file's
      * existence tells them apart.
      *
-     * Diagnosis order: a non-date day segment is [Rejection.Malformed] (no
-     * rollover can be claimed for it); a legal day that is not today is
-     * [Rejection.DayRolledOver] (the actionable diagnosis, whatever the hash
-     * looks like); only a legal day equal to today goes on to demand a
-     * well-shaped hash.
+     * Diagnosis order: a day segment that is not `yyyy-MM-dd`-**shaped** is
+     * [Rejection.Malformed] (no rollover can be claimed for it — note the shape
+     * gate is calendar-blind, so a well-shaped but nonexistent date such as
+     * `2026-13-45` classifies by day comparison and may report a rollover); a
+     * legal day that is not today is [Rejection.DayRolledOver] (the actionable
+     * diagnosis, whatever the hash looks like); only a legal day equal to
+     * today goes on to demand a well-shaped hash.
      */
     fun rejection(
         revision: String,
