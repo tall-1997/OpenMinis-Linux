@@ -163,4 +163,167 @@ class MemoryRevisionTest {
             ),
         )
     }
+
+    // -- [T-memory-revision-degenerate-inputs] defensive-predicate degenerate --
+    // -- inputs: empty / short / multi-colon / non-hex / oversized / uppercase --
+    // -- every one of these walked straight past the old startsWith() check,   --
+    // -- silently letting a concurrent writer overwrite the first.             --
+
+    @Test
+    fun `an empty hash is malformed, never a pass`() {
+        assertTrue(
+            MemoryRevision.rejection(
+                revision = "2026-11-20:",
+                day = "2026-11-20",
+                fileName = "2026-11-20.md",
+                dayFileExists = true,
+            ) is MemoryRevision.Rejection.Malformed,
+        )
+        // The guard-level reproduction of the reported F1 bypass: the old code
+        // returned null (proceed) here — JVM-reproduced before the fix.
+        assertEquals(
+            MemoryWriteRevisionGuard.malformedCopy(),
+            MemoryWriteRevisionGuard.refusal(
+                expectedRevision = "2026-11-20:",
+                fileName = "2026-11-20.md",
+                dayFileExists = true,
+                hashOf = { "ca9639251e3d29e3" },
+                existingContent = "someone wrote this first",
+            ),
+        )
+    }
+
+    @Test
+    fun `a short hash prefix is malformed, never a weakened pass`() {
+        // 1..15 hex chars must not match: the old startsWith() let any prefix
+        // of the real hash through (1-char guess = 1/16 hit rate).
+        for (short in listOf("a", "ca963", "ca9639251e3d29e")) {
+            assertTrue(
+                "prefix '$short' must be malformed",
+                MemoryRevision.rejection(
+                    revision = "2026-11-20:$short",
+                    day = "2026-11-20",
+                    fileName = "2026-11-20.md",
+                    dayFileExists = true,
+                ) is MemoryRevision.Rejection.Malformed,
+            )
+        }
+    }
+
+    @Test
+    fun `a multi-colon revision is malformed`() {
+        assertTrue(
+            MemoryRevision.rejection(
+                revision = "2026-11-20:abc:def",
+                day = "2026-11-20",
+                fileName = "2026-11-20.md",
+                dayFileExists = true,
+            ) is MemoryRevision.Rejection.Malformed,
+        )
+    }
+
+    @Test
+    fun `non-hex, oversized and uppercase hashes are malformed`() {
+        for (hash in listOf("zzzzzzzzzzzzzzzz", "ca9639251e3d29e3f", "CA9639251E3D29E3")) {
+            assertTrue(
+                "hash '$hash' must be malformed",
+                MemoryRevision.rejection(
+                    revision = "2026-11-20:$hash",
+                    day = "2026-11-20",
+                    fileName = "2026-11-20.md",
+                    dayFileExists = true,
+                ) is MemoryRevision.Rejection.Malformed,
+            )
+        }
+    }
+
+    @Test
+    fun `a malformed day segment is malformed even when the hash fits`() {
+        // "20261145" is not a YYYY-MM-DD shape (no separators): it can carry no
+        // rollover diagnosis, so it must fail the shape gate.
+        assertTrue(
+            MemoryRevision.rejection(
+                revision = "20261145:ca9639251e3d29e3",
+                day = "2026-11-20",
+                fileName = "2026-11-20.md",
+                dayFileExists = true,
+            ) is MemoryRevision.Rejection.Malformed,
+        )
+    }
+
+    @Test
+    fun `a legal yesterday day still classifies as rollover despite a bad hash`() {
+        // Diagnosis order: the actionable "rolled over" beats the shape complaint.
+        assertTrue(
+            MemoryRevision.rejection(
+                revision = "2026-11-19:zzzz",
+                day = "2026-11-20",
+                fileName = "2026-11-20.md",
+                dayFileExists = true,
+            ) is MemoryRevision.Rejection.DayRolledOver,
+        )
+    }
+
+    @Test
+    fun `legacy 16-hex hashes stay well-formed`() {
+        assertTrue(MemoryRevision.wellFormed("ca9639251e3d29e3"))
+        assertNull(
+            MemoryRevision.rejection(
+                revision = "ca9639251e3d29e3",
+                day = "2026-11-20",
+                fileName = "2026-11-20.md",
+                dayFileExists = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `wellFormed mirrors the rejection shape gate for the tool layer`() {
+        assertTrue(MemoryRevision.wellFormed("2026-11-20:ca9639251e3d29e3"))
+        assertTrue(
+            "empty hash is not well-formed",
+            !MemoryRevision.wellFormed("2026-11-20:"),
+        )
+        assertTrue(
+            "a 1MB garbled parameter is not well-formed",
+            !MemoryRevision.wellFormed("2026-11-20:" + "x".repeat(1_000_000)),
+        )
+    }
+
+    @Test
+    fun `a 15-char prefix is malformed, not a weakened pass`() {
+        // The old startsWith() would have PASSED this (the 15 chars are a real
+        // prefix of the file's hash); the shape gate refuses it as malformed
+        // instead of letting a truncated revision through.
+        val msg = MemoryWriteRevisionGuard.refusal(
+            expectedRevision = "2026-11-20:ca9639251e3d29e",
+            fileName = "2026-11-20.md",
+            dayFileExists = true,
+            hashOf = { "ca9639251e3d29e3" },
+            existingContent = "today's body",
+        )
+        assertEquals(MemoryWriteRevisionGuard.malformedCopy(), msg)
+    }
+
+    @Test
+    fun `writeMemory's returned revision round-trips into the next write`() {
+        // [F9 follow-up] The token minted by a write must be accepted verbatim
+        // by the next write on the same day — the whole point of the format.
+        val dir = java.nio.file.Files.createTempDirectory("memrev-roundtrip").toFile()
+        try {
+            val repo = MemoryRepository(dir) { System.currentTimeMillis() }
+            val first = repo.writeMemory("round-trip entry one", null)
+            assertTrue(first.startsWith("Memory saved"))
+            val token = Regex("revision (\\d{4}-\\d{2}-\\d{2}:[0-9a-f]{16})").find(first)
+                ?.groupValues?.get(1)
+                ?: error("no revision in write reply: $first")
+            val second = repo.writeMemory("round-trip entry two", token)
+            assertTrue(
+                "the freshly minted revision must be accepted verbatim, got: $second",
+                second.startsWith("Memory saved"),
+            )
+        } finally {
+            dir.deleteRecursively()
+        }
+    }
 }
