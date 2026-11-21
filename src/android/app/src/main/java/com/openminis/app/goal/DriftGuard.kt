@@ -25,7 +25,7 @@ object DriftGuard {
         appendLine("Before the next tool call, answer these three lines:")
         appendLine("1) Objective: restate the active goal in one sentence.")
         appendLine("2) Last actions: what the last $EVERY_TOOL_CALLS tool calls actually produced.")
-        appendLine("3) Verdict: on-track | drifting | blocked. If drifting, update the plan and next_step first.")
+        appendLine("3) Verdict: on-track | drifting | blocked. If drifting, call update_goal(op=rollback) to restore the newest checkpoint, then update the plan and next_step before the next tool call.")
         appendLine()
         append(goalPrompt)
     }

@@ -6,6 +6,7 @@ import com.openminis.app.data.model.AgentToolParam
 import com.openminis.app.goal.GoalCompletionVerifier
 import com.openminis.app.goal.GoalContinuation
 import com.openminis.app.goal.GoalManager
+import com.openminis.app.goal.TaskCheckpointStore
 import org.json.JSONObject
 
 object GoalTool {
@@ -32,7 +33,9 @@ object GoalTool {
             "op=clear DELETES the Goal (any status except paused) — use it when the task it described is " +
             "over or has been replaced and you are about to record a different objective; a Goal the human " +
             "paused is refused on purpose, report the conflict instead of forcing it. " +
-            "op=complete and op=blocked report outcome. op=complete is VERIFIED by the " +
+            "op=complete and op=blocked report outcome. op=rollback restores the newest checkpoint " +
+            "(written before each drift check) and is the right move when a drift check says drifting. " +
+            "op=complete is VERIFIED by the " +
             "host: while the plan board still has pending or failed steps the completion is " +
             "rejected and the Goal stays active — the tool result tells you what the board " +
             "still owes. After repeated rejections the host accepts the call and records its " +
@@ -46,7 +49,7 @@ object GoalTool {
             "op" to AgentToolParam(
                 "string",
                 "Operation",
-                enumValues = listOf("get", "create", "complete", "blocked", "clear"),
+                enumValues = listOf("get", "create", "complete", "blocked", "clear", "rollback"),
             ),
             "objective" to AgentToolParam(
                 "string",
@@ -81,6 +84,15 @@ object GoalTool {
         return try {
             val args = JSONObject(argsJson)
             val op = args.optString("op")
+            if (op == "rollback") {
+                val restored = TaskCheckpointStore.restoreLatest(context, sessionId)
+                val title = args.optString("tool_title", "Goal")
+                return if (restored > 0) {
+                    ToolExecutionResult("Rolled back to the newest checkpoint ($restored plan items restored).", true, toolTitle = title)
+                } else {
+                    ToolExecutionResult("No checkpoint to roll back to yet.", false, toolTitle = title)
+                }
+            }
             if (op == "clear") {
                 // [T-goal-tool-clear] Deletion has no state to render afterwards,
                 // so it returns its own result instead of the shared render path.
