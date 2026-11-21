@@ -59,7 +59,7 @@ object GoalTool {
                     "<goal_context> every request and quoted by goal-drift nudges — write checks a fresh pair " +
                     "of eyes could verify without reading this conversation.",
             ),
-            "condition" to AgentToolParam("string", "Specific unmet condition when op=blocked; repeated identical reports are counted."),,
+            "condition" to AgentToolParam("string", "Specific unmet condition when op=blocked; repeated identical reports are counted."),
         ),
         required = listOf("op"),
         propertyOrdering = listOf("tool_title", "op", "objective", "token_budget", "acceptance", "condition"),
