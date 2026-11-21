@@ -2,6 +2,7 @@ import java.util.Properties
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import java.io.FileOutputStream
+import java.time.Duration
 
 // Local instrumentation escape hatch. The release build type is minified by
 // R8, and the minified androidTest APK shares the app's classloader; runner
@@ -334,7 +335,7 @@ android {
         // defect in the test, not a slow suite. Fail that test and keep the
         // rest of the report, instead of losing the whole run.
         unitTests.all {
-            it.timeout.set(java.time.Duration.ofMinutes(15))
+            it.timeout.set(Duration.ofMinutes(15))
         }
     }
 
