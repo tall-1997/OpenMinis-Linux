@@ -168,6 +168,19 @@ internal class ProviderConfigStore(
      * landed.
      */
     internal suspend fun awaitPersisted() {
+        // [T-await-persisted-deadlock] Start the worker BEFORE enqueueing the
+        // Flush. It used to be launched only from a save path's call to
+        // [ensurePersistWorker], so a caller that awaited durability without
+        // having saved first enqueued a Flush into a channel with no consumer
+        // and then suspended on `done` FOREVER. `ensurePersistWorker()` is
+        // idempotent, so calling it here costs nothing on the normal path.
+        //
+        // Observed as a CI hang, not a local one: the fixture asserted on an
+        // unloaded config, [ProviderRepository.addInstance] returned false and
+        // skipped the save path, and the test thread parked here for the full
+        // task timeout (run 44944486846: 18 minutes, thread dump at
+        // HangProbe2Test.kt:71 inside runBlocking).
+        ensurePersistWorker()
         val done = kotlinx.coroutines.CompletableDeferred<Unit>()
         persistRequests.send(ProviderPersistRequest.Flush(done))
         done.await()
