@@ -3343,4 +3343,5 @@
     <string name="modeldetail_tail_budget">Buget final</string>
     <string name="modeldetail_tail_budget_state_auto">Automat (se adaptează ferestrei, până la 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Personalizat pentru acest model</string>
+    <string name="tool_limits_tool_concurrency">Instrumente de citire în paralel</string>
 </resources>

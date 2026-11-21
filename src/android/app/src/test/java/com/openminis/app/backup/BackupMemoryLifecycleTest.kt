@@ -129,8 +129,54 @@ class BackupMemoryLifecycleTest {
         assertFalse(MemoryRepository(to) { start }.getMemory("legacy only", "daily").contains("legacy only"))
     }
 
-    @Test fun cappedSessionPairNeverPublishesEitherMember() {
-        for (which in listOf("diary", "metadata")) {
+    /**
+     * [T-backup-memory-mtime] Session memory lives at `chats/<sid>/memory`, so the
+     * old ZIP-time fallback (which only matched `data/memory`) never fired and
+     * every restored diary came back stamped "now" — which un-expires a TTL'd
+     * note, because `MemoryMetadata.isExpired` reads the file mtime.
+     */
+    @Test fun legacySessionMemoryZipKeepsItsMarkdownZipTime() {
+        val staging = tmp.newFolder("old-session-format")
+        val tree = File(staging, "chats/sid/memory").apply { mkdirs() }
+        val body = File(tree, source).apply {
+            writeText("\uFEFF---\r\nttl_days: 1\r\n---\r\nlegacy session note\r\n")
+            assertTrue(setLastModified(start - 2 * MemoryLifecycle.DAY_MS))
+        }
+        val archive = File(tmp.root, "old-session-format.minisbak")
+        BackupZip.archive(staging, archive)
+        val extracted = tmp.newFolder("old-session-extracted")
+        BackupZip.extract(archive, extracted)
+        val restored = File(extracted, "chats/sid/memory/$source")
+        assertArrayEquals(body.readBytes(), restored.readBytes())
+        assertEquals(body.lastModified(), restored.lastModified())
+    }
+
+    /**
+     * [T-backup-memory-category] "Do not back up files" must exclude the MEMORY
+     * category as a whole instead of keeping SOUL.md while silently dropping
+     * every daily diary, and the package must carry the tombstones so a restore
+     * on another device can report the gap.
+     */
+    @Test fun theNoFilesCapExcludesTheWholeCategoryAndLeavesTombstones() {
+        val dir = BackupMemoryTree.deviceRoot(tmp.newFolder("nofiles-from"))
+        seed(dir)
+        File(dir, "SOUL.md").writeText("user persona")
+        val pkg = File(tmp.newFolder("nofiles-pkg"), "data/memory")
+        val skipped = mutableListOf<String>()
+        assertEquals(
+            0,
+            BackupMemoryTree.export(dir, pkg, maxDiaryBytes = 0L) { path, _ -> skipped += path }.entries,
+        )
+        assertFalse("the persona must not be half-backed-up", File(pkg, "SOUL.md").exists())
+        assertTrue("every excluded file is reported to the export UI", skipped.isNotEmpty())
+        val to = BackupMemoryTree.deviceRoot(tmp.newFolder("nofiles-to"))
+        val report = BackupMemoryTree.restore(pkg, to)
+        assertEquals(0, report.filesWritten)
+        assertTrue("the restore must report what the backup left out", report.sizeSkippedInPackage > 0)
+        assertFalse(File(to, "SOUL.md").exists())
+    }
+
+    @Test fun cappedSessionPairNeverPublishesEitherMember() {        for (which in listOf("diary", "metadata")) {
             val from = File(tmp.newFolder("from-$which"), "minis-sessions/sid/memory")
             val rollover = seed(from, "time bound incoming")
             val diary = File(from, source)

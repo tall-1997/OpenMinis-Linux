@@ -87,9 +87,18 @@ internal class ToolTurnContext(
     /** [T-tool-execution-ledger] Run-scoped: a replayed call reuses its result. */
     val ledger: ToolExecutionLedger,
     val receiptUserTurnId: String? = null,
+    /**
+     * [T-receipt-internal-run] Run identity, used as the receipt anchor when the
+     * run has no user row of its own (internal Goal execution). Null keeps the
+     * previous fail-closed behaviour for callers that never set it.
+     */
+    generationRunId: String? = null,
     receiptAfterResultId: String? = null,
 ) {
-    val receiptScope = ToolReceiptScope.userTurn(activeSessionId, receiptUserTurnId)?.afterTranscript(receiptAfterResultId)
+    val receiptScope = (
+        ToolReceiptScope.userTurn(activeSessionId, receiptUserTurnId)
+            ?: ToolReceiptScope.internalRun(activeSessionId, generationRunId)
+        )?.afterTranscript(receiptAfterResultId)
 }
 
 /**
@@ -588,6 +597,9 @@ private suspend fun ChatViewModel.runPlannedCall(
             argsSummary = WorkingMemoryArgs.summary(call.name, call.argsStr),
             resultHead = result.output,
             filesDir = context.filesDir,
+            // [T-harness-config-wiring] Resolve the serving model's override
+            // here; the store cannot know which model this turn belongs to.
+            maxEntries = activeHarnessConfig().ledgerMaxEntries,
         )
         finalizePlannedCall(ctx, call, result)
     }

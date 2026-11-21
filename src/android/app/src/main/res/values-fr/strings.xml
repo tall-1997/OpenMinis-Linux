@@ -3339,4 +3339,5 @@
     <string name="modeldetail_tail_budget">Budget final</string>
     <string name="modeldetail_tail_budget_state_auto">Automatique (s\'adapte à la fenêtre, jusqu\'à 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Personnalisé pour ce modèle</string>
+    <string name="tool_limits_tool_concurrency">Outils de lecture en parallèle</string>
 </resources>

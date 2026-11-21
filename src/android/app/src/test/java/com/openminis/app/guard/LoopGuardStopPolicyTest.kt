@@ -16,7 +16,7 @@ class LoopGuardStopPolicyTest {
     private fun repeatCall(guard: LoopGuard, n: Int, sig: String = "tap(a)"): Signal? {
         var last: Signal? = null
         repeat(n) {
-            last = guard.record(sig, ok = true, outcome = Outcome.Effective)?.first
+            last = guard.record(sig, ok = true, outcome = Outcome.Effective).lastOrNull()?.first
                 ?: last
         }
         return last
@@ -39,15 +39,36 @@ class LoopGuardStopPolicyTest {
     @Test
     fun aDisabledStopTurnsTheLastRungIntoOneMoreReminder() {
         val guard = LoopGuard().apply { stopEnabled = false }
-        var hit: Pair<Signal, Int>? = null
+        var hits: List<Pair<Signal, Int>> = emptyList()
         repeat(Signal.Repeat.stopAt) {
-            hit = guard.record("tap(a)", ok = true, outcome = Outcome.Effective)
+            hits = guard.record("tap(a)", ok = true, outcome = Outcome.Effective)
         }
-        assertNotNull("the model is still told about the last rung", hit)
-        assertEquals(Signal.Repeat, hit!!.first)
-        assertEquals(Signal.Repeat.stopAt, hit!!.second)
+        assertTrue("the model is still told about the last rung", hits.isNotEmpty())
+        assertEquals(Signal.Repeat, hits.last().first)
+        assertEquals(Signal.Repeat.stopAt, hits.last().second)
         assertNull("the session must not be stopped", guard.stopped)
         assertNull("and the next call is not refused", guard.check("tap(a)"))
+    }
+
+    /**
+     * [T-loop-guard-all-rungs] A call that advances TWO ladders must report both.
+     * The old single-hit return advanced the second signal's `warned` counter
+     * while dropping its notice, so that rung could never fire again: the model
+     * was told about the repeat and never about the no-effect that made it a
+     * loop.
+     */
+    @Test
+    fun aCallThatAdvancesTwoLaddersReportsBothRungs() {
+        val guard = LoopGuard().apply { stopEnabled = false }
+        var last: List<Pair<Signal, Int>> = emptyList()
+        // Both ladders share the same rung values, so one NoEffect call at the
+        // final count crosses both.
+        val rungs = minOf(Signal.Repeat.stopAt, Signal.NoEffect.stopAt)
+        repeat(rungs) {
+            last = guard.record("tap(a)", ok = true, outcome = Outcome.NoEffect)
+        }
+        val signals = last.map { it.first }
+        assertTrue("expected both ladders in one report, got $signals", signals.containsAll(listOf(Signal.Repeat, Signal.NoEffect)))
     }
 
     @Test

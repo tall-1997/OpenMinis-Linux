@@ -82,8 +82,18 @@ fun TokenUsageSheet(
     val lastCacheHitRate by viewModel.lastCacheHitRate.collectAsStateWithLifecycle()
     // [T-tool-result-aging] Latest fold stats from the send path.
     val saver by ContextSaverRuntime.stats.collectAsStateWithLifecycle()
-    // The previous projection stops being current when the visible transcript or route changes.
-    val breakdownState = remember(viewModel, session, modelEntry, modelGroup, summary, markerId, messages, streaming, memoryEnabled, attachments) {
+    // [T-token-sheet-recompute] This projection rebuilds the whole request
+    // (prompt assembly + a token scan of the entire history). Keying it on the
+    // message LIST made every streaming UI batch create a new container and
+    // restart the effect, so watching a long reply stream re-ran that full
+    // projection ~10 times a second and starved the frame loop. The request
+    // only changes when the transcript gains a row: key on its edge, plus the
+    // route/marker/memory inputs that genuinely move it.
+    val transcriptEdge = messages.size to (messages.lastOrNull()?.id ?: "")
+    val breakdownState = remember(
+        viewModel, session, modelEntry, modelGroup, summary, markerId, transcriptEdge, streaming,
+        memoryEnabled, attachments,
+    ) {
         mutableStateOf<ContextBreakdown?>(null)
     }
     val breakdown by breakdownState

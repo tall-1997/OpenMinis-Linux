@@ -647,7 +647,13 @@ private suspend fun ChatViewModel.executeToolDispatched(
     // paths never reach here). Script and spawn adapters record their own evidence.
     if (canonical != com.openminis.app.tools.ExecuteCodeTool.NAME &&
         canonical != com.openminis.app.tools.CodemodeTool.NAME && !SubAgentKind.isSpawnTool(canonical)
-    ) delivery?.completed(result)
+    ) {
+        // [T-receipt-terminal-evidence] The adapter answered, so the delivery is
+        // settled — a business failure included. Without this a mistyped
+        // `old_string` or a 4xx read back as "delivery pending, do not repeat".
+        result = com.openminis.app.tools.normalizeDeliveryEvidence(canonical, result)
+        delivery?.completed(result)
+    }
     // [T-android-action-guard] Record the outcome and attach the ladder
     // reminders (3/6, 3/6/9, 5/8, 2/4) to what the model sees. For reads,
     // "unchanged" is an output fingerprint match with the previous read in

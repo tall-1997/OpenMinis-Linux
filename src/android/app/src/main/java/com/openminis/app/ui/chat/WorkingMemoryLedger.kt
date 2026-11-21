@@ -70,6 +70,14 @@ internal class WorkingMemoryLedger {
         argsDigest: String,
         argsSummary: String,
         resultHead: String,
+        /**
+         * [T-harness-config-wiring] The cap is policy, not a constant: a
+         * per-model override must be able to change how many rounds the
+         * handover retains. It used to be read from
+         * `HarnessConfig.current()`, which always returns the shipped default,
+         * so the per-model value could never take effect.
+         */
+        maxEntries: Int = com.openminis.app.agent.HarnessConfig.current().ledgerMaxEntries,
     ): Boolean {
         entries.add(
             Entry(
@@ -82,10 +90,9 @@ internal class WorkingMemoryLedger {
             ),
         )
         delivered.add(false)
-        // [T-harness-config] The cap is policy, not a constant: a per-session
-        // override must be able to change how many rounds the handover retains.
-        // The shipped default (600) is byte-identical to MAX_ENTRIES.
-        val maxEntries = com.openminis.app.agent.HarnessConfig.current().ledgerMaxEntries
+        // [T-harness-config-wiring] The cap arrives from the caller's resolved
+        // per-model config; the shipped default (600) is byte-identical to
+        // MAX_ENTRIES when no override is stored.
         var folded = false
         if (entries.size > maxEntries) {
             folded = true
@@ -483,9 +490,10 @@ internal object WorkingMemoryStore {
         argsSummary: String,
         resultHead: String,
         filesDir: java.io.File? = null,
+        maxEntries: Int = com.openminis.app.agent.HarnessConfig.current().ledgerMaxEntries,
     ) {
         val ledger = ledgerFor(sessionId, filesDir)
-        val folded = ledger.append(turn, tool, argsDigest, argsSummary, resultHead)
+        val folded = ledger.append(turn, tool, argsDigest, argsSummary, resultHead, maxEntries)
         if (filesDir != null) {
             if (folded) {
                 // Only undelivered records belong in the durable handover;

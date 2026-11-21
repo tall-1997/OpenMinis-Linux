@@ -6,6 +6,7 @@ import com.openminis.app.data.repository.MemoryLifecycle
 import com.openminis.app.logging.AppLogger
 import java.io.File
 import java.nio.file.Files
+import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -33,6 +34,11 @@ internal object BackupMemoryTree {
     fun deviceRoot(filesDir: File): File = File(filesDir, SoulStore.MEMORY_SUBDIR)
 
     private const val PAIRS = ".diary-pairs.json"
+
+    /** [T-backup-memory-tombstone] `skipped[].reason` values. */
+    private const val SIZE_CAP = "size_cap"
+    private const val UNREADABLE = "unreadable"
+    private const val NO_FILES = "no_files"
     private fun metadata(root: File, source: String): File = File(root, "${MemoryLifecycle.SIDECAR_DIR}/$source.json")
 
     fun isMemoryTemp(relative: String): Boolean =
@@ -55,10 +61,30 @@ internal object BackupMemoryTree {
         var bytes = 0L
         val pairs = JSONObject()
         val markdownTimes = JSONObject()
+        // [T-backup-memory-tombstone] Every file this run could NOT include is
+        // recorded in the package itself, not only in the export history. A
+        // restore on another device has no other way to tell "the user has no
+        // memories" from "this backup left them out", so the gap was silent.
+        val skipped = JSONArray()
+        var skippedCategory: String? = null
+        fun noteSkip(path: String, size: Long, reason: String) {
+            onSkip(path, size)
+            skipped.put(JSONObject().put("path", path).put("size", size).put("reason", reason))
+        }
         if (source.isDirectory) MemoryLifecycle.locked(source) { root ->
+            // [T-backup-memory-category] "Do not back up files" (cap 0) means the
+            // MEMORY category as a whole is not included. Splitting it — daily
+            // diaries dropped, SOUL.md/GLOBAL.md kept — left the user with a
+            // half-restored persona and no way to tell why.
+            val noFiles = maxDiaryBytes != null && maxDiaryBytes <= 0L
+            if (noFiles) skippedCategory = NO_FILES
             for (file in treeFiles(root)) {
                 val rel = file.relativeTo(root).invariantSeparatorsPath
                 if (rel == PAIRS || isMemoryTemp(rel) || BackupDiaryPairs.isInternalRestorePath(rel)) continue
+                if (noFiles) {
+                    noteSkip("data/memory/$rel", file.length(), NO_FILES)
+                    continue
+                }
                 val member = BackupDiaryPairs.globalMember(rel)
                 if (member == null) {
                     val out = File(dest, rel)
@@ -77,8 +103,10 @@ internal object BackupMemoryTree {
                         if (pair.diary == null) continue
                         val sizes = listOfNotNull(pair.diary, pair.metadata).map { it.length() }
                         if (maxDiaryBytes != null && sizes.any { it > maxDiaryBytes }) {
-                            onSkip("data/memory/$rel", sizes[0])
-                            sizes.getOrNull(1)?.let { onSkip("data/memory/${sidecar.relativeTo(dest).invariantSeparatorsPath}", it) }
+                            noteSkip("data/memory/$rel", sizes[0], SIZE_CAP)
+                            sizes.getOrNull(1)?.let {
+                                noteSkip("data/memory/${sidecar.relativeTo(dest).invariantSeparatorsPath}", it, SIZE_CAP)
+                            }
                             continue
                         }
                         BackupDiaryPairs.withSnapshot(pair, member.source, dest) { staged ->
@@ -101,10 +129,14 @@ internal object BackupMemoryTree {
                     } catch (e: Exception) {
                         // If an incomplete staged pair cannot be removed, abort packaging it.
                         clearPairOutputs(body, sidecar)
-                        onSkip("data/memory/$rel", file.length())
+                        noteSkip("data/memory/$rel", file.length(), UNREADABLE)
                         val sourceMeta = metadata(root, member.source)
                         if (BackupDiaryPairs.exists(sourceMeta)) {
-                            onSkip("data/memory/${sourceMeta.relativeTo(root).invariantSeparatorsPath}", sourceMeta.length())
+                            noteSkip(
+                                "data/memory/${sourceMeta.relativeTo(root).invariantSeparatorsPath}",
+                                sourceMeta.length(),
+                                UNREADABLE,
+                            )
                         }
                         AppLogger.warning("Backup", "Cannot include diary $rel: ${e.message}")
                         continue
@@ -115,7 +147,12 @@ internal object BackupMemoryTree {
             }
         }
         if (source.isDirectory) {
-            val inventory = JSONObject().put("version", 1).put("pairs", pairs).put("markdown_mtime_ms", markdownTimes)
+            val inventory = JSONObject()
+                .put("version", 2)
+                .put("pairs", pairs)
+                .put("markdown_mtime_ms", markdownTimes)
+            if (skipped.length() > 0) inventory.put("skipped", skipped)
+            skippedCategory?.let { inventory.put("skipped_category", it) }
             File(dest, PAIRS).writeText(inventory.toString())
         }
         return BackupManifest.CategoryStat(entries, bytes, encrypted = false)
@@ -134,12 +171,23 @@ internal object BackupMemoryTree {
         val descriptor = if (!BackupDiaryPairs.exists(inventory)) null else try {
             require(inventory.isFile && inventory.canonicalFile == inventory.absoluteFile)
             JSONObject(inventory.readText()).also {
-                require(it.getInt("version") == 1)
+                // v1 = the original inventory; v2 adds the skipped-file
+                // tombstones. Both describe the same `pairs` map.
+                require(it.getInt("version") in 1..2)
                 it.getJSONObject("pairs")
             }
         } catch (_: Exception) {
             report.rejectedPaths++
             JSONObject() // An invalid inventory is not a legacy package.
+        }
+        // [T-backup-memory-tombstone] Surface what the exporter had to leave out,
+        // so a restore on another device can say "N memory files were not in this
+        // backup" instead of reporting a clean success.
+        descriptor?.optJSONArray("skipped")?.let { list ->
+            report.sizeSkippedInPackage += list.length()
+        }
+        descriptor?.optString("skipped_category")?.takeIf { it.isNotBlank() }?.let {
+            AppLogger.info("Restore", "[Restore] memory category was excluded at export time: $it")
         }
         val bound = descriptor?.optJSONObject("pairs") ?: descriptor?.let { JSONObject() }
         val markdownTimes = descriptor?.optJSONObject("markdown_mtime_ms")

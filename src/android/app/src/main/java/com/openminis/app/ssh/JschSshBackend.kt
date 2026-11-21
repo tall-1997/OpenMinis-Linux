@@ -1,6 +1,7 @@
 package com.openminis.app.ssh
 
 import android.content.Context
+import com.jcraft.jsch.Channel
 import com.jcraft.jsch.ChannelExec
 import com.jcraft.jsch.ChannelSftp
 import com.jcraft.jsch.HostKey
@@ -89,7 +90,7 @@ class JschSshBackend(
             val outReader = startStreamReader(outIn, stdout, outTotal, "ssh-stdout")
             val errReader = startStreamReader(errIn, stderr, errTotal, "ssh-stderr")
             val timedOut = !awaitWithDeadline(outReader, errReader, deadline)
-            val exit = if (timedOut) -1 else channel.exitStatus
+            val exit = if (timedOut) -1 else awaitExitStatus(channel, deadline)
             return SshExecResult(
                 exitCode = exit,
                 stdout = sinkText(stdout),
@@ -150,6 +151,23 @@ class JschSshBackend(
 
     private fun sinkText(sink: ByteArrayOutputStream): String =
         synchronized(sink) { sink.toString("UTF-8") }
+
+    /**
+     * [T-ssh-exit-status] RFC 4254 lets a server send CHANNEL_EOF before
+     * `exit-status`. The reader threads exit on EOF, so reading `exitStatus`
+     * immediately could observe JSch's -1 initial value for a command that
+     * actually succeeded — and `SshTool` then reported a NETWORK_ERROR for a
+     * successful call. Give the close notification the rest of the deadline
+     * (bounded) before concluding the code was never reported.
+     */
+    private fun awaitExitStatus(channel: Channel, deadline: Long): Int {
+        var remaining = minOf(EXIT_STATUS_GRACE_MS, deadline - System.currentTimeMillis())
+        while (channel.exitStatus < 0 && !channel.isClosed && remaining > 0) {
+            Thread.sleep(EXIT_STATUS_POLL_MS)
+            remaining -= EXIT_STATUS_POLL_MS
+        }
+        return channel.exitStatus
+    }
 
     // ---------------------------------------------------------------- sftp
 
@@ -453,6 +471,13 @@ class JschSshBackend(
         const val KEEPALIVE_MS = 15_000
         const val IDLE_EVICT_MS = 5 * 60_000L
         const val MAX_CAPTURE = 200_000
+
+        /**
+         * [T-ssh-exit-status] Bounded grace for the `exit-status` notification
+         * that may legally follow CHANNEL_EOF.
+         */
+        internal const val EXIT_STATUS_GRACE_MS = 250L
+        private const val EXIT_STATUS_POLL_MS = 10L
         private const val MAX_POOL = 6
         // POLL_MS gone with the busy-poll loop ([T-ssh-blocking-readers]):
         // exec now waits on blocking reader threads, not timed wakeups.

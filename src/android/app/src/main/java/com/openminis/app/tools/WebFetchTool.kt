@@ -158,3 +158,27 @@ internal fun readBodyBounded(body: okhttp3.ResponseBody?, maxBytes: Long): Strin
         String(out.toByteArray(), charset)
     }
 }
+
+/**
+ * [T-bounded-body-read] Byte counterpart of [readBodyBounded] for callers that
+ * persist binary content (skill assets, downloaded files). Returns at most
+ * [maxBytes]; callers that need to know it was truncated compare the length.
+ */
+internal fun readBodyBoundedBytes(body: okhttp3.ResponseBody?, maxBytes: Long): ByteArray? {
+    if (body == null) return null
+    body.byteStream().use { input ->
+        val out = java.io.ByteArrayOutputStream(
+            minOf(maxBytes, 64L * 1024L).toInt().coerceAtLeast(1024),
+        )
+        val buf = ByteArray(8192)
+        var total = 0L
+        while (total < maxBytes) {
+            val room = minOf(buf.size.toLong(), maxBytes - total).toInt()
+            val n = input.read(buf, 0, room)
+            if (n < 0) break
+            out.write(buf, 0, n)
+            total += n
+        }
+        return out.toByteArray()
+    }
+}

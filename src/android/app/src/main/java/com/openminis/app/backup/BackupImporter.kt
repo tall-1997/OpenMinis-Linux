@@ -864,10 +864,9 @@ class BackupImporter(
                 val logical = rel.removeSuffix(".enc")
                 val key = if (logical == "secrets.json") keys.secretsKey else keys.dataKey
                 // AAD binds to the name the member ships under, `.enc` included.
-                BackupCrypto.decryptFile(file, out, key, rel)
-            } else {
-                file.copyTo(out, overwrite = true)
-            }
+                // [T-backup-memory-mtime] memory TTL reads the file mtime, so keep it.
+                BackupCrypto.decryptFile(file, out, key, rel).also { file.lastModified().takeIf { t -> t > 0 }?.let(out::setLastModified) }
+            } else { BackupDiaryPairs.copyWithTime(file, out) } // [T-backup-memory-mtime] keeps mtime for plain members
         }
         return work
     }

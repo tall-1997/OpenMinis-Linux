@@ -3339,4 +3339,5 @@
     <string name="modeldetail_tail_budget">Badyet sa dulo</string>
     <string name="modeldetail_tail_budget_state_auto">Awtomatiko (umaayon sa window, hanggang 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Sarili para sa modelong ito</string>
+    <string name="tool_limits_tool_concurrency">Mga parallel na tool sa pagbasa</string>
 </resources>

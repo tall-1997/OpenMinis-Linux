@@ -280,7 +280,7 @@ class ModelUseOffloadHandler(
                     .put("message", "No API key configured for provider ${entry.model.provider}.")
                     .toString() + "\n",
             )
-        val provider = ProviderFactory.create(instance, apiKey, entry.model, context)
+        val provider = ProviderFactory.createDedicated(instance, apiKey, entry.model, context) // [T-endpoint-override-isolation] this turn mutates it
 
         // [GH#67] input_audio serialization is implemented for the OpenAI
         // chat/completions + responses paths only. Other provider types would

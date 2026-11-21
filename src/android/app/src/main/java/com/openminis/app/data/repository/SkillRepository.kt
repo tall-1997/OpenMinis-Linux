@@ -1251,8 +1251,8 @@ class SkillRepository(private val context: Context) {
                     .build()
                 httpClient.newCall(req).execute().use { resp ->
                     if (resp.isSuccessful) {
-                        val body = resp.body?.string()
-                        if (body != null) return body
+                        val body = com.openminis.app.tools.readBodyBounded(resp.body, com.openminis.app.data.body.ResourceLimits.SKILL_DOC_BYTES)
+                        if (body.isNotEmpty()) return body
                         lastReason = "GitHub contents API returned empty body"
                     } else {
                         val isTransient = resp.code == 403 || resp.code == 429 || resp.code in 500..599
@@ -1286,7 +1286,7 @@ class SkillRepository(private val context: Context) {
             try {
                 val req = Request.Builder().url(url).get().build()
                 httpClient.newCall(req).execute().use { resp ->
-                    if (resp.isSuccessful) return resp.body?.bytes()
+                    if (resp.isSuccessful) return com.openminis.app.tools.readBodyBoundedBytes(resp.body, com.openminis.app.data.body.ResourceLimits.SKILL_ASSET_BYTES)
                     val isTransient = resp.code == 403 || resp.code == 429 || resp.code in 500..599
                     if (!isTransient) {
                         Log.w(TAG, "[siblings] HTTP ${resp.code} non-retryable for $url")
@@ -1377,7 +1377,7 @@ class SkillRepository(private val context: Context) {
     private fun httpGetString(url: String): String? = try {
         val req = Request.Builder().url(url).get().build()
         httpClient.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) null else resp.body?.string()
+            if (!resp.isSuccessful) null else com.openminis.app.tools.readBodyBounded(resp.body, com.openminis.app.data.body.ResourceLimits.SKILL_DOC_BYTES)
         }
     } catch (e: Exception) {
         Log.w(TAG, "httpGetString failed $url: ${e.message}")
@@ -1387,7 +1387,7 @@ class SkillRepository(private val context: Context) {
     private fun httpGetBytes(url: String): ByteArray? = try {
         val req = Request.Builder().url(url).get().build()
         httpClient.newCall(req).execute().use { resp ->
-            if (!resp.isSuccessful) null else resp.body?.bytes()
+            if (!resp.isSuccessful) null else com.openminis.app.tools.readBodyBoundedBytes(resp.body, com.openminis.app.data.body.ResourceLimits.SKILL_ASSET_BYTES)
         }
     } catch (e: Exception) {
         Log.w(TAG, "httpGetBytes failed $url: ${e.message}")

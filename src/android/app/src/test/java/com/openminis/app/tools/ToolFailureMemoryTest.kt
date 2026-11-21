@@ -125,6 +125,43 @@ class ToolFailureMemoryTest {
         assertNull(ToolFailureMemory.lookup(ledger, "shell_execute", original, now))
     }
 
+    /**
+     * [T-known-failure-payload] The payload is the fix. Two failed `file_edit`
+     * calls on the same path used to cluster (their `old_string` was dropped
+     * from the comparison), so the third call — the one carrying the corrected
+     * `old_string` — was refused as "the small difference did not change the
+     * failure cause" and the model could never repair the file.
+     */
+    @Test
+    fun `a corrected edit payload is a new attempt and must run`() {
+        val broken = """{"path":"/src/A.kt","old_string":"foo("}"""
+        repeat(2) {
+            ToolFailureMemory.recordFailure(ledger, "file_edit", broken, "Error: old_string not found", now)
+        }
+        // The fix lives in the payload: it must not be treated as the same call.
+        assertNull(ToolFailureMemory.lookup(ledger, "file_edit", """{"path":"/src/A.kt","old_string":"foo()"}""", now))
+        // Same broken payload, different spelling of the path: still the same rake.
+        assertNotNull(ToolFailureMemory.lookup(ledger, "file_edit", """{"path":"./src/A.kt","old_string":"foo("}""", now))
+    }
+
+    /** `multi_edit.edits` / `mcp.arguments` are non-scalar, so they never reached the identity at all. */
+    @Test
+    fun `a changed structured payload is a new attempt`() {
+        val one = """{"action":"call","server":"s","tool":"t","arguments":{"q":"one"}}"""
+        repeat(2) { ToolFailureMemory.recordFailure(ledger, "mcp", one, "server error", now) }
+        assertNull(
+            ToolFailureMemory.lookup(
+                ledger, "mcp", """{"action":"call","server":"s","tool":"t","arguments":{"q":"two"}}""", now,
+            ),
+        )
+        assertNotNull(
+            ToolFailureMemory.lookup(
+                ledger, "mcp",
+                """{"action":"call","server":"s","tool":"t","arguments":{"q":"one"},"tool_title":"retry"}""", now,
+            ),
+        )
+    }
+
     @Test
     fun refusalExplainsWhatFailedAndHowToProceed() {
         repeat(2) { ToolFailureMemory.recordFailure(ledger, "shell_execute", "{}", "exit 137", now) }

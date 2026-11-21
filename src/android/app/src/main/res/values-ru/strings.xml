@@ -3347,4 +3347,5 @@
     <string name="modeldetail_tail_budget">Бюджет хвоста</string>
     <string name="modeldetail_tail_budget_state_auto">Автоматически (по окну модели, до 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Только для этой модели</string>
+    <string name="tool_limits_tool_concurrency">Параллельные инструменты чтения</string>
 </resources>

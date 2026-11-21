@@ -3344,4 +3344,5 @@
     <string name="modeldetail_tail_budget">Anggaran ekor</string>
     <string name="modeldetail_tail_budget_state_auto">Otomatis (mengikuti jendela, maksimal 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Khusus untuk model ini</string>
+    <string name="tool_limits_tool_concurrency">Alat baca paralel</string>
 </resources>

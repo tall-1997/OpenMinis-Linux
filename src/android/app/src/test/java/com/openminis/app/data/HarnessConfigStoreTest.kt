@@ -112,4 +112,26 @@ class HarnessConfigStoreTest {
         assertFalse(HarnessConfigStore.save(dir, "  ", HarnessConfig.DEFAULT))
         assertEquals(HarnessConfig.DEFAULT, HarnessConfigStore.forModel(dir, ""))
     }
+
+    /**
+     * A save that cannot complete must not leave the staged sidecar behind:
+     * `<key>.json.tmp` is written by every attempt under the same name, and no
+     * reader (including the diagnostics that list this directory) ever removes
+     * or reports it.
+     */
+    @Test
+    fun aFailedSaveDoesNotLeaveAStagedTempFile() {
+        val dir = tmp.newFolder()
+        val target = HarnessConfigStore.file(dir, "m1")
+        // A non-empty DIRECTORY at the destination makes Files.move fail after
+        // the temp file has already been written — the exact window the leak
+        // lived in.
+        val blocker = target.parentFile!!.resolve(target.name).also { it.mkdirs() }
+        blocker.resolve("occupied").writeText("x", Charsets.UTF_8)
+
+        assertFalse(HarnessConfigStore.save(dir, "m1", HarnessConfig.DEFAULT))
+
+        val leftovers = (target.parentFile ?: dir).listFiles().orEmpty().filter { it.name.endsWith(".tmp") }
+        assertTrue("failed save must not leave staged temp files: $leftovers", leftovers.isEmpty())
+    }
 }

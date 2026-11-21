@@ -27,7 +27,8 @@ class SecretMaskingTest {
         val masked = SecretMasking.mask(text)
         assertFalse(masked.contains("opaque-token-123"))
         assertFalse(masked.contains("abcdef123"))
-        assertTrue(masked.contains("Authorization=[redacted]"))
+        // The separator and quotes are preserved; only the value is replaced.
+        assertTrue(masked.contains("Authorization: [redacted]"))
         assertTrue(masked.contains("token=[redacted]"))
     }
 
@@ -55,7 +56,30 @@ class SecretMaskingTest {
 
         val basic = SecretMasking.mask("Authorization: Basic dXNlcjpwYXNzd29yZA==")
         assertFalse(basic.contains("dXNlcjpwYXNzd29yZA=="))
-        assertTrue(basic.contains("Authorization=[redacted]"))
+        assertTrue(basic.contains("Authorization: Basic [redacted]"))
+    }
+
+    /**
+     * [T-secret-mask-json-shape] Masked output is PERSISTED and read back by
+     * callers that parse it (failure clustering, compaction summaries, hidden
+     * notes). Rewriting a matched pair as `key=[redacted]` ate the quotes and
+     * the colon, so `{"password":"hunter2x"}` came back unparseable.
+     */
+    @Test
+    fun maskedJsonStaysParseableJson() {
+        val inputs = listOf(
+            """{"password":"hunter2x"}""",
+            """{"authorization":"Bearer abcdefgh1234"}""",
+            """{"args":{"token":"abcdef123456"},"path":"/tmp/a"}""",
+        )
+        for (input in inputs) {
+            val masked = SecretMasking.mask(input)
+            assertFalse("secret leaked: $masked", masked.contains("hunter2x") || masked.contains("abcdefgh1234") || masked.contains("abcdef123456"))
+            // Must still parse, and keep the key so the shape is readable.
+            val parsed = org.json.JSONObject(masked)
+            assertTrue("key lost: $masked", masked.contains("password") || masked.contains("authorization") || masked.contains("token"))
+            assertTrue(parsed.length() > 0)
+        }
     }
 
     @Test

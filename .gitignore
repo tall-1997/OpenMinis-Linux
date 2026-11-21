@@ -177,3 +177,10 @@ __pycache__/
 
 # local analysis scratch (never commit)
 .tmp-issue/
+
+# [T-provider-customization-untracked] Local provider build metadata. BUILDING.md
+# tells every builder to copy the .example here and fill in
+# ANTHROPIC_OAUTH_IDENTIFIER_PROMPT — a private value this repo does not ship.
+# Without this rule the file is "untracked but addable", so one `git add -A`
+# publishes the identifier.
+src/android/app/provider-customization.properties

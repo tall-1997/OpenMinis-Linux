@@ -149,7 +149,10 @@ object BackupRestoreFiles {
 
             dest.parentFile?.mkdirs()
             val memoryTime = entry.memoryMtimeMs?.takeIf {
-                pairSessionDiaries && BackupDiaryPairs.isSessionMemoryMarkdown(
+                // [T-backup-unknown-mtime] 0/negative means "unknown", never a
+                // real timestamp: stamping 1970 makes the diary read as ancient
+                // and `MemoryMetadata.isExpired` hides it after a restore.
+                it > 0 && pairSessionDiaries && BackupDiaryPairs.isSessionMemoryMarkdown(
                     entry.path.removePrefix("chats/").substringAfter('/', ""),
                 )
             }

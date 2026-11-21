@@ -3339,4 +3339,5 @@
     <string name="modeldetail_tail_budget">Orçamento final</string>
     <string name="modeldetail_tail_budget_state_auto">Automático (acompanha a janela, até 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Personalizado para este modelo</string>
+    <string name="tool_limits_tool_concurrency">Ferramentas de leitura em paralelo</string>
 </resources>

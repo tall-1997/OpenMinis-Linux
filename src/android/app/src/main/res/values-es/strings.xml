@@ -3190,4 +3190,5 @@
     <string name="modeldetail_tail_budget">Presupuesto final</string>
     <string name="modeldetail_tail_budget_state_auto">Automático (escala con la ventana, hasta 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Propio de este modelo</string>
+    <string name="tool_limits_tool_concurrency">Herramientas de lectura en paralelo</string>
 </resources>

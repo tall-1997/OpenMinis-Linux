@@ -58,7 +58,7 @@ internal object MemorySources {
                     val text = if (loadBody(name)) readTextResilient(diary, "memory") ?: return@runCatching null else null
                     if (text != null && diary.lastModified() != modified) return@runCatching null
                     val header = if (!governed) null else if (text != null) MemoryMetadataParser.header(text)
-                        else diary.bufferedReader().use(MemoryMetadataParser::header)
+                        else cachedHeader(diary)
                     Source(dir, name, modified, pair, header, text, now)
                 }.getOrNull()
             }
@@ -101,5 +101,40 @@ internal object MemorySources {
             if (owned.isSedimentCaption() || line.none { it.isLetterOrDigit() }) continue
             add(owned.copy(text = line))
         }
+    }
+
+    /**
+     * [T-memory-header-cache] `withScope` must read every other diary's header to
+     * decide supersession, which made a single-file reindex O(files in the
+     * directory). The header only depends on (mtime, size), so cache it: writes
+     * go through [MemoryLifecycle.locked], which serialises access to the same
+     * directory, and a real edit changes both keys and misses naturally.
+     */
+    private data class CachedHeader(val modified: Long, val size: Long, val header: MemoryMetadataParser.Header?)
+
+    private val headerCache = java.util.concurrent.ConcurrentHashMap<String, CachedHeader>()
+
+    /** [T-memory-header-cache] Diagnostics: real (cache-missing) header reads. */
+    internal var headerReadsForTest: Int = 0
+        private set
+
+    /** Bounded: one entry per diary file, and a runaway directory must not grow the heap. */
+    private const val HEADER_CACHE_MAX = 1_024
+
+    private fun cachedHeader(file: java.io.File): MemoryMetadataParser.Header? {
+        val key = runCatching { file.canonicalPath }.getOrElse { file.absolutePath }
+        val modified = file.lastModified()
+        val size = file.length()
+        headerCache[key]?.let { if (it.modified == modified && it.size == size) return it.header }
+        headerReadsForTest += 1
+        val header = runCatching { file.bufferedReader().use(MemoryMetadataParser::header) }.getOrNull()
+        if (headerCache.size >= HEADER_CACHE_MAX) headerCache.clear()
+        headerCache[key] = CachedHeader(modified, size, header)
+        return header
+    }
+
+    /** Tests: drop the cache so a fixture's rewrite is observed. */
+    internal fun clearHeaderCacheForTest() {
+        headerCache.clear()
     }
 }

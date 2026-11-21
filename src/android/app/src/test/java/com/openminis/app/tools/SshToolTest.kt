@@ -291,7 +291,11 @@ class SshToolTest {
         assertFalse(r.success)
         assertFalse(r.timedOut)
         assertFalse(r.notSent)
-        assertEquals(ToolErrorCode.NETWORK_ERROR, r.errorCode)
+        // [T-ssh-exit-status] -1 means "ran, code not reported", not "network
+        // failure": NETWORK_ERROR invited a retry of a command that had already
+        // executed.
+        assertEquals(ToolErrorCode.EXECUTION_FAILED, r.errorCode)
+        assertTrue("the ledger must not read this as never-sent", r.deliveryAccepted)
         assertTrue(r.output.contains("partial"))
     }
 

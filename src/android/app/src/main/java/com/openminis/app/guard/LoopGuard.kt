@@ -117,8 +117,14 @@ class LoopGuard {
      * (null = nothing to tell the model); reaching a stop rung also sets [stopped].
      */
     @Synchronized
-    fun record(signature: String?, ok: Boolean, outcome: Outcome): Pair<Signal, Int>? {
-        var hit: Pair<Signal, Int>? = null
+    fun record(signature: String?, ok: Boolean, outcome: Outcome): List<Pair<Signal, Int>> {
+        // [T-loop-guard-all-rungs] Every signal that crosses a NEW rung in this
+        // call must be reported. Returning a single hit meant that when two
+        // ladders reached a rung in the same call (the usual shape: a repeat that
+        // also had no effect), the second one's `warned` was advanced but its
+        // notice was dropped — and because `warned` had moved, that rung could
+        // never fire again. The model then never heard about the second cause.
+        val hits = ArrayList<Pair<Signal, Int>>(2)
         fun climb(signal: Signal, count: Int) {
             val rung = signal.ladder.lastOrNull { count >= it } ?: return
             if (rung <= (warned[signal] ?: 0)) return
@@ -135,7 +141,7 @@ class LoopGuard {
                 )
             }
             if (isStop) stopped = signal
-            if (hit == null || isStop) hit = signal to count
+            hits += signal to count
         }
         if (signature != null) {
             recent.addLast(signature)
@@ -159,7 +165,7 @@ class LoopGuard {
             }
             Outcome.None -> {}
         }
-        return hit
+        return hits
     }
 
     /** The user spoke (new turn or steering): every counter of this session starts again. */

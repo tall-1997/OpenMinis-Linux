@@ -38,7 +38,25 @@ internal class ToolReceiptScope private constructor(
 
     fun call(name: String, finalizedArgs: String): ToolReceiptKey? {
         val canonical = ToolAliases.canonical(name)
-        if (canonical.isBlank() || canonical.length > 512 || finalizedArgs.length > 512 * 1024) return null
+        if (canonical.isBlank() || canonical.length > 512) return null
+        // [T-receipt-large-args] A call identity must never be refused for being
+        // big. `file_write` has no content ceiling of its own and a large
+        // heredoc/script is an ordinary turn; the old 512 KiB refusal surfaced
+        // as "no stable call identity", i.e. the tool never ran and the message
+        // blamed the turn instead of the size. Above the normalization window
+        // the exact bytes are hashed instead of re-parsed (parsing is the part
+        // that costs memory), so the call still gets a stable, replay-detectable
+        // identity.
+        if (finalizedArgs.length > MAX_NORMALIZED_ARGS_CHARS) {
+            val raw = Digest.sha256Hex(finalizedArgs)
+            return ToolReceiptKey(
+                this,
+                receiptDigest(parentSha, laneSha, canonical, raw),
+                receiptDigest(parentSha, MAIN_LANE, canonical, raw),
+                receiptDigest("operation", canonical, raw),
+                false,
+            )
+        }
         val args = parseReceiptArgs(finalizedArgs) ?: return null
         val originalArgs = receiptArgsSha(args) ?: return null
         val normalized = effectiveReceiptArgs(canonical, args) ?: return null
@@ -57,6 +75,20 @@ internal class ToolReceiptScope private constructor(
     companion object {
         fun userTurn(sessionId: String, userRowId: String?): ToolReceiptScope? =
             root(sessionId, "user-row", userRowId)
+
+        /**
+         * [T-receipt-internal-run] A run with no user row of its own — internal
+         * Goal execution, a resumed tail whose only user rows are host notes —
+         * anchors its receipts on the run identity instead.
+         *
+         * Without it every receipted tool returned "no stable call identity"
+         * for the whole run: `/goal create` in a fresh chat never persists a
+         * user row (`internalGoalRun` skips it), so `file_write`,
+         * `shell_execute`, MCP and every other mutating tool were refused and
+         * a Goal could only read files.
+         */
+        fun internalRun(sessionId: String, runId: String?): ToolReceiptScope? =
+            root(sessionId, "internal-run", runId)
 
         fun supervisor(sessionId: String, runId: String): ToolReceiptScope? =
             root(sessionId, "supervisor-run", runId)
@@ -94,7 +126,7 @@ internal fun receiptDigest(vararg fields: String): String = Digest.sha256Hex(bui
 
 internal fun parseReceiptArgs(args: String): JSONObject? {
     // nextClean uses NUL as its end sentinel on both Android and the JVM.
-    if (args.length > 512 * 1024 || '\u0000' in args) return null
+    if (args.length > MAX_NORMALIZED_ARGS_CHARS || '\u0000' in args) return null
     return try {
         val parser = org.json.JSONTokener(args)
         (parser.nextValue() as? JSONObject)?.takeIf { parser.nextClean() == '\u0000' }
@@ -104,6 +136,14 @@ internal fun parseReceiptArgs(args: String): JSONObject? {
         null
     }
 }
+
+/**
+ * [T-receipt-large-args] Largest argument payload the identity layer re-parses
+ * for normalization. Real tool arguments come from model output and sit far
+ * below this; the value is a memory guard for the parse, not a limit on what a
+ * turn may call.
+ */
+internal const val MAX_NORMALIZED_ARGS_CHARS = 2 * 1024 * 1024
 
 /** The MCP executor and receipt key must see exactly the same effective payload. */
 internal fun mcpCallArguments(raw: Any?): JSONObject? = when (raw) {

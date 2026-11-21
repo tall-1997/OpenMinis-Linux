@@ -229,6 +229,22 @@ class McpHttpClient(
 
             try {
                 client.newCall(builder.build()).execute().use { resp ->
+                    // [T-mcp-side-effect-redirect] `tools/call` is the one request
+                    // that must never be replayed (the no-redirect client exists
+                    // for exactly that). But a 3xx ALSO proves the tool never ran,
+                    // and the generic "HTTP 307: <body>" SERVER_ERROR made
+                    // McpNativeTool mark it `serverAnswered` — so the receipt
+                    // ledger recorded a delivered call the server never executed.
+                    // Classify it as a proven not-sent failure and say what the
+                    // operator has to change.
+                    if (sideEffecting && sideEffectRedirect(resp.code) == SideEffectRedirect.NOT_SENT) {
+                        throw McpError(
+                            "CONNECT_FAILED",
+                            "server redirected tools/call (HTTP ${resp.code} → " +
+                                "${resp.header("Location").orEmpty()}); the request was not retried, " +
+                                "use the canonical endpoint URL",
+                        )
+                    }
                     if (resp.code == 401 && oauthConfigured) {
                         throw McpError(
                             McpError.AUTH_REQUIRED,
@@ -298,3 +314,15 @@ class McpHttpClient(
         }
     }
 }
+
+/** [T-mcp-side-effect-redirect] What a side-effecting POST must do with a 3xx. */
+internal enum class SideEffectRedirect { NOT_SENT, NONE }
+
+/**
+ * [T-mcp-side-effect-redirect] The client never replays a `tools/call`, so every
+ * 3xx on one means the tool never ran: the request was not processed, only
+ * forwarded. The receipt layer must read that as "not sent", never as a
+ * delivered call.
+ */
+internal fun sideEffectRedirect(code: Int): SideEffectRedirect =
+    if (code in 300..399) SideEffectRedirect.NOT_SENT else SideEffectRedirect.NONE

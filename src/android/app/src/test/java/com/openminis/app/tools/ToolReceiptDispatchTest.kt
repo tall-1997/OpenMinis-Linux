@@ -513,8 +513,7 @@ class ToolReceiptDispatchTest {
         assertEquals(ToolReceiptDecision.Ready, store.prepare(key("over capacity")))
     }
 
-    @Test fun `proven ended failures settle instead of pending forever`() = runBlocking {
-        val directory = temp.newFolder()
+    @Test fun `proven ended failures settle instead of pending forever`() = runBlocking {        val directory = temp.newFolder()
         val dispatch = ToolReceiptDispatch(ToolReceiptStore(directory))
         val scope = turn.lane("worker", "seat")
         suspend fun run(key: ToolReceiptKey, wire: String, result: ToolExecutionResult) =
@@ -629,5 +628,54 @@ class ToolReceiptDispatchTest {
         assertEquals(ToolReceiptDecision.Full, store.prepare(key("new")))
         assertEquals(ToolReceiptState.UNKNOWN, store.state(unknown))
         assertEquals(ToolReceiptState.ACCEPTED, store.state(accepted))
+    }
+
+    /**
+     * [T-receipt-terminal-evidence] An in-process adapter that RETURNED has a
+     * known delivery state. A plain business failure used to stay UNKNOWN, so
+     * the model was told "it may already have occurred, do not repeat" about an
+     * edit that certainly never happened.
+     */
+    @Test fun `an adapter that answered settles a plain business failure`() {
+        val editFailure = ToolExecutionResult("Error: old string not found in /tmp/a.kt", false)
+        assertTrue(normalizeDeliveryEvidence("file_edit", editFailure).deliveryAccepted)
+        assertFalse(normalizeDeliveryEvidence("file_edit", editFailure).success)
+        assertTrue(normalizeDeliveryEvidence("web_fetch", ToolExecutionResult("HTTP 404", false)).deliveryAccepted)
+        // Adapters that produce their own evidence keep their own verdict.
+        assertFalse(normalizeDeliveryEvidence("mcp", ToolExecutionResult("lost", false, timedOut = true)).deliveryAccepted)
+        assertFalse(normalizeDeliveryEvidence("ssh_exec", ToolExecutionResult("closed", false)).deliveryAccepted)
+        assertFalse(normalizeDeliveryEvidence("shell_execute", ToolExecutionResult("killed", false)).deliveryAccepted)
+        assertFalse(normalizeDeliveryEvidence("execute_code", ToolExecutionResult("boom", false)).deliveryAccepted)
+        // Never dispatched, and receipt advisories, stay exactly as reported.
+        assertFalse(normalizeDeliveryEvidence("file_edit", ToolExecutionResult("no", false, notSent = true)).deliveryAccepted)
+        val advisory = toolReceiptMissingAnchor()
+        assertSame(advisory, normalizeDeliveryEvidence("file_edit", advisory))
+    }
+
+    /** [T-receipt-large-args] A big payload used to lose its identity and refuse to run at all. */
+    @Test fun `a large call still has a stable identity`() {
+        val big = "x".repeat(600 * 1024)
+        val args = """{"path":"/tmp/big.txt","content":"$big"}"""
+        val first = requireNotNull(turn.call("file_write", args))
+        val second = requireNotNull(turn.call("file_write", args))
+        assertEquals(first.logicalSha, second.logicalSha)
+        assertEquals(first.operationSha, second.operationSha)
+    }
+
+    /**
+     * [T-receipt-internal-run] A Goal run started from a fresh chat persists no
+     * user row, so the user-row anchor is null and every receipted tool used to
+     * be refused — a Goal could read files and nothing else.
+     */
+    @Test fun `an internal run without a user row still gets a stable anchor`() {
+        val run = requireNotNull(ToolReceiptScope.internalRun("session-a", "run-1"))
+        assertNotNull(run.call("file_write", """{"path":"/tmp/a"}"""))
+        assertEquals(run.parentSha, requireNotNull(ToolReceiptScope.internalRun("session-a", "run-1")).parentSha)
+        assertNotEquals(run.parentSha, requireNotNull(ToolReceiptScope.internalRun("session-a", "run-2")).parentSha)
+        // Its namespace never collides with a user row that happens to share the id.
+        assertNotEquals(run.parentSha, requireNotNull(ToolReceiptScope.userTurn("session-a", "run-1")).parentSha)
+        // No run identity at all still fails closed.
+        assertNull(ToolReceiptScope.internalRun("session-a", null))
+        assertNull(ToolReceiptScope.internalRun("session-a", "  "))
     }
 }

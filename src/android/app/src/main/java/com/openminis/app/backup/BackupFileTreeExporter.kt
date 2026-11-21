@@ -97,8 +97,14 @@ class BackupFileTreeExporter(
             if (diaryMember?.member == BackupDiaryPairs.Member.DIARY) {
                 exportSessionDiary(entry, logicalPrefix, logicalPath, sessionId, result)
             } else if (inSnapshot(entry, result)) {
+                // [T-backup-unknown-mtime] `inSnapshot` treats a 0/negative mtime
+                // as "unknown, keep it". Writing that same 0 into
+                // memory_mtime_ms would make the restore stamp the file 1970,
+                // which `MemoryMetadata.isExpired` then reads as an ancient
+                // diary — the exact "unknown must not read as ancient"
+                // invariant this file states a few lines above.
                 val memoryMtime = if (category == BackupCategory.CHATS && BackupDiaryPairs.isSessionMemoryMarkdown(rel))
-                    entry.lastModified() else null
+                    entry.lastModified().takeIf { it > 0 } else null
                 writeFile(entry, logicalPath, sessionId, category, result, memoryMtime)
             }
         }
