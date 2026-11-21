@@ -53,8 +53,8 @@
     },
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatAssistantMessageUI.kt": {
       "color": 0,
-      "sp": 2,
-      "dp": 46
+      "sp": 0,
+      "dp": 26
     },
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatComposerSection.kt": {
       "color": 0,
@@ -1152,6 +1152,12 @@
     "src/android/app/src/main/java/com/openminis/app/ui/chat/StreamingMarkdownText.kt": {
       "183": "16",
       "184": "24"
+    },
+    "src/android/app/src/main/java/com/openminis/app/ui/chat/ThinkingBlockUI.kt": {
+      "130": "0.5",
+      "155": "13",
+      "157": "1.5",
+      "266": "300"
     },
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ToolGroupRow.kt": {
       "80": "0",

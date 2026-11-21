@@ -7,35 +7,26 @@ package com.openminis.app.ui.chat
 // also came across was deleted as unreachable dead code — the FlatChatItem
 // path in ChatMessageListSection is the only assistant renderer.)
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Terminal
@@ -48,12 +39,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -66,22 +53,15 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openminis.app.R
-import com.openminis.app.cottranslate.CotTranslationPrefs
-import com.openminis.app.cottranslate.OkHttpTranslationHttp
-import com.openminis.app.cottranslate.ReasoningTranslationController
-import com.openminis.app.cottranslate.ThinkingTranslationHandle
 import com.openminis.app.ui.components.MinisMenu
-import com.openminis.app.ui.settings.autoExpandThinkingEnabled
 import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.decorLinearSweep
 import com.openminis.app.ui.theme.m3Icon
@@ -501,270 +481,3 @@ internal fun ToolCallPill(
 // iOS-style bouncing dots (3 dots, easeInOut, staggered delay)
 // [T-android-split-chat] BouncingDots / StreamingDotsText / TypingIndicator
 // moved verbatim to ChatIndicators.kt (same package, now `internal`).
-
-// ─── Thinking Block (iOS: collapsible "Deep Thinking" section, blue tint) ────
-
-@Composable
-internal fun ThinkingBlock(
-    block: AssistantBlock,
-    isStreaming: Boolean,
-    isLast: Boolean = true,
-    /** [T-cot-translate-llm] The chat's live provider for the LLM translate
-     *  route; null (sub-agent bar, unavailable VM) = anonymous routes only. */
-    llmProvider: com.openminis.app.provider.LLMProvider? = null,
-    llmModelName: String = "",
-) {
-    // Per-block expand state, keyed by block.id so the user's manual toggle on
-    // an earlier (finished) thinking block survives recomposition while a
-    // later block is still streaming. The previous LaunchedEffect snapped
-    // every non-last block back to collapsed on each `isLast` flip, which
-    // fought the user's tap and produced a flicker that read as "tapping the
-    // earlier block shows the streaming block's content."
-    // [T-thinking-auto-expand-toggle] The initial auto-expand of a new
-    // streaming block is gated on the Appearance setting (default ON =
-    // historical behavior). When the user turned it off, a new streaming block
-    // starts collapsed; a manual header tap still expands it (setting
-    // userTouched, so neither the stream-end auto-collapse nor anything else
-    // fights the user). Read once at mount — mirrors iOS ThinkingBlockView,
-    // where the same UserDefaults gate sits at the one-shot auto-expand site.
-    val context = LocalContext.current
-    val autoExpandThinking = remember { autoExpandThinkingEnabled(context) }
-    val showFullThinking = remember { com.openminis.app.ui.settings.showFullThinkingEnabled(context) }
-    var expanded by remember(block.id) {
-        mutableStateOf(if (isStreaming) showFullThinking || (autoExpandThinking && isLast) else false)
-    }
-    var userTouched by remember(block.id) { mutableStateOf(false) }
-    var wasStreaming by remember(block.id) { mutableStateOf(isStreaming) }
-    LaunchedEffect(block.id, isStreaming) {
-        // Collapse only on a real active->finished edge (showFullThinking keeps it open).
-        if (wasStreaming && !isStreaming && !userTouched && !showFullThinking) {
-            delay(500)
-            expanded = false
-        }
-        wasStreaming = isStreaming
-    }
-    val thinkingBlue = RawC.systemBlue.tc
-    val charCount = block.content.length
-    val charLabel = when {
-        charCount >= 1000 -> "${charCount / 1000}K"
-        else -> "$charCount"
-    }
-
-    val thinkingHardCap = 100_000
-    val overHardCap = charCount > thinkingHardCap
-    var showFullContent by remember(block.id) { mutableStateOf(false) }
-    val transScope = rememberCoroutineScope()
-    val transContext = LocalContext.current
-    val transEnabled = remember { CotTranslationPrefs.enabled(transContext) }
-    var showTranslated by remember(block.id) { mutableStateOf(false) }
-    var transState by remember(block.id) { mutableStateOf<ReasoningTranslationController.CotTranslationState?>(null) }
-    // [T-cot-translate] Stable key — a content-hash suffix rebuilt the handle on every chunk and killed streaming translation.
-    val transHandle = remember(block.id) {
-        ThinkingTranslationHandle(
-            block.id, transScope, OkHttpTranslationHttp,
-        ).onState { s -> transState = s }
-    }
-    DisposableEffect(block.id) { onDispose { transHandle.dispose() } }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            // [P1-3] vertical self-padding removed: the row rhythm owns
-            // inter-row gaps (2.5dp between consecutive process rows).
-            .background(thinkingBlue.copy(alpha = 0.06f), RoundedCornerShape(12.dp))
-            .border(0.5.dp, thinkingBlue.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
-            .clip(RoundedCornerShape(12.dp))
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-    ) {
-        // Header row — only the header reacts to taps. Mirrors iOS, where
-        // .onTapGesture is on the header HStack, not the whole VStack. With
-        // clickable on the outer Column, a release after dragging in the
-        // inner scroller registered as a tap and toggled `expanded`.
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable {
-                    userTouched = true
-                    // [T-thinking-render-perf-android] Over the hard cap the
-                    // inline scroller is bypassed entirely; tapping the header
-                    // opens the native full-content viewer instead of toggling
-                    // the (never-shown) inline expansion.
-                    if (overHardCap) showFullContent = true
-                    else expanded = !expanded
-                },
-        ) {
-            if (isStreaming && block.toolStatus != ToolBlockStatus.SUCCESS) {
-                // iOS: ProgressView().controlSize(.mini) while streaming
-                CircularProgressIndicator(
-                    modifier = Modifier.size(13.dp),
-                    color = thinkingBlue,
-                    strokeWidth = 1.5.dp,
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-            } else {
-                Icon(
-                    imageVector = m3Icon(Icons.Default.Psychology),
-                    contentDescription = null,
-                    tint = thinkingBlue,
-                    modifier = Modifier.size(14.dp),
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-            }
-            Text(
-                text = stringResource(R.string.chat_thinking_header),
-                fontSize = MinisTypography.body,
-                fontWeight = FontWeight.SemiBold,
-                color = thinkingBlue,
-            )
-            Spacer(modifier = Modifier.weight(1f))
-            // [T-cot-translate] Explicit per-block trigger — expansion never sends.
-            if (transEnabled && !overHardCap && block.content.isNotBlank()) {
-                Text(
-                    text = stringResource(
-                        if (showTranslated) R.string.cot_translate_show_original
-                        else R.string.cot_translate_show_translation,
-                    ),
-                    fontSize = MinisTypography.cap,
-                    fontWeight = FontWeight.Medium,
-                    color = if (showTranslated) thinkingBlue else thinkingBlue.copy(alpha = 0.75f),
-                    modifier = Modifier.clickable {
-                        showTranslated = transHandle.toggle(transContext, block.content, isStreaming, llmProvider, llmModelName)
-                    },
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-            }
-            // [P-process-card] Thinking duration, settled by the agent loop
-            // when the first text/tool call ends the reasoning phase. Same
-            // slot family as the char count so the header reads
-            // "思考 · 4m 59s · 11k" like the reference card.
-            formatProcessDuration(block.durationMs)?.let { dur ->
-                Text(
-                    text = dur,
-                    fontSize = MinisTypography.cap,
-                    fontWeight = FontWeight.Medium,
-                    fontFamily = FontFamily.Monospace,
-                    color = thinkingBlue.copy(alpha = 0.6f),
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-            }
-            if (charCount > 0) {
-                Text(
-                    text = charLabel,
-                    fontSize = MinisTypography.cap,
-                    fontWeight = FontWeight.Medium,
-                    fontFamily = FontFamily.Monospace,
-                    color = thinkingBlue.copy(alpha = 0.6f),
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-            }
-            if (overHardCap) {
-                // [T-thinking-render-perf-android] No expand/collapse chevron —
-                // the content is too large for the inline Compose scroller.
-                // Offer the native full-content viewer instead.
-                Text(
-                    text = stringResource(R.string.thinking_view_full),
-                    fontSize = MinisTypography.cap,
-                    fontWeight = FontWeight.Medium,
-                    color = thinkingBlue,
-                )
-            } else {
-                Icon(
-                    imageVector = if (expanded) m3Icon(Icons.Default.KeyboardArrowUp) else m3Icon(Icons.Default.KeyboardArrowDown),
-                    contentDescription = if (expanded) "Collapse" else "Expand",
-                    tint = thinkingBlue.copy(alpha = 0.5f),
-                    modifier = Modifier.size(14.dp),
-                )
-            }
-        }
-
-        // Expanded content. Mirrors iOS ThinkingBlockView (AssistantBlockView.swift:648):
-        // an inner scroller capped at 300dp, auto-follow to the bottom while the
-        // block is streaming, manual drag at any time, and pause-on-user-scroll
-        // so a user reading earlier reasoning isn't yanked back to the tail by
-        // the next token.
-        AnimatedVisibility(visible = expanded && !overHardCap) {
-            val scrollState = rememberScrollState()
-            // [T-thinking-render-perf-android] Render only the tail window (O(window) not O(total));
-            // UiUpdateBatcher already paces recomposition at 200-500ms.
-            val renderedContent = block.content
-            val effectiveWindow = if (showFullThinking) thinkingHardCap else 8000 // 8k tail window
-            val isTruncated = renderedContent.length > effectiveWindow
-            val displayContent = visibleThinkingTail(renderedContent, effectiveWindow)
-            if (showTranslated) { // [T-cot-translate] feed the growing source
-                // Key on the streaming flag too: the final running=false
-                // update (tail completes) must fire when the stream ends.
-                LaunchedEffect(block.content.length, isStreaming) {
-                    transHandle.update(block.content, isStreaming)
-                }
-            }
-            ThinkingAutoFollow(
-                blockId = block.id,
-                contentVersionValue = block.content.length,
-                // [T-cot-translate] auto-follow pauses in the translated view —
-                // two competing scroll targets would fight.
-                isStreaming = isStreaming && !showTranslated,
-                scrollState = scrollState,
-            )
-            Column(
-                modifier = Modifier
-                    .padding(top = 6.dp)
-                    .heightIn(max = 300.dp)
-                    .verticalScroll(scrollState),
-            ) {
-                if (isTruncated) {
-                    Text(
-                        text = stringResource(
-                            R.string.thinking_truncated_hint,
-                            displayContent.length / 1000,
-                            charCount / 1000,
-                        ),
-                        fontSize = MinisTypography.cap,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                    )
-                }
-                if (showTranslated && transState != null) {
-                    Column {
-                        if (transState!!.failed) {
-                            Text(
-                                text = stringResource(R.string.cot_translate_failed),
-                                fontSize = MinisTypography.cap,
-                                color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
-                                modifier = Modifier
-                                    .clickable {
-                                        transHandle.retry(block.content, isStreaming)
-                                    }
-                                    .padding(vertical = 2.dp),
-                            )
-                        }
-                        Text(
-                            text = transState!!.text,
-                            fontSize = MinisTypography.body,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
-                            lineHeight = 19.sp,
-                        )
-                    }
-                } else {
-                    Text(
-                        text = displayContent,
-                        fontSize = MinisTypography.body,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
-                        lineHeight = 19.sp,
-                    )
-                }
-            }
-        }
-
-        // [T-thinking-render-perf-android] Hard-cap full-content viewer. A
-        // native TextView (selectable, scrollable) renders arbitrarily large
-        // thinking text without the Compose `Text` measure freeze.
-        if (overHardCap && showFullContent) {
-            ThinkingFullContentDialog(
-                content = block.content,
-                onDismiss = { showFullContent = false },
-            )
-        }
-    }
-}
-
