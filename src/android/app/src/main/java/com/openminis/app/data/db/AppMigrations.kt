@@ -646,6 +646,17 @@ internal object AppMigrations {
         }
     }
 
+    val MIGRATION_35_36 = object : Migration(35, 36) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // [T-goal-contract] Judgement-ready goal fields. Nullable on
+            // purpose: pre-36 rows keep working and the contract block is
+            // rendered only when a field is present.
+            db.addColumnIfMissing("session_goals", "acceptance", "TEXT")
+            db.addColumnIfMissing("session_goals", "constraints", "TEXT")
+            db.addColumnIfMissing("session_goals", "next_step", "TEXT")
+        }
+    }
+
     val MIGRATION_30_29 = object : Migration(30, 29) {
         override fun migrate(db: SupportSQLiteDatabase) {
             // Keep the columns (same policy as 17->16): older builds ignore
@@ -796,5 +807,5 @@ internal object AppMigrations {
     // [#27 memory embeddings] declared in MemoryEmbeddingMigrations.kt.
     MemoryEmbeddingMigrations.MIGRATION_32_33,
     MemoryEmbeddingMigrations.MIGRATION_33_32,
-    ) + ThinkingDormancyMigrations.ALL + CompactAssetMigrations.MIGRATION_34_35
+    ) + ThinkingDormancyMigrations.ALL + CompactAssetMigrations.MIGRATION_34_35 + listOf(MIGRATION_35_36)
 }

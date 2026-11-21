@@ -808,6 +808,15 @@ class ChatRepository(
         updatedAt = goal.updatedAt,
     )
 
+    /** [T-goal-contract] Persist the three judgement fields without touching state. */
+    suspend fun saveGoalContract(
+        sessionId: String,
+        acceptance: String?,
+        constraints: String?,
+        nextStep: String?,
+        updatedAt: Long,
+    ) = goalDao.updateContract(sessionId, acceptance, constraints, nextStep, updatedAt)
+
     /**
      * [T-token-attribution-snapshot] `modelSnapshot` records which model
      * ACTUALLY produced this message.

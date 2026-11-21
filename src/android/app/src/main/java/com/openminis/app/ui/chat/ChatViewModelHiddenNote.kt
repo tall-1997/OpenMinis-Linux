@@ -107,6 +107,21 @@ internal suspend fun ChatViewModel.commitSessionNoticesOnce(
             }
         }
     }
+    if (goalCanContinue) {
+        val ledger = WorkingMemoryStore.ledgerFor(sid, context.filesDir)
+        val bucket = com.openminis.app.goal.DriftGuard.bucketFor(ledger.size())
+        if (bucket >= com.openminis.app.goal.DriftGuard.MIN_TOOL_CALLS) {
+            val marker = com.openminis.app.goal.DriftGuard.markerFor(bucket)
+            if (agentHistory.none { it.content.contains(marker) }) {
+                val note = com.openminis.app.goal.DriftGuard.buildNote(
+                    marker, goalPrompt ?: goalObjective, bucket,
+                )
+                val committed = commitHiddenUserNote(note, sid)
+                if (!ownsNotices()) return
+                if (committed) ledgerDirty = true
+            }
+        }
+    }
     if (ledgerDirty) {
         val state = currentNoticeState()
         withContext(Dispatchers.IO) { NoticeLedgerStore.save(context.filesDir, sid, state) }

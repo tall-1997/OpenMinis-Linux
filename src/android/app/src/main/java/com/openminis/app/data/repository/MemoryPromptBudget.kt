@@ -24,7 +24,7 @@ package com.openminis.app.data.repository
 object MemoryPromptBudget {
 
     /** Characters of memory fragments allowed in one system prompt (~6k tokens). */
-    const val DEFAULT_BUDGET_CHARS = 24_000
+    const val DEFAULT_BUDGET_CHARS = 36_000
 
     /** A truncated fragment shorter than this is not worth including. */
     internal const val MIN_TRUNCATED_CHARS = 512

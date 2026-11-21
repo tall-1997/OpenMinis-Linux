@@ -30,6 +30,13 @@ internal fun goalContextPrompt(goal: SessionGoalEntity): String = buildString {
     appendLine(quoteObjective(goal.objective))
     appendLine("</untrusted_objective_json>")
     appendLine("State when this note was written: status=${goal.status}, tokens=${goal.tokensUsed}/${goal.tokenBudget?.toString() ?: "unlimited"}, elapsed=${goal.elapsedMs}ms.")
+    if (goal.acceptance != null || goal.constraints != null || goal.nextStep != null) {
+        appendLine("<goal_contract>")
+        goal.acceptance?.let { appendLine("acceptance: ${quoteObjective(it)}") }
+        goal.constraints?.let { appendLine("constraints: ${quoteObjective(it)}") }
+        goal.nextStep?.let { appendLine("next_step: ${quoteObjective(it)}") }
+        appendLine("</goal_contract>")
+    }
     appendLine("The numbers above are a snapshot, not a live read. Do not call update_goal(op=get) on consecutive turns — re-reading an unchanged goal burns tokens without progress; re-read only after a long-running operation or an external state change. Report complete only when the objective is verified; report the same blocked condition only when truly blocked.")
     appendLine("</goal_context>")
 }

@@ -134,8 +134,8 @@ class MemoryRepository(
         // iOS mirror) let three files alone ask for ~60K, so the budget
         // silently truncated the block — the real cause of "the model only
         // remembers two days".
-        internal const val MAX_INJECT_LINES = 50
-        internal const val MAX_INJECT_LINES_OLDER = 15
+        internal const val MAX_INJECT_LINES = 120
+        internal const val MAX_INJECT_LINES_OLDER = 40
         // memory_get full-dump (no keywords): cap at 500 lines — matches iOS
         // `maxTotalLines = 500` in AIChatViewModel+MemoryTools.swift.
         private const val MAX_DUMP_LINES = 500
@@ -144,7 +144,7 @@ class MemoryRepository(
         // is line-based with ±2 context windows, so we keep the same algorithm
         // and align on the 60 magnitude as the line budget.
         private const val MAX_SEARCH_LINES = 60
-        internal const val MAX_LOOKBACK_DAYS = 30
+        internal const val MAX_LOOKBACK_DAYS = 60
         // [P5] Verbatim daily window: 7 days (was 3). Days the budget cannot
         // admit drop to a MemoryIndex table-of-contents row instead of
         // vanishing — see MemoryAssembly for the two-pass guarantee.
@@ -183,7 +183,7 @@ class MemoryRepository(
         // 配额拒绝——若配额只站在工具路径上，改用 shell/file_edit 写同一个
         // bind 目录即可绕过，那恰好是本防护声称要拦的场景。
         private val MAX_ENTRY_BYTES = 8 * 1024      // 8 KB UTF-8
-        const val MAX_DAILY_ENTRIES = 30
+        const val MAX_DAILY_ENTRIES = 100
 
         /** writeMemory 的落盘格式：行首时间戳标记 + 正文 + 空行。行首锚定计数，
          *  正文里出现同形字符串不会被误计为一条记忆。 */

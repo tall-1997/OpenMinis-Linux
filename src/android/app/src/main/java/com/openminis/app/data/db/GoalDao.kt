@@ -16,6 +16,15 @@ interface GoalDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insert(goal: SessionGoalEntity)
 
+    @Query("UPDATE session_goals SET acceptance = :acceptance, constraints = :constraints, next_step = :nextStep, updated_at = :updatedAt WHERE session_id = :sessionId")
+    suspend fun updateContract(
+        sessionId: String,
+        acceptance: String?,
+        constraints: String?,
+        nextStep: String?,
+        updatedAt: Long,
+    )
+
     @Query("UPDATE session_goals SET objective = :objective, status = :status, token_budget = :tokenBudget, tokens_used = :tokensUsed, elapsed_ms = :elapsedMs, blocked_condition = :blockedCondition, blocked_count = :blockedCount, paused_at = :pausedAt, updated_at = :updatedAt WHERE session_id = :sessionId")
     suspend fun saveState(
         sessionId: String,

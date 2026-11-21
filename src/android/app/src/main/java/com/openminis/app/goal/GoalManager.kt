@@ -19,6 +19,9 @@ internal interface GoalPersistence {
     suspend fun load(sessionId: String): SessionGoalEntity?
     suspend fun insert(goal: SessionGoalEntity)
     suspend fun save(goal: SessionGoalEntity)
+    suspend fun saveContract(sessionId: String, acceptance: String?, constraints: String?, nextStep: String?, updatedAt: Long) {
+        // Default no-op keeps lightweight test fakes source-compatible.
+    }
     suspend fun delete(sessionId: String)
 }
 
@@ -27,6 +30,8 @@ private class RepositoryGoalPersistence(private val repository: ChatRepository) 
     override suspend fun load(sessionId: String): SessionGoalEntity? = repository.goal(sessionId)
     override suspend fun insert(goal: SessionGoalEntity) = repository.createGoal(goal)
     override suspend fun save(goal: SessionGoalEntity) = repository.saveGoal(goal)
+    override suspend fun saveContract(sessionId: String, acceptance: String?, constraints: String?, nextStep: String?, updatedAt: Long) =
+        repository.saveGoalContract(sessionId, acceptance, constraints, nextStep, updatedAt)
     override suspend fun delete(sessionId: String) = repository.goalDao.delete(sessionId)
 }
 
@@ -68,6 +73,17 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
         locks[(sessionId.hashCode() and Int.MAX_VALUE) % locks.size].withLock { block() }
 
     suspend fun get(sessionId: String): SessionGoalEntity? = persistence.load(sessionId)
+
+    /** [T-goal-contract] Write acceptance/constraints/next_step; no state change. */
+    suspend fun updateContract(
+        sessionId: String,
+        acceptance: String? = null,
+        constraints: String? = null,
+        nextStep: String? = null,
+    ): SessionGoalEntity? = locked(sessionId) {
+        persistence.saveContract(sessionId, acceptance, constraints, nextStep, System.currentTimeMillis())
+        persistence.load(sessionId)?.also { bump() }
+    }
 
     suspend fun createByUser(sessionId: String, objective: String, tokenBudget: Long? = null): SessionGoalEntity =
         locked(sessionId) {
