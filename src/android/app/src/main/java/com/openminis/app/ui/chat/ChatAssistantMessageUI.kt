@@ -39,8 +39,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -65,8 +67,8 @@ import com.openminis.app.ui.components.MinisMenu
 import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.decorLinearSweep
 import com.openminis.app.ui.theme.m3Icon
-import kotlinx.coroutines.delay
 import com.openminis.app.ui.tokens.MinisTypography
+import kotlinx.coroutines.delay
 @Composable
 internal fun AssistantHeader(speakerName: String? = null, speakerVendor: String? = null) {
     // [T-soul-md] Identity header = icon + SOUL.md-driven `name`.
