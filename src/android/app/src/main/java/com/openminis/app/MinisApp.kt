@@ -44,6 +44,7 @@ import com.openminis.app.sandbox.RootfsManager
 import com.openminis.app.sandbox.HostEventHooks
 import com.openminis.app.service.SessionActivityTracker
 import com.openminis.app.ui.MinisImageFetcher
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class MinisApp : Application(), ImageLoaderFactory {
@@ -55,9 +56,29 @@ class MinisApp : Application(), ImageLoaderFactory {
     @Volatile
     var subsystemsInitialized: Boolean = false
 
-    /** [T-android-startup-splash-hang] Why the subsystem block failed, for the recovery screen in MainActivity. */
-    var subsystemInitFailure: String? = null
-        private set
+    /**
+     * [T-android-startup-splash-hang] Why the subsystem block failed, for the
+     * recovery screen in MainActivity.
+     *
+     * Backed by a StateFlow rather than a bare var: the CORE init failure is
+     * read synchronously by MainActivity (which only reaches it while
+     * [subsystemsInitialized] is false), but the EXTENDED init failure in
+     * [onCreate] happens after the flag is already true — without the flow,
+     * the degraded state had no reader at all and was silently dropped.
+     * [subsystemInitFailureFlow] is what the degraded banner in the running
+     * app observes.
+     */
+    private val _subsystemInitFailure = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+
+    /** Observable degraded-startup cause; null while startup ran clean. */
+    val subsystemInitFailureFlow: kotlinx.coroutines.flow.StateFlow<String?> =
+        _subsystemInitFailure.asStateFlow()
+
+    var subsystemInitFailure: String?
+        get() = _subsystemInitFailure.value
+        private set(value) {
+            _subsystemInitFailure.value = value
+        }
 
     /** [T-android-downgrade-compat] Why init was skipped: newer-build DB vs genuine init failure, for accurate MainActivity guidance. */
     @Volatile
@@ -383,27 +404,30 @@ class MinisApp : Application(), ImageLoaderFactory {
         }
 
         // [Wave3 #12] SoulStore chain + GLOBAL.md seeding moved off the critical path (readers collect reactively or read files on demand).
-        appCoroutineScopes.io.launch {
-            // Load assets first (DEFAULT_CONTENT shipped persona); do not force-overwrite SOUL.md.
-            runCatching {
-                com.openminis.app.agent.SoulStore.loadDefaultFromAssets(this@MinisApp)
-                com.openminis.app.agent.SoulStore.forceOverwriteOnce(this@MinisApp)
-                com.openminis.app.agent.SoulStore.ensureExists(this@MinisApp)
-                com.openminis.app.agent.SoulStore.upgradeStaleDefault(this@MinisApp)
-                com.openminis.app.agent.SoulStore.renameStockProduct(this@MinisApp)
-                // [GH#299] 升级用户可能带着 interim 构建的旧 icon 引用；启动时迁移
-                // 一次，避免"不再保存 SOUL.md 就永远进不了备份根"（幂等）。
-                com.openminis.app.agent.SoulIconMigration.migrateLegacyRefOnStartup(this@MinisApp)
-                com.openminis.app.agent.SoulStore.refreshCache(this@MinisApp)
+        // [T-startup-degraded-extended] Everything after the DB/repository backstop is also degraded-mode
+        // isolated: a broken pref, bind plan or service init must not turn the whole process into a crash loop.
+        runCatching {
+            appCoroutineScopes.io.launch {
+                // Load assets first (DEFAULT_CONTENT shipped persona); do not force-overwrite SOUL.md.
+                runCatching {
+                    com.openminis.app.agent.SoulStore.loadDefaultFromAssets(this@MinisApp)
+                    com.openminis.app.agent.SoulStore.forceOverwriteOnce(this@MinisApp)
+                    com.openminis.app.agent.SoulStore.ensureExists(this@MinisApp)
+                    com.openminis.app.agent.SoulStore.upgradeStaleDefault(this@MinisApp)
+                    com.openminis.app.agent.SoulStore.renameStockProduct(this@MinisApp)
+                    // [GH#299] 升级用户可能带着 interim 构建的旧 icon 引用；启动时迁移
+                    // 一次，避免"不再保存 SOUL.md 就永远进不了备份根"（幂等）。
+                    com.openminis.app.agent.SoulIconMigration.migrateLegacyRefOnStartup(this@MinisApp)
+                    com.openminis.app.agent.SoulStore.refreshCache(this@MinisApp)
 
-                // [T-global-md-seed + T-default-assets] Seed GLOBAL.md starter template on first launch (create-only).
-                com.openminis.app.agent.SystemPromptBuilder.loadIdentityFromAssets(this@MinisApp)
-                com.openminis.app.data.repository.MemoryRepository.loadGlobalDefaultFromAssets(this@MinisApp)
-                com.openminis.app.data.repository.MemoryRepository.ensureGlobalExists(this@MinisApp)
-            }.onFailure {
-                android.util.Log.e("MinisApp", "soul/memory asset seeding failed", it)
+                    // [T-global-md-seed + T-default-assets] Seed GLOBAL.md starter template on first launch (create-only).
+                    com.openminis.app.agent.SystemPromptBuilder.loadIdentityFromAssets(this@MinisApp)
+                    com.openminis.app.data.repository.MemoryRepository.loadGlobalDefaultFromAssets(this@MinisApp)
+                    com.openminis.app.data.repository.MemoryRepository.ensureGlobalExists(this@MinisApp)
+                }.onFailure {
+                    android.util.Log.e("MinisApp", "soul/memory asset seeding failed", it)
+                }
             }
-        }
 
         appCoroutineScopes.io.launch {
             runCatching { chatRepository.warmupWorkspaceOwners() }.onFailure {
@@ -677,6 +701,13 @@ class MinisApp : Application(), ImageLoaderFactory {
         }.onFailure { Log.w("MinisApp", "MCP server init failed: ${it.message}") }
 
         // [T268] Ghost-alarm migration call moved into the startup IO block above.
+        }.onFailure { t ->
+            Log.e("MinisApp", "extended subsystem init failed — continuing degraded", t)
+            subsystemInitFailure = buildString {
+                append(t.javaClass.simpleName)
+                t.message?.take(300)?.let { append(": ").append(it) }
+            }
+        }
     }
 
     /** Coil ImageLoader: MinisImageFetcher resolves `minis://`; SvgDecoder is required for res/raw vendor logos. */

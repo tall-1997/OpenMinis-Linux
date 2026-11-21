@@ -497,13 +497,18 @@
         </activity>
 
         <!-- Agent foreground service -->
-        <!-- T-android-fgs-timeout-crash: type=mediaPlayback to escape the
-             dataSync 6h cap. See FOREGROUND_SERVICE_MEDIA_PLAYBACK
-             permission comment above. -->
+        <!-- The service tracks agent progress; it does not play media. Use
+             specialUse so the type matches actual behavior, and implement
+             Service.onTimeout() rather than relying on an unrelated media
+             playback exemption. -->
         <service
             android:name=".service.AgentForegroundService"
             android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="agent_status_tracking" />
+        </service>
 
         <!-- [T-update-download-fgs] Update download progress + process
              survival. dataSync is semantically correct here (it IS a data

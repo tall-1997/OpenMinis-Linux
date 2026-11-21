@@ -99,14 +99,18 @@ internal suspend fun ChatViewModel.publishRunSubagentLog(
         log: String,
     ) {
         if (toolId.isEmpty() || assistantId.isEmpty() || toolBlocks == null) return
-        synchronized(toolBlocks) {
+        // [T-parallel-tool-calls] Snapshot INSIDE the monitor: sibling lanes on
+        // Dispatchers.IO add/set concurrently, so a toList() taken after the
+        // monitor exits would race them (CME / torn publish).
+        val uiBlocks = synchronized(toolBlocks) {
             val i = toolBlocks.indexOfFirst { it.id == toolId }
             if (i >= 0) {
                 toolBlocks[i] = toolBlocks[i].copy(content = log)
             }
+            toolBlocks.toList()
         }
         withContext(Dispatchers.Main) {
-            updateAssistantMessage(assistantId, currentText, true, toolBlocks.toList())
+            updateAssistantMessage(assistantId, currentText, true, uiBlocks)
         }
     }
 
@@ -158,7 +162,9 @@ internal suspend fun ChatViewModel.publishSubAgentCard(
     if (subAgentChipsEnabled()) return
     if (parentToolId.isEmpty() || assistantId.isEmpty() || toolBlocks == null) return
     val cardId = if (cardIndex != null) subAgentCardId(parentToolId, cardIndex) else parentToolId
-    synchronized(toolBlocks) {
+    // [T-parallel-tool-calls] Snapshot INSIDE the monitor — sibling spawn peers
+    // publish concurrently from Dispatchers.IO lanes; see publishRunSubagentLog.
+    val uiBlocks = synchronized(toolBlocks) {
         val i = toolBlocks.indexOfFirst { it.id == cardId }
         if (i >= 0) {
             val existing = toolBlocks[i]
@@ -185,9 +191,10 @@ internal suspend fun ChatViewModel.publishSubAgentCard(
                 ),
             )
         }
+        toolBlocks.toList()
     }
     withContext(Dispatchers.Main) {
-        updateAssistantMessage(assistantId, currentText, true, toolBlocks.toList())
+        updateAssistantMessage(assistantId, currentText, true, uiBlocks)
     }
 }
 

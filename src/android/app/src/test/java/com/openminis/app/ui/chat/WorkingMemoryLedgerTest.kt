@@ -355,4 +355,61 @@ class WorkingMemoryLedgerTest {
             dir.deleteRecursively()
         }
     }
+
+    @Test
+    fun `concurrent appends and acks never lose an undelivered record`() {
+        val dir = tempDir()
+        val sid = "persist-lock-scope"
+        try {
+            WorkingMemoryStore.reset()
+            // [T-working-memory-lock-scope] Regression: append rides the
+            // per-ledger lock while ackDelivered rewrites the durable log with
+            // a full-file overwrite. Under the old store-level @Synchronized
+            // the two did not exclude each other: a record whose appendLine
+            // landed between ack's snapshot() and the rename was erased by the
+            // stale snapshot, and two racing persistAll calls tore one shared
+            // "${name}.tmp". Every composite store operation now takes the
+            // same per-session ledger lock, so this schedule is serialized.
+            val appenders = (1..4).map { lane ->
+                Thread {
+                    repeat(25) { i ->
+                        WorkingMemoryStore.append(
+                            sid, lane * 100 + i, "shell_execute", "d$lane$i",
+                            "cmd lane$lane round$i", "ok", filesDir = dir,
+                        )
+                    }
+                }
+            }
+            val deliverer = Thread {
+                repeat(40) {
+                    WorkingMemoryStore.renderUndelivered(sid, dir)
+                    WorkingMemoryStore.ackDelivered(sid, dir)
+                }
+            }
+            (appenders + deliverer).forEach { it.start() }
+            (appenders + deliverer).forEach { it.join() }
+
+            // 1. Nothing vanished from memory (100 appends, no fold at 600).
+            val ledger = WorkingMemoryStore.ledgerFor(sid, dir)
+            assertEquals(100, ledger.size())
+            // 2. No torn/interleaved durable lines: every line is valid JSON.
+            val f = WorkingMemoryStore.fileForTest(dir, sid)
+            val durableTurns = HashSet<Int>()
+            if (f.isFile) {
+                for (line in f.readLines()) {
+                    if (line.isBlank()) continue
+                    durableTurns.add(org.json.JSONObject(line).getInt("turn"))
+                }
+            }
+            // 3. Every still-undelivered record is on disk: the deliverer's
+            //    last full-file rewrite covered exactly the undelivered set at
+            //    that moment, and no append could slide past it afterwards.
+            for (e in ledger.snapshot(undeliveredOnly = true)) {
+                assertTrue("undelivered round ${e.turn} missing from durable log", e.turn in durableTurns)
+            }
+        } finally {
+            WorkingMemoryStore.reset()
+            dir.deleteRecursively()
+        }
+    }
 }

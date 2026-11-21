@@ -71,6 +71,24 @@ class McpApprovalCoreTest {
     }
 
     @Test
+    fun `all-dot ids are refused because they are path components`() {
+        // [T-mcp-approval-taskid] taskId is interpolated into
+        // /var/minis/shared/mcp-tasks/<taskId>/ — "." and ".." match the safe
+        // charset but resolve onto the parent directory, so createTask("..")
+        // would point every artifact write and deleteTaskDirectory at the
+        // shared root instead of a task directory.
+        for (bad in listOf(".", "..", "...")) {
+            assertFalse("id '$bad'", McpApprovalCore.validId(bad))
+            val r = McpApprovalCore.createTask(State(), bad, "demo", T0)
+            assertEquals("id '$bad'", ErrorCode.INVALID_ID, errCode(r))
+        }
+        // Dots INSIDE an id stay legal — only the all-dot controls are special.
+        assertTrue(McpApprovalCore.validId("a..b"))
+        assertTrue(McpApprovalCore.validId("v1.2-final"))
+        assertTrue(McpApprovalCore.validId(McpApprovalStore.newId()))
+    }
+
+    @Test
     fun `blank task name is refused`() {
         val r = McpApprovalCore.createTask(State(), "task-1", "   ", T0)
         assertEquals(ErrorCode.INVALID_NAME, errCode(r))

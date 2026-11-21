@@ -321,7 +321,7 @@ class MemoryRepository(
                     val separator = if (header != null && !prefix.endsWith('\n') && !prefix.endsWith('\r')) "\n" else ""
                     val newContent = prefix + separator + headerForNewFile + entry + body
                     writeLifecycleAtomic(file, newContent)
-                    val newRevision = Digest.sha256Hex(newContent).take(16)
+                    val newRevision = MemoryRevision.token(fileName.removeSuffix(".md"), newContent)
                     Log.i(TAG, "Memory written to $fileName (${content.length} chars, revision $newRevision)")
                     indexForEmbeddingsAsync(file)
                     WriteOutcome("Memory saved to $fileName (${content.length} chars, revision $newRevision)")
@@ -370,7 +370,13 @@ class MemoryRepository(
 
         return MemorySources.withScope(memoryDir, now, includeStanding = true) { sources ->
             val files = sources.filter { source ->
-                source.name != LearnedPrefsStore.FILE_NAME && (source.name != GLOBAL_FILE || scope == "all")
+                when (scope) {
+                    // "all" sweeps everything including the persona files; any
+                    // narrower scope searches memory entries only — the standing
+                    // persona/prefs files are never diary content.
+                    "all" -> source.name != LearnedPrefsStore.FILE_NAME
+                    else -> !MemorySources.isStandingSource(source.name)
+                }
             }.sortedWith(compareByDescending<MemorySources.Source> { it.name == GLOBAL_FILE }.thenByDescending { it.name })
             searchMemory(files, keywordList)
         } ?: "No memory files found."

@@ -1,9 +1,6 @@
 package com.openminis.app.speech
 
 import android.content.Context
-import android.media.AudioAttributes
-import android.media.AudioFocusRequest
-import android.media.AudioManager
 import android.media.MediaPlayer
 import android.widget.Toast
 import com.openminis.app.MinisApp
@@ -30,7 +27,6 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.resume
-import kotlin.math.roundToInt
 
 // [T-android-provider-tts-readaloud] Read-aloud routed through the resolved Voice OUTPUT selection, falling back to the on-device engine.
 // Utterances flow through a [Channel] worker (ordered); [T-android-tts-prefetch] lookahead synthesizes the next sentence during the current one's playback. Text is sanitized via [VoiceTextSanitizer].
@@ -319,11 +315,11 @@ class ReadAloudPlayer(context: Context) {
      * and the system TTS engine plays on STREAM_MUSIC too.
      */
     private suspend fun speakOne(text: String, prefetched: PrefetchedAudio? = null) {
-        applyVolumeBoost()
+        audio.applyVolumeBoost()
         try {
             speakOneInner(text, prefetched)
         } finally {
-            restoreVolumeBoost()
+            audio.restoreVolumeBoost()
         }
     }
 
@@ -573,8 +569,8 @@ class ReadAloudPlayer(context: Context) {
                 // Android had neither, and some OEM ROMs (ColorOS among them)
                 // will silently mute focus-less media playback. Focus denial is
                 // logged but non-fatal — muting is the exception, not the rule.
-                mp.setAudioAttributes(playbackAttributes)
-                requestAudioFocus()
+                mp.setAudioAttributes(audio.playbackAttributes)
+                audio.requestAudioFocus()
                 mp.setDataSource(file.absolutePath)
                 mp.setOnCompletionListener { finish() }
                 mp.setOnErrorListener { _, what, extra ->
@@ -582,30 +578,39 @@ class ReadAloudPlayer(context: Context) {
                     finish()
                     true
                 }
-                mp.prepare()
-                // [T-android-tts-rom-compat] start() FIRST, speed second, each
-                // in its own guard. The previous order relied on
-                // setPlaybackParams-on-prepared implicitly starting playback —
-                // documented AOSP behaviour, but some OEM MediaPlayer builds
-                // throw IllegalStateException there, and the failure landed in
-                // the OUTER runCatching which skipped the utterance entirely.
-                // Now a ROM that rejects the speed change still plays at 1×;
-                // only the speed is lost, never the audio.
-                mp.start()
-                // [T-readaloud-volume-200] The 0..1 part is MediaPlayer's own
-                // gain; anything above 1.0 rides the stream boost from
-                // [speakOne]'s applyVolumeBoost() (staying at 1.0 here — the
-                // player cannot exceed full scale on its own).
-                val vol = VoiceOutputState.volume.value
-                if (vol < 1.0f) mp.setVolume(vol, vol)
-                val speed = VoiceOutputState.speed.value
-                if (speed != 1.0f) {
+                // Decoder init must not run on the UI thread; prepareAsync keeps
+                // streaming/UI responsive, especially for utterance-per-sentence.
+                mp.setOnPreparedListener { prepared ->
                     runCatching {
-                        mp.playbackParams = mp.playbackParams.setSpeed(speed)
+                        // [T-android-tts-rom-compat] start() FIRST, speed second, each
+                        // in its own guard. The previous order relied on
+                        // setPlaybackParams-on-prepared implicitly starting playback —
+                        // documented AOSP behaviour, but some OEM MediaPlayer builds
+                        // throw IllegalStateException there, and the failure landed in
+                        // the OUTER runCatching which skipped the utterance entirely.
+                        // Now a ROM that rejects the speed change still plays at 1×;
+                        // only the speed is lost, never the audio.
+                        prepared.start()
+                        // [T-readaloud-volume-200] The 0..1 part is MediaPlayer's own
+                        // gain; anything above 1.0 rides the stream boost from
+                        // [speakOne]'s applyVolumeBoost() (staying at 1.0 here — the
+                        // player cannot exceed full scale on its own).
+                        val vol = VoiceOutputState.volume.value
+                        if (vol < 1.0f) prepared.setVolume(vol, vol)
+                        val speed = VoiceOutputState.speed.value
+                        if (speed != 1.0f) {
+                            runCatching {
+                                prepared.playbackParams = prepared.playbackParams.setSpeed(speed)
+                            }.onFailure {
+                                AppLogger.error(TAG, "playback speed $speed rejected by this ROM's MediaPlayer, playing at 1×: $it")
+                            }
+                        }
                     }.onFailure {
-                        AppLogger.error(TAG, "playback speed $speed rejected by this ROM's MediaPlayer, playing at 1×: $it")
+                        AppLogger.error(TAG, "MediaPlayer start failed: $it")
+                        finish()
                     }
                 }
+                mp.prepareAsync()
             }.onFailure {
                 AppLogger.error(TAG, "MediaPlayer setup failed: $it")
                 finish()
@@ -614,76 +619,10 @@ class ReadAloudPlayer(context: Context) {
         }
     }
 
-    // -- audio focus [T-android-tts-silent-blackhole] --
-
-    private val audioManager =
-        appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-
-    private val playbackAttributes = AudioAttributes.Builder()
-        .setUsage(AudioAttributes.USAGE_MEDIA)
-        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-        .build()
-
-    private var focusRequest: AudioFocusRequest? = null
-
-    private fun requestAudioFocus() {
-        val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
-            .setAudioAttributes(playbackAttributes)
-            .build()
-        focusRequest = req
-        val granted = audioManager.requestAudioFocus(req)
-        if (granted != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
-            AppLogger.info(TAG, "audio focus not granted ($granted) — playing anyway")
-        }
-    }
-
-    private fun abandonAudioFocus() {
-        focusRequest?.let { audioManager.abandonAudioFocusRequest(it) }
-        focusRequest = null
-    }
-
-    // -- read-aloud volume [T-readaloud-volume-200] --
-
-    /**
-     * Pre-boost STREAM_MUSIC index while a boosted utterance plays, or null.
-     * Anchored ONCE per utterance (a second [applyVolumeBoost] while boosted
-     * would compound the anchor and restore a louder-than-original volume).
-     */
-    private var boostedStreamFrom: Int? = null
-
-    /**
-     * Raise the music stream proportionally to the >100% part of
-     * [VoiceOutputState.volume]. Android has no per-app playback gain, so
-     * beyond MediaPlayer's 0..1 the only lever is the shared system stream —
-     * same trade-off iOS makes with AVAudioPlayer volume > 1 + session volume.
-     * Silent no-op at or below 100%, when the stream is already maxed, or when
-     * the ROM rejects the write.
-     */
-    private fun applyVolumeBoost() {
-        val v = VoiceOutputState.volume.value
-        if (v <= 1.0f || boostedStreamFrom != null) return
-        val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-        val current = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-        val target = (current * v).roundToInt().coerceAtMost(max)
-        if (target <= current) return
-        runCatching {
-            // Flag 0: no OS volume HUD for a background TTS tweak.
-            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, target, 0)
-        }.onSuccess {
-            boostedStreamFrom = current
-        }.onFailure {
-            AppLogger.error(TAG, "stream volume boost rejected: $it")
-        }
-    }
-
-    /** Undo [applyVolumeBoost]. Idempotent; safe from a cancelled coroutine. */
-    private fun restoreVolumeBoost() {
-        val from = boostedStreamFrom ?: return
-        boostedStreamFrom = null
-        runCatching {
-            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, from, 0)
-        }
-    }
+    // -- audio focus + stream volume [T-android-tts-silent-blackhole] [T-readaloud-volume-200] --
+    // AudioManager interaction (focus request, STREAM_MUSIC boost) lives in
+    // [ReadAloudAudio]; the player only drives it.
+    private val audio = ReadAloudAudio(appContext)
 
     /**
      * Speak via the on-device engine and wait for it to finish, so the queue
@@ -778,7 +717,7 @@ class ReadAloudPlayer(context: Context) {
             release()
         }
         player = null
-        abandonAudioFocus()
+        audio.abandonAudioFocus()
     }
 
     /**

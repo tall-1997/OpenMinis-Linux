@@ -44,8 +44,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.ContentCopy
@@ -101,6 +99,7 @@ import com.openminis.app.ui.components.MinisButton
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.components.SectionDesign
 import com.openminis.app.ui.components.SectionTextField
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.TextButton
@@ -161,7 +160,6 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
@@ -584,6 +582,9 @@ fun SessionListScreen(
     var showBrowserSheet by remember { mutableStateOf(false) }
     var showBrowserSettings by remember { mutableStateOf(false) }
     val browserTabPool = remember { com.openminis.app.browser.BrowserTabPool(context) }
+    DisposableEffect(Unit) {
+        onDispose { browserTabPool.dispose() }
+    }
 
     // [T-android-session-grouping] Groups are pulled out FIRST; only the
     // leftovers go through date bucketing. Assembly order below is
@@ -2823,172 +2824,6 @@ private fun SessionBadgeOverlay(
             // not produced yet. Render nothing rather than a placeholder
             // so a stray persisted entry from a future build doesn't
             // surface a debug-looking icon on the current build.
-        }
-    }
-}
-
-// ─── Onboarding Landing (iOS-style 3-step setup) ───────────────────────────
-
-@Composable
-private fun OnboardingLanding(
-    hasProviders: Boolean,
-    hasGroups: Boolean,
-    onAddProvider: () -> Unit,
-    onSelectModels: () -> Unit,
-    onStartConversation: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            // Bottom padding ≈ top-bar height so the content visually centers
-            // relative to the whole screen, not just the Scaffold inner area.
-            .padding(horizontal = 32.dp)
-            .padding(bottom = 64.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Icon(
-            imageVector = Icons.Default.AutoAwesome,
-            contentDescription = null,
-            modifier = Modifier.size(56.dp),
-            tint = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(Modifier.height(16.dp))
-
-        Text(
-            text = stringResource(R.string.sessionlist_welcome_title),
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = stringResource(R.string.sessionlist_welcome_subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-
-        Spacer(Modifier.height(32.dp))
-
-        Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            SetupStepCard(
-                number = 1,
-                title = stringResource(R.string.sessionlist_welcome_step1_title),
-                subtitle = if (hasProviders) {
-                    stringResource(R.string.sessionlist_welcome_step_done)
-                } else {
-                    stringResource(R.string.sessionlist_welcome_step1_subtitle)
-                },
-                isDone = hasProviders,
-                isLocked = false,
-                onClick = { if (!hasProviders) onAddProvider() },
-            )
-
-            SetupStepCard(
-                number = 2,
-                title = stringResource(R.string.sessionlist_welcome_step2_title),
-                subtitle = when {
-                    hasGroups -> stringResource(R.string.sessionlist_welcome_step_done)
-                    hasProviders -> stringResource(R.string.sessionlist_welcome_step2_subtitle)
-                    else -> stringResource(R.string.sessionlist_welcome_step2_locked)
-                },
-                isDone = hasGroups,
-                isLocked = !hasProviders,
-                onClick = { if (hasProviders && !hasGroups) onSelectModels() },
-            )
-
-            SetupStepCard(
-                number = 3,
-                title = stringResource(R.string.sessionlist_welcome_step3_title),
-                subtitle = if (hasGroups) {
-                    stringResource(R.string.sessionlist_welcome_step3_subtitle)
-                } else {
-                    stringResource(R.string.sessionlist_welcome_step3_locked)
-                },
-                isDone = false,
-                isLocked = !hasGroups,
-                onClick = { if (hasGroups) onStartConversation() },
-            )
-        }
-    }
-}
-
-@Composable
-private fun SetupStepCard(
-    number: Int,
-    title: String,
-    subtitle: String,
-    isDone: Boolean,
-    isLocked: Boolean,
-    onClick: () -> Unit,
-) {
-    val isEnabled = !isDone && !isLocked
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                shape = RoundedCornerShape(12.dp),
-            )
-            .clickable(enabled = isEnabled, onClick = onClick)
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .background(
-                    color = if (isDone) Color(0xFF34C759) else MaterialTheme.colorScheme.primary,
-                    shape = CircleShape,
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (isDone) {
-                Icon(
-                    imageVector = m3Icon(Icons.Default.Check),
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(16.dp),
-                )
-            } else {
-                Text(
-                    text = "$number",
-                    color = Color.White,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-        }
-
-        Column(
-            modifier = Modifier.weight(1f).height(56.dp),
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                color = if (isDone) MaterialTheme.colorScheme.onSurfaceVariant
-                else MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        if (!isDone && isEnabled) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-            )
         }
     }
 }

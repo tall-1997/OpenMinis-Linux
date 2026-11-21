@@ -1,7 +1,6 @@
 package com.openminis.app.sandbox.jobs
 
 import java.io.File
-import java.io.RandomAccessFile
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.ReentrantLock
@@ -72,15 +71,6 @@ object JobRegistry {
     const val MAX_TAIL_LINES = 2_000
 
     /**
-     * Output is read as a bounded tail, not the whole file: a chatty build
-     * log can be megabytes and the model asked for the last N lines. The
-     * window caps the read; [MAX_TAIL_CHARS] then caps what actually reaches
-     * the model (same spirit as [com.openminis.app.tools.ToolOutputSpill.LIMIT]).
-     */
-    private const val TAIL_WINDOW_BYTES = 256 * 1024
-    private const val MAX_TAIL_CHARS = 16_000
-
-    /**
      * [T-job-shell-lost-reconcile] UNKNOWN is the honest terminal state for a
      * job whose outcome cannot be observed: the sandbox shell died before the
      * exit sidecar landed (the sidecar write is translated by that dead
@@ -129,6 +119,21 @@ object JobRegistry {
 
         /** Blocking wait for process exit; returns the exit code. */
         fun await(): Int
+
+        /**
+         * [T-job-watcher-nonblocking] Suspending wait for process exit; the
+         * completion watcher ([launchWatcher]) uses this so a long-running job
+         * does not PIN a pooled Dispatchers.IO thread in `Thread.sleep` for
+         * its whole lifetime — 8 jobs per session across every chat and lane
+         * would otherwise park dozens of the ~64 shared IO threads that the
+         * rest of the app's file IO needs. Same contract as [await]: the exit
+         * code, the [Companion.SHELL_LOST] sentinel, and exceptions surfaced
+         * to the caller's runCatching. Default bridges to [await] on
+         * Dispatchers.IO (correct for fakes and spawners whose await returns
+         * promptly); a spawner whose wait is a poll loop overrides this with a
+         * delay()-based implementation that releases the thread between polls.
+         */
+        suspend fun awaitSuspend(): Int = withContext(Dispatchers.IO) { await() }
 
         /** Terminate the process. True when a signal was delivered. */
         fun kill(): Boolean
@@ -382,7 +387,12 @@ object JobRegistry {
             // it as a FAILED exit -1 rather than leaving the job RUNNING
             // forever. Int.MIN_VALUE marks "await blew up" distinctly from a
             // legitimate negative exit code before the mapping below.
-            val exit = runCatching { record.spawned.await() }.getOrElse { Int.MIN_VALUE }
+            // [T-job-watcher-nonblocking] Waits via the suspending variant so
+            // the coroutine yields its Dispatchers.IO thread between polls
+            // instead of holding one for the job's whole lifetime. Exit
+            // conditions are unchanged: they live inside the spawner's
+            // await/awaitSuspend pair.
+            val exit = runCatching { record.spawned.awaitSuspend() }.getOrElse { Int.MIN_VALUE }
             when {
                 exit == Int.MIN_VALUE -> finish(record, -1)
                 // [T-job-shell-lost-reconcile] The sandbox shell died before
@@ -546,7 +556,7 @@ object JobRegistry {
         }
         val file = record.spawned.stdoutFile
         if (!file.isFile) return OutputOutcome.NoOutputYet(record.job)
-        val (tail, truncated) = readTailLines(file, tailLines.coerceIn(1, MAX_TAIL_LINES))
+        val (tail, truncated) = JobTailRead.readTailLines(file, tailLines.coerceIn(1, MAX_TAIL_LINES))
         return OutputOutcome.Found(record.job, tail, truncated)
     }
 
@@ -727,58 +737,6 @@ object JobRegistry {
             }
         }
         return KillOutcome.Killed(record.job)
-    }
-
-    // ---------------------------------------------------------- tail read
-
-    /**
-     * Bounded tail read: last [TAIL_WINDOW_BYTES] of the file, split to
-     * lines, last [maxLines] kept. The first (possibly partial) line of the
-     * window is dropped when the window starts mid-file, so a UTF-8 char cut
-     * in half by the seek never leaks mojibake into the result.
-     */
-    private fun readTailLines(file: File, maxLines: Int): Pair<String, Boolean> {
-        val len = file.length()
-        if (len <= 0L) return "" to false
-        val window = minOf(len, TAIL_WINDOW_BYTES.toLong())
-        val start = len - window
-        val bytes = ByteArray(window.toInt())
-        var read = 0
-        RandomAccessFile(file, "r").use { raf ->
-            raf.seek(start)
-            while (read < bytes.size) {
-                val n = raf.read(bytes, read, bytes.size - read)
-                if (n < 0) break
-                read += n
-            }
-        }
-        var text = String(bytes, 0, read, Charsets.UTF_8)
-        var truncated = start > 0L
-        if (start > 0L) {
-            val nl = text.indexOf('\n')
-            if (nl < 0) return "" to true // one partial line fills the whole window
-            text = text.substring(nl + 1)
-        }
-        val lines = text.split('\n').toMutableList()
-        if (lines.isNotEmpty() && lines.last().isEmpty()) lines.removeAt(lines.lastIndex)
-        if (lines.size > maxLines) {
-            while (lines.size > maxLines) lines.removeAt(0)
-            truncated = true
-        }
-        var out = lines.joinToString("\n")
-        if (out.length > MAX_TAIL_CHARS) {
-            out = safeTail(out, MAX_TAIL_CHARS)
-            truncated = true
-        }
-        return out to truncated
-    }
-
-    /** Surrogate-safe tail cut (mirror of ToolOutputPolicy.safeSubstring). */
-    private fun safeTail(text: String, maxChars: Int): String {
-        if (text.length <= maxChars) return text
-        var cut = text.length - maxChars
-        if (Character.isLowSurrogate(text[cut])) cut++
-        return text.substring(cut)
     }
 
     /** Test seam: forget every job and the installed spawner. */

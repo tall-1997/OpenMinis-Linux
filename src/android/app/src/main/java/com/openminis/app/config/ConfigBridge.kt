@@ -516,8 +516,8 @@ object ConfigBridge {
                             id = UUID.randomUUID().toString(),
                             at = now, actor = actor, sessionId = sessionId,
                             scope = r.scope, key = r.rawPath,
-                            oldValueJSON = r.oldValue.jsonString(),
-                            newValueJSON = r.newValue.jsonString(),
+                            oldValueJSON = r.oldValue.redactingSecrets().jsonString(),
+                            newValueJSON = (r.auditNewValue ?: r.newValue).redactingSecrets().jsonString(),
                             confirmedAt = null, status = ConfigAuditStatus.TIMEOUT,
                             revertOf = null, caption = caption,
                         )
@@ -538,8 +538,8 @@ object ConfigBridge {
                             id = UUID.randomUUID().toString(),
                             at = now, actor = actor, sessionId = sessionId,
                             scope = r.scope, key = r.rawPath,
-                            oldValueJSON = r.oldValue.jsonString(),
-                            newValueJSON = r.newValue.jsonString(),
+                            oldValueJSON = r.oldValue.redactingSecrets().jsonString(),
+                            newValueJSON = (r.auditNewValue ?: r.newValue).redactingSecrets().jsonString(),
                             confirmedAt = now, status = ConfigAuditStatus.REJECTED,
                             revertOf = null, caption = caption,
                         )
@@ -571,8 +571,8 @@ object ConfigBridge {
                             ConfigAuditEntry(
                                 id = auditId, at = now, actor = actor, sessionId = sessionId,
                                 scope = r.scope, key = r.rawPath,
-                                oldValueJSON = r.oldValue.jsonString(),
-                                newValueJSON = r.newValue.jsonString(),
+                                oldValueJSON = r.oldValue.redactingSecrets().jsonString(),
+                                newValueJSON = (r.auditNewValue ?: r.newValue).redactingSecrets().jsonString(),
                                 confirmedAt = now, status = ConfigAuditStatus.REJECTED,
                                 revertOf = null, caption = caption,
                             )

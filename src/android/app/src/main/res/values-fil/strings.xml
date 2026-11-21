@@ -1323,6 +1323,8 @@
     <string name="backup_ready">Handa na ang Backup</string>
     <string name="backup_result_excluded_too_large">Hindi isinama (masyadong malaki)</string>
     <string name="backup_result_files_not_included">Hindi kasama ang mga file</string>
+    <string name="backup_result_excluded_unreadable">Hindi isinama (hindi mabasa)</string>
+    <string name="backup_result_credentials_unreadable">Hindi mabasa ang mga kredensyal</string>
     <string name="backup_result_local_only">Naka-save sa device na ito lamang.</string>
     <string name="backup_result_delivered">Naka-save sa device na ito, at nakopya sa %1$d ng %2$d destinasyon.</string>
     <string name="backup_local_removed">Inalis ang lokal na kopya — %1$s ang nabakante sa device na ito</string>
@@ -2750,6 +2752,7 @@
     <string name="modeldetail_section_context_retry">Context at retries</string>
     <string name="modeldetail_temperature">Temperature (0.0–2.0)</string>
     <string name="modeldetail_temperature_invalid">Maglagay ng numero mula 0.0 hanggang 2.0, o iwanang blangko para i-omit.</string>
+    <string name="modeldetail_harness_save_failed">Hindi ma-save ang pag-override ng context budget. Na-save ang entry ng model — subukan muli.</string>
     <string name="modeldetail_temperature_placeholder">I-omit</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">Magdagdag</string>

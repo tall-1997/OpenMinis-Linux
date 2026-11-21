@@ -450,7 +450,12 @@ internal object WorkingMemoryStore {
             val body = buildString {
                 for (e in entries) append(toLine(e)).append('\n')
             }
-            val tmp = java.io.File(target.parentFile, "${target.name}.tmp")
+            // [T-working-memory-lock-scope] Unique tmp suffix: two persistAll
+            // calls racing on the SAME session must never interleave inside one
+            // shared "${target.name}.tmp" — a torn double-write corrupts the
+            // rename source for both. nanoTime is unique per process, and
+            // cross-session tmp names already differ via the session file name.
+            val tmp = java.io.File(target.parentFile, "${target.name}.${System.nanoTime()}.tmp")
             tmp.writeText(body, Charsets.UTF_8)
             try {
                 java.nio.file.Files.move(
@@ -481,7 +486,6 @@ internal object WorkingMemoryStore {
         if (filesDir != null) ledgerFor(sessionId, filesDir)
     }
 
-    @Synchronized
     fun append(
         sessionId: String,
         turn: Int,
@@ -492,49 +496,73 @@ internal object WorkingMemoryStore {
         filesDir: java.io.File? = null,
         maxEntries: Int = com.openminis.app.agent.HarnessConfig.current().ledgerMaxEntries,
     ) {
+        // [T-working-memory-lock-scope] Lock the per-session ledger, not the
+        // process-wide store: parallel tool lanes for different sessions must
+        // not serialize behind each other's disk writes. Every composite store
+        // operation below (append's append+persist, renderUndelivered,
+        // ackDelivered, undoDelivery, hasUndelivered) takes THIS SAME lock
+        // object, so append can never interleave with the delivery bookkeeping.
+        // The ledger's own methods are synchronized on the same instance, so
+        // this critical section is reentrant.
         val ledger = ledgerFor(sessionId, filesDir)
-        val folded = ledger.append(turn, tool, argsDigest, argsSummary, resultHead, maxEntries)
-        if (filesDir != null) {
-            if (folded) {
-                // Only undelivered records belong in the durable handover;
-                // old delivered records must not replay after a restart.
-                persistAll(filesDir, sessionId, ledger.snapshot(undeliveredOnly = true))
-            } else {
-                ledger.lastEntry()?.let { appendLine(filesDir, sessionId, it) }
+        synchronized(ledger) {
+            val folded = ledger.append(turn, tool, argsDigest, argsSummary, resultHead, maxEntries)
+            if (filesDir != null) {
+                if (folded) {
+                    // Only undelivered records belong in the durable handover;
+                    // old delivered records must not replay after a restart.
+                    persistAll(filesDir, sessionId, ledger.snapshot(undeliveredOnly = true))
+                } else {
+                    ledger.lastEntry()?.let { appendLine(filesDir, sessionId, it) }
+                }
             }
         }
     }
 
-    @Synchronized
     fun renderUndelivered(sessionId: String, filesDir: java.io.File? = null): String? {
+        // [T-working-memory-lock-scope] Same per-session lock as append: render
+        // flips entries delivered while concurrent tool lanes add them, so the
+        // two must never interleave. The store-level @Synchronized this used to
+        // ride on covered the ledger methods but NOT append's per-ledger
+        // critical section — exactly the race the unified lock removes.
         val ledger = ledgerFor(sessionId, filesDir)
-        // Do NOT rewrite the durable log here: the caller must persist the
-        // delivered removal only AFTER the transcript commit succeeds. A crash
-        // between render and commit then retries (duplicate-risk) instead of
-        // silently losing the handover.
-        return ledger.renderUndelivered()
+        synchronized(ledger) {
+            // Do NOT rewrite the durable log here: the caller must persist the
+            // delivered removal only AFTER the transcript commit succeeds. A crash
+            // between render and commit then retries (duplicate-risk) instead of
+            // silently losing the handover.
+            return ledger.renderUndelivered()
+        }
     }
 
     /** [T-working-memory-persist] The note reached the transcript: drop the
      * delivered records from the durable log so a restart cannot repeat them. */
-    @Synchronized
     fun ackDelivered(sessionId: String, filesDir: java.io.File? = null) {
         if (filesDir == null) return
+        // [T-working-memory-lock-scope] snapshot() and the persistAll that
+        // rewrites the whole file must be atomic against append: under the old
+        // store-level lock an append could slide in between them, and the
+        // full-file overwrite then erased the record the appendLine had just
+        // written (and its in-memory delivery state disagreed with disk). Same
+        // lock object as append; persistAll tmp names are unique per call.
         val ledger = ledgerFor(sessionId, filesDir)
-        persistAll(filesDir, sessionId, ledger.snapshot(undeliveredOnly = true))
+        synchronized(ledger) {
+            persistAll(filesDir, sessionId, ledger.snapshot(undeliveredOnly = true))
+        }
     }
 
     /** [T-working-memory-persist] The commit failed: make the same records
      * deliverable again (in-memory state only; the log was never rewritten). */
-    @Synchronized
     fun undoDelivery(sessionId: String, filesDir: java.io.File? = null) {
-        ledgerFor(sessionId, filesDir).undoLastDelivery()
+        val ledger = ledgerFor(sessionId, filesDir)
+        synchronized(ledger) { ledger.undoLastDelivery() }
     }
 
     /** True when the ledger has lines not yet delivered to the transcript. */
-    @Synchronized
-    fun hasUndelivered(sessionId: String, filesDir: java.io.File? = null): Boolean =
-        ledgerFor(sessionId, filesDir).hasUndelivered()
+    fun hasUndelivered(sessionId: String, filesDir: java.io.File? = null): Boolean {
+        val ledger = ledgerFor(sessionId, filesDir)
+        synchronized(ledger) { return ledger.hasUndelivered() }
+    }
 
     /** Test / session-swap seam. Does not delete the durable log. */
     fun reset(sessionId: String? = null) {

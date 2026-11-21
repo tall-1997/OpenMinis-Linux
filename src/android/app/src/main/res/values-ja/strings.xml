@@ -1322,6 +1322,8 @@
     <string name="backup_ready">バックアップの準備ができました</string>
     <string name="backup_result_excluded_too_large">除外（サイズ超過）</string>
     <string name="backup_result_files_not_included">ファイルは含まれていません</string>
+    <string name="backup_result_excluded_unreadable">除外（読み取り不可）</string>
+    <string name="backup_result_credentials_unreadable">認証情報を読み取れませんでした</string>
     <string name="backup_result_local_only">この端末にのみ保存しました。</string>
     <string name="backup_result_delivered">この端末に保存し、%2$d 件中 %1$d 件の保存先にコピーしました。</string>
     <string name="backup_local_removed">ローカルのコピーを削除しました。この端末で %1$s を解放しました</string>
@@ -2749,6 +2751,7 @@
     <string name="modeldetail_section_context_retry">コンテキストと再試行</string>
     <string name="modeldetail_temperature">温度（0.0–2.0）</string>
     <string name="modeldetail_temperature_invalid">0.0 ～ 2.0 の数値を入力するか、空欄のままで省略してください。</string>
+    <string name="modeldetail_harness_save_failed">コンテキスト予算の上書きを保存できませんでした。モデル項目は保存済みです。もう一度お試しください。</string>
     <string name="modeldetail_temperature_placeholder">省略</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">追加</string>

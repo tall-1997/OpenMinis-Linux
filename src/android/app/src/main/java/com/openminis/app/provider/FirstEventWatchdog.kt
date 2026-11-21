@@ -105,6 +105,9 @@ fun Flow<LLMStreamChunk>.streamStallWatchdog(
     val lastEventNanos = AtomicLong(startNanos)
     // FIRST_EVENT / FIRST_CONTENT / IDLE — which phase tripped, if any.
     val timedOutPhase = java.util.concurrent.atomic.AtomicReference<String?>(null)
+    // [T-watchdog-real-error-preserved] What the provider threw while the
+    // timeout verdict was already firing (see the upstream catch below).
+    val capturedUpstreamError = java.util.concurrent.atomic.AtomicReference<Throwable?>(null)
 
     val upstream = launch {
         try {
@@ -139,7 +142,13 @@ fun Flow<LLMStreamChunk>.streamStallWatchdog(
             // dominant fact: swallow the cascade so the verdict wins. A
             // genuine provider failure before any timeout (timedOutPhase
             // still null) still propagates.
+            // [T-watchdog-real-error-preserved] The same close-with-cause race
+            // cuts BOTH ways: a REAL provider verdict (401/429/5xx) can land
+            // here exactly as the deadline expires, and swallowing it would
+            // replace the authoritative failure with a stall — mislabeling a
+            // rate limit as retryable-transient. Keep it for the verdict below.
             if (timedOutPhase.get() == null) throw e
+            capturedUpstreamError.set(e)
         }
     }
 
@@ -191,6 +200,16 @@ fun Flow<LLMStreamChunk>.streamStallWatchdog(
 
     upstream.join()
     watchdog.cancel()
+    // [T-watchdog-real-error-preserved] A captured ANSWER-type LLMError is the
+    // provider's own verdict — throw it instead of the timeout so the
+    // retry/fallback ladder classifies the real failure (a rate limit rotates
+    // the key bucket; a 401 is not retried at all). Every other captured
+    // shape — [T-canceled-io-mapping]'s teardown TransientError,
+    // NetworkError(cause=IOException("Canceled")), and equally the
+    // NetworkError(cause=SocketException("Socket closed")) the SAME teardown
+    // produces — is ambiguous with our own cancel cascade and yields to the
+    // timeout verdict ([T-watchdog-answer-whitelist]).
+    realProviderVerdict(capturedUpstreamError.get())?.let { throw it }
     when (timedOutPhase.get()) {
         // [GH#521] Headers landed but no token did: retry as transient. Do
         // NOT set stalledAfterFirstEvent — nothing visible was emitted, so
@@ -232,6 +251,67 @@ fun Flow<LLMStreamChunk>.firstEventWatchdog(
     idleTimeoutMs = 0L,
     reason = reason,
 )
+
+/**
+ * [T-watchdog-real-error-preserved] The provider's ANSWER-type verdict inside
+ * [raw], or null when [raw] is only the local cancel cascade / transport
+ * teardown. Pure and internal so the boundary classification is unit-testable
+ * without a live stream.
+ *
+ * Whitelist semantics ([T-watchdog-answer-whitelist]): only the error kinds
+ * the provider must have ANSWERED with may outrank the timeout verdict —
+ * [LLMError.RateLimited], [LLMError.InvalidApiKey], [LLMError.ProviderError],
+ * [LLMError.DecodingError], [LLMError.ContextLengthExceeded] and
+ * [LLMError.ContentFiltered]. Everything else yields to the timeout:
+ * TransientError (including the OpenAI-family teardown mapping), NetworkError,
+ * Timeout, Unknown, Cancelled, and a chain with no LLMError at all. The old
+ * implementation tried to whitelist the cascade by SHAPE — sniffing
+ * `cause.message == "Canceled"` and a teardown text prefix — and misfiled the
+ * `NetworkError(cause=SocketException("Socket closed"))` the SAME teardown
+ * produces (see the upstream catch above) as a real provider verdict, so it
+ * replaced the stall classification and lost `stalledAfterFirstEvent`,
+ * regenerating the whole turn. Only an error the provider itself answered
+ * with is unambiguous evidence; transport-shaped errors are not, whatever
+ * their message says.
+ *
+ * A whitelisted verdict wrapped by the channel/coroutine machinery (e.g.
+ * `RuntimeException("FlowAbortedException", cause = RateLimited)`) is still
+ * found: the walk keeps descending through [Throwable.cause] and returns the
+ * first answer-type [LLMError] on the chain.
+ */
+internal fun realProviderVerdict(raw: Throwable?): LLMError? {
+    var walker: Throwable? = raw
+    while (walker != null) {
+        if (walker is LLMError && walker.isAnswerVerdict) return walker
+        walker = walker.cause
+    }
+    return null
+}
+
+/**
+ * [T-watchdog-answer-whitelist] True only for the [LLMError] kinds a provider
+ * ANSWERS with (an HTTP status, a structured refusal, an unparseable body) —
+ * the ones [streamStallWatchdog] allows to outrank the timeout verdict. The
+ * transport/lifecycle kinds (NetworkError, Timeout, TransientError, Unknown,
+ * Cancelled) are exactly the shapes the watchdog's own `upstream.cancel()`
+ * cascade folds into during teardown, so they can never be trusted over the
+ * stall. Exhaustive over the sealed taxonomy: a new kind must be classified
+ * here deliberately, not silently fall to `else`.
+ */
+private val LLMError.isAnswerVerdict: Boolean
+    get() = when (this) {
+        is LLMError.RateLimited,
+        is LLMError.InvalidApiKey,
+        is LLMError.ProviderError,
+        is LLMError.DecodingError,
+        is LLMError.ContextLengthExceeded,
+        is LLMError.ContentFiltered -> true
+        is LLMError.NetworkError,
+        is LLMError.Timeout,
+        is LLMError.TransientError,
+        is LLMError.Cancelled,
+        is LLMError.Unknown -> false
+    }
 
 private const val NANOS_PER_MILLI = 1_000_000L
 

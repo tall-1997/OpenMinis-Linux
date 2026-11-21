@@ -198,6 +198,17 @@ object ApprovalGate {
         if (sessionId != null && detail.sessionId != sessionId) return
         approvalDetails.remove(id)
         pending.remove(id)?.value = value
+        // Per-session flow entries are UI caches; once no requests remain for a
+        // session, remove the entry so long-lived processes don't retain one
+        // StateFlow per historical chat. The "check empty, then remove" is one
+        // atomic compute(): a plain contains-check followed by remove() opened a
+        // window where a requestApproval filing for the same session between the
+        // two steps had its freshly created flow removed right after it.
+        detail.sessionId?.let { sid ->
+            pendingBySession.compute(sid) { _, existing ->
+                if (approvalDetails.none { it.value.sessionId == sid }) null else existing
+            }
+        }
         refreshPendingBroadcast()
     }
 
@@ -217,10 +228,14 @@ object ApprovalGate {
         if (sessionId == null) {
             approvalDetails.keys.toList().forEach { approvalDetails.remove(it) }
             pending.clear()
+            pendingBySession.clear()
             sessionAllowAll.clear()
             sessionAllowedTools.clear()
             legacyBoundSessionId = null
-        } else resetSessionAllowAll(sessionId)
+        } else {
+            resetSessionAllowAll(sessionId)
+            pendingBySession.remove(sessionId)
+        }
         refreshPendingBroadcast()
     }
 

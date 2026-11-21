@@ -180,9 +180,15 @@ internal object McpToolShared {
                 )
             }
         }.getOrElse {
+            // [GH#358-adjacent] 124 is the GNU-timeout convention — a REAL
+            // watchdog timeout reports it with timedOut=true (see
+            // PersistentShell/ExecutionCoordinator). A coordinator exception is
+            // a host-side failure, not a timeout, so it must NOT borrow the
+            // timeout code: -1 matches PersistentShell's own internal-error
+            // convention and timedOut stays false.
             ExecutionCoordinator.CommandResult(
                 output = "Execution failed: ${it.message}",
-                exitCode = 124,
+                exitCode = -1,
                 durationMs = 0L,
             )
         }

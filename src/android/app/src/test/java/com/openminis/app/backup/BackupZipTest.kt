@@ -104,9 +104,14 @@ class BackupZipTest {
         assertEquals("row-65535", File(extracted, "f65535").readText())
     }
 
-    /** §5.5: a malicious package must not write outside the destination. */
+    /**
+     * §5.5: a malicious package must not write outside the destination — and
+     * the refusal is per-entry now: the traversal entry is named in the
+     * report while the good members behind it still extract, instead of one
+     * bad name voiding the whole package.
+     */
     @Test
-    fun `refuses path traversal on extract`() {
+    fun `refuses path traversal on extract without losing the other members`() {
         val evil = File(tmp, "evil.zip")
         ZipOutputStream(evil.outputStream()).use { zos ->
             zos.setMethod(ZipOutputStream.STORED)
@@ -119,17 +124,83 @@ class BackupZipTest {
                 this.crc = crc.value
             }
             zos.putNextEntry(e); zos.write(payload); zos.closeEntry()
+
+            val good = "manifest".toByteArray()
+            val goodCrc = CRC32().apply { update(good) }
+            val ok = ZipEntry("manifest.json").apply {
+                method = ZipEntry.STORED
+                size = good.size.toLong()
+                compressedSize = good.size.toLong()
+                this.crc = goodCrc.value
+            }
+            zos.putNextEntry(ok); zos.write(good); zos.closeEntry()
         }
 
-        var threw = false
-        try {
-            BackupZip.extract(evil, File(tmp, "dest"))
-        } catch (e: BackupZip.ZipException) {
-            threw = true
-        }
-        assertTrue("a `..` entry must be refused", threw)
+        val dest = File(tmp, "dest")
+        val report = BackupZip.extract(evil, dest)
+        assertEquals(listOf("../../escaped.txt"), report.unsafePaths)
+        assertTrue("a `..` entry must be refused", "../../escaped.txt" in report.unsafePaths)
         assertTrue("nothing may be written outside the destination",
             !File(tmp, "escaped.txt").exists())
+        assertEquals("the good member behind the bad one still extracts",
+            "manifest", File(dest, "manifest.json").readText())
+        assertTrue(report.corrupt.isEmpty())
+    }
+
+    /**
+     * One entry with bytes that do not match its CRC must not abort the scan:
+     * the corrupt member is named (so the user can see what did not come
+     * through), its partial file removed, and the rest of the package lands.
+     */
+    @Test
+    fun `a corrupt entry is skipped and reported, not fatal`() {
+        val zip = File(tmp, "corrupt.zip")
+        val badPayload = "corrupted-content".toByteArray()
+        ZipOutputStream(zip.outputStream()).use { zos ->
+            zos.setMethod(ZipOutputStream.STORED)
+            // ZipOutputStream verifies the CRC on closeEntry, so a lie declared
+            // up front never makes it into the file. To exercise a package
+            // whose bytes genuinely diverged from their recorded CRC (bit rot,
+            // a truncated transfer), archive correctly first and flip a data
+            // byte afterwards.
+            val e = ZipEntry("blobs/bad").apply {
+                method = ZipEntry.STORED
+                size = badPayload.size.toLong()
+                compressedSize = badPayload.size.toLong()
+                crc = CRC32().apply { update(badPayload) }.value
+            }
+            zos.putNextEntry(e); zos.write(badPayload); zos.closeEntry()
+
+            val good = "fine".toByteArray()
+            val goodCrc = CRC32().apply { update(good) }
+            val ok = ZipEntry("blobs/good").apply {
+                method = ZipEntry.STORED
+                size = good.size.toLong()
+                compressedSize = good.size.toLong()
+                this.crc = goodCrc.value
+            }
+            zos.putNextEntry(ok); zos.write(good); zos.closeEntry()
+        }
+        // STORED members are plain bytes: flip one in place so the recorded
+        // CRC no longer matches what the stream yields.
+        val raw = zip.readBytes()
+        val at = String(raw, Charsets.ISO_8859_1).indexOf("corrupted-content")
+        check(at >= 0) { "corrupt payload not found in archive" }
+        raw[at] = 'X'.code.toByte()
+        zip.writeBytes(raw)
+
+        val dest = File(tmp, "corrupt-out")
+        val report = BackupZip.extract(zip, dest)
+        assertEquals(listOf("blobs/bad"), report.corrupt)
+        // This archive's CRC failure surfaces at closeEntry (STORED bytes read
+        // cleanly; the verdict lands when the entry closes). The written count
+        // used to be bumped BEFORE that verdict, so the same entry was counted
+        // as written + progress-reported AND named corrupt. It must be counted
+        // exactly once: the one good member.
+        assertEquals(1, report.written)
+        assertEquals("the good member still extracts", "fine", File(dest, "blobs/good").readText())
+        assertTrue("the partial corrupt file is removed", !File(dest, "blobs/bad").exists())
+        assertTrue(report.unsafePaths.isEmpty())
     }
 
     /**

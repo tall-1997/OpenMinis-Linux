@@ -1323,6 +1323,8 @@
     <string name="backup_ready">ข้อมูลสำรองพร้อมแล้ว</string>
     <string name="backup_result_excluded_too_large">ยกเว้น (ใหญ่เกินไป)</string>
     <string name="backup_result_files_not_included">ไม่ได้รวมไฟล์</string>
+    <string name="backup_result_excluded_unreadable">ยกเว้น (อ่านไม่ได้)</string>
+    <string name="backup_result_credentials_unreadable">อ่านข้อมูลรับรองไม่ได้</string>
     <string name="backup_result_local_only">บันทึกไว้ในอุปกรณ์นี้เท่านั้น</string>
     <string name="backup_result_delivered">บันทึกไว้ในอุปกรณ์นี้ และคัดลอกไปยัง %1$d จาก %2$d ปลายทาง</string>
     <string name="backup_local_removed">ลบสำเนาในเครื่องแล้ว — คืนพื้นที่ %1$s ในอุปกรณ์นี้</string>
@@ -2750,6 +2752,7 @@
     <string name="modeldetail_section_context_retry">บริบทและการลองใหม่</string>
     <string name="modeldetail_temperature">อุณหภูมิ (0.0–2.0)</string>
     <string name="modeldetail_temperature_invalid">ใส่ตัวเลข 0.0 ถึง 2.0 หรือเว้นว่างเพื่อไม่ส่ง</string>
+    <string name="modeldetail_harness_save_failed">บันทึกการปรับตัวบทบางจริงไม่สำเร็จ บันทึกรายการโมเดลแล้ว ลองอีกครั้ง</string>
     <string name="modeldetail_temperature_placeholder">ไม่ส่ง</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">เพิ่ม</string>

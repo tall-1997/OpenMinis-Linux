@@ -47,6 +47,17 @@ object McpApprovalCore {
 
     private val ID_PATTERN = Regex("[A-Za-z0-9._-]{1,64}")
 
+    /**
+     * An id is safe as a map key AND as a path component — [McpApprovalStore]
+     * interpolates taskId verbatim into
+     * `/var/minis/shared/mcp-tasks/<taskId>/`. The all-dot components "." and
+     * ".." match the charset above but are PATH CONTROLS: `createTask("..")`
+     * would make every artifact write and `deleteTaskDirectory` land on the
+     * shared root instead of a task directory. Dots inside an id stay legal
+     * (`a..b`), only a value made entirely of dots is refused.
+     */
+    fun validId(id: String): Boolean = ID_PATTERN.matches(id) && id.any { it != '.' }
+
     enum class TaskStatus { PENDING, ACTIVE, REVOKED }
     enum class OperationStatus { WAITING, APPROVED, REVOKED }
 
@@ -105,12 +116,12 @@ object McpApprovalCore {
     fun requestIdFor(taskId: String, tool: String, argumentsJson: String): String =
         Digest.sha256Hex("$taskId\n$tool\n$argumentsJson").take(32)
 
-    fun validId(id: String): Boolean = ID_PATTERN.matches(id)
-
     // -- task phase ----------------------------------------------------------
 
     fun createTask(state: State, taskId: String, name: String, nowMs: Long): Outcome {
-        if (!validId(taskId)) return err(ErrorCode.INVALID_ID, "taskId must match [A-Za-z0-9._-]{1,64}")
+        if (!validId(taskId)) {
+            return err(ErrorCode.INVALID_ID, "taskId must match [A-Za-z0-9._-]{1,64} and not consist only of dots")
+        }
         if (name.isBlank()) return err(ErrorCode.INVALID_NAME, "task name must not be blank")
         val existing = state.tasks[taskId]
         // Same-id reuse is refused only inside one generation. A row left over
@@ -169,7 +180,9 @@ object McpApprovalCore {
         val task = state.tasks[taskId] ?: return err(ErrorCode.TASK_NOT_FOUND, "task '$taskId' not found")
         if (task.epoch != state.epoch) return err(ErrorCode.EPOCH_MISMATCH, "task '$taskId' belongs to epoch ${task.epoch}")
         if (task.status != TaskStatus.ACTIVE) return err(ErrorCode.TASK_NOT_ACTIVE, "task '$taskId' is ${task.status}")
-        if (!validId(operationId)) return err(ErrorCode.INVALID_ID, "operationId must match [A-Za-z0-9._-]{1,64}")
+        if (!validId(operationId)) {
+            return err(ErrorCode.INVALID_ID, "operationId must match [A-Za-z0-9._-]{1,64} and not consist only of dots")
+        }
         if (state.operations.containsKey(operationId)) {
             return err(ErrorCode.OPERATION_EXISTS, "operation '$operationId' already exists")
         }

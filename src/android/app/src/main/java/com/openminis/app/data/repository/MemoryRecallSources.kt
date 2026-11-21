@@ -7,6 +7,9 @@ import java.io.File
 internal object MemorySources {
     private val standing = setOf(MemoryRepository.GLOBAL_FILE, "SOUL.md", "PERSONA.md", "AGENTS.md", LearnedPrefsStore.FILE_NAME)
 
+    /** True for the persona/prefs files that never count as a diary or memory entry. */
+    internal fun isStandingSource(name: String): Boolean = name in standing
+
     fun isRecallSource(name: String): Boolean = name.endsWith(".md") && name !in standing
 
     class Source(

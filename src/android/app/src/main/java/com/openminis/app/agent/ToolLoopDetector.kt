@@ -112,13 +112,14 @@ class ToolLoopDetector(private val config: ToolLoopConfig = ToolLoopConfig()) {
 
         // 2. global_circuit_breaker — universal backstop, before poll-specific
         //    rule so a runaway non-poll loop can't slip past on lower thresholds.
+        //    This is a HARD breaker, not a third warning: the model has already
+        //    demonstrated 30 identical no-progress outcomes.
         if (noProgressStreak >= config.globalCircuitBreakerThreshold) {
-            val msg = "[LOOP WARNING] $toolName has repeated identical no-progress " +
-                "outcomes $noProgressStreak times. The call still runs; change strategy " +
-                "if this is not waiting on something."
+            val msg = "[LOOP BLOCKED] CRITICAL: $toolName repeated identical no-progress " +
+                "outcomes $noProgressStreak times. Stop this call and change strategy."
             AppLogger.warning("ToolLoopDetector",
-                "WARNING global_circuit_breaker tool=$toolName streak=$noProgressStreak")
-            return LoopCheckResult(Level.WARNING, msg, "global:$toolName:$argsHash")
+                "CRITICAL global_circuit_breaker tool=$toolName streak=$noProgressStreak")
+            return LoopCheckResult(Level.CRITICAL, msg)
         }
 
         // 3. known_poll_no_progress — warn, but do not refuse the call. A long

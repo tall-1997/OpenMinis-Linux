@@ -127,9 +127,15 @@ object SandboxHttpProxy {
                 return
             }
             if (method.equals("CONNECT", true)) {
-                val hp = hostPort.split(':')
-                val host = hp[0]
-                val port = hp.getOrNull(1)?.toIntOrNull() ?: 443
+                // [T-proxy-ipv6-literal] The old `split(':')` read "[::1]:443"
+                // as host "[" port "" and every IPv6 destination died with an
+                // UnknownHostException before the tunnel ever opened.
+                val parsed = parseHostPort(hostPort, defaultPort = 443)
+                if (parsed == null) {
+                    client.getOutputStream().write("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n".toByteArray())
+                    return
+                }
+                val (host, port) = parsed
                 Socket(host, port).use { remote ->
                     // [T-proxy-tunnel-leak] Match the client's idle timeout so
                     // BOTH pump threads self-terminate on an idle tunnel and the
@@ -140,12 +146,21 @@ object SandboxHttpProxy {
                     tunnel(client, remote)
                 }
             } else {
-                val hp = hostPort.split(':')
-                val host = hp[0].trim()
-                val port = hp.getOrNull(1)?.toIntOrNull() ?: 80
+                val parsed = parseHostPort(hostPort, defaultPort = 80)
+                if (parsed == null) {
+                    client.getOutputStream().write("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n".toByteArray())
+                    return
+                }
+                val (host, port) = parsed
                 Socket(host, port).use { remote ->
                     remote.soTimeout = IDLE_TIMEOUT_MS
-                    remote.getOutputStream().write(header.toByteArray())
+                    // [T-proxy-header-bytes] readHeaders decoded the request
+                    // one byte at a time via `b.toChar()` (chars 0..255), so
+                    // re-encoding with the default charset (UTF-8) turned every
+                    // >=0x80 byte into two — a header value like a UTF-8
+                    // filename arrived corrupted at the origin server.
+                    // ISO-8859-1 maps chars 0..255 back to the exact bytes.
+                    remote.getOutputStream().write(header.toByteArray(Charsets.ISO_8859_1))
                     tunnel(client, remote)
                 }
             }
@@ -167,6 +182,56 @@ object SandboxHttpProxy {
             prev = b
             if (buf.length > 16_384) return buf.toString()
         }
+    }
+
+    /**
+     * [T-proxy-ipv6-literal] Split an authority into (host, port). Accepts the
+     * forms the two call sites hand over: CONNECT's authority target
+     * ("example.com:443", "[::1]:443"), a `Host:` header value ("example.com",
+     * "[2001:db8::1]:8080"), and — when no Host header exists — the raw
+     * absolute-form request target ("http://[::1]:8080/x"), which is stripped
+     * of scheme and path first.
+     *
+     * An IPv6 literal MUST be bracketed per RFC 3986 when it carries a port;
+     * the brackets are stripped here because java.net.Socket resolves the bare
+     * literal itself. A bare multi-colon authority (unbracketed IPv6, seen in
+     * the wild) is treated as host-only with the default port instead of
+     * splitting at every colon. Returns null when nothing sensible can be
+     * parsed — the caller replies 400 instead of connecting to "[".
+     */
+    internal fun parseHostPort(raw: String, defaultPort: Int): Pair<String, Int>? {
+        var s = raw.trim()
+        if (s.isEmpty()) return null
+        val scheme = s.indexOf("://")
+        if (scheme >= 0) {
+            s = s.substring(scheme + 3)
+            val slash = s.indexOf('/')
+            if (slash >= 0) s = s.substring(0, slash)
+        }
+        if (s.isEmpty()) return null
+        if (s.startsWith("[")) {
+            val close = s.indexOf(']')
+            if (close < 0) return null
+            val host = s.substring(1, close)
+            if (host.isEmpty()) return null
+            val port = if (s.length > close + 1 && s[close + 1] == ':') {
+                s.substring(close + 2).toIntOrNull() ?: return null
+            } else {
+                defaultPort
+            }
+            if (port !in 1..65535) return null
+            return host to port
+        }
+        val first = s.indexOf(':')
+        if (first < 0) return s to defaultPort
+        if (s.indexOf(':', first + 1) >= 0) {
+            // Bare unbracketed IPv6 literal — the whole authority is the host.
+            return s to defaultPort
+        }
+        val host = s.substring(0, first)
+        val port = s.substring(first + 1).toIntOrNull() ?: return null
+        if (host.isEmpty() || port !in 1..65535) return null
+        return host to port
     }
 
     private fun tunnel(a: Socket, b: Socket) {

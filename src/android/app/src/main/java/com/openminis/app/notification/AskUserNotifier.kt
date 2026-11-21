@@ -144,7 +144,7 @@ class AskUserNotifier(private val context: Context) {
         val launchIntent = buildLaunchIntent(sessionId)
 
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.drawable.ic_notification_status)
             .setContentTitle(context.getString(R.string.notify_question_title))
             .setContentText(questionPreview(first, questions.size))
             .setContentIntent(launchIntent)
@@ -154,7 +154,7 @@ class AskUserNotifier(private val context: Context) {
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(
                 NotificationCompat.Builder(context, CHANNEL_ID)
-                    .setSmallIcon(android.R.drawable.ic_dialog_info)
+                    .setSmallIcon(R.drawable.ic_notification_status)
                     .setContentTitle(context.getString(R.string.notify_question_public_title))
                     .setContentText(context.getString(R.string.notify_question_public_text))
                     .setContentIntent(launchIntent)
@@ -198,8 +198,12 @@ class AskUserNotifier(private val context: Context) {
             putExtra(AskUserIntents.EXTRA_ANSWER_LABEL, label)
             setPackage(context.packageName)
         }
+        // Include both request and option: labels repeat constantly ("Yes"/"No"),
+        // so a label-only code lets one pending question overwrite another
+        // request's answer PendingIntent.
+        val requestCode = (requestId.hashCode() * 31 + label.hashCode()) and 0x7fffffff
         return PendingIntent.getBroadcast(
-            context, label.hashCode(), intent,
+            context, requestCode, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
     }

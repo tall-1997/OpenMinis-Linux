@@ -1151,6 +1151,10 @@
     <string name="startup_failure_clear_title">确认清除全部应用数据？</string>
     <string name="startup_failure_clear_body">这会删除本机上的本地会话、记忆、设置与沙箱文件，然后重启应用。已导出的备份不受影响。仅在反复重启失败时使用。</string>
     <string name="startup_failure_clear_confirm">清除并重启</string>
+    <string name="degraded_startup_title">部分启动组件加载失败</string>
+    <string name="degraded_startup_body">应用正以降级模式运行，部分功能在重启前可能不可用。</string>
+    <string name="degraded_startup_cause">原因：%1$s</string>
+    <string name="degraded_startup_dismiss">关闭</string>
     <string name="usage_attr_unknown_session">无法确定模型 —— 会话记录已删除</string>
     <string name="usage_attr_removed">已不在当前配置的服务商中</string>
     <string name="usage_detail_output">输出</string>
@@ -1306,6 +1310,7 @@
     <string name="modeldetail_temperature">温度（0.0–2.0）</string>
     <string name="modeldetail_temperature_placeholder">不发送</string>
     <string name="modeldetail_temperature_invalid">请输入 0.0 到 2.0 的数字，或留空以不发送。</string>
+    <string name="modeldetail_harness_save_failed">无法保存上下文预算覆盖。模型条目已保存，请重试。</string>
     <string name="modeldetail_context_window">上下文窗口</string>
     <string name="modeldetail_thinking">思考</string>
     <!-- [T-thinking-ultra-manual] 模型参数页手动思考等级上限。 -->
@@ -1681,6 +1686,8 @@
     <string name="backup_ready">备份已就绪</string>
     <string name="backup_result_excluded_too_large">已排除（过大）</string>
     <string name="backup_result_files_not_included">未包含文件</string>
+    <string name="backup_result_excluded_unreadable">已排除（无法读取）</string>
+    <string name="backup_result_credentials_unreadable">凭据无法读取</string>
     <string name="backup_result_local_only">仅保存在本机。</string>
     <string name="backup_result_delivered">已保存在本机，并已复制到 %2$d 个目的地中的 %1$d 个。</string>
     <string name="backup_local_removed">已删除本机副本——释放 %1$s</string>

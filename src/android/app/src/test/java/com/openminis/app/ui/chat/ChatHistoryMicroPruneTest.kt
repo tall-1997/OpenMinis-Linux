@@ -161,6 +161,44 @@ class ChatHistoryMicroPruneTest {
     }
 
     @Test
+    fun `prune trigger meters the AGED list, not the pre-aging snapshot`() {
+        // [T-micro-prune-post-aging-pressure] projectChatRequest runs aging
+        // BEFORE the micro-prune trigger check. Aging folds results outside the
+        // shared keep window whose text has no verified recovery path and is
+        // over ToolResultAging.UNSPILLED_FOLD_FLOOR_CHARS (4000), while it
+        // deliberately KEEPS medium unbacked results (1200..4000 chars) verbatim.
+        // Those survivors are exactly what the micro-prune would trim — so the
+        // trigger must read the POST-AGING pressure: the pre-aging snapshot is
+        // always an overestimate and re-fires the (lossy) trim on requests
+        // aging already brought under the trigger.
+        val medium = "m".repeat(1_500)   // > micro head+tail (800), < aging's 4000 floor
+        val big = "x".repeat(6_000)      // > aging's unbacked fold floor → folded
+        val history = listOf(
+            toolCarrier("c0", "shell_execute", big),      // outside the keep window
+            toolCarrier("c1", "shell_execute", big),      // outside the keep window
+            toolCarrier("c2", "shell_execute", medium),   // outside the keep window
+            toolCarrier("c3", "shell_execute", medium),   // outside the keep window
+        ) + historyWith(6, seed = 'k')                // inside the keep window
+        val preAging = com.openminis.app.data.ContextTokenMeter.rawMessagesTokens(history).toLong()
+        val aged = ToolResultAging.age(history, keepRecent = MICRO_PRUNE_KEEP_RECENT).messages
+        val postAging = com.openminis.app.data.ContextTokenMeter.rawMessagesTokens(aged).toLong()
+        assertTrue("test setup: aging must fold the big results", postAging < preAging)
+        val trigger = (preAging + postAging) / 2L
+        assertTrue("test setup: trigger strictly between the two readings", postAging < trigger && trigger <= preAging)
+
+        // The FIX's behaviour: meter the aged list — under the real trigger the
+        // medium results aging deliberately kept stay verbatim.
+        assertSame(aged, microPruneOldToolResults(
+            aged, postAging, 100_000, keepRecent = MICRO_PRUNE_KEEP_RECENT, triggerTokens = trigger,
+        ))
+        // Contrast pin: the stale pre-aging pressure crosses the trigger and
+        // trims results the aged request has no business trimming.
+        assertTrue(microPruneOldToolResults(
+            aged, preAging, 100_000, keepRecent = MICRO_PRUNE_KEEP_RECENT, triggerTokens = trigger,
+        ) !== aged)
+    }
+
+    @Test
     fun `short results pass through unchanged`() {
         val history = listOf(
             userText("task"),

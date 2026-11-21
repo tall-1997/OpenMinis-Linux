@@ -753,7 +753,8 @@ private suspend fun ChatViewModel.executeLocalTool(
         is com.openminis.app.plugins.LocalToolPluginStore.MaterializeResult.UnsafeParam ->
             ToolExecutionResult(
                 "param '${m.param}' of local tool '${tool.name}' carries shell metacharacters " +
-                    "(semicolon, pipe, ampersand, dollar, backtick, redirect or newline) and was refused.",
+                    "(semicolon, pipe, ampersand, dollar, backtick, redirect, input redirect or " +
+                    "process substitution like <(…), or newline) and was refused.",
                 false,
                 errorCode = com.openminis.app.tools.ToolErrorCode.INVALID_ARGUMENTS,
                 recoveryHint = "Pass a plain value without shell metacharacters, or have the tool " +

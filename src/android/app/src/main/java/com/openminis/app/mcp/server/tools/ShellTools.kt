@@ -46,6 +46,13 @@ private fun shellExec(
             put("exit_code", result.exitCode)
             put("output", result.output)
             put("duration_ms", result.durationMs)
+            // [GH#358] A watchdog timeout keeps the GNU-timeout exit code 124 in
+            // exit_code (client scripts may already branch on it) but is
+            // reported STRUCTURALLY too, via the shell's internal verdict —
+            // never by sniffing for a bare 124, which a user command can
+            // legitimately exit with. Without this field an MCP client could
+            // not tell "the tool timed out" from "the command itself failed".
+            put("timed_out", result.timedOut)
         }
         McpServerCore.CallResult(
             JSONArray().put(McpToolShared.text(output.toString(2))),

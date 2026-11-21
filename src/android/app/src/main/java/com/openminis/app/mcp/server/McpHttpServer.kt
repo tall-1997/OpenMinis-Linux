@@ -56,7 +56,7 @@ class McpHttpServer(
         const val MAX_BODY_BYTES = 4 * 1024 * 1024
 
         /** Max header block size before the connection is dropped. */
-        private const val MAX_HEADER_BYTES = 64 * 1024
+        internal const val MAX_HEADER_BYTES = 64 * 1024
 
         /** [T-mcp-accept-recovery] Same construction as [start] uses. */
         private const val BIND_HOST = "127.0.0.1"
@@ -247,7 +247,9 @@ class McpHttpServer(
                 inFlightConnections.decrementAndGet()
                 Log.w(TAG, "refused connection: $pending in flight/queued (workers=$workerCount)")
                 runCatching { client.close() }
-                return
+                // Admission refused this peer, not the listener. `return` would
+                // kill the accept loop while the server still reports RUNNING.
+                continue
             }
             // Arm the idle timeout here as well: a socket that waits in the queue
             // must not outlive a stalled peer.

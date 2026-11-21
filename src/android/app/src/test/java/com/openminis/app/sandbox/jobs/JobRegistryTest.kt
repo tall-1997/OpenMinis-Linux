@@ -67,6 +67,13 @@ class JobRegistryTest {
         /** Non-null: await() returns it AT ONCE while the job is still "running" (shell-lost sentinel). */
         @Volatile var awaitResult: Int? = null
 
+        /**
+         * [T-job-watcher-nonblocking] Non-null: awaitSuspend() returns this
+         * instead of bridging to the blocking [await] — lets a test prove the
+         * registry watcher rides the suspending path.
+         */
+        @Volatile var overrideAwaitSuspend: (suspend () -> Int)? = null
+
         /** Host tree probe verdict; null = probe unavailable (the default). */
         @Volatile var hostAlive: Boolean? = null
 
@@ -110,6 +117,11 @@ class JobRegistryTest {
             }
         }
 
+        override suspend fun awaitSuspend(): Int {
+            overrideAwaitSuspend?.let { return it() }
+            return super.awaitSuspend()
+        }
+
         override fun kill(): Boolean {
             killResult?.let { return it }
             if (done) return false
@@ -138,6 +150,10 @@ class JobRegistryTest {
         private val exitCode: Int = 0,
         private val hold: Boolean = true,
         private val createFile: Boolean = true,
+        /** Pre-armed on every process: await() returns this at once (see [FakeProcess.awaitResult]). */
+        private val forceAwaitResult: Int? = null,
+        /** Pre-armed on every process: awaitSuspend() override (see [FakeProcess.overrideAwaitSuspend]). */
+        private val awaitSuspendResult: (suspend () -> Int)? = null,
     ) {
         private val counter = java.util.concurrent.atomic.AtomicLong()
         private val fileCounter = java.util.concurrent.atomic.AtomicLong()
@@ -146,6 +162,8 @@ class JobRegistryTest {
 
         val fn: (String, String, String?) -> JobRegistry.SpawnedProcess = { _, _, _ ->
             val p = FakeProcess(newOutputFile(), exitCode, hold, guestPath, 41000 + counter.incrementAndGet().toInt())
+            forceAwaitResult?.let { p.awaitResult = it }
+            awaitSuspendResult?.let { p.overrideAwaitSuspend = it }
             synchronized(processes) { processes.add(p) }
             p
         }
@@ -366,6 +384,32 @@ class JobRegistryTest {
         val job = startJob("s1")
         val done = awaitState("s1", job.id, JobRegistry.JobState.FAILED)
         assertEquals(7, done.exitCode)
+    }
+
+    /**
+     * [T-job-watcher-nonblocking] The completion watcher waits on the
+     * SUSPENDING variant: a process whose blocking await() never returns
+     * still finishes when awaitSuspend() reports the exit — proving the
+     * watcher does not depend on pinning a thread inside await().
+     */
+    @Test
+    fun watcherUsesSuspendingAwait_notTheBlockingOne() {
+        // Both knobs pre-armed via the spawner so the watcher cannot race the
+        // arm: the blocking await() answers the SHELL_LOST sentinel AT ONCE
+        // (which would leave the job RUNNING in the shell-lost mode, never
+        // COMPLETED), while the suspending override reports the real exit.
+        val sp = FakeSpawner(
+            tmp,
+            exitCode = 0,
+            hold = true,
+            forceAwaitResult = JobRegistry.SpawnedProcess.SHELL_LOST,
+            awaitSuspendResult = { 0 },
+        )
+        install(sp)
+        val job = startJob("s1")
+        val done = awaitState("s1", job.id, JobRegistry.JobState.COMPLETED)
+        assertEquals(0, done.exitCode)
+        sp.processes[0].finishNow() // release the fake's daemon thread for teardown
     }
 
     @Test

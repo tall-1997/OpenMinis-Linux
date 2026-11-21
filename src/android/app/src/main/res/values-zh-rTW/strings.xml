@@ -1395,6 +1395,8 @@
     <string name="backup_ready">備份已就緒</string>
     <string name="backup_result_excluded_too_large">已排除（檔案過大）</string>
     <string name="backup_result_files_not_included">未包含檔案</string>
+    <string name="backup_result_excluded_unreadable">已排除（無法讀取）</string>
+    <string name="backup_result_credentials_unreadable">憑證無法讀取</string>
     <string name="backup_result_local_only">僅儲存在這台裝置上。</string>
     <string name="backup_result_delivered">已儲存在這台裝置，並複製到 %2$d 個目的地中的 %1$d 個。</string>
     <string name="backup_local_removed">已移除本機副本——在這台裝置上釋出 %1$s</string>
@@ -2790,6 +2792,7 @@
     <string name="modeldetail_section_context_retry">上下文與重試</string>
     <string name="modeldetail_temperature">溫度（0.0–2.0）</string>
     <string name="modeldetail_temperature_invalid">請輸入 0.0 到 2.0 之間的數字，或留空以省略。</string>
+    <string name="modeldetail_harness_save_failed">無法儲存上下文預算覆寫。模型項目已儲存，請重試。</string>
     <string name="modeldetail_temperature_placeholder">省略</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">新增</string>

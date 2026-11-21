@@ -169,7 +169,11 @@ private val TAG_NEUTRALIZERS: Map<String, Regex> = mapOf(
  *
  * `usedTokens` is the caller's pressure reading
  * ([ChatViewModel.contextTokensForPolicy]); `triggerRatio` the derived prune
- * point (compact percent × [MICRO_TRIGGER_FRACTION_OF_COMPACT]).
+ * point (compact percent × [MICRO_TRIGGER_FRACTION_OF_COMPACT]). Measure it on
+ * the SAME [history] instance passed here: when aging runs first
+ * (projectChatRequest), the pre-aging reading is an overestimate of the aged
+ * request and would re-fire the trim on requests already under the trigger
+ * ([T-micro-prune-post-aging-pressure]).
  */
 internal fun microPruneOldToolResults(
     history: List<LLMMessage>,

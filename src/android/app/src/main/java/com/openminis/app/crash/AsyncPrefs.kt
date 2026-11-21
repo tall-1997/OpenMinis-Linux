@@ -87,6 +87,11 @@ class AsyncPrefs private constructor(
         return prefs?.getLong(key, defValue) ?: defValue
     }
 
+    fun getBoolean(key: String, defValue: Boolean): Boolean {
+        overrides[key]?.let { return it as Boolean }
+        return prefs?.getBoolean(key, defValue) ?: defValue
+    }
+
     fun putInt(key: String, value: Int) {
         overrides[key] = value
         val p = prefs
@@ -109,6 +114,7 @@ class AsyncPrefs private constructor(
         for ((k, v) in overrides) when (v) {
             is Int -> ed.putInt(k, v)
             is Long -> ed.putLong(k, v)
+            is Boolean -> ed.putBoolean(k, v)
         }
         ed.apply()
     }
@@ -142,8 +148,27 @@ class AsyncPrefs private constructor(
     companion object {
         private const val TAG = "AsyncPrefs"
 
+        /**
+         * One instance per prefs file name, for [cached]. Instances are cheap
+         * to build but each starts its own loader thread and (before the load
+         * lands) serves caller defaults — so a call site that builds a fresh
+         * instance per read multiplies threads AND races its own first read
+         * against the load.
+         */
+        private val cache = java.util.concurrent.ConcurrentHashMap<String, AsyncPrefs>()
+
         /** Create + warm. The load itself is asynchronous. */
         fun create(context: Context, name: String): AsyncPrefs =
             AsyncPrefs(context.applicationContext, name).also { it.warm() }
+
+        /**
+         * The process-wide instance for [name]: created + warmed on first use,
+         * reused for every later call. Reads-before-loaded still return the
+         * default, but only until that ONE instance's load lands — a hot path
+         * polling through [cached] converges on the persisted value instead of
+         * re-entering the default window on every call.
+         */
+        fun cached(context: Context, name: String): AsyncPrefs =
+            cache.computeIfAbsent(name) { create(context, it) }
     }
 }

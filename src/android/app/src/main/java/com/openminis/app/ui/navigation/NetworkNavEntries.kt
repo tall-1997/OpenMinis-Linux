@@ -47,8 +47,17 @@ fun NavGraphBuilder.networkDestinations(
  * [port-upstream-1.16] A proxy or Tailscale that keeps failing: a floating
  * banner over every screen (upstream hosts it in MainActivity right after
  * AppNavigation(); here it is emitted with the other overlay hosts).
+ *
+ * Also the mount point for the app-level degraded-startup banner
+ * ([com.openminis.app.ui.settings.DegradedStartupBannerHost]): MainActivity
+ * and AppNavigation both sit exactly on their architecture-policy line
+ * ceilings and cannot grow, so every app-wide overlay host is emitted here.
  */
 @Composable
 fun NetworkOverlayHost(navController: NavHostController) {
     com.openminis.app.ui.settings.NetworkAlertBannerHost(navController)
+    // [T-startup-degraded-extended] The extended-init degraded cause used to
+    // be written and read by nobody — the only consumer sat inside the
+    // not-initialized branch MainActivity guards (see MinisApp.kt).
+    com.openminis.app.ui.settings.DegradedStartupBannerHost()
 }

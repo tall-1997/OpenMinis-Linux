@@ -1323,6 +1323,8 @@
     <string name="backup_ready">Sandaran Sedia</string>
     <string name="backup_result_excluded_too_large">Dikecualikan (terlalu besar)</string>
     <string name="backup_result_files_not_included">Fail tidak disertakan</string>
+    <string name="backup_result_excluded_unreadable">Dikecualikan (tidak dapat dibaca)</string>
+    <string name="backup_result_credentials_unreadable">Kelayakan tidak dapat dibaca</string>
     <string name="backup_result_local_only">Hanya tersimpan pada peranti ini.</string>
     <string name="backup_result_delivered">Tersimpan pada peranti ini, dan disalin ke %1$d daripada %2$d destinasi.</string>
     <string name="backup_local_removed">Salinan setempat dibuang — %1$s dibebaskan pada peranti ini</string>
@@ -2750,6 +2752,7 @@
     <string name="modeldetail_section_context_retry">Konteks dan cubaan semula</string>
     <string name="modeldetail_temperature">Suhu (0,0–2,0)</string>
     <string name="modeldetail_temperature_invalid">Masukkan nombor dari 0,0 hingga 2,0, atau biarkan kosong untuk tidak dihantar.</string>
+    <string name="modeldetail_harness_save_failed">Tidak dapat menyimpan pengubah bajet konteks. Entri model telah disimpan — cuba lagi.</string>
     <string name="modeldetail_temperature_placeholder">Tiada</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">Tambah</string>

@@ -282,46 +282,141 @@ object BackupZip {
     // MARK: - Reading
 
     /**
+     * What [extract] could and could not lay down.
+     *
+     * One damaged entry must not void the whole restore: the forward scan's
+     * tolerance ("whatever precedes the damage") is meaningless if a single
+     * bad member throws the entire package away. So the scan CONTINUES past
+     * an entry it cannot honour and reports it here instead — the caller
+     * shows the names, and the manifest's integrity hashes still refuse a
+     * restore whose bytes did not come through intact. Nothing is swallowed:
+     * a skipped entry is a named, counted gap.
+     */
+    data class ExtractionReport(
+        /** Entries (files + directories) written successfully. */
+        val written: Int,
+        /** Entry names refused by the §5.5 path-traversal guard. */
+        val unsafePaths: List<String>,
+        /** Entry names whose data could not be read (CRC / corrupt stream). */
+        val corrupt: List<String>,
+    ) {
+        val problems: List<String>
+            get() = unsafePaths.map { "unsafe path: $it" } + corrupt.map { "corrupt data: $it" }
+    }
+
+    /**
      * Extract every entry of [zipFile] under [destination].
      *
      * Uses a forward [ZipInputStream] scan rather than random access, so a
      * package whose central directory is damaged still yields whatever
      * precedes the damage — the same tolerance iOS's forward-scan rescue path
      * provides.
+     *
+     * Per-entry resilience: an entry refused by [safeResolve] or one whose
+     * bytes fail mid-read (bad CRC, truncated deflate stream) is skipped and
+     * named in the returned [ExtractionReport], never written, and the scan
+     * carries on with the remaining members. The archive itself failing to
+     * open still throws — there is nothing to salvage from a package no
+     * stream can be opened on.
      */
-    fun extract(zipFile: File, destination: File, onProgress: ((String) -> Unit)? = null) {
+    fun extract(zipFile: File, destination: File, onProgress: ((String) -> Unit)? = null): ExtractionReport {
         destination.mkdirs()
         val root = destination.canonicalFile
         // [T-android-restore-gc-storm] One buffer for the whole archive, not
         // one per entry — see `archive` for the GC storm the per-entry
         // allocation caused during a large restore.
         val buf = ByteArray(COPY_BUFFER_BYTES)
+        var written = 0
+        val unsafePaths = mutableListOf<String>()
+        val corrupt = mutableListOf<String>()
         ZipInputStream(zipFile.inputStream().buffered()).use { zis ->
             while (true) {
-                val entry = zis.nextEntry ?: break
-                val out = safeResolve(root, entry.name)
+                val entry = try {
+                    zis.nextEntry ?: break
+                } catch (e: java.io.IOException) {
+                    // The central/stream structure itself broke here; whatever
+                    // follows is unreadable. What was written stays, and the
+                    // scan ends with the failure named.
+                    corrupt.add(entryNameUnknown(e))
+                    break
+                }
+                val out = try {
+                    safeResolve(root, entry.name)
+                } catch (e: ZipException) {
+                    // §5.5 stands: the entry is never written. It is skipped
+                    // and reported, though — one malicious or malformed name
+                    // must not void every good member behind it.
+                    unsafePaths.add(entry.name)
+                    AppLogger.error(TAG, "[Backup] refused entry '${entry.name}': ${e.message}")
+                    runCatching { zis.closeEntry() }
+                    continue
+                }
+                // Whether this entry's bytes already failed — a second verdict
+                // from closeEntry would only be noise.
+                var entryReported = false
                 if (entry.isDirectory) {
                     out.mkdirs()
                 } else {
                     out.parentFile?.mkdirs()
-                    out.outputStream().buffered().use { sink ->
-                        while (true) {
-                            val n = zis.read(buf)
-                            if (n < 0) break
-                            sink.write(buf, 0, n)
+                    try {
+                        out.outputStream().buffered().use { sink ->
+                            while (true) {
+                                val n = zis.read(buf)
+                                if (n < 0) break
+                                sink.write(buf, 0, n)
+                            }
+                        }
+                    } catch (e: java.io.IOException) {
+                        // Corrupt member data (CRC mismatch, truncated stream).
+                        // The partial file is worse than none: remove it, name
+                        // the entry, keep going.
+                        entryReported = true
+                        corrupt.add(entry.name)
+                        AppLogger.error(TAG, "[Backup] corrupt entry '${entry.name}': ${e.message}")
+                        out.delete()
+                    }
+                }
+                if (entryReported) {
+                    // A refused or already-reported entry: close it without a
+                    // second CRC verdict muddying the report.
+                    runCatching { zis.closeEntry() }
+                } else {
+                    try {
+                        zis.closeEntry()
+                    } catch (e: java.io.IOException) {
+                        // closeEntry verifies the CRC; a mismatch here means the
+                        // bytes this entry produced were wrong even if the write
+                        // itself "succeeded".
+                        entryReported = true
+                        corrupt.add(entry.name)
+                        AppLogger.error(TAG, "[Backup] corrupt entry '${entry.name}': ${e.message}")
+                        if (!entry.isDirectory) out.delete()
+                    }
+                }
+                if (!entryReported) {
+                    // Count and report only after the entry has FULLY landed —
+                    // closeEntry's CRC verdict included. The count used to be
+                    // bumped before closeEntry, so an entry whose CRC failed only
+                    // there was both counted as written (and progress-reported)
+                    // and named corrupt, while its file was deleted.
+                    if (!entry.isDirectory) {
+                        // Old global memory packages have no mtime inventory. Only the direct
+                        // Markdown member's ZIP time is a valid fallback; blob times are not.
+                        if (entry.name.endsWith(".md") && entry.time != -1L && isMemoryMarkdownEntry(entry.name)) {
+                            BackupDiaryPairs.restoreTime(out, entry.time)
                         }
                     }
-                    // Old global memory packages have no mtime inventory. Only the direct
-                    // Markdown member's ZIP time is a valid fallback; blob times are not.
-                    if (entry.name.endsWith(".md") && entry.time != -1L && isMemoryMarkdownEntry(entry.name)) {
-                        BackupDiaryPairs.restoreTime(out, entry.time)
-                    }
+                    written += 1
                     onProgress?.invoke(entry.name)
                 }
-                zis.closeEntry()
             }
         }
+        return ExtractionReport(written, unsafePaths, corrupt)
     }
+
+    /** The stream died before the next entry's name could be read. */
+    private fun entryNameUnknown(e: java.io.IOException): String =
+        "<unreadable archive data: ${e.message ?: e.javaClass.simpleName}>"
 
     private fun isMemoryMarkdownEntry(name: String): Boolean {
         // [T-backup-memory-mtime] Encrypted packages rename every member to
