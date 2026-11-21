@@ -924,11 +924,11 @@
     <string name="newer_db_body">這個 Minis Ultra 版本比建立您資料的版本還舊，因此無法安全地開啟它。\n\n沒有任何資料被刪除——您的對話在這台裝置上完好無缺。重新安裝較新版的 Minis Ultra，一切就會回來。</string>
     <string name="newer_db_versions">此版本支援資料格式 %1$d</string>
     <string name="newer_db_exit">關閉</string>
-        <string name="degraded_startup_title">部分啟動元件載入失敗</string>
+    <string name="degraded_startup_title">部分啟動元件載入失敗</string>
     <string name="degraded_startup_body">應用程式正以降級模式執行，部分功能在重新啟動前可能無法使用。</string>
     <string name="degraded_startup_cause">原因：%1$s</string>
     <string name="degraded_startup_dismiss">關閉</string>
-<string name="usage_attr_unknown_session">模型不明——該工作階段的紀錄已被刪除</string>
+    <string name="usage_attr_unknown_session">模型不明——該工作階段的紀錄已被刪除</string>
     <string name="usage_attr_removed">已不在您設定的供應商之中</string>
     <string name="usage_detail_output">輸出</string>
     <string name="usage_detail_daily_avg">每日平均</string>

@@ -865,11 +865,11 @@
     <string name="newer_db_body">Esta cópia do Minis Ultra é mais antiga do que a versão que criou seus dados, então não consegue abri-los com segurança.\n\nNada foi excluído — suas conversas continuam intactas neste aparelho. Reinstale a versão mais nova do Minis Ultra e tudo estará lá.</string>
     <string name="newer_db_versions">Esta versão é compatível com o formato de dados %1$d</string>
     <string name="newer_db_exit">Fechar</string>
-        <string name="degraded_startup_title">Alguns componentes de inicialização não foram carregados</string>
+    <string name="degraded_startup_title">Alguns componentes de inicialização não foram carregados</string>
     <string name="degraded_startup_body">O app está em execução com funcionalidade reduzida. Alguns recursos podem ficar indisponíveis até a reinicialização.</string>
     <string name="degraded_startup_cause">Causa: %1$s</string>
     <string name="degraded_startup_dismiss">Fechar</string>
-<string name="usage_attr_unknown_session">Modelo desconhecido — o registro da sessão foi excluído</string>
+    <string name="usage_attr_unknown_session">Modelo desconhecido — o registro da sessão foi excluído</string>
     <string name="usage_attr_removed">Não está mais entre os provedores que você configurou</string>
     <string name="usage_detail_output">Saída</string>
     <string name="usage_detail_daily_avg">Média diária</string>

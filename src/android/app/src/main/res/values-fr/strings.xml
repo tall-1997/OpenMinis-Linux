@@ -865,11 +865,11 @@
     <string name="newer_db_body">Cette copie de Minis Ultra est plus ancienne que celle qui a créé vos données, elle ne peut donc pas les ouvrir sans risque.\n\nRien n\'a été supprimé — vos conversations sont intactes sur cet appareil. Réinstallez la version plus récente de Minis Ultra et tout sera de nouveau là.</string>
     <string name="newer_db_versions">Cette version prend en charge le format de données %1$d</string>
     <string name="newer_db_exit">Fermer</string>
-        <string name="degraded_startup_title">Échec du chargement de certains composants au démarrage</string>
-    <string name="degraded_startup_body">L'application fonctionne avec des fonctionnalités réduites. Certaines fonctions peuvent être indisponibles jusqu'au redémarrage.</string>
+    <string name="degraded_startup_title">Échec du chargement de certains composants au démarrage</string>
+    <string name="degraded_startup_body">L\'application fonctionne avec des fonctionnalités réduites. Certaines fonctions peuvent être indisponibles jusqu\'au redémarrage.</string>
     <string name="degraded_startup_cause">Cause : %1$s</string>
     <string name="degraded_startup_dismiss">Fermer</string>
-<string name="usage_attr_unknown_session">Modèle inconnu — l\'enregistrement de la session a été supprimé</string>
+    <string name="usage_attr_unknown_session">Modèle inconnu — l\'enregistrement de la session a été supprimé</string>
     <string name="usage_attr_removed">Ne fait plus partie de vos fournisseurs configurés</string>
     <string name="usage_detail_output">Sortie</string>
     <string name="usage_detail_daily_avg">Moy. quotidienne</string>

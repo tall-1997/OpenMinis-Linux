@@ -865,11 +865,11 @@
     <string name="newer_db_body">Salinan Minis Ultra ini lebih lama daripada versi yang mencipta data anda, jadi ia tidak dapat membukanya dengan selamat.\n\nTiada apa-apa yang dipadam — perbualan anda kekal utuh pada peranti ini. Pasang semula Minis Ultra versi yang lebih baharu dan semuanya akan kembali tersedia.</string>
     <string name="newer_db_versions">Versi ini menyokong format data %1$d</string>
     <string name="newer_db_exit">Tutup</string>
-        <string name="degraded_startup_title">Sesetengah komponen permulaan gagal dimuatkan</string>
+    <string name="degraded_startup_title">Sesetengah komponen permulaan gagal dimuatkan</string>
     <string name="degraded_startup_body">Aplikasi berjalan dengan fungsi berkurangan. Sesetengah ciri mungkin tidak tersedia sehingga ia dimulakan semula.</string>
     <string name="degraded_startup_cause">Punca: %1$s</string>
     <string name="degraded_startup_dismiss">Tutup</string>
-<string name="usage_attr_unknown_session">Model tidak diketahui — rekod sesi telah dipadam</string>
+    <string name="usage_attr_unknown_session">Model tidak diketahui — rekod sesi telah dipadam</string>
     <string name="usage_attr_removed">Tiada lagi dalam pembekal yang anda tetapkan</string>
     <string name="usage_detail_output">Output</string>
     <string name="usage_detail_daily_avg">Purata Harian</string>

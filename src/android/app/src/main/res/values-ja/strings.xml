@@ -865,11 +865,11 @@
     <string name="newer_db_body">この Minis Ultra は、データを作成したバージョンより古いため、安全に開くことができません。\n\n何も削除されていません。会話はこの端末に無事残っています。新しいバージョンの Minis Ultra を再インストールすれば、すべて元どおりになります。</string>
     <string name="newer_db_versions">このバージョンが対応するデータ形式：%1$d</string>
     <string name="newer_db_exit">閉じる</string>
-        <string name="degraded_startup_title">一部の起動コンポーネントの読み込みに失敗しました</string>
+    <string name="degraded_startup_title">一部の起動コンポーネントの読み込みに失敗しました</string>
     <string name="degraded_startup_body">アプリは機能を制限して動作しています。再起動するまで一部の機能が利用できない場合があります。</string>
     <string name="degraded_startup_cause">原因: %1$s</string>
     <string name="degraded_startup_dismiss">閉じる</string>
-<string name="usage_attr_unknown_session">モデル不明 — セッションの記録が削除されています</string>
+    <string name="usage_attr_unknown_session">モデル不明 — セッションの記録が削除されています</string>
     <string name="usage_attr_removed">設定済みのプロバイダーに含まれていません</string>
     <string name="usage_detail_output">出力</string>
     <string name="usage_detail_daily_avg">日平均</string>

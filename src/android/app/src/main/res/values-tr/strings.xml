@@ -865,11 +865,11 @@
     <string name="newer_db_body">Minis Ultra\'in bu kopyası, verilerinizi oluşturan sürümden daha eski olduğu için onları güvenle açamıyor.\n\nHiçbir şey silinmedi — sohbetleriniz bu cihazda olduğu gibi duruyor. Minis Ultra\'in daha yeni sürümünü yeniden kurun, her şey yerinde olacak.</string>
     <string name="newer_db_versions">Bu sürüm %1$d veri biçimini destekler</string>
     <string name="newer_db_exit">Kapat</string>
-        <string name="degraded_startup_title">Bazı başlangıç bileşenleri yüklenemedi</string>
+    <string name="degraded_startup_title">Bazı başlangıç bileşenleri yüklenemedi</string>
     <string name="degraded_startup_body">Uygulama azaltılmış işlevsellikle çalışıyor. Yeniden başlatılana kadar bazı özellikler kullanılamayabilir.</string>
     <string name="degraded_startup_cause">Neden: %1$s</string>
     <string name="degraded_startup_dismiss">Kapat</string>
-<string name="usage_attr_unknown_session">Model bilinmiyor — oturum kaydı silinmiş</string>
+    <string name="usage_attr_unknown_session">Model bilinmiyor — oturum kaydı silinmiş</string>
     <string name="usage_attr_removed">Yapılandırdığınız sağlayıcılar arasında artık yok</string>
     <string name="usage_detail_output">Çıkış</string>
     <string name="usage_detail_daily_avg">Günlük Ortalama</string>
