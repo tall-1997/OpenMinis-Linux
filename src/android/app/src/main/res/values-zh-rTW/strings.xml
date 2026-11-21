@@ -2243,6 +2243,9 @@
     <string name="cot_translate_settings_language">目標語言</string>
     <string name="cot_translate_privacy_notice">展開的思考內容會傳送至所選翻譯服務，可能包含私人程式碼或對話細節。</string>
     <string name="cot_translate_anonymous_notice">Bing 與 Google 匿名介面無需登入或 API Key，但可能拒絕或限制請求。</string>
+    <string name="cot_translate_retry">重試</string>
+    <string name="cot_translate_privacy_accept">開啟</string>
+    <string name="cot_translate_privacy_decline">取消</string>
     <string name="git_panel_staged">已暫存</string>
     <string name="git_panel_changes_section">變更</string>
     <string name="git_panel_stats_files">已變更 %1$d 個檔案</string>

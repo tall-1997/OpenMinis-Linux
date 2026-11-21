@@ -2162,6 +2162,9 @@
     <string name="cot_translate_settings_language">Idioma de destino</string>
     <string name="cot_translate_privacy_notice">O raciocínio expandido é enviado ao serviço de tradução selecionado. Pode conter código privado ou detalhes da conversa.</string>
     <string name="cot_translate_anonymous_notice">Bing e Google não exigem login nem chave de API. Seus endpoints anônimos podem rejeitar ou limitar solicitações.</string>
+    <string name="cot_translate_retry">Tentar novamente</string>
+    <string name="cot_translate_privacy_accept">Ativar</string>
+    <string name="cot_translate_privacy_decline">Cancelar</string>
     <string name="git_panel_staged">Em staging</string>
     <string name="git_panel_changes_section">Alterações</string>
     <string name="git_panel_stats_files">%1$d arquivos alterados</string>

@@ -2170,6 +2170,9 @@
     <string name="cot_translate_settings_language">Целевой язык</string>
     <string name="cot_translate_privacy_notice">Развёрнутые рассуждения отправляются в выбранный сервис перевода. Они могут содержать частный код или детали разговора.</string>
     <string name="cot_translate_anonymous_notice">Bing и Google не требуют входа или ключа API. Их анонимные endpoints могут отклонять или ограничивать запросы.</string>
+    <string name="cot_translate_retry">Повторить</string>
+    <string name="cot_translate_privacy_accept">Включить</string>
+    <string name="cot_translate_privacy_decline">Отмена</string>
     <string name="git_panel_staged">Индексировано</string>
     <string name="git_panel_changes_section">Изменения</string>
     <string name="git_panel_stats_files">Изменено файлов: %1$d</string>

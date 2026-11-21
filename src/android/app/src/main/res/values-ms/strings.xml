@@ -2162,6 +2162,9 @@
     <string name="cot_translate_settings_language">Bahasa sasaran</string>
     <string name="cot_translate_privacy_notice">Penaakulan yang diperluas dihantar ke perkhidmatan terjemahan yang dipilih. Ia mungkin mengandungi kod peribadi atau butiran perbualan.</string>
     <string name="cot_translate_anonymous_notice">Bing dan Google tidak memerlukan log masuk atau kunci API. Titik akhir tanpa nama mereka mungkin menolak atau mengehadkan permintaan.</string>
+    <string name="cot_translate_retry">Cuba semula</string>
+    <string name="cot_translate_privacy_accept">Dayakan</string>
+    <string name="cot_translate_privacy_decline">Batal</string>
     <string name="git_panel_staged">Dipentas</string>
     <string name="git_panel_changes_section">Perubahan</string>
     <string name="git_panel_stats_files">%1$d fail diubah</string>

@@ -2166,6 +2166,9 @@
     <string name="cot_translate_settings_language">Limbă țintă</string>
     <string name="cot_translate_privacy_notice">Raționamentul extins este trimis serviciului de traducere selectat. Poate conține cod privat sau detalii ale conversației.</string>
     <string name="cot_translate_anonymous_notice">Bing și Google nu necesită autentificare sau cheie API. Punctele lor finale anonime pot respinge sau limita cererile.</string>
+    <string name="cot_translate_retry">Reîncearcă</string>
+    <string name="cot_translate_privacy_accept">Activează</string>
+    <string name="cot_translate_privacy_decline">Anulează</string>
     <string name="git_panel_staged">În staging</string>
     <string name="git_panel_changes_section">Modificări</string>
     <string name="git_panel_stats_files">%1$d fișiere modificate</string>

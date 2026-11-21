@@ -2162,6 +2162,9 @@
     <string name="cot_translate_settings_language">Target na wika</string>
     <string name="cot_translate_privacy_notice">Ang pinalawak na pangangatwiran ay ipinapadala sa napiling serbisyo ng pagsasalin. Maaari itong maglaman ng pribadong code o mga detalye ng pag-uusap.</string>
     <string name="cot_translate_anonymous_notice">Hindi kailangan ng Bing at Google ng pag-login o API key. Maaaring tanggihan o limitahan ng kanilang mga anonymous na endpoint ang mga kahilingan.</string>
+    <string name="cot_translate_retry">Subukan muli</string>
+    <string name="cot_translate_privacy_accept">I-on</string>
+    <string name="cot_translate_privacy_decline">Kanselahin</string>
     <string name="git_panel_staged">Naka-stage</string>
     <string name="git_panel_changes_section">Mga pagbabago</string>
     <string name="git_panel_stats_files">%1$d na file ang nabago</string>

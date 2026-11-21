@@ -2162,6 +2162,9 @@
     <string name="cot_translate_settings_language">ภาษาเป้าหมาย</string>
     <string name="cot_translate_privacy_notice">กระบวนการคิดแบบขยายจะถูกส่งไปยังบริการแปลที่เลือก ซึ่งอาจมีโค้ดส่วนตัวหรือรายละเอียดบทสนทนา</string>
     <string name="cot_translate_anonymous_notice">Bing และ Google ไม่ต้องเข้าสู่ระบบหรือคีย์ API ปลายทางแบบไม่ระบุตัวตนอาจปฏิเสธหรือจำกัดคำขอ</string>
+    <string name="cot_translate_retry">ลองใหม่</string>
+    <string name="cot_translate_privacy_accept">เปิดใช้</string>
+    <string name="cot_translate_privacy_decline">ยกเลิก</string>
     <string name="git_panel_staged">สเตจแล้ว</string>
     <string name="git_panel_changes_section">การเปลี่ยนแปลง</string>
     <string name="git_panel_stats_files">ไฟล์ที่เปลี่ยนแปลง %1$d รายการ</string>

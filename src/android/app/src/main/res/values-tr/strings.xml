@@ -2162,6 +2162,9 @@
     <string name="cot_translate_settings_language">Hedef dil</string>
     <string name="cot_translate_privacy_notice">Genişletilmiş akıl yürütme, seçilen çeviri hizmetine gönderilir. Özel kod veya konuşma ayrıntıları içerebilir.</string>
     <string name="cot_translate_anonymous_notice">Bing ve Google çeviri için oturum açma veya API anahtarı gerektirmez. Anonim uç noktaları istekleri reddedebilir veya sınırlayabilir.</string>
+    <string name="cot_translate_retry">Yeniden dene</string>
+    <string name="cot_translate_privacy_accept">Etkinleştir</string>
+    <string name="cot_translate_privacy_decline">İptal</string>
     <string name="git_panel_staged">Hazırlandı</string>
     <string name="git_panel_changes_section">Değişiklikler</string>
     <string name="git_panel_stats_files">%1$d dosya değiştirildi</string>

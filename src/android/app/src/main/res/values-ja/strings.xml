@@ -2159,6 +2159,9 @@
     <string name="cot_translate_settings_language">翻訳先の言語</string>
     <string name="cot_translate_privacy_notice">展開された思考内容は選択した翻訳サービスに送信されます。プライベートなコードや会話の詳細が含まれる場合があります。</string>
     <string name="cot_translate_anonymous_notice">Bing と Google の匿名エンドポイントはログインや API キー不要ですが、リクエストを拒否または制限する場合があります。</string>
+    <string name="cot_translate_retry">再試行</string>
+    <string name="cot_translate_privacy_accept">有効にする</string>
+    <string name="cot_translate_privacy_decline">キャンセル</string>
     <string name="git_panel_staged">ステージ済み</string>
     <string name="git_panel_changes_section">変更</string>
     <string name="git_panel_stats_files">%1$d 件のファイルを変更</string>
