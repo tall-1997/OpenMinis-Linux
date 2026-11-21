@@ -336,7 +336,6 @@
     <string name="token_usage_block_pending">Adjuntos sin enviar</string>
     <string name="token_usage_breakdown_estimated">Estimado</string>
     <string name="token_usage_breakdown_measured">Medido</string>
-    <string name="vm_steering_queued">En cola — se enviará en el próximo límite de turno</string>
     <string name="token_usage_section_thinking">Razonamiento</string>
     <string name="token_usage_thinking_label">Razonamiento</string>
     <string name="token_usage_thinking_level">Nivel</string>

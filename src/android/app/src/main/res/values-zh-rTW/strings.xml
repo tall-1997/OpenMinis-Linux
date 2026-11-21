@@ -384,7 +384,6 @@
     <string name="token_usage_block_pending">尚未送出的附件</string>
     <string name="token_usage_breakdown_estimated">估計</string>
     <string name="token_usage_breakdown_measured">實測</string>
-    <string name="vm_steering_queued">已排隊 — 將在下一輪對話邊界傳送</string>
     <string name="token_usage_section_thinking">思考</string>
     <string name="token_usage_thinking_label">思考</string>
     <string name="token_usage_thinking_level">級別</string>

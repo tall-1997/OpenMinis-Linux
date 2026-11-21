@@ -336,7 +336,6 @@
     <string name="token_usage_block_pending">Gönderilmemiş ekler</string>
     <string name="token_usage_breakdown_estimated">Tahmini</string>
     <string name="token_usage_breakdown_measured">Ölçülen</string>
-    <string name="vm_steering_queued">Kuyruğa alındı — sonraki tur sınırında gönderilecek</string>
     <string name="token_usage_section_thinking">Düşünme</string>
     <string name="token_usage_thinking_label">Düşünme</string>
     <string name="token_usage_thinking_level">Düzey</string>

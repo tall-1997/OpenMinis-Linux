@@ -338,7 +338,6 @@
     <string name="token_usage_block_pending">Niewysłane załączniki</string>
     <string name="token_usage_breakdown_estimated">Szacunek</string>
     <string name="token_usage_breakdown_measured">Zmierzone</string>
-    <string name="vm_steering_queued">W kolejce — zostanie wysłane na granicy następnej tury</string>
     <string name="token_usage_section_thinking">Myślenie</string>
     <string name="token_usage_thinking_label">Myślenie</string>
     <string name="token_usage_thinking_level">Poziom</string>

@@ -336,7 +336,6 @@
     <string name="token_usage_block_pending">전송되지 않은 첨부 파일</string>
     <string name="token_usage_breakdown_estimated">추정</string>
     <string name="token_usage_breakdown_measured">측정됨</string>
-    <string name="vm_steering_queued">대기열에 추가됨 — 다음 턴 경계에서 전송됩니다</string>
     <string name="token_usage_section_thinking">사고</string>
     <string name="token_usage_thinking_label">사고</string>
     <string name="token_usage_thinking_level">수준</string>

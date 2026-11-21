@@ -561,7 +561,6 @@
     <string name="token_usage_block_pending">尚未发送的附件</string>
     <string name="token_usage_breakdown_estimated">估计</string>
     <string name="token_usage_breakdown_measured">实测</string>
-    <string name="vm_steering_queued">已排队 — 将在下一轮对话边界发送</string>
     <string name="token_usage_section_thinking">思考</string>
     <string name="token_usage_thinking_label">思考</string>
     <string name="token_usage_thinking_level">级别</string>

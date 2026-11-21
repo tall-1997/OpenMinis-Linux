@@ -338,7 +338,6 @@
     <string name="token_usage_block_pending">Неотправленные вложения</string>
     <string name="token_usage_breakdown_estimated">Оценка</string>
     <string name="token_usage_breakdown_measured">Измерено</string>
-    <string name="vm_steering_queued">В очереди — будет отправлено на границе следующего хода</string>
     <string name="token_usage_section_thinking">Размышление</string>
     <string name="token_usage_thinking_label">Размышление</string>
     <string name="token_usage_thinking_level">Уровень</string>

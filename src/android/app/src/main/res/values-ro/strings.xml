@@ -337,7 +337,6 @@
     <string name="token_usage_block_pending">Atașamente netrimise</string>
     <string name="token_usage_breakdown_estimated">Estimat</string>
     <string name="token_usage_breakdown_measured">Măsurat</string>
-    <string name="vm_steering_queued">În coadă — se trimite la următoarea limită de tură</string>
     <string name="token_usage_section_thinking">Gândire</string>
     <string name="token_usage_thinking_label">Gândire</string>
     <string name="token_usage_thinking_level">Nivel</string>

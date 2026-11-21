@@ -336,7 +336,6 @@
     <string name="token_usage_block_pending">未送信の添付ファイル</string>
     <string name="token_usage_breakdown_estimated">推定</string>
     <string name="token_usage_breakdown_measured">実測</string>
-    <string name="vm_steering_queued">キューに追加 — 次のターン境界で送信されます</string>
     <string name="token_usage_section_thinking">思考</string>
     <string name="token_usage_thinking_label">思考</string>
     <string name="token_usage_thinking_level">レベル</string>

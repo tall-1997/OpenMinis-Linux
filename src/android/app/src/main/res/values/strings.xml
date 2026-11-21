@@ -615,7 +615,6 @@
     <string name="token_usage_block_pending">Unsent attachments</string>
     <string name="token_usage_breakdown_estimated">Estimated</string>
     <string name="token_usage_breakdown_measured">Measured</string>
-    <string name="vm_steering_queued">Queued — will be sent at the next turn boundary</string>
     <string name="token_usage_section_thinking">Thinking</string>
     <string name="token_usage_thinking_label">Thinking</string>
     <string name="token_usage_thinking_level">Level</string>

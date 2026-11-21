@@ -336,7 +336,6 @@
     <string name="token_usage_block_pending">Ungesendete Anhänge</string>
     <string name="token_usage_breakdown_estimated">Geschätzt</string>
     <string name="token_usage_breakdown_measured">Gemessen</string>
-    <string name="vm_steering_queued">In Warteschlange — wird an der nächsten Turn-Grenze gesendet</string>
     <string name="token_usage_section_thinking">Denken</string>
     <string name="token_usage_thinking_label">Denken</string>
     <string name="token_usage_thinking_level">Stufe</string>

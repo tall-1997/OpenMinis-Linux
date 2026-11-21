@@ -341,7 +341,6 @@
     <string name="token_usage_block_pending">Lampiran belum terkirim</string>
     <string name="token_usage_breakdown_estimated">Perkiraan</string>
     <string name="token_usage_breakdown_measured">Terukur</string>
-    <string name="vm_steering_queued">Dalam antrean — dikirim pada batas giliran berikutnya</string>
     <string name="token_usage_section_thinking">Penalaran</string>
     <string name="token_usage_thinking_label">Penalaran</string>
     <string name="token_usage_thinking_level">Tingkat</string>

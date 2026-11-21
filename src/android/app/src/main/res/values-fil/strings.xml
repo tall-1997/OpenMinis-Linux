@@ -336,7 +336,6 @@
     <string name="token_usage_block_pending">Mga hindi pa naipadalang attachment</string>
     <string name="token_usage_breakdown_estimated">Tantya</string>
     <string name="token_usage_breakdown_measured">Sinukat</string>
-    <string name="vm_steering_queued">Naka-queue — ipapadala sa susunod na hangganan ng turn</string>
     <string name="token_usage_section_thinking">Pag-iisip</string>
     <string name="token_usage_thinking_label">Pag-iisip</string>
     <string name="token_usage_thinking_level">Antas</string>
