@@ -1,0 +1,1 @@
+{"name":"ipa_nat_table","desc":"IPA NAT转换表","params":"lines:integer:行数,默认30","required":"","timeoutMs":15000,"cmd":"cat /sys/class/ipaNatTable/* 2>/dev/null | head -${lines:-30}; ls /sys/class/ipaNatTable/ 2>/dev/null"}

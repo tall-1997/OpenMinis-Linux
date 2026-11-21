@@ -1,0 +1,1 @@
+{"name": "yzt_res", "cat": "宇宙桥", "desc": "[宇宙桥] 53at资源下载: file=backgroundColor|backgroundImage|updatelog(宇宙工具箱更新日志)|yellow|avatar(头像制作zip), 落盘+预览", "params": "file", "required": "", "timeoutMs": 60000, "cmd": "sh /data/lemonbrain/bin/yzt.sh res $file"}

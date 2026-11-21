@@ -1,0 +1,1 @@
+{"name":"qwen2api_refresh","cat":"千问桥接","desc":"[千问桥接] 刷新会话并拉取千问账号模型列表(验证登录态)","params":"","required":"","timeoutMs":30000,"cmd":"sh /data/lemonbrain/qwen2api/qwen2api_ctl.sh refresh "}

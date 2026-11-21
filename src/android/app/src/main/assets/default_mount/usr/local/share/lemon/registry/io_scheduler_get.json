@@ -1,0 +1,1 @@
+{"name":"io_scheduler_get","desc":"查看全部块设备IO调度器","params":"","required":"","timeoutMs":15000,"cmd":"for q in /sys/block/*/queue/scheduler; do d=$(echo $q | cut -d/ -f4); echo -n \"$d: \"; cat $q; done 2>/dev/null"}

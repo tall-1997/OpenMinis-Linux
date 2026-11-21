@@ -1,0 +1,1 @@
+{"name":"mt_apk_list","cat":"MT底座","desc":"[MT底座] APK/zip 条目列表（不解压，手工中央目录遍历，按子串过滤）","params":"path,filter","required":"path","timeoutMs":60000,"cmd":"MT_ENG=apk MT_CMD=list MT_PATH=$path MT_KW=$filter sh /data/adb/lemon_kernel/lemon/mt/mt.sh"}

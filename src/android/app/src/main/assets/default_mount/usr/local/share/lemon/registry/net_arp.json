@@ -1,0 +1,1 @@
+{"name":"net_arp","desc":"查看邻居表/ARP缓存(ip neigh)","params":"lines:integer:行数,默认60","required":"","timeoutMs":15000,"cmd":"ip neigh show 2>&1 | head -${lines:-60}"}

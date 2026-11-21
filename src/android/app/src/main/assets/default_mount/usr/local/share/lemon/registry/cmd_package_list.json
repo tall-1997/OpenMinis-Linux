@@ -1,0 +1,1 @@
+{"name":"cmd_package_list","desc":"cmd package列出组件/包","params":"args:string:参数如 list packages -3 / resolve-activity,可空","required":"","timeoutMs":20000,"cmd":"cmd package $args 2>&1 | head -60"}

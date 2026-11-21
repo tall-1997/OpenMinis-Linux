@@ -1,0 +1,1 @@
+{"name":"virus_panic","cat":"安全防护","desc":"[安全防护] 应急处置：关第三方无障碍 + 冻结黑名单前台 + 回桌面解锁（快捷键也会调它）","params":"mode:string:留空=标准|force=连未命中的前台也冻结","timeoutMs":95000,"cmd":"/system/bin/timeout 85 sh /data/adb/lemon_kernel/lemonlib/lemon_virus.sh panic --$mode"}

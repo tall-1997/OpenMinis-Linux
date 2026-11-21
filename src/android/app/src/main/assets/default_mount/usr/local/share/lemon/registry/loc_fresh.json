@@ -1,0 +1,1 @@
+{"name":"loc_fresh","desc":"[感知] 主动请求新鲜定位(Termux:API,GPS优先网络兜底,定位关闭时临时开启用完恢复)","params":"","required":"","timeoutMs":90000,"cmd":"sh /data/lemonbrain/scripts/perception.sh loc_fresh"}

@@ -1,0 +1,1 @@
+{"name": "yzt_netdisk", "cat": "宇宙桥", "desc": "[宇宙桥] 网盘搜索(diskgirl): 探测get1.php跳转与最终页面URL", "params": "", "required": "", "timeoutMs": 40000, "cmd": "sh /data/lemonbrain/bin/yzt.sh netdisk"}

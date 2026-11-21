@@ -1,0 +1,1 @@
+{"name":"sherry_ai_clean","desc":"[雪莉] AI智能清理(Agnes判断safe才回收)","params":"","required":"","timeoutMs":180000,"cmd":"sh /data/lemonbrain/sherry_keeper/sherry_agent.sh ai_clean"}

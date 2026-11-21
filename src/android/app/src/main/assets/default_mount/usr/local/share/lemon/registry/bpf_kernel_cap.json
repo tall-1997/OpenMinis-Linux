@@ -1,0 +1,1 @@
+{"name":"bpf_kernel_cap","cat":"eBPF","desc":"[eBPF] 统一内核能力面板：观测层(kprobe)/可编程层(eBPF)/模块/污染 一屏汇总","params":"","timeoutMs":20000,"cmd":"/data/adb/lemonbpf/lemonbpf kernel_cap 2>&1"}

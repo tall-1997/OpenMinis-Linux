@@ -1,0 +1,1 @@
+{"name":"khook_trace_live","cat":"内核态","desc":"[内核态] 实时流 trace_pipe N 秒（真内核事件直播）","params":"sec:string:秒数(默认3)|filter:string:过滤正则(默认lemon_)","timeoutMs":60000,"cmd":"sh /data/adb/lemon_kernel/khook/khook.sh trace_live $sec $filter"}

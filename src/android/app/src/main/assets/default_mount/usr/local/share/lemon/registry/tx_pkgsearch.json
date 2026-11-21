@@ -1,0 +1,1 @@
+{"name":"tx_pkgsearch","cat":"Termux","desc":"[Termux] 离线搜索包（查本地索引，不联网）","params":"kw:string:关键词如 clang/numpy","required":"kw","timeoutMs":120000,"cmd":"TX_SUB=search TX_ARG=$kw sh /data/adb/lemon_kernel/lemon/tx/tx.sh pkg"}

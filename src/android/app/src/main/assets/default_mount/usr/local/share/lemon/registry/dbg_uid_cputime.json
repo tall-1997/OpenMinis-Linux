@@ -1,0 +1,1 @@
+{"name":"dbg_uid_cputime","desc":"按UID统计CPU时间","params":"lines:integer:行数,默认30","required":"","timeoutMs":15000,"cmd":"cat /proc/uid_cputime/show_uid_stat 2>/dev/null | head -${lines:-30}"}

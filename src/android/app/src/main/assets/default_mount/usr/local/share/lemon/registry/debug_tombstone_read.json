@@ -1,0 +1,1 @@
+{"name":"debug_tombstone_read","desc":"读取最新tombstone崩溃日志","params":"file:string:文件名,空则取最新|lines:integer:行数,默认60","required":"","timeoutMs":20000,"cmd":"f=${file:-$(ls -t /data/tombstones/ 2>/dev/null | head -1)}; cat /data/tombstones/$f 2>&1 | head -${lines:-60}"}

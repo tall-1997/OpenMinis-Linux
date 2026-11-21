@@ -1,0 +1,1 @@
+{"name":"charger_cycle","desc":"充电循环计数","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/charger_cycle 2>/dev/null | head -30"}

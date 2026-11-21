@@ -1,0 +1,1 @@
+{"name":"mem_rebuild","cat":"记忆检索","desc":"[记忆检索] 重建编号索引（原库不动，纯派生产物）","params":"","timeoutMs":60000,"cmd":"sh $LEMON_DATA/小柠檬记忆中心/_索引/mem.sh rebuild"}

@@ -1,0 +1,1 @@
+{"name":"algo_target_status","cat":"算法助手","desc":"[算法助手] 查看目标应用RPC状态","params":"package:string:包名","required":"","timeoutMs":15000,"cmd":"sh /data/adb/lemon_kernel/lemon/algo_call.sh target_status package=$package"}

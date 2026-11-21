@@ -1,0 +1,1 @@
+{"name":"usb_state","desc":"USB控制器与连接状态","params":"","required":"","timeoutMs":15000,"cmd":"echo '--- android_usb ---'; cat /sys/class/android_usb/android0/state 2>/dev/null; cat /sys/class/android_usb/android0/functions 2>/dev/null; echo '--- usb devices ---'; ls /sys/bus/usb/devices/ 2>/dev/null; echo '--- usbmon ---'; cat /sys/kernel/debug/usb/usbmon/0u 2>/dev/null | head -3"}

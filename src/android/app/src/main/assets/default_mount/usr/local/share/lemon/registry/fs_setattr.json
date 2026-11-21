@@ -1,0 +1,1 @@
+{"name":"fs_setattr","desc":"设置文件扩展属性(setfattr)","params":"name:string:属性名如user.test|val:string:值|path:string:路径","required":"name,val,path","timeoutMs":15000,"cmd":"setfattr -n $name -v $val $path 2>&1; getfattr -d $path 2>&1 | head"}

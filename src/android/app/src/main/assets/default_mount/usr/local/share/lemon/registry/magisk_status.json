@@ -1,0 +1,1 @@
+{"name":"magisk_status","desc":"[面具] 版本/守护/root态/path","params":"","required":"","timeoutMs":15000,"cmd":"M=/data/adb/magisk/magisk; echo ver=$($M -c 2>&1); echo daemon=$($M -v 2>&1); echo code=$($M -V 2>&1); echo path=$($M --path 2>&1); echo whoami=$(whoami 2>&1)"}

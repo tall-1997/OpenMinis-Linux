@@ -1,0 +1,1 @@
+{"name":"echo_dump_clean","desc":"清理脱壳产物目录（默认删7天前）","params":"dir:string:目录,默认/sdcard/Epic脱壳\ndays:integer:保留天数,默认7","required":"","timeoutMs":30000,"cmd":"d=/sdcard/Epic脱壳; [ -n $dir ] && d=$dir; n=7; [ -n \"$days\" ] && n=$days; find \"$d\" -type f -mtime +$n -delete 2>&1; echo cleaned older than ${n}d in $d"}

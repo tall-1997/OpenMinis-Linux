@@ -1,0 +1,1 @@
+{"name":"appmem_add","cat":"App记忆","desc":"[App记忆] 追加一条记忆到 App 记忆归档文件（单行短内容用，长内容请用文件工具）","params":"content:string:要追加的记忆内容","required":"content","timeoutMs":30000,"cmd":"sh /data/adb/lemon_kernel/lemon/appmem.sh add $content"}

@@ -1,0 +1,1 @@
+{"name":"cmd_device_config","desc":"读取/设置device_config(可空则列出命名空间)","params":"ns:string:命名空间,可空|key:string:键名,可空","required":"","timeoutMs":20000,"cmd":"if [ -z $ns ]; then device_config list 2>&1 | head -40; elif [ -z $key ]; then device_config list $ns 2>&1 | head -60; else device_config get $ns $key 2>&1; fi"}

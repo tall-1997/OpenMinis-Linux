@@ -1,0 +1,1 @@
+{"name":"log_main","desc":"导出main日志缓冲","params":"lines:integer:行数,默认100|filter:string:tag过滤,可空","required":"","timeoutMs":30000,"cmd":"logcat -d -b main 2>/dev/null | grep -i -- $filter | tail -${lines:-100}"}

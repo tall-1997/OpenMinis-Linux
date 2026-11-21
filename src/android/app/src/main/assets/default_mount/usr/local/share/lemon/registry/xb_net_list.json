@@ -1,0 +1,1 @@
+{"name":"xb_net_list","cat":"X浏览器","desc":"列出捕获的网络请求（最近40条：URL/方法/状态码/耗时/请求体/响应体）","params":"","required":"","timeoutMs":40000,"cmd":"/data/data/com.termux/files/usr/bin/bash /data/local/tmp/xbcdp.sh net_list"}

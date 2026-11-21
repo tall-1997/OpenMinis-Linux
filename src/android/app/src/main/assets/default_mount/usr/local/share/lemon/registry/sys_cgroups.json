@@ -1,0 +1,1 @@
+{"name":"sys_cgroups","desc":"cgroup层级与挂载","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/cgroups 2>&1; echo '--- mountinfo cgroup ---'; cat /proc/self/mountinfo 2>/dev/null | grep cgroup"}

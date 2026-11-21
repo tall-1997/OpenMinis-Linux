@@ -1,0 +1,1 @@
+{"name":"fs_append_file","desc":"[DS++别名] 追加内容到工作区文件","params":"path:string:文件路径|content:string:追加内容","required":"path","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/lemon/dspp/dspp_fs.sh append $path $content"}

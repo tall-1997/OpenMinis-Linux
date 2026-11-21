@@ -1,0 +1,1 @@
+{"name":"voocphy_fake_temp","desc":"VOOC快充假温度注入(调试用)","params":"val:string:温度值,留空读取","required":"","timeoutMs":15000,"cmd":"[ -n $val ] && echo $val > /proc/voocphy_batt_fake_temp 2>&1; echo -n \"fake_temp=\"; cat /proc/voocphy_batt_fake_temp 2>/dev/null"}

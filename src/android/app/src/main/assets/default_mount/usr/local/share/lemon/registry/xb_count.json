@@ -1,0 +1,1 @@
+{"name":"xb_count","cat":"X浏览器","desc":"统计 X浏览器页面匹配元素数量","params":"selector:string:CSS选择器","required":"selector","timeoutMs":35000,"cmd":"/data/data/com.termux/files/usr/bin/bash /data/local/tmp/xbcdp.sh count $selector"}

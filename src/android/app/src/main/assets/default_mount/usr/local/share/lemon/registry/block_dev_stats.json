@@ -1,0 +1,1 @@
+{"name":"block_dev_stats","desc":"块设备IO统计(/proc/diskstats)","params":"filter:string:设备过滤,可空|lines:integer:行数,默认40","required":"","timeoutMs":15000,"cmd":"cat /proc/diskstats 2>/dev/null | grep -i -- $filter | head -${lines:-40}"}

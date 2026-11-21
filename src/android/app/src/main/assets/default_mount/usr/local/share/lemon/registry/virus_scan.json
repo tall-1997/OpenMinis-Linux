@@ -1,0 +1,1 @@
+{"name":"virus_scan","cat":"安全防护","desc":"[安全防护] 扫描已装应用比对病毒库（包名/应用名/关键字三级判定）","params":"mode:string:留空=快扫(只比包名)|--deep=深扫(含应用名,较慢)","timeoutMs":210000,"cmd":"/system/bin/timeout 200 sh /data/adb/lemon_kernel/lemonlib/lemon_virus.sh scan $mode"}

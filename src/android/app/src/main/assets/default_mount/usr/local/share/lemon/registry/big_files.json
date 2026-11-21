@@ -1,0 +1,1 @@
+{"name":"big_files","cat":"存储增强","desc":"[存储增强] 大文件 TOP N：列出指定目录内 >5MB 的最大文件","params":"path:string:目录(默认/sdcard)|n:string:条数(默认25)","timeoutMs":60000,"cmd":"/system/bin/timeout 55 sh /data/adb/lemon_kernel/lemonlib/lemon_store.sh bigfiles $path $n"}

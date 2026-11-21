@@ -1,0 +1,1 @@
+{"name":"audio_swr","desc":"音频SWR总线控制","params":"","required":"","timeoutMs":15000,"cmd":"for f in /proc/rx_swr_ctrl /proc/va_swr_ctrl /proc/wsa2_swr_ctrl; do [ -e $f ] && { echo \"== $f ==\"; cat $f 2>/dev/null | head -20; }; done"}

@@ -1,0 +1,1 @@
+{"name":"tx_meson","cat":"Termux","desc":"[Termux] Meson工程配置并构建（Meson+Ninja）","params":"dir:string:工程目录,build:string:构建目录默认build,flags:string:meson额外参数","required":"dir","timeoutMs":600000,"cmd":"TX_DIR=$dir TX_BUILD=$build TX_FLAGS=$flags sh /data/adb/lemon_kernel/lemon/tx/tx.sh meson"}

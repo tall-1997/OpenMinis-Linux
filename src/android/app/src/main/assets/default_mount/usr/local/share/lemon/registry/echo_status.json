@@ -1,0 +1,1 @@
+{"name":"echo_status","desc":"检查 Echo 安装/进程/输出目录状态","params":"","required":"","timeoutMs":15000,"cmd":"echo '--pkg--'; pm list packages 2>/dev/null | grep dump.echo; echo '--proc--'; ps -A 2>/dev/null | grep dump.echo; echo '--dir--'; ls -d /sdcard/Epic脱壳 /sdcard/dexdump 2>&1"}

@@ -1,0 +1,1 @@
+{"name":"sensor_list","desc":"列出传感器设备与数据节点","params":"filter:string:过滤,可空","required":"","timeoutMs":15000,"cmd":"dumpsys sensorservice 2>/dev/null | head -40; echo '--- iio ---'; ls /sys/bus/iio/devices/ 2>/dev/null | grep -i -- $filter"}

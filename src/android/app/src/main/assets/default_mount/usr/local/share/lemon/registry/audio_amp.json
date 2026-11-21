@@ -1,0 +1,1 @@
+{"name":"audio_amp","desc":"智能功放状态(tfa98xx)","params":"","required":"","timeoutMs":15000,"cmd":"for f in /proc/tfa98xx-34 /proc/tfa98xx-35 /proc/ftm_tfa98xx; do [ -e $f ] && { echo \"== $f ==\"; cat $f 2>/dev/null | head -30; }; done"}

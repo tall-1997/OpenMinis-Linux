@@ -1,0 +1,1 @@
+{"name":"audio_codec","desc":"音频编解码器寄存器(wcd939x)","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/wcd939x_reginfo 2>/dev/null | head -40; cat /proc/wsa2_swr_ctrl 2>/dev/null | head -20"}

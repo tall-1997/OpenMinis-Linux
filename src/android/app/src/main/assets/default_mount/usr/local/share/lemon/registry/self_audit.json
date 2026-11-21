@@ -1,0 +1,1 @@
+{"name": "self_audit", "cat": "自主神经", "desc": "[自主神经] 安全自审计：证书到期天数+令牌文件权限+非回环暴露端口", "params": "", "required": "", "timeoutMs": 35000, "cmd": "/system/bin/timeout 30 /data/data/com.termux/files/usr/bin/python3 /data/lemonbrain/autonomic/self_audit.py"}

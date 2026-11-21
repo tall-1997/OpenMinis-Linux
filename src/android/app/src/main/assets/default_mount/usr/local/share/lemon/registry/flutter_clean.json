@@ -1,0 +1,1 @@
+{"name":"flutter_clean","cat":"Flutter底座","desc":"[Flutter] 清理旧解析目录（保留最近 6 个）+ 清临时抽取区，释放空间","params":"","required":"","timeoutMs":120000,"cmd":"FL_CMD=clean sh /data/adb/lemon_kernel/lemon/flutter/fscan.sh"}

@@ -1,0 +1,1 @@
+{"name":"pm_bind","desc":"绑定手机管家清运/扫描服务","params":"","required":"","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh pm_bind BB=/data/adb/magisk/busybox; echo bind | $BB nc 127.0.0.1 8890; echo bindscan | $BB nc 127.0.0.1 8890"}

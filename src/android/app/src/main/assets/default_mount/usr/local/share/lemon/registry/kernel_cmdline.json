@@ -1,0 +1,1 @@
+{"name":"kernel_cmdline","desc":"内核启动参数(/proc/cmdline)","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/cmdline 2>&1"}

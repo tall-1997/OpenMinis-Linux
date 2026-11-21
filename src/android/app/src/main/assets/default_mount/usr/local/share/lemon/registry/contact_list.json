@@ -1,0 +1,1 @@
+{"name":"contact_list","desc":"[感知] 通讯录读取(contacts2.db只读直查,姓名+号码,JSON输出)","params":"limit:integer:返回条数默认20最大200,offset:integer:偏移默认0","required":"","timeoutMs":30000,"cmd":"sh /data/lemonbrain/scripts/perception.sh contact_list $limit $offset"}

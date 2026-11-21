@@ -1,0 +1,1 @@
+{"name":"oplus_qos_info","desc":"OPPO QOS调度私有节点","params":"","required":"","timeoutMs":15000,"cmd":"ls /proc/oplus_qos_sched/ 2>/dev/null; for f in /proc/oplus_qos_sched/*; do [ -f \"$f\" ] && { echo -n \"$(basename $f)=\"; cat $f 2>/dev/null; }; done | head -40"}

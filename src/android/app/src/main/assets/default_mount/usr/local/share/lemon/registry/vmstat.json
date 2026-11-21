@@ -1,0 +1,1 @@
+{"name":"vmstat","desc":"虚拟内存统计(/proc/vmstat)","params":"filter:string:过滤,可空|lines:integer:行数,默认80","required":"","timeoutMs":15000,"cmd":"cat /proc/vmstat 2>/dev/null | grep -i -- $filter | head -${lines:-80}"}

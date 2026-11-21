@@ -1,0 +1,1 @@
+{"name": "yzt_video", "cat": "宇宙桥", "desc": "[宇宙桥] 随机短视频直链(302跳转拿直链): src=yujn(27分类)/yujnhttps/xjj(14目录)/xjj2/dj/cenguigui/hhl + cat=分类名(如COS/kawayi), 返回CDN直链", "params": "src,cat", "required": "src", "timeoutMs": 40000, "cmd": "sh /data/lemonbrain/bin/yzt.sh video $src $cat"}

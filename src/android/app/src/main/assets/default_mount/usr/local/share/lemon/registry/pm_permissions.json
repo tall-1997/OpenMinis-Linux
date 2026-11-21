@@ -1,0 +1,1 @@
+{"name":"pm_permissions","desc":"查看应用权限详情(dumpsys package permissions)","params":"pkg:string:包名","required":"pkg","timeoutMs":20000,"cmd":"dumpsys package $pkg 2>/dev/null | grep -A2 -iE 'requested permissions|granted' | head -80"}

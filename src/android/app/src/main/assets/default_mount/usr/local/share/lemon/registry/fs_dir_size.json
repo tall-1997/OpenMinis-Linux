@@ -1,0 +1,1 @@
+{"name":"fs_dir_size","desc":"统计目录大小(du)","params":"path:string:目录|depth:integer:深度,默认1","required":"path","timeoutMs":60000,"cmd":"du -h --max-depth=${depth:-1} $path 2>&1 | sort -rh | head -40"}

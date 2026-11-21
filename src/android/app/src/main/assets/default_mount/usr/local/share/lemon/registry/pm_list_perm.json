@@ -1,0 +1,1 @@
+{"name":"pm_list_perm","desc":"列出危险权限(dangerous)","params":"filter:string:过滤,可空","required":"","timeoutMs":20000,"cmd":"pm list permissions -d -g 2>/dev/null | grep -i -- $filter | head -60"}

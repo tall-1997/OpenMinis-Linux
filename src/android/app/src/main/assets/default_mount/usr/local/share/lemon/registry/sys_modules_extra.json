@@ -1,0 +1,1 @@
+{"name":"sys_modules_extra","desc":"内核模块详情(/proc/modules)","params":"filter:string:过滤,可空|lines:integer:行数,默认60","required":"","timeoutMs":15000,"cmd":"cat /proc/modules 2>/dev/null | grep -i -- $filter | head -${lines:-60}"}

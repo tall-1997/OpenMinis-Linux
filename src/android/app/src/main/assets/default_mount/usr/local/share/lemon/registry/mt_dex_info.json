@@ -1,0 +1,1 @@
+{"name":"mt_dex_info","cat":"MT底座","desc":"[MT底座] DEX 头信息与统计（magic/校验和/字符串/类型/原型/字段/方法/类数量）","params":"path","required":"path","timeoutMs":30000,"cmd":"MT_ENG=dex MT_CMD=info MT_PATH=$path sh /data/adb/lemon_kernel/lemon/mt/mt.sh"}

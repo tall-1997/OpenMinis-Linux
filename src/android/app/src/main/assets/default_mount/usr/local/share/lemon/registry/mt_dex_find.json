@@ -1,0 +1,1 @@
+{"name":"mt_dex_find","cat":"MT底座","desc":"[MT底座] DEX 特征定位：关键词同时扫字符串池+类名","params":"path,kw","required":"path,kw","timeoutMs":60000,"cmd":"MT_ENG=dex MT_CMD=find MT_PATH=$path MT_KW=$kw sh /data/adb/lemon_kernel/lemon/mt/mt.sh"}

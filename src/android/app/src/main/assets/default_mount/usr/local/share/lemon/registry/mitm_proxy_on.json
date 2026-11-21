@@ -1,0 +1,1 @@
+{"name":"mitm_proxy_on","desc":"开启全局HTTP代理指向MITM(8888)","params":"","required":"","timeoutMs":15000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh mitm_proxy_on settings put global http_proxy 127.0.0.1:8888; echo PROXY_ON; settings get global http_proxy"}

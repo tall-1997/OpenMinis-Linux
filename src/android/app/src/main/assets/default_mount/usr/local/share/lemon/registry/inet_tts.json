@@ -1,0 +1,1 @@
+{"name": "inet_tts", "cat": "免费网络工具", "desc": "[免费接入]Edge-TTS神经语音合成,文本转mp3(纯标准库实现,免key,支持多国声音)", "params": "text:string:要合成的文本|voice:string:声音名,默认zh-CN-XiaoxiaoNeural|out:string:输出路径,默认nettools/tts_out.mp3", "required": "text", "timeoutMs": 120000, "cmd": "/data/data/com.termux/files/usr/bin/python3 /data/lemonbrain/nettools/inet_tts.py --text=$text --voice=$voice --out=$out"}

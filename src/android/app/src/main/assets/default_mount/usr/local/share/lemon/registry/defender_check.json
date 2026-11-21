@@ -1,0 +1,1 @@
+{"name":"defender_check","cat":"安全防护","desc":"[安全防护] 单文件危险度详查（只报告不处置）","params":"file:string:文件绝对路径","timeoutMs":30000,"cmd":"/system/bin/timeout 28 sh /data/adb/lemon_kernel/lemonlib/lemon_defender.sh check $file"}

@@ -1,0 +1,1 @@
+{"name":"kernel_random_entropy","desc":"随机数熵池状态","params":"","required":"","timeoutMs":10000,"cmd":"cat /proc/sys/kernel/random/entropy_avail 2>&1; echo -n 'poolsize='; cat /proc/sys/kernel/random/poolsize 2>&1"}

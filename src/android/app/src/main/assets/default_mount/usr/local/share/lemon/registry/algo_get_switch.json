@@ -1,0 +1,1 @@
+{"name":"algo_get_switch","cat":"算法助手","desc":"[算法助手] 读取开关值","params":"package:string:包名|key:string:键名","required":"","timeoutMs":15000,"cmd":"sh /data/adb/lemon_kernel/lemon/algo_call.sh get_switch package=$package key=$key"}

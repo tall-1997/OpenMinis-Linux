@@ -1,0 +1,1 @@
+{"name":"termex_curl","desc":"[Termex] curl 8.11.1 支持http/https/ws/wss,内置OpenSSL3.3.2+CA","params":"args:string:curl参数,如 -s http://127.0.0.1:8788/","required":"args","timeoutMs":120000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termex_curl . /data/local/tmp/termex/env.sh; eval /data/local/tmp/termex/bin/curl $args 2>&1"}

@@ -1,0 +1,1 @@
+{"name":"res_kern_find","desc":"[资源] 内核源码 按名查找","params":"kw:string:文件名关键词","required":"kw","timeoutMs":30000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh res_kern_find sh /data/adb/lemon_kernel/lemon/res/res.sh kern find $kw"}

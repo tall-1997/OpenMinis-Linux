@@ -1,0 +1,1 @@
+{"name":"khook_health","cat":"内核态","desc":"[内核态] 内核态层自检：注入→捕获→卸载 全链路验证","params":"","timeoutMs":40000,"cmd":"sh /data/adb/lemon_kernel/khook/khook.sh health"}

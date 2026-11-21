@@ -1,0 +1,1 @@
+{"name":"virus_status","cat":"安全防护","desc":"[安全防护] 病毒拦截总览：病毒库条数/上次扫描命中/应急快捷键守护状态","params":"","timeoutMs":45000,"cmd":"/system/bin/timeout 35 sh /data/adb/lemon_kernel/lemonlib/lemon_virus.sh status; echo; echo '--- 应急快捷键守护 ---'; /system/bin/timeout 8 sh /data/adb/lemon_kernel/lemonlib/virus_key.sh status"}

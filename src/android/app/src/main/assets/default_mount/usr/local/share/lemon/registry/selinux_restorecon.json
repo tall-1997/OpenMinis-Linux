@@ -1,0 +1,1 @@
+{"name":"selinux_restorecon","desc":"恢复文件默认SELinux上下文(restorecon)","params":"path:string:路径","required":"path","timeoutMs":20000,"cmd":"restorecon -Rv $path 2>&1 | head -30"}

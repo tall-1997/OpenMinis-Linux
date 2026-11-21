@@ -1,0 +1,1 @@
+{"name":"flutter_list","cat":"Flutter底座","desc":"[Flutter] 列解析历史：目录名/体积占用（保留最近 6 个）","params":"","required":"","timeoutMs":60000,"cmd":"FL_CMD=list sh /data/adb/lemon_kernel/lemon/flutter/fscan.sh"}

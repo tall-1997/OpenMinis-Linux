@@ -1,0 +1,1 @@
+{"name":"magisk_module_list","desc":"[面具] 模块清单+启停状态","params":"","required":"","timeoutMs":15000,"cmd":"cd /data/adb/modules && for n in */; do n=${n%/}; [ -d $n ] || continue; s=on; [ -f $n/disable ] && s=off; [ -f $n/remove ] && s=remove; v=$(grep -m1 ^version= $n/module.prop 2>/dev/null | cut -d= -f2); echo $n [$s] $v; done"}

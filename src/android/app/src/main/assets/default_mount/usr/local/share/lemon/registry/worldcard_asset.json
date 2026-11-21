@@ -1,0 +1,1 @@
+{"name":"worldcard_asset","cat":"世界卡","timeoutMs":20000,"desc":"[世界卡] 读资产: a/b=词条卡tags(null可过滤) null=角色卡 text=攻防文本(可关键词过滤)","params":"which:string:资产名a或b或null或text|keyword:string:过滤关键词可空","cmd":"/data/data/com.termux/files/usr/bin/python3 /data/adb/lemon_kernel/lemon/worldcard/worldcard.py asset $which $keyword","required":""}

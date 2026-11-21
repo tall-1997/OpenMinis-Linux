@@ -1,0 +1,1 @@
+{"name":"shizuku_ko_unload","cat":"柠檬工具","desc":"[柠檬工具] 卸载 LemonShizuku 内核模块（自动先关 sh_enable 再 rmmod）","params":"","timeoutMs":30000,"cmd":"/system/bin/timeout 25 sh /data/adb/lemon_kernel/lemonlib/shizuku_ko.sh unload"}

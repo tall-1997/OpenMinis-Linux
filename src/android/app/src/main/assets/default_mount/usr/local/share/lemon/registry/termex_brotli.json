@@ -1,0 +1,1 @@
+{"name":"termex_brotli","desc":"[Termex] brotli 1.1.0 网页压缩","params":"args:string:brotli参数","required":"args","timeoutMs":120000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termex_brotli . /data/local/tmp/termex/env.sh; eval /data/local/tmp/termex/bin/brotli $args 2>&1"}

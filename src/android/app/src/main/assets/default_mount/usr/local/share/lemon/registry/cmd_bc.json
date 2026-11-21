@@ -1,0 +1,1 @@
+{"name":"cmd_bc","desc":"bc计算器","params":"expr:string:表达式如 2^10","required":"expr","timeoutMs":15000,"cmd":"echo $expr | bc 2>&1"}

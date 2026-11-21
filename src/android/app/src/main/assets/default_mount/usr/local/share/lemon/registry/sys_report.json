@@ -1,0 +1,1 @@
+{"name":"sys_report","cat":"系统增强","desc":"[系统增强] 综合健康报告：内核栈 + 系统负载 + 安全速览 一屏汇总","params":"","timeoutMs":60000,"cmd":"/system/bin/timeout 55 sh /data/adb/lemon_kernel/lemonlib/lemon_sys.sh report"}

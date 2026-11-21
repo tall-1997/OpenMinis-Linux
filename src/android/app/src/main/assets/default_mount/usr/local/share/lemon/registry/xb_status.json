@@ -1,0 +1,1 @@
+{"name":"xb_status","cat":"X浏览器","desc":"X浏览器 CDP 状态：当前页面 URL 与标题","params":"","required":"","timeoutMs":40000,"cmd":"/data/data/com.termux/files/usr/bin/bash /data/local/tmp/xbcdp.sh url; echo ---; /data/data/com.termux/files/usr/bin/bash /data/local/tmp/xbcdp.sh title"}

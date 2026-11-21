@@ -1,0 +1,1 @@
+{"name":"fs_file_find","desc":"按名称查找文件(find)","params":"path:string:起始目录|name:string:文件名模式如*.so|lines:integer:行数,默认40","required":"path,name","timeoutMs":60000,"cmd":"find $path -name $name 2>/dev/null | head -${lines:-40}"}

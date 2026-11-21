@@ -1,0 +1,1 @@
+{"name":"rfkill_list","desc":"列出全部无线开关(rfkill)","params":"","required":"","timeoutMs":15000,"cmd":"for r in /sys/class/rfkill/rfkill*; do n=$(basename $r); echo -n \"$n name=\"; cat $r/name 2>/dev/null | tr -d '\n'; echo -n ' type='; cat $r/type 2>/dev/null | tr -d '\n'; echo -n ' soft='; cat $r/soft 2>/dev/null | tr -d '\n'; echo -n ' hard='; cat $r/hard 2>/dev/null; done"}

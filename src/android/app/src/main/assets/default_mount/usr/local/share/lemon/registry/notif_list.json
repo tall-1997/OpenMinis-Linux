@@ -1,0 +1,1 @@
+{"name":"notif_list","desc":"[感知] 当前通知流(dumpsys notification解析,pkg/title/text,JSON输出)","params":"","required":"","timeoutMs":30000,"cmd":"sh /data/lemonbrain/scripts/perception.sh notif_list"}

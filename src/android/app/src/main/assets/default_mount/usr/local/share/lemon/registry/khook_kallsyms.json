@@ -1,0 +1,1 @@
+{"name":"khook_kallsyms","cat":"内核态","desc":"[内核态] 内核符号表搜索（44万符号，用于找 hook 目标函数名）","params":"kw:string:关键字|lines:string:行数(默认30)","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/khook/khook.sh kallsyms $kw $lines"}

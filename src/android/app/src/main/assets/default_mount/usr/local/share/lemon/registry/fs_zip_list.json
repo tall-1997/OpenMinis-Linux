@@ -1,0 +1,1 @@
+{"name":"fs_zip_list","desc":"列出zip内容(unzip -l)","params":"path:string:zip路径","required":"path","timeoutMs":30000,"cmd":"unzip -l $path 2>&1 | head -50"}

@@ -1,0 +1,1 @@
+{"name":"mt_dex_strings","cat":"MT底座","desc":"[MT底座] DEX 字符串池导出（MUTF-8 正确解码，kw 过滤，超 4000 行自动截断）","params":"path,kw","required":"path","timeoutMs":60000,"cmd":"MT_ENG=dex MT_CMD=strings MT_PATH=$path MT_KW=$kw sh /data/adb/lemon_kernel/lemon/mt/mt.sh"}

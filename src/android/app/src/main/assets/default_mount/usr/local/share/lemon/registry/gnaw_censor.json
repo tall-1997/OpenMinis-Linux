@@ -1,0 +1,1 @@
+{"name":"gnaw_censor","cat":"破甲","timeoutMs":25000,"desc":"[破甲] 云端审核改写检测(前缀免责/包覆虚构/置换搜索), exit 0=clean 11=censored","params":"file:string:响应文件路径,与text二选一|text:string:响应文本","cmd":"printf %s $text | /data/data/com.termux/files/usr/bin/python3 /data/adb/lemon_kernel/lemon/gnaw/gnaw-censor.py $file","required":""}

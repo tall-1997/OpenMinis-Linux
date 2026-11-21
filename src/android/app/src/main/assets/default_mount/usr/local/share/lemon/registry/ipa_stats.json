@@ -1,0 +1,1 @@
+{"name":"ipa_stats","desc":"高通IPA网络加速引擎统计","params":"","required":"","timeoutMs":15000,"cmd":"ls /sys/class/ipa/ 2>/dev/null; for f in /sys/class/ipa/*/*; do [ -f \"$f\" ] && { echo -n \"$(basename $f)=\"; cat $f 2>/dev/null; }; done | head -40"}

@@ -1,0 +1,1 @@
+{"name":"khook_status","cat":"内核态","desc":"[内核态] 能力总览：tracefs/kprobe/BPF/kallsyms/污染 全景","params":"","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/khook/khook.sh status"}

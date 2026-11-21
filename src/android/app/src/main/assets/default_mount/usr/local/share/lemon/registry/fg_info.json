@@ -1,0 +1,1 @@
+{"name":"fg_info","desc":"电量计(fuel gauge)信息","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/fg_info 2>/dev/null | head -40"}

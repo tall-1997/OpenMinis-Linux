@@ -1,0 +1,1 @@
+{"name":"svc_power","desc":"控制电源状态(svc power stayon/reboot)","params":"action:string:stayon|reboot|shutdown","required":"action","timeoutMs":15000,"cmd":"svc power $action 2>&1"}

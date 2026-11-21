@@ -1,0 +1,1 @@
+{"name":"qwen2api_status","cat":"千问桥接","desc":"[千问桥接] 桥接健康状态+会话有效性+访问key(仅本机)","params":"","required":"","timeoutMs":15000,"cmd":"sh /data/lemonbrain/qwen2api/qwen2api_ctl.sh status "}

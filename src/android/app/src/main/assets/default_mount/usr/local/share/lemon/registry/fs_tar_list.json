@@ -1,0 +1,1 @@
+{"name":"fs_tar_list","desc":"列出压缩包内容(tar/gz)","params":"path:string:压缩包路径","required":"path","timeoutMs":30000,"cmd":"tar -tzf $path 2>&1 | head -40 || tar -tf $path 2>&1 | head -40"}

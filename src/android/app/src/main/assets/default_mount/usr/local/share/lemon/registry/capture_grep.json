@@ -1,0 +1,1 @@
+{"name":"capture_grep","desc":"按关键字搜索抓包日志","params":"key:string:关键字如deepseek","required":"key","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh capture_grep grep -i $key /data/local/tmp/lemon_mitm/capture.log | tail -n 100"}

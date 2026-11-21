@@ -1,0 +1,1 @@
+{"name":"magisk_denylist_ls","desc":"[面具] DenyList 现状","params":"","required":"","timeoutMs":15000,"cmd":"M=/data/adb/magisk/magisk; echo status=$($M --denylist status 2>&1); echo '--- list ---'; $M --denylist ls 2>&1 | head -100"}

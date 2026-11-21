@@ -1,0 +1,1 @@
+{"name":"batt_param_noplug","desc":"拔插电状态电池参数","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/batt_param_noplug 2>/dev/null | head -40"}

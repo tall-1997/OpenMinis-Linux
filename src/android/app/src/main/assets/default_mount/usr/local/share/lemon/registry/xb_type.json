@@ -1,0 +1,1 @@
+{"name":"xb_type","cat":"X浏览器","desc":"向 X浏览器页面输入框填写文本","params":"selector:string:输入框CSS选择器|text:string:要输入的文本","required":"selector,text","timeoutMs":40000,"cmd":"/data/data/com.termux/files/usr/bin/bash /data/local/tmp/xbcdp.sh type $selector $text"}

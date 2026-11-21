@@ -1,0 +1,1 @@
+{"name":"devcoredump_list","desc":"设备核心转储列表","params":"","required":"","timeoutMs":15000,"cmd":"ls /sys/class/devcoredump/ 2>/dev/null; for d in /sys/class/devcoredump/*/; do echo \"== $d ==\"; cat $d/device 2>/dev/null; done | head -30"}

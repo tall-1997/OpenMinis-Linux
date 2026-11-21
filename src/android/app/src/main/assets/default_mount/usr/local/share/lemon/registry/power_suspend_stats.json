@@ -1,0 +1,1 @@
+{"name":"power_suspend_stats","desc":"查看休眠统计(/sys/power/suspend_stats)","params":"","required":"","timeoutMs":15000,"cmd":"cat /sys/power/suspend_stats 2>&1"}

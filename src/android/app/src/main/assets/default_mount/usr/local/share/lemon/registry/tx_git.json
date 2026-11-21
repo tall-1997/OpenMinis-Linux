@@ -1,0 +1,1 @@
+{"name":"tx_git","cat":"Termux","desc":"[Termux] git操作（root执行，可联网clone/pull/push）","params":"args:string:git子命令如 clone https://... ,dir:string:工作目录默认~","required":"args","timeoutMs":1200000,"cmd":"TX_GITARGS=$args TX_DIR=$dir sh /data/adb/lemon_kernel/lemon/tx/tx.sh git"}

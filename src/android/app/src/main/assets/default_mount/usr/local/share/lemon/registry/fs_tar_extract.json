@@ -1,0 +1,1 @@
+{"name":"fs_tar_extract","desc":"解压压缩包到指定目录","params":"path:string:压缩包|dest:string:目标目录","required":"path,dest","timeoutMs":120000,"cmd":"mkdir -p $dest; tar -xzf $path -C $dest 2>&1 && echo EXTRACTED || tar -xf $path -C $dest 2>&1 && echo EXTRACTED"}

@@ -1,0 +1,1 @@
+{"name":"tx_pip","cat":"Termux","desc":"[Termux] pip安装Python包（清华源）","params":"pkg:string:包名，多个用空格分隔","required":"pkg","timeoutMs":600000,"cmd":"TX_PKG=$pkg sh /data/adb/lemon_kernel/lemon/tx/tx.sh pip"}

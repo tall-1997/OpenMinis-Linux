@@ -1,0 +1,1 @@
+{"name":"pkg_revoke","desc":"撤销应用运行时权限(pm revoke)","params":"pkg:string:包名|perm:string:权限名","required":"pkg,perm","timeoutMs":20000,"cmd":"pm revoke $pkg $perm 2>&1; echo OK"}

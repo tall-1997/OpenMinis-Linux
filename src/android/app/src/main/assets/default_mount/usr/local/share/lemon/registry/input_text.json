@@ -1,0 +1,1 @@
+{"name":"input_text","desc":"注入文本输入(input text)","params":"text:string:要输入的文本(空格用%s)","required":"text","timeoutMs":15000,"cmd":"input text $text 2>&1 && echo SENT"}

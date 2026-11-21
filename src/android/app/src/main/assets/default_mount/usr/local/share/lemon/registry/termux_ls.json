@@ -1,0 +1,1 @@
+{"name":"termux_ls","desc":"列出Termux目录","params":"path:string:目录(可空)","required":"","timeoutMs":30000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termux_ls export PREFIX=/data/data/com.termux/files/usr; p=$path; if [ -z \"$p\" ]; then p=$PREFIX/bin; fi; ls -la \"$p\" | head -n 200"}

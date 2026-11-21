@@ -1,0 +1,1 @@
+{"name":"autostart_audit","cat":"自启服务","desc":"[自启服务] 自启项体检：缺执行位 / 可疑网络特征 / 重名 / 悬空链接 / 停用标记","params":"","timeoutMs":40000,"cmd":"/system/bin/timeout 35 sh /data/adb/lemon_kernel/lemonlib/lemon_boot.sh bootaudit"}

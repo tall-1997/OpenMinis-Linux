@@ -1,0 +1,1 @@
+{"name":"mt_arsc_strings","cat":"MT底座","desc":"[MT底座] ARSC 全局字符串值池导出（可按关键词过滤，改文案/查字符串用它）","params":"path,kw","required":"path","timeoutMs":60000,"cmd":"MT_ENG=arsc MT_CMD=strings MT_PATH=$path MT_KW=$kw sh /data/adb/lemon_kernel/lemon/mt/mt.sh"}

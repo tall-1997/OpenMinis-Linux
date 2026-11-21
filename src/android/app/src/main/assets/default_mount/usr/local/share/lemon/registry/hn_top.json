@@ -1,0 +1,1 @@
+{"name": "hn_top", "desc": "[免费API] HackerNews热帖ID(免Key)", "params": "p1:string:条数", "required": "", "timeoutMs": 15000, "cmd": "/data/adb/lemonpy/bin/python3 /data/lemonbrain/nettools/lemon_freeapis.py hn_top $p1 $p2 $p3"}

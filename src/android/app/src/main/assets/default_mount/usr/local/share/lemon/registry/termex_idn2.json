@@ -1,0 +1,1 @@
+{"name":"termex_idn2","desc":"[Termex] idn2 2.3.7 IDN域名转换","params":"args:string:idn2参数","required":"args","timeoutMs":30000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termex_idn2 . /data/local/tmp/termex/env.sh; eval /data/local/tmp/termex/bin/idn2 $args 2>&1"}

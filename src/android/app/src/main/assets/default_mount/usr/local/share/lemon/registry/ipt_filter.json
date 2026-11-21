@@ -1,0 +1,1 @@
+{"name":"ipt_filter","desc":"查看iptables filter表规则","params":"lines:integer:行数,默认100","required":"","timeoutMs":20000,"cmd":"iptables -t filter -L -n -v --line-numbers 2>&1 | head -${lines:-100}"}

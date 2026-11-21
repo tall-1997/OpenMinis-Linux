@@ -1,0 +1,1 @@
+{"name":"xb_start","desc":"[X浏览器] 启动或唤起","params":"","required":"","timeoutMs":15000,"cmd":"am start -n com.mmbox.xbrowser/com.mmbox.xbrowser.BrowserActivity 2>&1 | head -5"}

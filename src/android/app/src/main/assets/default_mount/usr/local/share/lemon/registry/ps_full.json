@@ -1,0 +1,1 @@
+{"name":"ps_full","desc":"完整进程列表(ps -A -o)","params":"lines:integer:行数,默认120","required":"","timeoutMs":15000,"cmd":"ps -A -o PID,PPID,USER,RSS,STAT,NAME 2>/dev/null | head -${lines:-120}"}

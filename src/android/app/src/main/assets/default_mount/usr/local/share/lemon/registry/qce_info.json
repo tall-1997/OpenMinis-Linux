@@ -1,0 +1,1 @@
+{"name":"qce_info","desc":"高通QCE加密引擎状态","params":"","required":"","timeoutMs":15000,"cmd":"ls /sys/class/qce/ 2>/dev/null; for f in /sys/class/qce/*/*; do [ -f \"$f\" ] && { echo -n \"$(basename $f)=\"; cat $f 2>/dev/null; }; done | head -30"}

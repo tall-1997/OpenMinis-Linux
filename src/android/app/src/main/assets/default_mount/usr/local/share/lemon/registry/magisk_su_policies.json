@@ -1,0 +1,1 @@
+{"name":"magisk_su_policies","desc":"[面具] SU授权表policies","params":"","required":"","timeoutMs":15000,"cmd":"/data/adb/magisk/magisk --sqlite 'select * from policies' 2>&1 | head -100"}

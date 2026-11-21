@@ -1,0 +1,1 @@
+{"name":"net_iface_stats","desc":"网络接口收发统计(/proc/net/dev)","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/net/dev 2>&1"}

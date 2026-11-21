@@ -1,0 +1,1 @@
+{"name":"sys_snapshot","cat":"系统增强","desc":"[系统增强] 系统全维快照：温度TOP8/CPU频率/内存/存储/电池/网络，并存为基线","params":"tag:string:标签(可空)","timeoutMs":60000,"cmd":"/system/bin/timeout 55 sh /data/adb/lemon_kernel/lemonlib/lemon_sys.sh snapshot $tag"}

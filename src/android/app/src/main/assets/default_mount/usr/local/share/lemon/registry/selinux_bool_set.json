@@ -1,0 +1,1 @@
+{"name":"selinux_bool_set","desc":"切换SELinux布尔开关","params":"name:string:布尔名|val:string:1或0","required":"name,val","timeoutMs":15000,"cmd":"echo $val > /sys/fs/selinux/booleans/$name 2>&1; echo -n 'now='; cat /sys/fs/selinux/booleans/$name"}

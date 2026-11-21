@@ -1,0 +1,1 @@
+{"name":"pm_iface","desc":"查看清运AIDL接口方法表","params":"","required":"","timeoutMs":15000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh pm_iface echo iface | /data/adb/magisk/busybox nc 127.0.0.1 8890"}

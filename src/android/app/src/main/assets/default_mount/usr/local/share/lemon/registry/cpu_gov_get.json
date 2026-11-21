@@ -1,0 +1,1 @@
+{"name":"cpu_gov_get","desc":"查看各CPU调频策略(governor)","params":"","required":"","timeoutMs":15000,"cmd":"for c in /sys/devices/system/cpu/cpu*/cpufreq; do echo -n $c; echo -n ' gov='; cat $c/scaling_governor 2>/dev/null; echo -n ' avail='; cat $c/scaling_available_governors 2>/dev/null; done"}

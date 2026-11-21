@@ -1,0 +1,1 @@
+{"name":"mem_overcommit","desc":"内存超额分配策略(/proc/sys/vm/overcommit_memory)","params":"val:string:0/1/2,留空只读","required":"","timeoutMs":15000,"cmd":"[ -n $val ] && echo $val > /proc/sys/vm/overcommit_memory 2>&1; echo -n 'overcommit_memory='; cat /proc/sys/vm/overcommit_memory; echo -n 'overcommit_ratio='; cat /proc/sys/vm/overcommit_ratio"}

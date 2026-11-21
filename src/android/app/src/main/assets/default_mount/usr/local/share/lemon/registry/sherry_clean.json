@@ -1,0 +1,1 @@
+{"name":"sherry_clean","desc":"[雪莉] 常规清理(临时/日志/空目录/旧APK等)","params":"","required":"","timeoutMs":120000,"cmd":"sh /data/lemonbrain/sherry_keeper/sherry_agent.sh clean"}

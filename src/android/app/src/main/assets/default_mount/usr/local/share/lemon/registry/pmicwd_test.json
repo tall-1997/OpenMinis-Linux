@@ -1,0 +1,1 @@
+{"name":"pmicwd_test","desc":"PMIC看门狗测试","params":"val:string:参数,留空读取","required":"","timeoutMs":15000,"cmd":"[ -n $val ] && echo $val > /proc/pmicwd_test 2>&1; cat /proc/pmicwd_test 2>/dev/null | head -20"}

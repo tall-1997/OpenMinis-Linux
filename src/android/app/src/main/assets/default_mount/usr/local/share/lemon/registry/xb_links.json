@@ -1,0 +1,1 @@
+{"name":"xb_links","cat":"X浏览器","desc":"列出 X浏览器页面所有链接","params":"","required":"","timeoutMs":40000,"cmd":"/data/data/com.termux/files/usr/bin/bash /data/local/tmp/xbcdp.sh links"}

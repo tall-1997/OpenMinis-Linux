@@ -1,0 +1,1 @@
+{"name":"tx_exec","cat":"Termux","desc":"[Termux] 以Termux用户执行命令（环境变量传参，可含空格与双引号，勿含单引号）","params":"args:string:要执行的命令,timeout:string:超时秒默认120","required":"args","timeoutMs":900000,"cmd":"TX_CMD=$args sh /data/adb/lemon_kernel/lemon/tx/tx.sh runc $timeout"}

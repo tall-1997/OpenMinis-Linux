@@ -1,0 +1,1 @@
+{"name":"fs_find_file","desc":"[DS++别名] 在工作区搜索文件","params":"keyword:string:文件名关键字,可空","required":"","timeoutMs":25000,"cmd":"sh /data/adb/lemon_kernel/lemon/dspp/dspp_fs.sh find $keyword"}

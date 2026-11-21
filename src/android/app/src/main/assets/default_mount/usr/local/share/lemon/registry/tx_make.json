@@ -1,0 +1,1 @@
+{"name":"tx_make","cat":"Termux","desc":"[Termux] make构建","params":"dir:string:工程目录,flags:string:make参数如 -j4","required":"dir","timeoutMs":600000,"cmd":"TX_DIR=$dir TX_FLAGS=$flags sh /data/adb/lemon_kernel/lemon/tx/tx.sh make"}

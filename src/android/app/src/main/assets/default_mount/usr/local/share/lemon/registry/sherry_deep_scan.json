@@ -1,0 +1,1 @@
+{"name":"sherry_deep_scan","desc":"[雪莉] 深度扫描:逐文件遍历用户区按SAFE/CAUTION/DANGEROUS分级出报告(只扫不删)","params":"path:string:扫描根目录,可空默认/storage/emulated/0","required":"","timeoutMs":180000,"cmd":"sh /data/lemonbrain/sherry_keeper/sherry_agent.sh deep_scan $path"}

@@ -1,0 +1,1 @@
+{"name": "inet_mcp_registry", "cat": "免费网络工具", "desc": "[免费接入]官方MCP注册表检索,发现可接入的外部MCP服务", "params": "q:string:关键词,可空列全部|limit:int:条数,默认10", "required": "", "timeoutMs": 60000, "cmd": "/data/data/com.termux/files/usr/bin/python3 /data/lemonbrain/nettools/inet_mcp_registry.py --q=$q --limit=$limit"}

@@ -1,0 +1,1 @@
+{"name":"res_grep","desc":"[资源] 五域跨库关键词搜索","params":"kw:string:关键词","required":"kw","timeoutMs":60000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh res_grep sh /data/adb/lemon_kernel/lemon/res/res_all.sh grep $kw"}

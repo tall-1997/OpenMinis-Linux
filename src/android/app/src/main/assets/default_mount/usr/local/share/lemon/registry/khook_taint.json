@@ -1,0 +1,1 @@
+{"name":"khook_taint","cat":"内核态","desc":"[内核态] 内核污染状态与风险评估（tainted 位解码）","params":"","timeoutMs":15000,"cmd":"sh /data/adb/lemon_kernel/khook/khook.sh taint"}

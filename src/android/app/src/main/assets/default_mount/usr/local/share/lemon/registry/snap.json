@@ -1,0 +1,1 @@
+{"name":"snap","cat":"柠檬工具","desc":"[柠檬工具] 快照管理：create <路径> <标签> | restore <标签> | list | diff <标签>","params":"action:string:操作(create/restore/list/diff) path:string:路径(create用) label:string:标签(create/restore/diff用)","timeoutMs":180000,"cmd":"sh /data/adb/lemon_kernel/lemonlib/snap.sh $action $path $label"}

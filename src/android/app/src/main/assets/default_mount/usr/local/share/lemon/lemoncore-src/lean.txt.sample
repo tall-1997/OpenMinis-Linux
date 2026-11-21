@@ -1,0 +1,6 @@
+# 小柠檬内核 · 精简白名单（tools/list 只返回匹配项）
+# 格式：工具名 或 前缀:（行尾冒号=前缀匹配）
+# 关闭：LEMON_LEAN=0   或删除本文件
+# 全量：tools/list 带 params {"all":true}
+tx:
+tool_

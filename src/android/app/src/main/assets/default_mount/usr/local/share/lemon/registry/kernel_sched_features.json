@@ -1,0 +1,1 @@
+{"name":"kernel_sched_features","desc":"调度器特性开关(/sys/kernel/debug/sched_features 或 sched)","params":"","required":"","timeoutMs":15000,"cmd":"cat /sys/kernel/debug/sched_features 2>/dev/null || cat /proc/sys/kernel/sched_* 2>/dev/null | head -40"}

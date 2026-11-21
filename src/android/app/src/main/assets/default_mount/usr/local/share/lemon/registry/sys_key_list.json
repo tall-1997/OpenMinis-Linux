@@ -1,0 +1,1 @@
+{"name":"sys_key_list","desc":"内核密钥环列表(/proc/keys)","params":"lines:integer:行数,默认40","required":"","timeoutMs":15000,"cmd":"cat /proc/keys 2>/dev/null | head -${lines:-40}; echo '--- keyring ---'; cat /proc/key-users 2>/dev/null | head -20"}

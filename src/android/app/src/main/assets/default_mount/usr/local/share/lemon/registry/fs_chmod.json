@@ -1,0 +1,1 @@
+{"name":"fs_chmod","desc":"修改文件权限(chmod)","params":"mode:string:权限如755或644|path:string:路径","required":"mode,path","timeoutMs":15000,"cmd":"chmod $mode $path 2>&1; ls -l $path 2>&1"}

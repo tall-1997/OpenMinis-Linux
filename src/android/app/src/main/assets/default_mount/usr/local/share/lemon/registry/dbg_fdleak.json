@@ -1,0 +1,1 @@
+{"name":"dbg_fdleak","desc":"文件描述符泄漏检测","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/fdleak_detect 2>/dev/null | head -40"}

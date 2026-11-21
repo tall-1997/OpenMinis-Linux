@@ -1,0 +1,1 @@
+{"name":"fs_touch","desc":"创建空文件/更新时间戳(touch)","params":"path:string:路径","required":"path","timeoutMs":15000,"cmd":"touch $path 2>&1 && echo OK; ls -l $path 2>&1"}

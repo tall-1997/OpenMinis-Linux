@@ -1,0 +1,1 @@
+{"name":"termex_ssh_keyscan","desc":"[Termex] ssh-keyscan 主机公钥采集","params":"args:string:ssh-keyscan参数","required":"args","timeoutMs":60000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termex_ssh_keyscan . /data/local/tmp/termex/env.sh; eval /data/local/tmp/termex/bin/ssh-keyscan $args 2>&1"}

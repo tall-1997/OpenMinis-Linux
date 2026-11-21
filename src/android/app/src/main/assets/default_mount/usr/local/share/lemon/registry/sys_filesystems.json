@@ -1,0 +1,1 @@
+{"name":"sys_filesystems","desc":"内核支持的文件系统列表","params":"","required":"","timeoutMs":10000,"cmd":"cat /proc/filesystems 2>&1"}

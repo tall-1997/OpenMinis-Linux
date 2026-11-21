@@ -1,0 +1,1 @@
+{"name": "yzt_movie", "cat": "宇宙桥", "desc": "[宇宙桥] 影视搜索: sub=search src=kunyu77|bajie|ywhuilong kw=关键词 pg=页码; sub=playlist ids=剧集ID(注:上游源近期不稳,无响应会明确报错)", "params": "sub,src,kw,pg", "required": "sub", "timeoutMs": 40000, "cmd": "sh /data/lemonbrain/bin/yzt.sh movie $sub $src $kw $pg"}

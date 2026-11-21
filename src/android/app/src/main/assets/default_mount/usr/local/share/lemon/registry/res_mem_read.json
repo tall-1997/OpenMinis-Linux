@@ -1,0 +1,1 @@
+{"name":"res_mem_read","desc":"[资源] 记忆中心 读文件","params":"path:string:文件相对路径|lines:integer:行数默认200","required":"path","timeoutMs":30000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh res_mem_read sh /data/adb/lemon_kernel/lemon/res/res.sh mem read $path $lines"}

@@ -1,0 +1,1 @@
+{"name":"mitm_stop","desc":"停止自研MITM代理","params":"","required":"","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh mitm_stop sh /data/adb/lemon_kernel/lemon/mitm/mitm.sh stop"}

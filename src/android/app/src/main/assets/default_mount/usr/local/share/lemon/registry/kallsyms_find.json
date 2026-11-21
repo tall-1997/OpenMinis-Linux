@@ -1,0 +1,1 @@
+{"name":"kallsyms_find","desc":"在内核符号表搜索符号(/proc/kallsyms)","params":"sym:string:符号名关键字","required":"sym","timeoutMs":20000,"cmd":"grep -i -- $sym /proc/kallsyms 2>/dev/null | head -30"}

@@ -1,0 +1,1 @@
+{"name":"oplus_cpu_info","desc":"OPPO CPU调度私有节点(频率/负载/boost)","params":"","required":"","timeoutMs":15000,"cmd":"ls /proc/oplus_cpu/ 2>/dev/null; for f in /proc/oplus_cpu/*; do [ -f \"$f\" ] && { echo -n \"$(basename $f)=\"; cat $f 2>/dev/null; }; done | head -60"}

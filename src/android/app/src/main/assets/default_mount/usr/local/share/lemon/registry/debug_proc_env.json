@@ -1,0 +1,1 @@
+{"name":"debug_proc_env","desc":"查看进程环境变量","params":"pid:string:进程ID","required":"pid","timeoutMs":15000,"cmd":"cat /proc/$pid/environ 2>/dev/null | tr '\\0' '\\n' | head -60"}

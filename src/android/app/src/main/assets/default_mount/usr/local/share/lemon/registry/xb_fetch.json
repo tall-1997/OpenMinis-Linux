@@ -1,0 +1,1 @@
+{"name":"xb_fetch","desc":"[X浏览器] 抓网页HTML(绕开WebView限制)","params":"url:string:网页地址|len:integer:字节上限","required":"url","timeoutMs":60000,"cmd":"n='$len'; [ -z \"$n\" ] && n=3000; curl -sL -m 45 -A 'Mozilla/5.0 (Linux; Android 15)' '$url' | head -c $n"}

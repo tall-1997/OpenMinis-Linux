@@ -1,0 +1,1 @@
+{"name":"dbg_uid_io","desc":"按UID统计IO","params":"lines:integer:行数,默认30","required":"","timeoutMs":15000,"cmd":"cat /proc/uid_io/stats 2>/dev/null | head -${lines:-30}"}

@@ -1,0 +1,1 @@
+{"name":"pkg_disable","desc":"禁用系统组件/应用(pm disable)","params":"comp:string:包名或包/组件","required":"comp","timeoutMs":20000,"cmd":"pm disable-user --user 0 $comp 2>&1; pm list packages -d 2>/dev/null | grep -i -- $comp"}

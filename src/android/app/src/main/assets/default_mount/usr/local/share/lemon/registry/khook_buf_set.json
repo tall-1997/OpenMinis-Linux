@@ -1,0 +1,1 @@
+{"name":"khook_buf_set","cat":"内核态","desc":"[内核态] 设置 trace 缓冲大小(KB)，越大保留越久","params":"kb:string:KB数(如8192)","timeoutMs":15000,"cmd":"sh /data/adb/lemon_kernel/khook/khook.sh buf_set $kb"}

@@ -1,0 +1,1 @@
+{"name":"khook_syscall_watch","cat":"内核态","desc":"[内核态] 预设系统调用观测：open|openat|read|write|exec|fork|connect|binder|mmap|kill","params":"preset:string:预设名|sec:string:采集秒数(默认3)","timeoutMs":60000,"cmd":"sh /data/adb/lemon_kernel/khook/khook.sh syscall_watch $preset $sec"}

@@ -1,0 +1,1 @@
+{"name":"lemon_tool_info","cat":"内核元工具","desc":"[内核元工具]查看任意工具的完整说明：描述、参数名、参数类型、每个参数含义。支持全部980个工具，不限于白名单。不知道工具名就先用 lemon_list_tools 查。","params":"name:string:工具名","required":"name","timeoutMs":180000,"cmd":"sh /data/lemonbrain/bin/lemon_meta info $name"}

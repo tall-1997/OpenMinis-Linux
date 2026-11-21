@@ -1,0 +1,1 @@
+{"name":"khook_probe_del","cat":"内核态","desc":"[内核态] 卸载指定 kprobe","params":"name:string:探针名","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/khook/khook.sh probe_del $name"}

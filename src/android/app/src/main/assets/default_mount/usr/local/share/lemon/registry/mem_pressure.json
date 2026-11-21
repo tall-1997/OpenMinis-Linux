@@ -1,0 +1,1 @@
+{"name":"mem_pressure","desc":"内存压力与PSI(/proc/pressure/memory)","params":"","required":"","timeoutMs":15000,"cmd":"echo '--- pressure/memory ---'; cat /proc/pressure/memory 2>/dev/null; echo '--- pressure/cpu ---'; cat /proc/pressure/cpu 2>/dev/null; echo '--- pressure/io ---'; cat /proc/pressure/io 2>/dev/null"}

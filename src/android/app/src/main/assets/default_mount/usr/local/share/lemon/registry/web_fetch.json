@@ -1,0 +1,1 @@
+{"name": "web_fetch", "desc": "[联网] 抓取网页正文(仅http/https,禁内网SSRF防护,纯文本≤60K)", "params": "url:string:网页地址", "required": "url", "timeoutMs": 40000, "cmd": "sh /data/lemonbrain/nettools/web_fetch.sh $url"}

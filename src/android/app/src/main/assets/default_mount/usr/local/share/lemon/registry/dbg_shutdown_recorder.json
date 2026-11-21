@@ -1,0 +1,1 @@
+{"name":"dbg_shutdown_recorder","desc":"关机记录器","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/shutdown_recorder 2>/dev/null | head -40"}

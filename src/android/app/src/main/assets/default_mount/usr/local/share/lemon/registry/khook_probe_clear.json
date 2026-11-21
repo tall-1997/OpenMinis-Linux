@@ -1,0 +1,1 @@
+{"name":"khook_probe_clear","cat":"内核态","desc":"[内核态] 一键清空全部 kprobe（含持久化残留）","params":"","timeoutMs":30000,"cmd":"sh /data/adb/lemon_kernel/khook/khook.sh probe_clear"}

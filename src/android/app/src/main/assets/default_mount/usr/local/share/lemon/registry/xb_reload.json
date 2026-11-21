@@ -1,0 +1,1 @@
+{"name":"xb_reload","cat":"X浏览器","desc":"刷新 X浏览器当前页面","params":"","required":"","timeoutMs":30000,"cmd":"/data/data/com.termux/files/usr/bin/bash /data/local/tmp/xbcdp.sh reload"}

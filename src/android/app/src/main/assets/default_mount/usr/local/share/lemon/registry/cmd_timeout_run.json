@@ -1,0 +1,1 @@
+{"name":"cmd_timeout_run","desc":"限时执行命令(timeout)","params":"cmd:string:命令|sec:string:秒数,默认10","required":"cmd","timeoutMs":120000,"cmd":"timeout ${sec:-10} sh -c $cmd 2>&1 | head -60"}

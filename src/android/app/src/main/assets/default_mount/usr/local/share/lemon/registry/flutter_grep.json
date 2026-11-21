@@ -1,0 +1,1 @@
+{"name":"flutter_grep","cat":"Flutter底座","desc":"[Flutter] 在解析产物中搜类名/方法/字符串/URL/端点（默认搜最近一次解析结果，自动跳过 90MB evidence）","params":"kw:string:关键词如 login/token/https|path:string:解析输出目录(可空=最近一次)","required":"kw","timeoutMs":120000,"cmd":"FL_CMD=grep FL_KW=$kw FL_PATH=$path sh /data/adb/lemon_kernel/lemon/flutter/fscan.sh"}

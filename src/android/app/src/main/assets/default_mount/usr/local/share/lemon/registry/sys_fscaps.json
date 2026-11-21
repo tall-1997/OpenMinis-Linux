@@ -1,0 +1,1 @@
+{"name":"sys_fscaps","desc":"文件系统能力(fscaps)","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/fs/*/ 2>/dev/null; cat /sys/kernel/fscaps 2>/dev/null; echo '--- ext4/f2fs ---'; cat /proc/fs/ext4/*/options 2>/dev/null | head -20"}

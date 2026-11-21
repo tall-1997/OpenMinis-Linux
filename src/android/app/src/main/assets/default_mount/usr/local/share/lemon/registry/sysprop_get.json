@@ -1,0 +1,1 @@
+{"name":"sysprop_get","desc":"读取系统属性getprop","params":"key:string:属性名,如ro.build.version.sdk","required":"key","timeoutMs":10000,"cmd":"getprop $key 2>&1"}

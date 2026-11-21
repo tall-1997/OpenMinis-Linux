@@ -1,0 +1,1 @@
+{"name": "github_repo", "desc": "[免费API] GitHub公开仓库信息(免Key)", "params": "p1:string:owner/repo", "required": "", "timeoutMs": 15000, "cmd": "/data/adb/lemonpy/bin/python3 /data/lemonbrain/nettools/lemon_freeapis.py github_repo $p1 $p2 $p3"}

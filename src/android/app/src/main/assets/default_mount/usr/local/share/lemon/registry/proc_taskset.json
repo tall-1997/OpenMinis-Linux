@@ -1,0 +1,1 @@
+{"name":"proc_taskset","desc":"把进程绑定到指定CPU掩码(taskset)","params":"pid:string:进程ID|mask:string:CPU掩码如ff或3","required":"pid,mask","timeoutMs":15000,"cmd":"taskset -p $mask $pid 2>&1; echo -n 'now='; taskset -p $pid 2>&1"}

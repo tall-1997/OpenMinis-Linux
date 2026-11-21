@@ -1,0 +1,1 @@
+{"name":"clip_clear","desc":"清空系统剪贴板","params":"","required":"","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh clip_clear sh /data/adb/lemon_kernel/lemon/clip/clip_clear.sh"}

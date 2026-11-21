@@ -1,0 +1,1 @@
+{"name":"wakeup_reason","desc":"最近唤醒原因与唤醒统计","params":"lines:integer:行数,默认40","required":"","timeoutMs":15000,"cmd":"cat /sys/kernel/wakeup_reasons/last_resume_reason 2>/dev/null; echo '--- counts ---'; cat /sys/kernel/wakeup_reasons/*_count 2>/dev/null | head -${lines:-40}; echo '--- class/wakeup ---'; ls /sys/class/wakeup/ 2>/dev/null | head -30"}

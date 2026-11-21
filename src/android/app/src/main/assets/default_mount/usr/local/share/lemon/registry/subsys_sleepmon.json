@@ -1,0 +1,1 @@
+{"name":"subsys_sleepmon","desc":"子系统睡眠监控","params":"","required":"","timeoutMs":15000,"cmd":"cat /sys/class/adspsleepmon/*/* 2>/dev/null | head -30; ls /sys/class/adspsleepmon/ 2>/dev/null"}

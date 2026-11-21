@@ -1,0 +1,1 @@
+{"name":"mount_rw","desc":"以读写方式重新挂载指定路径","params":"path:string:如/system","required":"path","timeoutMs":15000,"cmd":"mount -o remount,rw $path 2>&1; echo '--- 当前 ---'; mount | grep -- $path"}

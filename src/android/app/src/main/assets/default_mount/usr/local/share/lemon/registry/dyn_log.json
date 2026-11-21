@@ -1,0 +1,1 @@
+{"name":"dyn_log","cat":"动态插桩","desc":"[动态插桩] 读最新一次注入的日志输出","params":"n:string:行数(默认40)","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/lemonlib/dynhook.sh log $n"}

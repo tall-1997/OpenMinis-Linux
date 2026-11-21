@@ -1,0 +1,1 @@
+{"name":"ion_heap_info","desc":"ION/DMA-BUF 显存堆使用情况","params":"","required":"","timeoutMs":15000,"cmd":"ls /sys/kernel/debug/ion/ 2>/dev/null; cat /sys/kernel/debug/ion/heaps/* 2>/dev/null | head -40; cat /proc/dma_heap 2>/dev/null; ls /dev/dma_heap/ 2>/dev/null"}

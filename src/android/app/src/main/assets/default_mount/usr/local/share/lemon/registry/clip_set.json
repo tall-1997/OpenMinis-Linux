@@ -1,0 +1,1 @@
+{"name":"clip_set","desc":"写入系统剪贴板","params":"text:string:要写入的文本","required":"text","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh clip_set sh /data/adb/lemon_kernel/lemon/clip/clip_set.sh $text"}

@@ -1,0 +1,1 @@
+{"name":"cmd_zip","desc":"创建zip压缩包","params":"src:string:源|dst:string:目标zip","required":"src,dst","timeoutMs":60000,"cmd":"cd $(dirname $src) 2>/dev/null; zip -r $dst $(basename $src) 2>&1 | tail -5"}

@@ -1,0 +1,1 @@
+{"name":"fs_readlink","desc":"读取符号链接指向(readlink)","params":"path:string:链接路径","required":"path","timeoutMs":15000,"cmd":"readlink -f $path 2>&1; echo '--- 所有链接 ---'; readlink $path 2>&1"}

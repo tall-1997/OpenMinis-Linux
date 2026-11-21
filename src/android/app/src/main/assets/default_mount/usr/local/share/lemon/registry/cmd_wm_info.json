@@ -1,0 +1,1 @@
+{"name":"cmd_wm_info","desc":"窗口管理信息(wm size/density)","params":"","required":"","timeoutMs":15000,"cmd":"echo '--- size ---'; wm size 2>&1; echo '--- density ---'; wm density 2>&1"}

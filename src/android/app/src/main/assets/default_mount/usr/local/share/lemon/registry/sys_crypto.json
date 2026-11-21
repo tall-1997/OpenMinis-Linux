@@ -1,0 +1,1 @@
+{"name":"sys_crypto","desc":"内核加密算法支持(/proc/crypto)","params":"filter:string:过滤如sha,可空|lines:integer:行数,默认40","required":"","timeoutMs":15000,"cmd":"grep -A3 -i 'name.*$filter' /proc/crypto 2>/dev/null | head -${lines:-40}"}

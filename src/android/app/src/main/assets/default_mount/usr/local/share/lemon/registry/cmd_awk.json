@@ -1,0 +1,1 @@
+{"name":"cmd_awk","desc":"awk文本处理(通用)","params":"expr:string:完整awk表达式","required":"expr","timeoutMs":30000,"cmd":"awk $expr 2>&1 | head -60"}

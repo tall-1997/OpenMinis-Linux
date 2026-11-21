@@ -1,0 +1,1 @@
+{"name":"dspp_list_dir","desc":"[DS++] 列出工作区目录内容(相对路径=工作区内, 支持绝对路径)","params":"path:string:目录路径,可空","required":"","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/lemon/dspp/dspp_fs.sh list $path"}

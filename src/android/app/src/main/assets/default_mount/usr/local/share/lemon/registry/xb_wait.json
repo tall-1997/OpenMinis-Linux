@@ -1,0 +1,1 @@
+{"name":"xb_wait","cat":"X浏览器","desc":"等待 X浏览器页面出现某元素（返回 found/timeout）","params":"selector:string:CSS选择器|ms:integer:超时毫秒 默认10000","required":"selector","timeoutMs":40000,"cmd":"/data/data/com.termux/files/usr/bin/bash /data/local/tmp/xbcdp.sh wait $selector $ms"}

@@ -1,0 +1,1 @@
+{"name":"net_ss","desc":"查看TCP/UDP连接与监听端口(ss)","params":"lines:integer:行数,默认80","required":"","timeoutMs":15000,"cmd":"ss -tunap 2>&1 | head -${lines:-80}"}

@@ -1,0 +1,1 @@
+{"name":"bpf_stop","cat":"eBPF","desc":"[eBPF] 卸载内核态程序(syscount|opencap|all)","params":"which:string:syscount|opencap|all","timeoutMs":20000,"cmd":"/data/adb/lemonbpf/lemonbpf stop $which 2>&1"}

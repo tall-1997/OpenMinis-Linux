@@ -1,0 +1,1 @@
+{"name":"fs_cp","desc":"复制文件/目录(cp -a)","params":"src:string:源|dst:string:目标","required":"src,dst","timeoutMs":60000,"cmd":"cp -a $src $dst 2>&1 && echo COPIED; ls -ld $dst 2>&1"}

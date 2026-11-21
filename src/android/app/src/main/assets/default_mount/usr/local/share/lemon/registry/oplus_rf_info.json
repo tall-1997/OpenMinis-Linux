@@ -1,0 +1,1 @@
+{"name":"oplus_rf_info","desc":"OPPO射频状态","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/oplus_rf 2>/dev/null | head -40; ls /proc/oplus_rf/ 2>/dev/null"}

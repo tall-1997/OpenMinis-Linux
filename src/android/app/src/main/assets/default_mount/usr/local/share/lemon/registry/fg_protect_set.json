@@ -1,0 +1,1 @@
+{"name":"fg_protect_set","desc":"开关电量计保护","params":"val:string:1或0","required":"val","timeoutMs":15000,"cmd":"echo $val > /proc/fg_protect_enable 2>&1; echo -n \"now=\"; cat /proc/fg_protect_enable"}

@@ -1,0 +1,1 @@
+{"name":"io_scheduler_set","desc":"设置指定块设备IO调度器","params":"dev:string:设备名如sda或dm-0|sched:string:调度器名如mq-deadline/kyber/bfq/none","required":"dev,sched","timeoutMs":15000,"cmd":"echo $sched > /sys/block/$dev/queue/scheduler 2>&1; echo -n 'now='; cat /sys/block/$dev/queue/scheduler"}

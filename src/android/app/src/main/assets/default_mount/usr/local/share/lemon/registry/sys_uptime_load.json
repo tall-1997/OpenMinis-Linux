@@ -1,0 +1,1 @@
+{"name":"sys_uptime_load","desc":"系统运行时长与负载","params":"","required":"","timeoutMs":10000,"cmd":"echo -n 'uptime: '; cat /proc/uptime; echo -n 'loadavg: '; cat /proc/loadavg; echo '--- 启动时间 ---'; uptime 2>/dev/null"}

@@ -1,0 +1,1 @@
+{"name":"tx_cxx","cat":"Termux","desc":"[Termux] clang++编译C++17源码为可执行文件","params":"src:string:源文件,out:string:输出路径默认~/a.out,flags:string:额外编译参数","required":"src","timeoutMs":300000,"cmd":"TX_SRC=$src TX_OUT=$out TX_FLAGS=$flags sh /data/adb/lemon_kernel/lemon/tx/tx.sh cxx"}

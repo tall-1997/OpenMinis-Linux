@@ -1,0 +1,1 @@
+{"name":"cpu_online_list","desc":"查看各CPU在线状态","params":"","required":"","timeoutMs":15000,"cmd":"for c in /sys/devices/system/cpu/cpu[0-9]*; do n=$(basename $c); echo -n \"$n online=\"; cat $c/online 2>/dev/null || echo 1; done"}

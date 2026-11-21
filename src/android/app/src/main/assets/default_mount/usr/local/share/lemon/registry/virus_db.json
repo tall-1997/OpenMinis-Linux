@@ -1,0 +1,1 @@
+{"name":"virus_db","cat":"安全防护","desc":"[安全防护] 病毒库管理：update 联网更新 | --local 从游龙离线导入 | status | check <包名>","params":"action:string:update|--local|status|check;target:string:check 时可填包名","timeoutMs":95000,"cmd":"/system/bin/timeout 85 sh /data/adb/lemon_kernel/lemonlib/virusdb.sh $action $target"}

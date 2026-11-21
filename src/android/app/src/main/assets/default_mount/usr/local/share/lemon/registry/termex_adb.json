@@ -1,0 +1,1 @@
+{"name":"termex_adb","desc":"[Termex] Android Debug Bridge 1.0.41","params":"args:string:adb子命令,如 version / devices / shell id","required":"args","timeoutMs":60000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termex_adb . /data/local/tmp/termex/env.sh; eval /data/local/tmp/termex/bin/adb $args 2>&1"}

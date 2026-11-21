@@ -1,0 +1,1 @@
+{"name":"svc_panel","cat":"自启服务","desc":"[自启服务] 自研服务面板：8788/8790/eBPF/khook/模块/守护/策略 一屏；action=restart-core 重启内核","params":"action:string:留空看面板 restart-core重启内核","timeoutMs":60000,"cmd":"/system/bin/timeout 55 sh /data/adb/lemon_kernel/lemonlib/lemon_boot.sh svcpanel $action"}

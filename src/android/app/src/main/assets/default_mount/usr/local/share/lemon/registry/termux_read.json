@@ -1,0 +1,1 @@
+{"name":"termux_read","desc":"读取文件内容","params":"path:string:文件绝对路径|lines:integer:行数","required":"path","timeoutMs":30000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termux_read l=$lines; if [ -z \"$l\" ]; then l=100; fi; head -n \"$l\" $path"}

@@ -1,0 +1,1 @@
+{"name":"algo_query_logs","cat":"算法助手","desc":"[算法助手] 查询hook/算法日志","params":"keyword:string:关键词|limit:integer:条数|offset:integer:偏移|db_path:string:库路径","required":"","timeoutMs":25000,"cmd":"sh /data/adb/lemon_kernel/lemon/algo_call.sh query_logs keyword=$keyword limit=$limit offset=$offset db_path=$db_path"}

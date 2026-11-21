@@ -1,0 +1,1 @@
+{"name":"dumpsys_service","desc":"dumpsys指定系统服务(前N行)","params":"service:string:服务名如battery/window/meminfo|lines:integer:行数,默认120","required":"service","timeoutMs":30000,"cmd":"dumpsys $service 2>&1 | head -${lines:-120}"}

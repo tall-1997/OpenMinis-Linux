@@ -1,0 +1,1 @@
+{"name":"oplus_touch_boost","desc":"OPPO触控加速状态","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/oplus_touch_boost 2>/dev/null | head -40; ls /proc/oplus_touch_boost/ 2>/dev/null"}

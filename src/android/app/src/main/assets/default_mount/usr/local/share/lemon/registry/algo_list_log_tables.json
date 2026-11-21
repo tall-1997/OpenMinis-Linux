@@ -1,0 +1,1 @@
+{"name":"algo_list_log_tables","cat":"算法助手","desc":"[算法助手] 列出日志库中的表","params":"db_path:string:库路径,可空","required":"","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/lemon/algo_call.sh list_log_tables db_path=$db_path"}

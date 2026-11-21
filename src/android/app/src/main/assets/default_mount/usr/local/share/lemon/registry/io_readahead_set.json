@@ -1,0 +1,1 @@
+{"name":"io_readahead_set","desc":"查看/设置块设备预读大小(KB)","params":"dev:string:设备名|kb:string:预读KB,留空只读","required":"dev","timeoutMs":15000,"cmd":"[ -n $kb ] && echo $((kb*1024)) > /sys/block/$dev/queue/read_ahead_kb 2>&1; echo -n 'read_ahead_kb='; cat /sys/block/$dev/queue/read_ahead_kb"}

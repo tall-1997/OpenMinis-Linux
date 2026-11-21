@@ -1,0 +1,1 @@
+{"name":"tx_env","cat":"Termux","desc":"[Termux] 工具链自检：clang/cmake/ninja/meson/git/lld/strip 版本与包数","params":"","required":"","timeoutMs":90000,"cmd":"sh /data/adb/lemon_kernel/lemon/tx/tx.sh env"}

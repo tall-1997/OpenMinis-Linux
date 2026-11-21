@@ -1,0 +1,1 @@
+{"name":"capture_pull","desc":"回读抓包日志尾部","params":"lines:integer:返回行数,默认50","required":"","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh capture_pull n=50; [ -n $lines ] && n=$lines; tail -n $n /data/local/tmp/lemon_mitm/capture.log"}

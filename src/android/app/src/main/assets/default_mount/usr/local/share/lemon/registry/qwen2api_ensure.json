@@ -1,0 +1,1 @@
+{"name":"qwen2api_ensure","cat":"千问桥接","desc":"[千问桥接] 懒启动qwen2api桥接服务(127.0.0.1:3002)，已在运行则直接返回","params":"","required":"","timeoutMs":30000,"cmd":"sh /data/lemonbrain/qwen2api/qwen2api_ctl.sh ensure "}

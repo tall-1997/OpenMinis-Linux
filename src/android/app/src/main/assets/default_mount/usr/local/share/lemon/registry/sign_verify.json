@@ -1,0 +1,1 @@
+{"name":"sign_verify","desc":"[签名] jarsigner 校验APK签名","params":"args:string:APK路径","required":"args","timeoutMs":60000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh sign_verify . /data/local/tmp/mt_sign.sh verify $args"}

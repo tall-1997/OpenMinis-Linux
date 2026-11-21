@@ -1,0 +1,1 @@
+{"name":"algo_get_log_detail","cat":"算法助手","desc":"[算法助手] 按ID取单条日志","params":"id:integer:日志ID|db_path:string:库路径","required":"","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/lemon/algo_call.sh get_log_detail id=$id db_path=$db_path"}

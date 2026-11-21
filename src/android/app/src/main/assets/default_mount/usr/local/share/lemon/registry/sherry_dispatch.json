@@ -1,0 +1,1 @@
+{"name":"sherry_dispatch","desc":"[雪莉] 反向派活:内核给雪莉派任务,走ReAct自主执行","params":"task:string:要派给雪莉的任务描述","required":"task","timeoutMs":180000,"cmd":"sh /data/lemonbrain/sherry_keeper/sherry_agent.sh dispatch $task"}

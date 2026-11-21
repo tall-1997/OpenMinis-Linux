@@ -1,0 +1,1 @@
+{"name":"sherry_menu","desc":"[雪莉] 执行音量键菜单第N项","params":"n:string:菜单号1-10","required":"n","timeoutMs":120000,"cmd":"sh /data/lemonbrain/sherry_keeper/sherry_agent.sh menu $n"}

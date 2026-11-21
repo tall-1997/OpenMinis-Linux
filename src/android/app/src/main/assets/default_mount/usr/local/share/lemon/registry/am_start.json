@@ -1,0 +1,1 @@
+{"name":"am_start","desc":"启动Activity(am start)","params":"comp:string:组件如com.pkg/.MainActivity|extra:string:附加参数,可空","required":"comp","timeoutMs":20000,"cmd":"am start -n $comp $extra 2>&1 | head -10"}

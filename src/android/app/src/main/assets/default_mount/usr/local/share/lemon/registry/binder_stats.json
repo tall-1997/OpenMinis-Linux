@@ -1,0 +1,1 @@
+{"name":"binder_stats","desc":"Binder通信统计与事务计数","params":"lines:integer:行数,默认60","required":"","timeoutMs":15000,"cmd":"cat /sys/class/binder_stats_class/*/stats 2>/dev/null | head -${lines:-60}; echo '--- proc ---'; cat /proc/binder/stats 2>/dev/null | head -40"}

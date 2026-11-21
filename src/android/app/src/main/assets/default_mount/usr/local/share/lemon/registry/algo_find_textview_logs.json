@@ -1,0 +1,1 @@
+{"name":"algo_find_textview_logs","cat":"算法助手","desc":"[算法助手] 筛选setText/TextView赋值日志","params":"keyword:string:过滤词|limit:integer:条数|db_path:string:库路径","required":"","timeoutMs":25000,"cmd":"sh /data/adb/lemon_kernel/lemon/algo_call.sh find_textview_logs keyword=$keyword limit=$limit db_path=$db_path"}

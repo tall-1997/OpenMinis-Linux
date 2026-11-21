@@ -1,0 +1,1 @@
+{"name": "intent_router", "cat": "自主神经", "desc": "[自主神经] 自然语言工具发现：NL任务→LLM提关键字→tool_find返回候选工具", "params": "query:string:任务描述", "required": "query", "timeoutMs": 95000, "cmd": "q=$query; /system/bin/timeout 90 /data/data/com.termux/files/usr/bin/python3 /data/lemonbrain/autonomic/intent_router.py \"$q\""}

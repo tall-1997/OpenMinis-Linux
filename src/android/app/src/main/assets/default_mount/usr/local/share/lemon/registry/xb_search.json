@@ -1,0 +1,1 @@
+{"name":"xb_search","desc":"[X浏览器] 必应搜索","params":"kw:string:关键词","required":"kw","timeoutMs":20000,"cmd":"am start -a android.intent.action.VIEW -d \"https://www.bing.com/search?q=$kw\" 2>&1 | head -5; echo search: $kw"}

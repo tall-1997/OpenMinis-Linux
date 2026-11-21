@@ -1,0 +1,1 @@
+{"name":"cmd_watch","desc":"周期性执行命令(watch)","params":"cmd:string:命令|interval:string:间隔秒,默认2|count:string:次数,默认5","required":"cmd","timeoutMs":60000,"cmd":"i=${interval:-2}; c=${count:-5}; n=0; while [ $n -lt $c ]; do echo \"--- $(date +%T) ---\"; sh -c $cmd 2>&1; n=$((n+1)); [ $n -lt $c ] && sleep $i; done"}

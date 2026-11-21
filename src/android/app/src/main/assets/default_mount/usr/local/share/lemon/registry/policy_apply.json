@@ -1,0 +1,1 @@
+{"name":"policy_apply","cat":"柠檬工具","desc":"[柠檬工具] 统一策略中心：把实际状态收敛到 policy.json（幂等+自动快照）","params":"","timeoutMs":90000,"cmd":"sh /data/adb/lemon_kernel/lemonlib/policy.sh apply"}

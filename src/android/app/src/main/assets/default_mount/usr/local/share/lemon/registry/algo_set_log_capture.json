@@ -1,0 +1,1 @@
+{"name":"algo_set_log_capture","cat":"算法助手","desc":"[算法助手] 开关日志捕获总开关","params":"enabled:boolean:true开false关","required":"","timeoutMs":15000,"cmd":"sh /data/adb/lemon_kernel/lemon/algo_call.sh set_log_capture enabled=$enabled"}

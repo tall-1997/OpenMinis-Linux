@@ -1,0 +1,1 @@
+{"name":"mitm_status","desc":"查看MITM代理运行状态","params":"","required":"","timeoutMs":15000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh mitm_status sh /data/adb/lemon_kernel/lemon/mitm/mitm.sh status"}

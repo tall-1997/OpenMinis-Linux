@@ -1,0 +1,1 @@
+{"name":"pkg_info","desc":"查看应用详情(dumpsys package)","params":"pkg:string:包名|lines:integer:行数,默认120","required":"pkg","timeoutMs":25000,"cmd":"dumpsys package $pkg 2>&1 | head -${lines:-120}"}

@@ -1,0 +1,1 @@
+{"name":"fs_lsof","desc":"查看进程打开的文件(lsof风格, /proc扫描)","params":"filter:string:文件名过滤,可空|lines:integer:行数,默认60","required":"","timeoutMs":25000,"cmd":"for p in /proc/[0-9]*/fd/*; do tgt=$(readlink $p 2>/dev/null); case \"$tgt\" in *$filter*) echo \"${p%/fd/*} -> $tgt\";; esac; done 2>/dev/null | head -${lines:-60}"}

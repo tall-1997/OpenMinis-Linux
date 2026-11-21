@@ -1,0 +1,1 @@
+{"name":"selinux_chcon","desc":"修改文件SELinux上下文(chcon)","params":"ctx:string:上下文如u:object_r:system_file:s0|path:string:路径","required":"ctx,path","timeoutMs":15000,"cmd":"chcon $ctx $path 2>&1; echo -n 'now='; ls -Zd $path 2>&1"}

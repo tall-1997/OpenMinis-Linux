@@ -1,0 +1,1 @@
+{"name":"sysprop_set","desc":"设置系统属性setprop(重启失效)","params":"key:string:属性名|val:string:值","required":"key,val","timeoutMs":10000,"cmd":"setprop $key $val 2>&1; echo -n 'now='; getprop $key"}

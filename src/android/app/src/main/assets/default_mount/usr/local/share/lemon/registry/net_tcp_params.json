@@ -1,0 +1,1 @@
+{"name":"net_tcp_params","desc":"查看/设置内核TCP参数","params":"key:string:参数如tcp_congestion_control,可空|val:string:新值,可空","required":"","timeoutMs":15000,"cmd":"if [ -n $key ] && [ -n $val ]; then echo $val > /proc/sys/net/ipv4/$key 2>&1; fi; if [ -n $key ]; then echo -n \"$key=\"; cat /proc/sys/net/ipv4/$key 2>/dev/null; else ls /proc/sys/net/ipv4/ 2>/dev/null | head -40; fi"}

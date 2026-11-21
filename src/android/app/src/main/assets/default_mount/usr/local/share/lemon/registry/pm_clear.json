@@ -1,0 +1,1 @@
+{"name":"pm_clear","desc":"清除应用数据(pm clear)","params":"pkg:string:包名","required":"pkg","timeoutMs":20000,"cmd":"pm clear $pkg 2>&1"}

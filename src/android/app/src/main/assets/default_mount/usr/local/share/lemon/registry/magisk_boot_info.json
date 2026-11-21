@@ -1,0 +1,1 @@
+{"name":"magisk_boot_info","desc":"[面具/只读] 解包boot/init_boot镜像头部信息","params":"img:string:镜像路径","required":"img","timeoutMs":30000,"cmd":"test -e $img || { echo NO_SUCH_IMAGE $img; exit 1; }; W=/data/local/tmp/mbi_$$; mkdir -p $W; cd $W; /data/adb/magisk/magiskboot unpack -h $img 2>&1 | head -30; echo '--- SHA1 ---'; /data/adb/magisk/magiskboot sha1 $img 2>&1; cd /; rm -rf $W"}

@@ -1,0 +1,1 @@
+{"name":"res_mcp_list","desc":"[资源] MCP源码 列目录","params":"path:string:相对路径,可空列根目录","required":"","timeoutMs":30000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh res_mcp_list sh /data/adb/lemon_kernel/lemon/res/res.sh mcp list $path"}

@@ -1,0 +1,1 @@
+{"name":"tx_which","cat":"Termux","desc":"[Termux] 查询工具路径与可用性","params":"names:string:工具名空格分隔","required":"names","timeoutMs":90000,"cmd":"TX_NAMES=$names sh /data/adb/lemon_kernel/lemon/tx/tx.sh which"}

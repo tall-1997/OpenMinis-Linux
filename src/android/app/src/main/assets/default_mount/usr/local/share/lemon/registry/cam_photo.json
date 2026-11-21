@@ -1,0 +1,1 @@
+{"name":"cam_photo","desc":"[感知] 拍照存设备本地(Termux:API,返回路径+字节数,默认后置摄像头)","params":"out:string:输出路径可选默认toolout目录,camera:integer:摄像头ID默认0后置","required":"","timeoutMs":60000,"cmd":"sh /data/lemonbrain/scripts/perception.sh cam_photo $out $camera"}

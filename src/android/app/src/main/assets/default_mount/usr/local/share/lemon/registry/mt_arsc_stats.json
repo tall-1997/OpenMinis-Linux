@@ -1,0 +1,1 @@
+{"name":"mt_arsc_stats","cat":"MT底座","desc":"[MT底座] ARSC 资源表统计概览·P2版（包名/id/资源类型清单/键数/entry 总计；原名 mt_arsc_info 与上游 #415 工具撞名故改名）","params":"path","required":"path","timeoutMs":60000,"cmd":"MT_ENG=arsc MT_CMD=info MT_PATH=$path sh /data/adb/lemon_kernel/lemon/mt/mt.sh"}

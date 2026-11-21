@@ -1,0 +1,1 @@
+{"name":"tx_cmake","cat":"Termux","desc":"[Termux] CMake工程配置并构建（CMake+Ninja）","params":"dir:string:工程目录,build:string:构建目录默认~/build,flags:string:cmake额外参数","required":"dir","timeoutMs":600000,"cmd":"TX_DIR=$dir TX_BUILD=$build TX_FLAGS=$flags sh /data/adb/lemon_kernel/lemon/tx/tx.sh cmake"}

@@ -1,0 +1,1 @@
+{"name":"gnaw_inject","cat":"破甲","timeoutMs":25000,"desc":"[破甲] 出站锚点注入:三处锚点+SHA指纹防稀释(system/messages双通道), 输出注入后请求JSON","params":"file:string:请求JSON文件路径,与text二选一|text:string:请求JSON文本","cmd":"printf %s $text | /data/data/com.termux/files/usr/bin/python3 /data/adb/lemon_kernel/lemon/gnaw/gnaw-inject2.py $file","required":""}

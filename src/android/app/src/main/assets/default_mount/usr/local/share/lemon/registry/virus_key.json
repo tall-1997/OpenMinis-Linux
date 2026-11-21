@@ -1,0 +1,1 @@
+{"name":"virus_key","cat":"安全防护","desc":"[安全防护] 应急快捷键守护控制：音量下x3 + 音量上x3 触发处置","params":"action:string:start|stop|status|selftest","timeoutMs":30000,"cmd":"/system/bin/timeout 25 sh /data/adb/lemon_kernel/lemonlib/virus_key.sh $action"}

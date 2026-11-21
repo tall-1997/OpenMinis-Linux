@@ -1,0 +1,1 @@
+{"name":"algo_import_frida_script","cat":"算法助手","desc":"[算法助手] 导入Frida脚本到目标应用","params":"package:string:包名|name:string:脚本名|content:string:脚本内容","required":"","timeoutMs":30000,"cmd":"sh /data/adb/lemon_kernel/lemon/algo_call.sh import_frida_script package=$package name=$name content=$content"}

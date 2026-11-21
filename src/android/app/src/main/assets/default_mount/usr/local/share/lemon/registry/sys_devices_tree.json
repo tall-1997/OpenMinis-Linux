@@ -1,0 +1,1 @@
+{"name":"sys_devices_tree","desc":"系统设备树概览(/proc/devices)","params":"","required":"","timeoutMs":10000,"cmd":"cat /proc/devices 2>&1"}

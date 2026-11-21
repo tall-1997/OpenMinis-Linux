@@ -1,0 +1,1 @@
+{"name":"thermal_list","desc":"列出全部温控区类型与温度","params":"","required":"","timeoutMs":15000,"cmd":"for z in /sys/class/thermal/thermal_zone*; do echo -n $z; echo -n ' '; cat $z/type 2>/dev/null; echo -n ' temp='; cat $z/temp 2>/dev/null; done"}

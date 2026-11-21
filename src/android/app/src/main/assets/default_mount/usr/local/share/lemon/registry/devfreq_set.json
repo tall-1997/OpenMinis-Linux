@@ -1,0 +1,1 @@
+{"name":"devfreq_set","desc":"设置devfreq设备的最小/最大频率","params":"dev:string:设备名如1c00000.qcom,kgsl-3d0|min:string:最小Hz,可空|max:string:最大Hz,可空","required":"dev","timeoutMs":15000,"cmd":"[ -n $min ] && echo $min > /sys/class/devfreq/$dev/min_freq 2>&1; [ -n $max ] && echo $max > /sys/class/devfreq/$dev/max_freq 2>&1; echo -n 'cur='; cat /sys/class/devfreq/$dev/cur_freq 2>&1"}

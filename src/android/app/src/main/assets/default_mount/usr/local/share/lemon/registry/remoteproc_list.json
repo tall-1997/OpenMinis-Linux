@@ -1,0 +1,1 @@
+{"name":"remoteproc_list","desc":"远程处理器子系统列表(DSP/CDSP/ADSP)","params":"","required":"","timeoutMs":15000,"cmd":"for r in /sys/class/remoteproc/remoteproc*; do n=$(basename $r); echo -n \"$n name=\"; cat $r/name 2>/dev/null | tr -d '\n'; echo -n ' state='; cat $r/state 2>/dev/null; done"}

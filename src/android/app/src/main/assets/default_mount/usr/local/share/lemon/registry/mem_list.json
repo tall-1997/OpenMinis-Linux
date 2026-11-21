@@ -1,0 +1,1 @@
+{"name":"mem_list","cat":"记忆检索","desc":"[记忆检索] 列编号+标题（可按库名或编号区间过滤）","params":"lib:string:库名(可空)，如 小柠檬8号规则总库|lo:string:起始编号(可空)|hi:string:结束编号(可空)","timeoutMs":30000,"cmd":"sh $LEMON_DATA/小柠檬记忆中心/_索引/mem.sh list $lib $lo $hi"}

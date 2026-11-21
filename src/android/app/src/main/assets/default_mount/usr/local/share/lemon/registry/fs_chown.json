@@ -1,0 +1,1 @@
+{"name":"fs_chown","desc":"修改文件所有者(chown)","params":"owner:string:用户:组如0:0|path:string:路径","required":"owner,path","timeoutMs":15000,"cmd":"chown $owner $path 2>&1; ls -l $path 2>&1"}

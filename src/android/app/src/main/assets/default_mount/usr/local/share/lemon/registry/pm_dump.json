@@ -1,0 +1,1 @@
+{"name":"pm_dump","desc":"dump手机管家内部类方法表","params":"cls:string:完整类名","required":"cls","timeoutMs":15000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh pm_dump echo dump:$cls | /data/adb/magisk/busybox nc 127.0.0.1 8890"}

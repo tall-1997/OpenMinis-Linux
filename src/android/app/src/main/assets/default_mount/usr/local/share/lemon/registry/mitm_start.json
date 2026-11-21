@@ -1,0 +1,1 @@
+{"name":"mitm_start","desc":"启动自研MITM代理(127.0.0.1:8888)","params":"","required":"","timeoutMs":30000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh mitm_start sh /data/adb/lemon_kernel/lemon/mitm/mitm.sh start"}

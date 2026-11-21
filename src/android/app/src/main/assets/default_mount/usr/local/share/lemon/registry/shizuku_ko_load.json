@@ -1,0 +1,1 @@
+{"name":"shizuku_ko_load","cat":"柠檬工具","desc":"[柠檬工具] 加载 LemonShizuku 内核模块（可带初始白名单/目标uid）。安全默认：空白名单=不改任何东西、enable=0","params":"uids:string:白名单uid(逗号分隔,可空)|dst:string:伪装目标uid(默认2000=shell,可空)","timeoutMs":40000,"cmd":"/system/bin/timeout 32 sh /data/adb/lemon_kernel/lemonlib/shizuku_ko.sh load $uids $dst"}

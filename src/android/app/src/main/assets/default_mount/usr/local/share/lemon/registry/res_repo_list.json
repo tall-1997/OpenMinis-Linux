@@ -1,0 +1,1 @@
+{"name":"res_repo_list","desc":"[资源] 仓库中心 列目录","params":"path:string:相对路径,可空列根目录","required":"","timeoutMs":30000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh res_repo_list sh /data/adb/lemon_kernel/lemon/res/res.sh repo list $path"}

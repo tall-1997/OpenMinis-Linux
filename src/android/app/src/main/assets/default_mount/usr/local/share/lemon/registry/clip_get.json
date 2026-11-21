@@ -1,0 +1,1 @@
+{"name":"clip_get","desc":"读取剪贴板历史(搜狗输入法库,绕过Android16后台限制)","params":"limit:integer:返回条数,默认20","required":"limit","timeoutMs":30000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh clip_get sh /data/adb/lemon_kernel/lemon/clip/clip_get.sh $limit"}

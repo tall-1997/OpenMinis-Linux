@@ -1,0 +1,1 @@
+{"name":"cmd_nc_probe","desc":"nc端口探测","params":"host:string:主机|port:string:端口","required":"host,port","timeoutMs":15000,"cmd":"echo | nc -w 3 $host $port 2>&1 && echo OPEN || echo CLOSED"}

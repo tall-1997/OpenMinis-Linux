@@ -1,0 +1,1 @@
+{"name":"selinux_avc","desc":"抓取SELinux AVC拒绝日志(dmesg+logcat)","params":"lines:integer:行数,默认50","required":"","timeoutMs":30000,"cmd":"dmesg 2>/dev/null | grep -i avc | tail -${lines:-50}; echo '--- logcat ---'; logcat -d -b all 2>/dev/null | grep -i 'avc:' | tail -${lines:-50}"}

@@ -1,0 +1,1 @@
+{"name":"termex_grep","desc":"[Termex] GNU grep 3.x","params":"args:string:grep参数","required":"args","timeoutMs":60000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termex_grep . /data/local/tmp/termex/env.sh; eval /data/local/tmp/termex/bin/grep $args 2>&1"}

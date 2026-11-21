@@ -1,0 +1,1 @@
+{"name":"magisk_settings","desc":"[面具] 总开关zygisk/denylist/bootloop","params":"","required":"","timeoutMs":15000,"cmd":"/data/adb/magisk/magisk --sqlite 'select * from settings' 2>&1"}

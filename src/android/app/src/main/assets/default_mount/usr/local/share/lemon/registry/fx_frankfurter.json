@@ -1,0 +1,1 @@
+{"name": "fx_frankfurter", "desc": "[免费API] 免费汇率换算(ECB,免Key)", "params": "p1:string:源货币,p2:string:目标货币,p3:string:金额", "required": "", "timeoutMs": 15000, "cmd": "/data/adb/lemonpy/bin/python3 /data/lemonbrain/nettools/lemon_freeapis.py fx_frankfurter $p1 $p2 $p3"}

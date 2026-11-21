@@ -1,0 +1,1 @@
+{"name":"tx_curl","cat":"Termux","desc":"[Termux] curl下载文件（跟随跳转，root执行）","params":"url:string:下载地址,out:string:保存名默认dl.bin","required":"url","timeoutMs":900000,"cmd":"TX_CURL_URL=$url TX_CURL_OUT=$out sh /data/adb/lemon_kernel/lemon/tx/tx.sh curl"}

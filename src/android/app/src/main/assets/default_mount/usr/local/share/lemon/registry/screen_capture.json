@@ -1,0 +1,1 @@
+{"name":"screen_capture","cat":"屏幕感知","desc":"[屏幕感知] 截屏并返回路径+尺寸+字节元数据(图存设备本地screenshots/)","params":"","required":"","timeoutMs":30000,"cmd":"/data/data/com.termux/files/usr/bin/python3 /data/lemonbrain/autonomic/screen_eye.py capture"}

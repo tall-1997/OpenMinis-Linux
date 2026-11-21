@@ -1,0 +1,1 @@
+{"name":"loc_last","desc":"[感知] 最近已知位置(dumpsys location,定位服务关闭时为空数组)","params":"","required":"","timeoutMs":30000,"cmd":"sh /data/lemonbrain/scripts/perception.sh loc_last"}

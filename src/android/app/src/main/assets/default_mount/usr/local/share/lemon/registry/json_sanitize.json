@@ -1,0 +1,1 @@
+{"name":"json_sanitize","cat":"安全防护","desc":"[取长补短] JSON递归敏感字段脱敏：剥cookie/password/token/secret/formhash/qq等27键(整键丢弃非打码,源自MT论坛Pro McpServerManager)","params":"text:string:JSON文本(与file二选一)|file:string:JSON文件路径","required":"","timeoutMs":15000,"cmd":"printf %s $text | /data/data/com.termux/files/usr/bin/python3 /data/adb/lemon_kernel/lemon/sponge/json_sanitize.py --file $file"}

@@ -1,0 +1,1 @@
+{"name":"net_conntrack","desc":"查看连接跟踪表(conntrack)","params":"filter:string:过滤,可空|lines:integer:行数,默认50","required":"","timeoutMs":20000,"cmd":"cat /proc/net/nf_conntrack 2>/dev/null | grep -i -- $filter | head -${lines:-50}; echo '--- count ---'; cat /proc/sys/net/netfilter/nf_conntrack_count 2>/dev/null"}

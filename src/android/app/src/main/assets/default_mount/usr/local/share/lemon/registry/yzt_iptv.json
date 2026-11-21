@@ -1,0 +1,1 @@
+{"name": "yzt_iptv", "cat": "宇宙桥", "desc": "[宇宙桥] 直播源清单: src=iptv(央视卫视CCTV等171频道)|livechina(国内直播), 全文落盘+频道数+预览", "params": "src", "required": "", "timeoutMs": 60000, "cmd": "sh /data/lemonbrain/bin/yzt.sh iptv $src"}

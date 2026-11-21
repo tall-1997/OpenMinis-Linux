@@ -1,0 +1,1 @@
+{"name":"tx_elf","cat":"Termux","desc":"[Termux] ELF结构分析：头/段/符号/动态表","params":"file:string:ELF文件,op:string:header|sections|symbols|dynamic|all","required":"file","timeoutMs":180000,"cmd":"TX_FILE=$file TX_OP=$op sh /data/adb/lemon_kernel/lemon/tx/tx.sh elf"}

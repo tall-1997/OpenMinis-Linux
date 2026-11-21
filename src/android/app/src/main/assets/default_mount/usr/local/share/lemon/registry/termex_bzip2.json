@@ -1,0 +1,1 @@
+{"name":"termex_bzip2","desc":"[Termex] bzip2 1.0.8","params":"args:string:bzip2参数","required":"args","timeoutMs":120000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termex_bzip2 . /data/local/tmp/termex/env.sh; eval /data/local/tmp/termex/bin/bzip2 $args 2>&1"}

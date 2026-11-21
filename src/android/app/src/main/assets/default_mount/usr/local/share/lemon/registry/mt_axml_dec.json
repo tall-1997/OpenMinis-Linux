@@ -1,0 +1,1 @@
+{"name":"mt_axml_dec","cat":"MT底座","desc":"[MT底座] AXML 解码为可读 XML·P2版（typedValue 全类型格式化：string/float/dimension/fraction/int/boolean，CDATA/namespace 完整支持；原名 mt_axml_dump 与上游 #415 工具撞名故改名）","params":"path","required":"path","timeoutMs":30000,"cmd":"MT_ENG=axml MT_CMD=dump MT_PATH=$path sh /data/adb/lemon_kernel/lemon/mt/mt.sh"}

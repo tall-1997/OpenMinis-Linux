@@ -1,0 +1,1 @@
+{"name":"xb_text","cat":"X浏览器","desc":"取 X浏览器页面（或指定元素）的文本","params":"selector:string:CSS选择器 可空=body","required":"","timeoutMs":40000,"cmd":"/data/data/com.termux/files/usr/bin/bash /data/local/tmp/xbcdp.sh text $selector"}

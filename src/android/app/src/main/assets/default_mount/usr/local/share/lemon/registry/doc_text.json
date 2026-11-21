@@ -1,0 +1,1 @@
+{"name":"doc_text","cat":"文档","desc":"[文档] 提取文档文本(pdf/docx/pptx/xlsx/epub/txt 自动识别, 源自一加文档App能力并入)","params":"path:string:文档绝对路径|maxchars:integer:返回字符上限默认4000","required":"path","timeoutMs":60000,"cmd":"/data/data/com.termux/files/usr/bin/python3 /data/adb/lemon_kernel/doc_assets/doc_tool.py text $path $maxchars"}
