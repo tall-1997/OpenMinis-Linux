@@ -3337,6 +3337,10 @@
     <string name="guard_stop_on">Peut arrêter la session</string>
     <string name="guard_stop_off">N\'arrête jamais la session</string>
     <string name="guard_stop_footer">Quand il est actif, le garde-fou arrête la session dès que la même action se répète trop souvent. Quand il est inactif, il se contente de rappeler au modèle, utile pendant une longue attente comme une compilation.</string>
+    <string name="goal_drift_section">Supervision de la dérive de l\'objectif</string>
+    <string name="goal_drift_threshold_title">Seuil de rappel de dérive</string>
+    <string name="goal_drift_threshold_value">%1$d tours d\'outil</string>
+    <string name="goal_drift_footer">Tant qu\'un objectif est actif, voici combien de tours d\'outil consécutifs peuvent s\'écouler sans aucun mouvement du tableau du plan avant que l\'hôte ne rappelle au modèle son objectif. Plus élevé = moins de rappels ; plus bas = supervision plus stricte.</string>
     <string name="token_usage_section_memory">Mémoire</string>
     <string name="token_usage_memory_lines">Lignes livrées</string>
     <string name="token_usage_memory_shown">Nombre d\'affichages</string>

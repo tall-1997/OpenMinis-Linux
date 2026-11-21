@@ -1,5 +1,6 @@
 package com.openminis.app.goal
 
+import com.openminis.app.data.GoalDriftPrefs
 import com.openminis.app.data.db.GoalOrigin
 import com.openminis.app.data.db.GoalStatus
 import com.openminis.app.data.db.SessionGoalEntity
@@ -326,6 +327,7 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
             updated,
             objective = current.objective,
             pendingCount = plans.count { it.status != "done" },
+            threshold = GoalDriftPrefs.stallTurns(),
         )
         val finalState = if (nudge != null) updated.copy(nudgedBoardSha = updated.lastBoardSha) else updated
         GoalDriftStore.save(filesDir, sessionId, finalState)

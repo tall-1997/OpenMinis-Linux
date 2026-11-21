@@ -3341,6 +3341,10 @@
     <string name="guard_stop_on">Poate opri sesiunea</string>
     <string name="guard_stop_off">Nu oprește niciodată sesiunea</string>
     <string name="guard_stop_footer">Când este activ, protecția oprește sesiunea după ce aceeași acțiune se repetă prea des. Când este inactiv, doar îi reamintește modelului, util la așteptări lungi precum o compilare.</string>
+    <string name="goal_drift_section">Supravegherea derivei obiectivului</string>
+    <string name="goal_drift_threshold_title">Prag de memento pentru derivă</string>
+    <string name="goal_drift_threshold_value">%1$d ture de instrument</string>
+    <string name="goal_drift_footer">Cât timp un obiectiv este activ, acesta este numărul de ture consecutive de instrument care pot trece fără nicio mișcare a tablei planului înainte ca gazda să reamintească modelului obiectivul său. Mai mare = mai puține memento-uri; mai mic = supraveghere mai strictă.</string>
     <string name="token_usage_section_memory">Memorie</string>
     <string name="token_usage_memory_lines">Linii livrate</string>
     <string name="token_usage_memory_shown">Număr afișări</string>

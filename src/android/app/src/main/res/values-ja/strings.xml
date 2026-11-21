@@ -3336,6 +3336,10 @@
     <string name="guard_stop_on">セッションを停止できる</string>
     <string name="guard_stop_off">セッションを停止しない</string>
     <string name="guard_stop_footer">オンの場合、同じ操作が繰り返されるとセッションを停止します。オフの場合、モデルへの注意のみを行い、ビルド待ちなどの長い待機に適しています。</string>
+    <string name="goal_drift_section">目標逸脱の監視</string>
+    <string name="goal_drift_threshold_title">逸脱リマインダーのしきい値</string>
+    <string name="goal_drift_threshold_value">%1$d ツールターン</string>
+    <string name="goal_drift_footer">目標がアクティブな間、プランボードに何も変化がないまま連続でこの数のツールターンが経過すると、ホストがモデルに目標を思い出させます。大きいほどリマインダーは少なく、小さいほど監視は厳しくなります。</string>
     <string name="token_usage_section_memory">メモリ</string>
     <string name="token_usage_memory_lines">配信された行</string>
     <string name="token_usage_memory_shown">表示回数</string>

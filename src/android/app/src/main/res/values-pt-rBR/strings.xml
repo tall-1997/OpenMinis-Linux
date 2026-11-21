@@ -3337,6 +3337,10 @@
     <string name="guard_stop_on">Pode parar a sessão</string>
     <string name="guard_stop_off">Nunca para a sessão</string>
     <string name="guard_stop_footer">Quando ativado, a proteção para a sessão após a mesma ação se repetir demais. Quando desativado, apenas avisa o modelo, útil em esperas longas como um build.</string>
+    <string name="goal_drift_section">Supervisão de desvio do objetivo</string>
+    <string name="goal_drift_threshold_title">Limite de lembrete de desvio</string>
+    <string name="goal_drift_threshold_value">%1$d turnos de ferramenta</string>
+    <string name="goal_drift_footer">Enquanto um objetivo estiver ativo, este é o número de turnos de ferramenta consecutivos que podem passar sem nenhum movimento do quadro do plano antes de o host lembrar o modelo do seu objetivo. Mais alto significa menos lembretes; mais baixo significa supervisão mais rigorosa.</string>
     <string name="token_usage_section_memory">Memória</string>
     <string name="token_usage_memory_lines">Linhas entregues</string>
     <string name="token_usage_memory_shown">Vezes exibidas</string>

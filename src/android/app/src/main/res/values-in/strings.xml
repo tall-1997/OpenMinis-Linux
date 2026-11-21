@@ -3342,6 +3342,10 @@
     <string name="guard_stop_on">Dapat menghentikan sesi</string>
     <string name="guard_stop_off">Tidak pernah menghentikan sesi</string>
     <string name="guard_stop_footer">Jika aktif, pengaman menghentikan sesi setelah tindakan yang sama berulang terlalu sering. Jika nonaktif, pengaman hanya mengingatkan model, berguna saat menunggu lama seperti proses build.</string>
+    <string name="goal_drift_section">Pengawasan penyimpangan tujuan</string>
+    <string name="goal_drift_threshold_title">Ambang pengingat penyimpangan</string>
+    <string name="goal_drift_threshold_value">%1$d giliran alat</string>
+    <string name="goal_drift_footer">Selama tujuan aktif, ini adalah jumlah giliran alat berturut-turut yang dapat berlalu tanpa pergerakan apa pun di papan rencana sebelum host mengingatkan model tentang tujuannya. Lebih tinggi berarti lebih sedikit pengingat; lebih rendah berarti pengawasan lebih ketat.</string>
     <string name="token_usage_section_memory">Memori</string>
     <string name="token_usage_memory_lines">Baris terkirim</string>
     <string name="token_usage_memory_shown">Jumlah tampil</string>
