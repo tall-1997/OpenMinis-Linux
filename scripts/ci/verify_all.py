@@ -38,6 +38,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -285,20 +286,23 @@ def check_generated_tokens(cache: dict[Path, str]) -> list[str]:
     ui = REPO / "src" / "android" / "app" / "src" / "main" / "java" / "com" / "openminis" / "app" / "ui"
     if not gen.is_file() or not ui.is_dir():
         return []
-    out = REPO / ".verify_tokens_tmp"
-    try:
-        r = subprocess.run(
-            [sys.executable, str(gen), "--ui", str(ui), "--out", str(out)],
-            cwd=REPO, capture_output=True, text=True, timeout=300,
-        )
-    except subprocess.TimeoutExpired:
-        return ["gen_tokens.py 超时 (>300s)"]
-    if r.returncode != 0:
-        tail = (r.stderr or r.stdout or "").strip().splitlines()[-3:]
-        return [f"gen_tokens.py 失败 rc={r.returncode}: " + " | ".join(tail)]
-    produced = out / "MinisTokens.kt"
-    if not produced.is_file():
-        return [f"gen_tokens.py 未产出 {produced}"]
+    # 输出落到系统临时目录：以前写 REPO/.verify_tokens_tmp，跑一次门禁就在
+    # 工作区留下一堆文件，漏删就会被误提交（main 上曾经发生过）。
+    with tempfile.TemporaryDirectory(prefix="minis-tokens-") as tmp:
+        out = Path(tmp)
+        try:
+            r = subprocess.run(
+                [sys.executable, str(gen), "--ui", str(ui), "--out", str(out)],
+                cwd=REPO, capture_output=True, text=True, timeout=300,
+            )
+        except subprocess.TimeoutExpired:
+            return ["gen_tokens.py 超时 (>300s)"]
+        if r.returncode != 0:
+            tail = (r.stderr or r.stdout or "").strip().splitlines()[-3:]
+            return [f"gen_tokens.py 失败 rc={r.returncode}: " + " | ".join(tail)]
+        produced = out / "MinisTokens.kt"
+        if not produced.is_file():
+            return [f"gen_tokens.py 未产出 {produced}"]
     return []
 
 
