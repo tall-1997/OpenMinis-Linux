@@ -1045,6 +1045,13 @@
     <string name="model_group_detail_name">Nombre</string>
     <string name="model_group_detail_the_label_shown_in_the_model_picker_save">La etiqueta que se muestra en el selector de modelos. Se guarda automáticamente al tocar en otro lugar.</string>
     <string name="model_group_detail_routing_strategy">Estrategia de enrutamiento</string>
+    <string name="model_group_detail_more_strategies">Más estrategias</string>
+    <string name="model_group_detail_fewer_strategies">Menos estrategias</string>
+    <string name="model_connection_title">Modelo y conexión</string>
+    <string name="model_connection_providers_count">%1$d proveedores · %2$d modelos</string>
+    <string name="model_connection_groups_count">%1$d grupos</string>
+    <string name="model_connection_auto_groups">Grupos automáticos</string>
+    <string name="model_connection_not_set">Sin configurar</string>
     <string name="model_group_detail_routing_quota_window_footer">El miembro principal atiende hasta agotar la cuota de la ventana; luego toma el relevo el siguiente miembro hasta el reinicio.</string>
     <string name="model_group_detail_routing_round_robin_footer">Rota entre los miembros una llamada a la vez, en orden.</string>
     <string name="model_group_detail_routing_smart_footer">Las solicitudes ligeras van al último miembro (económico); las largas o complejas, al primero (potente).</string>

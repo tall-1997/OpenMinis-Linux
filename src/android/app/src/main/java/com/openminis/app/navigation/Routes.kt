@@ -58,6 +58,8 @@ object Routes {
     const val PROVIDER_DETAIL = "provider/{instanceId}"
     /** [T-android-provider-voice] Read-only shadow Voice Service detail. */
     const val SHADOW_VOICE_DETAIL = "voice_service/{instanceId}"
+    /** [T-model-connection] 设置里的「模型与连接」聚合页：连接 / 路由组 / 默认槽位。 */
+    const val MODEL_CONNECTION = "model_connection"
     const val MODEL_GROUPS = "model_groups"
     const val MODEL_GROUP_DETAIL = "model_group/{groupId}"
     const val ADD_MODELS_TO_GROUP = "add_models_to_group/{groupId}"

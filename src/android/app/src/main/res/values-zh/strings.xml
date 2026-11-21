@@ -1349,6 +1349,13 @@
     <string name="model_group_detail_name">名称</string>
     <string name="model_group_detail_the_label_shown_in_the_model_picker_save">在模型选择器里显示的标签。点击其它位置时自动保存。</string>
     <string name="model_group_detail_routing_strategy">路由策略</string>
+    <string name="model_connection_title">模型与连接</string>
+    <string name="model_connection_providers_count">%1$d 个供应商 · %2$d 个模型</string>
+    <string name="model_connection_groups_count">%1$d 个组</string>
+    <string name="model_connection_auto_groups">自动组</string>
+    <string name="model_connection_not_set">未设置</string>
+    <string name="model_group_detail_more_strategies">更多策略</string>
+    <string name="model_group_detail_fewer_strategies">收起更多策略</string>
     <string name="model_group_detail_routing_quota_window_footer">主成员服务至窗口配额耗尽，之后由下一位成员接管，直到窗口重置。</string>
     <string name="model_group_detail_routing_round_robin_footer">按顺序轮流切换成员，每次调用轮换一位。</string>
     <string name="model_group_detail_routing_smart_footer">轻量请求发给最后一位（省钱）成员；长或复杂的请求发给第一位（性能强）成员。</string>

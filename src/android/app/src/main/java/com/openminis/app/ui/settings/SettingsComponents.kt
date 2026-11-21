@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -40,6 +41,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.openminis.app.ui.components.MinisCenterTopBar
+import com.openminis.app.ui.components.SectionDesign
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
@@ -65,7 +67,6 @@ import com.openminis.app.R
 import com.openminis.app.ui.theme.monetIconTileColor
 import com.openminis.app.ui.theme.monetIconTileContentColor
 import com.openminis.app.ui.theme.m3Icon
-import com.openminis.app.i18n.uppercaseForDisplay
 
 /**
  * Shared primitives for settings pages. Grouped-card layout (iOS/ChatGPT style).
@@ -212,26 +213,24 @@ fun SettingsSection(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    // [T-android-settings-ui-md3] Section vertical rhythm normalized to the 4dp
-    // grid (fix_android_settings_ui.md #13): 24dp between sections instead of the
-    // off-grid 20dp. Applied as top padding so the first section under a TopAppBar
-    // keeps a consistent gap too.
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(top = 24.dp),
+            .padding(top = SectionDesign.SectionTopGap),
     ) {
         if (header != null) {
+            // 分组标题：句首大写、titleMedium/SemiBold。旧实现是全大写 labelSmall，
+            // 在 M3 里会「融进」页面背景；SectionDesign 的 HeaderInset 与行文字对齐。
             Text(
-                text = header.uppercaseForDisplay(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 0.5.sp,
-                // [T-android-settings-ui-md3] #5 header→card gap = 8dp (was 6dp,
-                // off-grid). Horizontal stays 32dp to align the header text with
-                // the inset card's content.
-                modifier = Modifier.padding(start = 32.dp, end = 32.dp, bottom = 8.dp),
+                text = header,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(
+                    start = SectionDesign.HeaderInset,
+                    end = SectionDesign.HeaderInset,
+                    bottom = SectionDesign.HeaderToCardGap,
+                ),
             )
         }
         // [T-android-settings-section-symmetry] The card carries NO vertical
@@ -248,25 +247,40 @@ fun SettingsSection(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(MaterialTheme.colorScheme.surfaceContainerLow),
+                .padding(horizontal = SectionDesign.ScreenHorizontalPadding)
+                .clip(SectionDesign.CardShape)
+                .background(SectionDesign.cardColor()),
             content = content,
         )
         if (footer != null) {
             Text(
                 text = footer,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                // [T-android-settings-ui-md3] #6 explanatory footer: 8dp below the
-                // card, 4dp before the next section (the parent's 24dp top padding
-                // already provides separation, so keep the footer's own bottom
-                // tight at 4dp).
-                modifier = Modifier.padding(start = 32.dp, end = 32.dp, top = 8.dp, bottom = 4.dp),
+                color = SectionDesign.footerColor(),
+                modifier = Modifier.padding(
+                    start = SectionDesign.HeaderInset,
+                    end = SectionDesign.HeaderInset,
+                    top = SectionDesign.CardToFooterGap,
+                    bottom = 4.dp,
+                ),
                 lineHeight = 16.sp,
             )
         }
     }
+}
+
+/**
+ * Thin divider for rows inside a [SettingsSection]. Insets match the row
+ * content edge (SectionDesign tokens) so the line tucks under the title
+ * instead of touching the card corner.
+ */
+@Composable
+fun SettingsRowDivider(modifier: Modifier = Modifier) {
+    HorizontalDivider(
+        modifier = modifier.padding(horizontal = SectionDesign.RowHorizontalPadding),
+        thickness = SectionDesign.DividerThickness,
+        color = SectionDesign.dividerColor(),
+    )
 }
 
 // ─── Row primitives ────────────────────────────────────────────────────────────
@@ -307,7 +321,7 @@ fun SettingsRow(
                 // is what made a no-subtitle last row read ~50px shorter.
                 .heightIn(min = minHeight)
                 .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(horizontal = SectionDesign.RowHorizontalPadding, vertical = 12.dp),
             // #10 keep the trailing control (Switch/value) vertically centered
             // against the title — already centered, kept explicit.
             verticalAlignment = Alignment.CenterVertically,
@@ -382,13 +396,15 @@ fun SettingsRow(
         }
 
         if (showDivider) {
-            val insetStart = if (icon != null) 58.dp else 14.dp
+            // 图标行分隔线从文字左缘起（16 + 30 图标 + 14 间距），无图标行从行内边距起。
+            val insetStart = if (icon != null) SectionDesign.RowHorizontalPadding + 44.dp
+                             else SectionDesign.RowHorizontalPadding
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = insetStart, end = 14.dp)
-                    .height(0.5.dp)
-                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    .padding(start = insetStart, end = SectionDesign.RowHorizontalPadding)
+                    .height(SectionDesign.DividerThickness)
+                    .background(SectionDesign.dividerColor()),
             )
         }
     }
@@ -500,9 +516,12 @@ fun SettingsChoiceRow(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = 16.dp, end = 14.dp)
-                    .height(0.5.dp)
-                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                    .padding(
+                        start = SectionDesign.RowHorizontalPadding,
+                        end = SectionDesign.RowHorizontalPadding,
+                    )
+                    .height(SectionDesign.DividerThickness)
+                    .background(SectionDesign.dividerColor()),
             )
         }
     }

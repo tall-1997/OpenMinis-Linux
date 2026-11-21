@@ -1469,6 +1469,13 @@
     <string name="model_group_detail_name">Name</string>
     <string name="model_group_detail_the_label_shown_in_the_model_picker_save">The label shown in the model picker. Saved automatically when you tap elsewhere.</string>
     <string name="model_group_detail_routing_strategy">Routing Strategy</string>
+    <string name="model_connection_title">Model &amp; Connection</string>
+    <string name="model_connection_providers_count">%1$d providers · %2$d models</string>
+    <string name="model_connection_groups_count">%1$d groups</string>
+    <string name="model_connection_auto_groups">Auto groups</string>
+    <string name="model_connection_not_set">Not set</string>
+    <string name="model_group_detail_more_strategies">More strategies</string>
+    <string name="model_group_detail_fewer_strategies">Fewer strategies</string>
     <string name="model_group_detail_routing_quota_window_footer">Primary member serves until the window quota runs out, then the next member takes over until it resets.</string>
     <string name="model_group_detail_routing_round_robin_footer">Rotates through members one call at a time, in order.</string>
     <string name="model_group_detail_routing_smart_footer">Light requests go to the last (budget) member; long or complex requests go to the first (strong) member.</string>

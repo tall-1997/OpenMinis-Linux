@@ -1047,6 +1047,13 @@
     <string name="model_group_detail_name">Nazwa</string>
     <string name="model_group_detail_the_label_shown_in_the_model_picker_save">Etykieta widoczna w wyborze modelu. Zapisywana automatycznie po dotknięciu innego miejsca.</string>
     <string name="model_group_detail_routing_strategy">Strategia kierowania</string>
+    <string name="model_group_detail_more_strategies">Więcej strategii</string>
+    <string name="model_group_detail_fewer_strategies">Mniej strategii</string>
+    <string name="model_connection_title">Model i połączenie</string>
+    <string name="model_connection_providers_count">%1$d dostawców · %2$d modeli</string>
+    <string name="model_connection_groups_count">%1$d grup</string>
+    <string name="model_connection_auto_groups">Grupy automatyczne</string>
+    <string name="model_connection_not_set">Nie ustawiono</string>
     <string name="model_group_detail_routing_quota_window_footer">Główny członek obsługuje, dopóki limit okna się nie wyczerpie; potem przejmuje następny członek aż do resetu.</string>
     <string name="model_group_detail_routing_round_robin_footer">Przechodzi przez członków po jednym wywołaniu, w kolejności.</string>
     <string name="model_group_detail_routing_smart_footer">Lekkie żądania trafiają do ostatniego (taniego) członka; długie lub złożone do pierwszego (mocnego).</string>

@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import com.openminis.app.data.model.ModelGroup
+import com.openminis.app.data.repository.AutoModelGroups
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.R
 import com.openminis.app.ui.components.MinisOutlinedButton
@@ -82,6 +83,8 @@ fun ModelGroupsScreen(
     providerRepository: ProviderRepository,
     onBack: () -> Unit,
     onGroupClick: (String) -> Unit,
+    /** [T-model-connection] true 时不画 Scaffold 顶栏，交给「模型与连接」聚合页。 */
+    embedded: Boolean = false,
     /** T185: navigate to the entries picker for the agent-loop set.
      *  Replaces T182's in-screen ModalBottomSheet so the picker shape
      *  matches AddModelsToGroupScreen (shared composable). */
@@ -90,7 +93,9 @@ fun ModelGroupsScreen(
     onAddAgentLoopGroups: () -> Unit = {},
 ) {
     val config by providerRepository.config.collectAsStateWithLifecycle()
-    val groups = config.modelGroups
+    // [T-auto-model-groups] 隐式组（auto: 前缀）由供应商派生，只在聊天选择器出现，
+    // 不进管理列表——否则用户会把它当成可编辑的组。
+    val groups = AutoModelGroups.userGroups(config)
     var showNewGroupDialog by remember { mutableStateOf(false) }
     var newGroupName by remember { mutableStateOf("") }
     // [T-android-swipe-row-actions] Pending swipe-delete target, hoisted out of
@@ -139,7 +144,7 @@ fun ModelGroupsScreen(
             fromKey.startsWith("group:") && toKey.startsWith("group:") -> {
                 val fromId = fromKey.removePrefix("group:")
                 val toId = toKey.removePrefix("group:")
-                val cur = providerRepository.config.value.modelGroups.map { it.id }
+                val cur = AutoModelGroups.userGroups(providerRepository.config.value).map { it.id }
                 val fromIdx = cur.indexOf(fromId)
                 val toIdx = cur.indexOf(toId)
                 if (fromIdx < 0 || toIdx < 0) return@rememberReorderableLazyListState
@@ -149,304 +154,247 @@ fun ModelGroupsScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            MinisCenterTopBar(
-                title = { Text(stringResource(R.string.model_groups_model_groups)) },
-                actions = {
-                    IconButton(onClick = { showNewGroupDialog = true }) {
-                        Icon(m3Icon(Icons.Default.Add), contentDescription = stringResource(R.string.model_groups_new_group))
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        // T313: page background uses SectionDesign.screenBackgroundColor()
-        // (= surfaceContainerLow), so the section cards painted in `surface`
-        // visibly stand out as iOS-style inset-grouped panels.
-        LazyColumn(
-            state = lazyListState,
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .background(SectionDesign.screenBackgroundColor()),
-        ) {
-            item("top_gap") { Spacer(modifier = Modifier.height(SectionDesign.FirstSectionTopGap)) }
-
-            if (groups.isEmpty()) {
-                item("empty_state") {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        Icon(
-                            m3Icon(Icons.Default.Layers),
-                            contentDescription = null,
-                            modifier = Modifier.size(48.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = stringResource(R.string.model_groups_no_model_groups),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = stringResource(R.string.model_groups_groups_let_you_combine_models_for_fallba),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            } else {
-                // [T-android-modelgroup-reorder] Groups are individual LazyColumn items keyed "group:<id>" (not one item wrapping a forEach), so ReorderableLazyListState can reorder them; drag lives on the leading handle.
-                item("groups_section_header") {
-                    SectionHeader(text = stringResource(R.string.agent_loop_models_groups))
-                }
-                itemsIndexed(groups, key = { _, g -> "group:${g.id}" }) { index, group ->
-                    ReorderableItem(
-                        state = reorderState,
-                        key = "group:${group.id}",
-                    ) { _ ->
-                        Column {
-                            if (index != 0) SectionDividerInsetCard()
-                            Box(
-                                modifier = Modifier.cardRow(
-                                    isFirst = index == 0,
-                                    isLast = index == groups.lastIndex,
-                                ),
-                            ) {
-                                // [T-android-swipe-row-actions] Replaces a SwipeToDismissBox that destroyed groups with no confirmation; Delete now routes through the same dialog/repo call as the detail screen.
-                                SwipeRowActions(
-                                    actions = listOf(
-                                        SwipeRowAction(
-                                            label = stringResource(R.string.common_edit),
-                                            icon = Icons.Filled.Edit,
-                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                                            onClick = { onGroupClick(group.id) },
-                                        ),
-                                        SwipeRowAction(
-                                            label = stringResource(R.string.common_delete),
-                                            icon = Icons.Filled.Delete,
-                                            containerColor = MaterialTheme.colorScheme.errorContainer,
-                                            contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                                            onClick = { groupToDelete = group },
-                                        ),
-                                    ),
-                                ) {
-                                    GroupRow(
-                                        group = group,
-                                        config = config,
-                                        onClick = { onGroupClick(group.id) },
-                                        dragHandleModifier = with(this@ReorderableItem) {
-                                            Modifier.draggableHandle()
-                                        },
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // T313 — Section 2 (Defaults). Two dropdown rows in one card
-                // with SectionDivider between them, footer caption outside.
-                item("defaults_section_spacer") {
-                    Spacer(modifier = Modifier.height(SectionDesign.SectionTopGap))
-                }
-                item("defaults_section_header") {
-                    SectionHeader(text = stringResource(R.string.model_groups_defaults))
-                }
-                item("defaults_section_card") {
-                    SectionCard {
-                        // Default Sub is not shown. Sub-agents use MultiAgentSettings;
-                        // defaultSubGroupId remains stored for title-generation fallback.
-                        SlotPickerField(
-                            label = stringResource(R.string.model_groups_default_primary),
-                            groups = groups,
-                            entries = config.modelEntries,
-                            instances = config.instances,
-                            selectedId = config.defaultPrimaryGroupId,
-                            onSelect = { providerRepository.defaultPrimaryGroupId = it },
-                        )
-                        SectionDivider()
-                        SlotPickerField(
-                            label = stringResource(R.string.model_groups_voice_input),
-                            groups = groups,
-                            entries = config.modelEntries,
-                            instances = config.instances,
-                            selectedId = config.voiceInputGroupId,
-                            onSelect = { providerRepository.voiceInputGroupId = it },
-                        )
-                        SectionDivider()
-                        SlotPickerField(
-                            label = stringResource(R.string.model_groups_voice_output),
-                            groups = groups,
-                            entries = config.modelEntries,
-                            instances = config.instances,
-                            selectedId = config.voiceOutputGroupId,
-                            onSelect = { providerRepository.voiceOutputGroupId = it },
-                        )
-                        SectionDivider()
-                        SlotPickerField(
-                            label = stringResource(R.string.model_groups_vision),
-                            groups = groups,
-                            entries = config.modelEntries,
-                            instances = config.instances,
-                            selectedId = config.visionGroupId,
-                            onSelect = { providerRepository.visionGroupId = it },
-                        )
-                        SectionDivider()
-                        SlotPickerField(
-                            label = stringResource(R.string.model_groups_compact_fallback),
-                            groups = groups,
-                            entries = config.modelEntries,
-                            instances = config.instances,
-                            selectedId = config.compactFallbackGroupId,
-                            onSelect = { providerRepository.compactFallbackGroupId = it },
-                        )
-                    }
-                }
-                item("defaults_section_footer") {
-                    SectionFooter(
-                        text = stringResource(R.string.model_groups_primary_is_used_for_main_agent_tasks_sub) +
-                            "\n" + stringResource(R.string.model_groups_compact_fallback_footer),
-                    )
-                }
-            }
-
-            // T182 / T185 / T186: Agent Loop Models section. Mirrors iOS
-            // ModelGroupsView.swift L77-79's inline AgentLoopModelsSection
-            // — header + curated rows + add-row + footer all directly in
-            // this LazyColumn so the rows can participate in the parent's
-            // ReorderableLazyListState (T186 drag-to-reorder).
-            agentLoopModelsSectionItems(
-                providerRepository = providerRepository,
-                config = config,
-                reorderState = reorderState,
-                onAddModelsTap = onAddAgentLoopModels,
-                onAddGroupsTap = onAddAgentLoopGroups,
+    val newGroupAction: @Composable () -> Unit = {
+        IconButton(onClick = { showNewGroupDialog = true }) {
+            Icon(
+                m3Icon(Icons.Default.Add),
+                contentDescription = stringResource(R.string.model_groups_new_group),
             )
         }
     }
 
-    // T185: the in-screen ModalBottomSheet was replaced by full-screen
-    // navigated picker screens (AddAgentLoopModelsScreen /
-    // AddAgentLoopGroupsScreen). The "Add Models" / "Add Groups"
-    // buttons inside AgentLoopModelsSection now invoke
-    // onAddAgentLoopModels / onAddAgentLoopGroups passed from
-    // AppNavigation, mirroring how AddModelsToGroupScreen is reached.
+    val listContent: @Composable (PaddingValues) -> Unit = { padding ->
+            // T313: page background uses SectionDesign.screenBackgroundColor()
+            // (= surfaceContainerLow), so the section cards painted in `surface`
+            // visibly stand out as iOS-style inset-grouped panels.
+            LazyColumn(
+                state = lazyListState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .background(SectionDesign.screenBackgroundColor()),
+            ) {
+                item("top_gap") { Spacer(modifier = Modifier.height(SectionDesign.FirstSectionTopGap)) }
 
-    if (showNewGroupDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                showNewGroupDialog = false
-                newGroupName = ""
-            },
-            title = { Text(stringResource(R.string.model_groups_new_group)) },
-            text = {
-                Column {
-                    Text(
-                        stringResource(R.string.model_groups_new_group_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = newGroupName,
-                        onValueChange = { newGroupName = it },
-                        label = { Text(stringResource(R.string.model_groups_group_name)) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
-            },
-            confirmButton = {
-                MinisTextButton(
-                    onClick = {
-                        if (newGroupName.isNotBlank()) {
-                            val newGroup = ModelGroup(name = newGroupName.trim())
-                            providerRepository.addGroup(newGroup)
-                            // Auto-set as primary default if it's the first group
-                            if (config.modelGroups.size == 1 && config.defaultPrimaryGroupId == null) {
-                                providerRepository.defaultPrimaryGroupId = newGroup.id
-                            }
-                            newGroupName = ""
-                            showNewGroupDialog = false
+                if (groups.isEmpty()) {
+                    item("empty_state") {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Icon(
+                                m3Icon(Icons.Default.Layers),
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = stringResource(R.string.model_groups_no_model_groups),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = stringResource(R.string.model_groups_groups_let_you_combine_models_for_fallba),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
-                    },
-                    enabled = newGroupName.isNotBlank(),
-                ) {
-                    Text(stringResource(R.string.model_groups_create))
+                    }
+                } else {
+                    // [T-android-modelgroup-reorder] Groups are individual LazyColumn items keyed "group:<id>" (not one item wrapping a forEach), so ReorderableLazyListState can reorder them; drag lives on the leading handle.
+                    item("groups_section_header") {
+                        SectionHeader(text = stringResource(R.string.agent_loop_models_groups))
+                    }
+                    itemsIndexed(groups, key = { _, g -> "group:${g.id}" }) { index, group ->
+                        ReorderableItem(
+                            state = reorderState,
+                            key = "group:${group.id}",
+                        ) { _ ->
+                            Column {
+                                if (index != 0) SectionDividerInsetCard()
+                                Box(
+                                    modifier = Modifier.cardRow(
+                                        isFirst = index == 0,
+                                        isLast = index == groups.lastIndex,
+                                    ),
+                                ) {
+                                    // [T-android-swipe-row-actions] Replaces a SwipeToDismissBox that destroyed groups with no confirmation; Delete now routes through the same dialog/repo call as the detail screen.
+                                    SwipeRowActions(
+                                        actions = listOf(
+                                            SwipeRowAction(
+                                                label = stringResource(R.string.common_edit),
+                                                icon = Icons.Filled.Edit,
+                                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                onClick = { onGroupClick(group.id) },
+                                            ),
+                                            SwipeRowAction(
+                                                label = stringResource(R.string.common_delete),
+                                                icon = Icons.Filled.Delete,
+                                                containerColor = MaterialTheme.colorScheme.errorContainer,
+                                                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                                                onClick = { groupToDelete = group },
+                                            ),
+                                        ),
+                                    ) {
+                                        GroupRow(
+                                            group = group,
+                                            config = config,
+                                            onClick = { onGroupClick(group.id) },
+                                            dragHandleModifier = with(this@ReorderableItem) {
+                                                Modifier.draggableHandle()
+                                            },
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                 }
-            },
-            dismissButton = {
-                MinisTextButton(onClick = {
+
+                // T182 / T185 / T186: Agent Loop Models section. Mirrors iOS
+                // ModelGroupsView.swift L77-79's inline AgentLoopModelsSection
+                // — header + curated rows + add-row + footer all directly in
+                // this LazyColumn so the rows can participate in the parent's
+                // ReorderableLazyListState (T186 drag-to-reorder).
+                agentLoopModelsSectionItems(
+                    providerRepository = providerRepository,
+                    config = config,
+                    reorderState = reorderState,
+                    onAddModelsTap = onAddAgentLoopModels,
+                    onAddGroupsTap = onAddAgentLoopGroups,
+                )
+            }
+        }
+
+        // T185: the in-screen ModalBottomSheet was replaced by full-screen
+        // navigated picker screens (AddAgentLoopModelsScreen /
+        // AddAgentLoopGroupsScreen). The "Add Models" / "Add Groups"
+        // buttons inside AgentLoopModelsSection now invoke
+        // onAddAgentLoopModels / onAddAgentLoopGroups passed from
+        // AppNavigation, mirroring how AddModelsToGroupScreen is reached.
+
+        if (showNewGroupDialog) {
+            AlertDialog(
+                onDismissRequest = {
                     showNewGroupDialog = false
                     newGroupName = ""
-                }) {
-                    Text(stringResource(R.string.common_cancel))
-                }
-            },
-        )
+                },
+                title = { Text(stringResource(R.string.model_groups_new_group)) },
+                text = {
+                    Column {
+                        Text(
+                            stringResource(R.string.model_groups_new_group_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = newGroupName,
+                            onValueChange = { newGroupName = it },
+                            label = { Text(stringResource(R.string.model_groups_group_name)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                },
+                confirmButton = {
+                    MinisTextButton(
+                        onClick = {
+                            if (newGroupName.isNotBlank()) {
+                                val newGroup = ModelGroup(name = newGroupName.trim())
+                                providerRepository.addGroup(newGroup)
+                                // Auto-set as primary default if it's the first group
+                                if (AutoModelGroups.userGroups(config).size == 1 && config.defaultPrimaryGroupId == null) {
+                                    providerRepository.defaultPrimaryGroupId = newGroup.id
+                                }
+                                newGroupName = ""
+                                showNewGroupDialog = false
+                            }
+                        },
+                        enabled = newGroupName.isNotBlank(),
+                    ) {
+                        Text(stringResource(R.string.model_groups_create))
+                    }
+                },
+                dismissButton = {
+                    MinisTextButton(onClick = {
+                        showNewGroupDialog = false
+                        newGroupName = ""
+                    }) {
+                        Text(stringResource(R.string.common_cancel))
+                    }
+                },
+            )
+        }
+
+        // [T-android-swipe-row-actions] Swipe-delete confirmation. Same title/body
+        // strings and same removeGroup() call as ModelGroupDetailScreen's Delete
+        // Group button — the swipe is a shortcut to that flow, not a second one.
+        groupToDelete?.let { target ->
+            AlertDialog(
+                onDismissRequest = { groupToDelete = null },
+                title = { Text(stringResource(R.string.model_group_detail_delete_group)) },
+                text = {
+                    Text(
+                        stringResource(
+                            R.string.model_group_detail_delete_named_group_confirm,
+                            target.name,
+                        ),
+                    )
+                },
+                confirmButton = {
+                    MinisTextButton(
+                        onClick = {
+                            providerRepository.removeGroup(target.id)
+                            groupToDelete = null
+                        },
+                    ) {
+                        Text(
+                            stringResource(R.string.common_delete),
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                },
+                dismissButton = {
+                    MinisTextButton(onClick = { groupToDelete = null }) {
+                        Text(stringResource(R.string.common_cancel))
+                    }
+                },
+            )
+    
     }
 
-    // [T-android-swipe-row-actions] Swipe-delete confirmation. Same title/body
-    // strings and same removeGroup() call as ModelGroupDetailScreen's Delete
-    // Group button — the swipe is a shortcut to that flow, not a second one.
-    groupToDelete?.let { target ->
-        AlertDialog(
-            onDismissRequest = { groupToDelete = null },
-            title = { Text(stringResource(R.string.model_group_detail_delete_group)) },
-            text = {
-                Text(
-                    stringResource(
-                        R.string.model_group_detail_delete_named_group_confirm,
-                        target.name,
-                    ),
+    if (embedded) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(SectionDesign.screenBackgroundColor()),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp),
+                horizontalArrangement = Arrangement.End,
+            ) { newGroupAction() }
+            listContent(PaddingValues(0.dp))
+        }
+    } else {
+        Scaffold(
+            topBar = {
+                MinisCenterTopBar(
+                    title = { Text(stringResource(R.string.model_groups_model_groups)) },
+                    actions = { newGroupAction() },
                 )
             },
-            confirmButton = {
-                MinisTextButton(
-                    onClick = {
-                        providerRepository.removeGroup(target.id)
-                        groupToDelete = null
-                    },
-                ) {
-                    Text(
-                        stringResource(R.string.common_delete),
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-            },
-            dismissButton = {
-                MinisTextButton(onClick = { groupToDelete = null }) {
-                    Text(stringResource(R.string.common_cancel))
-                }
-            },
-        )
-    }
-}
-
-/** Small colored badge label (e.g. "Primary", "Sub"). */
-@Composable
-private fun BadgeLabel(text: String, color: androidx.compose.ui.graphics.Color) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(color.copy(alpha = 0.12f))
-            .padding(horizontal = 6.dp, vertical = 2.dp),
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall,
-            color = color,
-            fontWeight = FontWeight.SemiBold,
-            fontSize = 11.sp,
-        )
+        ) { padding ->
+            listContent(padding)
+        }
     }
 }
 
@@ -700,276 +648,5 @@ private fun AgentLoopRow(
                 modifier = Modifier.size(18.dp),
             )
         }
-    }
-}
-
-// ── T313 LazyList card helpers ────────────────────────────────────────────
-//
-// SectionCard / SectionDivider from SectionDesign are designed for
-// Column-scoped sections, but the agent-loop section needs each row to
-// stay a top-level LazyColumn item so ReorderableLazyListState (T186) can
-// see it. These helpers paint the SectionDesign card visual on a per-row
-// basis: cardRow() applies horizontal insets + surface fill + per-row
-// corner clipping; SectionDividerInsetCard() draws the inner divider
-// between consecutive rows so the painted run reads as one panel.
-
-@Composable
-private fun Modifier.cardRow(isFirst: Boolean, isLast: Boolean): Modifier {
-    val shape = when {
-        isFirst && isLast -> SectionDesign.CardShape
-        isFirst -> RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)
-        isLast -> RoundedCornerShape(bottomStart = 12.dp, bottomEnd = 12.dp)
-        else -> RectangleShape
-    }
-    // Match SectionCard's inner Column vertical padding so first/last rows
-    // get the same breathing room from the card edge as Sections 1 & 2.
-    return this
-        .padding(horizontal = SectionDesign.ScreenHorizontalPadding)
-        .clip(shape)
-        .background(SectionDesign.cardColor())
-        .padding(
-            top = if (isFirst) SectionDesign.CardInnerVerticalPadding else 0.dp,
-            bottom = if (isLast) SectionDesign.CardInnerVerticalPadding else 0.dp,
-        )
-}
-
-/** Divider between two cardRow rows. Painted on the same surface fill so
- *  it reads as an inset divider inside the card panel rather than a hard
- *  line floating on the page background. */
-@Composable
-private fun SectionDividerInsetCard() {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = SectionDesign.ScreenHorizontalPadding)
-            .background(SectionDesign.cardColor()),
-    ) {
-        HorizontalDivider(
-            modifier = Modifier.padding(start = SectionDesign.DividerStartInset),
-            thickness = SectionDesign.DividerThickness,
-            color = SectionDesign.dividerColor(),
-        )
-    }
-}
-
-/**
- * [T-android-modelgroup-modality-icons] One modality marker shown after a Model
- * Group title. `kind` is the modality string ("image"/"audio"/"video"/"pdf"/
- * "text") and `isOutput` distinguishes a generation output from an accepted
- * input. Ports iOS ModelGroupsView.GroupRow.topModalities /
- * modalityIcon (commits 7caa580a + e0a7cd5f).
- */
-private data class GroupModalityMarker(val kind: String, val isOutput: Boolean)
-
-/**
- * Distinctiveness ranking, most distinctive first — mirrors iOS
- * `modalityPriority`. `text` input is intentionally absent (universal noise);
- * `text` output ranks last (implied for every model, only surfaces when a group
- * has nothing more distinctive). Transcription (audio-in) outranks other inputs
- * so Whisper-style groups get flagged even though their output is plain text.
- */
-private val GROUP_MODALITY_PRIORITY: List<GroupModalityMarker> = listOf(
-    GroupModalityMarker("video", isOutput = true),
-    GroupModalityMarker("image", isOutput = true),
-    GroupModalityMarker("audio", isOutput = true),
-    GroupModalityMarker("audio", isOutput = false),
-    GroupModalityMarker("video", isOutput = false),
-    GroupModalityMarker("image", isOutput = false),
-    GroupModalityMarker("pdf", isOutput = false),
-    GroupModalityMarker("text", isOutput = true),
-)
-
-/**
- * The group's top-2 most distinctive modalities across every member model's
- * inputs AND outputs, in priority order. Aggregates raw model modality lists
- * (Android convention — no capability inference); a null/empty outputModalities
- * counts as text output (iOS treats text-out as universal). Mirrors iOS
- * `GroupRow.topModalities`.
- */
-private fun groupTopModalities(
-    group: ModelGroup,
-    config: com.openminis.app.data.model.ProviderConfig,
-): List<GroupModalityMarker> {
-    val inputs = mutableSetOf<String>()
-    val outputs = mutableSetOf<String>()
-    for (entryId in group.memberEntryIds) {
-        val model = config.modelEntries.find { it.id == entryId }?.model ?: continue
-        model.inputModalities.orEmpty().forEach { inputs.add(it.lowercase()) }
-        val out = model.outputModalities.orEmpty()
-        if (out.isEmpty()) outputs.add("text") else out.forEach { outputs.add(it.lowercase()) }
-    }
-    return GROUP_MODALITY_PRIORITY.filter { marker ->
-        if (marker.isOutput) marker.kind in outputs else marker.kind in inputs
-    }.take(2)
-}
-
-/**
- * Icon + tint + a11y label for one [GroupModalityMarker], reusing the glyph
- * convention from ProviderDetailScreen.ModalityIconsRow: output/generation
- * modalities use the primary tint + "generate"-style glyph; input modalities
- * use the muted onSurfaceVariant tint. Renders nothing for unknown combos.
- */
-@Composable
-private fun GroupModalityIcon(marker: GroupModalityMarker) {
-    val outputTint = MaterialTheme.colorScheme.primary
-    val inputTint = MaterialTheme.colorScheme.onSurfaceVariant
-    val size = Modifier.size(14.dp)
-    val (vector, labelRes, tint) = when {
-        marker.isOutput && marker.kind == "video" -> Triple(Icons.Default.MovieCreation, R.string.modeldetail_video_output, outputTint)
-        marker.isOutput && marker.kind == "image" -> Triple(Icons.Default.AddPhotoAlternate, R.string.modeldetail_image_output, outputTint)
-        marker.isOutput && marker.kind == "audio" -> Triple(Icons.Default.VolumeUp, R.string.modelgroup_speech_output, outputTint)
-        marker.isOutput && marker.kind == "text" -> Triple(Icons.AutoMirrored.Filled.Article, R.string.modelgroup_text_generation, outputTint)
-        marker.kind == "audio" -> Triple(Icons.Default.Mic, R.string.modelgroup_speech_transcription, inputTint)
-        marker.kind == "video" -> Triple(Icons.Default.Videocam, R.string.modeldetail_video_input, inputTint)
-        marker.kind == "image" -> Triple(Icons.Default.Image, R.string.modeldetail_image_input, inputTint)
-        marker.kind == "pdf" -> Triple(Icons.AutoMirrored.Filled.InsertDriveFile, R.string.modeldetail_pdf_input, inputTint)
-        else -> return
-    }
-    Icon(imageVector = vector, contentDescription = stringResource(labelRes), modifier = size, tint = tint)
-}
-
-/** A single group row inside the Groups section card. Built as a plain
- *  Composable (not a ListItem) so it inherits the card's surface color
- *  cleanly without ListItem's container override. */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun GroupRow(
-    group: ModelGroup,
-    config: com.openminis.app.data.model.ProviderConfig,
-    onClick: () -> Unit,
-    /**
-     * [T-android-modelgroup-reorder] When non-null, a leading drag handle is
-     * rendered carrying this modifier (ReorderableItem.draggableHandle).
-     * Explicit handle rather than long-press-anywhere: the row already owns
-     * tap (open detail) and horizontal swipe (delete), and this matches
-     * AgentLoopRow's affordance in the section below.
-     */
-    dragHandleModifier: Modifier? = null,
-) {
-    // [T-modelgroups-row-scan] Three O(members × entries) scans used to run in
-    // composition on EVERY recomposition of the row (member names, enabled
-    // count, modality markers). One id→entry index is remembered per entries
-    // list; each derived value remembers against the smallest key it depends
-    // on, so unrelated recompositions reuse the results.
-    val membersById = remember(config.modelEntries) {
-        config.modelEntries.associateBy { it.id }
-    }
-    val enabledInstanceIds = remember(config.instances) {
-        config.instances.filter { it.isEnabled }.map { it.id }.toSet()
-    }
-    val memberNames = remember(group.memberEntryIds, membersById) {
-        group.memberEntryIds.mapNotNull { membersById[it]?.model?.displayName }
-    }
-    val preview = if (memberNames.size <= 3) {
-        memberNames.joinToString(", ")
-    } else {
-        memberNames.take(3).joinToString(", ") + " +${memberNames.size - 3}"
-    }
-    val isPrimary = config.defaultPrimaryGroupId == group.id
-    val isSub = config.defaultSubGroupId == group.id
-    val strategyLabel = stringResource(RoutingStrategyUi.titleRes(group.strategy))
-    // [T-disabled-provider-via-group-android] Count members whose provider
-    // instance is currently enabled — that's what the runtime resolver
-    // will actually consider. When every member sits behind a disabled
-    // provider, surface a warning so the user understands why the group
-    // appears empty in chat.
-    val totalMembers = group.memberEntryIds.size
-    val enabledMembers = remember(group.memberEntryIds, membersById, enabledInstanceIds) {
-        group.memberEntryIds.count { membersById[it]?.providerInstanceId in enabledInstanceIds }
-    }
-    val allDisabled = totalMembers > 0 && enabledMembers == 0
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(
-                horizontal = SectionDesign.RowHorizontalPadding,
-                vertical = SectionDesign.RowVerticalPadding,
-            ),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (dragHandleModifier != null) {
-            // T198 (same as AgentLoopRow): the handle must be an IconButton —
-            // a bare Icon has no pointer consumer, so draggableHandle() would
-            // never receive ACTION_DOWN/MOVE.
-            IconButton(
-                onClick = {},
-                modifier = dragHandleModifier.size(36.dp),
-            ) {
-                Icon(
-                    imageVector = m3Icon(Icons.Default.DragHandle),
-                    contentDescription = stringResource(R.string.model_group_detail_drag_to_reorder),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.size(20.dp),
-                )
-            }
-            Spacer(modifier = Modifier.width(4.dp))
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    text = group.name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                // [T-android-modelgroup-modality-icons] Mark the group's top-2
-                // most distinctive modalities (inputs + outputs) right after the
-                // title, in priority order, for at-a-glance "what is this group
-                // for". Ports iOS ModelGroupsView (7caa580a + e0a7cd5f).
-                // [T-modelgroups-row-scan] remember-guarded: recomputed only
-                // when the group's members or the entry list change.
-                val topModalities = remember(group.memberEntryIds, membersById) {
-                    groupTopModalities(group, config)
-                }
-                topModalities.forEach { marker ->
-                    GroupModalityIcon(marker)
-                }
-                if (isPrimary) BadgeLabel(stringResource(R.string.model_group_badge_primary), MaterialTheme.colorScheme.primary)
-                if (isSub) BadgeLabel(stringResource(R.string.model_group_badge_sub), MaterialTheme.colorScheme.tertiary)
-                if (allDisabled) {
-                    BadgeLabel(
-                        stringResource(R.string.model_group_no_usable_models_badge),
-                        MaterialTheme.colorScheme.error,
-                    )
-                }
-            }
-            // [T-disabled-provider-via-group-android] Surface "M of N
-            // disabled" when any member's provider is off so the user
-            // doesn't have to drill into the detail page to learn that
-            // the group isn't fully usable. Total count stays prominent
-            // because it's still the source of truth for what's in the
-            // group; the parenthetical reports disabled count.
-            val disabledCount = totalMembers - enabledMembers
-            // [T-hardcoded-strings] "models (N disabled)" was English-only.
-            val subtitleText = if (disabledCount > 0) {
-                "$strategyLabel · " + stringResource(R.string.model_group_models_disabled, totalMembers, disabledCount)
-            } else {
-                "$strategyLabel · " + stringResource(R.string.model_group_models_plain, totalMembers)
-            }
-            Text(
-                text = subtitleText,
-                style = MaterialTheme.typography.bodySmall,
-                color = if (allDisabled) MaterialTheme.colorScheme.error
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (preview.isNotEmpty()) {
-                Text(
-                    text = preview,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline,
-                    maxLines = 1,
-                )
-            }
-        }
-        Icon(
-            m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }

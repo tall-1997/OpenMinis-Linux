@@ -1046,6 +1046,13 @@
     <string name="model_group_detail_name">ชื่อ</string>
     <string name="model_group_detail_the_label_shown_in_the_model_picker_save">ป้ายกำกับที่แสดงในตัวเลือกโมเดล ระบบจะบันทึกอัตโนมัติเมื่อคุณแตะที่อื่น</string>
     <string name="model_group_detail_routing_strategy">กลยุทธ์การกำหนดเส้นทาง</string>
+    <string name="model_group_detail_more_strategies">กลยุทธ์เพิ่มเติม</string>
+    <string name="model_group_detail_fewer_strategies">ย่อกลยุทธ์</string>
+    <string name="model_connection_title">โมเดลและการเชื่อมต่อ</string>
+    <string name="model_connection_providers_count">%1$d ผู้ให้บริการ · %2$d โมเดล</string>
+    <string name="model_connection_groups_count">%1$d กลุ่ม</string>
+    <string name="model_connection_auto_groups">กลุ่มอัตโนมัติ</string>
+    <string name="model_connection_not_set">ยังไม่ตั้งค่า</string>
     <string name="model_group_detail_routing_quota_window_footer">สมาชิกหลักให้บริการจนโควตาหน้าต่างหมด แล้วสมาชิกถัดไปรับช่วงจนกว่าจะรีเซ็ต</string>
     <string name="model_group_detail_routing_round_robin_footer">วนสมาชิกทีละหนึ่งคำขอตามลำดับ</string>
     <string name="model_group_detail_routing_smart_footer">คำขอเบาไปที่สมาชิกสุดท้าย (ประหยัด) ส่วนคำขอยาวหรือซับซ้อนไปที่สมาชิกแรก (แรง)</string>

@@ -1046,6 +1046,13 @@
     <string name="model_group_detail_name">名前</string>
     <string name="model_group_detail_the_label_shown_in_the_model_picker_save">モデルピッカーに表示されるラベル。他の場所をタップすると自動的に保存されます。</string>
     <string name="model_group_detail_routing_strategy">ルーティング戦略</string>
+    <string name="model_group_detail_more_strategies">その他の戦略</string>
+    <string name="model_group_detail_fewer_strategies">戦略を折りたたむ</string>
+    <string name="model_connection_title">モデルと接続</string>
+    <string name="model_connection_providers_count">%1$d プロバイダー · %2$d モデル</string>
+    <string name="model_connection_groups_count">%1$d グループ</string>
+    <string name="model_connection_auto_groups">自動グループ</string>
+    <string name="model_connection_not_set">未設定</string>
     <string name="model_group_detail_routing_quota_window_footer">プライマリメンバーがウィンドウのクォータを使い切るまで処理し、その後リセットまで次のメンバーが引き継ぎます。</string>
     <string name="model_group_detail_routing_round_robin_footer">メンバーを順番に1回の呼び出しずつローテーションします。</string>
     <string name="model_group_detail_routing_smart_footer">軽いリクエストは最後の（安価な）メンバーへ、長い・複雑なリクエストは最初の（高性能な）メンバーへ送ります。</string>

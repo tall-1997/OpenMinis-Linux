@@ -1105,6 +1105,13 @@
     <string name="model_group_detail_name">名稱</string>
     <string name="model_group_detail_the_label_shown_in_the_model_picker_save">在模型選擇器裡顯示的標籤。點擊其他位置時自動儲存。</string>
     <string name="model_group_detail_routing_strategy">路由策略</string>
+    <string name="model_group_detail_more_strategies">更多策略</string>
+    <string name="model_group_detail_fewer_strategies">收合更多策略</string>
+    <string name="model_connection_title">模型與連線</string>
+    <string name="model_connection_providers_count">%1$d 個供應商 · %2$d 個模型</string>
+    <string name="model_connection_groups_count">%1$d 個群組</string>
+    <string name="model_connection_auto_groups">自動群組</string>
+    <string name="model_connection_not_set">未設定</string>
     <string name="model_group_detail_routing_quota_window_footer">主要成員服務至視窗配額耗盡，之後由下一位成員接手，直到視窗重置。</string>
     <string name="model_group_detail_routing_round_robin_footer">依順序輪流切換成員，每次呼叫輪換一位。</string>
     <string name="model_group_detail_routing_smart_footer">輕量請求發給最後一位（省錢）成員；長或複雜的請求發給第一位（效能強）成員。</string>

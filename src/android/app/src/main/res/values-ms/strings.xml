@@ -1046,6 +1046,13 @@
     <string name="model_group_detail_name">Nama</string>
     <string name="model_group_detail_the_label_shown_in_the_model_picker_save">Label yang dipaparkan dalam pemilih model. Disimpan secara automatik apabila anda mengetik di tempat lain.</string>
     <string name="model_group_detail_routing_strategy">Strategi Penghalaan</string>
+    <string name="model_group_detail_more_strategies">Lagi strategi</string>
+    <string name="model_group_detail_fewer_strategies">Kurangkan strategi</string>
+    <string name="model_connection_title">Model &amp; Sambungan</string>
+    <string name="model_connection_providers_count">%1$d pembekal · %2$d model</string>
+    <string name="model_connection_groups_count">%1$d kumpulan</string>
+    <string name="model_connection_auto_groups">Kumpulan automatik</string>
+    <string name="model_connection_not_set">Belum ditetapkan</string>
     <string name="model_group_detail_routing_quota_window_footer">Ahli utama melayan sehingga kuota tetingkap habis, kemudian ahli seterusnya mengambil alih sehingga diset semula.</string>
     <string name="model_group_detail_routing_round_robin_footer">Memusing ahli satu panggilan pada satu masa, mengikut urutan.</string>
     <string name="model_group_detail_routing_smart_footer">Permintaan ringan ke ahli terakhir (jimat); permintaan panjang atau kompleks ke ahli pertama (kuat).</string>

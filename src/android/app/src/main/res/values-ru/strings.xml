@@ -1048,6 +1048,13 @@
     <string name="model_group_detail_name">Имя</string>
     <string name="model_group_detail_the_label_shown_in_the_model_picker_save">Метка, отображаемая в выборе моделей. Сохраняется автоматически при нажатии в другом месте.</string>
     <string name="model_group_detail_routing_strategy">Стратегия маршрутизации</string>
+    <string name="model_group_detail_more_strategies">Ещё стратегии</string>
+    <string name="model_group_detail_fewer_strategies">Свернуть стратегии</string>
+    <string name="model_connection_title">Модель и подключение</string>
+    <string name="model_connection_providers_count">%1$d провайдеров · %2$d моделей</string>
+    <string name="model_connection_groups_count">%1$d групп</string>
+    <string name="model_connection_auto_groups">Автогруппы</string>
+    <string name="model_connection_not_set">Не задано</string>
     <string name="model_group_detail_routing_quota_window_footer">Основной участник обрабатывает запросы, пока не исчерпана квота окна, затем до сброса его сменяет следующий.</string>
     <string name="model_group_detail_routing_round_robin_footer">Перебирает участников по кругу — один вызов за раз, по порядку.</string>
     <string name="model_group_detail_routing_smart_footer">Лёгкие запросы идут последнему (дешёвому) участнику; длинные и сложные — первому (мощному).</string>

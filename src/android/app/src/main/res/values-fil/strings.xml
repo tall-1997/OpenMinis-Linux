@@ -1046,6 +1046,13 @@
     <string name="model_group_detail_name">Pangalan</string>
     <string name="model_group_detail_the_label_shown_in_the_model_picker_save">Ang label na ipinapakita sa model picker. Awtomatikong nase-save kapag nag-tap ka sa ibang bahagi.</string>
     <string name="model_group_detail_routing_strategy">Estratehiya sa Pagruruta</string>
+    <string name="model_group_detail_more_strategies">Higit pang estratehiya</string>
+    <string name="model_group_detail_fewer_strategies">Mas kaunting estratehiya</string>
+    <string name="model_connection_title">Model at Koneksyon</string>
+    <string name="model_connection_providers_count">%1$d provider · %2$d modelo</string>
+    <string name="model_connection_groups_count">%1$d grupo</string>
+    <string name="model_connection_auto_groups">Mga awtomatikong grupo</string>
+    <string name="model_connection_not_set">Hindi nakatakda</string>
     <string name="model_group_detail_routing_quota_window_footer">Nagseserbisyo ang pangunahing miyembro hanggang maubos ang quota ng window, pagkatapos ay papalit ang susunod na miyembro hanggang mag-reset.</string>
     <string name="model_group_detail_routing_round_robin_footer">Iikot sa mga miyembro nang paisa-isang tawag, ayon sa pagkakasunod-sunod.</string>
     <string name="model_group_detail_routing_smart_footer">Ang magagaan na kahilingan ay sa huling (murang) miyembro; ang mahahaba o kumplikado ay sa unang (malakas) na miyembro.</string>

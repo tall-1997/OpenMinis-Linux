@@ -1045,6 +1045,13 @@
     <string name="model_group_detail_name">Name</string>
     <string name="model_group_detail_the_label_shown_in_the_model_picker_save">Das in der Modellauswahl angezeigte Label. Wird automatisch gespeichert, wenn du an anderer Stelle tippst.</string>
     <string name="model_group_detail_routing_strategy">Routing-Strategie</string>
+    <string name="model_group_detail_more_strategies">Weitere Strategien</string>
+    <string name="model_group_detail_fewer_strategies">Weniger Strategien</string>
+    <string name="model_connection_title">Modell &amp; Verbindung</string>
+    <string name="model_connection_providers_count">%1$d Anbieter · %2$d Modelle</string>
+    <string name="model_connection_groups_count">%1$d Gruppen</string>
+    <string name="model_connection_auto_groups">Automatische Gruppen</string>
+    <string name="model_connection_not_set">Nicht festgelegt</string>
     <string name="model_group_detail_routing_quota_window_footer">Das primäre Mitglied bedient, bis das Fensterkontingent aufgebraucht ist, dann übernimmt das nächste Mitglied bis zur Zurücksetzung.</string>
     <string name="model_group_detail_routing_round_robin_footer">Rotiert die Mitglieder der Reihe nach durch, ein Aufruf nach dem anderen.</string>
     <string name="model_group_detail_routing_smart_footer">Leichte Anfragen gehen an das letzte (günstige) Mitglied; lange oder komplexe Anfragen an das erste (starke) Mitglied.</string>

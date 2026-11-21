@@ -34,7 +34,6 @@ import com.openminis.app.mcp.server.approval.McpApprovalCore
 import com.openminis.app.mcp.server.approval.McpApprovalExecutor
 import com.openminis.app.mcp.server.approval.McpApprovalManager
 import com.openminis.app.mcp.server.approval.McpApprovalRpc
-import com.openminis.app.ui.components.SettingsRowDivider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
