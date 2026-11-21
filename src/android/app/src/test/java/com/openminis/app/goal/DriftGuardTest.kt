@@ -45,4 +45,21 @@ class DriftGuardTest {
     fun nonPositiveCadenceIsRejected() {
         DriftGuard.bucketFor(50, 0)
     }
+
+    @Test
+    fun loopDetectionFiresOnlyOnIdenticalFullWindows() {
+        val same = List(DriftGuard.LOOP_WINDOW) { "cmd-a" }
+        assertTrue(DriftGuard.detectLoop(same))
+        assertFalse(DriftGuard.detectLoop(same.take(DriftGuard.LOOP_WINDOW - 1)))
+        assertFalse(DriftGuard.detectLoop(List(DriftGuard.LOOP_WINDOW) { "cmd-${it % 2}" }))
+        assertFalse(DriftGuard.detectLoop(List(DriftGuard.LOOP_WINDOW) { "" }))
+        assertFalse(DriftGuard.detectLoop(emptyList()))
+    }
+
+    @Test
+    fun noteCarriesTheTriggerReasonWhenPresent() {
+        val note = DriftGuard.buildNote(DriftGuard.markerFor(10), "", 10, 10, "loop: repeated calls")
+        assertTrue(note.contains("Trigger: loop: repeated calls"))
+        assertFalse(DriftGuard.buildNote(DriftGuard.markerFor(10), "", 10).contains("Trigger:"))
+    }
 }

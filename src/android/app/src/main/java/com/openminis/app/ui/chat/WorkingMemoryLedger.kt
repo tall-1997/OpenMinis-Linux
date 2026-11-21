@@ -217,6 +217,11 @@ internal class WorkingMemoryLedger {
     @Synchronized
     fun lastTurn(): Int = entries.lastOrNull()?.turn ?: 0
 
+    /** [T-drift-signal] The most recent k args digests, oldest first — the
+     *  input to DriftGuard.detectLoop. */
+    @Synchronized
+    fun recentDigests(k: Int): List<String> = entries.takeLast(k).map { it.argsDigest }
+
     /** [T-working-memory-persist] Undo the last render when its note failed
      * to reach the transcript; the next turn retries instead of losing it. */
     @Synchronized
