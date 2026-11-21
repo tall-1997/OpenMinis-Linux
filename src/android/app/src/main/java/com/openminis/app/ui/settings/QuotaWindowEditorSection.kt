@@ -17,7 +17,6 @@ import com.openminis.app.data.GroupRoutingState
 import com.openminis.app.data.model.FallbackStrategy
 import com.openminis.app.data.model.ModelGroup
 import com.openminis.app.ui.components.SectionTextField
-import com.openminis.app.ui.components.SettingsRowDivider
 
 /**
  * [T-routing-strategy-x-fix] Quota-window editor and fallback-trigger

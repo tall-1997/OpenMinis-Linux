@@ -32,6 +32,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import com.openminis.app.ui.tokens.MinisTypography
 
 @Composable
 internal fun RenderMdAudio(block: MdBlock.Audio) {
@@ -104,7 +105,7 @@ internal fun RenderMdAudio(block: MdBlock.Audio) {
         ) {
             MdText(
                 text = AnnotatedString(block.alt.ifEmpty { filename }),
-                fontSize = 13.sp,
+                fontSize = MinisTypography.body,
                 color = colors.text,
                 maxLines = 1,
             )
@@ -121,7 +122,7 @@ internal fun RenderMdAudio(block: MdBlock.Audio) {
             if (durationMs > 0) {
                 MdText(
                     text = AnnotatedString("${formatMdMediaMs(positionMs)} / ${formatMdMediaMs(durationMs)}"),
-                    fontSize = 11.sp,
+                    fontSize = MinisTypography.cap,
                     color = colors.blockquote,
                 )
             }

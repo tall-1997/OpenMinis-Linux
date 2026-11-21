@@ -133,8 +133,8 @@ object AccessibilityRecoveryManager {
      * Latched by [markGranted], which the service calls on connect.
      */
     fun hasEverBeenGranted(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getBoolean(KEY_EVER_GRANTED, false)
+        com.openminis.app.config.Prefs.file(PREFS)
+            .bool(KEY_EVER_GRANTED, false)
 
     /**
      * Latch that the grant has existed. Called from
@@ -143,9 +143,9 @@ object AccessibilityRecoveryManager {
      * toggle, Shizuku repair, or a restore).
      */
     fun markGranted(context: Context) {
-        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (!p.getBoolean(KEY_EVER_GRANTED, false)) {
-            p.edit().putBoolean(KEY_EVER_GRANTED, true).apply()
+        val p = com.openminis.app.config.Prefs.file(PREFS)
+        if (!p.bool(KEY_EVER_GRANTED, false)) {
+            p.set(KEY_EVER_GRANTED, true)
             AppLogger.info(TAG, "grant latched (first successful connect)")
         }
     }
@@ -173,9 +173,7 @@ object AccessibilityRecoveryManager {
         cachedRevoked?.let { if (now - cachedAtMs < CHECK_CACHE_TTL_MS) return it }
 
         val revoked = try {
-            val enabled = Settings.Secure.getString(
-                context.contentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+            val enabled = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
             )
             isRevokedIn(
                 enabledValue = enabled,
@@ -253,9 +251,7 @@ object AccessibilityRecoveryManager {
         val target = componentId(context)
 
         val existing = try {
-            Settings.Secure.getString(
-                context.contentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+            Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
             )?.split(':')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
         } catch (_: Throwable) { emptyList() }
 

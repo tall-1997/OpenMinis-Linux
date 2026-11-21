@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.data.model.ModelGroup
 import com.openminis.app.data.repository.ProviderRepository
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * Onboarding step 2: pick 1-3 models from configured providers
@@ -191,7 +192,7 @@ fun OnboardingModelSelectionScreen(
                                         Text(
                                             "${selectionIndex + 1}",
                                             color = MaterialTheme.colorScheme.onPrimary,
-                                            fontSize = 12.sp,
+                                            fontSize = MinisTypography.foot,
                                             fontWeight = FontWeight.SemiBold,
                                         )
                                     }

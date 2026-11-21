@@ -57,6 +57,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.RandomAccessFile
+import com.openminis.app.ui.tokens.MinisTypography
 // Log management screen: Logging switch, daily Log Files list, and Delete All Logs. Mirrors iOS LogManagementView.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -697,7 +698,7 @@ fun LogDetailScreen(
                         loadError ?: "",
                         style = TextStyle(
                             fontFamily = FontFamily.Monospace,
-                            fontSize = 12.sp,
+                            fontSize = MinisTypography.codeFoot,
                             color = MaterialTheme.colorScheme.error,
                         ),
                         modifier = Modifier.padding(12.dp),
@@ -721,8 +722,8 @@ fun LogDetailScreen(
                             text = log.readLine(i),
                             style = TextStyle(
                                 fontFamily = FontFamily.Monospace,
-                                fontSize = 11.sp,
-                                lineHeight = 16.sp,
+                                fontSize = MinisTypography.codeSm,
+                                lineHeight = MinisTypography.type.lineHeightMono(11f).sp,
                                 color = MaterialTheme.colorScheme.onSurface,
                             ),
                             modifier = Modifier.fillMaxWidth(),

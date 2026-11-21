@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * Group-chat speaker avatar. [T-brand-avatar-single-source] The brand mark is
@@ -51,7 +52,7 @@ internal fun VendorMark(
         Text(
             text = fallbackName.take(1),
             color = Color.White,
-            fontSize = 10.sp,
+            fontSize = MinisTypography.chip,
             fontWeight = FontWeight.Bold,
         )
     }

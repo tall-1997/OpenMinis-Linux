@@ -8,6 +8,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
@@ -27,6 +31,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import com.openminis.app.R
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * One rendered chat row: the alpha/search-focus wrapper Box plus the
@@ -155,6 +160,12 @@ internal fun ChatFlatItemRow(
                                 ),
                         ) {
                         when (item) {
+
+                            // [T-port-fold-tools] A folded run of tool calls: one row, members behind a tap.
+                            is com.openminis.app.ui.chat.FlatChatItem.AssistantToolGroup -> {
+                                var open by rememberSaveable(item.key) { mutableStateOf(item.expanded) }
+                                ToolGroupRow(item.copy(expanded = open)) { open = !open }
+                            }
                             is FlatChatItem.UserBubble -> {
                                 // User bubbles intentionally don't register
                                 // MinisTextKit shards — long-press on a user
@@ -541,8 +552,8 @@ private fun MessageUsageFooterLine(stats: MessageUsageStats) {
     val parts = listOfNotNull(tokensPart, cachePart, speedPart)
     Text(
         text = parts.joinToString(" · "),
-        fontSize = 11.sp,
-        lineHeight = 14.sp,
+        fontSize = MinisTypography.cap,
+        lineHeight = MinisTypography.lineCap,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(start = 6.dp, top = 3.dp),
     )

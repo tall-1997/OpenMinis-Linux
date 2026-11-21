@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.i18n.uppercaseForDisplay
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.tokens.MinisType
 
 /**
  * [T-detail-rows-unify] Shared row/section scaffolding for the settings
@@ -77,7 +78,7 @@ internal fun DetailSection(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
-                letterSpacing = 0.5.sp,
+                letterSpacing = MinisType().sectionLabelSpacing.sp,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
             )
         }

@@ -39,6 +39,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import com.openminis.app.ui.tokens.MinisTypography
 import com.openminis.app.R
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.ui.theme.m3Icon
@@ -69,7 +70,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ArrowCircleDown
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.sp
 import com.openminis.app.data.model.ModelEntry
 import com.openminis.app.data.model.ModelGroup
 import com.openminis.app.data.model.ProviderConfig
@@ -349,7 +349,7 @@ internal fun ModelPickerSheet(
                                         Spacer(Modifier.width(2.dp))
                                         Text(
                                             strategyLabel,
-                                            fontSize = 9.sp,
+                                            fontSize = MinisTypography.cap2,
                                             fontWeight = FontWeight.Medium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                         )
@@ -393,8 +393,8 @@ internal fun ModelPickerSheet(
                             if (isDefault) {
                                 Text(
                                     stringResource(R.string.model_picker_default_badge),
-                                    fontSize = 9.sp,
-                                    lineHeight = 11.sp,
+                                    fontSize = MinisTypography.cap2,
+                                    lineHeight = MinisTypography.lineBadge,
                                     fontWeight = FontWeight.Medium,
                                     color = Color(0xFF007AFF),
                                     modifier = Modifier

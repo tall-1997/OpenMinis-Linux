@@ -1713,9 +1713,9 @@ private fun categoryTint(cat: BackupCategory): Color = when (cat) {
     BackupCategory.CHATS -> IosBlue                 // blue
     BackupCategory.SHARED_FILES -> IosIndigo         // indigo
     BackupCategory.SKILLS -> IosOrange              // orange
-    BackupCategory.MEMORY -> Color(0xFFFF2D55)             // pink
+    BackupCategory.MEMORY -> RawC.systemPink.tc             // pink
     BackupCategory.PROVIDERS -> IosTeal         // teal
-    BackupCategory.MCP_SERVERS -> Color(0xFF32ADE6)      // cyan
+    BackupCategory.MCP_SERVERS -> RawC.systemTeal.tc      // cyan
     BackupCategory.ENVIRONMENT_VARIABLES -> Color(0xFFA2845E) // brown
     BackupCategory.VOICE_CORRECTIONS -> IosPurple // purple
     BackupCategory.ROOTFS -> IosGreen             // green

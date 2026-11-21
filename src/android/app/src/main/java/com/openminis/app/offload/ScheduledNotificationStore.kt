@@ -19,12 +19,12 @@ import org.json.JSONObject
  */
 internal class ScheduledNotificationStore(context: Context) {
 
-    private val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private val prefs = com.openminis.app.config.Prefs.file(PREFS)
 
     fun add(entry: JSONObject) {
         val list = loadAll()
         list.put(entry)
-        prefs.edit().putString(KEY, list.toString()).apply()
+        prefs.set(KEY, list.toString())
     }
 
     fun remove(id: String): Boolean {
@@ -32,7 +32,7 @@ internal class ScheduledNotificationStore(context: Context) {
         for (i in 0 until list.length()) {
             if (list.getJSONObject(i).optString("id") == id) {
                 list.remove(i)
-                prefs.edit().putString(KEY, list.toString()).apply()
+                prefs.set(KEY, list.toString())
                 return true
             }
         }
@@ -40,7 +40,7 @@ internal class ScheduledNotificationStore(context: Context) {
     }
 
     fun clear() {
-        prefs.edit().remove(KEY).apply()
+        prefs.remove(KEY)
     }
 
     fun get(id: String): JSONObject? {
@@ -53,7 +53,7 @@ internal class ScheduledNotificationStore(context: Context) {
     }
 
     fun loadAll(): JSONArray {
-        val raw = prefs.getString(KEY, null) ?: return JSONArray()
+        val raw = prefs.stringOrNull(KEY) ?: return JSONArray()
         return try { JSONArray(raw) } catch (_: Exception) { JSONArray() }
     }
 
@@ -75,7 +75,7 @@ internal class ScheduledNotificationStore(context: Context) {
                 dropped = true
             }
         }
-        if (dropped) prefs.edit().putString(KEY, kept.toString()).apply()
+        if (dropped) prefs.set(KEY, kept.toString())
     }
 
     companion object {

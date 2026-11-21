@@ -12,5 +12,5 @@ dependencies {
     // its classpath), so it still compiles against the Maven 20231013 API —
     // which is a superset of the platform's — while the APK binds to the
     // platform classes only.
-    compileOnly("org.json:json:20231013")
+    compileOnly(libs.org.json)
 }

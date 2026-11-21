@@ -50,6 +50,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * Logs → Config Changes tab. Lists every config write attempt
@@ -331,7 +332,7 @@ private fun StatusBadge(status: ConfigAuditStatus) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodySmall.copy(
-                fontSize = 10.sp,
+                fontSize = MinisTypography.chip,
                 fontFamily = FontFamily.Monospace,
             ),
             color = Color.White,

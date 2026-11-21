@@ -119,7 +119,7 @@ class ThinkingStableExpandTest {
 
     @Test
     fun `thinking content poll is gone - batcher paces recomposition`() {
-        val src = ProductionSources.read("ui/chat/ChatAssistantMessageUI.kt")
+        val src = ProductionSources.read("ui/chat/ThinkingBlockUI.kt")
         assertFalse(
             "rememberUpdatedState poll loop removed - it only added lag on top of the batcher",
             "rememberUpdatedState" in src,

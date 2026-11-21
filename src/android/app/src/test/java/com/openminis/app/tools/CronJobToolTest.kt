@@ -2,9 +2,12 @@ package com.openminis.app.tools
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.openminis.app.config.AndroidPrefsSource
+import com.openminis.app.config.Prefs
 import com.openminis.app.scheduled.ScheduledTargetMode
 import com.openminis.app.scheduled.ScheduledTaskManager
 import com.openminis.app.scheduled.ScheduledTaskStore
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -13,7 +16,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import org.json.JSONObject
 
 /**
  * [T-android-subagent-attribution] Pins the session attribution contract of
@@ -31,6 +33,7 @@ class CronJobToolTest {
 
     @Before
     fun setUp() {
+        Prefs.install(AndroidPrefsSource(context))
         ScheduledTaskStore(context).clear()
     }
 

@@ -110,6 +110,7 @@ import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.openminis.app.ui.tokens.MinisTypography
 // ─── Media blocks (inline image / video / audio) ────────────────────────────
 
 // [T-minis-decode-unify] The old local resolver (resolveMediaFile) used the
@@ -185,7 +186,7 @@ private fun BrokenImagePlaceholder(alt: String?) {
             )
             Text(
                 text = alt?.takeIf { it.isNotBlank() } ?: "Image not available",
-                fontSize = 12.sp,
+                fontSize = MinisTypography.foot,
                 color = palette.secondaryText,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 maxLines = 2,

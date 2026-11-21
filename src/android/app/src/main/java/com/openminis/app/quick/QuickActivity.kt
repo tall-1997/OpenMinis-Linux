@@ -109,9 +109,9 @@ class QuickActivity : ComponentActivity() {
             // Same theme resolution as MainActivity: read the stored
             // appearance prefs once — no one-frame flash of the wrong theme.
             val appearance = remember { getAppearancePrefs(this) }
-            val themeMode = appearance.getInt(KEY_THEME_MODE, 0)
-            val fontScale = fontScaleForLevel(appearance.getInt(KEY_FONT_APP_BASE, 0))
-            val dynamicColor = appearance.getBoolean(KEY_DYNAMIC_COLOR, false)
+            val themeMode = appearance.int(KEY_THEME_MODE, 0)
+            val fontScale = fontScaleForLevel(appearance.int(KEY_FONT_APP_BASE, 0))
+            val dynamicColor = appearance.bool(KEY_DYNAMIC_COLOR, false)
             val darkTheme = when (themeMode) {
                 1 -> false
                 2 -> true

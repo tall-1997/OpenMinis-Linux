@@ -73,7 +73,6 @@ import com.openminis.app.ui.components.MinisButton
 import com.openminis.app.ui.components.MinisOutlinedButton
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.components.SectionTextField
-import com.openminis.app.ui.components.SettingsRowDivider
 import com.openminis.app.ui.RoutingStrategyUi
 
 /**
@@ -110,6 +109,7 @@ fun ModelGroupDetailScreen(
     val coroutineScope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
     var strategy by remember { mutableStateOf(group.strategy) }
+
     var fallbackStrategy by remember { mutableStateOf(group.fallbackStrategy) }
     // T312: keyed on group.id (stable across nav/config-refresh; `group` key would re-fire each recomposition).
     var defaultThinkingLevel by remember(group.id) {
@@ -223,23 +223,14 @@ fun ModelGroupDetailScreen(
 
             // ── Routing Strategy ──────────────────────────────────────
             item {
-                SettingsSection(
-                    header = stringResource(R.string.model_group_detail_routing_strategy),
-                    footer = stringResource(RoutingStrategyUi.footerRes(strategy)),
-                ) {
-                    // [T-routing-strategy-x] Shared choice-row template; labels in RoutingStrategyUi.
-                    RoutingStrategy.entries.forEach { candidate ->
-                        SettingsChoiceRow(
-                            title = stringResource(RoutingStrategyUi.titleRes(candidate)),
-                            selected = strategy == candidate,
-                            onSelect = {
-                                strategy = candidate
-                                providerRepository.updateGroup(group.copy(strategy = candidate))
-                            },
-                            showDivider = candidate != RoutingStrategy.smart,
-                        )
-                    }
-                }
+                RoutingStrategyCard(
+                    selected = strategy,
+                    groupId = group.id,
+                    onSelect = { candidate ->
+                        strategy = candidate
+                        providerRepository.updateGroup(group.copy(strategy = candidate))
+                    },
+                )
             }
 
             // ── First-token timeout (group override, all strategies) ──

@@ -42,11 +42,11 @@ object AppIconRepository {
         }
     }
 
-    private fun prefs(context: Context): SharedPreferences =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private fun prefs() =
+        com.openminis.app.config.Prefs.file(PREFS)
 
     fun current(context: Context): Variant =
-        Variant.fromId(prefs(context).getString(KEY_SELECTED_ID, Variant.Auto.id))
+        Variant.fromId(prefs().string(KEY_SELECTED_ID, Variant.Auto.id))
 
     /**
      * Apply [target] as the active launcher icon. Disables every other
@@ -74,7 +74,7 @@ object AppIconRepository {
                     PackageManager.DONT_KILL_APP,
                 )
             }
-            prefs(ctx).edit().putString(KEY_SELECTED_ID, target.id).apply()
+            prefs().set(KEY_SELECTED_ID, target.id)
             Log.i(TAG, "icon switched ${current.id} → ${target.id}")
             return true
         } catch (t: Throwable) {

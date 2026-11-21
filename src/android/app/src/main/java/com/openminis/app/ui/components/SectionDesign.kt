@@ -64,6 +64,11 @@ object SectionDesign {
     /** Horizontal padding inside the card (from card-inner-edge to row content). */
     val RowHorizontalPadding = 16.dp
 
+    /** Screen-edge inset used by section headers and footers. Matches the
+     *  row content line: card inset + row inset, so the header text sits
+     *  directly above the first column of row text. */
+    val HeaderInset = ScreenHorizontalPadding + RowHorizontalPadding
+
     /** Vertical padding inside a row (top + bottom each). */
     val RowVerticalPadding = 10.dp
 

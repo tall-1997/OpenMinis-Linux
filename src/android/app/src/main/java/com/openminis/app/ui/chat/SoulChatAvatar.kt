@@ -8,6 +8,7 @@ import androidx.compose.ui.unit.sp
 import com.openminis.app.ui.settings.LocalSoulModelIdentity
 import com.openminis.app.ui.settings.SoulIconGlyph
 import com.openminis.app.ui.settings.SoulModelIdentity
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * [T-soul-avatar-model-icon] 聊天气泡头的 Soul 头像。
@@ -30,7 +31,7 @@ internal fun SoulChatAvatar(
         SoulIconGlyph(
             icon = soulIcon,
             sizeDp = 18.dp,
-            emojiSp = 15.sp,
+            emojiSp = MinisTypography.title,
             sparkleTint = sparkleGradient,
         )
     }

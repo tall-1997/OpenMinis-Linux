@@ -84,7 +84,7 @@ internal suspend fun ProviderRepository.persistToDbAndMirror(config: ProviderCon
     // If the mirror write fails, the DB remains authoritative. The next
     // cold start detects the mismatch and repairs the compatibility mirror
     // from the DB snapshot instead of importing stale JSON.
-    val mirrorWritten = prefs.edit().putString("config", mirrorStr).commit()
+    val mirrorWritten = prefs.set("config", mirrorStr)
     // [T-android-provider-memo] Any persisted config change can reshape
     // instances/entries (baseURL, UA, azure flags, useResponsesAPI…). The
     // memo key already carries the full instance hashCode + credential

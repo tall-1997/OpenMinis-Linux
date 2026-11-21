@@ -36,6 +36,8 @@ import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.i18n.uppercaseForDisplay
+import com.openminis.app.ui.tokens.MinisType
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * Stateless detail body composables used by [SessionMemorySheet] when a row
@@ -74,7 +76,7 @@ fun MemoryFileViewerBody(
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 textStyle = LocalTextStyle.current.copy(
                     fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
+                    fontSize = MinisTypography.codeFoot,
                     color = ChatColors.primaryText,
                 ),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
@@ -88,10 +90,10 @@ fun MemoryFileViewerBody(
             ) {
                 Text(
                     text = initialContent.ifEmpty { "(empty)" },
-                    fontSize = 12.sp,
+                    fontSize = MinisTypography.codeFoot,
                     fontFamily = FontFamily.Monospace,
                     color = ChatColors.primaryText,
-                    lineHeight = 18.sp,
+                    lineHeight = MinisTypography.lineCode,
                 )
             }
         }
@@ -119,7 +121,7 @@ private fun SavedToast(modifier: Modifier = Modifier, text: Int = R.string.memor
         Text(
             text = stringResource(text),
             color = MaterialTheme.colorScheme.inverseOnSurface,
-            fontSize = 12.sp,
+            fontSize = MinisTypography.foot,
             fontWeight = FontWeight.Medium,
         )
     }
@@ -153,7 +155,7 @@ fun MemoryWriteDetailBody(
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 textStyle = LocalTextStyle.current.copy(
                     fontFamily = FontFamily.Monospace,
-                    fontSize = 12.sp,
+                    fontSize = MinisTypography.codeFoot,
                     color = ChatColors.primaryText,
                 ),
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
@@ -171,10 +173,10 @@ fun MemoryWriteDetailBody(
                     SelectionContainer {
                         Text(
                             text = written,
-                            fontSize = 12.sp,
+                            fontSize = MinisTypography.codeFoot,
                             fontFamily = FontFamily.Monospace,
                             color = ChatColors.primaryText,
-                            lineHeight = 18.sp,
+                            lineHeight = MinisTypography.lineCode,
                         )
                     }
                 }
@@ -183,10 +185,10 @@ fun MemoryWriteDetailBody(
                 SelectionContainer {
                     Text(
                         text = record.output,
-                        fontSize = 12.sp,
+                        fontSize = MinisTypography.codeFoot,
                         fontFamily = FontFamily.Monospace,
                         color = ChatColors.secondaryText,
-                        lineHeight = 18.sp,
+                        lineHeight = MinisTypography.lineCode,
                     )
                 }
             }
@@ -227,7 +229,7 @@ fun MemoryGetDetailBody(record: MemoryToolRecord) {
                 )
                 Text(
                     text = keywords,
-                    fontSize = 13.sp,
+                    fontSize = MinisTypography.body,
                     fontWeight = FontWeight.SemiBold,
                     color = ChatColors.primaryText,
                 )
@@ -236,10 +238,10 @@ fun MemoryGetDetailBody(record: MemoryToolRecord) {
         SelectionContainer {
             Text(
                 text = record.output,
-                fontSize = 12.sp,
+                fontSize = MinisTypography.codeFoot,
                 fontFamily = FontFamily.Monospace,
                 color = ChatColors.primaryText,
-                lineHeight = 18.sp,
+                lineHeight = MinisTypography.lineCode,
             )
         }
     }
@@ -249,9 +251,9 @@ fun MemoryGetDetailBody(record: MemoryToolRecord) {
 private fun SectionHeader(text: String) {
     Text(
         text = text.uppercaseForDisplay(),
-        fontSize = 11.sp,
+        fontSize = MinisTypography.cap,
         fontWeight = FontWeight.Medium,
-        letterSpacing = 0.5.sp,
+        letterSpacing = MinisType().sectionLabelSpacing.sp,
         color = ChatColors.secondaryText,
     )
 }

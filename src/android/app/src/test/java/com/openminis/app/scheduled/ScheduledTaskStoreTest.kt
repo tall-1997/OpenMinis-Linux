@@ -2,9 +2,12 @@ package com.openminis.app.scheduled
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.openminis.app.config.AndroidPrefsSource
+import com.openminis.app.config.Prefs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -26,6 +29,11 @@ import org.robolectric.annotation.Config
 class ScheduledTaskStoreTest {
 
     private val context: Context = ApplicationProvider.getApplicationContext()
+
+    @Before
+    fun setUp() {
+        Prefs.install(AndroidPrefsSource(context))
+    }
 
     @Test
     fun legacyJsonLoadsAsNullNewFields() {

@@ -85,6 +85,7 @@ import com.openminis.app.ui.chat.StandardChatSheet
 import kotlinx.coroutines.launch
 import com.openminis.app.ui.theme.decorPulse
 import com.openminis.app.ui.theme.decorRotationAngle
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * Bottom sheet presenting the browser tab pool with tab bar, URL bar,
@@ -230,7 +231,7 @@ fun BrowserSheet(
                     item {
                         Text(
                             "${tabs.size}/3",
-                            fontSize = 10.sp,
+                            fontSize = MinisTypography.chip,
                             fontWeight = FontWeight.Medium,
                             fontFamily = FontFamily.Monospace,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
@@ -402,7 +403,7 @@ fun BrowserSheet(
                             singleLine = true,
                             enabled = !isAgentBusy,
                             textStyle = LocalTextStyle.current.copy(
-                                fontSize = 13.sp,
+                                fontSize = MinisTypography.code,
                                 fontFamily = FontFamily.Monospace,
                                 color = MaterialTheme.colorScheme.onSurface,
                             ),
@@ -423,7 +424,7 @@ fun BrowserSheet(
                         if (urlInput.isEmpty()) {
                             Text(
                                 stringResource(R.string.browser_search_placeholder),
-                                fontSize = 13.sp,
+                                fontSize = MinisTypography.code,
                                 fontFamily = FontFamily.Monospace,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -583,7 +584,7 @@ private fun TabChip(
     ) {
         Text(
             text = title,
-            fontSize = 12.sp,
+            fontSize = MinisTypography.foot,
             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
             color = textColor,
             maxLines = 1,
@@ -680,7 +681,7 @@ private fun AgentBrowsingOverlay(accent: Color, onTakeover: () -> Unit) {
             Text(
                 stringResource(R.string.browser_minis_browsing),
                 color = Color.White.copy(alpha = 0.9f),
-                fontSize = 13.sp,
+                fontSize = MinisTypography.body,
                 fontWeight = FontWeight.Medium,
             )
             Spacer(Modifier.width(12.dp))
@@ -694,7 +695,7 @@ private fun AgentBrowsingOverlay(accent: Color, onTakeover: () -> Unit) {
             Text(
                 stringResource(R.string.browser_takeover),
                 color = accent,
-                fontSize = 13.sp,
+                fontSize = MinisTypography.body,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.clickable(onClick = onTakeover),
             )

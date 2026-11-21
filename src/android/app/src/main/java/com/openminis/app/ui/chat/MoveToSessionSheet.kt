@@ -1,5 +1,7 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.ui.tokens.RawColors
+import com.openminis.app.ui.tokens.asColor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -63,6 +65,7 @@ import kotlinx.coroutines.withContext
 import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.TimeUnit
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * Bottom sheet listing all chat sessions except the current one. Tapping
@@ -204,7 +207,7 @@ private fun NewChatRow(onClick: () -> Unit) {
         }
         Text(
             text = stringResource(R.string.new_chat),
-            fontSize = 15.sp,
+            fontSize = MinisTypography.title,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
@@ -257,7 +260,7 @@ private fun MoveToPickerRow(
         ) {
             Text(
                 text = session.title ?: untitled,
-                fontSize = 15.sp,
+                fontSize = MinisTypography.title,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
@@ -265,7 +268,7 @@ private fun MoveToPickerRow(
             )
             Text(
                 text = timeText,
-                fontSize = 12.sp,
+                fontSize = MinisTypography.foot,
                 color = MaterialTheme.colorScheme.outline,
                 maxLines = 1,
             )
@@ -286,21 +289,21 @@ private fun categoryStyle(category: String?): CategoryStyle {
     return when (category?.lowercase()) {
         "code"         -> CategoryStyle(Icons.Outlined.Code, Color(0xFFF09A37))
         "writing"      -> CategoryStyle(Icons.Outlined.Description, Color(0xFF3478F6))
-        "research"     -> CategoryStyle(Icons.Outlined.Language, Color(0xFF30B0C7))
-        "analysis"     -> CategoryStyle(Icons.Outlined.BarChart, Color(0xFF5856D6))
-        "creative"     -> CategoryStyle(Icons.Outlined.Brush, Color(0xFFFF2D55))
-        "chat"         -> CategoryStyle(Icons.Outlined.Forum, Color(0xFF34C759))
+        "research"     -> CategoryStyle(Icons.Outlined.Language, RawColors.systemTealAlt.asColor)
+        "analysis"     -> CategoryStyle(Icons.Outlined.BarChart, RawColors.systemPurple.asColor)
+        "creative"     -> CategoryStyle(Icons.Outlined.Brush, RawColors.systemPink.asColor)
+        "chat"         -> CategoryStyle(Icons.Outlined.Forum, RawColors.systemGreen.asColor)
         "math"         -> CategoryStyle(Icons.Outlined.Calculate, Color(0xFF9B59B6))
         "translation"  -> CategoryStyle(Icons.Outlined.Translate, Color(0xFF00BCD4))
-        "health"       -> CategoryStyle(Icons.Outlined.Favorite, Color(0xFFFF3B30))
+        "health"       -> CategoryStyle(Icons.Outlined.Favorite, RawColors.systemRed.asColor)
         "finance"      -> CategoryStyle(Icons.Outlined.Payments, Color(0xFF00C7BE))
         "travel"       -> CategoryStyle(Icons.Outlined.Map, Color(0xFFF09A37))
         "education"    -> CategoryStyle(Icons.Outlined.Book, Color(0xFF3478F6))
-        "design"       -> CategoryStyle(Icons.Outlined.Palette, Color(0xFFFF2D55))
-        "productivity" -> CategoryStyle(Icons.Outlined.CalendarMonth, Color(0xFFFFCC00))
+        "design"       -> CategoryStyle(Icons.Outlined.Palette, RawColors.systemPink.asColor)
+        "productivity" -> CategoryStyle(Icons.Outlined.CalendarMonth, RawColors.systemYellow.asColor)
         "support"      -> CategoryStyle(Icons.Outlined.Settings, Color(0xFF8B6914))
-        "other"        -> CategoryStyle(Icons.Outlined.GridView, Color(0xFF8E8E93))
-        else           -> CategoryStyle(Icons.Outlined.Forum, Color(0xFF8E8E93))
+        "other"        -> CategoryStyle(Icons.Outlined.GridView, RawColors.systemGray.asColor)
+        else           -> CategoryStyle(Icons.Outlined.Forum, RawColors.systemGray.asColor)
     }
 }
 

@@ -74,18 +74,13 @@ object SandboxNotifyActions {
         val cmd = normalizeGuestCommand(command) ?: return null
         val token = "dyn:" + UUID.randomUUID().toString().replace("-", "").take(16)
         val payload = JSONObject().put("session", sessionId).put("cmd", cmd).toString()
-        context.applicationContext
-            .getSharedPreferences(DYN_PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putString(token, payload)
-            .apply()
+        com.openminis.app.config.Prefs.file(DYN_PREFS).set(token, payload)
         return token
     }
 
     private fun loadDynamic(context: Context, token: String): String? {
-        val raw = context.applicationContext
-            .getSharedPreferences(DYN_PREFS, Context.MODE_PRIVATE)
-            .getString(token, null) ?: return null
+        val raw = com.openminis.app.config.Prefs.file(DYN_PREFS)
+            .stringOrNull(token) ?: return null
         return runCatching { JSONObject(raw).optString("cmd").takeIf { it.isNotBlank() } }.getOrNull()
     }
 }

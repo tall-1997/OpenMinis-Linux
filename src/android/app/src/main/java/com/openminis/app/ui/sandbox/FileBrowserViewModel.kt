@@ -283,9 +283,7 @@ class FileBrowserViewModel(
         // a3e7f1d0). Persisted lazily via SharedPreferences when the user
         // toggles the menu item; if [appContext] is null (e.g. test
         // harness) we fall back to the default false.
-        val persisted = appContext
-            ?.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
-            ?.getBoolean(PREF_KEY_SHOW_HIDDEN, false)
+        val persisted = appContext?.let { com.openminis.app.config.Prefs.file(PREFS_NAME).bool(PREF_KEY_SHOW_HIDDEN, false) }
             ?: false
         if (persisted) {
             _uiState.value = _uiState.value.copy(showHidden = true)
@@ -303,11 +301,7 @@ class FileBrowserViewModel(
     fun setShowHidden(value: Boolean) {
         if (_uiState.value.showHidden == value) return
         _uiState.value = _uiState.value.copy(showHidden = value)
-        appContext
-            ?.getSharedPreferences(PREFS_NAME, android.content.Context.MODE_PRIVATE)
-            ?.edit()
-            ?.putBoolean(PREF_KEY_SHOW_HIDDEN, value)
-            ?.apply()
+        appContext?.let { com.openminis.app.config.Prefs.file(PREFS_NAME).set(PREF_KEY_SHOW_HIDDEN, value) }
         loadItems()
     }
 

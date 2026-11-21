@@ -314,9 +314,7 @@ fun ChatSplitScaffold(
     // constructor read. Keep the instance lazy and move the first value reads
     // onto Dispatchers.IO in LaunchedEffects, with safe defaults for the first
     // frame (default width fraction / expanded list).
-    val uiPrefs = remember(context) {
-        context.getSharedPreferences(UI_PREFS, android.content.Context.MODE_PRIVATE)
-    }
+    val uiPrefs = remember { com.openminis.app.config.Prefs.file(UI_PREFS) }
     // The window's own width, so the default can be a proportion of it rather
     // than a fixed dp that only looks right on one tablet size.
     //
@@ -335,7 +333,7 @@ fun ChatSplitScaffold(
     // for the first frame(s) instead of blocking composition on disk.
     LaunchedEffect(windowWidth, uiPrefs) {
         val stored = withContext(Dispatchers.IO) {
-            uiPrefs.getFloat(KEY_LIST_PANE_WIDTH, listPaneWidth.value)
+            uiPrefs.float(KEY_LIST_PANE_WIDTH, listPaneWidth.value)
         }
         listPaneWidth = stored
             .coerceIn(LIST_PANE_MIN_WIDTH.value, LIST_PANE_MAX_WIDTH.value)
@@ -371,13 +369,13 @@ fun ChatSplitScaffold(
     }
     LaunchedEffect(uiPrefs, initialSessionId) {
         val stored = withContext(Dispatchers.IO) {
-            uiPrefs.getBoolean(KEY_LIST_COLLAPSED, false)
+            uiPrefs.bool(KEY_LIST_COLLAPSED, false)
         }
         val corrected = stored && initialSessionId != null
         listCollapsed = corrected
         if (stored != corrected) {
             withContext(Dispatchers.IO) {
-                uiPrefs.edit().putBoolean(KEY_LIST_COLLAPSED, corrected).apply()
+                uiPrefs.set(KEY_LIST_COLLAPSED, corrected)
             }
         }
     }
@@ -596,9 +594,7 @@ fun ChatSplitScaffold(
                         onToggleSidebar = if (twoPane) {
                             {
                                 listCollapsed = !listCollapsed
-                                uiPrefs.edit()
-                                    .putBoolean(KEY_LIST_COLLAPSED, listCollapsed)
-                                    .apply()
+                                uiPrefs.set(KEY_LIST_COLLAPSED, listCollapsed)
                             }
                         } else {
                             null
@@ -625,9 +621,7 @@ fun ChatSplitScaffold(
                         if (twoPane) {
                             {
                                 listCollapsed = !listCollapsed
-                                uiPrefs.edit()
-                                    .putBoolean(KEY_LIST_COLLAPSED, listCollapsed)
-                                    .apply()
+                                uiPrefs.set(KEY_LIST_COLLAPSED, listCollapsed)
                             }
                         } else {
                             null
@@ -681,9 +675,7 @@ fun ChatSplitScaffold(
                         // emits deltas at display rate and each commit is a
                         // disk write.
                         onDragStopped = {
-                            uiPrefs.edit()
-                                .putFloat(KEY_LIST_PANE_WIDTH, listPaneWidth.value)
-                                .apply()
+                            uiPrefs.set(KEY_LIST_PANE_WIDTH, listPaneWidth.value)
                         },
                     ),
             )

@@ -45,6 +45,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.openminis.app.R
+import com.openminis.app.ui.tokens.MinisMotion
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.ui.components.DialogWindowImmersiveEffect
 import com.openminis.app.ui.theme.ChatColors
@@ -202,8 +203,10 @@ fun WebPreviewFullscreenScreen(
 
             AnimatedVisibility(
                 visible = toolbarVisible,
+                // 进场快、退场慢：工具栏不该抢操作的注意力，但也不能「啪」地
+                // 消失得让人以为是卡了。SLOW=320ms 是这条节奏的唯一来源。
                 enter = fadeIn(animationSpec = tween(220)),
-                exit = fadeOut(animationSpec = tween(300)),
+                exit = fadeOut(animationSpec = tween(MinisMotion.SLOW)),
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(end = 16.dp, bottom = navInset + 16.dp),

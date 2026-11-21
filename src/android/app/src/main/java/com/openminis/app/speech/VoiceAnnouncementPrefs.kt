@@ -78,10 +78,9 @@ object VoiceAnnouncementPrefs {
      * Read the full snapshot. Missing entries use [AnnouncementScene.defaultEnabled].
      */
     fun load(context: Context): AnnouncementPrefs {
-        val prefs = context.applicationContext
-            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = com.openminis.app.config.Prefs.file(PREFS_NAME)
         val map = AnnouncementScene.entries.associateWith { scene ->
-            prefs.getBoolean(keyOf(scene), scene.defaultEnabled)
+            prefs.bool(keyOf(scene), scene.defaultEnabled)
         }
         return AnnouncementPrefs(map)
     }
@@ -95,11 +94,7 @@ object VoiceAnnouncementPrefs {
      * the classpath).
      */
     fun setEnabled(context: Context, scene: AnnouncementScene, enabled: Boolean) {
-        context.applicationContext
-            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putBoolean(keyOf(scene), enabled)
-            .apply()
+        com.openminis.app.config.Prefs.file(PREFS_NAME).set(keyOf(scene), enabled)
     }
 
     /**
@@ -108,9 +103,7 @@ object VoiceAnnouncementPrefs {
      * must not allocate a four-entry map each time.
      */
     fun isEnabled(context: Context, scene: AnnouncementScene): Boolean =
-        context.applicationContext
-            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getBoolean(keyOf(scene), scene.defaultEnabled)
+        com.openminis.app.config.Prefs.file(PREFS_NAME).bool(keyOf(scene), scene.defaultEnabled)
 
     /**
      * The spoken sentence for [scene].

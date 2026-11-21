@@ -3,7 +3,6 @@ package com.openminis.app.network
 
 import android.content.Context
 import com.openminis.app.logging.AppLogger
-import com.openminis.app.util.EncryptedPrefsFactory
 import java.util.UUID
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -194,10 +193,10 @@ object NetworkSettingsStore {
     fun encode(s: NetworkSettings): String = json.encodeToString(s)
 
     fun load(context: Context): NetworkSettings =
-        decode(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null))
+        decode(com.openminis.app.config.Prefs.file(PREFS).stringOrNull(KEY))
 
     fun save(context: Context, s: NetworkSettings) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, encode(s)).apply()
+        com.openminis.app.config.Prefs.file(PREFS).set(KEY, encode(s))
     }
 }
 
@@ -209,16 +208,15 @@ object NetworkSettingsStore {
 object NetworkSecrets {
     private const val FILE = "minis_network_secrets"
 
-    private fun prefs(context: Context) = EncryptedPrefsFactory.safeCreate(context.applicationContext, FILE)
+    private fun prefs(context: Context) = com.openminis.app.config.Prefs.file(FILE)
 
     fun password(context: Context, proxyId: String): String =
-        runCatching { prefs(context).getString("proxy.$proxyId", null) }.getOrNull().orEmpty()
+        runCatching { prefs(context).stringOrNull("proxy.$proxyId") }.getOrNull().orEmpty()
 
     fun setPassword(context: Context, proxyId: String, password: String) {
         runCatching {
-            val e = prefs(context).edit()
-            if (password.isEmpty()) e.remove("proxy.$proxyId") else e.putString("proxy.$proxyId", password)
-            e.apply()
+            val p = prefs(context)
+            if (password.isEmpty()) p.remove("proxy.$proxyId") else p.set("proxy.$proxyId", password)
         }.onFailure { AppLogger.error("Network", "[Net][Proxy] could not store the password for a proxy: ${it.javaClass.simpleName}") }
     }
 

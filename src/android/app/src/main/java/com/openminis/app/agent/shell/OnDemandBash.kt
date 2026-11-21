@@ -109,23 +109,28 @@ object OnDemandBash {
     }
 
     private fun backoffReason(context: Context): String? {
-        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val count = p.getInt(KEY_FAIL_COUNT, 0)
+        val p = com.openminis.app.config.Prefs.file(PREFS)
+        val count = p.int(KEY_FAIL_COUNT, 0)
         if (count >= MAX_STRIKES) return "bash install disabled after $MAX_STRIKES failures (retry manually: apt-get install -y bash)"
-        val last = p.getLong(KEY_LAST_FAIL, 0)
+        val last = p.long(KEY_LAST_FAIL, 0)
         if (last > 0 && System.currentTimeMillis() - last < BACKOFF_WINDOW_MS) return "bash install backing off (recent failure)"
         return null
     }
 
     private fun recordFailure(context: Context) {
-        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        p.edit().putInt(KEY_FAIL_COUNT, p.getInt(KEY_FAIL_COUNT, 0) + 1)
-            .putLong(KEY_LAST_FAIL, System.currentTimeMillis()).apply()
+        val p = com.openminis.app.config.Prefs.file(PREFS)
+        // 计数 + 时间戳成对：只写计数会让退避计算用上旧的失败时间
+        p.write {
+            putInt(KEY_FAIL_COUNT, p.int(KEY_FAIL_COUNT, 0) + 1)
+            putLong(KEY_LAST_FAIL, System.currentTimeMillis())
+        }
     }
 
     private fun clearFailure(context: Context) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .remove(KEY_FAIL_COUNT).remove(KEY_LAST_FAIL).apply()
+        com.openminis.app.config.Prefs.file(PREFS).write {
+            remove(KEY_FAIL_COUNT)
+            remove(KEY_LAST_FAIL)
+        }
     }
 
     private suspend fun networkReachable(): Boolean = withContext(Dispatchers.IO) {

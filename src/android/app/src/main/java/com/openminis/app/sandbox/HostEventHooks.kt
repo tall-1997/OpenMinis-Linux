@@ -20,14 +20,21 @@ object HostEventHooks {
 
     private var app: Context? = null
 
+    /**
+     * [T-prefs-typed] 文件名与键都登记在 PrefsRegistry（host_event_hooks / hooks_json）。
+     * 写入语义不变：PrefsBackend 内部仍走 `editor.commit()`（同步），只是不再把
+     * 布尔返回值往上传 —— commit 仅在磁盘故障时为 false，调用方原本也只是打一条 warn。
+     */
+    private fun prefs() = com.openminis.app.config.Prefs.file(PREFS)
+
     fun init(context: Context) {
         app = context.applicationContext
     }
 
     @Synchronized
     fun list(): Map<String, List<String>> {
-        val ctx = app ?: return emptyMap()
-        val raw = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, "{}") ?: "{}"
+        if (app == null) return emptyMap()
+        val raw = prefs().string(KEY, "{}")
         return runCatching {
             val obj = JSONObject(raw)
             obj.keys().asSequence().associateWith { k ->
@@ -39,7 +46,7 @@ object HostEventHooks {
 
     @Synchronized
     fun register(event: String, command: String): Boolean {
-        val ctx = app ?: return false
+        if (app == null) return false
         val ev = event.trim()
         val cmd = command.trim()
         if (ev.isEmpty() || !com.openminis.app.notification.SandboxNotifyActions.isSafeGuestCommand(cmd)) {
@@ -49,20 +56,20 @@ object HostEventHooks {
         val cur = next[ev].orEmpty().toMutableList()
         if (cmd !in cur) cur += cmd
         next[ev] = cur
-        persist(ctx, next)
+        persist(next)
         return true
     }
 
     @Synchronized
     fun unregister(event: String, command: String?): Boolean {
-        val ctx = app ?: return false
+        if (app == null) return false
         val next = list().toMutableMap()
         if (command.isNullOrBlank()) {
             next.remove(event)
         } else {
             next[event] = next[event].orEmpty().filterNot { it == command }
         }
-        persist(ctx, next)
+        persist(next)
         return true
     }
 
@@ -84,17 +91,14 @@ object HostEventHooks {
     }
 
     @Synchronized
-    private fun persist(ctx: Context, map: Map<String, List<String>>) {
+    private fun persist(map: Map<String, List<String>>) {
         val obj = JSONObject()
         for ((k, v) in map) {
             val arr = JSONArray()
             v.forEach { arr.put(it) }
             obj.put(k, arr)
         }
-        val ok = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putString(KEY, obj.toString())
-            .commit()
-        if (!ok) Log.w(TAG, "failed to persist host event hooks")
+        prefs().set(KEY, obj.toString())
+        Log.d(TAG, "persisted host event hooks")
     }
 }

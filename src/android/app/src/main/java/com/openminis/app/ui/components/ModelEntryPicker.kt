@@ -51,6 +51,7 @@ import com.openminis.app.data.model.hasAudioInput
 import com.openminis.app.data.model.hasAudioOutput
 import com.openminis.app.data.model.hasImageInput
 import com.openminis.app.data.model.normalizeModalities
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * [T-android-provider-voice] First-class modality scoping for the shared
@@ -576,8 +577,8 @@ fun modalityBadges(model: LLMModel): List<String> {
 fun ModalityBadge(badge: String) {
     Text(
         badge,
-        fontSize = 9.sp,
-        lineHeight = 11.sp,
+        fontSize = MinisTypography.cap2,
+        lineHeight = MinisTypography.lineBadge,
         fontWeight = FontWeight.Medium,
         maxLines = 1,
         softWrap = false,

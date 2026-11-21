@@ -61,11 +61,10 @@ internal object StopOptionsPrefs {
     private const val KEY = "chat.confirmBeforeStop"
 
     fun enabled(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY, false)
+        com.openminis.app.config.Prefs.file(PREFS).bool(KEY, false)
 
     fun setEnabled(context: Context, value: Boolean) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putBoolean(KEY, value).apply()
+        com.openminis.app.config.Prefs.file(PREFS).set(KEY, value)
     }
 }
 

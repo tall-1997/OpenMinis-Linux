@@ -63,6 +63,7 @@ import com.termux.view.TerminalView
 import com.termux.view.TerminalViewClient
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
+import com.openminis.app.ui.tokens.MinisTypography
 
 // iOS-matched palette
 private val TerminalBg = Color(0xFF000000)
@@ -347,7 +348,7 @@ private fun TerminalTopBar(
             color = TerminalFg,
             style = TextStyle(
                 fontFamily = JetBrainsMonoFontFamily,
-                fontSize = 16.sp,
+                fontSize = MinisTypography.titleLg,
             ),
         )
         Spacer(modifier = Modifier.weight(1f))
@@ -450,8 +451,8 @@ private fun QuickCommandButton(
     ) {
         when {
             icon != null -> Icon(icon, null, tint = fg, modifier = Modifier.size(12.dp))
-            iconText != null -> Text(iconText, color = fg, style = TextStyle(fontFamily = JetBrainsMonoFontFamily, fontSize = 11.sp))
+            iconText != null -> Text(iconText, color = fg, style = TextStyle(fontFamily = JetBrainsMonoFontFamily, fontSize = MinisTypography.cap))
         }
-        Text(label, color = fg, style = TextStyle(fontFamily = JetBrainsMonoFontFamily, fontSize = 11.sp), maxLines = 1)
+        Text(label, color = fg, style = TextStyle(fontFamily = JetBrainsMonoFontFamily, fontSize = MinisTypography.cap), maxLines = 1)
     }
 }

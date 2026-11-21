@@ -221,24 +221,22 @@ object HangDetector {
      * have been hanging.
      */
     fun shouldForceHomeOnLaunch(context: Context): Boolean {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getInt(KEY_HANG_COUNT, 0) >= HANG_LIMIT_FOR_BREAKER
+        return com.openminis.app.config.Prefs.file(PREFS_NAME).int(KEY_HANG_COUNT, 0) >= HANG_LIMIT_FOR_BREAKER
     }
 
     /** Manual reset (Settings → "Reset hang counter") — clears immediately. */
     fun resetHangCount(context: Context) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putInt(KEY_HANG_COUNT, 0)
-            .putLong(KEY_LAST_HANG_AT, 0L)
-            .apply()
+        // 两个键一起清零：只清计数不清时间戳，下一次判定会读到旧的 last_hang_at
+        com.openminis.app.config.Prefs.file(PREFS_NAME).write {
+            putInt(KEY_HANG_COUNT, 0)
+            putLong(KEY_LAST_HANG_AT, 0L)
+        }
         // [T-android-render-breaker] Manual reset also restores full rendering.
         _renderBreakerActive.value = false
     }
 
     fun currentHangCount(context: Context): Int =
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getInt(KEY_HANG_COUNT, 0)
+        com.openminis.app.config.Prefs.file(PREFS_NAME).int(KEY_HANG_COUNT, 0)
 
     // -- internals -----------------------------------------------------------
 
@@ -485,12 +483,12 @@ object HangDetector {
         if (sample) writeStallSample("mid-hang", durationMs, escalation = 0)
         if (!counts) return
 
-        val prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val newCount = prefs.getInt(KEY_HANG_COUNT, 0) + 1
-        prefs.edit()
-            .putInt(KEY_HANG_COUNT, newCount)
-            .putLong(KEY_LAST_HANG_AT, System.currentTimeMillis())
-            .apply()
+        val prefs = com.openminis.app.config.Prefs.file(PREFS_NAME)
+        val newCount = prefs.int(KEY_HANG_COUNT, 0) + 1
+        prefs.write {
+            putInt(KEY_HANG_COUNT, newCount)
+            putLong(KEY_LAST_HANG_AT, System.currentTimeMillis())
+        }
         // [T-android-render-breaker] Trip the render degrade one hang BEFORE
         // the system would ANR-kill us (baseline showed death between #2/#3).
         if (newCount >= RENDER_DEGRADE_HANG_COUNT && !_renderBreakerActive.value) {

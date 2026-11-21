@@ -86,6 +86,43 @@ def strip_noise(line):
     return LINE_COMMENT.sub("", line)
 
 
+def check_apostrophes(mods):
+    """Locale strings whose bare apostrophe aapt will reject.
+
+    为什么必须单独查：aapt2 把裸 `'` 当成引号字符，报的是
+    "Invalid unicode escape sequence in string" —— 一个完全指不到
+    根因的诼。而且这个错误在 Kotlin 编译之后才爆，即使用最贵的那一步
+    （实测本轮 CI：Kotlin 编译过了，倒在 app/src/main/res/values-fr）。
+    正确写法是 `\\'`，本项目其他 313 处都遵守，只有新加的一行漏了。
+
+    注意：`"a \\"b\\" c"` 这种双引号包裹的串里，撇号是合法的，要跳过。
+    """
+    problems = []
+    for mod in mods:
+        res = os.path.join(mod, "res")
+        if not os.path.isdir(res):
+            continue
+        for dirpath, dirnames, filenames in os.walk(res):
+            if not os.path.basename(dirpath).startswith("values"):
+                continue
+            for fn in filenames:
+                if not fn.endswith(".xml"):
+                    continue
+                path = os.path.join(dirpath, fn)
+                with open(path, encoding="utf-8", errors="replace") as f:
+                    for lineno, line in enumerate(f, 1):
+                        m = re.search(r'<(string|item)\s+name="([^"]+)"[^>]*>(.*)</\1>', line)
+                        if not m:
+                            continue
+                        value = m.group(3)
+                        # 双引号包裹的片段里撇号合法，挖掉
+                        value = re.sub(r'"(?:[^"\\]|\\.)*"', '""', value)
+                        if re.search(r"(?<!\\)'", value):
+                            rel = os.path.relpath(path, REPO)
+                            problems.append((rel, lineno, m.group(2)))
+    return problems
+
+
 def main():
     mods = modules()
     if not mods:
@@ -131,13 +168,21 @@ def main():
                             dangling.append((rel, lineno, kind, name, near))
 
     print(f"scanned {scanned} Kotlin files across {len(mods)} resource module(s)")
-    if not dangling:
-        print("OK: every R.string/R.plurals/R.array reference resolves")
+
+    apos = check_apostrophes(mods)
+    for rel, lineno, name in apos:
+        print(f"  {rel}:{lineno}  '{name}' 有裸撇号 → aapt 会报 Invalid unicode escape sequence，写成 \\'")
+
+    if not dangling and not apos:
+        print("OK: every R.string/R.plurals/R.array reference resolves; no bare apostrophes")
         return 0
-    print(f"FAIL: {len(dangling)} dangling resource reference(s)")
+    if dangling:
+        print(f"FAIL: {len(dangling)} dangling resource reference(s)")
     for rel, lineno, kind, name, near in dangling:
         hint = f"  closest defined: {', '.join(near)}" if near else "  (no similar name defined)"
         print(f"  {rel}:{lineno}  R.{kind}.{name}{hint}")
+    if apos:
+        print(f"FAIL: {len(apos)} string(s) with bare apostrophe")
     if verbose:
         for mod, names in mods.items():
             print(f"  module {os.path.relpath(mod, REPO)}: "

@@ -64,6 +64,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * Immersive 90%-tall bottom sheet that hosts a [WebViewHolder] for a
@@ -314,7 +315,7 @@ internal fun WebPreviewToolbar(
         ) {
             Text(
                 text = title,
-                fontSize = 14.sp,
+                fontSize = MinisTypography.bodyLg,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
@@ -323,7 +324,7 @@ internal fun WebPreviewToolbar(
             if (subtitle.isNotBlank()) {
                 Text(
                     text = subtitle,
-                    fontSize = 11.sp,
+                    fontSize = MinisTypography.cap,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

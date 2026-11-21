@@ -2,6 +2,9 @@ package com.openminis.app.provider
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.openminis.app.config.AndroidPrefsSource
+import com.openminis.app.config.Prefs
+import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -10,7 +13,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import org.json.JSONObject
 
 /**
  * The health store must not scrub manifest lanes on the very boot that seeds
@@ -38,6 +40,7 @@ class ManifestLaneHealthScrubTest {
 
     @Before
     fun setUp() {
+        Prefs.install(AndroidPrefsSource(context))
         FreeLaneHealth.resetForTest()
         healthPrefs.edit().clear().commit()
         legacyPrefs.edit().clear().commit()
@@ -46,6 +49,7 @@ class ManifestLaneHealthScrubTest {
 
     @After
     fun tearDown() {
+        Prefs.uninstall()
         FreeLaneHealth.nowProvider = { System.currentTimeMillis() }
         FreeLaneHealth.resetForTest()
     }

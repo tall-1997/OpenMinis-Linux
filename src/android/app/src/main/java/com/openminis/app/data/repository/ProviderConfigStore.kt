@@ -62,7 +62,10 @@ internal class ProviderConfigStore(
         coerceInputValues = true
     }
 
-    internal val prefs: SharedPreferences = context.getSharedPreferences("provider_config", Context.MODE_PRIVATE)
+    // 三个外部组件（ModelCatalogCache / ModelGrouping / ProviderRepository）都用它。
+    // 它们现在也收 PrefsHandle，所以这里终于是类型化句柄 —— 之前为了兼容它们
+    // 保留 SharedPreferences，是过渡状态，现在收口了。
+    internal val prefs: com.openminis.app.config.PrefsHandle = com.openminis.app.config.Prefs.file("provider_config")
 
     // [T-android-provider-room-store] Per-row provider config DB. Lives in
     // its own provider.db file so a downgrade to a build that doesn't know
@@ -86,10 +89,11 @@ internal class ProviderConfigStore(
         // would happily read them again. No code reads these keys any
         // more; sweep them once per process (no-op after the first run).
         runCatching {
-            val orphans = prefs.all.keys.filter { it.startsWith("keypool_") }
-            if (orphans.isNotEmpty()) {
-                prefs.edit().also { e -> orphans.forEach { e.remove(it) } }.apply()
-                android.util.Log.i("ProviderRepo", "swept " + orphans.size + " orphan keypool_* entries")
+            // 类型化句柄：keypool_ 是注册表里声明的动态前缀，所以这里既拿得到
+            // 全量键，也能按前缀批量删 —— 两条路都过守卫。
+            val swept = com.openminis.app.config.Prefs.file("provider_config").removeAllWithPrefix("keypool_")
+            if (swept > 0) {
+                android.util.Log.i("ProviderRepo", "swept $swept orphan keypool_* entries")
             }
         }
         prefs
@@ -268,6 +272,8 @@ internal class ProviderConfigStore(
                     throw IllegalStateException("Provider configuration could not be loaded; mutation aborted", e)
                 }
                 repo._config.value = loaded
+                // [T-auto-model-groups] 首次加载后补隐式组；之后由 saveConfig 重建。
+                AutoModelGroups.syncInPlace(repo._config.value)
                 repo._configLoaded.value = true
             }
         }
@@ -323,12 +329,11 @@ internal class ProviderConfigStore(
      * once. Mirrors iOS #636 lastUsedModelEntryId.
      */
     var lastUsedEntryId: String?
-        get() = prefs.getString(ProviderRepository.KEY_LAST_USED_ENTRY, null)
+        get() = com.openminis.app.config.Prefs.file("provider_config").stringOrNull(ProviderRepository.KEY_LAST_USED_ENTRY)
         set(value) {
-            prefs.edit().apply {
-                if (value == null) remove(ProviderRepository.KEY_LAST_USED_ENTRY)
-                else putString(ProviderRepository.KEY_LAST_USED_ENTRY, value)
-            }.apply()
+            val p = com.openminis.app.config.Prefs.file("provider_config")
+            if (value == null) p.remove(ProviderRepository.KEY_LAST_USED_ENTRY)
+            else p.set(ProviderRepository.KEY_LAST_USED_ENTRY, value)
         }
 
     /**
@@ -439,8 +444,9 @@ internal class ProviderConfigStore(
     private fun purgeRetiredBuiltInLaneFiles() {
         runCatching { File(context.filesDir, "builtin-plugins/a2a").deleteRecursively() }
         runCatching {
-            val legacy = context.getSharedPreferences("a2a_gateway", Context.MODE_PRIVATE)
-            if (legacy.all.isNotEmpty()) legacy.edit().clear().apply()
+            // a2a_gateway 是已退休功能的遗留文件，注册表里以 openKeySpace 声明，
+            // 所以 clear() 被允许 —— 对已登记键空间的普通文件调 clear() 会抛异常。
+            com.openminis.app.config.Prefs.file("a2a_gateway").clear()
         }
     }
 
@@ -530,9 +536,9 @@ internal class ProviderConfigStore(
      * Input group binding. Per-device (prefs), not part of the synced config.
      */
     var voiceInputOverrideEntryId: String?
-        get() = prefs.getString("voice.input.overrideEntryId", null)
+        get() = com.openminis.app.config.Prefs.file("provider_config").stringOrNull("voice.input.overrideEntryId")
         set(value) {
-            prefs.edit().putString("voice.input.overrideEntryId", value).apply()
+            com.openminis.app.config.Prefs.file("provider_config").set("voice.input.overrideEntryId", value)
             synchronized(repo.configLock) {
                 val config = repo._config.value
                 repo._config.value = config.copy(revision = ProviderConfig.nextRevision())
@@ -548,9 +554,9 @@ internal class ProviderConfigStore(
      * the synced config.
      */
     var voiceOutputOverrideEntryId: String?
-        get() = prefs.getString("voice.output.overrideEntryId", null)
+        get() = com.openminis.app.config.Prefs.file("provider_config").stringOrNull("voice.output.overrideEntryId")
         set(value) {
-            prefs.edit().putString("voice.output.overrideEntryId", value).apply()
+            com.openminis.app.config.Prefs.file("provider_config").set("voice.output.overrideEntryId", value)
             synchronized(repo.configLock) {
                 val config = repo._config.value
                 repo._config.value = config.copy(revision = ProviderConfig.nextRevision())

@@ -50,6 +50,10 @@ internal sealed class ProviderPersistRequest {
  * [ProviderRepository.awaitPersisted].
  */
 internal fun ProviderRepository.saveConfig(config: ProviderConfig) {
+    // [T-auto-model-groups] 隐式组是派生数据：以本次保存的供应商/模型为准重建，
+    // 用户自建组（无 `auto:` 前缀）原样保留。放在 detachedCopy 之前，
+    // 保证发布的快照与落库内容一致。
+    AutoModelGroups.syncInPlace(config)
     // [T-android-provider-empty-load-wipe] No "block empty saves" guard here on
     // purpose: mutators pass the SAME object as _config.value and mutate it in
     // place, so at this point an empty `config` and an empty `_config.value`

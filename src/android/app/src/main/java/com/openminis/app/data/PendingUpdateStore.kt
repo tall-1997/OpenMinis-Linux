@@ -1,7 +1,6 @@
 package com.openminis.app.data
 
 import android.content.Context
-import android.content.SharedPreferences
 import com.openminis.app.data.UpdateVersionLogic
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.util.Digest
@@ -82,15 +81,15 @@ object PendingUpdateStore {
         val sourceId: String? = null,
     )
 
-    private var prefs: SharedPreferences? = null
+    private var prefs: com.openminis.app.config.PrefsHandle? = null
 
     /** Idempotent. Safe to call from MinisApp.onCreate. */
     fun init(context: Context) {
         if (prefs != null) return
-        prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        prefs = com.openminis.app.config.Prefs.file(PREFS)
     }
 
-    private fun requirePrefs(context: Context): SharedPreferences {
+    private fun requirePrefs(context: Context): com.openminis.app.config.PrefsHandle {
         prefs?.let { return it }
         init(context)
         return prefs!!
@@ -105,7 +104,7 @@ object PendingUpdateStore {
             put("downloadedAtMs", pending.downloadedAtMs)
             put("installLaunchedAtMs", pending.installLaunchedAtMs)
         }
-        requirePrefs(context).edit().putString(KEY, json.toString()).apply()
+        requirePrefs(context).set(KEY, json.toString())
         AppLogger.info(
             TAG,
             "setPending version=${pending.targetVersionName} size=${pending.apkSize} sha256=${pending.sha256 != null}",
@@ -126,10 +125,10 @@ object PendingUpdateStore {
      */
     fun markInstallLaunched(context: Context) {
         val p = requirePrefs(context)
-        val raw = p.getString(KEY, null) ?: return
+        val raw = p.stringOrNull(KEY) ?: return
         val obj = runCatching { JSONObject(raw) }.getOrNull() ?: return
         obj.put("installLaunchedAtMs", System.currentTimeMillis())
-        p.edit().putString(KEY, obj.toString()).apply()
+        p.set(KEY, obj.toString())
         AppLogger.info(TAG, "markInstallLaunched version=${obj.optString("targetVersionName")}")
     }
 
@@ -142,17 +141,17 @@ object PendingUpdateStore {
             if (intent.apkSha256 != null) put("apkSha256", intent.apkSha256) else put("apkSha256", JSONObject.NULL)
             if (intent.sourceId != null) put("sourceId", intent.sourceId) else put("sourceId", JSONObject.NULL)
         }
-        requirePrefs(context).edit().putString(KEY_INTENT, json.toString()).apply()
+        requirePrefs(context).set(KEY_INTENT, json.toString())
         AppLogger.info(TAG, "setPendingIntent version=${intent.targetVersionName} size=${intent.apkSize}")
     }
 
     /** Returns the outstanding download request, or null when none / expired. */
     fun getPendingIntent(context: Context): PendingIntent? {
         val p = requirePrefs(context)
-        val raw = p.getString(KEY_INTENT, null) ?: return null
+        val raw = p.stringOrNull(KEY_INTENT) ?: return null
         val obj = runCatching { JSONObject(raw) }.getOrNull()
         if (obj == null) {
-            p.edit().remove(KEY_INTENT).apply()
+            p.remove(KEY_INTENT)
             return null
         }
         val intent = PendingIntent(
@@ -177,7 +176,7 @@ object PendingUpdateStore {
     }
 
     fun clearPendingIntent(context: Context) {
-        requirePrefs(context).edit().remove(KEY_INTENT).apply()
+        requirePrefs(context).remove(KEY_INTENT)
         AppLogger.info(TAG, "clearPendingIntent")
     }
 
@@ -194,11 +193,11 @@ object PendingUpdateStore {
      */
     fun getPending(context: Context): PendingUpdate? {
         val p = requirePrefs(context)
-        val raw = p.getString(KEY, null) ?: return null
+        val raw = p.stringOrNull(KEY) ?: return null
         val obj = runCatching { JSONObject(raw) }.getOrNull()
         if (obj == null) {
             AppLogger.warning(TAG, "stored JSON malformed, discarding")
-            p.edit().remove(KEY).apply()
+            p.remove(KEY)
             return null
         }
         val pending = PendingUpdate(
@@ -253,7 +252,7 @@ object PendingUpdateStore {
     }
 
     fun clearPending(context: Context) {
-        requirePrefs(context).edit().remove(KEY).apply()
+        requirePrefs(context).remove(KEY)
         AppLogger.info(TAG, "clearPending")
     }
 
