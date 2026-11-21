@@ -61,12 +61,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.openminis.app.R
 import com.openminis.app.ui.theme.monetIconTileColor
 import com.openminis.app.ui.theme.monetIconTileContentColor
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * Shared primitives for settings pages. Grouped-card layout (iOS/ChatGPT style).
@@ -263,7 +263,7 @@ fun SettingsSection(
                     top = SectionDesign.CardToFooterGap,
                     bottom = 4.dp,
                 ),
-                lineHeight = 16.sp,
+                lineHeight = MinisTypography.lineNote,
             )
         }
     }

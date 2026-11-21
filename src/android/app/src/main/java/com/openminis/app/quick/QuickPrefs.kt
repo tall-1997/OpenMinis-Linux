@@ -16,29 +16,30 @@ import android.content.SharedPreferences
  */
 class QuickPrefs(context: Context) {
 
-    private val sp: SharedPreferences =
-        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val sp: com.openminis.app.config.PrefsHandle =
+        com.openminis.app.config.Prefs.file(PREFS_NAME)
 
     var panelSessionId: String?
-        get() = sp.getString(KEY_PANEL_SESSION, null)
-        set(value) = sp.edit().putString(KEY_PANEL_SESSION, value).apply()
+        get() = sp.stringOrNull(KEY_PANEL_SESSION)
+        set(value) { sp.set(KEY_PANEL_SESSION, value) }
 
     var panelUsedAtMs: Long
-        get() = sp.getLong(KEY_PANEL_AT, 0L)
-        set(value) = sp.edit().putLong(KEY_PANEL_AT, value).apply()
+        get() = sp.long(KEY_PANEL_AT, 0L)
+        set(value) { sp.set(KEY_PANEL_AT, value) }
 
     /** Record that the panel sent into [sessionId] right now (one write). */
     fun markPanelSession(sessionId: String) {
-        sp.edit()
-            .putString(KEY_PANEL_SESSION, sessionId)
-            .putLong(KEY_PANEL_AT, System.currentTimeMillis())
-            .apply()
+        // session + 时间戳成对：只写 session 会让「多久之前」显示错的旧值
+        sp.write {
+            putString(KEY_PANEL_SESSION, sessionId)
+            putLong(KEY_PANEL_AT, System.currentTimeMillis())
+        }
     }
 
     /** Refresh only the timestamp for an already-recorded session id. */
     fun touchPanelSession() {
-        if (sp.getString(KEY_PANEL_SESSION, null) != null) {
-            sp.edit().putLong(KEY_PANEL_AT, System.currentTimeMillis()).apply()
+        if (sp.stringOrNull(KEY_PANEL_SESSION) != null) {
+            sp.set(KEY_PANEL_AT, System.currentTimeMillis())
         }
     }
 

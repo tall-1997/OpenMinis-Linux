@@ -15,11 +15,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.openminis.app.ui.tokens.LocalMinisColors
+import com.openminis.app.ui.tokens.LocalMinisDimens
+import com.openminis.app.ui.tokens.LocalMinisType
+import com.openminis.app.ui.tokens.MinisColors
+import com.openminis.app.ui.tokens.MinisDimens
+import com.openminis.app.ui.tokens.MinisType
 
 // Accent: iOS blue, desaturated. [T-android-accent-blue-parity]
 //
@@ -210,6 +217,18 @@ fun MinisTheme(
         } else {
             fallbackChatPalette
         }
+    // [T-tokens-wire] 令牌层必须在这里真正提供，否则 LocalMinisColors 一直取
+    // staticCompositionLocalOf 的默认值（MinisColors.Light），深色模式读令牌
+    // 永远拿到浅色值 —— 与 PR #126「只挂 Provider 没接消费者」同型的假修复。
+    val minisColors = if (darkTheme) MinisColors.Dark else MinisColors.Light
+    // 紧凑档跟屏幕宽度走，不跟取色走 —— Compact 的语义是「平板分栏 / 小屏横屏
+    // 整体缩一档间距」，拿 dynamicActive 当开关会让开启动态取色的手机无故变密。
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    val minisDimens = if (screenWidthDp >= 600) MinisDimens.Compact else MinisDimens()
+    // 行高阶梯单一来源：MinisType.lineHeight(size) 由全仓 57 组多行
+    // fontSize/lineHeight 配对反推。M3Typography 里 11sp 与 12sp 同用 16sp 行高
+    // 是 M3 规范下限所致，令牌表里 12sp = 17sp。
+    val minisType = MinisType()
 
     MaterialTheme(
         colorScheme = colorScheme,
@@ -220,6 +239,9 @@ fun MinisTheme(
             LocalChatPalette provides chatPalette,
             LocalMonetDynamic provides dynamicActive,
             LocalUseRoundedIcons provides dynamicActive,
+            LocalMinisColors provides minisColors,
+            LocalMinisDimens provides minisDimens,
+            LocalMinisType provides minisType,
         ) {
             // [T-decor-shared-clock] 所有装饰动画共用一个 30fps 相位来源。
             // 消费者必须显式读 LocalDecorPhase / decor* 派生器才真正共享时钟
@@ -305,21 +327,21 @@ private fun TextStyle.scale(factor: Float): TextStyle =
 // ─── M3 Typography (Material You 模式用) ───────────────────────────────────
 
 private val M3Typography = Typography(
-    displayLarge = TextStyle(fontSize = 57.sp, fontWeight = FontWeight.Normal, lineHeight = 64.sp),
-    displayMedium = TextStyle(fontSize = 45.sp, fontWeight = FontWeight.Normal, lineHeight = 52.sp),
-    displaySmall = TextStyle(fontSize = 36.sp, fontWeight = FontWeight.Normal, lineHeight = 44.sp),
-    headlineLarge = TextStyle(fontSize = 32.sp, fontWeight = FontWeight.Normal, lineHeight = 40.sp),
-    headlineMedium = TextStyle(fontSize = 28.sp, fontWeight = FontWeight.Normal, lineHeight = 36.sp),
-    headlineSmall = TextStyle(fontSize = 24.sp, fontWeight = FontWeight.Normal, lineHeight = 32.sp),
-    titleLarge = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Medium, lineHeight = 28.sp),
-    titleMedium = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Medium, lineHeight = 24.sp),
-    titleSmall = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium, lineHeight = 20.sp),
-    bodyLarge = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Normal, lineHeight = 24.sp),
-    bodyMedium = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Normal, lineHeight = 20.sp),
-    bodySmall = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Normal, lineHeight = 16.sp),
-    labelLarge = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium, lineHeight = 20.sp),
-    labelMedium = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium, lineHeight = 16.sp),
-    labelSmall = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Medium, lineHeight = 16.sp),
+    displayLarge = TextStyle(fontSize = 57.sp, fontWeight = FontWeight.Normal, lineHeight = 64.sp),  // token-literal-ok: Material3 规范拷贝，值由规范决定而非本项目排版意图
+    displayMedium = TextStyle(fontSize = 45.sp, fontWeight = FontWeight.Normal, lineHeight = 52.sp),  // token-literal-ok: Material3 规范拷贝，值由规范决定而非本项目排版意图
+    displaySmall = TextStyle(fontSize = 36.sp, fontWeight = FontWeight.Normal, lineHeight = 44.sp),  // token-literal-ok: Material3 规范拷贝，值由规范决定而非本项目排版意图
+    headlineLarge = TextStyle(fontSize = 32.sp, fontWeight = FontWeight.Normal, lineHeight = 40.sp),  // token-literal-ok: Material3 规范拷贝，值由规范决定而非本项目排版意图
+    headlineMedium = TextStyle(fontSize = 28.sp, fontWeight = FontWeight.Normal, lineHeight = 36.sp),  // token-literal-ok: Material3 规范拷贝，值由规范决定而非本项目排版意图
+    headlineSmall = TextStyle(fontSize = 24.sp, fontWeight = FontWeight.Normal, lineHeight = 32.sp),  // token-literal-ok: Material3 规范拷贝，值由规范决定而非本项目排版意图
+    titleLarge = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Medium, lineHeight = 28.sp),  // token-literal-ok: Material3 规范拷贝，值由规范决定而非本项目排版意图
+    titleMedium = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Medium, lineHeight = 24.sp),  // token-literal-ok: Material3 规范拷贝，值由规范决定而非本项目排版意图
+    titleSmall = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium, lineHeight = 20.sp),  // token-literal-ok: Material3 规范拷贝，值由规范决定而非本项目排版意图
+    bodyLarge = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.Normal, lineHeight = 24.sp),  // token-literal-ok: Material3 规范拷贝，值由规范决定而非本项目排版意图
+    bodyMedium = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Normal, lineHeight = 20.sp),  // token-literal-ok: Material3 规范拷贝，值由规范决定而非本项目排版意图
+    bodySmall = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Normal, lineHeight = 16.sp),  // token-literal-ok: Material3 规范拷贝，值由规范决定而非本项目排版意图
+    labelLarge = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium, lineHeight = 20.sp),  // token-literal-ok: Material3 规范拷贝，值由规范决定而非本项目排版意图
+    labelMedium = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium, lineHeight = 16.sp),  // token-literal-ok: Material3 规范拷贝，值由规范决定而非本项目排版意图
+    labelSmall = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.Medium, lineHeight = MinisType().lineHeightTight(11f).sp),  // token-literal-ok: Material3 规范拷贝，值由规范决定而非本项目排版意图
 )
 
 private fun scaledTypography(factor: Float): Typography {

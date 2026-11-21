@@ -45,6 +45,7 @@ import com.openminis.app.ui.components.MinisSheetDragPill
 import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.launch
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * Standardized half-screen modal sheet used by every popup launched from the
@@ -222,7 +223,7 @@ fun StandardChatSheetHeader(
         Spacer(modifier = Modifier.weight(1f))
         Text(
             text = title,
-            fontSize = 16.sp,
+            fontSize = MinisTypography.titleLg,
             fontWeight = FontWeight.SemiBold,
             color = ChatColors.primaryText,
             maxLines = 1,

@@ -86,6 +86,7 @@ import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.decorLinearSweep
 import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.delay
+import com.openminis.app.ui.tokens.MinisTypography
 @Composable
 internal fun AssistantHeader(speakerName: String? = null, speakerVendor: String? = null) {
     // [T-soul-md] Identity header = icon + SOUL.md-driven `name`.
@@ -129,7 +130,7 @@ internal fun AssistantHeader(speakerName: String? = null, speakerVendor: String?
         Spacer(modifier = Modifier.width(6.dp))
         Text(
             text = displayName,
-            fontSize = 16.sp,
+            fontSize = MinisTypography.titleLg,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurface,
         )
@@ -172,7 +173,7 @@ internal fun InlineErrorBanner(error: String, onRetry: (() -> Unit)? = null) {
             .widthIn(min = 200.dp)
             .padding(top = 4.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFFFF3B30).copy(alpha = 0.12f))
+            .background(RawC.systemRed.tc.copy(alpha = 0.12f))
             .combinedClickable(
                 onClick = {},
                 onLongClick = {
@@ -185,15 +186,15 @@ internal fun InlineErrorBanner(error: String, onRetry: (() -> Unit)? = null) {
         Icon(
             imageVector = m3Icon(Icons.Default.Error),
             contentDescription = null,
-            tint = Color(0xFFFF3B30),
+            tint = RawC.systemRed.tc,
             modifier = Modifier.size(14.dp),
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = error,
-            color = Color(0xFFFF3B30),
-            fontSize = 12.sp,
-            lineHeight = 16.sp,
+            color = RawC.systemRed.tc,
+            fontSize = MinisTypography.foot,
+            lineHeight = MinisTypography.lineNote,
             maxLines = 3,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
@@ -204,7 +205,7 @@ internal fun InlineErrorBanner(error: String, onRetry: (() -> Unit)? = null) {
                 modifier = Modifier
                     .minimumInteractiveComponentSize()
                     .clip(RoundedCornerShape(50))
-                    .background(Color(0xFFFF3B30).copy(alpha = 0.15f))
+                    .background(RawC.systemRed.tc.copy(alpha = 0.15f))
                     .clickable(onClick = onRetry)
                     .padding(horizontal = 10.dp, vertical = 3.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -212,11 +213,11 @@ internal fun InlineErrorBanner(error: String, onRetry: (() -> Unit)? = null) {
                 Icon(
                     imageVector = m3Icon(Icons.Default.Refresh),
                     contentDescription = null,
-                    tint = Color(0xFFFF3B30),
+                    tint = RawC.systemRed.tc,
                     modifier = Modifier.size(10.dp),
                 )
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(stringResource(R.string.chat_longpress_retry), color = Color(0xFFFF3B30), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.chat_longpress_retry), color = RawC.systemRed.tc, fontSize = MinisTypography.cap, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -389,7 +390,7 @@ internal fun ToolCallPill(
             ) {
                 Text(
                     text = displayToolTitle(block.toolName, block.toolArgs, block.toolTitle),
-                    fontSize = 13.sp,
+                    fontSize = MinisTypography.body,
                     fontWeight = FontWeight.Medium,
                     // [P-process-card] A failed call tints its OWN row's title
                     // (matching the icon) — the reference card colours the
@@ -413,7 +414,7 @@ internal fun ToolCallPill(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = durationText,
-                    fontSize = 11.sp,
+                    fontSize = MinisTypography.cap,
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                     softWrap = false,
@@ -542,7 +543,7 @@ internal fun ThinkingBlock(
         }
         wasStreaming = isStreaming
     }
-    val thinkingBlue = Color(0xFF007AFF)
+    val thinkingBlue = RawC.systemBlue.tc
     val charCount = block.content.length
     val charLabel = when {
         charCount >= 1000 -> "${charCount / 1000}K"
@@ -612,7 +613,7 @@ internal fun ThinkingBlock(
             }
             Text(
                 text = stringResource(R.string.chat_thinking_header),
-                fontSize = 13.sp,
+                fontSize = MinisTypography.body,
                 fontWeight = FontWeight.SemiBold,
                 color = thinkingBlue,
             )
@@ -624,7 +625,7 @@ internal fun ThinkingBlock(
                         if (showTranslated) R.string.cot_translate_show_original
                         else R.string.cot_translate_show_translation,
                     ),
-                    fontSize = 11.sp,
+                    fontSize = MinisTypography.cap,
                     fontWeight = FontWeight.Medium,
                     color = if (showTranslated) thinkingBlue else thinkingBlue.copy(alpha = 0.75f),
                     modifier = Modifier.clickable {
@@ -640,7 +641,7 @@ internal fun ThinkingBlock(
             formatProcessDuration(block.durationMs)?.let { dur ->
                 Text(
                     text = dur,
-                    fontSize = 11.sp,
+                    fontSize = MinisTypography.cap,
                     fontWeight = FontWeight.Medium,
                     fontFamily = FontFamily.Monospace,
                     color = thinkingBlue.copy(alpha = 0.6f),
@@ -650,7 +651,7 @@ internal fun ThinkingBlock(
             if (charCount > 0) {
                 Text(
                     text = charLabel,
-                    fontSize = 11.sp,
+                    fontSize = MinisTypography.cap,
                     fontWeight = FontWeight.Medium,
                     fontFamily = FontFamily.Monospace,
                     color = thinkingBlue.copy(alpha = 0.6f),
@@ -663,7 +664,7 @@ internal fun ThinkingBlock(
                 // Offer the native full-content viewer instead.
                 Text(
                     text = stringResource(R.string.thinking_view_full),
-                    fontSize = 11.sp,
+                    fontSize = MinisTypography.cap,
                     fontWeight = FontWeight.Medium,
                     color = thinkingBlue,
                 )
@@ -718,7 +719,7 @@ internal fun ThinkingBlock(
                             displayContent.length / 1000,
                             charCount / 1000,
                         ),
-                        fontSize = 11.sp,
+                        fontSize = MinisTypography.cap,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                     )
@@ -728,7 +729,7 @@ internal fun ThinkingBlock(
                         if (transState!!.failed) {
                             Text(
                                 text = stringResource(R.string.cot_translate_failed),
-                                fontSize = 11.sp,
+                                fontSize = MinisTypography.cap,
                                 color = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
                                 modifier = Modifier
                                     .clickable {
@@ -739,7 +740,7 @@ internal fun ThinkingBlock(
                         }
                         Text(
                             text = transState!!.text,
-                            fontSize = 13.sp,
+                            fontSize = MinisTypography.body,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
                             lineHeight = 19.sp,
                         )
@@ -747,7 +748,7 @@ internal fun ThinkingBlock(
                 } else {
                     Text(
                         text = displayContent,
-                        fontSize = 13.sp,
+                        fontSize = MinisTypography.body,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
                         lineHeight = 19.sp,
                     )

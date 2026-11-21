@@ -60,7 +60,7 @@ object VoiceOutputState {
     // ReadAloudPlayer.init, and a player can be constructed off the main
     // thread — without it a caller could observe a half-published object.
     @Volatile
-    private var prefs: SharedPreferences? = null
+    private var prefs: com.openminis.app.config.PrefsHandle? = null
 
     private val _isEnabled = MutableStateFlow(false)
     val isEnabled: StateFlow<Boolean> = _isEnabled.asStateFlow()
@@ -111,10 +111,11 @@ object VoiceOutputState {
     fun setSystemVoice(name: String?, label: String?) {
         _systemVoiceName.value = name
         _systemVoiceLabel.value = label
-        prefs?.edit()
-            ?.putString(KEY_SYSTEM_VOICE, name)
-            ?.putString(KEY_SYSTEM_VOICE_LABEL, label)
-            ?.apply()
+        // name 与 label 成对：只写 name 会让设置页显示空标签
+        prefs?.write {
+            putString(KEY_SYSTEM_VOICE, name)
+            putString(KEY_SYSTEM_VOICE_LABEL, label)
+        }
     }
 
     /**
@@ -194,21 +195,20 @@ object VoiceOutputState {
 
     fun init(context: Context) {
         if (prefs != null) return
-        val p = context.applicationContext
-            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val p = com.openminis.app.config.Prefs.file(PREFS)
         prefs = p
-        _isEnabled.value = p.getBoolean(KEY_ENABLED, false)
-        _isMuted.value = p.getBoolean(KEY_MUTED, false)
-        _speed.value = p.getFloat(KEY_SPEED, 1.0f)
-        _volume.value = p.getFloat(KEY_VOLUME, 1.0f).coerceIn(1.0f, 2.0f)
-        _systemVoiceName.value = p.getString(KEY_SYSTEM_VOICE, null)
-        _systemVoiceLabel.value = p.getString(KEY_SYSTEM_VOICE_LABEL, null)
+        _isEnabled.value = p.bool(KEY_ENABLED, false)
+        _isMuted.value = p.bool(KEY_MUTED, false)
+        _speed.value = p.float(KEY_SPEED, 1.0f)
+        _volume.value = p.float(KEY_VOLUME, 1.0f).coerceIn(1.0f, 2.0f)
+        _systemVoiceName.value = p.stringOrNull(KEY_SYSTEM_VOICE)
+        _systemVoiceLabel.value = p.stringOrNull(KEY_SYSTEM_VOICE_LABEL)
         // [T-android-tts-capsule-drag] Both keys must be present: a half-written
         // pair (or a default sentinel) would silently anchor the capsule to a
         // bogus corner, so treat anything incomplete as "never dragged".
         _dragOffsetDp.value =
             if (p.contains(KEY_DRAG_X_DP) && p.contains(KEY_DRAG_Y_DP)) {
-                p.getFloat(KEY_DRAG_X_DP, 0f) to p.getFloat(KEY_DRAG_Y_DP, 0f)
+                p.float(KEY_DRAG_X_DP, 0f) to p.float(KEY_DRAG_Y_DP, 0f)
             } else {
                 null
             }
@@ -221,16 +221,18 @@ object VoiceOutputState {
      */
     fun setCapsuleDragOffsetDp(xDp: Float, yDp: Float) {
         _dragOffsetDp.value = xDp to yDp
-        prefs?.edit()
-            ?.putFloat(KEY_DRAG_X_DP, xDp)
-            ?.putFloat(KEY_DRAG_Y_DP, yDp)
-            ?.apply()
+        // x/y 必须同事务：只写一个会留下「一半新一半旧」的坐标，
+        // 胶囊会跳到对角线上（上面 init 里的注释也强调过这一点）
+        prefs?.write {
+            putFloat(KEY_DRAG_X_DP, xDp)
+            putFloat(KEY_DRAG_Y_DP, yDp)
+        }
     }
 
     fun setEnabled(value: Boolean) {
         if (_isEnabled.value == value) return
         _isEnabled.value = value
-        prefs?.edit()?.putBoolean(KEY_ENABLED, value)?.apply()
+        prefs?.set(KEY_ENABLED, value)
         if (!value) {
             // Off → stop whatever is being read, drop the queue, clear the
             // temporary mute (meaningless once fully off; a fresh enable
@@ -243,7 +245,7 @@ object VoiceOutputState {
     fun setMuted(value: Boolean) {
         if (_isMuted.value == value) return
         _isMuted.value = value
-        prefs?.edit()?.putBoolean(KEY_MUTED, value)?.apply()
+        prefs?.set(KEY_MUTED, value)
         // Mute silences the CURRENT playback too, not just future utterances.
         if (value) activePlayer?.stop()
     }
@@ -251,7 +253,7 @@ object VoiceOutputState {
     fun setSpeed(value: Float) {
         if (_speed.value == value) return
         _speed.value = value
-        prefs?.edit()?.putFloat(KEY_SPEED, value)?.apply()
+        prefs?.set(KEY_SPEED, value)
     }
 
     /** Cycle 1× → 1.25× → 1.5× → 2× → 1×. */
@@ -273,7 +275,7 @@ object VoiceOutputState {
         val clamped = value.coerceIn(1.0f, 2.0f)
         if (_volume.value == clamped) return
         _volume.value = clamped
-        prefs?.edit()?.putFloat(KEY_VOLUME, clamped)?.apply()
+        prefs?.set(KEY_VOLUME, clamped)
     }
 
     /** Cycle 100% → 150% → 200% → 100%. */

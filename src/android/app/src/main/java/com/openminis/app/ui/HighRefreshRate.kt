@@ -38,12 +38,10 @@ object HighRefreshRate {
     private const val KEY = "high_refresh"
 
     fun enabled(context: Context): Boolean =
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getBoolean(KEY, true)
+        com.openminis.app.config.Prefs.file(PREFS).bool(KEY, true)
 
     fun setEnabled(context: Context, on: Boolean) {
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putBoolean(KEY, on).apply()
+        com.openminis.app.config.Prefs.file(PREFS).set(KEY, on)
     }
 
     fun apply(activity: Activity) {

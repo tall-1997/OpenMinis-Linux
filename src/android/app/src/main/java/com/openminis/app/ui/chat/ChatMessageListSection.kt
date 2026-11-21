@@ -27,6 +27,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import com.openminis.app.R
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * One rendered chat row: the alpha/search-focus wrapper Box plus the
@@ -541,8 +542,8 @@ private fun MessageUsageFooterLine(stats: MessageUsageStats) {
     val parts = listOfNotNull(tokensPart, cachePart, speedPart)
     Text(
         text = parts.joinToString(" · "),
-        fontSize = 11.sp,
-        lineHeight = 14.sp,
+        fontSize = MinisTypography.cap,
+        lineHeight = MinisTypography.lineCap,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(start = 6.dp, top = 3.dp),
     )

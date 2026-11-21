@@ -67,7 +67,7 @@ object SessionBadgeStore {
         ICLOUD_SYNCING,
     }
 
-    @Volatile private var prefs: SharedPreferences? = null
+    @Volatile private var prefs: com.openminis.app.config.PrefsHandle? = null
 
     // sessionId -> ordered queue (head = currently displayed).
     private val _byId = MutableStateFlow<Map<String, List<SessionBadgeState>>>(emptyMap())
@@ -101,7 +101,7 @@ object SessionBadgeStore {
 
     fun init(context: Context) {
         if (prefs != null) return
-        val p = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val p = com.openminis.app.config.Prefs.file(PREFS)
         prefs = p
         val (restored, restoredStamps) = loadFromDisk(p)
         synchronized(this) {
@@ -328,7 +328,7 @@ object SessionBadgeStore {
         }
     }
 
-    private fun persistToDisk(p: SharedPreferences, map: Map<String, List<SessionBadgeState>>) {
+    private fun persistToDisk(p: com.openminis.app.config.PrefsHandle, map: Map<String, List<SessionBadgeState>>) {
         // v2 encoding: "id1=PAUSED:1723449600000,ICLOUD_SYNCING:0;id2=PAUSED:0".
         // Plain text is still fine — SharedPreferences atomicity covers the
         // whole string; entries are small (a few hundred sessions × short enum
@@ -339,20 +339,20 @@ object SessionBadgeStore {
             val perState = ts[id]
             "$id=" + q.joinToString(",") { "${it.name}:${perState?.get(it) ?: NO_STAMP}" }
         }
-        runCatching { p.edit().putString(KEY_V2, encoded).apply() }
+        runCatching { p.set(KEY_V2, encoded) }
             .onFailure { Log.w(TAG, "persist failed: ${it.message}") }
     }
 
     private fun loadFromDisk(
-        p: SharedPreferences,
+        p: com.openminis.app.config.PrefsHandle,
     ): Pair<Map<String, List<SessionBadgeState>>, Map<String, Map<SessionBadgeState, Long>>> {
-        val rawV2 = runCatching { p.getString(KEY_V2, null) }.getOrNull()
+        val rawV2 = runCatching { p.stringOrNull(KEY_V2) }.getOrNull()
         if (!rawV2.isNullOrBlank()) return decodeV2(rawV2)
         // No v2 blob: either a fresh install (v1 also absent → empty) or an
         // upgrade from a build that only ever wrote v1. Import the v1 queues so
         // no badge is lost; they carry NO stamps, i.e. unknown age → stale for
         // the group-card window, which is the documented choice.
-        val rawV1 = runCatching { p.getString(KEY, null) }.getOrNull()
+        val rawV1 = runCatching { p.stringOrNull(KEY) }.getOrNull()
         if (rawV1.isNullOrBlank()) return emptyMap<String, List<SessionBadgeState>>() to emptyMap()
         val migrated = decodeV1(rawV1)
         Log.d(TAG, "loadFromDisk: migrated ${migrated.size} sessions from v1 (unstamped → stale)")

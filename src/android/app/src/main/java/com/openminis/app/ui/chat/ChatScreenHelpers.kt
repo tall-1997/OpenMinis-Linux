@@ -147,3 +147,16 @@ internal fun captureSelectionReplacement(
         after = inserted,
     )
 }
+
+/**
+ * 输入框正文字号：令牌基准 × 用户字号档位系数。
+ *
+ * 抽出来是因为行高必须跟着字号一起算 —— bodyMedium 自带固定 20sp 的
+ * lineHeight，字号放大到 1.21 倍是 19.97sp 时行距会塌成 1.0，两行文字贴在一起。
+ * 这里把「字号 + 行高」绑成一个函数，调用处不可能只改一半。
+ */
+internal fun composerFontSize(scale: Float): Float =
+    com.openminis.app.ui.tokens.MinisType().bodyInput * scale
+
+internal fun composerLineHeight(scale: Float): Float =
+    com.openminis.app.ui.tokens.MinisType().lineHeight(composerFontSize(scale))

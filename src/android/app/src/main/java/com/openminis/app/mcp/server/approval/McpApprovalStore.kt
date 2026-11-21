@@ -20,10 +20,10 @@ import java.security.SecureRandom
  * Serialization is static so the JVM tests cover the byte-level round trip
  * without any Android type. Plain SharedPreferences (no secrets inside).
  */
-class McpApprovalStore internal constructor(private val prefs: SharedPreferences) {
+class McpApprovalStore internal constructor(private val prefs: com.openminis.app.config.PrefsHandle) {
 
     /** App-facing entry point: preferences live in the app's private store. */
-    constructor(context: Context) : this(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE))
+    constructor(context: Context) : this(com.openminis.app.config.Prefs.file(PREFS))
 
     companion object {
         private const val PREFS = "mcp_approvals"
@@ -122,8 +122,7 @@ class McpApprovalStore internal constructor(private val prefs: SharedPreferences
             for (i in 0 until tasks.length()) {
                 val t = tasks.getJSONObject(i)
                 val task = Task(
-                    taskId = t.getString("taskId"),
-                    name = t.optString("name"),
+                    taskId = t.getString("taskId"), name = t.optString("name"),
                     status = enumOf<TaskStatus>(t.optString("status")),
                     epoch = t.optLong("epoch", 1L),
                     createdAtMs = t.optLong("createdAtMs"),
@@ -134,17 +133,13 @@ class McpApprovalStore internal constructor(private val prefs: SharedPreferences
             for (i in 0 until ops.length()) {
                 val o = ops.getJSONObject(i)
                 val op = Operation(
-                    operationId = o.getString("operationId"),
-                    taskId = o.optString("taskId"),
+                    operationId = o.getString("operationId"), taskId = o.optString("taskId"),
                     requestId = o.optString("requestId"),
                     tool = o.optString("tool"),
                     argumentsJson = o.optString("argumentsJson"),
                     status = enumOfOr(o.optString("status"), OperationStatus.REVOKED),
                     createdAtMs = o.optLong("createdAtMs"),
-                    approvedAtMs = if (o.has("approvedAtMs")) o.getLong("approvedAtMs") else null,
-                    sourceFileHash = if (o.has("sourceFileHash")) o.getString("sourceFileHash") else null,
-                    operationFingerprint = if (o.has("operationFingerprint")) o.getString("operationFingerprint") else null,
-                )
+                    approvedAtMs = if (o.has("approvedAtMs")) o.getLong("approvedAtMs") else null, sourceFileHash = if (o.has("sourceFileHash")) o.optString("sourceFileHash", "") else null, operationFingerprint = if (o.has("operationFingerprint")) o.optString("operationFingerprint", "") else null,  )
                 opMap[op.operationId] = op
             }
             val executedIds = mutableSetOf<String>()
@@ -167,7 +162,7 @@ class McpApprovalStore internal constructor(private val prefs: SharedPreferences
 
     @Volatile
     private var cached: State = run {
-        val raw = prefs.getString(KEY_STATE, null)
+        val raw = prefs.stringOrNull(KEY_STATE)
         if (raw == null) State() else parse(raw) ?: State()
     }
 
@@ -181,7 +176,7 @@ class McpApprovalStore internal constructor(private val prefs: SharedPreferences
     fun update(transform: (State) -> State): State = synchronized(this) {
         val next = transform(cached)
         cached = next
-        prefs.edit().putString(KEY_STATE, serialize(next)).apply()
+        prefs.set(KEY_STATE, serialize(next))
         next
     }
 

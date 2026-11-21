@@ -43,7 +43,7 @@ class McpApprovalUiPathTest {
         McpApprovalStore.taskRootPrefix =
             File(System.getProperty("java.io.tmpdir"), "mcp-approval-ui-test").path + "/"
         dispatcher = CountingDispatcher()
-        manager = McpApprovalManager(McpApprovalStore(ApprovalFakePrefs()))
+        manager = McpApprovalManager(McpApprovalStore(approvalFakePrefs()))
         rpc = McpApprovalRpc(manager, McpApprovalExecutor(dispatcher))
     }
 

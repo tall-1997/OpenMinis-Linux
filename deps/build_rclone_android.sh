@@ -15,8 +15,7 @@
 #
 # The same .aar carries the embedded Tailscale node (deps/rclone-mobile/tsnet)
 # and the local network entry (nethub): an app can load only one gomobile
-# library (one Go runtime). GO_TAGS trims Tailscale features at build time,
-# with the same default as deps/build_rclone_ios.sh:
+# library (one Go runtime). GO_TAGS trims Tailscale features at build time:
 #   ts_omit_logtail    never upload logs to log.tailscale.com
 #   ts_omit_portmapper no UPnP / NAT-PMP / PCP to the LAN gateway (NAT
 #                      traversal then relies on STUN + DERP)

@@ -102,8 +102,8 @@ class DebugServer(
     private fun lanListenEnabled(): Boolean {
         if (!com.openminis.app.BuildConfig.DEBUG) return false
         return runCatching {
-            context.getSharedPreferences(LAN_LISTEN_PREFS, Context.MODE_PRIVATE)
-                .getBoolean(LAN_LISTEN_KEY, false)
+            com.openminis.app.config.Prefs.file(LAN_LISTEN_PREFS)
+                .bool(LAN_LISTEN_KEY, false)
         }.getOrDefault(false)
     }
 

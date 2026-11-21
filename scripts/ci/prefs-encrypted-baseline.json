@@ -1,0 +1,14 @@
+{
+  "note": "曾登记为 ENCRYPTED 的 prefs 文件。只增不减。",
+  "encrypted": [
+    "backup_rclone_secrets",
+    "env_var_values",
+    "mcp_oauth_secrets",
+    "mcp_server_secrets",
+    "minis_network_secrets",
+    "oauth_prefs",
+    "plugin_online_keys",
+    "provider_secrets",
+    "ssh_host_secrets"
+  ]
+}

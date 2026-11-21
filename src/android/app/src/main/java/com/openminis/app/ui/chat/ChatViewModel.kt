@@ -1884,8 +1884,7 @@ class ChatViewModel(
         _autoCompactEnabled.value = enabled
     }
 
-    internal fun groupChatPrefs() =
-        context.getSharedPreferences("minis_group_chat", android.content.Context.MODE_PRIVATE)
+    internal fun groupChatPrefs() = com.openminis.app.config.Prefs.file("minis_group_chat")
 
     /**
      * Prefs must not read [realSessionId] while properties above it initialize.
@@ -1902,18 +1901,18 @@ class ChatViewModel(
 
     internal fun roundStartKey() = "round:$groupChatPrefsId"
 
-    private val _groupChatEnabled = MutableStateFlow(groupChatPrefs().getBoolean(groupChatKey(), false))
+    private val _groupChatEnabled = MutableStateFlow(groupChatPrefs().bool(groupChatKey(), false))
     val groupChatEnabled: StateFlow<Boolean> = _groupChatEnabled.asStateFlow()
 
     @Volatile
     internal var groupChatCloseRequested = false
 
     @Volatile
-    internal var groupChatClosedAfterId: String? = groupChatPrefs().getString(closedKey(), null)
+    internal var groupChatClosedAfterId: String? = groupChatPrefs().stringOrNull(closedKey())
 
     /** Tail when this open began. Keeps an unfinished previous round out of the new one. */
     @Volatile
-    internal var groupChatRoundStartId: String? = groupChatPrefs().getString(roundStartKey(), null)
+    internal var groupChatRoundStartId: String? = groupChatPrefs().stringOrNull(roundStartKey())
 
     /** Set when group chat is opened before any message is loaded. */
     @Volatile
@@ -1922,30 +1921,29 @@ class ChatViewModel(
     internal fun migrateGroupChatPrefs(fromId: String, toId: String) {
         if (fromId == toId || fromId.isEmpty() || toId.isEmpty()) return
         val prefs = groupChatPrefs()
-        val editor = prefs.edit()
-        if (prefs.contains("enabled:$fromId")) {
-            editor.putBoolean("enabled:$toId", prefs.getBoolean("enabled:$fromId", false))
-            editor.remove("enabled:$fromId")
+        // 四个键一起搬。分四次事务会出现「新 id 有一半、旧 id 还有另一半」，
+        // 下次打开群聊就读到半套配置。
+        prefs.write {
+            if (prefs.contains("enabled:$fromId")) {
+                putBoolean("enabled:$toId", prefs.bool("enabled:$fromId", false))
+                remove("enabled:$fromId")
+            }
+            prefs.stringOrNull("closed:$fromId")?.let { closed ->
+                putString("closed:$toId", closed); remove("closed:$fromId")
+            }
+            prefs.stringOrNull("round:$fromId")?.let { round ->
+                putString("round:$toId", round); remove("round:$fromId")
+            }
+            prefs.stringOrNull("opening:$fromId")?.let { opening ->
+                putString("opening:$toId", opening); remove("opening:$fromId")
+            }
         }
-        prefs.getString("closed:$fromId", null)?.let { closed ->
-            editor.putString("closed:$toId", closed)
-            editor.remove("closed:$fromId")
-        }
-        prefs.getString("round:$fromId", null)?.let { round ->
-            editor.putString("round:$toId", round)
-            editor.remove("round:$fromId")
-        }
-        prefs.getString("opening:$fromId", null)?.let { opening ->
-            editor.putString("opening:$toId", opening)
-            editor.remove("opening:$fromId")
-        }
-        editor.apply()
         groupChatPrefsId = toId
     }
 
     fun setGroupChatEnabled(enabled: Boolean) {
         val opening = enabled && !_groupChatEnabled.value
-        groupChatPrefs().edit().putBoolean(groupChatKey(), enabled).apply()
+        groupChatPrefs().set(groupChatKey(), enabled)
         _groupChatEnabled.value = enabled
         if (!enabled) groupChatCloseRequested = false
         if (opening) groupChatAnchorPending = !anchorGroupRound()
@@ -1954,7 +1952,7 @@ class ChatViewModel(
 
     /** Prefs can outlive the in-memory flag after a restart. Do not dismiss the @ menu. */
     internal fun adoptStoredGroupChatEnabled() {
-        if (!_groupChatEnabled.value && groupChatPrefs().getBoolean(groupChatKey(), false)) {
+        if (!_groupChatEnabled.value && groupChatPrefs().bool(groupChatKey(), false)) {
             _groupChatEnabled.value = true
         }
     }

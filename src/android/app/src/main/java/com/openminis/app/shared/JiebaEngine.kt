@@ -90,8 +90,8 @@ internal class JiebaEngine(context: Context) {
      */
     private fun extractDictionaries(): File {
         val targetDir = File(appContext.filesDir, "jieba")
-        val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val extractedVersion = prefs.getInt(KEY_DICT_VERSION, -1)
+        val prefs = com.openminis.app.config.Prefs.file(PREFS_NAME)
+        val extractedVersion = prefs.int(KEY_DICT_VERSION, -1)
 
         val allPresent = DICT_FILES.all { File(targetDir, it).exists() }
         if (extractedVersion == DICT_VERSION && allPresent) {
@@ -110,7 +110,7 @@ internal class JiebaEngine(context: Context) {
             // before assets are touched).
             copyAsset("jieba/$name", File(targetDir, name))
         }
-        prefs.edit().putInt(KEY_DICT_VERSION, DICT_VERSION).apply()
+        prefs.set(KEY_DICT_VERSION, DICT_VERSION)
         return targetDir
     }
 

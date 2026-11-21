@@ -1,5 +1,7 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.ui.tokens.RawColors
+import com.openminis.app.ui.tokens.asColor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
@@ -28,26 +30,26 @@ import com.openminis.app.ui.theme.ChatColors
 internal object BrandAccent {
     /** Light-theme brand accents: the vendors' own primary hues. */
     private val LIGHT: Map<String, Color> = mapOf(
-        "zhipu" to Color(0xFF3859FF),
-        "deepseek" to Color(0xFF4D6BFE),
-        "claude" to Color(0xFFD97757),
-        "gemini" to Color(0xFF3186FF),
-        "wenxin" to Color(0xFF012F8D),
-        "minimax" to Color(0xFFE2167E),
-        "hailuo" to Color(0xFF1FA2B8),
-        "kimi" to Color(0xFF16161A),
-        "openai" to Color(0xFF16161A),
-        "grok" to Color(0xFF16161A),
-        "qwen" to Color(0xFF16161A),
-        "moonshot" to Color(0xFF16161A),
-        "meta" to Color(0xFF0668E1),
-        "mistral" to Color(0xFFFF7000),
-        "cohere" to Color(0xFF39594D),
-        "perplexity" to Color(0xFF20808D),
-        "openrouter" to Color(0xFF00A3C4),
-        "groq" to Color(0xFFF55036),
-        "baichuan" to Color(0xFF1A6DFF),
-        "hunyuan" to Color(0xFF0052D9),
+        "zhipu" to RawColors.Brand.zhipu.asColor,
+        "deepseek" to RawColors.Brand.deepseek.asColor,
+        "claude" to RawColors.Brand.claude.asColor,
+        "gemini" to RawColors.Brand.gemini.asColor,
+        "wenxin" to RawColors.Brand.wenxin.asColor,
+        "minimax" to RawColors.Brand.minimax.asColor,
+        "hailuo" to RawColors.Brand.hailuo.asColor,
+        "kimi" to RawColors.Brand.kimi.asColor,
+        "openai" to RawColors.Brand.openai.asColor,
+        "grok" to RawColors.Brand.grok.asColor,
+        "qwen" to RawColors.Brand.qwen.asColor,
+        "moonshot" to RawColors.Brand.moonshot.asColor,
+        "meta" to RawColors.Brand.meta.asColor,
+        "mistral" to RawColors.Brand.mistral.asColor,
+        "cohere" to RawColors.Brand.cohere.asColor,
+        "perplexity" to RawColors.Brand.perplexity.asColor,
+        "openrouter" to RawColors.Brand.openrouter.asColor,
+        "groq" to RawColors.Brand.groq.asColor,
+        "baichuan" to RawColors.Brand.baichuan.asColor,
+        "hunyuan" to RawColors.Brand.hunyuan.asColor,
     )
 
     /**
@@ -57,43 +59,43 @@ internal object BrandAccent {
      * separate map so the light table stays the vendors' literal colours.
      */
     private val DARK_OVERRIDES: Map<String, Color> = mapOf(
-        "kimi" to Color(0xFF8FA8C8),
-        "openai" to Color(0xFFC8C8D2),
-        "grok" to Color(0xFFA8AEC0),
-        "qwen" to Color(0xFF9B8CF0),
-        "hailuo" to Color(0xFF7FC8D8),
-        "moonshot" to Color(0xFF8FA8C8),
-        "cohere" to Color(0xFF6FA893),
-        "mistral" to Color(0xFFFF9A4D),
-        "wenxin" to Color(0xFF5B7FD4),
-        "hunyuan" to Color(0xFF4D8AE8),
-        "baichuan" to Color(0xFF5B8CFF),
-        "meta" to Color(0xFF4C8DF0),
-        "groq" to Color(0xFFFF7A66),
-        "minimax" to Color(0xFFFF5AA5),
-        "zhipu" to Color(0xFF6D8BFF),
-        "deepseek" to Color(0xFF7A93FF),
-        "claude" to Color(0xFFE89070),
-        "gemini" to Color(0xFF6FA8FF),
+        "kimi" to RawColors.BrandDark.kimi.asColor,
+        "openai" to RawColors.BrandDark.openai.asColor,
+        "grok" to RawColors.BrandDark.grok.asColor,
+        "qwen" to RawColors.BrandDark.qwen.asColor,
+        "hailuo" to RawColors.BrandDark.hailuo.asColor,
+        "moonshot" to RawColors.BrandDark.moonshot.asColor,
+        "cohere" to RawColors.BrandDark.cohere.asColor,
+        "mistral" to RawColors.BrandDark.mistral.asColor,
+        "wenxin" to RawColors.BrandDark.wenxin.asColor,
+        "hunyuan" to RawColors.BrandDark.hunyuan.asColor,
+        "baichuan" to RawColors.BrandDark.baichuan.asColor,
+        "meta" to RawColors.BrandDark.meta.asColor,
+        "groq" to RawColors.BrandDark.groq.asColor,
+        "minimax" to RawColors.BrandDark.minimax.asColor,
+        "zhipu" to RawColors.BrandDark.zhipu.asColor,
+        "deepseek" to RawColors.BrandDark.deepseek.asColor,
+        "claude" to RawColors.BrandDark.claude.asColor,
+        "gemini" to RawColors.BrandDark.gemini.asColor,
     )
 
     /** Palette for brands with no known accent (deterministic per name). */
     private val LIGHT_HASH = listOf(
-        Color(0xFF5B8DEF),
-        Color(0xFF3FA36A),
-        Color(0xFFD4654A),
-        Color(0xFF8A6AD6),
-        Color(0xFFC48A2A),
-        Color(0xFF3A9CA8),
+        0xFF5B8DEFL.asColor,
+        0xFF3FA36AL.asColor,
+        0xFFD4654AL.asColor,
+        0xFF8A6AD6L.asColor,
+        0xFFC48A2AL.asColor,
+        0xFF3A9CA8L.asColor,
     )
 
     private val DARK_HASH = listOf(
-        Color(0xFF8AB4F8),
-        Color(0xFF7BC98F),
-        Color(0xFFE89478),
-        Color(0xFFB79CE8),
-        Color(0xFFE4B65C),
-        Color(0xFF6FC4D0),
+        0xFF8AB4F8L.asColor,
+        0xFF7BC98FL.asColor,
+        0xFFE89478L.asColor,
+        0xFFB79CE8L.asColor,
+        0xFFE4B65CL.asColor,
+        0xFF6FC4D0L.asColor,
     )
 
     /** Brand accent for a lobe slug, or null when the slug has no entry. */

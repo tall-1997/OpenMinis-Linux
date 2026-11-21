@@ -794,18 +794,18 @@ class AgentForegroundService : Service() {
         // minSdk 26 (O) — the SDK_INT >= O wrapper was always true; the
         // getSharedPreferences call it guarded runs unconditionally below.
         val manager = getSystemService(NotificationManager::class.java)
-        val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+        val prefs = com.openminis.app.config.Prefs.file(PREFS)
         // Undo the IMPORTANCE_MIN migration once. MIN + SECRET hides the
         // ongoing row from the status bar and MIUI island. After this,
         // never delete the channel again so a user who changes it in
         // system settings keeps that choice.
-        if (!prefs.getBoolean(KEY_CHANNEL_RESTORED, false)) {
+        if (!prefs.bool(KEY_CHANNEL_RESTORED, false)) {
             val existing = manager.getNotificationChannel(CHANNEL_ID)
             if (existing != null && existing.importance <= NotificationManager.IMPORTANCE_MIN) {
                 manager.deleteNotificationChannel(CHANNEL_ID)
                 Log.i(TAG, "Restored agent_status channel to IMPORTANCE_LOW")
             }
-            prefs.edit().putBoolean(KEY_CHANNEL_RESTORED, true).apply()
+            prefs.set(KEY_CHANNEL_RESTORED, true)
         }
         val channel = NotificationChannel(
             CHANNEL_ID,

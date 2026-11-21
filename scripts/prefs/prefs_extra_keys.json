@@ -1,0 +1,206 @@
+{
+  "_comment": [
+    "手工补充清单：扫描器抓不到、但确实合法存在的 prefs 键与前缀。",
+    "存在的理由有三类，每条都要在 reason 里写清楚属于哪一类：",
+    "  1) literal-key      —— 源码直接写字符串，没有 const val",
+    "  2) shared-file      —— 一个文件同时用了多个 prefs 文件，扫描器无法判定归属",
+    "  3) migrated-inline  —— 迁移后键由调用点拼接，静态扫描看不出完整形态",
+    "这份清单只进不退：删掉一条会让守卫开始拒绝活代码。",
+    "  4) open-key-space   —— 键名本身是数据（插件 id/组件 id），无法静态枚举，声明后整体放行",
+    "  5) encrypted        —— 迁移后源码不再出现 EncryptedPrefsFactory，加密属性必须显式声明"
+  ],
+  "files": {
+    "mirror_settings": {
+      "keys": {
+        "KEY_FRESH_INSTALL": "rootfs.freshInstall"
+      },
+      "reason": "literal-key + shared-file: RootfsManager 与 MirrorSettingsScreen 共用此文件，且该键在 RootfsManager 里以字面量写入（没有 const），扫描器的归属规则（文件唯一使用一个 prefs）不成立。"
+    },
+    "dpkg_world_retry": {
+      "keys": {
+        "KEY_STRIKES": "strikes"
+      },
+      "reason": "literal-key + shared-file: RootfsManager 单文件用了 4 个 prefs 文件，strikes 是单段字面量键，无法被归属规则抓到。",
+      "ephemeral": true
+    },
+    "pip_world_retry": {
+      "keys": {
+        "KEY_STRIKES": "strikes"
+      },
+      "reason": "同上：RootfsManager 的 pip 侧重试计数，单段字面量键。",
+      "ephemeral": true
+    },
+    "dev_suite_state": {
+      "openKeySpace": true,
+      "reason": "open-key-space: 键是组件 id（jdk/python/node/rust…），DevSuiteStore 用 p.all.keys 遍历全部键，无法静态枚举"
+    },
+    "plugin_online_flags": {
+      "openKeySpace": true,
+      "reason": "open-key-space: 键是插件 id，OnlinePluginStore 读取 .all 全量标志位"
+    },
+    "plugin_online_keys": {
+      "openKeySpace": true,
+      "reason": "open-key-space + encrypted: 键是插件 id；迁移到 Prefs.file 后源码里不再有 EncryptedPrefsFactory 字面量，加密属性必须在此显式声明，否则会退化成明文",
+      "encrypted": true
+    },
+    "offload_permissions_asked": {
+      "ephemeral": true,
+      "reason": "open-key-space: 键是 Android 权限字符串（android.permission.CAMERA 等），由系统定义，无法静态枚举",
+      "openKeySpace": true
+    },
+    "provider_refresh_marks": {
+      "ephemeral": true,
+      "reason": "open-key-space + ephemeral: 键是 provider instanceId；刷新结果过期即失效",
+      "openKeySpace": true
+    },
+    "update_download_prefs": {
+      "ephemeral": true,
+      "reason": "ephemeral: 下载进度，进程重启即废弃"
+    },
+    "minis_tool_limits": {
+      "keys": {
+        "LITERAL_toolCallConcurrency": "toolCallConcurrency",
+        "LITERAL_autoConcurrency": "autoConcurrency"
+      },
+      "reason": "literal-key: 源码直接写字面量（无 const），扫描器抓不到"
+    },
+    "skill_user_disabled": {
+      "keys": {
+        "LITERAL_seeded_from_db": "seeded_from_db",
+        "LITERAL_ids": "ids"
+      },
+      "reason": "literal-key: 源码用 private val/直接字面量（seeded_from_db、ids）"
+    },
+    "a2a_gateway": {
+      "openKeySpace": true,
+      "reason": "open-key-space: 已退休功能的遗留文件，只做清空（legacy.all / clear）"
+    },
+    "provider_config": {
+      "keys": {
+        "LITERAL_voice_in": "voice.input.overrideEntryId",
+        "LITERAL_voice_out": "voice.output.overrideEntryId",
+        "LITERAL_last_used": "lastUsedModelEntryId"
+      },
+      "reason": "dynamic-prefix ×4: keypool_<instanceId>（凭据池）、modelsLastFetchAt_<instanceId>（模型目录缓存时间）、voiceShadowDisabled.<instanceId>（语音影子开关）；另 3 个字面量键直接写在源码里",
+      "dynPrefixes": [
+        "keypool_",
+        "modelsLastFetchAt_",
+        "voiceShadowDisabled."
+      ]
+    },
+    "file_browser_prefs": {
+      "keys": {
+        "PREF_KEY_SHOW_HIDDEN": "file_browser_show_hidden"
+      },
+      "reason": "归属漏抓: 常量定义在 companion object 里（第 518 行），与使用点（288/309）跨了 200 多行，归属规则没连上"
+    },
+    "browser_prefs": {
+      "keys": {
+        "LITERAL_user_agent_profile": "user_agent_profile",
+        "LITERAL_custom_user_agent": "custom_user_agent",
+        "PREF_IDLE_TIMEOUT_MINUTES": "idle_timeout_minutes",
+        "PREF_GLOBAL_VIEWPORT_WIDTH": "browser_custom_viewport_width",
+        "PREF_GLOBAL_VIEWPORT_HEIGHT": "browser_custom_viewport_height"
+      },
+      "reason": "literal-key + dynamic-prefix: user_agent_profile/custom_user_agent 由 UI 内联写；engine_stale_seen_<TARGET_MAJOR> 按 WebView 主版本号记录横幅已读",
+      "dynPrefixes": [
+        "engine_stale_seen_"
+      ]
+    },
+    "minis_group_chat": {
+      "dynPrefixes": [
+        "closed:",
+        "enabled:",
+        "opening:",
+        "round:"
+      ],
+      "reason": "dynamic-template: 键是 \"closed:$fromId\" / \"enabled:$toId\" 这类字符串模板（群聊按会话对记录），无法静态枚举"
+    },
+    "session_list_ui": {
+      "openKeySpace": true,
+      "reason": "open-key-space: 键由列表状态动态生成，SessionListViewModel 作为 internal val 暴露给 UI 层"
+    },
+    "skills_prefs": {
+      "openKeySpace": true,
+      "reason": "open-key-space: 排序状态键由 UI 层动态生成，SkillsManagementScreen 用 lazy 句柄持有"
+    },
+    "offload_permissions": {
+      "dynPrefixes": [
+        "level_"
+      ],
+      "reason": "dynamic-prefix: \"level_$toolName\" 按工具名存权限等级"
+    },
+    "voice_announcement_prefs": {
+      "dynPrefixes": [
+        "scene."
+      ],
+      "reason": "dynamic-prefix: keyOf(scene) = KEY_PREFIX + scene.key。KEY_PREFIX 是拼接片段，生成器已排除 _PREFIX 后缀常量，所以这里显式声明前缀"
+    },
+    "stream_trace": {
+      "keys": {
+        "PREFS_ENABLED": "enabled"
+      },
+      "reason": "literal-key: 常量名是 PREFS_ENABLED（不匹配 KEY_* 规则），扫描器没抓到"
+    },
+    "free_lane_health": {
+      "reason": "literal-key: 单个键 dead_ids 存 JSON（lane:id → 死亡时间戳），键空间不是开放的",
+      "keys": {
+        "KEY_DEAD": "dead_ids"
+      }
+    },
+    "zen_free_lane_health": {
+      "reason": "literal-key: 旧版同一个键名，只读一次做迁移",
+      "keys": {
+        "KEY_DEAD": "dead_ids"
+      }
+    },
+    "vscreen": {
+      "openKeySpace": true,
+      "reason": "open-key-space: VscreensStore 是通用 KV 接口（getString/putString/remove/all），键由脚本任意指定"
+    },
+    "backup_rclone_remotes": {
+      "openKeySpace": true,
+      "reason": "open-key-space: 键是用户自定义的 remote 名称"
+    },
+    "backup_rclone_secrets": {
+      "openKeySpace": true,
+      "reason": "加密文件：rclone 远端密码/令牌。原靠 EncryptedPrefsFactory.safeCreate 字面量判定加密，迁移到 Prefs.file(SECRETS_PREFS_NAME) 后该线索消失，需显式钉住。",
+      "encrypted": true
+    },
+    "mcp_server": {
+      "keys": {
+        "KEY_ENABLED": "enabled",
+        "KEY_PORT": "port",
+        "KEY_TOKEN": "token"
+      },
+      "reason": "literal-key: 三个常量名不符合 KEY_* 归属规则（KEY_ENABLED 等），扫描器漏抓"
+    },
+    "minis_network": {
+      "keys": {
+        "KEY": "network.settings.v1"
+      },
+      "reason": "literal-key: 常量名叫 KEY（不带前缀），RE_KEY_CONST 要求 KEY* 或 *_KEY 开头"
+    },
+    "sandbox_notify_dyn": {
+      "dynPrefixes": [
+        "dyn:"
+      ],
+      "reason": "dynamic-prefix: 键是 \"dyn:<uuid16>\"，每次注册通知动作生成一个新键，用过即弃"
+    },
+    "mcp_oauth_secrets": {
+      "encrypted": true,
+      "dynPrefixes": [
+        "tokens::",
+        "secret::"
+      ],
+      "reason": "MCP OAuth 令牌库。键由 secretKey(server)/tokensKey(server) 两个函数拼出（\"secret::\"+server / \"tokens::\"+server），扫描器只认 `.getX(\"p\" + v)` 行内形态，看不见函数内的拼接。该文件曾被完全漏登记 —— 文件名常量 `FILE = \"mcp_oauth_secrets\"` 走的是 EncryptedPrefsFactory.safeCreate(ctx, FILE) 的标识符分支，而全局 consts 表里 PREFS/FILE 这类名字被十几个文件重名覆盖，解析结果指向了别的文件。"
+    },
+    "minis_network_secrets": {
+      "encrypted": true,
+      "dynPrefixes": [
+        "proxy."
+      ],
+      "reason": "加密文件：代理密码。迁移到 Prefs.file 后源码里不再有 EncryptedPrefsFactory 字面量，扫描器看不到加密性，必须在此声明，否则静默退化成明文 XML。键是 \"proxy.\"+proxyId 拼接。"
+    }
+  }
+}

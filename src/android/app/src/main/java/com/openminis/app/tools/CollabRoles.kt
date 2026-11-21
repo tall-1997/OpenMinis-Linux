@@ -228,8 +228,7 @@ object CollabRoles {
     private const val KEY = "roles_json"
 
     fun loadCustom(context: Context): List<Role> = try {
-        val json = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(KEY, null) ?: return emptyList()
+        val json = com.openminis.app.config.Prefs.file(PREFS).stringOrNull(KEY) ?: return emptyList()
         val arr = org.json.JSONArray(json)
         (0 until arr.length()).mapNotNull { i ->
             val o = arr.optJSONObject(i) ?: return@mapNotNull null
@@ -259,8 +258,7 @@ object CollabRoles {
                     .put("tools", org.json.JSONArray(r.tools.toList())),
             )
         }
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putString(KEY, arr.toString()).apply()
+        com.openminis.app.config.Prefs.file(PREFS).set(KEY, arr.toString())
     }
 
     /** Built-ins + customs; a custom with the same name shadows the builtin. */

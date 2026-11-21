@@ -85,10 +85,10 @@ import com.openminis.app.ui.theme.ChatColors
 // dependency.
 import com.openminis.app.ui.chat.LocalMarkdownSessionId
 import com.openminis.app.ui.chat.resolveMdMediaFile
+import com.openminis.app.ui.tokens.MinisTypography
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import java.io.File
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -216,12 +216,12 @@ private fun HeadingBlock(
     mathSpans: List<MarkdownParser.MathSpan>,
 ) {
     val (fontSize, fontWeight) = when (heading.level) {
-        1 -> 24.sp to FontWeight.Bold
-        2 -> 20.sp to FontWeight.Bold
-        3 -> 18.sp to FontWeight.SemiBold
-        4 -> 16.sp to FontWeight.SemiBold
-        5 -> 15.sp to FontWeight.Medium
-        else -> 14.sp to FontWeight.Medium
+        1 -> MinisTypography.type.displayLg.sp to FontWeight.Bold
+        2 -> MinisTypography.type.display.sp to FontWeight.Bold
+        3 -> MinisTypography.type.head.sp to FontWeight.SemiBold
+        4 -> MinisTypography.type.titleLg.sp to FontWeight.SemiBold
+        5 -> MinisTypography.type.title.sp to FontWeight.Medium
+        else -> MinisTypography.type.bodyLg.sp to FontWeight.Medium
     }
     // (#4) Headings carry inline math through [MathFlowText] now — previously
     // the placeholder sentinel was stripped here and `$x^2$` inside a heading
@@ -366,9 +366,9 @@ private fun CodeBlockView(
                 text = highlighted,
                 style = TextStyle(
                     fontFamily = FontFamily.Monospace,
-                    fontSize = 13.sp,
+                    fontSize = MinisTypography.body,
                     color = codeColor,
-                    lineHeight = 18.sp,
+                    lineHeight = MinisTypography.lineCode,
                 ),
             )
         }

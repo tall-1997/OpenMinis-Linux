@@ -1,0 +1,6709 @@
+{
+  "src_root": "src/android/app/src/main/java/com/openminis/app",
+  "prefs_files": [
+    {
+      "name": "a11y_app_policy",
+      "module": "accessibility",
+      "modules": [
+        "accessibility"
+      ],
+      "encrypted": false,
+      "usage_count": 2,
+      "usage_files": [
+        "accessibility/A11yAppPolicy.kt"
+      ],
+      "keys": {
+        "KEY": "policy_json"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "a11y_recovery",
+      "module": "accessibility",
+      "modules": [
+        "accessibility"
+      ],
+      "encrypted": false,
+      "usage_count": 2,
+      "usage_files": [
+        "accessibility/AccessibilityRecoveryManager.kt"
+      ],
+      "keys": {
+        "KEY_EVER_GRANTED": "ever_granted"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "a2a_gateway",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "data/repository/ProviderConfigStore.kt"
+      ],
+      "keys": {},
+      "dyn_keys": [],
+      "open_key_space": true,
+      "ephemeral": false
+    },
+    {
+      "name": "agent_fgs",
+      "module": "service",
+      "modules": [
+        "service"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "service/AgentForegroundService.kt"
+      ],
+      "keys": {
+        "KEY_CHANNEL_RESTORED": "channel_visible_restored"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "app_icon_prefs",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "data/repository/AppIconRepository.kt"
+      ],
+      "keys": {
+        "KEY_SELECTED_ID": "selected_icon_id"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "appearance_prefs",
+      "module": ".",
+      "modules": [
+        ".",
+        "config",
+        "i18n",
+        "ui"
+      ],
+      "encrypted": false,
+      "usage_count": 6,
+      "usage_files": [
+        "MainActivity.kt",
+        "config/ConfigBuiltins.kt",
+        "i18n/LocaleWrap.kt",
+        "ui/chat/ChatStopOptions.kt",
+        "ui/settings/AppearanceScreen.kt"
+      ],
+      "keys": {
+        "KEY": "chat.confirmBeforeStop",
+        "KEY_AUTO_EXPAND_THINKING": "chat.autoExpandThinking",
+        "KEY_AUTO_FOCUS_AFTER_REPLY": "chat.autoFocusAfterReply",
+        "KEY_AUTO_GROUPING": "autoGroupingEnabled",
+        "KEY_COMPOSER_CONTEXT_GLOW": "chat.composerContextGlow",
+        "KEY_CURRENT_CHAT_SESSION_ID": "minis.current_chat_session_id",
+        "KEY_DYNAMIC_COLOR": "chat.dynamicColor",
+        "KEY_FOLD_AI_PROCESS": "chat.foldAiProcess",
+        "KEY_FONT_APP_BASE": "font_app_base",
+        "KEY_FONT_CHAT_INPUT": "font_chat_input",
+        "KEY_FONT_MESSAGE": "font_message",
+        "KEY_KEEP_SCREEN_AWAKE": "keepScreenAwakeDuringTasks",
+        "KEY_LANGUAGE": "app_language",
+        "KEY_LAUNCH_SESSION": "launch_session",
+        "KEY_RETURN_KEY_BEHAVIOR": "returnKeyBehavior",
+        "KEY_SHOW_CHAT_TITLE": "appearance.show_chat_title",
+        "KEY_SHOW_COMPLETED_TOOL_CARDS": "chat.showCompletedToolCards",
+        "KEY_SHOW_FLOATING_TOOL_BAR": "chat.showFloatingToolBar",
+        "KEY_SHOW_MESSAGE_TOKEN_USAGE": "chat.showMessageTokenUsage",
+        "KEY_SHOW_MIC_BUTTON": "chat.showMicButton",
+        "KEY_SHOW_SUBAGENT_BAR": "chat.showSubAgentBar",
+        "KEY_THEME_MODE": "theme_mode",
+        "KEY_TOOL_PREVIEW": "tool_preview"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "background_settings",
+      "module": "config",
+      "modules": [
+        "config",
+        "data",
+        "service"
+      ],
+      "encrypted": false,
+      "usage_count": 3,
+      "usage_files": [
+        "config/ConfigBuiltins.kt",
+        "data/repository/BackgroundSettingsRepository.kt",
+        "service/SessionActivityTracker.kt"
+      ],
+      "keys": {
+        "KEY_BG_OVERLAY_ENABLED": "backgroundOverlayEnabled",
+        "KEY_BG_OVERLAY_X": "backgroundOverlayX",
+        "KEY_BG_OVERLAY_Y": "backgroundOverlayY",
+        "KEY_DYNAMIC_ISLAND_ENABLED": "dynamicIslandEnabled",
+        "KEY_TASK_NOTIFICATIONS": "taskNotificationsEnabled",
+        "PRESENCE_KEEP_ALIVE_KEY": "presenceKeepAliveEnabled"
+      },
+      "dyn_keys": [
+        "backgroundOverlayX",
+        "backgroundOverlayY"
+      ],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "backup_rclone_remotes",
+      "module": "backup",
+      "modules": [
+        "backup"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "backup/remote/RcloneRemoteStore.kt"
+      ],
+      "keys": {},
+      "dyn_keys": [],
+      "open_key_space": true,
+      "ephemeral": false
+    },
+    {
+      "name": "backup_rclone_secrets",
+      "module": "backup",
+      "modules": [
+        "backup"
+      ],
+      "encrypted": true,
+      "usage_count": 1,
+      "usage_files": [
+        "backup/remote/RcloneRemoteStore.kt"
+      ],
+      "keys": {},
+      "dyn_keys": [],
+      "open_key_space": true,
+      "ephemeral": false
+    },
+    {
+      "name": "backup_ui",
+      "module": "ui",
+      "modules": [
+        "ui"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "ui/settings/backup/BackupViewModel.kt"
+      ],
+      "keys": {
+        "KEY_CATEGORIES": "selectedCategories",
+        "KEY_ENCRYPT": "encrypt",
+        "KEY_MAX_FILE_MB": "maxFileSizeMB"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "bash_install",
+      "module": "agent",
+      "modules": [
+        "agent"
+      ],
+      "encrypted": false,
+      "usage_count": 3,
+      "usage_files": [
+        "agent/shell/OnDemandBash.kt"
+      ],
+      "keys": {
+        "KEY_FAIL_COUNT": "failCount",
+        "KEY_LAST_FAIL": "lastFailAt"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "boot_hook",
+      "module": "sandbox",
+      "modules": [
+        "sandbox"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "sandbox/BootHookSettings.kt"
+      ],
+      "keys": {
+        "KEY_ENABLED": "enabled",
+        "KEY_FIRST_SEEN_AT": "first_seen_at",
+        "KEY_LAST_FINGERPRINT": "last_script_fingerprint"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "browser_prefs",
+      "module": "browser",
+      "modules": [
+        "browser",
+        "ui"
+      ],
+      "encrypted": false,
+      "usage_count": 6,
+      "usage_files": [
+        "browser/BrowserTabPool.kt",
+        "browser/WebViewEngine.kt",
+        "ui/browser/BrowserSettingsSheet.kt"
+      ],
+      "keys": {
+        "LITERAL_custom_user_agent": "custom_user_agent",
+        "LITERAL_user_agent_profile": "user_agent_profile",
+        "PREF_GLOBAL_VIEWPORT_HEIGHT": "browser_custom_viewport_height",
+        "PREF_GLOBAL_VIEWPORT_WIDTH": "browser_custom_viewport_width",
+        "PREF_IDLE_TIMEOUT_MINUTES": "idle_timeout_minutes"
+      },
+      "dyn_keys": [
+        "engine_stale_seen_"
+      ],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "claude_cli_version",
+      "module": "auth",
+      "modules": [
+        "auth"
+      ],
+      "encrypted": false,
+      "usage_count": 2,
+      "usage_files": [
+        "auth/ClaudeCliVersion.kt"
+      ],
+      "keys": {
+        "KEY_FETCHED_AT": "fetched_at",
+        "KEY_VERSION": "version"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "collab_roles",
+      "module": "tools",
+      "modules": [
+        "tools"
+      ],
+      "encrypted": false,
+      "usage_count": 2,
+      "usage_files": [
+        "tools/CollabRoles.kt"
+      ],
+      "keys": {
+        "KEY": "roles_json"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "composer_input_prefs",
+      "module": "ui",
+      "modules": [
+        "ui"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "ui/chat/ComposerInputModePrefs.kt"
+      ],
+      "keys": {
+        "KEY_MODE": "composer_input_mode_pref"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "cot_translation",
+      "module": "cottranslate",
+      "modules": [
+        "cottranslate"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "cottranslate/CotTranslationPrefs.kt"
+      ],
+      "keys": {
+        "KEY_ENABLED": "enabled",
+        "KEY_LANGUAGE": "language",
+        "KEY_PRIVACY_ACK": "privacy_ack",
+        "KEY_PROVIDER": "provider"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "crash_freq_prefs",
+      "module": "crash",
+      "modules": [
+        "crash"
+      ],
+      "encrypted": false,
+      "usage_count": 6,
+      "usage_files": [
+        "crash/CrashFrequencyDetector.kt"
+      ],
+      "keys": {
+        "KEY_DISMISSED_AT": "dismissed_at",
+        "KEY_FORCE_HOME_UNTIL": "force_home_until",
+        "KEY_SUPPRESS_UNTIL": "suppress_until"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "debug_server_prefs",
+      "module": "debug",
+      "modules": [
+        "debug"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "debug/DebugServer.kt"
+      ],
+      "keys": {
+        "LAN_LISTEN_KEY": "lan_listen"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "dev_suite_state",
+      "module": "plugins",
+      "modules": [
+        "plugins"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "plugins/DevSuiteStore.kt"
+      ],
+      "keys": {},
+      "dyn_keys": [],
+      "open_key_space": true,
+      "ephemeral": false
+    },
+    {
+      "name": "display_prefs",
+      "module": "ui",
+      "modules": [
+        "ui"
+      ],
+      "encrypted": false,
+      "usage_count": 2,
+      "usage_files": [
+        "ui/HighRefreshRate.kt"
+      ],
+      "keys": {
+        "KEY": "high_refresh"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "dpkg_world_retry",
+      "module": "sandbox",
+      "modules": [
+        "sandbox"
+      ],
+      "encrypted": false,
+      "usage_count": 2,
+      "usage_files": [
+        "sandbox/RootfsManager.kt"
+      ],
+      "keys": {
+        "KEY_STRIKES": "strikes"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": true
+    },
+    {
+      "name": "dummy",
+      "module": "auth",
+      "modules": [
+        "auth"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "auth/XAIOAuthManager.kt"
+      ],
+      "keys": {},
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "env_var_values",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": true,
+      "usage_count": 1,
+      "usage_files": [
+        "data/repository/EnvVarRepository.kt"
+      ],
+      "keys": {},
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "envvar_privacy",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "data/EnvVarPrivacyStore.kt"
+      ],
+      "keys": {
+        "KEY": "privacy_mode_enabled"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "file_browser_prefs",
+      "module": "ui",
+      "modules": [
+        "ui"
+      ],
+      "encrypted": false,
+      "usage_count": 2,
+      "usage_files": [
+        "ui/sandbox/FileBrowserViewModel.kt"
+      ],
+      "keys": {
+        "PREF_KEY_SHOW_HIDDEN": "file_browser_show_hidden"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "free_lane_health",
+      "module": "provider",
+      "modules": [
+        "provider"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "provider/FreeLaneHealth.kt"
+      ],
+      "keys": {
+        "KEY_DEAD": "dead_ids"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "hang_detector_prefs",
+      "module": "diagnostics",
+      "modules": [
+        "diagnostics"
+      ],
+      "encrypted": false,
+      "usage_count": 4,
+      "usage_files": [
+        "diagnostics/HangDetector.kt"
+      ],
+      "keys": {
+        "KEY_HANG_COUNT": "hang_count",
+        "KEY_LAST_HANG_AT": "last_hang_at_ms"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "host_event_hooks",
+      "module": "sandbox",
+      "modules": [
+        "sandbox"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "sandbox/HostEventHooks.kt"
+      ],
+      "keys": {
+        "KEY": "hooks_json"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "lifecycle_hooks",
+      "module": "agent",
+      "modules": [
+        "agent"
+      ],
+      "encrypted": false,
+      "usage_count": 2,
+      "usage_files": [
+        "agent/lifecycle/LifecycleHooks.kt"
+      ],
+      "keys": {
+        "KEY": "config_json"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "local_tool_plugins",
+      "module": "plugins",
+      "modules": [
+        "plugins"
+      ],
+      "encrypted": false,
+      "usage_count": 3,
+      "usage_files": [
+        "plugins/LocalToolPluginStore.kt"
+      ],
+      "keys": {
+        "KEY": "tools_json"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "logging_prefs",
+      "module": "logging",
+      "modules": [
+        "logging"
+      ],
+      "encrypted": false,
+      "usage_count": 3,
+      "usage_files": [
+        "logging/AppLogger.kt"
+      ],
+      "keys": {
+        "KEY_ENABLED": "logging_enabled"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "mcp_approvals",
+      "module": "mcp",
+      "modules": [
+        "mcp"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "mcp/server/approval/McpApprovalStore.kt"
+      ],
+      "keys": {
+        "KEY_STATE": "state"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "mcp_oauth_secrets",
+      "module": "mcp",
+      "modules": [
+        "mcp"
+      ],
+      "encrypted": true,
+      "usage_count": 1,
+      "usage_files": [
+        "mcp/oauth/MCPOAuthStore.kt"
+      ],
+      "keys": {},
+      "dyn_keys": [
+        "secret::",
+        "tokens::"
+      ],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "mcp_server",
+      "module": "mcp",
+      "modules": [
+        "mcp"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "mcp/server/McpServerConfigStore.kt"
+      ],
+      "keys": {
+        "KEY_ENABLED": "enabled",
+        "KEY_PORT": "port",
+        "KEY_TOKEN": "token"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "mcp_server_secrets",
+      "module": "mcp",
+      "modules": [
+        "mcp"
+      ],
+      "encrypted": true,
+      "usage_count": 1,
+      "usage_files": [
+        "mcp/server/McpServerConfigStore.kt"
+      ],
+      "keys": {},
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "minis_alarms_prefs",
+      "module": ".",
+      "modules": [
+        ".",
+        "offload"
+      ],
+      "encrypted": false,
+      "usage_count": 2,
+      "usage_files": [
+        "MinisAppGhostAlarms.kt",
+        "offload/AlarmOffloadManager.kt"
+      ],
+      "keys": {
+        "KEY_ALARMS": "alarms_json"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "minis_auto_compact_prefs",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "data/AutoCompactPrefs.kt"
+      ],
+      "keys": {
+        "KEY_ENABLED": "autoCompactOnThreshold",
+        "KEY_THRESHOLD": "autoCompactThresholdPercent"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "minis_cache_warming",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "data/CacheWarmingPrefs.kt"
+      ],
+      "keys": {
+        "KEY_ENABLED": "cacheWarmingEnabled"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "minis_config_permission",
+      "module": "config",
+      "modules": [
+        "config"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "config/MinisConfigPermissionStore.kt"
+      ],
+      "keys": {
+        "KEY": "minis_config_enabled"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "minis_context_saver",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "data/ContextSaverPrefs.kt"
+      ],
+      "keys": {
+        "KEY_MODE": "mode"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "minis_embedding_prefs",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "data/memory/EmbeddingPrefs.kt"
+      ],
+      "keys": {
+        "KEY_API_KEY": "embedding.api_key",
+        "KEY_BASE_URL": "embedding.base_url",
+        "KEY_ENABLED": "embedding.enabled",
+        "KEY_MODEL": "embedding.model"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "minis_enhanced_cache_prefs",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "data/EnhancedCachePrefs.kt"
+      ],
+      "keys": {
+        "KEY_CONFIRMED": "enhancedCacheConfirmed"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "minis_evolution_prefs",
+      "module": "evolution",
+      "modules": [
+        "evolution"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "evolution/EvolutionPrefs.kt"
+      ],
+      "keys": {
+        "KEY_DAILY_CAP": "evolution.daily_cap",
+        "KEY_ENABLED": "evolution.enabled",
+        "KEY_LAST_HARVEST": "evolution.last_harvest_at",
+        "KEY_LAST_REFLECT": "evolution.last_reflect_at",
+        "KEY_LLM_COUNT": "evolution.llm_count",
+        "KEY_LLM_DAY": "evolution.llm_day",
+        "KEY_LLM_FAILS": "evolution.llm_fails"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "minis_fast_mode_prefs",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "data/FastModePrefs.kt"
+      ],
+      "keys": {
+        "KEY_ENABLED": "codexFastModeEnabled"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "minis_group_chat",
+      "module": "ui",
+      "modules": [
+        "ui"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "ui/chat/ChatViewModel.kt"
+      ],
+      "keys": {},
+      "dyn_keys": [
+        "closed:",
+        "enabled:",
+        "opening:",
+        "round:"
+      ],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "minis_guard_prefs",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "data/GuardPrefs.kt"
+      ],
+      "keys": {
+        "KEY_STOP_ENABLED": "loopGuardStopEnabled"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "minis_memory_prefs",
+      "module": "config",
+      "modules": [
+        "config",
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 2,
+      "usage_files": [
+        "config/ConfigBuiltins.kt",
+        "data/MemoryGlobalPrefs.kt"
+      ],
+      "keys": {
+        "KEY_GLOBAL_ENABLED": "memory.global.enabled"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "minis_network",
+      "module": "network",
+      "modules": [
+        "network"
+      ],
+      "encrypted": false,
+      "usage_count": 2,
+      "usage_files": [
+        "network/NetworkSettings.kt"
+      ],
+      "keys": {
+        "KEY": "network.settings.v1"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "minis_network_secrets",
+      "module": "network",
+      "modules": [
+        "network"
+      ],
+      "encrypted": true,
+      "usage_count": 1,
+      "usage_files": [
+        "network/NetworkSettings.kt"
+      ],
+      "keys": {},
+      "dyn_keys": [
+        "proxy."
+      ],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "minis_phone_backup_folders",
+      "module": "backup",
+      "modules": [
+        "backup"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "backup/PhoneBackupFolderStore.kt"
+      ],
+      "keys": {
+        "KEY": "folders",
+        "KEY_CONFIG_DECODE_FAILED": "config_decode_failed"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "minis_plan_discussion_prefs",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "data/PlanDiscussionPrefs.kt"
+      ],
+      "keys": {
+        "KEY_ENABLED": "planDiscussionEnabled",
+        "KEY_MODE": "planDiscussionMode"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "minis_quick",
+      "module": "quick",
+      "modules": [
+        "quick"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "quick/QuickPrefs.kt"
+      ],
+      "keys": {
+        "KEY_PANEL_AT": "panel_session_at",
+        "KEY_PANEL_SESSION": "panel_session_id"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "minis_scheduled_notifications",
+      "module": "offload",
+      "modules": [
+        "offload"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "offload/ScheduledNotificationStore.kt"
+      ],
+      "keys": {
+        "KEY": "scheduled"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "minis_scheduled_tasks_prefs",
+      "module": "scheduled",
+      "modules": [
+        "scheduled"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "scheduled/ScheduledTaskStore.kt"
+      ],
+      "keys": {
+        "KEY_TASKS": "tasks_json"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "minis_storage_scan",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 2,
+      "usage_files": [
+        "data/StorageScanner.kt"
+      ],
+      "keys": {
+        "KEY_ROOTFS_BYTES": "ubuntu_rootfs_bytes"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "minis_tool_limits",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "data/ToolLimitPrefs.kt"
+      ],
+      "keys": {
+        "KEY_CHARS": "fileReadMaxChars",
+        "KEY_LINES": "fileReadMaxLines",
+        "KEY_MAIN_TURNS": "mainSessionMaxTurns",
+        "KEY_SHELL": "shellTimeoutSec",
+        "KEY_TURNS": "subagentMaxTurns",
+        "LITERAL_autoConcurrency": "autoConcurrency",
+        "LITERAL_toolCallConcurrency": "toolCallConcurrency"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "minis_unread_registry",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "data/UnreadRegistry.kt"
+      ],
+      "keys": {},
+      "dyn_keys": [
+        "lastReadAt:"
+      ],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "mirror_settings",
+      "module": "sandbox",
+      "modules": [
+        "sandbox",
+        "ui"
+      ],
+      "encrypted": false,
+      "usage_count": 2,
+      "usage_files": [
+        "sandbox/RootfsManager.kt",
+        "ui/sandbox/MirrorSettingsScreen.kt"
+      ],
+      "keys": {
+        "KEY_FRESH_INSTALL": "rootfs.freshInstall"
+      },
+      "dyn_keys": [
+        "mirror.selected.",
+        "mirror.useCustom."
+      ],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "multi_agent_settings",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "data/repository/MultiAgentSettingsRepository.kt"
+      ],
+      "keys": {
+        "KEY_ENABLED": "enabled",
+        "KEY_MAX_CONCURRENT": "max_concurrent",
+        "KEY_MODEL_IDS": "model_entry_ids",
+        "KEY_SUBAGENT_MAX_ATTEMPTS": "subagent_max_attempts",
+        "KEY_SUBAGENT_MAX_TURNS": "subagent_max_turns",
+        "KEY_SUPERVISOR_MAX_WORKER_TURNS": "supervisor_max_worker_turns",
+        "KEY_WORKER_MODEL_ID": "worker_model_entry_id"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "oauth_prefs",
+      "module": "auth",
+      "modules": [
+        "auth",
+        "backup"
+      ],
+      "encrypted": true,
+      "usage_count": 5,
+      "usage_files": [
+        "auth/OAuthManager.kt",
+        "backup/BackupImporter.kt",
+        "backup/BackupSecretsCollector.kt"
+      ],
+      "keys": {
+        "KEY_MANUAL_BEARER": "manual_bearer_token"
+      },
+      "dyn_keys": [
+        "oauth_",
+        "oauth_manual_bearer_token_",
+        "oauth_tokens_"
+      ],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "offload_permissions",
+      "module": "offload",
+      "modules": [
+        "offload"
+      ],
+      "encrypted": false,
+      "usage_count": 3,
+      "usage_files": [
+        "offload/OffloadPermissionManager.kt",
+        "offload/PrivacyPermissionPolicy.kt"
+      ],
+      "keys": {
+        "KEY": "privacy_global_level"
+      },
+      "dyn_keys": [
+        "level_"
+      ],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "offload_permissions_asked",
+      "module": "offload",
+      "modules": [
+        "offload"
+      ],
+      "encrypted": false,
+      "usage_count": 2,
+      "usage_files": [
+        "offload/OffloadPermissionManager.kt"
+      ],
+      "keys": {},
+      "dyn_keys": [],
+      "open_key_space": true,
+      "ephemeral": true
+    },
+    {
+      "name": "outbound_mask",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "data/OutboundMaskPrefs.kt"
+      ],
+      "keys": {
+        "KEY": "enabled"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "pending_update",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "data/PendingUpdateStore.kt"
+      ],
+      "keys": {
+        "KEY": "pending",
+        "KEY_INTENT": "pending_intent"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "pip_world_retry",
+      "module": "sandbox",
+      "modules": [
+        "sandbox"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "sandbox/RootfsManager.kt"
+      ],
+      "keys": {
+        "KEY_STRIKES": "strikes"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": true
+    },
+    {
+      "name": "plugin_network_policy",
+      "module": "plugins",
+      "modules": [
+        "plugins"
+      ],
+      "encrypted": false,
+      "usage_count": 3,
+      "usage_files": [
+        "plugins/ConnectorNetworkPolicy.kt"
+      ],
+      "keys": {},
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "plugin_online_flags",
+      "module": "plugins",
+      "modules": [
+        "plugins"
+      ],
+      "encrypted": false,
+      "usage_count": 3,
+      "usage_files": [
+        "plugins/OnlinePluginStore.kt"
+      ],
+      "keys": {},
+      "dyn_keys": [],
+      "open_key_space": true,
+      "ephemeral": false
+    },
+    {
+      "name": "plugin_online_keys",
+      "module": "plugins",
+      "modules": [
+        "plugins"
+      ],
+      "encrypted": true,
+      "usage_count": 3,
+      "usage_files": [
+        "plugins/OnlinePluginStore.kt"
+      ],
+      "keys": {},
+      "dyn_keys": [],
+      "open_key_space": true,
+      "ephemeral": false
+    },
+    {
+      "name": "plugin_registry",
+      "module": "plugins",
+      "modules": [
+        "plugins"
+      ],
+      "encrypted": false,
+      "usage_count": 3,
+      "usage_files": [
+        "plugins/OnlinePluginStore.kt",
+        "plugins/PluginRegistry.kt"
+      ],
+      "keys": {
+        "CACHE_KEY": "plugin_registry_cache",
+        "OVERRIDE_KEY": "registry_url_override"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "provider_config",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 8,
+      "usage_files": [
+        "data/repository/ProviderConfigStore.kt"
+      ],
+      "keys": {
+        "LITERAL_last_used": "lastUsedModelEntryId",
+        "LITERAL_voice_in": "voice.input.overrideEntryId",
+        "LITERAL_voice_out": "voice.output.overrideEntryId"
+      },
+      "dyn_keys": [
+        "keypool_",
+        "modelsLastFetchAt_",
+        "voiceShadowDisabled."
+      ],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "provider_extra_headers",
+      "module": "provider",
+      "modules": [
+        "provider"
+      ],
+      "encrypted": true,
+      "usage_count": 1,
+      "usage_files": [
+        "provider/ProviderHeaderStore.kt"
+      ],
+      "keys": {
+        "KEY": "headers_json",
+        "OPENCODE_SESSION_KEY": "opencode_session_json"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "provider_refresh_marks",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 3,
+      "usage_files": [
+        "data/repository/ProviderRefreshMarks.kt"
+      ],
+      "keys": {},
+      "dyn_keys": [],
+      "open_key_space": true,
+      "ephemeral": true
+    },
+    {
+      "name": "provider_secrets",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": true,
+      "usage_count": 2,
+      "usage_files": [
+        "data/repository/ProviderConfigStore.kt",
+        "data/repository/ProviderCredentialPool.kt"
+      ],
+      "keys": {},
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "sandbox_firewall",
+      "module": "sandbox",
+      "modules": [
+        "sandbox"
+      ],
+      "encrypted": false,
+      "usage_count": 2,
+      "usage_files": [
+        "sandbox/SandboxFirewall.kt"
+      ],
+      "keys": {
+        "KEY_POLICY": "policy"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "sandbox_job_keepalive",
+      "module": "sandbox",
+      "modules": [
+        "sandbox"
+      ],
+      "encrypted": false,
+      "usage_count": 2,
+      "usage_files": [
+        "sandbox/SandboxJobKeepAlive.kt"
+      ],
+      "keys": {
+        "KEY_SESSIONS": "sessions"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "sandbox_notify_dyn",
+      "module": "notification",
+      "modules": [
+        "notification"
+      ],
+      "encrypted": false,
+      "usage_count": 2,
+      "usage_files": [
+        "notification/SandboxNotifyActions.kt"
+      ],
+      "keys": {},
+      "dyn_keys": [
+        "dyn:"
+      ],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "security_gate",
+      "module": "security",
+      "modules": [
+        "security"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "security/SecurityGateHolder.kt"
+      ],
+      "keys": {
+        "KEY_MODE": "permission_mode"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "session_badge_store",
+      "module": "service",
+      "modules": [
+        "service"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "service/SessionBadgeStore.kt"
+      ],
+      "keys": {
+        "KEY": "badge_state_by_session",
+        "KEY_V2": "badge_state_by_session_v2"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "session_list_ui",
+      "module": "ui",
+      "modules": [
+        "ui"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "ui/sessions/SessionListViewModel.kt"
+      ],
+      "keys": {},
+      "dyn_keys": [],
+      "open_key_space": true,
+      "ephemeral": false
+    },
+    {
+      "name": "share_prefs",
+      "module": "share",
+      "modules": [
+        "share"
+      ],
+      "encrypted": false,
+      "usage_count": 3,
+      "usage_files": [
+        "share/SharedShareStore.kt"
+      ],
+      "keys": {
+        "KEY_PENDING_SHARE": "pending_share"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "skill_feeds_prefs",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "data/repository/SkillSubscriptionStore.kt"
+      ],
+      "keys": {
+        "KEY_FEEDS": "feeds_json"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "skill_prompt_prefs",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "data/repository/SkillManifest.kt"
+      ],
+      "keys": {
+        "KEY_PROGRESSIVE": "skills.progressive_loading"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "skill_user_disabled",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "data/repository/SkillRepository.kt"
+      ],
+      "keys": {
+        "LITERAL_ids": "ids",
+        "LITERAL_seeded_from_db": "seeded_from_db"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "skills_prefs",
+      "module": "ui",
+      "modules": [
+        "ui"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "ui/settings/SkillsManagementScreen.kt"
+      ],
+      "keys": {},
+      "dyn_keys": [],
+      "open_key_space": true,
+      "ephemeral": false
+    },
+    {
+      "name": "soul_store",
+      "module": "agent",
+      "modules": [
+        "agent"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "agent/SoulStore.kt"
+      ],
+      "keys": {
+        "FORCE_OVERWRITE_KEY": "force_overwrite_1_36_13"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "speech_recognition",
+      "module": "speech",
+      "modules": [
+        "speech"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "speech/SpeechRecognitionManager.kt"
+      ],
+      "keys": {
+        "KEY_ENGINE_ID": "engineId",
+        "KEY_LOCALE": "locale"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "ssh_host_secrets",
+      "module": "ssh",
+      "modules": [
+        "ssh"
+      ],
+      "encrypted": true,
+      "usage_count": 1,
+      "usage_files": [
+        "ssh/SshConfigStore.kt"
+      ],
+      "keys": {},
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "ssh_workspace_prefs",
+      "module": "ssh",
+      "modules": [
+        "ssh"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "ssh/SshWorkspace.kt"
+      ],
+      "keys": {},
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "stream_trace",
+      "module": "provider",
+      "modules": [
+        "provider"
+      ],
+      "encrypted": false,
+      "usage_count": 2,
+      "usage_files": [
+        "provider/StreamTraceRecorder.kt"
+      ],
+      "keys": {
+        "PREFS_ENABLED": "enabled"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "sub_agent_types",
+      "module": "tools",
+      "modules": [
+        "tools"
+      ],
+      "encrypted": false,
+      "usage_count": 2,
+      "usage_files": [
+        "tools/SubAgentTypeStore.kt"
+      ],
+      "keys": {
+        "KEY": "types_json"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "text_segmenter",
+      "module": "shared",
+      "modules": [
+        "shared"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "shared/JiebaEngine.kt"
+      ],
+      "keys": {
+        "KEY_DICT_VERSION": "jieba_dict_version"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "translate_settings",
+      "module": "i18n",
+      "modules": [
+        "i18n"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "i18n/TranslationPrefs.kt"
+      ],
+      "keys": {
+        "KEY_ENABLED": "enabled",
+        "KEY_ENTRY": "entry_id",
+        "KEY_LANG": "lang"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "ui_prefs",
+      "module": "ui",
+      "modules": [
+        "ui"
+      ],
+      "encrypted": false,
+      "usage_count": 2,
+      "usage_files": [
+        "ui/navigation/ChatSplitScaffold.kt",
+        "ui/sessions/SessionListScreen.kt"
+      ],
+      "keys": {
+        "KEY_LIST_COLLAPSED": "tablet_list_pane_collapsed",
+        "KEY_LIST_PANE_WIDTH": "tablet_list_pane_width_dp"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "update_download_prefs",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 2,
+      "usage_files": [
+        "data/UpdateDownloadManager.kt"
+      ],
+      "keys": {
+        "KEY_WIFI_ONLY": "wifi_only"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": true
+    },
+    {
+      "name": "update_sources",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "data/UpdateSourceRegistry.kt"
+      ],
+      "keys": {
+        "KEY_INCLUDE_ROLLING": "include_rolling",
+        "KEY_PREFERRED": "preferred_source_id"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "voice_announcement_prefs",
+      "module": "speech",
+      "modules": [
+        "speech"
+      ],
+      "encrypted": false,
+      "usage_count": 3,
+      "usage_files": [
+        "speech/VoiceAnnouncementPrefs.kt"
+      ],
+      "keys": {},
+      "dyn_keys": [
+        "scene."
+      ],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "voice_correction_prefs",
+      "module": "speech",
+      "modules": [
+        "speech"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "speech/correction/VoiceCorrectionConsent.kt"
+      ],
+      "keys": {
+        "KEY_ENABLED": "voiceCorrectionCollectionEnabled",
+        "KEY_PROMPTED": "voiceCorrectionCollectionPrompted"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "voice_prefs",
+      "module": "speech",
+      "modules": [
+        "speech",
+        "ui"
+      ],
+      "encrypted": false,
+      "usage_count": 5,
+      "usage_files": [
+        "speech/VoiceOutputState.kt",
+        "ui/chat/voice/HandsFreeVoicePanel.kt",
+        "ui/chat/voice/InlineVoiceInputPanel.kt"
+      ],
+      "keys": {
+        "KEY_DRAG_X_DP": "readReplies.capsuleDragXDp",
+        "KEY_DRAG_Y_DP": "readReplies.capsuleDragYDp",
+        "KEY_ENABLED": "handsFree.enabled",
+        "KEY_EXPANDED": "voice.panel.expanded",
+        "KEY_MUTED": "readReplies.muted",
+        "KEY_SPEED": "readReplies.speed",
+        "KEY_SYSTEM_VOICE": "readReplies.systemVoice",
+        "KEY_SYSTEM_VOICE_LABEL": "readReplies.systemVoiceLabel",
+        "KEY_VOLUME": "readReplies.volume"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "vscreen",
+      "module": "vscreen",
+      "modules": [
+        "vscreen"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "vscreen/VscreenPrefs.kt"
+      ],
+      "keys": {},
+      "dyn_keys": [],
+      "open_key_space": true,
+      "ephemeral": false
+    },
+    {
+      "name": "web_search_prefs",
+      "module": "tools",
+      "modules": [
+        "tools"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "tools/WebSearchSettings.kt"
+      ],
+      "keys": {
+        "KEY_BING_KEY": "bing_key",
+        "KEY_BOCHA": "bocha_key",
+        "KEY_BRAVE": "brave_key",
+        "KEY_CUSTOM_KEY": "custom_key",
+        "KEY_CUSTOM_KEY_HEADER": "custom_key_header",
+        "KEY_CUSTOM_URL": "custom_url",
+        "KEY_ENGINE": "engine",
+        "KEY_ENGINE_EXPLICIT": "engine_explicit",
+        "KEY_EXA": "exa_key",
+        "KEY_FALLBACK": "fallback_ddg",
+        "KEY_JINA": "jina_key",
+        "KEY_KEYLESS_CN": "keyless_cn",
+        "KEY_SEARXNG_URL": "searxng_url",
+        "KEY_TAVILY": "tavily_key",
+        "KEY_TOOL_ENABLED": "tool_enabled",
+        "KEY_ZHIPU": "zhipu_key"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "workspace_layout",
+      "module": "sandbox",
+      "modules": [
+        "sandbox"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "sandbox/LegacyWorkspaceMigrator.kt"
+      ],
+      "keys": {
+        "KEY_DONE": "legacy_v1_done",
+        "KEY_DONE_V2": "legacy_v2_filed"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
+      "name": "zen_free_lane_health",
+      "module": "provider",
+      "modules": [
+        "provider"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "provider/FreeLaneHealth.kt"
+      ],
+      "keys": {
+        "KEY_DEAD": "dead_ids"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    }
+  ],
+  "constant_conflicts": [
+    {
+      "name": "TAG",
+      "a": "MinisAppAsyncInit",
+      "b": "A11yRecovery",
+      "files": [
+        "MinisAppAsyncInit.kt",
+        "accessibility/AccessibilityRecoveryManager.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "a11y_app_policy",
+      "b": "a11y_recovery",
+      "files": [
+        "accessibility/A11yAppPolicy.kt",
+        "accessibility/AccessibilityRecoveryManager.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "A11yRecovery",
+      "b": "MinisA11y",
+      "files": [
+        "accessibility/AccessibilityRecoveryManager.kt",
+        "accessibility/MinisAccessibilityService.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "MinisA11y",
+      "b": "RestrictedSettings",
+      "files": [
+        "accessibility/MinisAccessibilityService.kt",
+        "accessibility/RestrictedSettingsManager.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "RestrictedSettings",
+      "b": "A11yReplay",
+      "files": [
+        "accessibility/RestrictedSettingsManager.kt",
+        "accessibility/SkillReplayEngine.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "A11yReplay",
+      "b": "ContextAssembly",
+      "files": [
+        "accessibility/SkillReplayEngine.kt",
+        "agent/ContextAssemblySnapshot.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ContextAssembly",
+      "b": "GenerationRun",
+      "files": [
+        "agent/ContextAssemblySnapshot.kt",
+        "agent/GenerationRunLifecycle.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "GenerationRun",
+      "b": "PersonaPromptLibrary",
+      "files": [
+        "agent/GenerationRunStore.kt",
+        "agent/PersonaPromptLibrary.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "PersonaPromptLibrary",
+      "b": "SoulStore",
+      "files": [
+        "agent/PersonaPromptLibrary.kt",
+        "agent/SoulIconMigration.kt"
+      ]
+    },
+    {
+      "name": "FILE_NAME",
+      "a": "a11y_skills.json",
+      "b": "SOUL.md",
+      "files": [
+        "accessibility/A11ySkillStore.kt",
+        "agent/SoulStore.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SoulStore",
+      "b": "Soul",
+      "files": [
+        "agent/SoulStore.kt",
+        "agent/SoulStore.kt"
+      ]
+    },
+    {
+      "name": "FILE_NAME",
+      "a": "SOUL.md",
+      "b": "world-book.json",
+      "files": [
+        "agent/SoulStore.kt",
+        "agent/WorldBook.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "Soul",
+      "b": "LifecycleHooks",
+      "files": [
+        "agent/SoulStore.kt",
+        "agent/lifecycle/LifecycleHooks.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "a11y_recovery",
+      "b": "lifecycle_hooks",
+      "files": [
+        "accessibility/AccessibilityRecoveryManager.kt",
+        "agent/lifecycle/LifecycleHooks.kt"
+      ]
+    },
+    {
+      "name": "KEY",
+      "a": "policy_json",
+      "b": "config_json",
+      "files": [
+        "accessibility/A11yAppPolicy.kt",
+        "agent/lifecycle/LifecycleHooks.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "LifecycleHooks",
+      "b": "Bashism",
+      "files": [
+        "agent/lifecycle/LifecycleHooks.kt",
+        "agent/shell/BashismDetector.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "lifecycle_hooks",
+      "b": "bash_install",
+      "files": [
+        "agent/lifecycle/LifecycleHooks.kt",
+        "agent/shell/OnDemandBash.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "Bashism",
+      "b": "ClaudeCliVersion",
+      "files": [
+        "agent/shell/OnDemandBash.kt",
+        "auth/ClaudeCliVersion.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "bash_install",
+      "b": "claude_cli_version",
+      "files": [
+        "agent/shell/OnDemandBash.kt",
+        "auth/ClaudeCliVersion.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ClaudeCliVersion",
+      "b": "ClaudeOAuth",
+      "files": [
+        "auth/ClaudeCliVersion.kt",
+        "auth/ClaudeOAuthManager.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ClaudeOAuth",
+      "b": "GeminiOAuth",
+      "files": [
+        "auth/ClaudeOAuthManager.kt",
+        "auth/GeminiOAuthManager.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "GeminiOAuth",
+      "b": "KimiOAuth",
+      "files": [
+        "auth/GeminiOAuthManager.kt",
+        "auth/KimiOAuthManager.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "KimiOAuth",
+      "b": "OAuthCallbackServer",
+      "files": [
+        "auth/KimiOAuthManager.kt",
+        "auth/OAuthCallbackServer.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "OAuthCallbackServer",
+      "b": "OAuthManager",
+      "files": [
+        "auth/OAuthCallbackServer.kt",
+        "auth/OAuthManager.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "OAuthManager",
+      "b": "OAuthRedirect",
+      "files": [
+        "auth/OAuthManager.kt",
+        "auth/OAuthRedirectActivity.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "OAuthRedirect",
+      "b": "CodexOAuth",
+      "files": [
+        "auth/OAuthRedirectActivity.kt",
+        "auth/OpenAIOAuthManager.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "CodexOAuth",
+      "b": "OpenRouterOAuth",
+      "files": [
+        "auth/OpenAIOAuthManager.kt",
+        "auth/OpenRouterOAuthManager.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "OpenRouterOAuth",
+      "b": "XAIOAuth",
+      "files": [
+        "auth/OpenRouterOAuthManager.kt",
+        "auth/XAIOAuthManager.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "XAIOAuth",
+      "b": "AutomationAgentRunner",
+      "files": [
+        "auth/XAIOAuthManager.kt",
+        "automation/AutomationAgentRunner.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "AutomationAgentRunner",
+      "b": "AutomationRuleMgr",
+      "files": [
+        "automation/AutomationAgentRunner.kt",
+        "automation/AutomationRuleManager.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "AutomationRuleMgr",
+      "b": "AutomationRuleRecv",
+      "files": [
+        "automation/AutomationRuleManager.kt",
+        "automation/AutomationRuleReceiver.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "AutomationRuleRecv",
+      "b": "RuleMonitorService",
+      "files": [
+        "automation/AutomationRuleReceiver.kt",
+        "automation/RuleMonitorService.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "RuleMonitorService",
+      "b": "AutomationRulesVM",
+      "files": [
+        "automation/RuleMonitorService.kt",
+        "automation/ui/AutomationRulesViewModel.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "AutomationRulesVM",
+      "b": "Backup",
+      "files": [
+        "automation/ui/AutomationRulesViewModel.kt",
+        "backup/BackupBlobStore.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "Backup",
+      "b": "Restore",
+      "files": [
+        "backup/BackupHistory.kt",
+        "backup/BackupImporter.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "Restore",
+      "b": "Backup",
+      "files": [
+        "backup/BackupImporter.kt",
+        "backup/BackupIncrementalManifest.kt"
+      ]
+    },
+    {
+      "name": "FILE_NAME",
+      "a": "world-book.json",
+      "b": "last-manifest.json",
+      "files": [
+        "agent/WorldBook.kt",
+        "backup/BackupIncrementalManifest.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "Backup",
+      "b": "Restore",
+      "files": [
+        "backup/BackupIncrementalManifest.kt",
+        "backup/BackupRestoreFiles.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "Restore",
+      "b": "Backup",
+      "files": [
+        "backup/BackupRestoreFiles.kt",
+        "backup/BackupSecretsCollector.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "Backup",
+      "b": "BackupUndo",
+      "files": [
+        "backup/BackupSecretsCollector.kt",
+        "backup/BackupUndoController.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "BackupUndo",
+      "b": "Backup",
+      "files": [
+        "backup/BackupUndoController.kt",
+        "backup/BackupZip.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "Backup",
+      "b": "MinisBackupAgent",
+      "files": [
+        "backup/BackupZip.kt",
+        "backup/MinisBackupAgent.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "MinisBackupAgent",
+      "b": "Backup",
+      "files": [
+        "backup/MinisBackupAgent.kt",
+        "backup/PhoneBackupFolderStore.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "claude_cli_version",
+      "b": "minis_phone_backup_folders",
+      "files": [
+        "auth/ClaudeCliVersion.kt",
+        "backup/PhoneBackupFolderStore.kt"
+      ]
+    },
+    {
+      "name": "KEY",
+      "a": "config_json",
+      "b": "folders",
+      "files": [
+        "agent/lifecycle/LifecycleHooks.kt",
+        "backup/PhoneBackupFolderStore.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "Backup",
+      "b": "Rclone",
+      "files": [
+        "backup/PhoneBackupFolderStore.kt",
+        "backup/remote/RcloneBridge.kt"
+      ]
+    },
+    {
+      "name": "PREFS_NAME",
+      "a": "soul_store",
+      "b": "backup_rclone_remotes",
+      "files": [
+        "agent/SoulStore.kt",
+        "backup/remote/RcloneRemoteStore.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "Rclone",
+      "b": "BrowserHistory",
+      "files": [
+        "backup/remote/RcloneRemoteStore.kt",
+        "browser/BrowserHistory.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "BrowserHistory",
+      "b": "BrowserTabPool",
+      "files": [
+        "browser/BrowserHistory.kt",
+        "browser/BrowserTabPool.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "BrowserTabPool",
+      "b": "BrowserUseManager",
+      "files": [
+        "browser/BrowserTabPool.kt",
+        "browser/BrowserUseManager.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "BrowserUseManager",
+      "b": "GoogleAuthRouter",
+      "files": [
+        "browser/BrowserUseManager.kt",
+        "browser/GoogleAuthRouter.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "GoogleAuthRouter",
+      "b": "WebViewCrashGuard",
+      "files": [
+        "browser/GoogleAuthRouter.kt",
+        "browser/WebViewRenderCrashGuard.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "WebViewCrashGuard",
+      "b": "ToolCards",
+      "files": [
+        "browser/WebViewRenderCrashGuard.kt",
+        "cards/CardRenderers.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ToolCards",
+      "b": "ConfigBridge",
+      "files": [
+        "cards/CardRenderers.kt",
+        "config/ConfigBridge.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "minis_phone_backup_folders",
+      "b": "minis_config_permission",
+      "files": [
+        "backup/PhoneBackupFolderStore.kt",
+        "config/MinisConfigPermissionStore.kt"
+      ]
+    },
+    {
+      "name": "KEY",
+      "a": "folders",
+      "b": "minis_config_enabled",
+      "files": [
+        "backup/PhoneBackupFolderStore.kt",
+        "config/MinisConfigPermissionStore.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ConfigBridge",
+      "b": "ConfigAuditLog",
+      "files": [
+        "config/ConfigBridge.kt",
+        "config/audit/ConfigAuditLog.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ConfigAuditLog",
+      "b": "ConfigConfirmGate",
+      "files": [
+        "config/audit/ConfigAuditLog.kt",
+        "config/confirm/ConfigConfirmationGate.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "minis_config_permission",
+      "b": "cot_translation",
+      "files": [
+        "config/MinisConfigPermissionStore.kt",
+        "cottranslate/CotTranslationPrefs.kt"
+      ]
+    },
+    {
+      "name": "KEY_LANGUAGE",
+      "a": "app_language",
+      "b": "language",
+      "files": [
+        "config/PrefKeys.kt",
+        "cottranslate/CotTranslationPrefs.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ConfigConfirmGate",
+      "b": "CotTranslateLLM",
+      "files": [
+        "config/confirm/ConfigConfirmationGate.kt",
+        "cottranslate/LlmTranslationRoute.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "CotTranslateLLM",
+      "b": "CotTranslateHandle",
+      "files": [
+        "cottranslate/LlmTranslationRoute.kt",
+        "cottranslate/ThinkingTranslationHandle.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "CotTranslateHandle",
+      "b": "AsyncPrefs",
+      "files": [
+        "cottranslate/ThinkingTranslationHandle.kt",
+        "crash/AsyncPrefs.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "AsyncPrefs",
+      "b": "CrashFreqDetector",
+      "files": [
+        "crash/AsyncPrefs.kt",
+        "crash/CrashFrequencyDetector.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "cot_translation",
+      "b": "crash_freq_prefs",
+      "files": [
+        "cottranslate/CotTranslationPrefs.kt",
+        "crash/CrashFrequencyDetector.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "CrashFreqDetector",
+      "b": "NativeCrashHandler",
+      "files": [
+        "crash/CrashFrequencyDetector.kt",
+        "crash/NativeCrashHandler.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "crash_freq_prefs",
+      "b": "minis_auto_compact_prefs",
+      "files": [
+        "crash/CrashFrequencyDetector.kt",
+        "data/AutoCompactPrefs.kt"
+      ]
+    },
+    {
+      "name": "KEY_ENABLED",
+      "a": "enabled",
+      "b": "autoCompactOnThreshold",
+      "files": [
+        "cottranslate/CotTranslationPrefs.kt",
+        "data/AutoCompactPrefs.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "minis_auto_compact_prefs",
+      "b": "minis_cache_warming",
+      "files": [
+        "data/AutoCompactPrefs.kt",
+        "data/CacheWarmingPrefs.kt"
+      ]
+    },
+    {
+      "name": "KEY_ENABLED",
+      "a": "autoCompactOnThreshold",
+      "b": "cacheWarmingEnabled",
+      "files": [
+        "data/AutoCompactPrefs.kt",
+        "data/CacheWarmingPrefs.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "NativeCrashHandler",
+      "b": "ContextOffload",
+      "files": [
+        "crash/NativeCrashHandler.kt",
+        "data/ContextOffload.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "minis_cache_warming",
+      "b": "minis_context_saver",
+      "files": [
+        "data/CacheWarmingPrefs.kt",
+        "data/ContextSaverPrefs.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "minis_context_saver",
+      "b": "minis_enhanced_cache_prefs",
+      "files": [
+        "data/ContextSaverPrefs.kt",
+        "data/EnhancedCachePrefs.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "minis_enhanced_cache_prefs",
+      "b": "envvar_privacy",
+      "files": [
+        "data/EnhancedCachePrefs.kt",
+        "data/EnvVarPrivacyStore.kt"
+      ]
+    },
+    {
+      "name": "KEY",
+      "a": "minis_config_enabled",
+      "b": "privacy_mode_enabled",
+      "files": [
+        "config/MinisConfigPermissionStore.kt",
+        "data/EnvVarPrivacyStore.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "envvar_privacy",
+      "b": "minis_fast_mode_prefs",
+      "files": [
+        "data/EnvVarPrivacyStore.kt",
+        "data/FastModePrefs.kt"
+      ]
+    },
+    {
+      "name": "KEY_ENABLED",
+      "a": "cacheWarmingEnabled",
+      "b": "codexFastModeEnabled",
+      "files": [
+        "data/CacheWarmingPrefs.kt",
+        "data/FastModePrefs.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "minis_fast_mode_prefs",
+      "b": "minis_guard_prefs",
+      "files": [
+        "data/FastModePrefs.kt",
+        "data/GuardPrefs.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "minis_guard_prefs",
+      "b": "minis_memory_prefs",
+      "files": [
+        "data/GuardPrefs.kt",
+        "data/MemoryGlobalPrefs.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ContextOffload",
+      "b": "MountedFolders",
+      "files": [
+        "data/ContextOffload.kt",
+        "data/MountedFoldersStore.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "minis_memory_prefs",
+      "b": "outbound_mask",
+      "files": [
+        "data/MemoryGlobalPrefs.kt",
+        "data/OutboundMaskPrefs.kt"
+      ]
+    },
+    {
+      "name": "KEY",
+      "a": "privacy_mode_enabled",
+      "b": "enabled",
+      "files": [
+        "data/EnvVarPrivacyStore.kt",
+        "data/OutboundMaskPrefs.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "MountedFolders",
+      "b": "PendingUpdateStore",
+      "files": [
+        "data/MountedFoldersStore.kt",
+        "data/PendingUpdateStore.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "outbound_mask",
+      "b": "pending_update",
+      "files": [
+        "data/OutboundMaskPrefs.kt",
+        "data/PendingUpdateStore.kt"
+      ]
+    },
+    {
+      "name": "KEY",
+      "a": "enabled",
+      "b": "pending",
+      "files": [
+        "data/OutboundMaskPrefs.kt",
+        "data/PendingUpdateStore.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "pending_update",
+      "b": "minis_plan_discussion_prefs",
+      "files": [
+        "data/PendingUpdateStore.kt",
+        "data/PlanDiscussionPrefs.kt"
+      ]
+    },
+    {
+      "name": "KEY_ENABLED",
+      "a": "codexFastModeEnabled",
+      "b": "planDiscussionEnabled",
+      "files": [
+        "data/FastModePrefs.kt",
+        "data/PlanDiscussionPrefs.kt"
+      ]
+    },
+    {
+      "name": "KEY_MODE",
+      "a": "mode",
+      "b": "planDiscussionMode",
+      "files": [
+        "data/ContextSaverPrefs.kt",
+        "data/PlanDiscussionPrefs.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "PendingUpdateStore",
+      "b": "SessionForkManager",
+      "files": [
+        "data/PendingUpdateStore.kt",
+        "data/SessionForkManager.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "minis_plan_discussion_prefs",
+      "b": "minis_storage_scan",
+      "files": [
+        "data/PlanDiscussionPrefs.kt",
+        "data/StorageScanner.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "minis_storage_scan",
+      "b": "minis_tool_limits",
+      "files": [
+        "data/StorageScanner.kt",
+        "data/ToolLimitPrefs.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "minis_tool_limits",
+      "b": "minis_unread_registry",
+      "files": [
+        "data/ToolLimitPrefs.kt",
+        "data/UnreadRegistry.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SessionForkManager",
+      "b": "UpdateChecker",
+      "files": [
+        "data/SessionForkManager.kt",
+        "data/UpdateChecker.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "UpdateChecker",
+      "b": "UpdateDownloadManager",
+      "files": [
+        "data/UpdateChecker.kt",
+        "data/UpdateDownloadManager.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "UpdateDownloadManager",
+      "b": "UpdateDownloadService",
+      "files": [
+        "data/UpdateDownloadManager.kt",
+        "data/UpdateDownloadService.kt"
+      ]
+    },
+    {
+      "name": "CHANNEL_ID",
+      "a": "minis_automation_monitor",
+      "b": "update_download",
+      "files": [
+        "automation/RuleMonitorService.kt",
+        "data/UpdateDownloadService.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "UpdateDownloadService",
+      "b": "UpdateSourceRegistry",
+      "files": [
+        "data/UpdateDownloadService.kt",
+        "data/UpdateSourceRegistry.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "minis_unread_registry",
+      "b": "update_sources",
+      "files": [
+        "data/UnreadRegistry.kt",
+        "data/UpdateSourceRegistry.kt"
+      ]
+    },
+    {
+      "name": "FILE_NAME",
+      "a": "last-manifest.json",
+      "b": "db_gate_freshness.json",
+      "files": [
+        "backup/BackupIncrementalManifest.kt",
+        "data/db/DatabaseGateFreshness.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "UpdateSourceRegistry",
+      "b": "DbHealth",
+      "files": [
+        "data/UpdateSourceRegistry.kt",
+        "data/db/DatabaseHealthCheck.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "DbHealth",
+      "b": "DbVersionGuard",
+      "files": [
+        "data/db/DatabaseStartupGate.kt",
+        "data/db/DatabaseVersionGuard.kt"
+      ]
+    },
+    {
+      "name": "DB_NAME",
+      "a": "minis-config-audit.db",
+      "b": "minis.db",
+      "files": [
+        "config/audit/ConfigAuditLog.kt",
+        "data/db/DatabaseVersionGuard.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "update_sources",
+      "b": "minis_embedding_prefs",
+      "files": [
+        "data/UpdateSourceRegistry.kt",
+        "data/memory/EmbeddingPrefs.kt"
+      ]
+    },
+    {
+      "name": "KEY_ENABLED",
+      "a": "planDiscussionEnabled",
+      "b": "embedding.enabled",
+      "files": [
+        "data/PlanDiscussionPrefs.kt",
+        "data/memory/EmbeddingPrefs.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "DbVersionGuard",
+      "b": "AppIconRepository",
+      "files": [
+        "data/db/DatabaseVersionGuard.kt",
+        "data/repository/AppIconRepository.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "minis_embedding_prefs",
+      "b": "app_icon_prefs",
+      "files": [
+        "data/memory/EmbeddingPrefs.kt",
+        "data/repository/AppIconRepository.kt"
+      ]
+    },
+    {
+      "name": "PREFS_NAME",
+      "a": "backup_rclone_remotes",
+      "b": "background_settings",
+      "files": [
+        "backup/remote/RcloneRemoteStore.kt",
+        "data/repository/BackgroundSettingsRepository.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "AppIconRepository",
+      "b": "ChatRepository",
+      "files": [
+        "data/repository/AppIconRepository.kt",
+        "data/repository/ChatRepository.kt"
+      ]
+    },
+    {
+      "name": "FILE_NAME",
+      "a": "db_gate_freshness.json",
+      "b": ".revert-stage.json",
+      "files": [
+        "data/db/DatabaseGateFreshness.kt",
+        "data/repository/ChatRepositoryRevert.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ChatRepository",
+      "b": "EnvVarRepository",
+      "files": [
+        "data/repository/ChatRepository.kt",
+        "data/repository/EnvVarRepository.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "EnvVarRepository",
+      "b": "MCPRepository",
+      "files": [
+        "data/repository/EnvVarRepository.kt",
+        "data/repository/MCPRepository.kt"
+      ]
+    },
+    {
+      "name": "DB_NAME",
+      "a": "minis.db",
+      "b": "mcp.db",
+      "files": [
+        "data/db/DatabaseVersionGuard.kt",
+        "data/repository/MCPRepository.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "MCPRepository",
+      "b": "MemoryRepository",
+      "files": [
+        "data/repository/MCPRepository.kt",
+        "data/repository/MemoryFragmentBuilder.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "MemoryRepository",
+      "b": "MemoryRecallEngine",
+      "files": [
+        "data/repository/MemoryFragmentBuilder.kt",
+        "data/repository/MemoryRecallEngine.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "MemoryRecallEngine",
+      "b": "MemoryRepository",
+      "files": [
+        "data/repository/MemoryRecallEngine.kt",
+        "data/repository/MemoryRepository.kt"
+      ]
+    },
+    {
+      "name": "MANIFEST",
+      "a": "manifest.json",
+      "b": "original.json",
+      "files": [
+        "backup/BackupUndoStore.kt",
+        "data/repository/MemoryRestoreJournal.kt"
+      ]
+    },
+    {
+      "name": "PREFS_NAME",
+      "a": "background_settings",
+      "b": "multi_agent_settings",
+      "files": [
+        "data/repository/BackgroundSettingsRepository.kt",
+        "data/repository/MultiAgentSettingsRepository.kt"
+      ]
+    },
+    {
+      "name": "KEY_ENABLED",
+      "a": "embedding.enabled",
+      "b": "enabled",
+      "files": [
+        "data/memory/EmbeddingPrefs.kt",
+        "data/repository/MultiAgentSettingsRepository.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "app_icon_prefs",
+      "b": "provider_refresh_marks",
+      "files": [
+        "data/repository/AppIconRepository.kt",
+        "data/repository/ProviderRefreshMarks.kt"
+      ]
+    },
+    {
+      "name": "FILE_NAME",
+      "a": ".revert-stage.json",
+      "b": "session_list_snapshot.json",
+      "files": [
+        "data/repository/ChatRepositoryRevert.kt",
+        "data/repository/SessionListSnapshotCache.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "provider_refresh_marks",
+      "b": "skill_prompt_prefs",
+      "files": [
+        "data/repository/ProviderRefreshMarks.kt",
+        "data/repository/SkillManifest.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "MemoryRepository",
+      "b": "SkillRepository",
+      "files": [
+        "data/repository/MemoryRepository.kt",
+        "data/repository/SkillRepository.kt"
+      ]
+    },
+    {
+      "name": "DB_NAME",
+      "a": "mcp.db",
+      "b": "skills.db",
+      "files": [
+        "data/repository/MCPRepository.kt",
+        "data/repository/SkillRepository.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "skill_prompt_prefs",
+      "b": "skill_feeds_prefs",
+      "files": [
+        "data/repository/SkillManifest.kt",
+        "data/repository/SkillSubscriptionStore.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SkillRepository",
+      "b": "SkillFeeds",
+      "files": [
+        "data/repository/SkillRepository.kt",
+        "data/repository/SkillSubscriptionStore.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SkillFeeds",
+      "b": "DebugServer",
+      "files": [
+        "data/repository/SkillSubscriptionStore.kt",
+        "debug/DebugServer.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "app_list",
+      "b": "app_info",
+      "files": [
+        "device/AppTools.kt",
+        "device/AppTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "app_info",
+      "b": "app_launch",
+      "files": [
+        "device/AppTools.kt",
+        "device/AppTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "app_launch",
+      "b": "app_open_link",
+      "files": [
+        "device/AppTools.kt",
+        "device/AppTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "app_open_link",
+      "b": "app_send_intent",
+      "files": [
+        "device/AppTools.kt",
+        "device/AppTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "app_send_intent",
+      "b": "share_to_app",
+      "files": [
+        "device/AppTools.kt",
+        "device/AppTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "share_to_app",
+      "b": "contacts_search",
+      "files": [
+        "device/AppTools.kt",
+        "device/CommsTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "contacts_search",
+      "b": "calendar_read",
+      "files": [
+        "device/CommsTools.kt",
+        "device/CommsTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "calendar_read",
+      "b": "calendar_add",
+      "files": [
+        "device/CommsTools.kt",
+        "device/CommsTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "calendar_add",
+      "b": "sms_read",
+      "files": [
+        "device/CommsTools.kt",
+        "device/CommsTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "sms_read",
+      "b": "call_log_read",
+      "files": [
+        "device/CommsTools.kt",
+        "device/CommsTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "call_log_read",
+      "b": "sms_send",
+      "files": [
+        "device/CommsTools.kt",
+        "device/CommsTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "sms_send",
+      "b": "location_get",
+      "files": [
+        "device/CommsTools.kt",
+        "device/CommsTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "location_get",
+      "b": "media_control",
+      "files": [
+        "device/CommsTools.kt",
+        "device/MediaClipboardTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "media_control",
+      "b": "clipboard_get",
+      "files": [
+        "device/MediaClipboardTools.kt",
+        "device/MediaClipboardTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "clipboard_get",
+      "b": "clipboard_set",
+      "files": [
+        "device/MediaClipboardTools.kt",
+        "device/MediaClipboardTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "clipboard_set",
+      "b": "notification_dismiss",
+      "files": [
+        "device/MediaClipboardTools.kt",
+        "device/NotificationExtrasTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "notification_dismiss",
+      "b": "notification_open",
+      "files": [
+        "device/NotificationExtrasTools.kt",
+        "device/NotificationExtrasTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "notification_open",
+      "b": "notification_reply",
+      "files": [
+        "device/NotificationExtrasTools.kt",
+        "device/NotificationExtrasTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "notification_reply",
+      "b": "device_status",
+      "files": [
+        "device/NotificationExtrasTools.kt",
+        "device/SystemTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "device_status",
+      "b": "setting_get",
+      "files": [
+        "device/SystemTools.kt",
+        "device/SystemTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "setting_get",
+      "b": "sound_mode",
+      "files": [
+        "device/SystemTools.kt",
+        "device/SystemTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "sound_mode",
+      "b": "volume_set",
+      "files": [
+        "device/SystemTools.kt",
+        "device/SystemTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "volume_set",
+      "b": "dnd_set",
+      "files": [
+        "device/SystemTools.kt",
+        "device/SystemTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "dnd_set",
+      "b": "brightness_set",
+      "files": [
+        "device/SystemTools.kt",
+        "device/SystemTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "brightness_set",
+      "b": "flashlight",
+      "files": [
+        "device/SystemTools.kt",
+        "device/SystemTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "flashlight",
+      "b": "alarm_set",
+      "files": [
+        "device/SystemTools.kt",
+        "device/SystemTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "alarm_set",
+      "b": "wifi_toggle",
+      "files": [
+        "device/SystemTools.kt",
+        "device/SystemTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "wifi_toggle",
+      "b": "bluetooth_toggle",
+      "files": [
+        "device/SystemTools.kt",
+        "device/SystemTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "bluetooth_toggle",
+      "b": "mobile_data_toggle",
+      "files": [
+        "device/SystemTools.kt",
+        "device/SystemTools.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "DebugServer",
+      "b": "Env",
+      "files": [
+        "debug/DebugServer.kt",
+        "diagnostics/EnvironmentBanner.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "Env",
+      "b": "HangDetector",
+      "files": [
+        "diagnostics/EnvironmentBanner.kt",
+        "diagnostics/HangDetector.kt"
+      ]
+    },
+    {
+      "name": "PREFS_NAME",
+      "a": "multi_agent_settings",
+      "b": "hang_detector_prefs",
+      "files": [
+        "data/repository/MultiAgentSettingsRepository.kt",
+        "diagnostics/HangDetector.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "HangDetector",
+      "b": "MemProbe",
+      "files": [
+        "diagnostics/HangDetector.kt",
+        "diagnostics/LargeAllocProbe.kt"
+      ]
+    },
+    {
+      "name": "FILE_NAME",
+      "a": "session_list_snapshot.json",
+      "b": "launch-beacon.log",
+      "files": [
+        "data/repository/SessionListSnapshotCache.kt",
+        "diagnostics/LaunchCycleBeacon.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "MemProbe",
+      "b": "LaunchBeacon",
+      "files": [
+        "diagnostics/LargeAllocProbe.kt",
+        "diagnostics/LaunchCycleBeacon.kt"
+      ]
+    },
+    {
+      "name": "FILE_NAME",
+      "a": "launch-beacon.log",
+      "b": "route-fuse.txt",
+      "files": [
+        "diagnostics/LaunchCycleBeacon.kt",
+        "diagnostics/RouteFuse.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "LaunchBeacon",
+      "b": "StreamPerf",
+      "files": [
+        "diagnostics/LaunchCycleBeacon.kt",
+        "diagnostics/StreamPerfMonitor.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "StreamPerf",
+      "b": "MinisDocumentsProvider",
+      "files": [
+        "diagnostics/StreamPerfMonitor.kt",
+        "documentsprovider/MinisDocumentsProvider.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "MinisDocumentsProvider",
+      "b": "Evolution",
+      "files": [
+        "documentsprovider/MinisDocumentsProvider.kt",
+        "evolution/EvolutionEngine.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "Evolution",
+      "b": "EvolutionLlm",
+      "files": [
+        "evolution/EvolutionEngine.kt",
+        "evolution/EvolutionLlm.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "skill_feeds_prefs",
+      "b": "minis_evolution_prefs",
+      "files": [
+        "data/repository/SkillSubscriptionStore.kt",
+        "evolution/EvolutionPrefs.kt"
+      ]
+    },
+    {
+      "name": "KEY_ENABLED",
+      "a": "enabled",
+      "b": "evolution.enabled",
+      "files": [
+        "data/repository/MultiAgentSettingsRepository.kt",
+        "evolution/EvolutionPrefs.kt"
+      ]
+    },
+    {
+      "name": "FILE_NAME",
+      "a": "route-fuse.txt",
+      "b": "LEARNED.md",
+      "files": [
+        "diagnostics/RouteFuse.kt",
+        "evolution/LearnedPrefsStore.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "EvolutionLlm",
+      "b": "GitPanel",
+      "files": [
+        "evolution/EvolutionLlm.kt",
+        "git/GitCli.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "GitPanel",
+      "b": "GitCommitMsg",
+      "files": [
+        "git/GitCli.kt",
+        "git/GitCommitMessageGenerator.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "GitCommitMsg",
+      "b": "GitPanel",
+      "files": [
+        "git/GitCommitMessageGenerator.kt",
+        "git/GitHostRepo.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "minis_evolution_prefs",
+      "b": "translate_settings",
+      "files": [
+        "evolution/EvolutionPrefs.kt",
+        "i18n/TranslationPrefs.kt"
+      ]
+    },
+    {
+      "name": "KEY_ENABLED",
+      "a": "evolution.enabled",
+      "b": "enabled",
+      "files": [
+        "evolution/EvolutionPrefs.kt",
+        "i18n/TranslationPrefs.kt"
+      ]
+    },
+    {
+      "name": "NAME_PREFIX",
+      "a": "automation_rule",
+      "b": "app_",
+      "files": [
+        "automation/AutomationRuleTools.kt",
+        "knowledge/AppKnowledgeTools.kt"
+      ]
+    },
+    {
+      "name": "FILE",
+      "a": "disabled-tools.json",
+      "b": "app_notes.json",
+      "files": [
+        "data/repository/MCPToolPolicy.kt",
+        "knowledge/AppNotes.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "GitPanel",
+      "b": "AppLogger",
+      "files": [
+        "git/GitPanelProbes.kt",
+        "logging/AppLogger.kt"
+      ]
+    },
+    {
+      "name": "KEY_ENABLED",
+      "a": "enabled",
+      "b": "logging_enabled",
+      "files": [
+        "i18n/TranslationPrefs.kt",
+        "logging/AppLogger.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "AppLogger",
+      "b": "McpNativeBridge",
+      "files": [
+        "logging/AppLogger.kt",
+        "mcp/client/McpNativeBridge.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "McpNativeBridge",
+      "b": "MCPOAuthController",
+      "files": [
+        "mcp/client/McpNativeBridge.kt",
+        "mcp/oauth/MCPOAuthController.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "MCPOAuthController",
+      "b": "MCPOAuthStore",
+      "files": [
+        "mcp/oauth/MCPOAuthController.kt",
+        "mcp/oauth/MCPOAuthStore.kt"
+      ]
+    },
+    {
+      "name": "FILE",
+      "a": "app_notes.json",
+      "b": "mcp_oauth_secrets",
+      "files": [
+        "knowledge/AppNotes.kt",
+        "mcp/oauth/MCPOAuthStore.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "MCPOAuthStore",
+      "b": "MCPTokenBridge",
+      "files": [
+        "mcp/oauth/MCPOAuthStore.kt",
+        "mcp/oauth/MCPTokenBridge.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "mobile_data_toggle",
+      "b": "endpoint.json",
+      "files": [
+        "device/SystemTools.kt",
+        "mcp/server/McpEndpointFile.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "MCPTokenBridge",
+      "b": "McpHttpServer",
+      "files": [
+        "mcp/oauth/MCPTokenBridge.kt",
+        "mcp/server/McpHttpServer.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "translate_settings",
+      "b": "mcp_server",
+      "files": [
+        "i18n/TranslationPrefs.kt",
+        "mcp/server/McpServerConfigStore.kt"
+      ]
+    },
+    {
+      "name": "KEY_ENABLED",
+      "a": "logging_enabled",
+      "b": "enabled",
+      "files": [
+        "logging/AppLogger.kt",
+        "mcp/server/McpServerConfigStore.kt"
+      ]
+    },
+    {
+      "name": "PROTOCOL_VERSION",
+      "a": "2025-06-18",
+      "b": "2025-03-26",
+      "files": [
+        "mcp/client/McpJsonRpc.kt",
+        "mcp/server/McpServerCore.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "McpHttpServer",
+      "b": "McpServerManager",
+      "files": [
+        "mcp/server/McpHttpServer.kt",
+        "mcp/server/McpServerManager.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "mcp_server",
+      "b": "mcp_approvals",
+      "files": [
+        "mcp/server/McpServerConfigStore.kt",
+        "mcp/server/approval/McpApprovalStore.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "McpServerManager",
+      "b": "AppTrustStore",
+      "files": [
+        "mcp/server/McpServerManager.kt",
+        "network/AppTrustStore.kt"
+      ]
+    },
+    {
+      "name": "DIR_NAME",
+      "a": "backup-undo",
+      "b": "trusted-cas",
+      "files": [
+        "backup/BackupUndoStore.kt",
+        "network/AppTrustStore.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "AppTrustStore",
+      "b": "ConnWarmup",
+      "files": [
+        "network/AppTrustStore.kt",
+        "network/ConnectionWarmup.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ConnWarmup",
+      "b": "DohDns",
+      "files": [
+        "network/ConnectionWarmup.kt",
+        "network/DohDns.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "DohDns",
+      "b": "GomobileNet",
+      "files": [
+        "network/DohDns.kt",
+        "network/GomobileNet.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "GomobileNet",
+      "b": "Network",
+      "files": [
+        "network/GomobileNet.kt",
+        "network/NetworkAlertCenter.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "Network",
+      "b": "NetworkMonitor",
+      "files": [
+        "network/NetworkHub.kt",
+        "network/NetworkMonitor.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "NetworkMonitor",
+      "b": "Network",
+      "files": [
+        "network/NetworkMonitor.kt",
+        "network/NetworkRuntime.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "mcp_approvals",
+      "b": "minis_network",
+      "files": [
+        "mcp/server/approval/McpApprovalStore.kt",
+        "network/NetworkSettings.kt"
+      ]
+    },
+    {
+      "name": "KEY",
+      "a": "pending",
+      "b": "network.settings.v1",
+      "files": [
+        "data/PendingUpdateStore.kt",
+        "network/NetworkSettings.kt"
+      ]
+    },
+    {
+      "name": "FILE",
+      "a": "mcp_oauth_secrets",
+      "b": "minis_network_secrets",
+      "files": [
+        "mcp/oauth/MCPOAuthStore.kt",
+        "network/NetworkSettings.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "Network",
+      "b": "ApprovalBR",
+      "files": [
+        "network/WebViewNetworkProxy.kt",
+        "notification/ApprovalBroadcastReceiver.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ApprovalBR",
+      "b": "ApprovalNotifier",
+      "files": [
+        "notification/ApprovalBroadcastReceiver.kt",
+        "notification/ApprovalNotifier.kt"
+      ]
+    },
+    {
+      "name": "CHANNEL_ID",
+      "a": "update_download",
+      "b": "minis_approval",
+      "files": [
+        "data/UpdateDownloadService.kt",
+        "notification/ApprovalNotifier.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ApprovalNotifier",
+      "b": "AskUserBR",
+      "files": [
+        "notification/ApprovalNotifier.kt",
+        "notification/AskUserBroadcastReceiver.kt"
+      ]
+    },
+    {
+      "name": "EXTRA_REQUEST_ID",
+      "a": "approval_request_id",
+      "b": "ask_user_request_id",
+      "files": [
+        "notification/ApprovalNotifier.kt",
+        "notification/AskUserNotifier.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "AskUserBR",
+      "b": "AskUserNotifier",
+      "files": [
+        "notification/AskUserBroadcastReceiver.kt",
+        "notification/AskUserNotifier.kt"
+      ]
+    },
+    {
+      "name": "CHANNEL_ID",
+      "a": "minis_approval",
+      "b": "minis_question",
+      "files": [
+        "notification/ApprovalNotifier.kt",
+        "notification/AskUserNotifier.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "AskUserNotifier",
+      "b": "TaskNotifier",
+      "files": [
+        "notification/AskUserNotifier.kt",
+        "notification/BackgroundTaskNotifier.kt"
+      ]
+    },
+    {
+      "name": "CHANNEL_ID",
+      "a": "minis_question",
+      "b": "minis_task_completed",
+      "files": [
+        "notification/AskUserNotifier.kt",
+        "notification/BackgroundTaskNotifier.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "TaskNotifier",
+      "b": "ConfigConfirmNotifier",
+      "files": [
+        "notification/BackgroundTaskNotifier.kt",
+        "notification/ConfigConfirmNotifier.kt"
+      ]
+    },
+    {
+      "name": "CHANNEL_ID",
+      "a": "minis_task_completed",
+      "b": "minis_config_confirm",
+      "files": [
+        "notification/BackgroundTaskNotifier.kt",
+        "notification/ConfigConfirmNotifier.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ConfigConfirmNotifier",
+      "b": "OrphanNotificationSweep",
+      "files": [
+        "notification/ConfigConfirmNotifier.kt",
+        "notification/OrphanNotificationSweep.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "OrphanNotificationSweep",
+      "b": "SandboxNotifyAction",
+      "files": [
+        "notification/OrphanNotificationSweep.kt",
+        "notification/SandboxNotifyActionReceiver.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SandboxNotifyAction",
+      "b": "AlarmOffloadManager",
+      "files": [
+        "notification/SandboxNotifyActionReceiver.kt",
+        "offload/AlarmOffloadManager.kt"
+      ]
+    },
+    {
+      "name": "PREFS_NAME",
+      "a": "hang_detector_prefs",
+      "b": "minis_alarms_prefs",
+      "files": [
+        "diagnostics/HangDetector.kt",
+        "offload/AlarmOffloadManager.kt"
+      ]
+    },
+    {
+      "name": "CHANNEL_ID",
+      "a": "minis_config_confirm",
+      "b": "minis_alarms",
+      "files": [
+        "notification/ConfigConfirmNotifier.kt",
+        "offload/AlarmOffloadManager.kt"
+      ]
+    },
+    {
+      "name": "CHANNEL_NAME",
+      "a": "Automation Monitor",
+      "b": "Minis Alarms & Timers",
+      "files": [
+        "automation/RuleMonitorService.kt",
+        "offload/AlarmOffloadManager.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "AlarmOffloadManager",
+      "b": "AlarmReceiver",
+      "files": [
+        "offload/AlarmOffloadManager.kt",
+        "offload/AlarmReceiver.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "AlarmReceiver",
+      "b": "MediaPlayerManager",
+      "files": [
+        "offload/AlarmReceiver.kt",
+        "offload/MediaPlayerManager.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "MediaPlayerManager",
+      "b": "NotifListener",
+      "files": [
+        "offload/MediaPlayerManager.kt",
+        "offload/MinisNotificationListenerService.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "minis_network",
+      "b": "offload_permissions",
+      "files": [
+        "network/NetworkSettings.kt",
+        "offload/PrivacyPermissionPolicy.kt"
+      ]
+    },
+    {
+      "name": "KEY",
+      "a": "network.settings.v1",
+      "b": "privacy_global_level",
+      "files": [
+        "network/NetworkSettings.kt",
+        "offload/PrivacyPermissionPolicy.kt"
+      ]
+    },
+    {
+      "name": "CHANNEL_ID",
+      "a": "minis_alarms",
+      "b": "minis_agent_notifications",
+      "files": [
+        "offload/AlarmOffloadManager.kt",
+        "offload/ScheduledNotificationReceiver.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "NotifListener",
+      "b": "ScheduledNotifReceiver",
+      "files": [
+        "offload/MinisNotificationListenerService.kt",
+        "offload/ScheduledNotificationReceiver.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "offload_permissions",
+      "b": "minis_scheduled_notifications",
+      "files": [
+        "offload/PrivacyPermissionPolicy.kt",
+        "offload/ScheduledNotificationStore.kt"
+      ]
+    },
+    {
+      "name": "KEY",
+      "a": "privacy_global_level",
+      "b": "scheduled",
+      "files": [
+        "offload/PrivacyPermissionPolicy.kt",
+        "offload/ScheduledNotificationStore.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ScheduledNotifReceiver",
+      "b": "ShizukuBackend",
+      "files": [
+        "offload/ScheduledNotificationReceiver.kt",
+        "offload/ShizukuBackend.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ShizukuBackend",
+      "b": "ShizukuManager",
+      "files": [
+        "offload/ShizukuBackend.kt",
+        "offload/ShizukuManager.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ShizukuManager",
+      "b": "WeatherManager",
+      "files": [
+        "offload/ShizukuManager.kt",
+        "offload/WeatherManager.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "WeatherManager",
+      "b": "OptionalPackages",
+      "files": [
+        "offload/WeatherManager.kt",
+        "platform/OptionalPackages.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "minis_scheduled_notifications",
+      "b": "plugin_network_policy",
+      "files": [
+        "offload/ScheduledNotificationStore.kt",
+        "plugins/ConnectorNetworkPolicy.kt"
+      ]
+    },
+    {
+      "name": "SESSION_ID",
+      "a": "mcp-server",
+      "b": "dev-suite-installer",
+      "files": [
+        "mcp/server/tools/McpToolShared.kt",
+        "plugins/DevSuiteCommandRunner.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "plugin_network_policy",
+      "b": "dev_suite_state",
+      "files": [
+        "plugins/ConnectorNetworkPolicy.kt",
+        "plugins/DevSuiteStore.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "dev_suite_state",
+      "b": "local_tool_plugins",
+      "files": [
+        "plugins/DevSuiteStore.kt",
+        "plugins/LocalToolPluginStore.kt"
+      ]
+    },
+    {
+      "name": "KEY",
+      "a": "scheduled",
+      "b": "tools_json",
+      "files": [
+        "offload/ScheduledNotificationStore.kt",
+        "plugins/LocalToolPluginStore.kt"
+      ]
+    },
+    {
+      "name": "REGISTRY_URL",
+      "a": "https://registry.npmjs.org/@anthropic-ai%2Fclaude-code",
+      "b": "https://raw.githubusercontent.com/kusesad-1122/XINCODE-Public/main/docs/plugins/registry.json",
+      "files": [
+        "auth/ClaudeCliVersion.kt",
+        "plugins/PluginRegistry.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "local_tool_plugins",
+      "b": "plugin_registry",
+      "files": [
+        "plugins/LocalToolPluginStore.kt",
+        "plugins/PluginRegistry.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "OptionalPackages",
+      "b": "PowerOpt",
+      "files": [
+        "platform/OptionalPackages.kt",
+        "power/PowerOptimizationManager.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "PowerOpt",
+      "b": "DataLearnerApi",
+      "files": [
+        "power/PowerOptimizationManager.kt",
+        "provider/DataLearnerApi.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "DataLearnerApi",
+      "b": "FreeLaneCatalogCache",
+      "files": [
+        "provider/DataLearnerApi.kt",
+        "provider/FreeLaneCatalogCache.kt"
+      ]
+    },
+    {
+      "name": "FILE_NAME",
+      "a": "LEARNED.md",
+      "b": "free_lane_catalog.json",
+      "files": [
+        "evolution/LearnedPrefsStore.kt",
+        "provider/FreeLaneCatalogCache.kt"
+      ]
+    },
+    {
+      "name": "KEY_FETCHED_AT",
+      "a": "fetched_at",
+      "b": "fetchedAtMs",
+      "files": [
+        "auth/ClaudeCliVersion.kt",
+        "provider/FreeLaneCatalogCache.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "FreeLaneCatalogCache",
+      "b": "FreeLaneDirectory",
+      "files": [
+        "provider/FreeLaneCatalogCache.kt",
+        "provider/FreeLaneDirectory.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "FreeLaneDirectory",
+      "b": "FreeLaneHealth",
+      "files": [
+        "provider/FreeLaneDirectory.kt",
+        "provider/FreeLaneHealth.kt"
+      ]
+    },
+    {
+      "name": "PREFS_NAME",
+      "a": "minis_alarms_prefs",
+      "b": "free_lane_health",
+      "files": [
+        "offload/AlarmOffloadManager.kt",
+        "provider/FreeLaneHealth.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "FreeLaneHealth",
+      "b": "FreeLaneManifest",
+      "files": [
+        "provider/FreeLaneHealth.kt",
+        "provider/FreeLaneManifest.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "FreeLaneManifest",
+      "b": "ImageBudget",
+      "files": [
+        "provider/FreeLaneManifest.kt",
+        "provider/ImageBudget.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ImageBudget",
+      "b": "KiloFreeLane",
+      "files": [
+        "provider/ImageBudget.kt",
+        "provider/KiloFreeLane.kt"
+      ]
+    },
+    {
+      "name": "BASE_URL",
+      "a": "https://api.open-meteo.com/v1/forecast",
+      "b": "https://api.kilo.ai/api/gateway",
+      "files": [
+        "offload/WeatherManager.kt",
+        "provider/KiloFreeLane.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "KiloFreeLane",
+      "b": "LlmMiddleware",
+      "files": [
+        "provider/KiloFreeLane.kt",
+        "provider/LlmMiddleware.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "LlmMiddleware",
+      "b": "ModelReleaseIndex",
+      "files": [
+        "provider/LlmMiddleware.kt",
+        "provider/ModelReleaseIndex.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ModelReleaseIndex",
+      "b": "ModelsDevApi",
+      "files": [
+        "provider/ModelReleaseIndex.kt",
+        "provider/ModelsDevApi.kt"
+      ]
+    },
+    {
+      "name": "HOST",
+      "a": "api.kilo.ai",
+      "b": "opencode.ai",
+      "files": [
+        "provider/KiloFreeLane.kt",
+        "provider/OpenCodeSessionHeader.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "plugin_registry",
+      "b": "provider_extra_headers",
+      "files": [
+        "plugins/PluginRegistry.kt",
+        "provider/ProviderHeaderStore.kt"
+      ]
+    },
+    {
+      "name": "KEY",
+      "a": "tools_json",
+      "b": "headers_json",
+      "files": [
+        "plugins/LocalToolPluginStore.kt",
+        "provider/ProviderHeaderStore.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ModelsDevApi",
+      "b": "SampledDecode",
+      "files": [
+        "provider/ModelsDevApi.kt",
+        "provider/SampledDecode.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SampledDecode",
+      "b": "StreamTrace",
+      "files": [
+        "provider/SampledDecode.kt",
+        "provider/StreamTraceRecorder.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "provider_extra_headers",
+      "b": "stream_trace",
+      "files": [
+        "provider/ProviderHeaderStore.kt",
+        "provider/StreamTraceRecorder.kt"
+      ]
+    },
+    {
+      "name": "USER_AGENT",
+      "a": "GeminiCLI/0.30.0 (android; aarch64)",
+      "b": "opencode/latest/2.0.26/cli",
+      "files": [
+        "auth/GeminiOAuthManager.kt",
+        "provider/ZenClientVersion.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "StreamTrace",
+      "b": "ZenFreeLane",
+      "files": [
+        "provider/StreamTraceRecorder.kt",
+        "provider/ZenFreeLane.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ZenFreeLane",
+      "b": "ZenFreeLaneGate",
+      "files": [
+        "provider/ZenFreeLane.kt",
+        "provider/ZenFreeLaneGate.kt"
+      ]
+    },
+    {
+      "name": "PREFIX",
+      "a": "online_",
+      "b": "ses_",
+      "files": [
+        "plugins/OnlineApiTool.kt",
+        "provider/ZenSession.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ZenFreeLaneGate",
+      "b": "OpenAIModelsApi",
+      "files": [
+        "provider/ZenFreeLaneGate.kt",
+        "provider/openai/OpenAIModelsApi.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "OpenAIModelsApi",
+      "b": "RequestBodyGate",
+      "files": [
+        "provider/openai/OpenAIModelsApi.kt",
+        "provider/openai/RequestBodyGate.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "RequestBodyGate",
+      "b": "VoiceProvider",
+      "files": [
+        "provider/openai/RequestBodyGate.kt",
+        "provider/voice/VoiceProvider.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "VoiceProvider",
+      "b": "VoiceFactory",
+      "files": [
+        "provider/voice/VoiceProvider.kt",
+        "provider/voice/VoiceProviderFactory.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "VoiceFactory",
+      "b": "MimoVoice",
+      "files": [
+        "provider/voice/VoiceProviderFactory.kt",
+        "provider/voice/VoiceProviderVendors.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "MimoVoice",
+      "b": "XAIModelsApi",
+      "files": [
+        "provider/voice/VoiceProviderVendors.kt",
+        "provider/xai/XAIModelsApi.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "XAIModelsApi",
+      "b": "QuickNotifications",
+      "files": [
+        "provider/xai/XAIModelsApi.kt",
+        "quick/QuickNotifications.kt"
+      ]
+    },
+    {
+      "name": "PREFS_NAME",
+      "a": "free_lane_health",
+      "b": "minis_quick",
+      "files": [
+        "provider/FreeLaneHealth.kt",
+        "quick/QuickPrefs.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "QuickNotifications",
+      "b": "QuickPromptDispatcher",
+      "files": [
+        "quick/QuickNotifications.kt",
+        "quick/QuickPromptDispatcher.kt"
+      ]
+    },
+    {
+      "name": "SESSION_SOURCE",
+      "a": "automation",
+      "b": "quick",
+      "files": [
+        "automation/AutomationAgentRunner.kt",
+        "quick/QuickPromptDispatcher.kt"
+      ]
+    },
+    {
+      "name": "ENDPOINT",
+      "a": "api.anthropic.com/api/oauth/usage",
+      "b": "chatgpt.com/backend-api/wham/usage",
+      "files": [
+        "quota/QuotaAdapterClaudeSubscription.kt",
+        "quota/QuotaAdapterCodexSubscription.kt"
+      ]
+    },
+    {
+      "name": "HEADER_PREFIX",
+      "a": "anthropic-ratelimit-unified-",
+      "b": "x-codex-",
+      "files": [
+        "quota/QuotaAdapterClaudeSubscription.kt",
+        "quota/QuotaAdapterCodexSubscription.kt"
+      ]
+    },
+    {
+      "name": "ENDPOINT",
+      "a": "chatgpt.com/backend-api/wham/usage",
+      "b": "api.deepseek.com/user/balance",
+      "files": [
+        "quota/QuotaAdapterCodexSubscription.kt",
+        "quota/QuotaAdapterDeepSeek.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "QuickPromptDispatcher",
+      "b": "Quota",
+      "files": [
+        "quick/QuickPromptDispatcher.kt",
+        "quota/QuotaObservationSink.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "Quota",
+      "b": "BootHook",
+      "files": [
+        "quota/QuotaStorePublish.kt",
+        "sandbox/BootHook.kt"
+      ]
+    },
+    {
+      "name": "GUEST_PATH",
+      "a": "/var/minis/shared/mcp/endpoint.json",
+      "b": "/var/minis/boot.sh",
+      "files": [
+        "mcp/server/McpEndpointFile.kt",
+        "sandbox/BootHook.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "stream_trace",
+      "b": "boot_hook",
+      "files": [
+        "provider/StreamTraceRecorder.kt",
+        "sandbox/BootHookSettings.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "BootHook",
+      "b": "ExecutionCoordinator",
+      "files": [
+        "sandbox/BootHook.kt",
+        "sandbox/ExecutionCoordinator.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ExecutionCoordinator",
+      "b": "HostEventBridge",
+      "files": [
+        "sandbox/ExecutionCoordinator.kt",
+        "sandbox/HostEventBridge.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "HostEventBridge",
+      "b": "HostEventHooks",
+      "files": [
+        "sandbox/HostEventBridge.kt",
+        "sandbox/HostEventHooks.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "boot_hook",
+      "b": "host_event_hooks",
+      "files": [
+        "sandbox/BootHookSettings.kt",
+        "sandbox/HostEventHooks.kt"
+      ]
+    },
+    {
+      "name": "KEY",
+      "a": "headers_json",
+      "b": "hooks_json",
+      "files": [
+        "provider/ProviderHeaderStore.kt",
+        "sandbox/HostEventHooks.kt"
+      ]
+    },
+    {
+      "name": "SESSION_ID",
+      "a": "dev-suite-installer",
+      "b": "__host-events__",
+      "files": [
+        "plugins/DevSuiteCommandRunner.kt",
+        "sandbox/HostEventHooks.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "HostEventHooks",
+      "b": "HostStatusPublisher",
+      "files": [
+        "sandbox/HostEventHooks.kt",
+        "sandbox/HostStatusPublisher.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "host_event_hooks",
+      "b": "workspace_layout",
+      "files": [
+        "sandbox/HostEventHooks.kt",
+        "sandbox/LegacyWorkspaceMigrator.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "HostStatusPublisher",
+      "b": "MinisTerminals",
+      "files": [
+        "sandbox/HostStatusPublisher.kt",
+        "sandbox/MinisTerminals.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "MinisTerminals",
+      "b": "NativeOffloadServer",
+      "files": [
+        "sandbox/MinisTerminals.kt",
+        "sandbox/NativeOffload.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "NativeOffloadServer",
+      "b": "PRootKernel",
+      "files": [
+        "sandbox/NativeOffload.kt",
+        "sandbox/PRootArgv.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "PRootKernel",
+      "b": "PersistentShell",
+      "files": [
+        "sandbox/PRootOffloadStubs.kt",
+        "sandbox/PersistentShell.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "PersistentShell",
+      "b": "RootfsManager",
+      "files": [
+        "sandbox/PersistentShell.kt",
+        "sandbox/RootfsManager.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "workspace_layout",
+      "b": "sandbox_firewall",
+      "files": [
+        "sandbox/LegacyWorkspaceMigrator.kt",
+        "sandbox/SandboxFirewall.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "RootfsManager",
+      "b": "SandboxHttpProxy",
+      "files": [
+        "sandbox/RootfsTar.kt",
+        "sandbox/SandboxHttpProxy.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "sandbox_firewall",
+      "b": "sandbox_job_keepalive",
+      "files": [
+        "sandbox/SandboxFirewall.kt",
+        "sandbox/SandboxJobKeepAlive.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SandboxHttpProxy",
+      "b": "SandboxWorkload",
+      "files": [
+        "sandbox/SandboxHttpProxy.kt",
+        "sandbox/SandboxWorkload.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SandboxWorkload",
+      "b": "PersistentShell",
+      "files": [
+        "sandbox/SandboxWorkload.kt",
+        "sandbox/ShellEnvWriter.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "PersistentShell",
+      "b": "ShellExecutor",
+      "files": [
+        "sandbox/ShellEnvWriter.kt",
+        "sandbox/ShellExecutor.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ShellExecutor",
+      "b": "SpawnSignalMask",
+      "files": [
+        "sandbox/ShellExecutor.kt",
+        "sandbox/SpawnSignalMask.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SpawnSignalMask",
+      "b": "TerminalSession",
+      "files": [
+        "sandbox/SpawnSignalMask.kt",
+        "sandbox/TerminalSession.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "TerminalSession",
+      "b": "WorkspaceMover",
+      "files": [
+        "sandbox/TerminalSession.kt",
+        "sandbox/WorkspaceMover.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "endpoint.json",
+      "b": "render-degrade.flag",
+      "files": [
+        "mcp/server/McpEndpointFile.kt",
+        "sandbox/kernel/remediation/DegradeFlags.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "WorkspaceMover",
+      "b": "RemediationLoop",
+      "files": [
+        "sandbox/WorkspaceMover.kt",
+        "sandbox/kernel/remediation/RemediationLoop.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "RemediationLoop",
+      "b": "A11yOffload",
+      "files": [
+        "sandbox/kernel/remediation/RemediationLoop.kt",
+        "sandbox/offload/AccessibilityOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "A11yOffload",
+      "b": "AlarmOffload",
+      "files": [
+        "sandbox/offload/AccessibilityOffloadHandler.kt",
+        "sandbox/offload/AlarmOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "AlarmOffload",
+      "b": "BrowserUseOffload",
+      "files": [
+        "sandbox/offload/AlarmOffloadHandler.kt",
+        "sandbox/offload/BrowserUseOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "BrowserUseOffload",
+      "b": "CalendarOffload",
+      "files": [
+        "sandbox/offload/BrowserUseOffloadHandler.kt",
+        "sandbox/offload/CalendarOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "CalendarOffload",
+      "b": "ClipboardOffload",
+      "files": [
+        "sandbox/offload/CalendarOffloadHandler.kt",
+        "sandbox/offload/ClipboardOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ClipboardOffload",
+      "b": "ConfigOffload",
+      "files": [
+        "sandbox/offload/ClipboardOffloadHandler.kt",
+        "sandbox/offload/ConfigOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ConfigOffload",
+      "b": "ContactsOffload",
+      "files": [
+        "sandbox/offload/ConfigOffloadHandler.kt",
+        "sandbox/offload/ContactsOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "HELP_TEXT",
+      "a": "minis-config - read or change Minis app settings (logged + revertable)\\n",
+      "b": "",
+      "files": [
+        "sandbox/offload/ConfigOffloadHandler.kt",
+        "sandbox/offload/ContactsOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ContactsOffload",
+      "b": "DebugOffload",
+      "files": [
+        "sandbox/offload/ContactsOffloadHandler.kt",
+        "sandbox/offload/DebugOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "DebugOffload",
+      "b": "LocationOffload",
+      "files": [
+        "sandbox/offload/DebugOffloadHandler.kt",
+        "sandbox/offload/LocationOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "LocationOffload",
+      "b": "ModelUseOffload",
+      "files": [
+        "sandbox/offload/LocationOffloadHandler.kt",
+        "sandbox/offload/ModelUseOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "NO_MODELS_HINT",
+      "a": "No models available. Go to Settings > Model Groups > Available Models in Agent Loop to expose models to the agent.",
+      "b": "No models available. Go to Settings > Model Groups to add models that the agent can use.",
+      "files": [
+        "offload/ModelUseManager.kt",
+        "sandbox/offload/ModelUseOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ModelUseOffload",
+      "b": "NotificationOffload",
+      "files": [
+        "sandbox/offload/ModelUseOffloadHandler.kt",
+        "sandbox/offload/NotificationOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "CHANNEL_NAME",
+      "a": "Minis Alarms & Timers",
+      "b": "Agent Notifications",
+      "files": [
+        "offload/AlarmOffloadManager.kt",
+        "sandbox/offload/NotificationOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "NotificationOffload",
+      "b": "OffloadOutput",
+      "files": [
+        "sandbox/offload/NotificationOffloadHandler.kt",
+        "sandbox/offload/OffloadOutput.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "OffloadOutput",
+      "b": "OpenOffload",
+      "files": [
+        "sandbox/offload/OffloadOutput.kt",
+        "sandbox/offload/OpenOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "OpenOffload",
+      "b": "PhotosOffload",
+      "files": [
+        "sandbox/offload/OpenOffloadHandler.kt",
+        "sandbox/offload/PhotosOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "PhotosOffload",
+      "b": "ScheduledTaskOffload",
+      "files": [
+        "sandbox/offload/PhotosOffloadHandler.kt",
+        "sandbox/offload/ScheduledTaskOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ScheduledTaskOffload",
+      "b": "SessionsOffload",
+      "files": [
+        "sandbox/offload/ScheduledTaskOffloadHandler.kt",
+        "sandbox/offload/SessionsOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "TOOL_NAME",
+      "a": "minis-browser-use",
+      "b": "minis-sessions-cli",
+      "files": [
+        "sandbox/offload/BrowserUseOffloadHandler.kt",
+        "sandbox/offload/SessionsOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SessionsOffload",
+      "b": "ShizukuOffload",
+      "files": [
+        "sandbox/offload/SessionsOffloadHandler.kt",
+        "sandbox/offload/ShizukuOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "SERVICE_HELP",
+      "a": "service status | ping\\n",
+      "b": "",
+      "files": [
+        "sandbox/offload/AccessibilityOffloadHandler.kt",
+        "sandbox/offload/ShizukuOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "INPUT_HELP",
+      "a": "input text <s> [--node id --observation obsId] [--clear|--append] | input clear | input key BACK|HOME|RECENTS|NOTIFICATIONS\\n",
+      "b": "",
+      "files": [
+        "sandbox/offload/AccessibilityOffloadHandler.kt",
+        "sandbox/offload/ShizukuOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ShizukuOffload",
+      "b": "SpeakOffload",
+      "files": [
+        "sandbox/offload/ShizukuOffloadHandler.kt",
+        "sandbox/offload/SpeakOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SpeakOffload",
+      "b": "SpeechOffload",
+      "files": [
+        "sandbox/offload/SpeakOffloadHandler.kt",
+        "sandbox/offload/SpeechOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SpeechOffload",
+      "b": "SuOffload",
+      "files": [
+        "sandbox/offload/SpeechOffloadHandler.kt",
+        "sandbox/offload/SuOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SuOffload",
+      "b": "WeatherOffload",
+      "files": [
+        "sandbox/offload/SuOffloadHandler.kt",
+        "sandbox/offload/WeatherOffloadHandler.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "WeatherOffload",
+      "b": "ScheduledAgentRunner",
+      "files": [
+        "sandbox/offload/WeatherOffloadHandler.kt",
+        "scheduled/ScheduledAgentRunner.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ScheduledAgentRunner",
+      "b": "SchedInAppTimer",
+      "files": [
+        "scheduled/ScheduledAgentRunner.kt",
+        "scheduled/ScheduledInAppTimer.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SchedInAppTimer",
+      "b": "SchedRunNow",
+      "files": [
+        "scheduled/ScheduledInAppTimer.kt",
+        "scheduled/ScheduledRunNow.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SchedRunNow",
+      "b": "ScheduledTaskRecv",
+      "files": [
+        "scheduled/ScheduledRunNow.kt",
+        "scheduled/ScheduledTaskAlarmReceiver.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ScheduledTaskRecv",
+      "b": "ScheduledTaskManager",
+      "files": [
+        "scheduled/ScheduledTaskAlarmReceiver.kt",
+        "scheduled/ScheduledTaskManager.kt"
+      ]
+    },
+    {
+      "name": "ACTION_FIRE",
+      "a": "com.openminis.app.automation.FIRE",
+      "b": "com.openminis.app.scheduled.FIRE",
+      "files": [
+        "automation/AutomationRuleManager.kt",
+        "scheduled/ScheduledTaskManager.kt"
+      ]
+    },
+    {
+      "name": "CHANNEL_ID",
+      "a": "minis_agent_notifications",
+      "b": "minis_scheduled_tasks",
+      "files": [
+        "sandbox/offload/NotificationOffloadHandler.kt",
+        "scheduled/ScheduledTaskManager.kt"
+      ]
+    },
+    {
+      "name": "CHANNEL_NAME",
+      "a": "Agent Notifications",
+      "b": "Scheduled Tasks",
+      "files": [
+        "sandbox/offload/NotificationOffloadHandler.kt",
+        "scheduled/ScheduledTaskManager.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ScheduledTaskManager",
+      "b": "ScheduledTaskStore",
+      "files": [
+        "scheduled/ScheduledTaskManager.kt",
+        "scheduled/ScheduledTaskStore.kt"
+      ]
+    },
+    {
+      "name": "PREFS_NAME",
+      "a": "minis_quick",
+      "b": "minis_scheduled_tasks_prefs",
+      "files": [
+        "quick/QuickPrefs.kt",
+        "scheduled/ScheduledTaskStore.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "sandbox_job_keepalive",
+      "b": "security_gate",
+      "files": [
+        "sandbox/SandboxJobKeepAlive.kt",
+        "security/SecurityGateHolder.kt"
+      ]
+    },
+    {
+      "name": "KEY_MODE",
+      "a": "planDiscussionMode",
+      "b": "permission_mode",
+      "files": [
+        "data/PlanDiscussionPrefs.kt",
+        "security/SecurityGateHolder.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ScheduledTaskStore",
+      "b": "AgentForegroundService",
+      "files": [
+        "scheduled/ScheduledTaskStore.kt",
+        "service/AgentForegroundService.kt"
+      ]
+    },
+    {
+      "name": "CHANNEL_ID",
+      "a": "minis_scheduled_tasks",
+      "b": "agent_status",
+      "files": [
+        "scheduled/ScheduledTaskManager.kt",
+        "service/AgentForegroundService.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "security_gate",
+      "b": "agent_fgs",
+      "files": [
+        "security/SecurityGateHolder.kt",
+        "service/AgentForegroundService.kt"
+      ]
+    },
+    {
+      "name": "CHANNEL_NAME",
+      "a": "Scheduled Tasks",
+      "b": "Agent Status",
+      "files": [
+        "scheduled/ScheduledTaskManager.kt",
+        "service/AgentForegroundService.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "AgentForegroundService",
+      "b": "ApprovalGate",
+      "files": [
+        "service/AgentForegroundService.kt",
+        "service/ApprovalGate.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ApprovalGate",
+      "b": "DynamicIslandSupport",
+      "files": [
+        "service/ApprovalGate.kt",
+        "service/DynamicIslandSupport.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "DynamicIslandSupport",
+      "b": "HyperOsIsland",
+      "files": [
+        "service/DynamicIslandSupport.kt",
+        "service/HyperOsIsland.kt"
+      ]
+    },
+    {
+      "name": "ACTION_STOP",
+      "a": "com.openminis.app.STOP_AGENT_SERVICE",
+      "b": "miui.focus.action_stop",
+      "files": [
+        "service/AgentForegroundService.kt",
+        "service/HyperOsIsland.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "HyperOsIsland",
+      "b": "OverlayPermissionNudge",
+      "files": [
+        "service/HyperOsIsland.kt",
+        "service/OverlayPermissionNudge.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "OverlayPermissionNudge",
+      "b": "SessionTracker",
+      "files": [
+        "service/OverlayPermissionNudge.kt",
+        "service/SessionActivityTracker.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SessionTracker",
+      "b": "SessionBadgeStore",
+      "files": [
+        "service/SessionActivityTracker.kt",
+        "service/SessionBadgeStore.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "agent_fgs",
+      "b": "session_badge_store",
+      "files": [
+        "service/AgentForegroundService.kt",
+        "service/SessionBadgeStore.kt"
+      ]
+    },
+    {
+      "name": "KEY",
+      "a": "hooks_json",
+      "b": "badge_state_by_session",
+      "files": [
+        "sandbox/HostEventHooks.kt",
+        "service/SessionBadgeStore.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SessionBadgeStore",
+      "b": "SessionConcurrency",
+      "files": [
+        "service/SessionBadgeStore.kt",
+        "service/SessionConcurrencyManager.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SessionConcurrency",
+      "b": "ToolOverlayController",
+      "files": [
+        "service/SessionConcurrencyManager.kt",
+        "service/ToolOverlayController.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ToolOverlayController",
+      "b": "ShareCoordinator",
+      "files": [
+        "service/ToolOverlayController.kt",
+        "share/ShareCoordinator.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ShareCoordinator",
+      "b": "ShareReceiver",
+      "files": [
+        "share/ShareCoordinator.kt",
+        "share/ShareReceiverActivity.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ShareReceiver",
+      "b": "SharedShareStore",
+      "files": [
+        "share/ShareReceiverActivity.kt",
+        "share/SharedShareStore.kt"
+      ]
+    },
+    {
+      "name": "PREFS_NAME",
+      "a": "minis_scheduled_tasks_prefs",
+      "b": "share_prefs",
+      "files": [
+        "scheduled/ScheduledTaskStore.kt",
+        "share/SharedShareStore.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SharedShareStore",
+      "b": "JiebaEngine",
+      "files": [
+        "share/SharedShareStore.kt",
+        "shared/JiebaEngine.kt"
+      ]
+    },
+    {
+      "name": "PREFS_NAME",
+      "a": "share_prefs",
+      "b": "text_segmenter",
+      "files": [
+        "share/SharedShareStore.kt",
+        "shared/JiebaEngine.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "JiebaEngine",
+      "b": "ProviderASR",
+      "files": [
+        "shared/JiebaEngine.kt",
+        "speech/ProviderSpeechRecognitionEngine.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ProviderASR",
+      "b": "ReadAloud",
+      "files": [
+        "speech/ProviderSpeechRecognitionEngine.kt",
+        "speech/ReadAloudPlayer.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ReadAloud",
+      "b": "SpeechManager",
+      "files": [
+        "speech/ReadAloudPlayer.kt",
+        "speech/SpeechRecognitionManager.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "session_badge_store",
+      "b": "speech_recognition",
+      "files": [
+        "service/SessionBadgeStore.kt",
+        "speech/SpeechRecognitionManager.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SpeechManager",
+      "b": "SystemSTT",
+      "files": [
+        "speech/SpeechRecognitionManager.kt",
+        "speech/SystemSpeechRecognitionEngine.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SystemSTT",
+      "b": "SystemTtsVoiceCatalog",
+      "files": [
+        "speech/SystemSpeechRecognitionEngine.kt",
+        "speech/SystemTtsVoiceCatalog.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SystemTtsVoiceCatalog",
+      "b": "TextToSpeech",
+      "files": [
+        "speech/SystemTtsVoiceCatalog.kt",
+        "speech/TextToSpeechManager.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "TextToSpeech",
+      "b": "VAD",
+      "files": [
+        "speech/TextToSpeechManager.kt",
+        "speech/VoiceActivityDetector.kt"
+      ]
+    },
+    {
+      "name": "PREFS_NAME",
+      "a": "text_segmenter",
+      "b": "voice_announcement_prefs",
+      "files": [
+        "shared/JiebaEngine.kt",
+        "speech/VoiceAnnouncementPrefs.kt"
+      ]
+    },
+    {
+      "name": "KEY_PREFIX",
+      "a": "lastReadAt:",
+      "b": "scene.",
+      "files": [
+        "data/UnreadRegistry.kt",
+        "speech/VoiceAnnouncementPrefs.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "speech_recognition",
+      "b": "voice_prefs",
+      "files": [
+        "speech/SpeechRecognitionManager.kt",
+        "speech/VoiceOutputState.kt"
+      ]
+    },
+    {
+      "name": "KEY_ENABLED",
+      "a": "enabled",
+      "b": "readReplies",
+      "files": [
+        "sandbox/BootHookSettings.kt",
+        "speech/VoiceOutputState.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "VAD",
+      "b": "CorrectionContext",
+      "files": [
+        "speech/VoiceActivityDetector.kt",
+        "speech/correction/CorrectionContextBuilder.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "CorrectionContext",
+      "b": "CorrectionStrategy",
+      "files": [
+        "speech/correction/CorrectionContextBuilder.kt",
+        "speech/correction/CorrectionStrategy.kt"
+      ]
+    },
+    {
+      "name": "SYSTEM_PROMPT",
+      "a": "You are a translation engine. Translate the user's text into the ",
+      "b": "You fix speech-recognition errors in transcribed text. Output ONLY the ",
+      "files": [
+        "cottranslate/LlmTranslationRoute.kt",
+        "speech/correction/CorrectionStrategy.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "CorrectionStrategy",
+      "b": "PinyinNormalizer",
+      "files": [
+        "speech/correction/CorrectionStrategy.kt",
+        "speech/correction/PhoneticNormalizer.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "PinyinNormalizer",
+      "b": "TypedVocabulary",
+      "files": [
+        "speech/correction/PhoneticNormalizer.kt",
+        "speech/correction/TypedVocabularyBuilder.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "TypedVocabulary",
+      "b": "BackgroundWordFreq",
+      "files": [
+        "speech/correction/TypedVocabularyBuilder.kt",
+        "speech/correction/VocabularyFilter.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "BackgroundWordFreq",
+      "b": "VoiceCorrection",
+      "files": [
+        "speech/correction/VocabularyFilter.kt",
+        "speech/correction/VoiceCorrection.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "voice_prefs",
+      "b": "voice_correction_prefs",
+      "files": [
+        "speech/VoiceOutputState.kt",
+        "speech/correction/VoiceCorrectionConsent.kt"
+      ]
+    },
+    {
+      "name": "KEY_ENABLED",
+      "a": "readReplies",
+      "b": "voiceCorrectionCollectionEnabled",
+      "files": [
+        "speech/VoiceOutputState.kt",
+        "speech/correction/VoiceCorrectionConsent.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "VoiceCorrection",
+      "b": "VoiceCorrectionDB",
+      "files": [
+        "speech/correction/VoiceCorrection.kt",
+        "speech/correction/VoiceCorrectionDb.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "VoiceCorrectionDB",
+      "b": "VoiceCorrectionEngine",
+      "files": [
+        "speech/correction/VoiceCorrectionDb.kt",
+        "speech/correction/VoiceCorrectionEngine.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "VoiceCorrectionEngine",
+      "b": "VoiceCorrectionRec",
+      "files": [
+        "speech/correction/VoiceCorrectionEngine.kt",
+        "speech/correction/VoiceCorrectionRecorder.kt"
+      ]
+    },
+    {
+      "name": "PREFS_NAME",
+      "a": "voice_announcement_prefs",
+      "b": "ssh_workspace_prefs",
+      "files": [
+        "speech/VoiceAnnouncementPrefs.kt",
+        "ssh/SshWorkspace.kt"
+      ]
+    },
+    {
+      "name": "KEY_PREFIX",
+      "a": "scene.",
+      "b": "bind.",
+      "files": [
+        "speech/VoiceAnnouncementPrefs.kt",
+        "ssh/SshWorkspace.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "VoiceCorrectionRec",
+      "b": "AgentPlanStore",
+      "files": [
+        "speech/correction/VoiceCorrectionRecorder.kt",
+        "tools/AgentPlanTool.kt"
+      ]
+    },
+    {
+      "name": "DIR_NAME",
+      "a": "trusted-cas",
+      "b": "agent-plan",
+      "files": [
+        "network/AppTrustStore.kt",
+        "tools/AgentPlanTool.kt"
+      ]
+    },
+    {
+      "name": "FILE_NAME",
+      "a": "free_lane_catalog.json",
+      "b": "plans.json",
+      "files": [
+        "provider/FreeLaneCatalogCache.kt",
+        "tools/AgentPlanTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "render-degrade.flag",
+      "b": "agent_plan",
+      "files": [
+        "sandbox/kernel/remediation/DegradeFlags.kt",
+        "tools/AgentPlanTool.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "AgentPlanStore",
+      "b": "AgentReportStore",
+      "files": [
+        "tools/AgentPlanTool.kt",
+        "tools/AgentReportTool.kt"
+      ]
+    },
+    {
+      "name": "DIR_NAME",
+      "a": "agent-plan",
+      "b": "agent-report",
+      "files": [
+        "tools/AgentPlanTool.kt",
+        "tools/AgentReportTool.kt"
+      ]
+    },
+    {
+      "name": "FILE_NAME",
+      "a": "plans.json",
+      "b": "report.json",
+      "files": [
+        "tools/AgentPlanTool.kt",
+        "tools/AgentReportTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "agent_plan",
+      "b": "agent_report",
+      "files": [
+        "tools/AgentPlanTool.kt",
+        "tools/AgentReportTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "agent_report",
+      "b": "ask_reasoning",
+      "files": [
+        "tools/AgentReportTool.kt",
+        "tools/AskReasoningTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "ask_reasoning",
+      "b": "ask_user_question",
+      "files": [
+        "tools/AskReasoningTool.kt",
+        "tools/AskUserQuestion.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "AgentReportStore",
+      "b": "AtomicFileWrite",
+      "files": [
+        "tools/AgentReportTool.kt",
+        "tools/AtomicFileWrite.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "ask_user_question",
+      "b": "check_agent",
+      "files": [
+        "tools/AskUserQuestion.kt",
+        "tools/CheckAgentTool.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "AtomicFileWrite",
+      "b": "CodeGraphIndexer",
+      "files": [
+        "tools/AtomicFileWrite.kt",
+        "tools/CodeGraphIndexer.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "check_agent",
+      "b": "code_graph",
+      "files": [
+        "tools/CheckAgentTool.kt",
+        "tools/CodeGraphTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "code_graph",
+      "b": "execute_code_js",
+      "files": [
+        "tools/CodeGraphTool.kt",
+        "tools/CodemodeTool.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "voice_correction_prefs",
+      "b": "collab_roles",
+      "files": [
+        "speech/correction/VoiceCorrectionConsent.kt",
+        "tools/CollabRoles.kt"
+      ]
+    },
+    {
+      "name": "KEY",
+      "a": "badge_state_by_session",
+      "b": "roles_json",
+      "files": [
+        "service/SessionBadgeStore.kt",
+        "tools/CollabRoles.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "execute_code_js",
+      "b": "cronjob",
+      "files": [
+        "tools/CodemodeTool.kt",
+        "tools/CronJobTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "cronjob",
+      "b": "dispatch_agents",
+      "files": [
+        "tools/CronJobTool.kt",
+        "tools/DispatchAgentsTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "dispatch_agents",
+      "b": "evolution",
+      "files": [
+        "tools/DispatchAgentsTool.kt",
+        "tools/EvolutionTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "evolution",
+      "b": "execute_code",
+      "files": [
+        "tools/EvolutionTool.kt",
+        "tools/ExecuteCodeTool.kt"
+      ]
+    },
+    {
+      "name": "DIR",
+      "a": "harness-config",
+      "b": ".checkpoints",
+      "files": [
+        "data/HarnessConfigStore.kt",
+        "tools/FileCheckpointTool.kt"
+      ]
+    },
+    {
+      "name": "MANIFEST",
+      "a": "original.json",
+      "b": "manifest.json",
+      "files": [
+        "data/repository/MemoryRestoreJournal.kt",
+        "tools/FileCheckpointTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "execute_code",
+      "b": "file_checkpoint",
+      "files": [
+        "tools/ExecuteCodeTool.kt",
+        "tools/FileCheckpointTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "file_checkpoint",
+      "b": "file_edit",
+      "files": [
+        "tools/FileCheckpointTool.kt",
+        "tools/FileEditTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "file_edit",
+      "b": "file_read",
+      "files": [
+        "tools/FileEditTool.kt",
+        "tools/FileReadTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "file_read",
+      "b": "file_write",
+      "files": [
+        "tools/FileReadTool.kt",
+        "tools/FileWriteTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "file_write",
+      "b": "find_tools",
+      "files": [
+        "tools/FileWriteTool.kt",
+        "tools/FindTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "find_tools",
+      "b": "glob",
+      "files": [
+        "tools/FindTools.kt",
+        "tools/GlobTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "glob",
+      "b": "update_goal",
+      "files": [
+        "tools/GlobTool.kt",
+        "tools/GoalTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "update_goal",
+      "b": "grep_source",
+      "files": [
+        "tools/GoalTool.kt",
+        "tools/GrepSourceTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "grep_source",
+      "b": "grep",
+      "files": [
+        "tools/GrepSourceTool.kt",
+        "tools/GrepTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "grep",
+      "b": "invoke_skill",
+      "files": [
+        "tools/GrepTool.kt",
+        "tools/InvokeSkillTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "invoke_skill",
+      "b": "background_job",
+      "files": [
+        "tools/InvokeSkillTool.kt",
+        "tools/JobTools.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "background_job",
+      "b": "list_dir",
+      "files": [
+        "tools/JobTools.kt",
+        "tools/ListDirTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "list_dir",
+      "b": "mcp",
+      "files": [
+        "tools/ListDirTool.kt",
+        "tools/McpNativeTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "mcp",
+      "b": "multi_edit",
+      "files": [
+        "tools/McpNativeTool.kt",
+        "tools/MultiEditTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "multi_edit",
+      "b": "ocr_image",
+      "files": [
+        "tools/MultiEditTool.kt",
+        "tools/OcrTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "ocr_image",
+      "b": "present_file",
+      "files": [
+        "tools/OcrTool.kt",
+        "tools/PresentTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "present_file",
+      "b": "read_image",
+      "files": [
+        "tools/PresentTool.kt",
+        "tools/ReadImageTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "read_image",
+      "b": "get_screen_time",
+      "files": [
+        "tools/ReadImageTool.kt",
+        "tools/ScreenTimeTool.kt"
+      ]
+    },
+    {
+      "name": "SEARCH",
+      "a": "history_search",
+      "b": "search_sessions",
+      "files": [
+        "tools/HistorySearchTool.kt",
+        "tools/SessionLookupTool.kt"
+      ]
+    },
+    {
+      "name": "READ",
+      "a": "history_read",
+      "b": "read_session",
+      "files": [
+        "tools/HistorySearchTool.kt",
+        "tools/SessionLookupTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "get_screen_time",
+      "b": "skill_manage",
+      "files": [
+        "tools/ScreenTimeTool.kt",
+        "tools/SkillManageTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "skill_manage",
+      "b": "ssh_exec",
+      "files": [
+        "tools/SkillManageTool.kt",
+        "tools/SshTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "ssh_exec",
+      "b": "su_exec",
+      "files": [
+        "tools/SshTool.kt",
+        "tools/SuExecTool.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "CodeGraphIndexer",
+      "b": "SubAgentBatchRegistry",
+      "files": [
+        "tools/CodeGraphIndexer.kt",
+        "tools/SubAgentBatchRegistry.kt"
+      ]
+    },
+    {
+      "name": "DIR_NAME",
+      "a": "agent-report",
+      "b": "subagent-batches",
+      "files": [
+        "tools/AgentReportTool.kt",
+        "tools/SubAgentBatchRegistry.kt"
+      ]
+    },
+    {
+      "name": "FILE_NAME",
+      "a": "report.json",
+      "b": "batches.json",
+      "files": [
+        "tools/AgentReportTool.kt",
+        "tools/SubAgentBatchRegistry.kt"
+      ]
+    },
+    {
+      "name": "PREFIX",
+      "a": "ses_",
+      "b": "subagent:",
+      "files": [
+        "provider/ZenSession.kt",
+        "tools/SubAgentLane.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "collab_roles",
+      "b": "sub_agent_types",
+      "files": [
+        "tools/CollabRoles.kt",
+        "tools/SubAgentTypeStore.kt"
+      ]
+    },
+    {
+      "name": "KEY",
+      "a": "roles_json",
+      "b": "types_json",
+      "files": [
+        "tools/CollabRoles.kt",
+        "tools/SubAgentTypeStore.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SubAgentBatchRegistry",
+      "b": "SupervisorRunStore",
+      "files": [
+        "tools/SubAgentBatchRegistry.kt",
+        "tools/SupervisorRunStore.kt"
+      ]
+    },
+    {
+      "name": "DIR_NAME",
+      "a": "subagent-batches",
+      "b": "supervisor-runs",
+      "files": [
+        "tools/SubAgentBatchRegistry.kt",
+        "tools/SupervisorRunStore.kt"
+      ]
+    },
+    {
+      "name": "FILE_NAME",
+      "a": "batches.json",
+      "b": "runs.json",
+      "files": [
+        "tools/SubAgentBatchRegistry.kt",
+        "tools/SupervisorRunStore.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SupervisorRunStore",
+      "b": "TaskMandateStore",
+      "files": [
+        "tools/SupervisorRunStore.kt",
+        "tools/TaskMandateTool.kt"
+      ]
+    },
+    {
+      "name": "DIR_NAME",
+      "a": "supervisor-runs",
+      "b": "task-mandate",
+      "files": [
+        "tools/SupervisorRunStore.kt",
+        "tools/TaskMandateTool.kt"
+      ]
+    },
+    {
+      "name": "FILE_NAME",
+      "a": "runs.json",
+      "b": "mandate.json",
+      "files": [
+        "tools/SupervisorRunStore.kt",
+        "tools/TaskMandateTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "su_exec",
+      "b": "task_mandate",
+      "files": [
+        "tools/SuExecTool.kt",
+        "tools/TaskMandateTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "task_mandate",
+      "b": "agent_terminal",
+      "files": [
+        "tools/TaskMandateTool.kt",
+        "tools/TerminalTools.kt"
+      ]
+    },
+    {
+      "name": "FILE_NAME",
+      "a": "mandate.json",
+      "b": ".tool-failures.json",
+      "files": [
+        "tools/TaskMandateTool.kt",
+        "tools/ToolFailureMemory.kt"
+      ]
+    },
+    {
+      "name": "MARKER",
+      "a": "The connection dropped mid-reply",
+      "b": "[tool-output-spill]",
+      "files": [
+        "agent/StreamDropReminder.kt",
+        "tools/ToolOutputSpill.kt"
+      ]
+    },
+    {
+      "name": "FILENAME",
+      "a": "browser_history.json",
+      "b": "[A-Za-z0-9._-]{1,255}",
+      "files": [
+        "browser/BrowserHistory.kt",
+        "tools/ToolOutputSpill.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "agent_terminal",
+      "b": "ui_action",
+      "files": [
+        "tools/TerminalTools.kt",
+        "tools/UiActionTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "ui_action",
+      "b": "ui_read",
+      "files": [
+        "tools/UiActionTool.kt",
+        "tools/UiReadTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "ui_read",
+      "b": "ui_skill",
+      "files": [
+        "tools/UiReadTool.kt",
+        "tools/UiSkillTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "ui_skill",
+      "b": "virtual_screen",
+      "files": [
+        "tools/UiSkillTool.kt",
+        "tools/VirtualScreenTool.kt"
+      ]
+    },
+    {
+      "name": "SYSTEM_PROMPT",
+      "a": "You fix speech-recognition errors in transcribed text. Output ONLY the ",
+      "b": "You are an image description engine. Describe the provided image factually ",
+      "files": [
+        "speech/correction/CorrectionStrategy.kt",
+        "tools/VisionGroupResolver.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "virtual_screen",
+      "b": "web_fetch",
+      "files": [
+        "tools/VirtualScreenTool.kt",
+        "tools/WebFetchTool.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "sub_agent_types",
+      "b": "web_search_prefs",
+      "files": [
+        "tools/SubAgentTypeStore.kt",
+        "tools/WebSearchSettings.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "web_fetch",
+      "b": "web_search",
+      "files": [
+        "tools/WebFetchTool.kt",
+        "tools/WebSearchTool.kt"
+      ]
+    },
+    {
+      "name": "NAME",
+      "a": "web_search",
+      "b": "wolfpack_run",
+      "files": [
+        "tools/WebSearchTool.kt",
+        "tools/WolfpackTool.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "web_search_prefs",
+      "b": "display_prefs",
+      "files": [
+        "tools/WebSearchSettings.kt",
+        "ui/HighRefreshRate.kt"
+      ]
+    },
+    {
+      "name": "KEY",
+      "a": "types_json",
+      "b": "high_refresh",
+      "files": [
+        "tools/SubAgentTypeStore.kt",
+        "ui/HighRefreshRate.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "TaskMandateStore",
+      "b": "BrowserExternalScheme",
+      "files": [
+        "tools/TaskMandateTool.kt",
+        "ui/browser/BrowserExternalSchemeHandler.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "BrowserExternalScheme",
+      "b": "ChatViewModel",
+      "files": [
+        "ui/browser/BrowserExternalSchemeHandler.kt",
+        "ui/chat/CacheWarmBookkeeping.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ChatViewModel",
+      "b": "CancelDiag",
+      "files": [
+        "ui/chat/CacheWarmBookkeeping.kt",
+        "ui/chat/CancellationDiagnostic.kt"
+      ]
+    },
+    {
+      "name": "KEY",
+      "a": "high_refresh",
+      "b": "chat.confirmBeforeStop",
+      "files": [
+        "ui/HighRefreshRate.kt",
+        "ui/chat/ChatStopOptions.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "CancelDiag",
+      "b": "ChatViewModel",
+      "files": [
+        "ui/chat/CancellationDiagnostic.kt",
+        "ui/chat/ChatViewModel.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ChatViewModel",
+      "b": "ChatVMStore",
+      "files": [
+        "ui/chat/ChatViewModel.kt",
+        "ui/chat/ChatViewModelStore.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ChatVMStore",
+      "b": "ChatViewModel",
+      "files": [
+        "ui/chat/ChatViewModelStore.kt",
+        "ui/chat/CompactChunkPool.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "display_prefs",
+      "b": "composer_input_prefs",
+      "files": [
+        "ui/HighRefreshRate.kt",
+        "ui/chat/ComposerInputModePrefs.kt"
+      ]
+    },
+    {
+      "name": "KEY_MODE",
+      "a": "permission_mode",
+      "b": "composer_input_mode_pref",
+      "files": [
+        "security/SecurityGateHolder.kt",
+        "ui/chat/ComposerInputModePrefs.kt"
+      ]
+    },
+    {
+      "name": "HEADER",
+      "a": "x-opencode-session",
+      "b": "Dropped rounds digest — these rounds are NOT in the compact summary above; ",
+      "files": [
+        "provider/OpenCodeSessionHeader.kt",
+        "ui/chat/DroppedRoundDigest.kt"
+      ]
+    },
+    {
+      "name": "BASE_URL",
+      "a": "https://api.kilo.ai/api/gateway",
+      "b": "http://localhost/",
+      "files": [
+        "provider/KiloFreeLane.kt",
+        "ui/chat/GenUiSandbox.kt"
+      ]
+    },
+    {
+      "name": "MARKER",
+      "a": "[tool-output-spill]",
+      "b": "[HISTORY_DIGEST]",
+      "files": [
+        "tools/ToolOutputSpill.kt",
+        "ui/chat/HistoryDigest.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ChatViewModel",
+      "b": "KatexWebViewPool",
+      "files": [
+        "ui/chat/CompactChunkPool.kt",
+        "ui/chat/KatexWebViewPool.kt"
+      ]
+    },
+    {
+      "name": "HEADER",
+      "a": "Dropped rounds digest — these rounds are NOT in the compact summary above; ",
+      "b": "Current task anchor (the latest substantive request from the user in this ",
+      "files": [
+        "ui/chat/DroppedRoundDigest.kt",
+        "ui/chat/PromptAnchors.kt"
+      ]
+    },
+    {
+      "name": "DIR",
+      "a": ".checkpoints",
+      "b": "session-journal",
+      "files": [
+        "tools/FileCheckpointTool.kt",
+        "ui/chat/SessionJournal.kt"
+      ]
+    },
+    {
+      "name": "MARKER",
+      "a": "[HISTORY_DIGEST]",
+      "b": "Session state restored by the host",
+      "files": [
+        "ui/chat/HistoryDigest.kt",
+        "ui/chat/SessionStateSnapshot.kt"
+      ]
+    },
+    {
+      "name": "STUB_PREFIX",
+      "a": "body stored (",
+      "b": "[Inline image data omitted from history: ",
+      "files": [
+        "data/display/DisplayParts.kt",
+        "ui/chat/TextifiedImageGuard.kt"
+      ]
+    },
+    {
+      "name": "DIR",
+      "a": "session-journal",
+      "b": "tool-receipts",
+      "files": [
+        "ui/chat/SessionJournal.kt",
+        "ui/chat/ToolReceiptStore.kt"
+      ]
+    },
+    {
+      "name": "MARKER",
+      "a": "Session state restored by the host",
+      "b": "Tools changed",
+      "files": [
+        "ui/chat/SessionStateSnapshot.kt",
+        "ui/chat/ToolSetDelta.kt"
+      ]
+    },
+    {
+      "name": "DIR",
+      "a": "tool-receipts",
+      "b": "working-memory",
+      "files": [
+        "ui/chat/ToolReceiptStore.kt",
+        "ui/chat/WorkingMemoryLedger.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "composer_input_prefs",
+      "b": "voice_prefs",
+      "files": [
+        "ui/chat/ComposerInputModePrefs.kt",
+        "ui/chat/voice/HandsFreeVoicePanel.kt"
+      ]
+    },
+    {
+      "name": "KEY_ENABLED",
+      "a": "voiceCorrectionCollectionEnabled",
+      "b": "handsFree.enabled",
+      "files": [
+        "speech/correction/VoiceCorrectionConsent.kt",
+        "ui/chat/voice/HandsFreeVoicePanel.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "KatexWebViewPool",
+      "b": "QuickTest",
+      "files": [
+        "ui/chat/KatexWebViewPool.kt",
+        "ui/components/QuickTestSheet.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "QuickTest",
+      "b": "GitPanel",
+      "files": [
+        "ui/components/QuickTestSheet.kt",
+        "ui/git/GitPanelViewModel.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "GitPanel",
+      "b": "KaTeXView",
+      "files": [
+        "ui/git/GitPanelViewModel.kt",
+        "ui/markdown/KaTeXView.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "KaTeXView",
+      "b": "WebPreviewShortcut",
+      "files": [
+        "ui/markdown/KaTeXView.kt",
+        "ui/preview/WebPreviewShortcut.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "WebPreviewShortcut",
+      "b": "WebViewHolder",
+      "files": [
+        "ui/preview/WebPreviewShortcut.kt",
+        "ui/preview/WebViewHolder.kt"
+      ]
+    },
+    {
+      "name": "PREFS_NAME",
+      "a": "ssh_workspace_prefs",
+      "b": "file_browser_prefs",
+      "files": [
+        "ssh/SshWorkspace.kt",
+        "ui/sandbox/FileBrowserViewModel.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "WebViewHolder",
+      "b": "MirrorSpeedTest",
+      "files": [
+        "ui/preview/WebViewHolder.kt",
+        "ui/sandbox/MirrorSettingsScreen.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "voice_prefs",
+      "b": "mirror_settings",
+      "files": [
+        "ui/chat/voice/InlineVoiceInputPanel.kt",
+        "ui/sandbox/MirrorSettingsScreen.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "MirrorSpeedTest",
+      "b": "SessionListVM",
+      "files": [
+        "ui/sandbox/MirrorSettingsScreen.kt",
+        "ui/sessions/SessionListViewModel.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "SessionListVM",
+      "b": "ProviderDetail",
+      "files": [
+        "ui/sessions/SessionListViewModel.kt",
+        "ui/settings/OpenCodeSessionSection.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ProviderDetail",
+      "b": "ProviderDetailPool",
+      "files": [
+        "ui/settings/OpenCodeSessionSection.kt",
+        "ui/settings/ProviderDetailPoolSection.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ProviderDetailPool",
+      "b": "ProviderDetail",
+      "files": [
+        "ui/settings/ProviderDetailPoolSection.kt",
+        "ui/settings/ProviderDetailScreen.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ProviderDetail",
+      "b": "ProviderImportZip",
+      "files": [
+        "ui/settings/ProviderHeaderSection.kt",
+        "ui/settings/ProviderImportZip.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ProviderImportZip",
+      "b": "ProviderDetail",
+      "files": [
+        "ui/settings/ProviderImportZip.kt",
+        "ui/settings/ProviderOAuthBlock.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "ProviderDetail",
+      "b": "BackupViewModel",
+      "files": [
+        "ui/settings/ProviderOAuthBlock.kt",
+        "ui/settings/backup/BackupHistoryDeletion.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "BackupViewModel",
+      "b": "Rclone",
+      "files": [
+        "ui/settings/backup/BackupViewModel.kt",
+        "ui/settings/backup/RcloneDestinationsViewModel.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "Rclone",
+      "b": "EncryptedPrefsFactory",
+      "files": [
+        "ui/settings/backup/RcloneDestinationsViewModel.kt",
+        "util/EncryptedPrefsFactory.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "EncryptedPrefsFactory",
+      "b": "AudioMuter",
+      "files": [
+        "util/EncryptedPrefsFactory.kt",
+        "vscreen/AudioMuter.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "AudioMuter",
+      "b": "HandoffBR",
+      "files": [
+        "vscreen/AudioMuter.kt",
+        "vscreen/HandoffBroadcastReceiver.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "HandoffBR",
+      "b": "HandoffController",
+      "files": [
+        "vscreen/HandoffBroadcastReceiver.kt",
+        "vscreen/HandoffController.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "HandoffController",
+      "b": "HandoffNotifier",
+      "files": [
+        "vscreen/HandoffController.kt",
+        "vscreen/HandoffNotifier.kt"
+      ]
+    },
+    {
+      "name": "CHANNEL_ID",
+      "a": "agent_status",
+      "b": "minis_vscreen_handoff",
+      "files": [
+        "service/AgentForegroundService.kt",
+        "vscreen/HandoffNotifier.kt"
+      ]
+    },
+    {
+      "name": "KEY_PREFIX",
+      "a": "bind.",
+      "b": "handoff_",
+      "files": [
+        "ssh/SshWorkspace.kt",
+        "vscreen/HandoffStore.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "HandoffNotifier",
+      "b": "TaskMover",
+      "files": [
+        "vscreen/HandoffNotifier.kt",
+        "vscreen/TaskMover.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "TaskMover",
+      "b": "VirtualScreenCapture",
+      "files": [
+        "vscreen/TaskMover.kt",
+        "vscreen/VirtualScreenCapture.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "VirtualScreenCapture",
+      "b": "VirtualScreenManager",
+      "files": [
+        "vscreen/VirtualScreenCapture.kt",
+        "vscreen/VirtualScreenManager.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "VirtualScreenManager",
+      "b": "VirtualScreenUpkeep",
+      "files": [
+        "vscreen/VirtualScreenManager.kt",
+        "vscreen/VirtualScreenUpkeep.kt"
+      ]
+    },
+    {
+      "name": "PREFS_NAME",
+      "a": "file_browser_prefs",
+      "b": "vscreen",
+      "files": [
+        "ui/sandbox/FileBrowserViewModel.kt",
+        "vscreen/VscreenPrefs.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "VirtualScreenUpkeep",
+      "b": "VscreenServiceClient",
+      "files": [
+        "vscreen/VirtualScreenUpkeep.kt",
+        "vscreen/VscreenServiceClient.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "VscreenServiceClient",
+      "b": "RootDisplayProvider",
+      "files": [
+        "vscreen/VscreenServiceClient.kt",
+        "vscreen/tier/RootDisplayProvider.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "RootDisplayProvider",
+      "b": "VscreenTier",
+      "files": [
+        "vscreen/tier/RootDisplayProvider.kt",
+        "vscreen/tier/TierStateMachine.kt"
+      ]
+    },
+    {
+      "name": "KEY",
+      "a": "chat.confirmBeforeStop",
+      "b": "tier_probe_v1",
+      "files": [
+        "ui/chat/ChatStopOptions.kt",
+        "vscreen/tier/TierStateMachine.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "VscreenTier",
+      "b": "VdHostDeployer",
+      "files": [
+        "vscreen/tier/TierStateMachine.kt",
+        "vscreen/tier/VdHostDeployer.kt"
+      ]
+    },
+    {
+      "name": "CACHE_DIR",
+      "a": "/var/minis/shared/cache/devsuite",
+      "b": "vdhost",
+      "files": [
+        "plugins/DevSuiteInstaller.kt",
+        "vscreen/tier/VdHostDeployer.kt"
+      ]
+    }
+  ],
+  "orphan_keys": [
+    "API_KEY",
+    "COL_KEY",
+    "HEADER_KEY",
+    "INDEX_KEY",
+    "KEY",
+    "KEYS_FILE",
+    "KEYS_URL",
+    "KEY_APP_GLOBAL",
+    "KEY_CONFIG_DECODE_FAILED",
+    "KEY_CURSOR",
+    "KEY_DEAD",
+    "KEY_ENABLED",
+    "KEY_ENDPOINT",
+    "KEY_FETCHED_AT",
+    "KEY_FREE",
+    "KEY_GOAL",
+    "KEY_IDS",
+    "KEY_LAST_BUILD_TIME",
+    "KEY_LAST_USED_ENTRY",
+    "KEY_LEARNED",
+    "KEY_PAID",
+    "KEY_PLACEHOLDER",
+    "KEY_PORT",
+    "KEY_PROBED_AT",
+    "KEY_PROJECT_RULES",
+    "KEY_REMOTES",
+    "KEY_SESSION_GLOBAL",
+    "KEY_SHELL_POLICY",
+    "KEY_SHOW_FULL_THINKING",
+    "KEY_SHOW_TURN_CHANGES_CARD",
+    "KEY_TOKEN",
+    "LEDGER_KEY",
+    "MCP_PROXY_KEY",
+    "UNKNOWN_MODEL_KEY"
+  ],
+  "totals": {
+    "prefs_files": 103,
+    "prefs_encrypted": 10,
+    "key_constants_attributed": 186,
+    "orphan_keys": 34,
+    "usage_sites": 182,
+    "usage_files": 109,
+    "constant_conflicts": 520
+  }
+}

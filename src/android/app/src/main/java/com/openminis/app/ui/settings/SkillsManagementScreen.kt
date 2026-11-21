@@ -115,19 +115,14 @@ fun SkillsManagementScreen(
 
     // Sort preference (SharedPreferences, default name ascending). [T-android-sessionlist-prefs-io] lazy handle; first touch on IO.
     val sortPrefs = remember {
-        lazy {
-            context.applicationContext.getSharedPreferences(
-                "skills_prefs",
-                android.content.Context.MODE_PRIVATE,
-            )
-        }
+        lazy { com.openminis.app.config.Prefs.file("skills_prefs") }
     }
     var sortByModified by remember { mutableStateOf(false) }
     var sortAscending by remember { mutableStateOf(true) }
     LaunchedEffect(Unit) {
         val stored = withContext(Dispatchers.IO) {
             val prefs = sortPrefs.value
-            prefs.getBoolean("sort_by_modified", false) to prefs.getBoolean("sort_ascending", true)
+            prefs.bool("sort_by_modified", false) to prefs.bool("sort_ascending", true)
         }
         sortByModified = stored.first
         sortAscending = stored.second
@@ -177,7 +172,7 @@ fun SkillsManagementScreen(
                         },
                         onClick = {
                             sortByModified = false
-                            sortPrefs.value.edit().putBoolean("sort_by_modified", false).apply()
+                            sortPrefs.value.set("sort_by_modified", false)
                             sortMenuExpanded = false
                         },
                     )
@@ -189,7 +184,7 @@ fun SkillsManagementScreen(
                         },
                         onClick = {
                             sortByModified = true
-                            sortPrefs.value.edit().putBoolean("sort_by_modified", true).apply()
+                            sortPrefs.value.set("sort_by_modified", true)
                             sortMenuExpanded = false
                         },
                     )
@@ -209,7 +204,7 @@ fun SkillsManagementScreen(
                         },
                         onClick = {
                             sortAscending = !sortAscending
-                            sortPrefs.value.edit().putBoolean("sort_ascending", sortAscending).apply()
+                            sortPrefs.value.set("sort_ascending", sortAscending)
                             sortMenuExpanded = false
                         },
                     )

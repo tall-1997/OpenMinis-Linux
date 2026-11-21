@@ -58,6 +58,7 @@ import com.openminis.app.data.model.SystemVoiceEntries
 import com.openminis.app.data.model.SystemVoiceIds
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.speech.VoiceOutputState
+import com.openminis.app.ui.tokens.MinisTypography
 /**
  * [T-android-unified-model-picker] Android counterpart of iOS
  * UnifiedModelPicker: ONE single-select model picker sheet, parameterized the
@@ -304,7 +305,7 @@ fun UnifiedModelPickerSheet(
                                     Spacer(Modifier.width(2.dp))
                                     Text(
                                         "FB",
-                                        fontSize = 9.sp,
+                                        fontSize = MinisTypography.cap2,
                                         fontWeight = FontWeight.Medium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                     )

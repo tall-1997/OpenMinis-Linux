@@ -139,10 +139,8 @@ internal fun ChatViewModel.grepSourceToolResult(name: String, argsJson: String):
  * not publish every live sibling's transcript into it.
  */
 internal fun ChatViewModel.subAgentChipsEnabled(): Boolean =
-    context.getSharedPreferences(
-        com.openminis.app.config.PREF_APPEARANCE,
-        android.content.Context.MODE_PRIVATE,
-    ).getBoolean(com.openminis.app.ui.settings.KEY_SHOW_SUBAGENT_BAR, true)
+    com.openminis.app.config.Prefs.file(com.openminis.app.config.PREF_APPEARANCE)
+        .bool(com.openminis.app.ui.settings.KEY_SHOW_SUBAGENT_BAR, true)
 
 internal suspend fun ChatViewModel.publishSubAgentCard(
     parentToolId: String,

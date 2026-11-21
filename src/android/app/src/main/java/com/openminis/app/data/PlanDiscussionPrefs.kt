@@ -39,7 +39,7 @@ object PlanDiscussionPrefs {
 
     fun prime(context: Context) {
         appContext = context.applicationContext
-        cachedMode = readMode(prefs(context))
+        cachedMode = readMode(prefs())
     }
 
     fun mode(): Mode = cachedMode
@@ -48,20 +48,22 @@ object PlanDiscussionPrefs {
 
     fun setMode(mode: Mode) {
         cachedMode = mode
-        appContext?.let { ctx ->
-            prefs(ctx).edit()
-                .putString(KEY_MODE, mode.wire)
-                .putBoolean(KEY_ENABLED, mode != Mode.OFF)
-                .apply()
+        if (appContext != null) {
+            // 两个键一起写：mode 和 enabled 描述同一个状态，
+            // 分两次落盘会出现「模式是新值、开关还是旧值」的中间态
+            prefs().write {
+                putString(KEY_MODE, mode.wire)
+                putBoolean(KEY_ENABLED, mode != Mode.OFF)
+            }
         }
     }
 
     fun setMode(context: Context, mode: Mode) {
         cachedMode = mode
-        prefs(context).edit()
-            .putString(KEY_MODE, mode.wire)
-            .putBoolean(KEY_ENABLED, mode != Mode.OFF)
-            .apply()
+        prefs().write {
+            putString(KEY_MODE, mode.wire)
+            putBoolean(KEY_ENABLED, mode != Mode.OFF)
+        }
     }
 
     /** Chat-menu compatibility: on maps to AUTO (smarter default). */
@@ -73,12 +75,12 @@ object PlanDiscussionPrefs {
         setMode(context, if (enabled) Mode.AUTO else Mode.OFF)
     }
 
-    private fun readMode(sp: android.content.SharedPreferences): Mode {
-        val stored = sp.getString(KEY_MODE, null)
+    private fun readMode(sp: com.openminis.app.config.PrefsHandle): Mode {
+        val stored = sp.stringOrNull(KEY_MODE)
         if (stored != null) return Mode.fromWire(stored)
-        return if (sp.getBoolean(KEY_ENABLED, false)) Mode.ALWAYS else Mode.OFF
+        return if (sp.bool(KEY_ENABLED, false)) Mode.ALWAYS else Mode.OFF
     }
 
-    private fun prefs(context: Context) =
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private fun prefs() =
+        com.openminis.app.config.Prefs.file(PREFS)
 }

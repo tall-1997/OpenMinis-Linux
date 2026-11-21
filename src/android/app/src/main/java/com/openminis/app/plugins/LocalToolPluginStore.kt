@@ -40,16 +40,12 @@ object LocalToolPluginStore {
     // ─── persistence ───────────────────────────────────────────────────
 
     fun load(context: Context): List<LocalToolDef> {
-        val text = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(KEY, null) ?: return emptyList()
+        val text = com.openminis.app.config.Prefs.file(PREFS).stringOrNull(KEY) ?: return emptyList()
         return runCatching { parse(text) }.getOrDefault(emptyList())
     }
 
     fun save(context: Context, tools: List<LocalToolDef>) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putString(KEY, serialize(tools))
-            .apply()
+        com.openminis.app.config.Prefs.file(PREFS).set(KEY, serialize(tools))
     }
 
     fun upsert(context: Context, tool: LocalToolDef) {
@@ -101,8 +97,7 @@ object LocalToolPluginStore {
 
     /** Cheap change stamp for tool-list memoization: hash of the raw JSON, no parse. */
     fun toolsStamp(context: Context): Long =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(KEY, null)?.hashCode()?.toLong() ?: 0L
+        com.openminis.app.config.Prefs.file(PREFS).stringOrNull(KEY)?.hashCode()?.toLong() ?: 0L
 
     // ─── JSON codec ────────────────────────────────────────────────────
 

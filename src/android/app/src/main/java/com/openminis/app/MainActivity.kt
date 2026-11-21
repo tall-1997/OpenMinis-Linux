@@ -2,7 +2,6 @@ package com.openminis.app
 
 import android.app.LocaleManager
 import android.content.Intent
-import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -67,7 +66,7 @@ class MainActivity : ComponentActivity() {
      * [getAppearancePrefs] gained its process-wide cache, two listener
      * registrations per configuration change). One field, both readers.
      */
-    private val appearancePrefs: SharedPreferences by lazy {
+    private val appearancePrefs: com.openminis.app.config.PrefsHandle by lazy {
         getAppearancePrefs(this)
     }
 
@@ -547,23 +546,22 @@ class MainActivity : ComponentActivity() {
             // `appearancePrefs` (one SharedPreferences handle per Activity,
             // not one per reader).
             val prefs = appearancePrefs
-            var themeMode by remember { mutableIntStateOf(prefs.getInt(KEY_THEME_MODE, 0)) }
-            var appBaseLevel by remember { mutableIntStateOf(prefs.getInt(KEY_FONT_APP_BASE, 0)) }
-            var dynamicColor by remember { mutableStateOf(prefs.getBoolean(KEY_DYNAMIC_COLOR, false)) }
+            var themeMode by remember { mutableIntStateOf(prefs.int(KEY_THEME_MODE, 0)) }
+            var appBaseLevel by remember { mutableIntStateOf(prefs.int(KEY_FONT_APP_BASE, 0)) }
+            var dynamicColor by remember { mutableStateOf(prefs.bool(KEY_DYNAMIC_COLOR, false)) }
 
             DisposableEffect(prefs) {
-                val listener = SharedPreferences.OnSharedPreferenceChangeListener { sp, key ->
+                val stopListening = prefs.observe { key ->
                     when (key) {
-                        KEY_THEME_MODE -> themeMode = sp.getInt(KEY_THEME_MODE, 0)
-                        KEY_FONT_APP_BASE -> appBaseLevel = sp.getInt(KEY_FONT_APP_BASE, 0)
-                        KEY_DYNAMIC_COLOR -> dynamicColor = sp.getBoolean(KEY_DYNAMIC_COLOR, false)
+                        KEY_THEME_MODE -> themeMode = prefs.int(KEY_THEME_MODE, 0)
+                        KEY_FONT_APP_BASE -> appBaseLevel = prefs.int(KEY_FONT_APP_BASE, 0)
+                        KEY_DYNAMIC_COLOR -> dynamicColor = prefs.bool(KEY_DYNAMIC_COLOR, false)
                         KEY_KEEP_SCREEN_AWAKE -> applyKeepScreenAwakeFlag(
                             SessionActivityTracker.activeSessions.value.isNotEmpty()
                         )
                     }
                 }
-                prefs.registerOnSharedPreferenceChangeListener(listener)
-                onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+                onDispose { stopListening() }
             }
 
             val darkTheme = when (themeMode) {
@@ -688,7 +686,7 @@ class MainActivity : ComponentActivity() {
         // of calling getAppearancePrefs() again: getSharedPreferences returns
         // a cached impl, but the instance identity matters for the listener
         // contract and this keeps a single canonical handle per Activity.
-        val mode = appearancePrefs.getInt(KEY_LAUNCH_SESSION, 0)
+        val mode = appearancePrefs.int(KEY_LAUNCH_SESSION, 0)
         if (mode != 2) return
         val nav = navController ?: return
         val newRoute = Routes.chat("__new__${java.util.UUID.randomUUID()}")
@@ -732,7 +730,7 @@ class MainActivity : ComponentActivity() {
 
     private fun applySavedLanguage() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-        val code = getSharedPreferences(PREF_APPEARANCE, MODE_PRIVATE).getString(KEY_LANGUAGE, "") ?: ""
+        val code = com.openminis.app.config.Prefs.file(PREF_APPEARANCE).string(KEY_LANGUAGE, "")
         val localeManager = getSystemService(LocaleManager::class.java) ?: return
         val desired = if (code.isEmpty()) LocaleList.getEmptyLocaleList() else LocaleList.forLanguageTags(code)
         if (localeManager.applicationLocales.toLanguageTags() != desired.toLanguageTags()) {

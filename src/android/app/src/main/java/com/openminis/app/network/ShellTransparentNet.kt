@@ -10,6 +10,7 @@ import android.net.ConnectivityManager
 import android.net.LinkProperties
 import android.net.Network
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.sandbox.RootfsManager
 import java.io.File
 import java.net.Inet4Address
 import java.net.Inet6Address
@@ -108,7 +109,10 @@ object ShellTransparentNet {
         val dir = File(context.filesDir, "net").apply { mkdirs() }
         routesFile = File(dir, "xnet.routes")
         mapDir = File(dir, "xnet-map")
-        guestResolvConf = File(context.filesDir, "alpine-rootfs/etc/resolv.conf")
+        // RootfsManager owns the sandbox root directory name. Hardcoding it
+        // here is how this drifted onto the legacy "alpine-rootfs" path, which
+        // made guestResolvers() always read a missing file and return empty.
+        guestResolvConf = File(RootfsManager.getInstance(context).rootfsDir, "etc/resolv.conf")
         routesPath = routesFile.absolutePath
         // A file from an earlier process names a listener that is gone.
         if (routesFile.delete()) AppLogger.info(TAG, "[Net][Xparent] removed the routes file of an earlier process")

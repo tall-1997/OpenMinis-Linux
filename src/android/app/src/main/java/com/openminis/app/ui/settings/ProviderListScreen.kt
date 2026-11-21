@@ -1,5 +1,6 @@
 package com.openminis.app.ui.settings
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.tokens.RawSpace
 
 import android.net.Uri
 import android.widget.Toast
@@ -694,7 +695,7 @@ fun ProviderListScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 4.dp),
+                    .padding(horizontal = RawSpace.xs.dp),
                 horizontalArrangement = Arrangement.End,
             ) { listActions() }
             Column(

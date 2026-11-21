@@ -567,10 +567,8 @@ class BackupExporter(
     private fun exportSettings(dataDir: File) {
         val toolLimits = JSONObject()
         runCatching {
-            val prefs = context.getSharedPreferences(
-                com.openminis.app.data.ToolLimitPrefs.PREFS, android.content.Context.MODE_PRIVATE,
-            )
-            for ((key, value) in prefs.all) {
+            val prefs = com.openminis.app.config.Prefs.file(com.openminis.app.data.ToolLimitPrefs.PREFS)
+            for ((key, value) in prefs.snapshot()) {
                 when (value) {
                     is Int -> toolLimits.put(key, value)
                     is Long -> toolLimits.put(key, value)

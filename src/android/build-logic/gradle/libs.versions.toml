@@ -1,0 +1,8 @@
+[versions]
+# build-logic 是独立的 composite build（includeBuild），拿不到根目录的
+# gradle/libs.versions.toml，所以这里必须自带一份。
+# 与根目录保持同步由 scripts/ci/check_version_catalog_sync.py 强制。
+kotlin = "2.1.0"
+
+[libraries]
+kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }

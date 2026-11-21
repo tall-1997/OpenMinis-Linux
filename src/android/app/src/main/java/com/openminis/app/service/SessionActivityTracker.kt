@@ -312,8 +312,8 @@ object SessionActivityTracker {
      */
     private fun presenceKeepAliveEnabled(): Boolean {
         val ctx = appContext ?: return true
-        return ctx.getSharedPreferences(PRESENCE_KEEP_ALIVE_PREFS, Context.MODE_PRIVATE)
-            .getBoolean(PRESENCE_KEEP_ALIVE_KEY, true)
+        return com.openminis.app.config.Prefs.file(PRESENCE_KEEP_ALIVE_PREFS)
+            .bool(PRESENCE_KEEP_ALIVE_KEY, true)
     }
 
     /**

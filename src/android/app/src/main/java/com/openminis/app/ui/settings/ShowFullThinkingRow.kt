@@ -17,7 +17,7 @@ import com.openminis.app.ui.theme.IosIndigo
 const val KEY_SHOW_FULL_THINKING = "chat.showFullThinking"  // Boolean, default false
 
 fun showFullThinkingEnabled(context: Context): Boolean =
-    getAppearancePrefs(context).getBoolean(KEY_SHOW_FULL_THINKING, false)
+    getAppearancePrefs(context).bool(KEY_SHOW_FULL_THINKING, false)
 
 @Composable
 internal fun ShowFullThinkingRow(

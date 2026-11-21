@@ -19,14 +19,10 @@ object StorageScanner {
     )
 
     fun cachedRootfsBytes(context: Context): Long =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getLong(KEY_ROOTFS_BYTES, 0L)
+        com.openminis.app.config.Prefs.file(PREFS).long(KEY_ROOTFS_BYTES, 0L)
 
     fun saveRootfsBytes(context: Context, bytes: Long) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putLong(KEY_ROOTFS_BYTES, bytes)
-            .apply()
+        com.openminis.app.config.Prefs.file(PREFS).set(KEY_ROOTFS_BYTES, bytes)
     }
 
     fun directorySize(

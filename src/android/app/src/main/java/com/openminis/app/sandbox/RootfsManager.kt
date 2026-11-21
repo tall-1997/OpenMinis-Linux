@@ -174,10 +174,8 @@ class RootfsManager private constructor(private val context: Context) {
 
             // Flag a fresh install so MirrorSpeedTestViewModel.autoDetectOnceIfNeeded()
             // picks the fastest mirror for each category on first boot.
-            context.getSharedPreferences("mirror_settings", Context.MODE_PRIVATE)
-                .edit()
-                .putBoolean("rootfs.freshInstall", true)
-                .apply()
+            com.openminis.app.config.Prefs.file("mirror_settings")
+                .set("rootfs.freshInstall", true)
 
             Log.i(TAG, "Rootfs installation complete")
             _installState.value = RootfsInstallState.Installed
@@ -1224,31 +1222,30 @@ class RootfsManager private constructor(private val context: Context) {
         val stillMissing = names.filter { it !in installedPackageNames() }
         if (stillMissing.isEmpty()) {
             dpkgWorldFailedFile.delete()
-            context.getSharedPreferences("dpkg_world_retry", Context.MODE_PRIVATE)
-                .edit().putInt("strikes", 0).apply()
+            com.openminis.app.config.Prefs.file("dpkg_world_retry").set("strikes", 0)
             return
         }
         // Heal mirrors before spending a retry strike on a dead source.
         runCatching { runMinisMirrorAutoLocked() }
             .onFailure { Log.w(TAG, "[dpkg-world] minis-mirror auto failed (non-fatal): ${it.message}") }
 
-        val prefs = context.getSharedPreferences("dpkg_world_retry", Context.MODE_PRIVATE)
-        val strikes = prefs.getInt("strikes", 0)
+        val dpkgRetryPrefs = com.openminis.app.config.Prefs.file("dpkg_world_retry")
+        val strikes = dpkgRetryPrefs.int("strikes")
         if (strikes >= MAX_DPKG_WORLD_RETRY_STRIKES) {
             Log.w(TAG, "[dpkg-world] giving up after $strikes strikes")
             dpkgWorldFailedFile.delete()
-            prefs.edit().remove("strikes").apply()
+            dpkgRetryPrefs.remove("strikes")
             return
         }
         val result = runAptInstallInGuest(stillMissing)
         if (result.exitCode == 0) {
             dpkgWorldFailedFile.delete()
-            prefs.edit().putInt("strikes", 0).apply()
+            dpkgRetryPrefs.set("strikes", 0)
             Log.i(TAG, "[dpkg-world] retry restored ${stillMissing.size} package(s)")
         } else {
             val failed = extractFailedPackages(result.output, stillMissing)
             dpkgWorldFailedFile.writeText(failed.joinToString("\n") + "\n")
-            prefs.edit().putInt("strikes", strikes + 1).apply()
+            dpkgRetryPrefs.set("strikes", strikes + 1)
             Log.w(TAG, "[dpkg-world] retry failed strike=${strikes + 1} queued=${failed.size}")
         }
     }
@@ -1371,8 +1368,8 @@ class RootfsManager private constructor(private val context: Context) {
             pipWorldFailedFile.delete()
             return
         }
-        val prefs = context.getSharedPreferences("pip_world_retry", android.content.Context.MODE_PRIVATE)
-        val strikes = prefs.getInt("strikes", 0)
+        val pipRetryPrefs = com.openminis.app.config.Prefs.file("pip_world_retry")
+        val strikes = pipRetryPrefs.int("strikes")
         if (strikes >= MAX_PIP_WORLD_RETRY_STRIKES) {
             Log.w(TAG, "[pip-world] giving up after $strikes strikes")
             pipWorldFailedFile.delete()
@@ -1380,10 +1377,10 @@ class RootfsManager private constructor(private val context: Context) {
         }
         if (runPipInstallUnlocked(names)) {
             pipWorldFailedFile.delete()
-            prefs.edit().putInt("strikes", 0).apply()
+            pipRetryPrefs.set("strikes", 0)
             Log.i(TAG, "[pip-world] retry restored ${names.size} packages")
         } else {
-            prefs.edit().putInt("strikes", strikes + 1).apply()
+            pipRetryPrefs.set("strikes", strikes + 1)
             Log.w(TAG, "[pip-world] retry failed strike=${strikes + 1}")
         }
     }

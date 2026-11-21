@@ -36,6 +36,7 @@ import com.openminis.app.i18n.uppercaseForDisplay
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * Session Token Usage bottom sheet — mirrors iOS `TokenUsageSheet` and uses
@@ -172,7 +173,7 @@ fun TokenUsageSheet(
                         ContextBlockList(b)
                         Text(
                             text = stringResource(R.string.context_usage_note_estimate),
-                            fontSize = 12.sp,
+                            fontSize = MinisTypography.foot,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
@@ -291,7 +292,7 @@ private fun StatSection(title: String, content: @Composable () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(
             text = title.uppercaseForDisplay(),
-            fontSize = 12.sp,
+            fontSize = MinisTypography.foot,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(bottom = 6.dp),
@@ -310,14 +311,14 @@ private fun StatRow(label: String, value: String) {
     ) {
         Text(
             text = label,
-            fontSize = 14.sp,
+            fontSize = MinisTypography.bodyLg,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Spacer(modifier = Modifier.width(12.dp))
         Spacer(modifier = Modifier.weight(1f))
         Text(
             text = value,
-            fontSize = 14.sp,
+            fontSize = MinisTypography.bodyLg,
             fontFamily = FontFamily.Monospace,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -355,19 +356,19 @@ private fun ContextBlockList(data: ContextBreakdown) {
                 ) {
                     Text(
                         text = stringResource(block.key.labelRes()),
-                        fontSize = 14.sp,
+                        fontSize = MinisTypography.bodyLg,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         text = "${(block.share * 100).toInt()}%",
-                        fontSize = 12.sp,
+                        fontSize = MinisTypography.foot,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(modifier = Modifier.weight(1f))
                     Text(
                         text = formatTokens(block.tokens),
-                        fontSize = 14.sp,
+                        fontSize = MinisTypography.bodyLg,
                         fontFamily = FontFamily.Monospace,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

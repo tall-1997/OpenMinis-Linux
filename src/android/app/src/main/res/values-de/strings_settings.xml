@@ -75,4 +75,7 @@
     <string name="perm_vscreen_tiers_footer">Die vom Agenten verwalteten virtuellen Bildschirme wählen die beste verfügbare Stufe: root (privilegierter Bildschirm), Shizuku (öffentlicher Bildschirm) oder den In-App-Fallback. Eine höherer Stufe zu geben rüstet neue Bildschirme automatisch auf; laufende Bildschirme werden nie migriert.</string>
     <string name="provider_list_config_load_failed_banner">Die Anbieter-Konfiguration ließ sich nicht laden. Änderungen sind gesperrt, bis die App sie wieder lesen kann — probiere eine Anbieter-Aktion zum Wiederholen.</string>
     <string name="provider_share_no_credentials">Nichts zu teilen: Geteilte Exporte enthalten keine Zugangsdaten. Nutze das verschlüsselte Backup, um Schlüssel zu übertragen.</string>
+    <string name="cot_translate_retry">Erneut versuchen</string>
+    <string name="cot_translate_privacy_accept">Aktivieren</string>
+    <string name="cot_translate_privacy_decline">Abbrechen</string>
 </resources>

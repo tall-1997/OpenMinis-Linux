@@ -57,6 +57,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import com.openminis.app.ui.theme.decorRotationAngle
+import com.openminis.app.ui.tokens.MinisTypography
 
 
 /*
@@ -396,7 +397,7 @@ internal fun VoiceEngineUnavailableNotice(
 
             Text(
                 text = stringResource(R.string.voice_panel_no_engine_title),
-                style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
+                style = TextStyle(fontSize = MinisTypography.bodyLg, fontWeight = FontWeight.SemiBold),
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
@@ -409,7 +410,7 @@ internal fun VoiceEngineUnavailableNotice(
 
         Text(
             text = stringResource(R.string.voice_panel_no_engine_body),
-            style = TextStyle(fontSize = 12.sp),
+            style = TextStyle(fontSize = MinisTypography.foot),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
@@ -473,7 +474,7 @@ internal fun NoticeActionButton(label: String, onClick: () -> Unit) {
     ) {
         Text(
             text = label,
-            style = TextStyle(fontSize = 12.sp),
+            style = TextStyle(fontSize = MinisTypography.foot),
             color = MaterialTheme.colorScheme.onSurface,
         )
     }

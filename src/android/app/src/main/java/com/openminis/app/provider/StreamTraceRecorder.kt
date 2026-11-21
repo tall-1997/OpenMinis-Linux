@@ -49,14 +49,12 @@ object StreamTraceRecorder {
     fun setEnabled(enabled: Boolean, context: android.content.Context) {
         this.enabled = enabled
         baseDir = dir(context)
-        context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
-            .edit().putBoolean(PREFS_ENABLED, enabled).apply()
+        com.openminis.app.config.Prefs.file(PREFS).set(PREFS_ENABLED, enabled)
         if (!enabled) file.set(null)
     }
 
     fun restore(context: android.content.Context) {
-        enabled = context.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
-            .getBoolean(PREFS_ENABLED, false)
+        enabled = com.openminis.app.config.Prefs.file(PREFS).bool(PREFS_ENABLED, false)
         baseDir = dir(context)
     }
 

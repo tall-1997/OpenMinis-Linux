@@ -12,7 +12,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * 小号彩色徽标（Primary / Sub 等）。从 ModelGroupsScreen 抽出，守住架构行数上限。
@@ -30,7 +30,7 @@ internal fun BadgeLabel(text: String, color: Color) {
             style = MaterialTheme.typography.labelSmall,
             color = color,
             fontWeight = FontWeight.SemiBold,
-            fontSize = 11.sp,
+            fontSize = MinisTypography.cap,
         )
     }
 }

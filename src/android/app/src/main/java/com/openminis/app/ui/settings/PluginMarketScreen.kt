@@ -41,7 +41,7 @@ fun PluginMarketScreen(
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
-    var plugins by remember { mutableStateOf(PluginRegistry.cached(context)) }
+    var plugins by remember { mutableStateOf(PluginRegistry.cached()) }
     var loading by remember { mutableStateOf(true) }
     var status by remember { mutableStateOf("") }
     var keyTarget by remember { mutableStateOf<PluginRegistry.RemotePlugin?>(null) }
@@ -57,7 +57,7 @@ fun PluginMarketScreen(
 
     LaunchedEffect(Unit) {
         mcpRepository?.reloadFromDisk()
-        val result = withContext(Dispatchers.IO) { PluginRegistry.fetch(context) }
+        val result = withContext(Dispatchers.IO) { PluginRegistry.fetch() }
         plugins = result.first
         loading = false
         status = if (result.second) {

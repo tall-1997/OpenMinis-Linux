@@ -48,6 +48,7 @@ import com.openminis.app.scheduled.ScheduledTargetMode
 import com.openminis.app.scheduled.ScheduledTask
 import com.openminis.app.util.IsoTime
 import java.util.Calendar
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * Support pieces for [ScheduledTaskEditScreen] — pickers, row widgets and the
@@ -158,7 +159,7 @@ internal fun MessagePickerDialog(
                             Modifier.fillMaxWidth().clickable { onPick(m.id, m.preview) }
                                 .padding(vertical = 10.dp),
                         ) {
-                            Text(m.preview, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 14.sp)
+                            Text(m.preview, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = MinisTypography.bodyLg)
                         }
                     }
                 }
@@ -204,7 +205,7 @@ internal fun WorkspacePickerDialog(
                     ) { CircularProgressIndicator() }
                     list.isEmpty() -> Text(
                         stringResource(R.string.scheduled_task_no_folders),
-                        fontSize = 13.sp,
+                        fontSize = MinisTypography.body,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     else -> LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {

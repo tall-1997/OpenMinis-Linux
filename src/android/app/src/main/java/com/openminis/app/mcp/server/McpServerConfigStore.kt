@@ -38,23 +38,23 @@ class McpServerConfigStore(context: Context) {
         val shellPolicy: String = SHELL_POLICY_AUTO,
     )
 
-    private val prefs: SharedPreferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private val prefs: com.openminis.app.config.PrefsHandle = com.openminis.app.config.Prefs.file(PREFS)
     private val secretPrefs: SharedPreferences = EncryptedPrefsFactory.safeCreate(context, "mcp_server_secrets")
 
     private val _config = MutableStateFlow(load())
     val config: StateFlow<Config> = _config.asStateFlow()
 
     private fun load(): Config = Config(
-        enabled = prefs.getBoolean(KEY_ENABLED, false),
-        port = prefs.getInt(KEY_PORT, McpHttpServer.DEFAULT_PORT)
+        enabled = prefs.bool(KEY_ENABLED, false),
+        port = prefs.int(KEY_PORT, McpHttpServer.DEFAULT_PORT)
             .takeIf { McpHttpServer.validPort(it) } ?: McpHttpServer.DEFAULT_PORT,
         token = secretPrefs.getString(KEY_TOKEN, null)?.takeIf { it.isNotBlank() },
-        shellPolicy = prefs.getString(KEY_SHELL_POLICY, null)
+        shellPolicy = prefs.stringOrNull(KEY_SHELL_POLICY)
             ?.takeIf { validShellPolicy(it) } ?: SHELL_POLICY_AUTO,
     )
 
     fun setEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_ENABLED, enabled).apply()
+        prefs.set(KEY_ENABLED, enabled)
         if (enabled && secretPrefs.getString(KEY_TOKEN, null).isNullOrBlank()) {
             regenerateToken()
         } else {
@@ -64,14 +64,14 @@ class McpServerConfigStore(context: Context) {
 
     fun setPort(port: Int) {
         val valid = if (McpHttpServer.validPort(port)) port else McpHttpServer.DEFAULT_PORT
-        prefs.edit().putInt(KEY_PORT, valid).apply()
+        prefs.set(KEY_PORT, valid)
         _config.value = load()
     }
 
     /** Persist shell_exec gate policy ("auto"|"strict"). Invalid values are ignored. */
     fun setShellPolicy(policy: String) {
         if (!validShellPolicy(policy)) return
-        prefs.edit().putString(KEY_SHELL_POLICY, policy).apply()
+        prefs.set(KEY_SHELL_POLICY, policy)
         _config.value = load()
     }
 

@@ -75,4 +75,7 @@
     <string name="perm_vscreen_tiers_footer">Las pantallas virtuales del agente eligen el mejor nivel disponible: root (pantalla privilegiada), Shizuku (pantalla pública) o el respaldo en la app. Conceder un nivel superior actualiza las pantallas nuevas automáticamente; las pantallas en vivo nunca se migran.</string>
     <string name="provider_list_config_load_failed_banner">No se pudo cargar la configuración de proveedores. Los cambios quedan bloqueados hasta que la app pueda leerla de nuevo — prueba una acción de proveedor para reintentar.</string>
     <string name="provider_share_no_credentials">Nada que compartir: las credenciales quedan excluidas de los exportes compartidos. Usa la copia de seguridad cifrada para mover claves.</string>
+    <string name="cot_translate_retry">Reintentar</string>
+    <string name="cot_translate_privacy_accept">Activar</string>
+    <string name="cot_translate_privacy_decline">Cancelar</string>
 </resources>

@@ -123,12 +123,12 @@ object UpdateSourceRegistry {
 
     /** The user's saved source pick, or null (no preference yet). */
     fun preferredSourceId(context: Context): String? =
-        requirePrefs(context).getString(KEY_PREFERRED, null)
+        requirePrefs().stringOrNull(KEY_PREFERRED)
 
     /** Persist the user's source pick (validated against [SOURCES]). */
     fun setPreferredSourceId(context: Context, id: String) {
         if (SOURCES.none { it.id == id }) return
-        requirePrefs(context).edit().putString(KEY_PREFERRED, id).apply()
+        requirePrefs().set(KEY_PREFERRED, id)
         AppLogger.info(TAG, "preferred source set to $id")
     }
 
@@ -138,13 +138,13 @@ object UpdateSourceRegistry {
      * Default false: stable users never see a CI build unless they opt in.
      */
     fun includeRolling(context: Context): Boolean =
-        requirePrefs(context).getBoolean(KEY_INCLUDE_ROLLING, false)
+        requirePrefs().bool(KEY_INCLUDE_ROLLING, false)
 
     fun setIncludeRolling(context: Context, value: Boolean) {
-        requirePrefs(context).edit().putBoolean(KEY_INCLUDE_ROLLING, value).apply()
+        requirePrefs().set(KEY_INCLUDE_ROLLING, value)
         AppLogger.info(TAG, "include rolling channel = $value")
     }
 
-    private fun requirePrefs(context: Context) =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private fun requirePrefs() =
+        com.openminis.app.config.Prefs.file(PREFS)
 }

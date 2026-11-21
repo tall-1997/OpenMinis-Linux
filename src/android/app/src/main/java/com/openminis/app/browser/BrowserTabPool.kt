@@ -272,24 +272,22 @@ class BrowserTabPool(private val context: Context) {
 
     init {
         // Restore persisted User-Agent profile from SharedPreferences so pool-owned
-        // WebViews start in the correct mode (Mobile vs Desktop) and
-        // captureWebViewBitmap() uses the matching viewport.
-        val prefs = context.getSharedPreferences("browser_prefs", Context.MODE_PRIVATE)
-        val profileName = prefs.getString("user_agent_profile", null)
+        // WebViews start in Mobile vs Desktop mode; captureWebViewBitmap() uses this too.
+        val browserPrefs = com.openminis.app.config.Prefs.file("browser_prefs")
+        val profileName = browserPrefs.stringOrNull("user_agent_profile")
         if (profileName != null) {
             runCatching { UserAgentProfile.valueOf(profileName) }.getOrNull()?.let {
                 _userAgentProfile.value = it
             }
         }
-        customUserAgentString = prefs.getString("custom_user_agent", null)?.ifEmpty { null }
-
+        customUserAgentString = browserPrefs.stringOrNull("custom_user_agent")?.ifEmpty { null }
         // Restore global custom viewport (0 = unset → fall back to UA profile).
         // Mirrors iOS `BrowserCustomViewport{Width,Height}` UserDefaults keys.
-        _customViewportWidth.value = prefs.getInt(PREF_GLOBAL_VIEWPORT_WIDTH, 0).coerceAtLeast(0)
-        _customViewportHeight.value = prefs.getInt(PREF_GLOBAL_VIEWPORT_HEIGHT, 0).coerceAtLeast(0)
+        _customViewportWidth.value = browserPrefs.int(PREF_GLOBAL_VIEWPORT_WIDTH, 0).coerceAtLeast(0)
+        _customViewportHeight.value = browserPrefs.int(PREF_GLOBAL_VIEWPORT_HEIGHT, 0).coerceAtLeast(0)
 
         // Load user-configured idle timeout (default 15 min, matches iOS).
-        val storedMinutes = prefs.getInt(PREF_IDLE_TIMEOUT_MINUTES, DEFAULT_IDLE_TIMEOUT_MINUTES)
+        val storedMinutes = browserPrefs.int(PREF_IDLE_TIMEOUT_MINUTES, DEFAULT_IDLE_TIMEOUT_MINUTES)
         idleTimeoutMs = storedMinutes.coerceIn(MIN_IDLE_TIMEOUT_MINUTES, MAX_IDLE_TIMEOUT_MINUTES) * 60_000L
 
         // Start idle tab eviction timer (60-second interval, matching iOS)
@@ -316,8 +314,7 @@ class BrowserTabPool(private val context: Context) {
     fun setIdleTimeoutMinutes(minutes: Int) {
         val clamped = minutes.coerceIn(MIN_IDLE_TIMEOUT_MINUTES, MAX_IDLE_TIMEOUT_MINUTES)
         idleTimeoutMs = clamped * 60_000L
-        val prefs = context.getSharedPreferences("browser_prefs", Context.MODE_PRIVATE)
-        prefs.edit().putInt(PREF_IDLE_TIMEOUT_MINUTES, clamped).apply()
+        com.openminis.app.config.Prefs.file("browser_prefs").set(PREF_IDLE_TIMEOUT_MINUTES, clamped)
         Log.i(TAG, "Idle timeout set to $clamped min")
     }
 
@@ -1238,11 +1235,11 @@ class BrowserTabPool(private val context: Context) {
     suspend fun setGlobalViewport(width: Int, height: Int) {
         _customViewportWidth.value = width.coerceAtLeast(0)
         _customViewportHeight.value = height.coerceAtLeast(0)
-        val prefs = context.getSharedPreferences("browser_prefs", Context.MODE_PRIVATE)
-        prefs.edit()
-            .putInt(PREF_GLOBAL_VIEWPORT_WIDTH, _customViewportWidth.value)
-            .putInt(PREF_GLOBAL_VIEWPORT_HEIGHT, _customViewportHeight.value)
-            .apply()
+        // 宽高一起写：只写一个会让下次恢复时出现「宽度是新的、高度还是旧的」
+        com.openminis.app.config.Prefs.file("browser_prefs").write {
+            putInt(PREF_GLOBAL_VIEWPORT_WIDTH, _customViewportWidth.value)
+            putInt(PREF_GLOBAL_VIEWPORT_HEIGHT, _customViewportHeight.value)
+        }
         applyViewportToAllTabs()
     }
 

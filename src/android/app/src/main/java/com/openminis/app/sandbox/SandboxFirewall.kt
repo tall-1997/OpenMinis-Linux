@@ -41,18 +41,12 @@ object SandboxFirewall {
     private var wifiCallback: ConnectivityManager.NetworkCallback? = null
 
     fun policy(context: Context): Policy {
-        val raw = context.applicationContext
-            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(KEY_POLICY, Policy.ALLOW.wire)
+        val raw = com.openminis.app.config.Prefs.file(PREFS).string(KEY_POLICY, Policy.ALLOW.wire)
         return Policy.parse(raw)
     }
 
     fun setPolicy(context: Context, policy: Policy) {
-        context.applicationContext
-            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putString(KEY_POLICY, policy.wire)
-            .apply()
+        com.openminis.app.config.Prefs.file(PREFS).set(KEY_POLICY, policy.wire)
         syncHttpProxy(context, policy)
     }
 

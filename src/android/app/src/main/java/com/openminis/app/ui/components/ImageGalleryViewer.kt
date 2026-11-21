@@ -57,6 +57,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * One image in an [ImageGalleryViewer]. [model] is anything Coil's
@@ -226,7 +227,7 @@ fun ImageGalleryViewer(
                                 Text(
                                     text = currentItem.caption,
                                     color = Color.White,
-                                    fontSize = 12.sp,
+                                    fontSize = MinisTypography.foot,
                                     fontWeight = FontWeight.Medium,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
