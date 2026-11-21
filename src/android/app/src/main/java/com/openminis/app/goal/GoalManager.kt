@@ -82,18 +82,28 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
      *  Fields are clamped here — the single choke point for ALL contract
      *  writers — because these strings render into EVERY request prompt:
      *  an unbounded write would inflate the prompt for the rest of the
-     *  session. Matches the P0 plan's 800-char contract ceiling. */
+     *  session. Matches the P0 plan's 800-char contract ceiling.
+     *
+     *  [T-goal-contract-keep-old] A null field means "leave untouched", not
+     *  "erase": omitted fields are resolved from the stored row inside the
+     *  session lock, so any direct caller gets the same keep-old semantics
+     *  the GoalTool's pick() pre-resolution provides. An explicit blank
+     *  string still clears the field. */
     suspend fun updateContract(
         sessionId: String,
         acceptance: String? = null,
         constraints: String? = null,
         nextStep: String? = null,
     ): SessionGoalEntity? = locked(sessionId) {
+        val current = persistence.load(sessionId)
+        val resolvedAcceptance = (acceptance ?: current?.acceptance)?.clampContract()
+        val resolvedConstraints = (constraints ?: current?.constraints)?.clampContract()
+        val resolvedNextStep = (nextStep ?: current?.nextStep)?.clampContract()
         persistence.saveContract(
             sessionId,
-            acceptance?.clampContract(),
-            constraints?.clampContract(),
-            nextStep?.clampContract(),
+            resolvedAcceptance,
+            resolvedConstraints,
+            resolvedNextStep,
             System.currentTimeMillis(),
         )
         persistence.load(sessionId)?.also { bump() }
