@@ -867,7 +867,11 @@
     <string name="newer_db_body">Эта копия Minis Ultra старше той, что создала ваши данные, поэтому не может безопасно их открыть.\n\nНичего не удалено — ваши переписки на устройстве целы. Переустановите более новую версию Minis Ultra, и всё вернётся на место.</string>
     <string name="newer_db_versions">Эта версия поддерживает формат данных %1$d</string>
     <string name="newer_db_exit">Закрыть</string>
-    <string name="usage_attr_unknown_session">Модель неизвестна — запись сессии была удалена</string>
+        <string name="degraded_startup_title">Не удалось загрузить некоторые компоненты запуска</string>
+    <string name="degraded_startup_body">Приложение работает с ограниченной функциональностью. Некоторые функции могут быть недоступны до перезапуска.</string>
+    <string name="degraded_startup_cause">Причина: %1$s</string>
+    <string name="degraded_startup_dismiss">Закрыть</string>
+<string name="usage_attr_unknown_session">Модель неизвестна — запись сессии была удалена</string>
     <string name="usage_attr_removed">Больше нет среди ваших настроенных провайдеров</string>
     <string name="usage_detail_output">Выходные</string>
     <string name="usage_detail_daily_avg">Среднее за день</string>

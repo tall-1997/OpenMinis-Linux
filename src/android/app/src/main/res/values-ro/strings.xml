@@ -866,7 +866,11 @@
     <string name="newer_db_body">Această copie a aplicației Minis Ultra este mai veche decât versiunea care ți-a creat datele, așa că nu le poate deschide în siguranță.\n\nNu s-a șters nimic — conversațiile tale sunt intacte pe acest dispozitiv. Reinstalează versiunea mai nouă de Minis Ultra și totul va fi la locul lui.</string>
     <string name="newer_db_versions">Această versiune acceptă formatul de date %1$d</string>
     <string name="newer_db_exit">Închide</string>
-    <string name="usage_attr_unknown_session">Model necunoscut — înregistrarea sesiunii a fost ștearsă</string>
+        <string name="degraded_startup_title">Unele componente de pornire nu au putut fi încărcate</string>
+    <string name="degraded_startup_body">Aplicația rulează cu funcționalitate redusă. Unele funcții pot fi indisponibile până la repornire.</string>
+    <string name="degraded_startup_cause">Cauză: %1$s</string>
+    <string name="degraded_startup_dismiss">Închide</string>
+<string name="usage_attr_unknown_session">Model necunoscut — înregistrarea sesiunii a fost ștearsă</string>
     <string name="usage_attr_removed">Nu mai există printre furnizorii configurați</string>
     <string name="usage_detail_output">Ieșire</string>
     <string name="usage_detail_daily_avg">Medie zilnică</string>

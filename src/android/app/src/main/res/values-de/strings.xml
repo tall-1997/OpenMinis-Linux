@@ -864,7 +864,11 @@
     <string name="newer_db_body">Diese Kopie von Minis Ultra ist älter als die Version, die Ihre Daten erstellt hat, und kann sie daher nicht sicher öffnen.\n\nEs wurde nichts gelöscht — Ihre Unterhaltungen sind auf diesem Gerät unversehrt. Installieren Sie die neuere Version von Minis Ultra erneut, dann ist alles wieder da.</string>
     <string name="newer_db_versions">Diese Version unterstützt Datenformat %1$d</string>
     <string name="newer_db_exit">Schließen</string>
-    <string name="usage_attr_unknown_session">Modell unbekannt — der Sitzungseintrag wurde gelöscht</string>
+        <string name="degraded_startup_title">Einige Startkomponenten konnten nicht geladen werden</string>
+    <string name="degraded_startup_body">Die App läuft mit eingeschränktem Funktionsumfang. Einige Funktionen sind möglicherweise erst nach einem Neustart verfügbar.</string>
+    <string name="degraded_startup_cause">Ursache: %1$s</string>
+    <string name="degraded_startup_dismiss">Schließen</string>
+<string name="usage_attr_unknown_session">Modell unbekannt — der Sitzungseintrag wurde gelöscht</string>
     <string name="usage_attr_removed">Nicht mehr unter Ihren eingerichteten Anbietern</string>
     <string name="usage_detail_output">Ausgabe</string>
     <string name="usage_detail_daily_avg">Tagesdurchschnitt</string>

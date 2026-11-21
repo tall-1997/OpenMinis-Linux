@@ -864,7 +864,11 @@
     <string name="newer_db_body">Esta copia de Minis Ultra es más antigua que la que creó tus datos, así que no puede abrirlos de forma segura.\n\nNo se ha eliminado nada: tus conversaciones siguen intactas en este dispositivo. Vuelve a instalar la versión más reciente de Minis Ultra y todo estará ahí.</string>
     <string name="newer_db_versions">Esta versión admite el formato de datos %1$d</string>
     <string name="newer_db_exit">Cerrar</string>
-    <string name="usage_attr_unknown_session">Modelo desconocido: se eliminó el registro de la sesión</string>
+        <string name="degraded_startup_title">Algunos componentes de inicio no se cargaron</string>
+    <string name="degraded_startup_body">La app funciona con funcionalidad reducida. Algunas funciones pueden no estar disponibles hasta que se reinicie.</string>
+    <string name="degraded_startup_cause">Causa: %1$s</string>
+    <string name="degraded_startup_dismiss">Cerrar</string>
+<string name="usage_attr_unknown_session">Modelo desconocido: se eliminó el registro de la sesión</string>
     <string name="usage_attr_removed">Ya no está entre tus proveedores configurados</string>
     <string name="usage_detail_output">Salida</string>
     <string name="usage_detail_daily_avg">Prom. diario</string>

@@ -865,7 +865,11 @@
     <string name="newer_db_body">Mas luma ang kopyang ito ng Minis Ultra kaysa sa bersyong gumawa ng data mo, kaya hindi ito ligtas na mabubuksan.\n\nWalang nabura — buo pa rin ang mga usapan mo sa device na ito. I-install muli ang mas bagong bersyon ng Minis Ultra at babalik ang lahat.</string>
     <string name="newer_db_versions">Sinusuportahan ng bersyong ito ang data format %1$d</string>
     <string name="newer_db_exit">Isara</string>
-    <string name="usage_attr_unknown_session">Hindi alam ang model — nabura na ang record ng session</string>
+        <string name="degraded_startup_title">May mga bahagi ng pag-startup na hindi na-load</string>
+    <string name="degraded_startup_body">Tumatakbo ang app na may pinait na functionality. Ang ilang feature ay maaaring hindi magamit hanggang sa i-restart ito.</string>
+    <string name="degraded_startup_cause">Dahilan: %1$s</string>
+    <string name="degraded_startup_dismiss">Isara</string>
+<string name="usage_attr_unknown_session">Hindi alam ang model — nabura na ang record ng session</string>
     <string name="usage_attr_removed">Wala na sa mga provider na naitakda mo</string>
     <string name="usage_detail_output">Output</string>
     <string name="usage_detail_daily_avg">Average Kada Araw</string>
