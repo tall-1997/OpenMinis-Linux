@@ -79,9 +79,10 @@
       "keys": {
         "LITERAL_voice_in": "voice.input.overrideEntryId",
         "LITERAL_voice_out": "voice.output.overrideEntryId",
-        "LITERAL_last_used": "lastUsedModelEntryId"
+        "LITERAL_last_used": "lastUsedModelEntryId",
+        "LITERAL_config": "config"
       },
-      "reason": "dynamic-prefix ×4: keypool_<instanceId>（凭据池）、modelsLastFetchAt_<instanceId>（模型目录缓存时间）、voiceShadowDisabled.<instanceId>（语音影子开关）；另 3 个字面量键直接写在源码里",
+      "reason": "dynamic-prefix ×4: keypool_<instanceId>（凭据池）、modelsLastFetchAt_<instanceId>（模型目录缓存时间）、voiceShadowDisabled.<instanceId>（语音影子开关）；另 4 个字面量键直接写在源码里。config 是 downgrade 兼容 JSON 镜像（ProviderRepositoryLoad.stringOrNull(\"config\") / Persist.set(\"config\")），漏登记会让 PrefsHandle.check 抛 IllegalArgumentException，导致初始 config 加载必然失败、addInstance 返回 false —— 实测就是这个让 ProviderRepository 永远停在未加载状态。",
       "dynPrefixes": [
         "keypool_",
         "modelsLastFetchAt_",

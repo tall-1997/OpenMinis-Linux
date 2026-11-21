@@ -1365,6 +1365,7 @@
         "data/repository/ProviderConfigStore.kt"
       ],
       "keys": {
+        "LITERAL_config": "config",
         "LITERAL_last_used": "lastUsedModelEntryId",
         "LITERAL_voice_in": "voice.input.overrideEntryId",
         "LITERAL_voice_out": "voice.output.overrideEntryId"
@@ -6708,7 +6709,7 @@
   "totals": {
     "prefs_files": 103,
     "prefs_encrypted": 10,
-    "key_constants_attributed": 187,
+    "key_constants_attributed": 188,
     "orphan_keys": 34,
     "usage_sites": 181,
     "usage_files": 108,
