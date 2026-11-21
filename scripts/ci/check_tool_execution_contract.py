@@ -92,8 +92,20 @@ check("handle.channel.lock().use" in store and "ATOMIC_MOVE, REPLACE_EXISTING" i
 for path in ("ChatViewModelGroupChatSpeak.kt", "ChatViewModelSubAgentRun.kt",
              "ChatViewModelSupervisorExt.kt", "ChatViewModelToolReceipts.kt"):
     code = source("ui/chat/" + path)
-    check(re.search(r"\bexecuteTool\([^\n]+receiptScope\s*=", code) is not None,
-          f"{path} must dispatch nested tools with the owning receipt scope")
+    # The VALUE matters, not just the keyword: `receiptScope = null` is exactly
+    # the regression this guard exists for — every receipted tool then fails
+    # closed with "no stable call identity" while the check still reads green.
+    scopes = re.findall(r"\bexecuteTool\([^\n]*?receiptScope\s*=\s*([^,)\n]+)", code)
+    check(bool(scopes), f"{path} must dispatch nested tools with the owning receipt scope")
+    check(all(s.strip() != "null" for s in scopes),
+          f"{path} must never dispatch nested tools with a null receipt scope")
+
+# The per-lane worker scopes are built here; a null element silently disarms a
+# whole spawn batch, and this file was not covered by the per-caller check above.
+spawn = source("ui/chat/ChatViewModelSubAgentExt.kt")
+check(re.search(r"receiptScopes\s*=\s*spawns\.indices\.map\s*\{", spawn) is not None
+      and re.search(r"receiptScopes\s*=\s*spawns\.indices\.map\s*\{\s*null\s*\}", spawn) is None,
+      "ChatViewModelSubAgentExt.kt must build one non-null receipt scope per spawned worker")
 
 if errors:
     print("tool execution contract: FAIL")

@@ -161,27 +161,9 @@ class ResidentWindowTest {
     }
 
     @Test
-    fun `the count cut respects the same orphaning rule`() {
-        // 10 self-contained tool turns plus a plain tail. Any of the tool
-        // turns is a legal boundary because it carries its own tool use.
-        val history = (0 until 10).map { toolTurn("t$it", 8) } + listOf(text("tail"))
-        val cut = ResidentWindow.countCut(history, maxMessages = 4)
-        assertTrue("must cut: $cut", cut > 0)
-        val kept = history.subList(cut, history.size)
-        assertTrue("kept=${kept.size}", kept.size <= 4)
-        val first = kept.first().contentParts
-        assertTrue(
-            "first retained entry must not be a bare tool result",
-            first.none { it is AgentContentPart.ToolResult } ||
-                first.any { it is AgentContentPart.ToolUse },
-        )
-    }
-
-    @Test
     fun `a history within budget is left alone`() {
         val history = listOf(text("short"), text("also short"))
         assertEquals(0, ResidentWindow.byteCut(history))
-        assertEquals(0, ResidentWindow.countCut(history, maxMessages = 400))
     }
 
     @Test

@@ -48,7 +48,7 @@ object MemoryCenterStats {
         val shared = File(filesDir, MemoryIndex.SHARED_DIR)
         val sharedFiles = shared.listFiles()?.filter { it.isFile && it.extension == "md" }.orEmpty()
 
-        var recalled = jsonKeyCount(File(shared, RECALL_SIDECAR))
+        var recalled = 0
         var blockedRepeats = 0
         var sediments = 0
         var scanned = 0
@@ -62,16 +62,38 @@ object MemoryCenterStats {
 
         val sessionMemories = sessions.map { session ->
             blockedRepeats += jsonKeyCount(File(session, FAILURE_LEDGER))
-            File(session, "memory").also { recalled += jsonKeyCount(File(it, RECALL_SIDECAR)) }
+            File(session, "memory")
         }
         for (memory in sessionMemories + shared) {
-            if (scanned >= MAX_FILES_SCANNED) break
+            // [T-memory-center-distinct] The legacy `.recall-counts.json` sidecar
+            // is frozen (nothing writes it since delivery receipts landed) but
+            // still describes entries served before the upgrade. Summing its key
+            // count with the lifecycle counter counted any entry that was served
+            // both before and after the upgrade twice, so "distinct entries
+            // served at least once" could read nearly 2×. Match the old keys to
+            // the entries that own them and count the union.
+            val sidecarKeys = recallSidecarKeys(File(memory, RECALL_SIDECAR))
+            val matchedKeys = HashSet<String>()
+            var complete = true
             val diaries = memory.listFiles().orEmpty().filter { it.isFile && DAILY.matches(it.name) }
             for (file in diaries) {
-                if (scanned >= MAX_FILES_SCANNED) break
+                if (scanned >= MAX_FILES_SCANNED) {
+                    complete = false
+                    break
+                }
                 scanned += 1
                 val diary = MemoryLifecycle.read(memory, file.name) ?: continue
-                recalled += diary.managed().count { it.state.usage > 0 }
+                val day = if (file.name == MemoryRepository.GLOBAL_FILE) "global" else file.name.removeSuffix(".md")
+                for (entry in diary.managed()) {
+                    val legacyKey = if (sidecarKeys.isEmpty()) null
+                    else MemoryRecallEngine.recallCountKey(day, entry.body)
+                    if (legacyKey != null && legacyKey in sidecarKeys) {
+                        matchedKeys += legacyKey
+                        recalled += 1
+                    } else if (entry.state.usage > 0) {
+                        recalled += 1
+                    }
+                }
                 if (memory != shared) {
                     var index = diary.text.indexOf(SEDIMENT_MARKER)
                     while (index >= 0) {
@@ -80,6 +102,9 @@ object MemoryCenterStats {
                     }
                 }
             }
+            // Keys that no surviving entry claims (a deleted or edited diary)
+            // still happened; count them once when the walk covered the scope.
+            if (complete && sidecarKeys.isNotEmpty()) recalled += (sidecarKeys - matchedKeys).size
         }
 
         return Snapshot(
@@ -94,5 +119,30 @@ object MemoryCenterStats {
     private fun jsonKeyCount(file: File): Int {
         if (!file.isFile) return 0
         return runCatching { org.json.JSONObject(file.readText()).length() }.getOrDefault(0)
+    }
+
+    private val OPAQUE_COUNT_KEY = Regex("v2:[0-9a-f]{64}")
+
+    /**
+     * The sidecar's key set, normalized the same way [MemoryRecallEngine] loads
+     * it, so a legacy `day:line` key resolves to the v2 hash the entry itself
+     * produces.
+     */
+    private fun recallSidecarKeys(file: File): Set<String> {
+        if (!file.isFile) return emptySet()
+        return runCatching {
+            val obj = org.json.JSONObject(file.readText())
+            buildSet {
+                val keys = obj.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    if (key.isBlank() || obj.optInt(key, 0) <= 0) continue
+                    add(
+                        if (OPAQUE_COUNT_KEY.matches(key)) key
+                        else MemoryRecallEngine.recallCountKey(key.substringBefore(':'), key.substringAfter(':', "")),
+                    )
+                }
+            }
+        }.getOrDefault(emptySet())
     }
 }

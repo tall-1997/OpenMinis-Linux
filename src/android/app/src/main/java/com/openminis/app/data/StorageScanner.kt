@@ -65,18 +65,27 @@ object StorageScanner {
     }
 
     private fun runDuKilobytes(cmd: List<String>, timeoutSec: Long): Long? {
+        var process: Process? = null
         return try {
             val p = ProcessBuilder(cmd).redirectErrorStream(true).start()
-            val line = p.inputStream.bufferedReader().use { it.readLine() }
-            val finished = p.waitFor(timeoutSec, TimeUnit.SECONDS)
-            if (!finished) {
+            process = p
+            // [T-du-deadline-first] `du -sk` prints its summary only after it has
+            // walked the whole tree, so reading the pipe first blocks for the
+            // entire traversal and the `waitFor` below never gets a chance to
+            // time out — a large rootfs parked this on the IO thread forever
+            // (and a cancelled coroutine cannot interrupt a blocking read).
+            // Wait on the deadline first; only then drain the output.
+            if (!p.waitFor(timeoutSec, TimeUnit.SECONDS)) {
                 p.destroyForcibly()
                 return null
             }
+            val line = p.inputStream.bufferedReader().use { it.readLine() }
             if (p.exitValue() != 0 || line.isNullOrBlank()) return null
             line.trim().substringBefore('\t').substringBefore(' ').toLongOrNull()
         } catch (_: Exception) {
             null
+        } finally {
+            process?.destroyForcibly()
         }
     }
 

@@ -3346,4 +3346,5 @@
     <string name="modeldetail_tail_budget">Budżet końcówki</string>
     <string name="modeldetail_tail_budget_state_auto">Automatyczny (skaluje się z oknem, do 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Własny dla tego modelu</string>
+    <string name="tool_limits_tool_concurrency">Narzędzia odczytu równoległego</string>
 </resources>

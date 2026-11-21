@@ -3338,4 +3338,5 @@
     <string name="modeldetail_tail_budget">末尾予算</string>
     <string name="modeldetail_tail_budget_state_auto">自動（ウィンドウに合わせて調整、最大60k）</string>
     <string name="modeldetail_tail_budget_state_specific">このモデル専用</string>
+    <string name="tool_limits_tool_concurrency">並列読み取りツール数</string>
 </resources>

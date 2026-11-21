@@ -14,6 +14,10 @@ object ResourceLimits {
     // [Wave3-fix-7] MAX_EXPANSION_RATIO (32) deleted with the BodyStore DEFLATE
     // read branch — it guarded only that inflate path, which had no writer.
     const val MAX_DECLARED_UNCOMPRESSED = 8 * 1024 * 1024
+    /** One remote skill document (SKILL.md / GitHub listing) materialised in memory. */
+    const val SKILL_DOC_BYTES = 2L * 1024 * 1024
+    /** One remote skill asset blob materialised in memory. */
+    const val SKILL_ASSET_BYTES = 8L * 1024 * 1024
     /** One session load may materialize at most this many preview bytes. */
     const val SESSION_PREVIEW_BUDGET = 1024 * 1024
     /**

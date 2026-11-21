@@ -434,17 +434,6 @@ object ToolOutputSpill {
             null
         }
     }
-
-    /** Publish the same recoverable guest path format for progressive trimming. */
-    fun offloadForTrim(context: Context, sessionId: String, toolId: String, content: String): String? {
-        if (!canReadInChat(context, sessionId)) return null
-        val filesDir = context.filesDir
-        val existing = declaredSpillPath(content)
-        if (isOffloadPlaceholder(content)) {
-            return existing?.takeIf { hostFile(filesDir, sessionId, it) != null }
-        }
-        return offloadInSession(filesDir, sessionId, "trim-$toolId", content)
-    }
 }
 
 internal enum class SpillPlan { PASSTHROUGH, ALREADY_SPILLED, CAPPED, WRITE }

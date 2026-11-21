@@ -324,10 +324,22 @@ object BackupZip {
     }
 
     private fun isMemoryMarkdownEntry(name: String): Boolean {
-        val parts = name.replace('\\', '/').split('/').filter { it.isNotEmpty() }
-        return parts.size in 3..4 && parts.takeLast(3).let {
+        // [T-backup-memory-mtime] Encrypted packages rename every member to
+        // `<name>.enc`, so the logical name has to be unwrapped first; and the
+        // mtime fallback must cover BOTH memory trees — global (`data/memory`)
+        // and per-chat (`chats/<sid>/memory`). Missing the session tree left
+        // every restored diary stamped "now", which `MemoryMetadata.isExpired`
+        // then read as fresh and un-expired an old TTL'd note.
+        val logical = name.replace('\\', '/').let { if (it.endsWith(".enc")) it.dropLast(4) else it }
+        val parts = logical.split('/').filter { it.isNotEmpty() }
+        if (parts.isEmpty() || !BackupDiaryPairs.isMemoryMarkdown(parts.last())) return false
+        val global = parts.size in 3..4 && parts.takeLast(3).let {
             it[0] == "data" && it[1] == "memory" && BackupDiaryPairs.isMemoryMarkdown(it[2])
         }
+        val session = parts.size >= 4 && parts.takeLast(4).let {
+            it[0] == "chats" && it[2] == "memory" && BackupDiaryPairs.isMemoryMarkdown(it[3])
+        }
+        return global || session
     }
 
     /**

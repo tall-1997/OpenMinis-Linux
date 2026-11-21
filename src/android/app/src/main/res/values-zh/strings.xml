@@ -2974,4 +2974,5 @@
     <string name="modeldetail_tail_budget">尾部预算</string>
     <string name="modeldetail_tail_budget_state_auto">自动（随窗口缩放，最多 60k）</string>
     <string name="modeldetail_tail_budget_state_specific">当前模型自定义</string>
+    <string name="tool_limits_tool_concurrency">并行读工具数</string>
 </resources>

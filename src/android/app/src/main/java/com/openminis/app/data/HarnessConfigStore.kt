@@ -92,9 +92,9 @@
             return runCatching { !target.exists() || target.delete() }.getOrDefault(false)
         }
         val valid = runCatching { config.validated() }.getOrNull() ?: return false
+        val tmp = File(target.parentFile, "${target.name}.tmp")
         return runCatching {
             target.parentFile?.mkdirs()
-            val tmp = File(target.parentFile, "${target.name}.tmp")
             tmp.writeText(toJson(valid), Charsets.UTF_8)
             java.nio.file.Files.move(
                 tmp.toPath(), target.toPath(),
@@ -104,7 +104,12 @@
                 cache[key] = Entry(target.lastModified(), valid)
             }
             true
-        }.getOrDefault(false)
+        }.getOrDefault(false).also {
+            // A failed write must not leave a half-written sidecar behind: the
+            // next save reuses the same name, and a stale .tmp is invisible to
+            // every reader (including the diagnostics that show this directory).
+            if (tmp.exists()) runCatching { tmp.delete() }
+        }
     }
 
     /** Serialize every field, so a future addition is a visible diff. */

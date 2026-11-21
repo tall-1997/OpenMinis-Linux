@@ -96,6 +96,14 @@ class SecurityGateImpl : SecurityGate {
             "web_search", "web_fetch", "search_sessions", "read_session",
             "read_image", "describe_image",
             "code_graph", "ocr_image", "get_screen_time",
+            // [T-history-tools-readonly] Scoped transcript search/read: this
+            // session's own rows, already redacted, no FS or network reach.
+            // Without these two the default ASK mode raised an approval sheet
+            // for them (and a headless run waited out the 90s approval timeout
+            // and refused), which made the very tool #401 added for long-run
+            // recall unusable exactly where it was needed.
+            com.openminis.app.tools.HistorySearchTool.SEARCH,
+            com.openminis.app.tools.HistorySearchTool.READ,
         )
         val WRITE_TOOLS = setOf(
             "file_write", "file_edit", "multi_edit", "su_exec",
@@ -159,6 +167,11 @@ class SecurityGateImpl : SecurityGate {
             "browser_use" -> classifyBrowserUse(toolArgs)
             "ocr_image" -> GateCommand(name, toolArgs, Capability.FS, Reversibility.REVERSIBLE, "只读图片文字")
             "get_screen_time" -> GateCommand(name, toolArgs, Capability.SYSTEM, Reversibility.REVERSIBLE, "只读屏幕使用时间")
+            // [T-history-tools-readonly] Same trust domain as memory_get search:
+            // the app's own transcript rows, no guest FS, no network.
+            com.openminis.app.tools.HistorySearchTool.SEARCH,
+            com.openminis.app.tools.HistorySearchTool.READ,
+            -> GateCommand(name, toolArgs, Capability.SYSTEM, Reversibility.REVERSIBLE, "Read-only session history")
             "execute_code", "code_exec" ->
                 GateCommand(name, toolArgs, Capability.SYSTEM, Reversibility.REVERSIBLE, "沙箱代码执行")
             "spawn_agent", "run_subagent", "dispatch_agents", "wolfpack_run" ->

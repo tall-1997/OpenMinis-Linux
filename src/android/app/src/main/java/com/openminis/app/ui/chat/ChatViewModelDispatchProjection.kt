@@ -85,6 +85,16 @@ internal suspend fun ChatViewModel.buildDispatchProjection(
     if (activeSessionId != sessionId) return@withContext null
     val clock = requestClockNote(sessionId, history)
     val digest = HistoryDigest.render(llmDigestLines, llmDigestOmitted)
+    // [T-digest-covers-gap] Coverage gaps are no longer an input to compaction,
+    // so the digest is the only thing standing between the model and a silent
+    // hole. Log the one state that would break that contract.
+    if (coverageGapWithoutDigest(compact.hasCoverageGap, digest)) {
+        com.openminis.app.logging.AppLogger.warning(
+            "HistoryDigest",
+            "[T-digest-covers-gap] coverage gap without a rendered digest: " +
+                "lines=${llmDigestLines.size} omitted=$llmDigestOmitted session=$sessionId",
+        )
+    }
     val key = DispatchProjectionKey(
         sessionId, model, harness, policy, window, compact.marker?.id,
         requestThinkingLevel(provider), ContextSaverPrefs.mode(), OutboundMaskPrefs.isEnabled, stallNote,

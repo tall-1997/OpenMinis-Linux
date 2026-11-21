@@ -23,6 +23,9 @@ object WebSearchTool {
     private const val MAX_RESULTS = 8
     private const val TIMEOUT_MS = 15_000
 
+/** [T-bounded-body-read] Ceiling for one search/fetch reply body. */
+private const val MAX_RESPONSE_CHARS = 4 * 1024 * 1024
+
     data class Result(
         val title: String,
         val url: String,
@@ -722,9 +725,7 @@ object WebSearchTool {
         return try {
             val code = conn.responseCode
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-            stream?.use { inp ->
-                BufferedReader(InputStreamReader(inp, StandardCharsets.UTF_8)).readText()
-            }
+            stream?.use { inp -> readBounded(InputStreamReader(inp, StandardCharsets.UTF_8)) }
         } finally {
             conn.disconnect()
         }
@@ -749,12 +750,26 @@ object WebSearchTool {
             conn.outputStream.use { it.write(json.toByteArray(StandardCharsets.UTF_8)) }
             val code = conn.responseCode
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-            stream?.use { inp ->
-                BufferedReader(InputStreamReader(inp, StandardCharsets.UTF_8)).readText()
-            }
+            stream?.use { inp -> readBounded(InputStreamReader(inp, StandardCharsets.UTF_8)) }
         } finally {
             conn.disconnect()
         }
+    }
+
+    /**
+     * [T-bounded-body-read] Search backends are remote: cap what we materialise so
+     * a huge or hostile reply is truncated instead of exhausting the heap.
+     */
+    private fun readBounded(reader: java.io.Reader): String {
+        val out = StringBuilder(minOf(MAX_RESPONSE_CHARS, 64 * 1024))
+        val buf = CharArray(8192)
+        while (out.length < MAX_RESPONSE_CHARS) {
+            val room = minOf(buf.size, MAX_RESPONSE_CHARS - out.length)
+            val n = reader.read(buf, 0, room)
+            if (n < 0) break
+            out.append(buf, 0, n)
+        }
+        return out.toString()
     }
 
     private fun stripTags(raw: String): String =

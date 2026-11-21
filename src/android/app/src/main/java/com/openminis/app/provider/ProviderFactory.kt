@@ -78,6 +78,21 @@ object ProviderFactory {
         )
     }
 
+    /**
+     * [T-endpoint-override-isolation] Build a provider that is NOT shared.
+     *
+     * `OpenAIProvider.absoluteEndpointOverride` is a mutable field, and
+     * `model_use` sets it on the instance it is about to call. Handing it the
+     * memoized instance leaked that override into every later chat request from
+     * the same config (the memo returned the SAME object), so a model-use turn
+     * could silently redirect the next chat request to e.g.
+     * `/images/generations`. Callers that mutate a provider use this instead.
+     */
+    fun createDedicated(instance: ProviderInstance, apiKey: String, model: LLMModel, context: Context? = null): LLMProvider {
+        val config = instance.copy()
+        return createUncached(config, apiKey, model, context, ProviderHeaderStore.headersFor(config.id))
+    }
+
     fun create(instance: ProviderInstance, apiKey: String, model: LLMModel, context: Context? = null): LLMProvider {
         val config = instance.copy()
         // [GH#221] 用户自定义请求头存在 ProviderHeaderStore（不改 Room schema）。

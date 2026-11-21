@@ -212,18 +212,34 @@ fun ModelEntryDetailScreen(
                     } else {
                         entry.copy(overrides = newOverrides, isHidden = isHidden)
                     }
-                    // [T-harness-config-store] Persist next to the model so the next assembly
-                    // resolves it; null restores the automatic scaling.
-                    com.openminis.app.data.HarnessConfigStore.save(
+                    // [T-harness-config-store] The model row is the authoritative
+                    // record, so it must land FIRST: the sidecar used to be
+                    // written first and a failing `updateEntry` then left the two
+                    // stores disagreeing. The save result is no longer discarded —
+                    // a failed sidecar write is reported instead of bouncing back
+                    // as if the override had been stored.
+                    providerRepository.updateEntry(updated)
+                    // [T-harness-config-preserve] Start from the model's CURRENT
+                    // config, not from DEFAULT: the old `DEFAULT.copy(...)` wiped
+                    // every other field (digest budget, ledger size) on each save,
+                    // so a value tuned anywhere else silently reverted.
+                    val harnessSaved = com.openminis.app.data.HarnessConfigStore.save(
                         harnessContext.filesDir,
                         entryId,
                         if (harnessCustom) {
-                            com.openminis.app.agent.HarnessConfig.DEFAULT.copy(postAnchorBudgetTokens = harnessTailBudget)
+                            com.openminis.app.data.HarnessConfigStore
+                                .forModel(harnessContext.filesDir, entryId)
+                                .copy(postAnchorBudgetTokens = harnessTailBudget)
                         } else {
                             null
                         },
                     )
-                    providerRepository.updateEntry(updated)
+                    if (!harnessSaved) {
+                        com.openminis.app.logging.AppLogger.warning(
+                            "ModelEntryDetail",
+                            "[T-harness-config-store] harness override not persisted for $entryId",
+                        )
+                    }
                     onBack()
                 },
                 modifier = Modifier.padding(end = 8.dp),

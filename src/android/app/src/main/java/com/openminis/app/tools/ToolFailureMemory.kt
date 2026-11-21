@@ -52,6 +52,22 @@ object ToolFailureMemory {
         "value", "data", "old_string", "new_string",
     )
 
+    /**
+     * [T-known-failure-payload] The subset of [NON_IDENTITY_KEYS] that is the
+     * OPERATION itself rather than a label: an edit's `old_string`, a write's
+     * `content`, an MCP call's `arguments`.
+     *
+     * Near-clustering compares calls that "differ only in a flag/path", which
+     * is why these keys are dropped from the canonical identity. But dropping
+     * them from the CLUSTER decision too made a corrected edit indistinguishable
+     * from the broken one it replaced: `file_edit` twice with a bad
+     * `old_string` clustered, and the third call — the one carrying the fix —
+     * was refused as "the small difference did not change the failure cause".
+     * Payload must therefore be compared separately: same payload may cluster,
+     * a changed payload starts a new attempt.
+     */
+    private val PAYLOAD_KEYS = NON_IDENTITY_KEYS - setOf("tool_title", "tool_input")
+
     private val WHITESPACE = Regex("\\s+")
 
     data class Entry(
@@ -65,6 +81,8 @@ object ToolFailureMemory {
         val argsCanonical: String = "",
         /** [T-known-failure-near] Path/number-normalized error, for same-cause. */
         val errorClass: String = "",
+        /** [T-known-failure-payload] Hash of the operation payload; "" = pre-upgrade record. */
+        val payloadSha: String = "",
         /** Transient: matched a near (not exact) call. Never persisted. */
         val nearMatch: Boolean = false,
     )
@@ -91,8 +109,9 @@ object ToolFailureMemory {
         // flag/path slightly. A same-tool, same-error-class cluster with high
         // argument similarity is the same rake; block it and say WHY.
         val canonical = canonicalArgs(tool, argsJson)
+        val payload = payloadSignature(argsJson)
         val near = all.values.firstOrNull { e ->
-            e.tool == tool && armed(e, nowMs) &&
+            e.tool == tool && armed(e, nowMs) && samePayload(e.payloadSha, payload) &&
                 e.errorClass.isNotBlank() && e.errorClass == errorClass(e.lastError) &&
                 similarity(e.argsCanonical.ifBlank { e.argsExcerpt }, canonical) >= NEAR_THRESHOLD
         } ?: return null
@@ -107,6 +126,7 @@ object ToolFailureMemory {
         val key = fingerprint(tool, argsJson)
         val all = readAll(file).toMutableMap()
         val canonical = canonicalArgs(tool, argsJson)
+        val payload = payloadSignature(argsJson)
         val errorKey = errorClass(error)
         val exact = all[key]
         // Cluster into a near entry when the exact key is new but the same
@@ -114,6 +134,7 @@ object ToolFailureMemory {
         val nearKey = if (exact == null) {
             all.entries.firstOrNull { (_, e) ->
                 e.tool == tool && e.errorClass.isNotBlank() &&
+                    samePayload(e.payloadSha, payload) &&
                     e.errorClass == errorKey &&
                     similarity(e.argsCanonical.ifBlank { e.argsExcerpt }, canonical) >= NEAR_THRESHOLD
             }?.key
@@ -133,6 +154,7 @@ object ToolFailureMemory {
             argsExcerpt = argsExcerpt(argsJson),
             argsCanonical = canonical,
             errorClass = errorKey,
+            payloadSha = payload,
         )
         all[storeKey] = entry
         writeAll(file, all)
@@ -272,9 +294,43 @@ object ToolFailureMemory {
         ).joinToString(" ")
     }
 
+    /**
+     * [T-known-failure-payload] Identity of the OPERATION payload only — the
+     * keys [canonicalArgs] deliberately drops, plus every non-scalar value
+     * (`multi_edit.edits`, `mcp.arguments`), which the scalar filter dropped
+     * too. Two calls may only join the same near cluster when this matches, so
+     * changing the thing being edited always reads as a new attempt.
+     *
+     * "" means "no payload to compare" (a flag-only call, or a pre-upgrade
+     * record that never stored one); equal blanks still cluster exactly as
+     * before, and a blank-vs-hash pair simply does not match.
+     */
+    internal fun payloadSignature(argsJson: String): String {
+        val raw = argsJson.trim()
+        if (raw.isEmpty()) return ""
+        // [T-known-failure-payload] Hash the RAW payload, not the masked one:
+        // only a digest is persisted (never the text), and masking would make
+        // two different passwords — i.e. two different repair attempts — hash
+        // identically.
+        val parsed = runCatching { org.json.JSONObject(raw) }.getOrNull() ?: return ""
+        val source = StringBuilder()
+        for (key in parsed.keys().asSequence().sorted().toList()) {
+            val value = parsed.opt(key)
+            val scalar = value is String || value is Number || value is Boolean
+            val payload = key in PAYLOAD_KEYS || !scalar
+            if (!payload || key == "tool_title") continue
+            source.append(key).append('=').append(value?.toString().orEmpty()).append('\u0000')
+        }
+        if (source.isEmpty()) return ""
+        val digest = MessageDigest.getInstance("SHA-256").digest(source.toString().toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it) }.take(16)
+    }
+
+    /** [T-known-failure-payload] Same payload (or neither side has one) ⇒ same rake. */
+    private fun samePayload(a: String, b: String): Boolean = a == b
+
     /** Jaccard similarity of the normalized token sets. */
-    internal fun similarity(a: String, b: String): Double {
-        val left = tokens(a)
+    internal fun similarity(a: String, b: String): Double {        val left = tokens(a)
         val right = tokens(b)
         if (left.isEmpty() && right.isEmpty()) return 1.0
         if (left.isEmpty() || right.isEmpty()) return 0.0
@@ -365,6 +421,7 @@ object ToolFailureMemory {
                     argsExcerpt = obj.optString("argsExcerpt"),
                     argsCanonical = obj.optString("argsCanonical"),
                     errorClass = obj.optString("errorClass"),
+                    payloadSha = obj.optString("payloadSha"),
                 )
             }
             out
@@ -386,7 +443,8 @@ object ToolFailureMemory {
                     .put("lastAtMs", entry.lastAtMs)
                     .put("argsExcerpt", entry.argsExcerpt)
                     .put("argsCanonical", entry.argsCanonical)
-                    .put("errorClass", entry.errorClass),
+                    .put("errorClass", entry.errorClass)
+                    .put("payloadSha", entry.payloadSha),
             )
         }
         file.parentFile?.mkdirs()

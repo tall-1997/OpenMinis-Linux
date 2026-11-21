@@ -53,17 +53,6 @@ internal object ResidentWindow {
             }
 
     /**
-     * How many leading entries to drop so the history is at most
-     * [maxMessages] long, without orphaning a tool result.
-     */
-    fun countCut(history: List<LLMMessage>, maxMessages: Int): Int {
-        val overflow = history.size - maxMessages
-        if (overflow <= 0) return 0
-        val legal = legalBoundaries(history)
-        return firstLegal(legal, overflow) ?: 0
-    }
-
-    /**
      * How many leading entries to drop so the history fits [budget].
      *
      * The last entry is never dropped: that is the turn in flight, and

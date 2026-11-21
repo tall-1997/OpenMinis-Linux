@@ -13,28 +13,31 @@ private const val MAX_IN_LOOP_COMPACTIONS = 3
  * Token pressure alone decides compaction. Coverage gaps are represented by a
  * bounded history digest in the request; they must not force a paid compaction
  * while the request is below the configured threshold.
+ *
+ * [T-digest-covers-gap] The gap signal still exists — it is checked against the
+ * rendered digest at dispatch ([coverageGapWithoutDigest]) — but it is
+ * deliberately not an input here, so it is no longer passed and silently
+ * ignored.
  */
-@Suppress("UNUSED_PARAMETER")
 internal fun projectedCapacity(
     policy: ContextPolicy,
     tokens: Int,
     window: Int,
-    hasCoverageGap: Boolean,
     bypassSoftThreshold: Boolean = false,
 ): ContextPolicy.CheckResult {
-    if (window >0 && tokens >= window) {
-        return if (policy.compactThreshold >0 && !bypassSoftThreshold) {
+    if (window > 0 && tokens >= window) {
+        return if (policy.compactThreshold > 0 && !bypassSoftThreshold) {
             ContextPolicy.CheckResult.NEEDS_COMPACT
         } else {
             ContextPolicy.CheckResult.EXHAUSTED
         }
     }
-    if (bypassSoftThreshold || window <=0) return ContextPolicy.CheckResult.OK
+    if (bypassSoftThreshold || window <= 0) return ContextPolicy.CheckResult.OK
     return policy.check(tokens, window)
 }
 
 internal fun ProjectedChatRequest.capacity(bypassSoftThreshold: Boolean = false): ContextPolicy.CheckResult =
-    projectedCapacity(policy, estimate.tokens, window, hasCoverageGap, bypassSoftThreshold)
+    projectedCapacity(policy, estimate.tokens, window, bypassSoftThreshold)
 
 internal suspend fun ChatViewModel.stopAtContextLimit(
     assistantId: String,

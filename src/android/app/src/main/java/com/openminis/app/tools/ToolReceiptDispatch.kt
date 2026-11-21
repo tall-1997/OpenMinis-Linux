@@ -53,6 +53,44 @@ internal fun toolReceiptMissingAnchor() = ToolExecutionResult(
     false, errorCode = ToolErrorCode.RECEIPT_BLOCKED, notSent = true,
 )
 
+/**
+ * [T-receipt-terminal-evidence] Adapters that produce their own delivery
+ * evidence. The generic boundary must not overrule them: `mcp` deliberately
+ * leaves a transport failure pending (`deliveryAccepted = serverAnswered`),
+ * and the shell/script/spawn lanes report executed-vs-not inside their own
+ * result construction.
+ */
+private val selfReportedDeliveryTools = setOf(
+    McpNativeTool.NAME,
+    "ssh_exec",
+    ExecuteCodeTool.NAME,
+    CodemodeTool.NAME,
+    "shell_exec", "shell_execute", "env_exec", "su_exec",
+)
+
+/**
+ * [T-receipt-terminal-evidence] An adapter that RETURNED has a known delivery
+ * state: the call ran, or the refusal is the adapter's own answer. Only
+ * `notSent` (never dispatched), an unmarked timeout (remote answer lost) and a
+ * receipt advisory are genuinely unknown.
+ *
+ * Every other in-process adapter used to leave the receipt at UNKNOWN on a
+ * plain business failure — a mistyped `old_string`, a missing file, an HTTP
+ * 4xx — which told the model "it may already have occurred, do not repeat"
+ * about an edit that certainly did not happen, skipped the known-failure
+ * ladder, and pinned an UNKNOWN record forever (they are never recycled), so a
+ * long session eventually filled the receipt store and started refusing every
+ * other mutating tool.
+ */
+internal fun normalizeDeliveryEvidence(canonical: String, result: ToolExecutionResult): ToolExecutionResult =
+    if (canonical in selfReportedDeliveryTools || SubAgentKind.isSpawnTool(canonical) || result.notSent ||
+        result.timedOut || result.deliveryAccepted || result.isReceiptAdvisory()
+    ) {
+        result
+    } else {
+        result.copy(deliveryAccepted = true)
+    }
+
 /** Execution boundary shared by turn, spawn, script, and detached-lane callers. */
 internal class ToolReceiptDispatch(private val store: ToolReceiptStore) {
     suspend fun run(

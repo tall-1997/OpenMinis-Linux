@@ -3,6 +3,7 @@ package com.openminis.app.backup
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -174,16 +175,28 @@ class BackupBlobStoreTest {
         val store = BackupBlobStore(staging, maxFileBytes = null)
         val freshBytes = "fresh member bytes".toByteArray()
         val freshSha = com.openminis.app.util.Digest.sha256Hex(freshBytes)
+        val brokenBytes = "third member bytes".toByteArray()
+        val freshMember = file("fresh.md", freshBytes)
         val resumedMember = file("diary.md", resumedContent)
-        val freshMember = file("meta.json", freshBytes)
+        val brokenMember = file("broken.json", brokenBytes)
         try {
-            store.beforeMoveForTest = { if (it == 0) freshMember.delete() }
-            runCatching {
+            // [P3-5] The failure must land AFTER a destination this run created
+            // has already moved, otherwise the rollback branch never executes and
+            // the assertion below is vacuous. Member order is fresh → resumed →
+            // broken; deleting the third member's SOURCE makes its move fail with
+            // the first two already on disk.
+            store.beforeMoveForTest = { if (it == 2) brokenMember.delete() }
+            val failure = runCatching {
                 store.addDiaryPair(
-                    listOf(resumedMember to "data/memory/diary.md", freshMember to "data/memory/meta.json"),
+                    listOf(
+                        freshMember to "data/memory/fresh.md",
+                        resumedMember to "data/memory/diary.md",
+                        brokenMember to "data/memory/broken.json",
+                    ),
                     sessionId = "s1",
                 )
-            }
+            }.exceptionOrNull()
+            assertNotNull("the third member must fail after the first two moved", failure)
         } finally {
             store.beforeMoveForTest = null
         }
@@ -196,6 +209,8 @@ class BackupBlobStoreTest {
             "this run's fresh bytes must still be rolled back",
             File(File(File(staging, "blobs"), freshSha.take(2)), freshSha).exists(),
         )
+        // Nothing was indexed: the batch failed as a unit.
+        assertTrue(store.blobIndex.isEmpty())
     }
 
     /**

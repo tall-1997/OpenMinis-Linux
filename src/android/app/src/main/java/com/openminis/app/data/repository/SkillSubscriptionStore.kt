@@ -140,6 +140,9 @@ object SkillSubscriptionSync {
     private const val TAG = "SkillFeeds"
     private const val TIMEOUT_MS = 20_000
 
+/** [T-bounded-body-read] A skill feed is a document; anything larger is truncated. */
+private const val MAX_FEED_CHARS = 512 * 1024
+
     suspend fun refreshAuto(context: Context, repo: SkillRepository) {
         val due = SkillSubscriptionStore.list(context).filter { it.autoUpdate }
         for (feed in due) {
@@ -209,9 +212,23 @@ object SkillSubscriptionSync {
         return try {
             val code = conn.responseCode
             val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-            stream?.use { BufferedReader(InputStreamReader(it, Charsets.UTF_8)).readText() }
+            // [T-bounded-body-read] A feed is remote text: read at most
+            // MAX_FEED_CHARS so a huge reply is truncated, not materialised.
+            stream?.use { readTextBounded(InputStreamReader(it, Charsets.UTF_8), MAX_FEED_CHARS) }
         } finally {
             conn.disconnect()
         }
+    }
+
+    private fun readTextBounded(reader: java.io.Reader, maxChars: Int): String {
+        val out = StringBuilder(minOf(maxChars, 64 * 1024))
+        val buf = CharArray(8192)
+        while (out.length < maxChars) {
+            val room = minOf(buf.size, maxChars - out.length)
+            val n = reader.read(buf, 0, room)
+            if (n < 0) break
+            out.append(buf, 0, n)
+        }
+        return out.toString()
     }
 }

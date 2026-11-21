@@ -111,6 +111,14 @@ internal object HistoryDigest {
     /**
      * Prefix the first user turn. A leading system-shaped user blob is how
      * this app already injects compact summaries without breaking alternation.
+     *
+     * [T-anthropic-toolresult-first] The carrier is not always a plain text
+     * turn: when the resident window opens mid-round the first USER message is
+     * the `tool_result` block, and Anthropic rejects any user content array
+     * whose `tool_result` is not FIRST. Prepending the digest as a text part
+     * there 400s every request of that session, and the digest is recomputed
+     * identically on every retry so it never self-heals. [prependUserText] owns
+     * that rule (append on a tool-result carrier, prepend otherwise).
      */
     fun inject(history: List<LLMMessage>, digest: String?): List<LLMMessage> {
         if (digest.isNullOrBlank() || history.isEmpty()) return history
@@ -120,16 +128,17 @@ internal object HistoryDigest {
             return listOf(LLMMessage(role = LLMMessage.Role.USER, content = digest)) + history
         }
         val updated = history.toMutableList()
-        val target = updated[index]
-        val parts = if (target.contentParts.isEmpty()) {
-            target.contentParts
-        } else {
-            listOf(AgentContentPart.Text(digest)) + target.contentParts
-        }
-        updated[index] = target.copy(
-            content = digest + "\n\n" + target.content,
-            contentParts = parts,
-        )
+        updated[index] = prependUserText(updated[index], digest)
         return updated
     }
 }
+
+/**
+ * [T-digest-covers-gap] The #404 contract: a request whose resident history does
+ * not cover the persisted transcript must carry a rendered digest describing
+ * what it left out. A gap with no digest is a silent hole in the model's view,
+ * and nothing else in the pipeline can detect it — the gap signal is no longer
+ * an input to compaction, so this is the only place that can notice.
+ */
+internal fun coverageGapWithoutDigest(hasCoverageGap: Boolean, digest: String?): Boolean =
+    hasCoverageGap && digest.isNullOrBlank()

@@ -60,4 +60,33 @@ class HistoryDigestTest {
         assertTrue(injected[1].content.endsWith("question"))
         assertEquals(injected, HistoryDigest.inject(injected, "[HISTORY_DIGEST]\nagain"))
     }
+
+    /**
+     * [T-anthropic-toolresult-first] A window that opens mid-round starts on the
+     * `tool_result` carrier. Anthropic 400s any user content array whose
+     * `tool_result` is not first, and the digest is recomputed the same way on
+     * every retry, so prepending there makes the session permanently unusable.
+     */
+    @Test
+    fun injectAppendsAfterToolResultsInsteadOfBreakingTheirOrder() {
+        val history = listOf(
+            LLMMessage(
+                role = LLMMessage.Role.USER,
+                content = "",
+                contentParts = listOf(
+                    AgentContentPart.ToolResult(id = "tool-1", name = "read", content = "file body"),
+                ),
+            ),
+        )
+        val injected = HistoryDigest.inject(history, "[HISTORY_DIGEST]\nnote").single()
+        assertTrue(
+            "the tool_result must stay first for the Anthropic wire",
+            injected.contentParts.first() is AgentContentPart.ToolResult,
+        )
+        assertEquals(
+            "[HISTORY_DIGEST]\nnote",
+            (injected.contentParts.last() as AgentContentPart.Text).text,
+        )
+        assertTrue(injected.content.startsWith("[HISTORY_DIGEST]"))
+    }
 }

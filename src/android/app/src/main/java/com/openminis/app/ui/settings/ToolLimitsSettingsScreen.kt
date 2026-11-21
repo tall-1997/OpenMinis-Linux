@@ -27,6 +27,10 @@ fun ToolLimitsSettingsScreen(onBack: () -> Unit) {
     val chars = remember(revision) { ToolLimitPrefs.fileReadMaxChars() }
     val lines = remember(revision) { ToolLimitPrefs.fileReadMaxLines() }
     val turns = remember(revision) { ToolLimitPrefs.subagentMaxTurns() }
+    // [T-parallel-tool-calls] How many read-lane tools may overlap in one turn.
+    // The pref existed and the dispatcher read it, but nothing could ever write
+    // it — the value was pinned at 4 for every user.
+    val readConcurrency = remember(revision) { ToolLimitPrefs.toolCallConcurrency() }
     // [T-main-session-turn-cap] The main agent loop's runaway guard, next to
     // the sub-agent cap it used to be confused with.
     val mainTurns = remember(revision) { ToolLimitPrefs.mainSessionMaxTurns() }
@@ -135,6 +139,16 @@ fun ToolLimitsSettingsScreen(onBack: () -> Unit) {
                 max = ToolLimitPrefs.MAX_MAIN_MAX_TURNS,
                 step = ToolLimitPrefs.MAIN_TURNS_STEP,
                 onChange = { ToolLimitPrefs.setMainSessionMaxTurns(it) },
+                showDivider = true,
+            )
+            LimitStepper(
+                title = stringResource(R.string.tool_limits_tool_concurrency),
+                valueLabel = readConcurrency.toString(),
+                value = readConcurrency,
+                min = ToolLimitPrefs.MIN_TOOL_CALL_CONCURRENCY,
+                max = ToolLimitPrefs.MAX_TOOL_CALL_CONCURRENCY,
+                step = 1,
+                onChange = { ToolLimitPrefs.setToolCallConcurrency(it) },
                 showDivider = false,
             )
         }

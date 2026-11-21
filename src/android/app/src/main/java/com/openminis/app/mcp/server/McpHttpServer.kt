@@ -237,9 +237,21 @@ class McpHttpServer(
             // [P2-mcp-pool] Saturation trace: when every worker is busy the
             // unbounded queue grows silently; leave a warning with the depth.
             val pending = inFlightConnections.incrementAndGet()
-            if (pending > workerCount) {
-                Log.w(TAG, "mcp pool saturated: $pending connections in flight/queued (workers=$workerCount)")
+            // [T-mcp-server-admission] Refuse instead of queueing forever. The
+            // fixed pool's queue is unbounded, and a queued socket has no
+            // `soTimeout` yet (that is armed inside handleConnection), so every
+            // unserved connection pins an fd. Loopback has no UID isolation on
+            // Android: any local app could open connections until the whole
+            // process ran out of descriptors.
+            if (pending > workerCount * 2) {
+                inFlightConnections.decrementAndGet()
+                Log.w(TAG, "refused connection: $pending in flight/queued (workers=$workerCount)")
+                runCatching { client.close() }
+                return
             }
+            // Arm the idle timeout here as well: a socket that waits in the queue
+            // must not outlive a stalled peer.
+            runCatching { client.soTimeout = 30_000 }
             pool?.execute {
                 try {
                     handleConnection(client)

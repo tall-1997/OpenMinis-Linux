@@ -119,6 +119,22 @@ object NativeOffloadServer {
     private const val HANDLER_POOL_SIZE = 4
 
     /**
+     * [T-native-offload-admission] How long an accepted connection may stay
+     * silent before the worker reclaims it. Without this, a guest process that
+     * connects and sends nothing holds a worker forever — the handler watchdog
+     * only releases the CLIENT side and cannot free the thread — so four such
+     * sockets disabled every `android-*` tool until the app was restarted.
+     */
+    private const val CONNECT_IDLE_TIMEOUT_MS = 5_000
+
+    /**
+     * [T-native-offload-admission] Ceiling on accepted-but-unserved connections.
+     * The pool queue is unbounded, so a burst would queue sockets (and their fds)
+     * instead of being refused.
+     */
+    private const val MAX_IN_FLIGHT_CLIENTS = 8
+
+    /**
      * [OpenMinis#439] Abstract-socket name for THIS process.
      *
      * WHY IT IS PER-PROCESS. The name used to be the constant
@@ -190,6 +206,9 @@ object NativeOffloadServer {
     private var workerPool: java.util.concurrent.ExecutorService? = null
     @Volatile
     private var handlerPool: java.util.concurrent.ExecutorService? = null
+
+    /** [T-native-offload-admission] Accepted clients that have not been served yet. */
+    private val inFlightClients = java.util.concurrent.atomic.AtomicInteger(0)
 
     private fun newPool(name: String, size: Int): java.util.concurrent.ExecutorService {
         val seq = java.util.concurrent.atomic.AtomicInteger(0)
@@ -367,10 +386,26 @@ object NativeOffloadServer {
                 return
             }
             Log.d(TAG, "accepted client from proot extension")
+            // [T-native-offload-admission] Reclaim a connection that never sends
+            // its request, and refuse a burst instead of queueing sockets: an
+            // unbounded queue of silent clients is what wedged every android-*
+            // tool (each one pins a worker AND an fd).
+            val pending = inFlightClients.incrementAndGet()
+            if (pending > MAX_IN_FLIGHT_CLIENTS) {
+                inFlightClients.decrementAndGet()
+                Log.w(TAG, "refused client: $pending in flight/queued (max $MAX_IN_FLIGHT_CLIENTS)")
+                runCatching { client.close() }
+                continue
+            }
+            val socketTimed = runCatching {
+                client.soTimeout = CONNECT_IDLE_TIMEOUT_MS
+            }.isSuccess
+            if (!socketTimed) Log.w(TAG, "could not arm the connect idle timeout")
             // Pooled worker instead of a thread per connection: each connection
             // is short (one request → reply), so a small fixed pool is enough.
             val pool = workerPool
             if (pool == null || pool.isShutdown) {
+                inFlightClients.decrementAndGet()
                 runCatching { client.close() }
                 continue
             }
@@ -380,6 +415,7 @@ object NativeOffloadServer {
                 } catch (e: Exception) {
                     Log.w(TAG, "worker error: ${e.message}", e)
                 } finally {
+                    inFlightClients.decrementAndGet()
                     try { client.close() } catch (_: Exception) {}
                 }
             }

@@ -1671,7 +1671,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             allToolBlocks = allToolBlocks,
             toolInputChunkRings = toolInputChunkRings,
             toolCallRawArgs = toolCallRawArgs,
-            receiptUserTurnId = receiptUserTurnId,
+            receiptUserTurnId = receiptUserTurnId, generationRunId = generationRunId,
             // [T-receipt-after-result] The boundary is what THIS attempt actually
             // carried: the last result row (with its host proof) visible in the
             // projected request, never an attempt counter or a live UI bubble.

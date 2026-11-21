@@ -111,4 +111,33 @@ class MemoryCenterStatsTest {
         }
         assertEquals(MemoryCenterStats.MAX_SESSION_DIRS, MemoryCenterStats.collect(filesDir).blockedRepeats)
     }
+
+    /**
+     * [T-memory-center-distinct] The sidecar is the pre-upgrade counter and the
+     * lifecycle usage is the current one. An entry that was served before the
+     * upgrade AND delivered after it is still ONE distinct entry; summing the
+     * two populations reported it twice.
+     */
+    @Test
+    fun anEntryServedBeforeAndAfterTheUpgradeIsCountedOnce() {
+        val now = 1_798_200_000_000L
+        val memory = sharedMemory()
+        val repository = MemoryRepository(memory) { now }
+        repository.writeHostMemory("served twice", origin = MemoryEntryOrigin.MEMORY_WRITE, autoArchive = false)
+        val source = repository.todayFileName()
+        val entry = MemoryLifecycle.read(memory, source)!!.managed().single { it.body == "served twice" }
+        MemoryLifecycle.recordDelivery(setOf(entry.ref), "user-one", now + 1)
+        val legacyKey = MemoryRecallEngine.recallCountKey(source.removeSuffix(".md"), entry.body)
+        File(memory, MemoryCenterStats.RECALL_SIDECAR).writeText("""{"$legacyKey":3}""")
+
+        assertEquals(1, MemoryCenterStats.collect(filesDir).recalled)
+    }
+
+    /** A legacy key that no surviving entry owns still counts — the entry was really served. */
+    @Test
+    fun aLegacyKeyWithoutASurvivingEntryIsStillCounted() {
+        File(sharedMemory(), MemoryCenterStats.RECALL_SIDECAR)
+            .writeText("""{"${MemoryRecallEngine.recallCountKey("2026-01-01", "deleted line")}":2}""")
+        assertEquals(1, MemoryCenterStats.collect(filesDir).recalled)
+    }
 }

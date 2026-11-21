@@ -3339,4 +3339,5 @@
     <string name="modeldetail_tail_budget">Kuyruk bütçesi</string>
     <string name="modeldetail_tail_budget_state_auto">Otomatik (pencereye göre, en çok 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Bu modele özel</string>
+    <string name="tool_limits_tool_concurrency">Paralel okuma araçları</string>
 </resources>

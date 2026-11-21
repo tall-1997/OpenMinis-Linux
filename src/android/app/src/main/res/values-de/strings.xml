@@ -3190,4 +3190,5 @@
     <string name="modeldetail_tail_budget">Restbudget</string>
     <string name="modeldetail_tail_budget_state_auto">Automatisch (skaliert mit dem Fenster, bis 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Eigen für dieses Modell</string>
+    <string name="tool_limits_tool_concurrency">Parallele Lesetools</string>
 </resources>

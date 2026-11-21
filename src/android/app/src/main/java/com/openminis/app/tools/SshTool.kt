@@ -328,14 +328,19 @@ object SshTool {
                 toolTitle = title,
                 timedOut = true,
             )
-            // JSch returns -1 when no exit status arrived. Channel EOF alone
-            // does not distinguish completed execution from a lost connection.
+            // [T-ssh-exit-status] JSch reports -1 when no exit status arrived.
+            // That is NOT a network failure: the command ran, the server just
+            // did not return a code (or the code was still in flight). Reporting
+            // NETWORK_ERROR made the model retry a command that had already
+            // executed; EXECUTION_FAILED + deliveryAccepted says "it happened,
+            // outcome unknown" instead.
             r.exitCode < 0 -> ToolExecutionResult(
-                "SSH closed without a remote exit status.\n$body",
+                "SSH ran the command but the server did not report an exit status.\n$body",
                 false,
-                errorCode = ToolErrorCode.NETWORK_ERROR,
-                recoveryHint = "Verify remotely before repeating this command.",
+                errorCode = ToolErrorCode.EXECUTION_FAILED,
+                recoveryHint = "Verify the effect remotely before repeating this command.",
                 toolTitle = title,
+                deliveryAccepted = true,
             )
             else -> ToolExecutionResult(body, true, toolTitle = title)
         }

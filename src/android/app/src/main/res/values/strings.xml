@@ -3102,4 +3102,5 @@
     <string name="modeldetail_tail_budget">Tail budget</string>
     <string name="modeldetail_tail_budget_state_auto">Automatic (scales with the window, up to 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Custom for this model</string>
+    <string name="tool_limits_tool_concurrency">Parallel read tools</string>
 </resources>

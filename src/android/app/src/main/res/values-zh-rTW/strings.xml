@@ -3336,4 +3336,5 @@
     <string name="modeldetail_tail_budget">尾部預算</string>
     <string name="modeldetail_tail_budget_state_auto">自動（依視窗縮放，最多 60k）</string>
     <string name="modeldetail_tail_budget_state_specific">目前模型自訂</string>
+    <string name="tool_limits_tool_concurrency">平行讀取工具數</string>
 </resources>

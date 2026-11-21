@@ -735,7 +735,6 @@ internal fun ChatViewModel.loadSession() {
             viewModelScope.launch(Dispatchers.IO) {
                 runSessionContextEstimate(
                     estimate = {
-                        reconcileReceiptRows(sessionId, receiptRows)
                         val provider = currentProvider
                         provider to provider?.let {
                             projectChatRequest(
@@ -754,6 +753,15 @@ internal fun ChatViewModel.loadSession() {
                         Log.w(ChatViewModel.TAG, "Session context estimate unavailable: ${it.javaClass.simpleName}")
                     },
                 )
+                // [T-receipt-reconcile-not-optional] Receipt reconciliation is
+                // ledger repair, not an optional estimate: folding it into the
+                // estimate above made a Room/JSON failure look like "context
+                // estimate unavailable" while the session's UNKNOWN receipts
+                // stayed unsettled (and kept injecting "delivery pending").
+                runCatching { reconcileReceiptRows(sessionId, receiptRows) }
+                    .onFailure {
+                        Log.w(ChatViewModel.TAG, "Receipt reconciliation failed: ${it.javaClass.simpleName}")
+                    }
                 checkInstructionSnapshotDrift()
             }
         } else {

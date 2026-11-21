@@ -3338,4 +3338,5 @@
     <string name="modeldetail_tail_budget">꼬리 예산</string>
     <string name="modeldetail_tail_budget_state_auto">자동(윈도에 맞춰 조정, 최대 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">이 모델 전용</string>
+    <string name="tool_limits_tool_concurrency">병렬 읽기 도구 수</string>
 </resources>

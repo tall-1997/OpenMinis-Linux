@@ -97,10 +97,33 @@ object SecretMasking {
     /** Replace every credential-shaped substring with [REPLACEMENT]. */
     fun mask(text: String): String {
         var out = PATTERNS.fold(text) { acc, r -> acc.replace(r, REPLACEMENT) }
-        out = AUTH_SCHEME.replace(out) { "${it.groupValues[1]}=$REPLACEMENT" }
+        out = AUTH_SCHEME.replace(out) { maskValueOnly(it, 2) }
         out = CLI_SECRET.replace(out) { "${it.groupValues[1]} $REPLACEMENT" }
         out = CLI_USERINFO.replace(out) { "${it.groupValues[1]} $REPLACEMENT" }
         out = SSHPASS.replace(out) { "${it.groupValues[1]} -p $REPLACEMENT" }
-        return ASSIGNMENTS.replace(out) { "${it.groupValues[1]}=$REPLACEMENT" }
+        return ASSIGNMENTS.replace(out) { m ->
+            // [T-secret-mask-json-shape] Replace ONLY the value span. Rewriting
+            // the whole match as `key=[redacted]` ate the surrounding quotes and
+            // the colon, so `{"password":"hunter2x"}` became `{password=[redacted]}`
+            // — no longer JSON. This output is persisted and re-parsed (failure
+            // clustering, compaction summaries, hidden notes), so the damage
+            // surfaced as "the log/ledger is corrupt", not as a masking bug.
+            val value = m.groups["quoted"] ?: m.groups["bare"]
+            if (value == null) {
+                "${m.groupValues[1]}=$REPLACEMENT"
+            } else {
+                val start = value.range.first - m.range.first
+                val end = value.range.last + 1 - m.range.first
+                m.value.replaceRange(start, end, REPLACEMENT)
+            }
+        }
+    }
+
+    /** Mask one capture group's span, leaving quotes, keys and separators intact. */
+    private fun maskValueOnly(match: MatchResult, group: Int): String {
+        val range = match.groups[group]?.range ?: return match.value
+        val start = range.first - match.range.first
+        val end = range.last + 1 - match.range.first
+        return match.value.replaceRange(start, end, REPLACEMENT)
     }
 }
