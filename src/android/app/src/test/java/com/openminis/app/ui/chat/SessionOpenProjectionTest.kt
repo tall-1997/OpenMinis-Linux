@@ -4,8 +4,8 @@ import androidx.lifecycle.ViewModelStore
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.openminis.app.MinisApp
+import com.openminis.app.config.InMemorySource
 import com.openminis.app.config.Prefs
-import com.openminis.app.config.AndroidPrefsSource
 import com.openminis.app.data.db.AppDatabase
 import com.openminis.app.data.db.ChatSessionEntity
 import com.openminis.app.data.model.LLMModel
@@ -65,7 +65,7 @@ class SessionOpenProjectionTest {
     @Before
     fun setUp() = runBlocking {
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        Prefs.install(AndroidPrefsSource(app))
+        Prefs.install(InMemorySource())
         app.appContainer.multiAgentSettingsRepository = MultiAgentSettingsRepository(app)
         ProviderHeaderStore.resetForTest()
         EncryptedPrefsFactory.resetCacheForTest()

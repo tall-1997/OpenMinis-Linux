@@ -326,6 +326,16 @@ android {
         // database). Pure-JVM tests are unaffected — they never touch
         // resources.
         unitTests.isIncludeAndroidResources = true
+        // [T-ci-test-hang] A hung test used to burn the whole 90-minute job
+        // budget: run 44907660989 sat in testReleaseUnitTest from 13:21 to
+        // 14:42 with zero output and was cancelled by timeout, so the PR got
+        // no verdict at all. The same 7331-test suite finishes in ~2m40s on
+        // this runner, so a single test still running after 15 minutes is a
+        // defect in the test, not a slow suite. Fail that test and keep the
+        // rest of the report, instead of losing the whole run.
+        unitTests.all {
+            it.timeout.set(java.time.Duration.ofMinutes(15))
+        }
     }
 
     // [T-androidtest-release] This project has no debug buildType, and AGP
