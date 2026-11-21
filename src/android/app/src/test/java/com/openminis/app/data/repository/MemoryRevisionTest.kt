@@ -181,16 +181,19 @@ class MemoryRevisionTest {
         )
         // The guard-level reproduction of the reported F1 bypass: the old code
         // returned null (proceed) here — JVM-reproduced before the fix.
-        assertEquals(
-            MemoryWriteRevisionGuard.malformedCopy(),
-            MemoryWriteRevisionGuard.refusal(
-                expectedRevision = "2026-11-20:",
-                fileName = "2026-11-20.md",
-                dayFileExists = true,
-                hashOf = { "ca9639251e3d29e3" },
-                existingContent = "someone wrote this first",
-            ),
+        val f1Msg = MemoryWriteRevisionGuard.refusal(
+            expectedRevision = "2026-11-20:",
+            fileName = "2026-11-20.md",
+            dayFileExists = true,
+            hashOf = { "ca9639251e3d29e3" },
+            existingContent = "someone wrote this first",
         )
+        assertEquals(MemoryWriteRevisionGuard.malformedCopy(), f1Msg)
+        // The copy must stay actionable: the model self-corrects from it, so
+        // losing either half of the guidance turns the refusal into a dead end.
+        requireNotNull(f1Msg)
+        assertTrue("must tell the caller to pass it verbatim", f1Msg.contains("原样传入"))
+        assertTrue("must offer the omit-revision escape", f1Msg.contains("省略 revision"))
     }
 
     @Test
@@ -309,9 +312,11 @@ class MemoryRevisionTest {
     fun `writeMemory's returned revision round-trips into the next write`() {
         // [F9 follow-up] The token minted by a write must be accepted verbatim
         // by the next write on the same day — the whole point of the format.
+        // Fixed clock: a wall-clock read between the two writes could roll over
+        // midnight and turn this into a DayRolledOver flake (23:59 boundary).
         val dir = java.nio.file.Files.createTempDirectory("memrev-roundtrip").toFile()
         try {
-            val repo = MemoryRepository(dir) { System.currentTimeMillis() }
+            val repo = MemoryRepository(dir) { 1_798_200_000_000L }
             val first = repo.writeMemory("round-trip entry one", null)
             assertTrue(first.startsWith("Memory saved"))
             val token = Regex("revision (\\d{4}-\\d{2}-\\d{2}:[0-9a-f]{16})").find(first)
@@ -325,5 +330,22 @@ class MemoryRevisionTest {
         } finally {
             dir.deleteRecursively()
         }
+    }
+
+    @Test
+    fun `a legacy bare hash passes the guard end-to-end when it matches`() {
+        // [P3 review follow-up] The legacy path was only covered piecewise
+        // (rejection()==null at the classifier, matching token at the guard).
+        // This pins the combined legacy contract: a pre-#407 bare 16-hex hash
+        // that matches today's file still writes.
+        assertNull(
+            MemoryWriteRevisionGuard.refusal(
+                expectedRevision = "ca9639251e3d29e3",
+                fileName = "2026-11-20.md",
+                dayFileExists = true,
+                hashOf = { "ca9639251e3d29e3" },
+                existingContent = "today's body",
+            ),
+        )
     }
 }
