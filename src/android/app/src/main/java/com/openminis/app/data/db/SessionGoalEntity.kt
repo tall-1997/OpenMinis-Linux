@@ -24,6 +24,15 @@ data class SessionGoalEntity(
      * sovereign, a model objective is only ever the CURRENT task's.
      */
     @ColumnInfo(name = "created_by") val createdBy: String = GoalOrigin.USER,
+    /**
+     * [T-goal-drift-reconciler] Structured definition of done — the field the
+     * completion verifier's "honest boundary" (free-text objective with NO
+     * parsed criteria) names as missing. Rendered into `<goal_context>` every
+     * request and echoed in drift nudges, so the model self-verifies against
+     * concrete checks instead of vibes. Nullable: pre-migration rows and
+     * quick objectives legitimately have none.
+     */
+    @ColumnInfo(name = "acceptance") val acceptance: String? = null,
 )
 
 object GoalStatus {

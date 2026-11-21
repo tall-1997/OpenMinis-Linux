@@ -796,5 +796,5 @@ internal object AppMigrations {
     // [#27 memory embeddings] declared in MemoryEmbeddingMigrations.kt.
     MemoryEmbeddingMigrations.MIGRATION_32_33,
     MemoryEmbeddingMigrations.MIGRATION_33_32,
-    ) + ThinkingDormancyMigrations.ALL + CompactAssetMigrations.MIGRATION_34_35
+    ) + ThinkingDormancyMigrations.ALL + CompactAssetMigrations.MIGRATION_34_35 + GoalMigrations.MIGRATION_35_36
 }

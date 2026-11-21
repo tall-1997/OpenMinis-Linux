@@ -3,8 +3,10 @@ package com.openminis.app.goal
 import com.openminis.app.data.db.GoalOrigin
 import com.openminis.app.data.db.GoalStatus
 import com.openminis.app.data.db.SessionGoalEntity
+import android.content.Context
 import com.openminis.app.data.repository.ChatRepository
 import com.openminis.app.goal.GoalCompletionVerifier.Verification
+import com.openminis.app.tools.AgentPlanStore
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
@@ -69,7 +71,12 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
 
     suspend fun get(sessionId: String): SessionGoalEntity? = persistence.load(sessionId)
 
-    suspend fun createByUser(sessionId: String, objective: String, tokenBudget: Long? = null): SessionGoalEntity =
+    suspend fun createByUser(
+        sessionId: String,
+        objective: String,
+        tokenBudget: Long? = null,
+        acceptance: String? = null,
+    ): SessionGoalEntity =
         locked(sessionId) {
             check(persistence.load(sessionId) == null) { "A Goal already exists for this session" }
             GoalStateMachine.create(
@@ -78,7 +85,7 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
                 tokenBudget,
                 System.currentTimeMillis(),
                 GoalOrigin.USER,
-            ).also {
+            ).copy(acceptance = acceptance?.trim()?.takeIf { it.isNotBlank() }).also {
                 persistence.insert(it)
                 bump()
             }
@@ -104,12 +111,34 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
      * it). A [GoalOrigin.USER] Goal is never overwritten: the human's objective
      * outranks whatever the model inferred.
      */
-    suspend fun createByModel(sessionId: String, objective: String, tokenBudget: Long? = null): SessionGoalEntity = locked(sessionId) {
+    suspend fun createByModel(
+        sessionId: String,
+        objective: String,
+        tokenBudget: Long? = null,
+        acceptance: String? = null,
+    ): SessionGoalEntity = locked(sessionId) {
         val normalized = objective.trim()
+        val normalizedAcceptance = acceptance?.trim()?.takeIf { it.isNotBlank() }
         val existing = persistence.load(sessionId)
         if (existing != null) {
             val sameObjective = existing.objective == normalized
-            if (sameObjective || !supersedableByModel(existing)) return@locked existing
+            if (sameObjective || !supersedableByModel(existing)) {
+                // [T-goal-drift-reconciler] A re-emission of the SAME objective
+                // may still refine its definition of done — record it without
+                // disturbing the idempotent contract, and only for a goal the
+                // model owns (a human's row is sovereign, criteria included).
+                if (sameObjective &&
+                    normalizedAcceptance != null &&
+                    existing.createdBy == GoalOrigin.MODEL &&
+                    existing.acceptance != normalizedAcceptance
+                ) {
+                    return@locked existing.copy(acceptance = normalizedAcceptance, updatedAt = System.currentTimeMillis()).also {
+                        persistence.save(it)
+                        bump()
+                    }
+                }
+                return@locked existing
+            }
             // One row per session: drop the stale model Goal, then write the
             // new task's. (A single UPDATE would need saveState to carry
             // created_at; the delete+insert keeps the fresh start time and is
@@ -122,7 +151,7 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
             tokenBudget,
             System.currentTimeMillis(),
             GoalOrigin.MODEL,
-        ).also {
+        ).copy(acceptance = normalizedAcceptance).also {
             persistence.insert(it)
             bump()
         }
@@ -263,13 +292,72 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
         )
     }
 
-    suspend fun recordUsage(sessionId: String, tokens: Long, elapsedMs: Long): SessionGoalEntity? = locked(sessionId) {
+    /**
+     * Per-tool-turn Goal accounting: usage counters PLUS the drift reconciler's
+     * stall tick ([T-goal-drift-reconciler]) — both are O(1) host-side writes
+     * riding the same locked transaction, so the drift signal costs no model
+     * turn. Delivery happens at the natural turn end via [driftNudgeIfOwed];
+     * mid-run this only counts.
+     */
+    suspend fun recordUsage(
+        sessionId: String,
+        tokens: Long,
+        elapsedMs: Long,
+        context: Context? = null,
+    ): SessionGoalEntity? = locked(sessionId) {
         val current = persistence.load(sessionId) ?: return@locked null
-        GoalStateMachine.recordProgress(current, tokens.coerceAtLeast(0), elapsedMs.coerceAtLeast(0), System.currentTimeMillis())
+        val updated = GoalStateMachine.recordProgress(current, tokens.coerceAtLeast(0), elapsedMs.coerceAtLeast(0), System.currentTimeMillis())
             .also {
                 persistence.save(it)
                 bump()
             }
+        // [T-goal-drift-reconciler] Advance the stall counter against the plan
+        // board. Failure-bounded: a drift bookkeeping hiccup must not fail the
+        // usage write the loop already depends on.
+        if (context != null) runCatching {
+            val fingerprint = GoalDriftReconciler.boardFingerprint(
+                runCatching { AgentPlanStore.list(sessionId, context) }.getOrElse { emptyList() },
+            )
+            GoalDriftStore.save(
+                context.filesDir,
+                sessionId,
+                GoalDriftReconciler.next(
+                    GoalDriftStore.load(context.filesDir, sessionId),
+                    goalActive = updated.status == GoalStatus.ACTIVE,
+                    fingerprint = fingerprint,
+                ),
+            )
+        }
+        updated
+    }
+
+    /**
+     * [T-goal-drift-reconciler] Natural-turn-end drift delivery: advances the
+     * stall counter against the current board, and when the threshold is
+     * crossed on a not-yet-nudged fingerprint returns the reminder text and
+     * records the delivered-once marker. The loop appends it as a user
+     * message under the persist-then-append contract. Null = silent.
+     */
+    suspend fun driftNudgeIfOwed(sessionId: String, context: Context?): String? = locked(sessionId) {
+        val current = persistence.load(sessionId) ?: return@locked null
+        val filesDir = context?.filesDir ?: return@locked null
+        val driftState = GoalDriftStore.load(filesDir, sessionId)
+        val plans = runCatching { AgentPlanStore.list(sessionId, context) }.getOrElse { emptyList() }
+        val fingerprint = GoalDriftReconciler.boardFingerprint(plans)
+        val updated = GoalDriftReconciler.next(
+            driftState,
+            goalActive = current.status == GoalStatus.ACTIVE,
+            fingerprint = fingerprint,
+        )
+        val nudge = GoalDriftReconciler.nudgeIfOwed(
+            updated,
+            objective = current.objective,
+            acceptance = current.acceptance,
+            pendingCount = plans.count { it.status != "done" },
+        )
+        val finalState = if (nudge != null) updated.copy(nudgedBoardSha = updated.lastBoardSha) else updated
+        GoalDriftStore.save(filesDir, sessionId, finalState)
+        nudge
     }
 
     /**

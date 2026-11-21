@@ -3,8 +3,15 @@ package com.openminis.app.goal
 import com.openminis.app.data.db.GoalStatus
 import com.openminis.app.data.db.SessionGoalEntity
 
-private fun quoteObjective(value: String): String = buildString {
-    append('"')
+
+/**
+ * [T-goal-drift-reconciler] Shared escaper for untrusted text mounted inside
+ * `<goal_context>`: control characters are JSON-escaped and angle brackets
+ * neutralized (`\u003C`/`\u003E`) so a criterion line cannot close the
+ * wrapper and speak outside the envelope. [quoteObjective] wraps it for the
+ * JSON block; acceptance bullets use it bare.
+ */
+private fun escapeUntrusted(value: String): String = buildString {
     for (char in value) {
         when (char) {
             '"' -> append("\\\"")
@@ -19,6 +26,11 @@ private fun quoteObjective(value: String): String = buildString {
             else -> if (char.code < 0x20) append("\\u%04X".format(char.code)) else append(char)
         }
     }
+}
+
+private fun quoteObjective(value: String): String = buildString {
+    append('"')
+    append(escapeUntrusted(value))
     append('"')
 }
 
@@ -29,6 +41,13 @@ internal fun goalContextPrompt(goal: SessionGoalEntity): String = buildString {
     appendLine("<untrusted_objective_json>")
     appendLine(quoteObjective(goal.objective))
     appendLine("</untrusted_objective_json>")
+    // [T-goal-drift-reconciler] The structured definition of done, when the
+    // goal carries one. Escaped like the objective: a criterion line must not
+    // be able to close the wrapper and speak outside the envelope.
+    goal.acceptance?.takeIf { it.isNotBlank() }?.let { criteria ->
+        appendLine("Acceptance criteria — the definition of done for this goal. Verify against these before reporting complete:")
+        criteria.lines().filter { it.isNotBlank() }.take(12).forEach { appendLine("- ${escapeUntrusted(it.trim())}") }
+    }
     appendLine("State when this note was written: status=${goal.status}, tokens=${goal.tokensUsed}/${goal.tokenBudget?.toString() ?: "unlimited"}, elapsed=${goal.elapsedMs}ms.")
     appendLine("The numbers above are a snapshot, not a live read. Do not call update_goal(op=get) on consecutive turns — re-reading an unchanged goal burns tokens without progress; re-read only after a long-running operation or an external state change. Report complete only when the objective is verified; report the same blocked condition only when truly blocked.")
     appendLine("</goal_context>")

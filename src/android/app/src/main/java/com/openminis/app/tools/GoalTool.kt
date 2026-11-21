@@ -53,10 +53,16 @@ object GoalTool {
                 "Required for op=create: the concrete completion objective, in one sentence.",
             ),
             "token_budget" to AgentToolParam("integer", "Optional positive token budget for op=create."),
-            "condition" to AgentToolParam("string", "Specific unmet condition when op=blocked; repeated identical reports are counted."),
+            "acceptance" to AgentToolParam(
+                "string",
+                "Optional for op=create: the concrete definition of done, one check per line. Rendered into " +
+                    "<goal_context> every request and quoted by goal-drift nudges — write checks a fresh pair " +
+                    "of eyes could verify without reading this conversation.",
+            ),
+            "condition" to AgentToolParam("string", "Specific unmet condition when op=blocked; repeated identical reports are counted."),,
         ),
         required = listOf("op"),
-        propertyOrdering = listOf("tool_title", "op", "objective", "token_budget", "condition"),
+        propertyOrdering = listOf("tool_title", "op", "objective", "token_budget", "acceptance", "condition"),
     )
 
     /**
@@ -109,7 +115,8 @@ object GoalTool {
                         )
                     }
                     val budget = if (args.has("token_budget")) args.optLong("token_budget").takeIf { it > 0 } else null
-                    manager.createByModel(sessionId, objective, budget)
+                    val acceptance = args.optString("acceptance").takeIf(String::isNotBlank)
+                    manager.createByModel(sessionId, objective, budget, acceptance)
                 }
                 "complete" -> {
                     // [T-goal-completion-verifier] The host verifies before
