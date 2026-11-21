@@ -112,6 +112,7 @@ class ChatViewModel(
         if (cached != null && sessionMemoryRepoCacheSid == sid) return cached
         val repo = MemoryRepository(
             com.openminis.app.sandbox.SessionWorkspace.memoryDir(context.filesDir, sid),
+            sharedDir = com.openminis.app.data.repository.MemoryIndex.sharedDir(context.filesDir),
         )
         sessionMemoryRepoCache = repo
         sessionMemoryRepoCacheSid = sid

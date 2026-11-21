@@ -24,6 +24,10 @@ import com.openminis.app.util.IsoTime
 class MemoryRepository(
     private val memoryDir: File,
     private val clock: () -> Long = System::currentTimeMillis,
+    /** [T-memory-shared-promotion] App-wide mirror: host writes are copied here
+     *  so a NEW chat's prompt can see what earlier chats learned. Null keeps
+     *  the old per-session behaviour (used by tests and non-chat callers). */
+    private val sharedDir: File? = null,
 ) {
 
     val learnedPrefs = LearnedPrefsStore(File(memoryDir, LearnedPrefsStore.FILE_NAME))
@@ -246,10 +250,32 @@ class MemoryRepository(
         pin: Boolean = false,
     ): String {
         if (ttlDays != null && (!autoArchive || ttlDays !in 1..MemoryLifecycle.MAX_TTL_DAYS)) return "Error: Invalid ttl_days"
-        return writeEntry(content, expectedRevision, origin, ttlDays, autoArchive, pin,
+        val result = writeEntry(content, expectedRevision, origin, ttlDays, autoArchive, pin,
             initialHeader = MemoryMetadataParser.frontmatterFor(type = "daily"),
         )
+        if (result.startsWith("Memory saved")) mirrorToShared(content)
+        return result
     }
+
+    /** [T-memory-shared-promotion] Best-effort copy into minis-global/memory.
+     *  Never throws into the diary transaction: a failed mirror must not lose
+     *  the session copy that already landed. Dedup is byte-exact on the body. */
+    private fun mirrorToShared(content: String) {
+        val dir = sharedDir ?: return
+        runCatching {
+            synchronized(sharedLock) {
+                dir.mkdirs()
+                val now = clock()
+                val file = File(dir, "${IsoTime.formatLocalDate(now)}.md")
+                val existing = if (file.isFile) file.readText() else ""
+                if (existing.contains(content.trim())) return@synchronized
+                val header = if (existing.isBlank()) "---\ntype: daily\n---\n" else ""
+                file.appendText(header + "<!-- ${IsoTime.formatLocalSeconds(now)} -->\n" + content.trim() + "\n\n")
+            }
+        }
+    }
+
+    private val sharedLock = Any()
 
     private fun writeEntry(
         content: String,

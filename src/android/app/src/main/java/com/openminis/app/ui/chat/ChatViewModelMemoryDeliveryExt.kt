@@ -180,7 +180,7 @@ internal fun ChatViewModel.projectMemoryDeliveryPrompt(
     if (!_memoryEnabled.value) return daily.project(prompt, "", null, now) ?: MemoryDeliveryPrompt(prompt, null)
     val sessionDir = SessionWorkspace.memoryDir(context.filesDir, daily.memoryOwnerId)
     val (assembly, _) = assembleDailyMemory(
-        session = MemoryRepository(sessionDir),
+        session = MemoryRepository(sessionDir, sharedDir = MemoryIndex.sharedDir(context.filesDir)),
         sessionDir = sessionDir,
         sharedDir = MemoryIndex.sharedDir(context.filesDir),
         query = query,
