@@ -49,7 +49,7 @@ object GoalTool {
             "op" to AgentToolParam(
                 "string",
                 "Operation",
-                enumValues = listOf("get", "create", "complete", "blocked", "clear", "rollback"),
+                enumValues = listOf("get", "create", "contract", "complete", "blocked", "clear", "rollback"),
             ),
             "objective" to AgentToolParam(
                 "string",
@@ -57,9 +57,12 @@ object GoalTool {
             ),
             "token_budget" to AgentToolParam("integer", "Optional positive token budget for op=create."),
             "condition" to AgentToolParam("string", "Specific unmet condition when op=blocked; repeated identical reports are counted."),
+            "acceptance" to AgentToolParam("string", "op=contract: judgement-ready acceptance criteria, one sentence."),
+            "constraints" to AgentToolParam("string", "op=contract: hard constraints / forbidden moves for this task."),
+            "next_step" to AgentToolParam("string", "op=contract: the single next action the agent commits to."),
         ),
         required = listOf("op"),
-        propertyOrdering = listOf("tool_title", "op", "objective", "token_budget", "condition"),
+        propertyOrdering = listOf("tool_title", "op", "objective", "token_budget", "condition", "acceptance", "constraints", "next_step"),
     )
 
     /**
@@ -108,6 +111,27 @@ object GoalTool {
                         toolTitle = title,
                     )
                 }
+            }
+            if (op == "contract") {
+                val current = manager.get(sessionId)
+                    ?: return ToolExecutionResult(
+                        "Goal error: no Goal exists for this session — create one before attaching a contract",
+                        false,
+                        toolTitle = args.optString("tool_title", "Goal"),
+                    )
+                fun pick(key: String, old: String?): String? =
+                    if (args.has(key)) args.optString(key).trim().takeIf { it.isNotEmpty() } else old
+                val updated = manager.updateContract(
+                    sessionId,
+                    acceptance = pick("acceptance", current.acceptance),
+                    constraints = pick("constraints", current.constraints),
+                    nextStep = pick("next_step", current.nextStep),
+                ) ?: current
+                return ToolExecutionResult(
+                    manager.render(updated),
+                    true,
+                    toolTitle = args.optString("tool_title", "Goal"),
+                )
             }
             val goal = when (op) {
                 "get" -> manager.get(sessionId)

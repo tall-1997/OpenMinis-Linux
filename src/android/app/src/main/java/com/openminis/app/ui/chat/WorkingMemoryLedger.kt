@@ -211,6 +211,12 @@ internal class WorkingMemoryLedger {
     @Synchronized
     fun size(): Int = entries.size
 
+    /** [T-drift-guard] Monotonic round counter; unlike [size] it keeps
+     *  growing after old entries fold into one marker line, so periodic
+     *  checks never stop firing on a long session. */
+    @Synchronized
+    fun lastTurn(): Int = entries.lastOrNull()?.turn ?: 0
+
     /** [T-working-memory-persist] Undo the last render when its note failed
      * to reach the transcript; the next turn retries instead of losing it. */
     @Synchronized

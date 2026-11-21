@@ -657,6 +657,14 @@ internal object AppMigrations {
         }
     }
 
+    val MIGRATION_36_35 = object : Migration(36, 35) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // Keep the goal-contract columns (same policy as 30->29): older
+            // builds ignore extra fields, and dropping them would lose the
+            // contract the user wrote.
+        }
+    }
+
     val MIGRATION_30_29 = object : Migration(30, 29) {
         override fun migrate(db: SupportSQLiteDatabase) {
             // Keep the columns (same policy as 17->16): older builds ignore
@@ -807,5 +815,5 @@ internal object AppMigrations {
     // [#27 memory embeddings] declared in MemoryEmbeddingMigrations.kt.
     MemoryEmbeddingMigrations.MIGRATION_32_33,
     MemoryEmbeddingMigrations.MIGRATION_33_32,
-    ) + ThinkingDormancyMigrations.ALL + CompactAssetMigrations.MIGRATION_34_35 + listOf(MIGRATION_35_36)
+    ) + ThinkingDormancyMigrations.ALL + CompactAssetMigrations.MIGRATION_34_35 + listOf(MIGRATION_35_36, MIGRATION_36_35)
 }

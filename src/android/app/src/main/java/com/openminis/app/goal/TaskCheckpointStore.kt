@@ -1,10 +1,11 @@
 package com.openminis.app.goal
 
 import android.content.Context
-import com.openminis.app.data.db.SessionGoalEntity
 import com.openminis.app.sandbox.ExecutionCoordinator
 import com.openminis.app.sandbox.SessionWorkspace
 import com.openminis.app.tools.AgentPlanStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -13,18 +14,24 @@ import java.util.UUID
 /**
  * [T-task-checkpoint] File-based recovery points for long tasks.
  *
- * A checkpoint is a plan-board snapshot plus the goal contract fields. The
- * host writes one before every drift check (every 10 tool rounds) and
- * `update_goal(op=rollback)` restores the newest one, so a drifted run can
- * return to a known-good plan instead of trying to untangle itself in place.
+ * A checkpoint is a plan-board snapshot plus the goal contract as it was
+ * rendered for the model (`goalPrompt` carries objective + acceptance +
+ * constraints + next_step). The host writes one before every drift check
+ * (every 10 tool rounds) and `update_goal(op=rollback)` restores the newest
+ * one, so a drifted run can return to a known-good plan instead of trying to
+ * untangle itself in place.
  *
  * Storage is per-owner-session under `task-checkpoints/checkpoints.json`;
- * the newest 20 are kept (a checkpoint is tiny — plan titles, not transcripts).
+ * the newest [MAX] are kept (a checkpoint is tiny — plan titles, not
+ * transcripts). All disk IO runs on [Dispatchers.IO]: callers are coroutines
+ * on the chat path and must never block the main thread on a JSON rewrite.
  */
 object TaskCheckpointStore {
     private const val DIR = "task-checkpoints"
     private const val FILE = "checkpoints.json"
-    private const val MAX = 20
+
+    /** Hard cap on retained recovery points; older ones fall off the tail. */
+    const val MAX = 20
 
     data class PlanRow(val id: String, val title: String, val description: String, val status: String)
 
@@ -32,9 +39,7 @@ object TaskCheckpointStore {
         val id: String,
         val createdAt: Long,
         val objective: String?,
-        val acceptance: String?,
-        val constraints: String?,
-        val nextStep: String?,
+        val goalPrompt: String?,
         val plans: List<PlanRow>,
     )
 
@@ -43,9 +48,14 @@ object TaskCheckpointStore {
         return File(File(SessionWorkspace.base(context.filesDir, owner), DIR), FILE)
     }
 
-    fun save(context: Context?, sessionId: String, goal: SessionGoalEntity?): Boolean {
-        context ?: return false
-        return runCatching {
+    suspend fun save(
+        context: Context?,
+        sessionId: String,
+        objective: String?,
+        goalPrompt: String?,
+    ): Boolean = withContext(Dispatchers.IO) {
+        context ?: return@withContext false
+        runCatching {
             val plans = AgentPlanStore.list(sessionId, context).map {
                 PlanRow(it.id, it.title, it.description, it.status)
             }
@@ -55,10 +65,8 @@ object TaskCheckpointStore {
                 Snapshot(
                     id = UUID.randomUUID().toString(),
                     createdAt = System.currentTimeMillis(),
-                    objective = goal?.objective,
-                    acceptance = goal?.acceptance,
-                    constraints = goal?.constraints,
-                    nextStep = goal?.nextStep,
+                    objective = objective?.trim()?.takeIf { it.isNotEmpty() },
+                    goalPrompt = goalPrompt?.takeIf { it.isNotBlank() },
                     plans = plans,
                 ),
             )
@@ -73,9 +81,9 @@ object TaskCheckpointStore {
     }
 
     /** Restores the newest checkpoint's plan board. Returns restored item count. */
-    fun restoreLatest(context: Context?, sessionId: String): Int {
-        context ?: return 0
-        val snapshot = latest(context, sessionId) ?: return 0
+    suspend fun restoreLatest(context: Context?, sessionId: String): Int = withContext(Dispatchers.IO) {
+        context ?: return@withContext 0
+        val snapshot = latest(context, sessionId) ?: return@withContext 0
         val inputs = snapshot.plans.map {
             AgentPlanStore.PlanInput(
                 id = it.id,
@@ -84,15 +92,16 @@ object TaskCheckpointStore {
                 status = it.status,
             )
         }
-        AgentPlanStore.replace(sessionId, context, inputs)
-        return inputs.size
+        runCatching { AgentPlanStore.replace(sessionId, context, inputs) }
+            .map { inputs.size }
+            .getOrDefault(0)
     }
 
     private fun load(context: Context, sessionId: String): List<Snapshot> = runCatching {
         val f = file(context, sessionId)
-        if (!f.isFile) return emptyList()
+        if (!f.isFile) return@runCatching emptyList()
         val root = JSONObject(f.readText())
-        val arr = root.optJSONArray("checkpoints") ?: return emptyList()
+        val arr = root.optJSONArray("checkpoints") ?: return@runCatching emptyList()
         buildList {
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
@@ -100,7 +109,14 @@ object TaskCheckpointStore {
                 val rows = buildList {
                     for (j in 0 until plans.length()) {
                         val p = plans.getJSONObject(j)
-                        add(PlanRow(p.optString("id"), p.optString("title"), p.optString("description"), p.optString("status")))
+                        add(
+                            PlanRow(
+                                p.optString("id"),
+                                p.optString("title"),
+                                p.optString("description"),
+                                p.optString("status"),
+                            ),
+                        )
                     }
                 }
                 add(
@@ -108,9 +124,7 @@ object TaskCheckpointStore {
                         id = o.optString("id"),
                         createdAt = o.optLong("createdAt"),
                         objective = o.optString("objective").takeIf { it.isNotEmpty() },
-                        acceptance = o.optString("acceptance").takeIf { it.isNotEmpty() },
-                        constraints = o.optString("constraints").takeIf { it.isNotEmpty() },
-                        nextStep = o.optString("nextStep").takeIf { it.isNotEmpty() },
+                        goalPrompt = o.optString("goalPrompt").takeIf { it.isNotEmpty() },
                         plans = rows,
                     ),
                 )
@@ -120,16 +134,15 @@ object TaskCheckpointStore {
 
     private fun write(context: Context, sessionId: String, snapshots: List<Snapshot>) {
         val f = file(context, sessionId)
-        f.parentFile?.mkdirs()
+        val parent = f.parentFile ?: return
+        parent.mkdirs()
         val arr = JSONArray()
         for (s in snapshots) {
             val o = JSONObject()
             o.put("id", s.id)
             o.put("createdAt", s.createdAt)
             o.put("objective", s.objective ?: "")
-            o.put("acceptance", s.acceptance ?: "")
-            o.put("constraints", s.constraints ?: "")
-            o.put("nextStep", s.nextStep ?: "")
+            o.put("goalPrompt", s.goalPrompt ?: "")
             val plans = JSONArray()
             for (p in s.plans) {
                 plans.put(
@@ -144,7 +157,7 @@ object TaskCheckpointStore {
             arr.put(o)
         }
         val root = JSONObject().put("checkpoints", arr)
-        val tmp = File(f.parentFile, "${f.name}.tmp")
+        val tmp = File(parent, "${f.name}.tmp")
         tmp.writeText(root.toString())
         if (!tmp.renameTo(f)) {
             f.writeText(root.toString())

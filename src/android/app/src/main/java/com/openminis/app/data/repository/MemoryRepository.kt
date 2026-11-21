@@ -11,6 +11,7 @@ import java.io.File
 import java.io.IOException
 import com.openminis.app.util.Digest
 import com.openminis.app.util.IsoTime
+import com.openminis.app.util.SecretMasking
 
 /**
  * Manages the memory directory (`minis-global/memory/`).
@@ -23,11 +24,14 @@ import com.openminis.app.util.IsoTime
  */
 class MemoryRepository(
     private val memoryDir: File,
-    private val clock: () -> Long = System::currentTimeMillis,
     /** [T-memory-shared-promotion] App-wide mirror: host writes are copied here
      *  so a NEW chat's prompt can see what earlier chats learned. Null keeps
-     *  the old per-session behaviour (used by tests and non-chat callers). */
+     *  the old per-session behaviour (used by tests and non-chat callers).
+     *  Position matters: it MUST sit before [clock] so the many
+     *  `MemoryRepository(dir) { time }` trailing-lambda call sites keep
+     *  binding the lambda to the clock. */
     private val sharedDir: File? = null,
+    private val clock: () -> Long = System::currentTimeMillis,
 ) {
 
     val learnedPrefs = LearnedPrefsStore(File(memoryDir, LearnedPrefsStore.FILE_NAME))
@@ -75,6 +79,13 @@ class MemoryRepository(
         private const val TAG = "MemoryRepository"
         internal const val GLOBAL_FILE = "GLOBAL.md"
         private const val HASH_CAP_BYTES = 256 * 1024
+
+        /** Cross-instance lock: every session has its own repository, but all
+         *  of them append to the same shared day file. */
+        val SHARED_LOCK = Any()
+
+        /** Per-day mirror ceiling (256 KB ≈ 2.5K typical entries). */
+        const val MAX_SHARED_DAILY_BYTES = 256 * 1024L
 
         /**
          * [T-global-md-seed] Default GLOBAL.md content for first-run seeding.
@@ -131,7 +142,7 @@ class MemoryRepository(
         }
         // [T-memory-prompt-budget] Tiered per-day verbatim caps for daily-log
         // injection: today gets MAX_INJECT_LINES, older days in the window
-        // get MAX_INJECT_LINES_OLDER. 50 + 6*15 lines is roughly 15-17K chars
+        // get MAX_INJECT_LINES_OLDER. 120 + 6*40 lines is roughly 36-40K chars
         // at the ~100 chars/line measured on real logs, sized so the whole
         // 7-day window fits inside MemoryPromptBudget.DEFAULT_BUDGET_CHARS
         // next to the standing fragments. The old single 200-line cap (an
@@ -259,23 +270,28 @@ class MemoryRepository(
 
     /** [T-memory-shared-promotion] Best-effort copy into minis-global/memory.
      *  Never throws into the diary transaction: a failed mirror must not lose
-     *  the session copy that already landed. Dedup is byte-exact on the body. */
+     *  the session copy that already landed. Dedup is byte-exact on the body.
+     *  Secrets are masked here too — the shared file is readable by every
+     *  chat's prompt, so it must never carry a credential the session copy
+     *  was allowed to keep. Growth is capped per day file: a runaway
+     *  memory_write loop must not fill the app's data partition. */
     private fun mirrorToShared(content: String) {
         val dir = sharedDir ?: return
+        val masked = SecretMasking.mask(content.trim())
+        if (masked.isEmpty()) return
         runCatching {
-            synchronized(sharedLock) {
+            synchronized(SHARED_LOCK) {
                 dir.mkdirs()
                 val now = clock()
                 val file = File(dir, "${IsoTime.formatLocalDate(now)}.md")
+                if (file.isFile && file.length() > MAX_SHARED_DAILY_BYTES) return@synchronized
                 val existing = if (file.isFile) file.readText() else ""
-                if (existing.contains(content.trim())) return@synchronized
+                if (existing.contains(masked)) return@synchronized
                 val header = if (existing.isBlank()) "---\ntype: daily\n---\n" else ""
-                file.appendText(header + "<!-- ${IsoTime.formatLocalSeconds(now)} -->\n" + content.trim() + "\n\n")
+                file.appendText(header + "<!-- ${IsoTime.formatLocalSeconds(now)} -->\n" + masked + "\n\n")
             }
         }
     }
-
-    private val sharedLock = Any()
 
     private fun writeEntry(
         content: String,

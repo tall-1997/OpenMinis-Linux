@@ -109,13 +109,13 @@ internal suspend fun ChatViewModel.commitSessionNoticesOnce(
     }
     if (goalCanContinue) {
         val ledger = WorkingMemoryStore.ledgerFor(sid, context.filesDir)
-        val bucket = com.openminis.app.goal.DriftGuard.bucketFor(ledger.size())
+        val bucket = com.openminis.app.goal.DriftGuard.bucketFor(ledger.lastTurn())
         if (bucket >= com.openminis.app.goal.DriftGuard.MIN_TOOL_CALLS) {
             val marker = com.openminis.app.goal.DriftGuard.markerFor(bucket)
             if (agentHistory.none { it.content.contains(marker) }) {
                 // [T-task-checkpoint] Recovery point before every drift check:
                 // the plan board at the last known-good round.
-                com.openminis.app.goal.TaskCheckpointStore.save(context, sid, null)
+                com.openminis.app.goal.TaskCheckpointStore.save(context, sid, goalObjective, goalPrompt)
                 val note = com.openminis.app.goal.DriftGuard.buildNote(
                     marker, goalPrompt ?: goalObjective, bucket,
                 )
