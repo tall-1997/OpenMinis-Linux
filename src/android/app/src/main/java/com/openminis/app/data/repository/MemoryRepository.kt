@@ -289,7 +289,14 @@ class MemoryRepository(
                             dayFileExists = existing.isNotEmpty(),
                             hashOf = { Digest.sha256Hex(it) },
                             existingContent = existing,
-                        )?.let { return@write WriteOutcome(it) }
+                        )?.let {
+                            // [F4] Refusals were previously invisible: the only logs on this
+                            // path were success (Log.i) and exception (Log.e), so an audit of
+                            // "why did my write not land" had nothing to read. One warning
+                            // per refusal, copy prefix only — never the entry body.
+                            Log.w(TAG, "memory write rejected: $fileName — ${it.take(80)}")
+                            return@write WriteOutcome(it)
+                        }
                     }
                     val header = MemoryMetadataParser.header(existing)
                     val bodyStart = header?.bodyStart ?: if (existing.startsWith('\uFEFF')) 1 else 0
