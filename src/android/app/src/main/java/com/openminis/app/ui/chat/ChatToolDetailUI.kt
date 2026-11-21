@@ -152,7 +152,7 @@ internal fun ToolDetailSheet(
         block.toolStatus == ToolBlockStatus.STREAMING ||
         block.toolStatus == ToolBlockStatus.PENDING
     val toolAccent = toolAccentColor(block.toolName)
-
+    val dim = Dims.dimens
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -1365,7 +1365,7 @@ private fun EditorCard(
     val cardBg = if (isDark) Color(0xFF1A1A1A) else Color(0xFFF0F0F0)
     val headerBg = if (isDark) Color(0xFF212121) else Color(0xFFEBEBEB)
     val cardBorder = if (isDark) Color(0xFF404040) else Color(0xFFD1D1D1)
-
+    val dim = Dims.dimens
     Column(
         modifier = Modifier
             .fillMaxSize()

@@ -18,7 +18,7 @@ const val KEY_SHOW_TURN_CHANGES_CARD = "chat.showTurnChangesCard"  // Boolean, d
 
 /** Default OFF — see [KEY_SHOW_TURN_CHANGES_CARD]. */
 fun showTurnChangesCardEnabled(context: Context): Boolean =
-    getAppearancePrefs(context).getBoolean(KEY_SHOW_TURN_CHANGES_CARD, false)
+    getAppearancePrefs(context).bool(KEY_SHOW_TURN_CHANGES_CARD, false)
 
 @Composable
 internal fun ShowTurnChangesCardRow(

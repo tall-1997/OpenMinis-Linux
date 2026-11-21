@@ -447,7 +447,6 @@ fun ChatScreen(
         viewModel.onForegroundChanged(true)
         // Stamp read on enter AND dispose so streamed rows aren't "unseen" on leave.
         com.openminis.app.data.UnreadRegistry.markRead(
-            tHangDiagAppContext,
             viewModel.realSessionId.ifBlank { sessionId },
         )
         // Mount/dispose markers (PerfLongCtx, hangCount extra preserved).
@@ -462,7 +461,6 @@ fun ChatScreen(
             viewModel.onForegroundChanged(false)
             // Final read stamp.
             com.openminis.app.data.UnreadRegistry.markRead(
-                tHangDiagAppContext,
                 viewModel.realSessionId.ifBlank { sessionId },
             )
             // T-android-new-chat-empty-residue: drop sessions materialised by
@@ -1589,18 +1587,17 @@ fun ChatScreen(
         val listener: (String) -> Unit = { key ->
             onMain {
                 when (key) {
-                    com.openminis.app.ui.settings.KEY_FONT_MESSAGE -> messageFontLevel = sp.int(key, 0)
-                    com.openminis.app.ui.settings.KEY_FONT_CHAT_INPUT -> chatInputLevel = sp.int(key, 0)
-                    com.openminis.app.ui.settings.KEY_SHOW_FLOATING_TOOL_BAR -> showFloatingToolBar = sp.bool(key, true)
-                    com.openminis.app.ui.settings.KEY_SHOW_COMPLETED_TOOL_CARDS -> showCompletedToolCards = sp.bool(key, false)
-                    com.openminis.app.ui.settings.KEY_FOLD_AI_PROCESS -> foldAiProcess = sp.bool(key, com.openminis.app.ui.settings.DEFAULT_FOLD_AI_PROCESS)
-                    com.openminis.app.ui.settings.KEY_SHOW_MIC_BUTTON -> showMicButton = sp.bool(key, com.openminis.app.ui.settings.DEFAULT_SHOW_MIC_BUTTON)
-                    com.openminis.app.ui.settings.KEY_SHOW_SUBAGENT_BAR -> showSubAgentBar = sp.bool(key, true)
-                    com.openminis.app.ui.settings.KEY_AUTO_FOCUS_AFTER_REPLY -> autoFocusAfterReply = sp.bool(key, true)
-                    com.openminis.app.ui.settings.KEY_SHOW_CHAT_TITLE -> showChatTitlePill = sp.bool(key, true)
-                    com.openminis.app.ui.settings.KEY_SHOW_MESSAGE_TOKEN_USAGE -> showMessageUsage = sp.bool(key, true)
-                    com.openminis.app.ui.settings.KEY_COMPOSER_CONTEXT_GLOW -> showComposerContextGlow = sp.bool(key, true)
-                    null -> applyAppearancePrefs(sp)
+                    com.openminis.app.ui.settings.KEY_FONT_MESSAGE -> messageFontLevel = appearancePrefs.int(key, 0)
+                    com.openminis.app.ui.settings.KEY_FONT_CHAT_INPUT -> chatInputLevel = appearancePrefs.int(key, 0)
+                    com.openminis.app.ui.settings.KEY_SHOW_FLOATING_TOOL_BAR -> showFloatingToolBar = appearancePrefs.bool(key, true)
+                    com.openminis.app.ui.settings.KEY_SHOW_COMPLETED_TOOL_CARDS -> showCompletedToolCards = appearancePrefs.bool(key, false)
+                    com.openminis.app.ui.settings.KEY_FOLD_AI_PROCESS -> foldAiProcess = appearancePrefs.bool(key, com.openminis.app.ui.settings.DEFAULT_FOLD_AI_PROCESS)
+                    com.openminis.app.ui.settings.KEY_SHOW_MIC_BUTTON -> showMicButton = appearancePrefs.bool(key, com.openminis.app.ui.settings.DEFAULT_SHOW_MIC_BUTTON)
+                    com.openminis.app.ui.settings.KEY_SHOW_SUBAGENT_BAR -> showSubAgentBar = appearancePrefs.bool(key, true)
+                    com.openminis.app.ui.settings.KEY_AUTO_FOCUS_AFTER_REPLY -> autoFocusAfterReply = appearancePrefs.bool(key, true)
+                    com.openminis.app.ui.settings.KEY_SHOW_CHAT_TITLE -> showChatTitlePill = appearancePrefs.bool(key, true)
+                    com.openminis.app.ui.settings.KEY_SHOW_MESSAGE_TOKEN_USAGE -> showMessageUsage = appearancePrefs.bool(key, true)
+                    com.openminis.app.ui.settings.KEY_COMPOSER_CONTEXT_GLOW -> showComposerContextGlow = appearancePrefs.bool(key, true)
                 }
             }
         }

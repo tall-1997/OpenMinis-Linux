@@ -242,7 +242,7 @@ fun AppearanceScreen(
             autoExpandThinking = p.bool(KEY_AUTO_EXPAND_THINKING, true)
             showFullThinking = p.bool(KEY_SHOW_FULL_THINKING, false)
             foldAiProcess = p.bool(KEY_FOLD_AI_PROCESS, DEFAULT_FOLD_AI_PROCESS)
-            showTurnChangesCard = p.getBoolean(KEY_SHOW_TURN_CHANGES_CARD, false)
+            showTurnChangesCard = p.bool(KEY_SHOW_TURN_CHANGES_CARD, false)
             dynamicColor = p.bool(KEY_DYNAMIC_COLOR, false)
             showChatTitle = p.bool(KEY_SHOW_CHAT_TITLE, true)
             autoGrouping = p.bool(KEY_AUTO_GROUPING, true)
@@ -510,9 +510,9 @@ fun AppearanceScreen(
                 title = stringResource(R.string.appearance_fold_ai_process_title),
                 subtitle = stringResource(R.string.appearance_fold_ai_process_subtitle),
                 checked = foldAiProcess,
-                onCheckedChange = { foldAiProcess = it; prefs.value.edit().putBoolean(KEY_FOLD_AI_PROCESS, it).apply() },
+                onCheckedChange = { foldAiProcess = it; prefs.value.set(KEY_FOLD_AI_PROCESS, it) },
             )
-            ShowTurnChangesCardRow(showTurnChangesCard) { showTurnChangesCard = it; prefs.value.edit().putBoolean(KEY_SHOW_TURN_CHANGES_CARD, it).apply() }
+            ShowTurnChangesCardRow(showTurnChangesCard) { showTurnChangesCard = it; prefs.value.set(KEY_SHOW_TURN_CHANGES_CARD, it) }
         }
 
         // -- Auto-Focus After Reply --
@@ -624,11 +624,10 @@ fun AppearanceScreen(
                 ) {
                     MinisTextButton(onClick = {
                         chatInputLevel = 0; messageLevel = 0; appBaseLevel = 0
-                        prefs.value.edit()
-                            .putInt(KEY_FONT_CHAT_INPUT, 0)
-                            .putInt(KEY_FONT_MESSAGE, 0)
-                            .putInt(KEY_FONT_APP_BASE, 0)
-                            .apply()
+                        // 三个字号同事务：分开写会让界面短暂显示「聊天恢复、消息没恢复」
+                        prefs.value.write {
+                            putInt(KEY_FONT_CHAT_INPUT, 0); putInt(KEY_FONT_MESSAGE, 0); putInt(KEY_FONT_APP_BASE, 0)
+                        }
                     }) {
                         Text(stringResource(R.string.appearance_font_reset), color = MaterialTheme.colorScheme.error)
                     }

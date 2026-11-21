@@ -28,7 +28,7 @@ import com.openminis.app.data.repository.ProviderRepository
 
 /** One shadow Voice Service row: name + ASR/TTS model counts. */
 @Composable
-private fun ShadowVoiceRow(
+internal fun ShadowVoiceRow(
     shadow: ProviderRepository.ShadowVoiceProvider,
     onClick: () -> Unit,
 ) {
