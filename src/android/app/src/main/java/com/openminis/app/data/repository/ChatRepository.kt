@@ -651,15 +651,9 @@ class ChatRepository(
                 dao.updateSortOrder(row.id, scratchBase + index)
             }
             val restoredRows = mutableListOf<MessageEntity>()
-            // INTENTIONAL BEHAVIOR CHANGE — a latest archive version with
-            // bodyRef != null whose offloaded body cannot be sized (sizeOf <= 0,
-            // including bodyStore() == null) is NOT restored and STAYS archived.
-            // An earlier revision restored such rows blindly; the restored live
-            // row then had a bodyRef pointing at nothing readable, and
-            // RequestHistory fail-closes on it — every later send in the session
-            // failed permanently. Fail-close here instead: the archive is kept
-            // intact so a later backup/blob repair can restore it for real.
-            // An offloaded body that cannot be verified must not become a live row.
+            // INTENTIONAL BEHAVIOR CHANGE — an unverifiable offloaded body (bodyRef != null, sizeOf <= 0) is
+            // NOT restored and stays archived: blind restore produced a live row RequestHistory fail-closes
+            // on, permanently failing every later send. The archive is kept so a later blob repair can restore it.
             val unrestorableArchiveIds = mutableSetOf<String>()
             order.forEachIndexed { index, entry ->
                 if (entry.restored) {
