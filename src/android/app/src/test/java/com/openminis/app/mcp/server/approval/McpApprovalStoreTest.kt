@@ -125,6 +125,29 @@ class McpApprovalStoreTest {
     }
 
     @Test
+    fun `task root refuses a dot-only task id`() {
+        // [T-mcp-approval-taskid] taskRootFor is the single taskId→path point;
+        // createTask already refuses all-dot ids, but persisted state is
+        // deserialized verbatim, so the path builder fails closed too — a
+        // corrupt prefs file with taskId ".." must not resolve the shared root.
+        val old = McpApprovalStore.taskRootPrefix
+        try {
+            // Pin the production default: another test class may have left the
+            // shared prefix at a temp dir (class order is not guaranteed).
+            McpApprovalStore.taskRootPrefix = McpApprovalStore.TASK_ROOT_PREFIX
+            for (bad in listOf(".", "..")) {
+                val thrown = runCatching { McpApprovalStore.taskRootFor(bad) }
+                assertTrue("id '$bad'", thrown.isFailure)
+                assertTrue(thrown.exceptionOrNull() is IllegalArgumentException)
+            }
+            // A legal id still builds the path.
+            assertEquals("/var/minis/shared/mcp-tasks/abc/", McpApprovalStore.taskRootFor("abc"))
+        } finally {
+            McpApprovalStore.taskRootPrefix = old
+        }
+    }
+
+    @Test
     fun `host task root is the literal path until a resolver is injected`() {
         val oldPrefix = McpApprovalStore.taskRootPrefix
         val oldResolver = McpApprovalStore.taskRootHostResolver

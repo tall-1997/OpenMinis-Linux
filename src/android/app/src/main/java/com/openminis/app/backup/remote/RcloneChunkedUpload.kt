@@ -137,49 +137,35 @@ class RcloneChunkedUpload(private val context: Context) {
         for (attempt in 1..2) {
             if (isCancelled()) throw CancelledException()
             try {
-                // copyfile blocks until the whole package has been sent, so it
-                // can report nothing along the way. rclone tracks the transfer
-                // itself, so live bytes are polled from core/stats on a
-                // separate thread. `bytes` is cumulative for the session, hence
-                // the baseline taken before the copy starts.
-                val baseline = statsBytes()
-                // AtomicBoolean, not a plain local: the poller runs on another
-                // thread and must see the stop flag without a data race.
-                val done = java.util.concurrent.atomic.AtomicBoolean(false)
-                val poller = if (onProgress != null) {
-                    Thread {
-                        while (!done.get()) {
-                            try {
-                                Thread.sleep(500)
-                            } catch (_: InterruptedException) {
-                                break
-                            }
-                            if (done.get()) break
-                            val moved = (statsBytes() - baseline).coerceAtLeast(0)
-                            // Never report more than the file — stats can
-                            // include other bookkeeping, and a bar that
-                            // overshoots reads as a bug even when the transfer
-                            // is fine.
-                            onProgress(Progress(minOf(moved, size), size))
-                        }
-                    }.apply { isDaemon = true; start() }
-                } else {
-                    null
-                }
-
-                try {
-                    RcloneBridge.rpc(
-                        "operations/copyfile",
-                        mapOf(
-                            "srcFs" to (packageFile.parentFile?.absolutePath ?: ""),
-                            "srcRemote" to name,
-                            "dstFs" to fs,
-                            "dstRemote" to partial,
-                        ),
-                    )
-                } finally {
-                    done.set(true)
-                    poller?.interrupt()
+                // copyfile blocks until the whole package has been sent, so a
+                // blocking call can report nothing along the way — and a
+                // wedged rclone bridge would hold this thread forever. Run it
+                // as an ASYNC job polled to completion (the same machinery as
+                // [downloadWholeFile]): live bytes come from the job's own
+                // stats group, Cancel stops the transfer for real via
+                // job/stop, and the wall-clock deadline bounds a hung bridge.
+                val group = "upload-${java.util.UUID.randomUUID()}"
+                runJobWithDeadline(
+                    "operations/copyfile",
+                    mapOf(
+                        "srcFs" to (packageFile.parentFile?.absolutePath ?: ""),
+                        "srcRemote" to name,
+                        "dstFs" to fs,
+                        "dstRemote" to partial,
+                        "_group" to group,
+                    ),
+                    isCancelled,
+                ) {
+                    // The original poller thread only ran for a listener —
+                    // keep that shape and skip the stats RPC entirely when
+                    // nobody is listening.
+                    if (onProgress == null) return@runJobWithDeadline
+                    // Per-group stats start at zero for this job. Never report
+                    // more than the file — stats can include other
+                    // bookkeeping, and a bar that overshoots reads as a bug
+                    // even when the transfer is fine.
+                    val moved = groupStatsBytes(group)
+                    onProgress(Progress(minOf(moved, size), size))
                 }
 
                 // The size check IS the success condition, not decoration.
@@ -310,8 +296,106 @@ class RcloneChunkedUpload(private val context: Context) {
         return item.optLong("Size", -1L)
     }
 
-    private fun statsBytes(): Long =
-        runCatching { RcloneBridge.rpc("core/stats").optLong("bytes", 0L) }.getOrDefault(0L)
+    /** Bytes moved so far within one job's stats group (it starts at zero with the job). */
+    private fun groupStatsBytes(group: String): Long =
+        runCatching { RcloneBridge.rpc("core/stats", mapOf("group" to group)).optLong("bytes", 0L) }
+            .getOrDefault(0L)
+
+    /**
+     * Run ONE rclone RPC as an `_async` job and poll it to completion with
+     * the shared deadline / cancellation / stop machinery.
+     *
+     * A blocking `operations/copyfile` owns its thread inside Go until the
+     * whole payload has landed — nothing in Kotlin can interrupt it, and a
+     * wedged bridge holds the caller forever. `_async` returns a jobid
+     * immediately, `job/status` reports completion, and `job/stop` aborts the
+     * transfer for real when [isCancelled] trips — bounded by
+     * [CANCEL_GRACE_MS] so a bridge that never answers cannot hold Cancel
+     * hostage either. [deadlineMs] is the total wall-clock ceiling: a job
+     * still running past it is hung (or far too slow), stopped and reported
+     * as one.
+     *
+     * The deadline fires ONLY while the job is still unfinished — a job that
+     * reports `finished` on the very tick the ceiling elapses is honoured and
+     * its complete result used, never deleted as a timeout victim.
+     *
+     * Returns when the job finished without an error. Throws
+     * [UploadException] for a job error or a deadline stop, and
+     * [CancelledException] on cancellation. [onTick] runs on every poll
+     * while the job is in flight (progress reporting).
+     */
+    private fun runJobWithDeadline(
+        method: String,
+        args: Map<String, Any?>,
+        isCancelled: () -> Boolean = { false },
+        deadlineMs: Long = JOB_MAX_DURATION_MS,
+        onTick: () -> Unit = {},
+    ) {
+        val started = RcloneBridge.rpc(method, args + mapOf("_async" to true))
+        val jobId = started.optInt("jobid", -1)
+        if (jobId < 0) {
+            // The async request itself was refused. Fall back rather than
+            // silently doing nothing — better a call that cannot be cancelled
+            // or bounded than no call at all.
+            AppLogger.error(TAG, "[Rclone] $method returned no jobid; falling back to blocking call")
+            RcloneBridge.rpc(method, args)
+            return
+        }
+
+        var cancelled = false
+        // Once Cancel is requested, job/stop aborts the transfer server-side
+        // and `finished` should arrive within moments — but a bridge that
+        // never answers must not hold Cancel hostage either, so the wait for
+        // the job to die is bounded separately.
+        var cancelRequestedAt = 0L
+        val deadline = System.currentTimeMillis() + deadlineMs
+        while (true) {
+            Thread.sleep(POLL_INTERVAL_MS)
+
+            if (!cancelled && isCancelled()) {
+                cancelled = true
+                cancelRequestedAt = System.currentTimeMillis()
+                // Stop THIS job by id, then keep polling until rclone reports
+                // it finished — abandoning the call while the server still
+                // writes would leave the destination object in a half state.
+                runCatching { RcloneBridge.rpc("job/stop", mapOf("jobid" to jobId)) }
+            }
+
+            val status = runCatching {
+                RcloneBridge.rpc("job/status", mapOf("jobid" to jobId))
+            }.getOrNull()
+            val finished = status?.optBoolean("finished") ?: false
+
+            // Cancellation is honoured even when the job never reports
+            // `finished`: job/stop was sent, the grace elapses, the caller
+            // unwinds. Better a bounded cleanup than Cancel that hangs.
+            if (cancelled && (finished ||
+                    System.currentTimeMillis() - cancelRequestedAt > CANCEL_GRACE_MS)
+            ) {
+                throw CancelledException()
+            }
+
+            // The total deadline fires for a hung job, cancelled or not — but
+            // only while the job is actually still running. A transfer that
+            // lands exactly as the ceiling passes is complete and must be
+            // kept: checking `finished` first is what used to delete a fully
+            // downloaded file on the deadline tick that reported it.
+            if (!finished && System.currentTimeMillis() > deadline) {
+                if (cancelled) throw CancelledException()
+                runCatching { RcloneBridge.rpc("job/stop", mapOf("jobid" to jobId)) }
+                throw UploadException(TIMEOUT_MESSAGE)
+            }
+
+            if (!finished) {
+                onTick()
+                continue
+            }
+
+            val error = status?.optString("error").orEmpty()
+            if (error.isNotEmpty()) throw UploadException(error)
+            return
+        }
+    }
 
     // MARK: - Reading back
 
@@ -460,14 +544,10 @@ class RcloneChunkedUpload(private val context: Context) {
     /**
      * Fetch a single-file package, cancellably, reporting speed.
      *
-     * Runs the copy as an ASYNC rclone job rather than a blocking call. That is
-     * what makes Cancel work at all: a blocking `operations/copyfile` owns its
-     * thread inside Go until the whole file has landed, so there is nothing to
-     * interrupt from Kotlin. `_async` returns a jobid immediately, and
-     * `job/stop` with that id aborts the transfer for real.
-     *
-     * `_group` scopes the byte counter to this job, so progress is not skewed
-     * by anything else transferring at the same time.
+     * Runs the copy as an ASYNC rclone job rather than a blocking call (see
+     * [runJobWithDeadline] for the polling / deadline / cancellation
+     * machinery). `_group` scopes the byte counter to this job, so progress
+     * is not skewed by anything else transferring at the same time.
      */
     private fun downloadWholeFile(
         pkg: RemotePackage,
@@ -479,32 +559,6 @@ class RcloneChunkedUpload(private val context: Context) {
         val fs = remote.fsSpec
         val dstFs = destination.parentFile?.absolutePath ?: ""
         val group = "restore-${java.util.UUID.randomUUID()}"
-        val started = RcloneBridge.rpc(
-            "operations/copyfile",
-            mapOf(
-                "srcFs" to fs, "srcRemote" to pkg.key,
-                "dstFs" to dstFs, "dstRemote" to destination.name,
-                "_async" to true, "_group" to group,
-            ),
-        )
-        val jobId = started.optInt("jobid", -1)
-        if (jobId < 0) {
-            // The async request itself was refused. Fall back rather than
-            // silently doing nothing — better a download that cannot be
-            // cancelled than no download at all.
-            AppLogger.error(TAG, "[Rclone] copyfile returned no jobid; falling back to blocking copy")
-            RcloneBridge.rpc(
-                "operations/copyfile",
-                mapOf(
-                    "srcFs" to fs, "srcRemote" to pkg.key,
-                    "dstFs" to dstFs, "dstRemote" to destination.name,
-                ),
-            )
-            verifyDownload(pkg, destination, onProgress)
-            return
-        }
-
-        var cancelled = false
         // Rolling rate. Smoothed rather than differenced between consecutive
         // 250ms polls: at that interval one slow tick reads as a near-stall and
         // the number flickers unusably. An EMA settles within a second or two
@@ -513,23 +567,16 @@ class RcloneChunkedUpload(private val context: Context) {
         var lastBytes = 0L
         var lastTick = System.currentTimeMillis()
         var smoothed: Double? = null
-        while (true) {
-            Thread.sleep(POLL_INTERVAL_MS)
-
-            if (!cancelled && cancelFlag?.isCancelled() == true) {
-                cancelled = true
-                // Stop THIS job by id, then keep polling until rclone reports
-                // it finished — deleting the file out from under a transfer
-                // that is still writing would be worse than waiting.
-                runCatching { RcloneBridge.rpc("job/stop", mapOf("jobid" to jobId)) }
-            }
-
-            val status = runCatching {
-                RcloneBridge.rpc("job/status", mapOf("jobid" to jobId))
-            }.getOrNull()
-            val finished = status?.optBoolean("finished") ?: false
-
-            if (!finished) {
+        try {
+            runJobWithDeadline(
+                "operations/copyfile",
+                mapOf(
+                    "srcFs" to fs, "srcRemote" to pkg.key,
+                    "dstFs" to dstFs, "dstRemote" to destination.name,
+                    "_group" to group,
+                ),
+                isCancelled = { cancelFlag?.isCancelled() == true },
+            ) {
                 val stats = runCatching {
                     RcloneBridge.rpc("core/stats", mapOf("group" to group))
                 }.getOrNull()
@@ -553,21 +600,14 @@ class RcloneChunkedUpload(private val context: Context) {
                 onProgress?.invoke(
                     Progress(minOf(moved, pkg.size), pkg.size, smoothed ?: 0.0),
                 )
-                continue
             }
-
-            val error = status?.optString("error").orEmpty()
-            if (cancelled) {
-                // Free the scratch: a cancelled download leaves a partial file
-                // that is useless and, for a large package, expensive to keep.
-                destination.delete()
-                throw CancelledException()
-            }
-            if (error.isNotEmpty()) {
-                destination.delete()
-                throw UploadException(error)
-            }
-            break
+        } catch (e: Exception) {
+            // A cancelled, timed-out or failed transfer must not leave a
+            // partial file behind — the caller deletes the destination before
+            // every download, but a download that gives up should leave
+            // nothing that could be mistaken for a package.
+            destination.delete()
+            throw e
         }
         verifyDownload(pkg, destination, onProgress)
     }
@@ -623,15 +663,28 @@ class RcloneChunkedUpload(private val context: Context) {
 
         val scratch = File(context.cacheDir, "minis-dl-${pkg.displayName}").apply { mkdirs() }
         try {
+            // Same wall-clock ceiling as a whole-file restore. Each part used
+            // to be fetched with one BLOCKING copyfile and no ceiling at all —
+            // a wedged bridge stalled the reassembly forever, exactly the hang
+            // the whole-file path already fixed. Every part now runs as an
+            // async job polled to completion, against ONE total deadline for
+            // the whole reassembly, and Cancel stops the in-flight part for
+            // real.
+            val deadline = System.currentTimeMillis() + JOB_MAX_DURATION_MS
             destination.outputStream().buffered().use { out ->
                 var written = 0L
                 for (name in names) {
-                    RcloneBridge.rpc(
+                    if (cancelFlag?.isCancelled() == true) throw CancelledException()
+                    val remaining = deadline - System.currentTimeMillis()
+                    if (remaining <= 0) throw UploadException(TIMEOUT_MESSAGE)
+                    runJobWithDeadline(
                         "operations/copyfile",
                         mapOf(
                             "srcFs" to remote.fsSpec, "srcRemote" to "${pkg.key}/$name",
                             "dstFs" to scratch.absolutePath, "dstRemote" to name,
                         ),
+                        isCancelled = { cancelFlag?.isCancelled() == true },
+                        deadlineMs = remaining,
                     )
                     val local = File(scratch, name)
                     local.inputStream().buffered().use { it.copyTo(out) }
@@ -640,6 +693,11 @@ class RcloneChunkedUpload(private val context: Context) {
                     onProgress?.invoke(Progress(written, pkg.size))
                 }
             }
+        } catch (e: Exception) {
+            // Same rule as the whole-file path: a cancelled, timed-out or
+            // failed reassembly must not leave a partial file behind.
+            destination.delete()
+            throw e
         } finally {
             scratch.deleteRecursively()
         }
@@ -657,6 +715,28 @@ class RcloneChunkedUpload(private val context: Context) {
         /** 250ms, not 500: Cancel is user-facing and the poll interval is the
          *  floor on how long it appears to hang. */
         private const val POLL_INTERVAL_MS = 250L
+
+        /**
+         * [T-rclone-job-deadline] Ceiling on a single transfer's polling loop.
+         * Sized for a multi-GB package on a slow link (a 4GB restore at
+         * 500KB/s is ~2.2h); a job still running past this is hung, not slow.
+         */
+        private const val JOB_MAX_DURATION_MS = 6L * 60 * 60 * 1000
+
+        /** How long Cancel waits for the stopped job to report death before
+         *  the partial file is freed anyway. */
+        private const val CANCEL_GRACE_MS = 30_000L
+
+        /**
+         * Message for a transfer that outlived its wall-clock budget. Worded
+         * NOT to claim the server stopped responding: a transfer can still be
+         * moving data, just too slowly to finish inside the ceiling, and the
+         * old "server stopped responding mid-download" misreported that.
+         */
+        private const val TIMEOUT_MESSAGE =
+            "The transfer ran past its time limit and was stopped before it could finish. " +
+                "The connection may be too slow or unstable for a transfer this size — " +
+                "try again on a faster connection."
 
         /** EMA weight for the derived transfer rate. */
         private const val RATE_ALPHA = 0.3

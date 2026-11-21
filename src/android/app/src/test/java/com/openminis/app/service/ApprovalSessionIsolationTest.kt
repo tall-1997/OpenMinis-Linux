@@ -69,4 +69,27 @@ class ApprovalSessionIsolationTest {
         assertEquals(1, ApprovalGate.pendingCount())
         ApprovalGate.deny(id, "stop-sid") // the user answers later; clean up
     }
+
+    /**
+     * [T-approval-gate-atomic-drain] resolve() drains a session's per-session
+     * flow once no requests remain for it, so long-lived processes don't
+     * retain one StateFlow per historical chat. That drain used to be a
+     * contains-check followed by remove(); a request filed for the same
+     * session between the two steps had its freshly created flow removed
+     * right after it, and the UI never saw the request. Whatever the
+     * interleaving, a request filed after (or racing) the drain must be
+     * visible through the session's flow.
+     */
+    @Test fun aRequestFiledAfterTheSessionFlowDrainsStaysVisible() = runBlocking {
+        val first = ApprovalGate.requestApproval("drain", "file_write", "drain me")
+        assertEquals(setOf(first), ApprovalGate.pendingApprovals("drain").value.keys)
+        ApprovalGate.approve(first, "drain")
+
+        // The session flow entry is now removed; a fresh request must
+        // recreate a WORKING flow, not fall into the removed one.
+        val second = ApprovalGate.requestApproval("drain", "file_write", "again")
+        assertEquals(setOf(second), ApprovalGate.pendingApprovals("drain").value.keys)
+        ApprovalGate.deny(second, "drain")
+        assertTrue(ApprovalGate.pendingApprovals("drain").value.isEmpty())
+    }
 }

@@ -1,6 +1,7 @@
 package com.openminis.app.crash
 
 import android.app.Application
+import android.util.Log
 import com.openminis.app.data.db.DatabaseVersionGuard
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -62,10 +63,34 @@ internal object LaunchPhaseProbes {
      * on, and guarantees every reader after Application.onCreate returns —
      * MainActivity's pendingShareFiles check, the onResume share prompt,
      * AppNavigation's force-home pref read — sees the final state.
+     *
+     * A wedged filesystem must not turn a crash-recovery probe into a launch
+     * ANR, so the wait is bounded; timeout takes the conservative "not in safe
+     * mode" path and lets the scan finish in the background.
      */
-    fun awaitLaunchScan() {
+    fun awaitLaunchScan(): Boolean {
         val done = launchScanDone
-        if (!done.isCompleted) runBlocking { done.await() }
+        if (done.isCompleted) return true
+        val landed = runBlocking {
+            try {
+                kotlinx.coroutines.withTimeoutOrNull(LAUNCH_PROBE_TIMEOUT_MS) { done.await() } != null
+            } catch (_: Throwable) {
+                false
+            }
+        }
+        // The timeout branch takes the conservative "not in safe mode" path
+        // and lets the scan finish in the background — but that decision is
+        // invisible unless it is logged. Distinguish it from a completed scan
+        // so a post-hoc investigation can tell "probe gave up" from "probe
+        // decided".
+        if (!landed) {
+            Log.w(
+                TAG,
+                "launch scan did not finish within ${LAUNCH_PROBE_TIMEOUT_MS}ms — " +
+                    "continuing without its verdict (scan keeps running in the background)",
+            )
+        }
+        return landed
     }
 
     @Volatile
@@ -94,6 +119,33 @@ internal object LaunchPhaseProbes {
      */
     fun awaitDbVersionProbe(): DatabaseVersionGuard.Decision {
         val probe = checkNotNull(dbVersionProbe)
-        return runBlocking { probe.await() }
+        var timedOut = false
+        val decision = runBlocking {
+            try {
+                kotlinx.coroutines.withTimeoutOrNull(LAUNCH_PROBE_TIMEOUT_MS) { probe.await() }
+                    ?: run {
+                        timedOut = true
+                        DatabaseVersionGuard.Decision.PROCEED
+                    }
+            } catch (_: Throwable) {
+                DatabaseVersionGuard.Decision.PROCEED
+            }
+        }
+        // PROCEED can mean "probe evaluated cleanly" or "probe timed out and
+        // we gave up" — record which, so a later Room open failure is not
+        // misread as a verdict the probe actually made.
+        if (timedOut) {
+            Log.w(
+                TAG,
+                "db-version probe did not finish within ${LAUNCH_PROBE_TIMEOUT_MS}ms — " +
+                    "assuming PROCEED without its verdict",
+            )
+        }
+        return decision
     }
+
+    /** Bound launch-critical IO hand-offs so a wedged volume cannot ANR onCreate. */
+    private const val LAUNCH_PROBE_TIMEOUT_MS = 5_000L
+
+    private const val TAG = "LaunchPhaseProbes"
 }

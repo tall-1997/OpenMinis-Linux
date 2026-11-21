@@ -28,7 +28,8 @@ class SupervisorSessionHostTest {
     fun register_makesSessionLiveAndLookupReturnsSameInstance() {
         SupervisorSessionHost.remove("host-1")
         val l = live("host-1")
-        SupervisorSessionHost.register(l)
+        // Free slot: register inserts and reports no pre-existing entry.
+        assertNull(SupervisorSessionHost.register(l))
         assertTrue(SupervisorSessionHost.isLive("host-1"))
         assertSame(l, SupervisorSessionHost.live("host-1"))
         SupervisorSessionHost.remove("host-1")
@@ -45,13 +46,19 @@ class SupervisorSessionHostTest {
     }
 
     @Test
-    fun secondRegisterReplacesTheLiveLoopForTheSameSession() {
+    fun secondRegisterDoesNotReplaceTheLiveLoopForTheSameSession() {
         SupervisorSessionHost.remove("host-3")
         val first = live("host-3")
         SupervisorSessionHost.register(first)
         val second = live("host-3")
-        SupervisorSessionHost.register(second)
-        assertSame(second, SupervisorSessionHost.live("host-3"))
+        // [T-supervisor-register-race] putIfAbsent: a concurrent second start
+        // that lost the race between the isLive() check and register must not
+        // clobber the winner's entry — an overwrite orphaned the first loop,
+        // which kept running with no host entry (input routing and halt lost
+        // it). The caller cancels its own job when the return is non-null.
+        assertSame(first, SupervisorSessionHost.register(second))
+        assertSame(first, SupervisorSessionHost.live("host-3"))
+        assertTrue(SupervisorSessionHost.isLive("host-3"))
         SupervisorSessionHost.remove("host-3")
     }
 

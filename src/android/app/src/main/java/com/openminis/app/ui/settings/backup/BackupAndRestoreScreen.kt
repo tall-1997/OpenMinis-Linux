@@ -494,6 +494,12 @@ private fun BackupTab(
     // watched, gone by their next visit.
     lastResult?.let { r ->
         if (!running) {
+            val skipRows = listOfNotNull(
+                if (r.skippedTooLarge > 0) R.string.backup_result_excluded_too_large to r.skippedTooLarge else null,
+                if (r.skippedNoFiles > 0) R.string.backup_result_files_not_included to r.skippedNoFiles else null,
+                if (r.skippedUnreadable > 0) R.string.backup_result_excluded_unreadable to r.skippedUnreadable else null,
+                if (r.skippedCredentials > 0) R.string.backup_result_credentials_unreadable to r.skippedCredentials else null,
+            )
             SettingsSection(
                 header = stringResource(R.string.backup_ready),
                 footer = backupResultFooter(r),
@@ -501,19 +507,13 @@ private fun BackupTab(
                 DetailValueRow(
                     label = stringResource(R.string.backup_history_size),
                     value = humanBytes(r.totalBytes),
-                    showDivider = r.skippedFiles > 0 || r.destinations.isNotEmpty(),
+                    showDivider = skipRows.isNotEmpty() || r.destinations.isNotEmpty(),
                 )
-                if (r.skippedFiles > 0) {
+                skipRows.forEachIndexed { i, (labelRes, count) ->
                     DetailValueRow(
-                        // "Too large" would be wrong when the user's own cap
-                        // said not to include files at all — nothing exceeded
-                        // anything then.
-                        label = stringResource(
-                            if (maxFileSizeMB == MAX_FILE_NO_FILES) R.string.backup_result_files_not_included
-                            else R.string.backup_result_excluded_too_large,
-                        ),
-                        value = stringResource(R.string.backup_history_file_count, r.skippedFiles),
-                        showDivider = r.destinations.isNotEmpty(),
+                        label = stringResource(labelRes),
+                        value = stringResource(R.string.backup_history_file_count, count),
+                        showDivider = i < skipRows.lastIndex || r.destinations.isNotEmpty(),
                     )
                 }
                 // Per destination, not one combined status: "2 of 3 saved" is

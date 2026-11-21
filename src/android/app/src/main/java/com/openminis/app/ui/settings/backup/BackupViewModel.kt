@@ -4,6 +4,7 @@ import android.app.Application
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.openminis.app.backup.BackupBlobStore
 import com.openminis.app.backup.BackupCategory
 import com.openminis.app.backup.BackupUndoController
 import com.openminis.app.backup.BackupExporter
@@ -166,6 +167,11 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
         val skippedFiles: Int,
         val destinations: List<BackupHistory.DestinationOutcome>,
         val localCopyRemoved: Boolean = false,
+        /** Skips broken out by WHY: the old single count had one label for four causes. */
+        val skippedTooLarge: Int = 0,
+        val skippedNoFiles: Int = 0,
+        val skippedUnreadable: Int = 0,
+        val skippedCredentials: Int = 0,
     ) {
         val allDelivered: Boolean
             get() = destinations.isNotEmpty() && destinations.all { it.succeeded }
@@ -320,7 +326,7 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
                 // Share / Save it, and re-run delivery later. Mirrors iOS's
                 // "package is ready even if a destination failed" behaviour.
                 val outcomes = withContext(Dispatchers.IO) {
-                    deliverToRemotes(summary.packageFile, summary.backupId) { line ->
+                    deliverToRemotes(getApplication(), phoneStore, summary.packageFile, summary.backupId) { line ->
                         _statusText.value = line
                         note(line)
                         publishRunning(record, log)
@@ -364,11 +370,16 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
 
+                val skipCounts = summary.skippedPaths.groupingBy { it.reason }.eachCount()
                 _lastResult.value = RunResult(
                     totalBytes = summary.totalBytes,
                     skippedFiles = summary.skippedFiles,
                     destinations = outcomes,
                     localCopyRemoved = localRemoved,
+                    skippedTooLarge = skipCounts[BackupBlobStore.SkipReason.SIZE_CAP] ?: 0,
+                    skippedNoFiles = skipCounts[BackupBlobStore.SkipReason.NO_FILES] ?: 0,
+                    skippedUnreadable = skipCounts[BackupBlobStore.SkipReason.UNREADABLE] ?: 0,
+                    skippedCredentials = skipCounts[BackupBlobStore.SkipReason.CREDENTIALS] ?: 0,
                 )
                 val failed = outcomes.filterNot { it.succeeded }
                 if (failed.isNotEmpty()) {
@@ -390,7 +401,7 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
                     totalBytes = summary.totalBytes,
                     skippedFiles = summary.skippedFiles,
                     skippedEntries = summary.skippedPaths.map {
-                        BackupHistory.SkippedEntry(it.path, it.size)
+                        BackupHistory.SkippedEntry(it.path, it.size, reason = it.reason.wireName)
                     },
                     packageName = summary.packageFile.name,
                     destinations = outcomes,
@@ -504,74 +515,6 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
         _historyRecords.value = history.records()
     }
 
-    /**
-     * Upload the produced package to every enabled rclone remote as a single
-     * verified `.minisbak` (see RcloneChunkedUpload, which no longer chunks).
-     * Returns a list of "name: reason"
-     * strings for remotes that failed; empty when all succeeded (or none are
-     * configured). Never throws — a failed remote must not lose the local copy.
-     */
-    private fun deliverToRemotes(
-        packageFile: File,
-        backupId: String,
-        onProgress: (String) -> Unit,
-    ): List<BackupHistory.DestinationOutcome> {
-        val store = com.openminis.app.backup.remote.RcloneRemoteStore(getApplication())
-        val enabled = store.enabledRemotes
-        val phone = phoneStore.enabledFolders
-        if (enabled.isEmpty() && phone.isEmpty()) return emptyList()
-        if (enabled.isNotEmpty()) store.syncToRclone()
-        val uploader = com.openminis.app.backup.remote.RcloneChunkedUpload(getApplication())
-        // [T-android-backup-history] Report EVERY destination, not just the
-        // failures. "Which servers did last night's backup actually reach?"
-        // was unanswerable while only errors were returned.
-        val outcomes = mutableListOf<BackupHistory.DestinationOutcome>()
-        for (remote in enabled) {
-            try {
-                onProgress("Sending to ${remote.name}…")
-                uploader.upload(packageFile, remote, backupId) { p ->
-                    val pct = if (p.totalBytes > 0) (p.bytesSent * 100 / p.totalBytes) else 0
-                    onProgress("Sending to ${remote.name}… $pct%")
-                }
-                outcomes.add(
-                    BackupHistory.DestinationOutcome(
-                        remote.name, succeeded = true,
-                        kind = remote.backend, path = remote.path,
-                    ),
-                )
-            } catch (e: Exception) {
-                AppLogger.error(TAG, "[Backup] delivery to ${remote.name} failed: ${e.message}")
-                outcomes.add(
-                    BackupHistory.DestinationOutcome(
-                        remote.name, succeeded = false, detail = e.message ?: "failed",
-                        kind = remote.backend, path = remote.path,
-                    ),
-                )
-            }
-        }
-        for (folder in phone) {
-            try {
-                onProgress("Copying to ${folder.name}…")
-                phoneStore.copyPackage(folder, packageFile, packageFile.name)
-                outcomes.add(
-                    BackupHistory.DestinationOutcome(
-                        folder.name, succeeded = true,
-                        kind = "phone", path = folder.treeUri,
-                    ),
-                )
-            } catch (e: Exception) {
-                AppLogger.error(TAG, "[Backup] phone copy to ${folder.name} failed: ${e.message}")
-                outcomes.add(
-                    BackupHistory.DestinationOutcome(
-                        folder.name, succeeded = false, detail = e.message ?: "failed",
-                        kind = "phone", path = folder.treeUri,
-                    ),
-                )
-            }
-        }
-        return outcomes
-    }
-
     data class PhoneRestoreItem(val uri: Uri, val name: String, val size: Long)
 
     private val _phoneRestoreFolder = MutableStateFlow<String?>(null)
@@ -607,6 +550,8 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
         val extractedRoot: File,
         val manifest: BackupManifest,
         val availableCategories: Set<BackupCategory>,
+        /** Entries the extractor skipped — named in the restore report's warnings. */
+        val extractionIssues: List<String> = emptyList(),
     )
 
     /**
@@ -650,15 +595,20 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
         // multi-GB package into a visible one.
         var files = 0
         var bytes = 0L
-        BackupZip.extract(zip, extracted) { name ->
+        val report = BackupZip.extract(zip, extracted) { name ->
             files += 1
             bytes += File(extracted, name).length()
             _openProgress.value = OpenProgress(files, bytes, name.substringAfterLast('/'))
         }
+        // Skipped entries (unsafe path / corrupt data) ride into the restore
+        // report instead of aborting the open; logged here as well.
+        if (report.problems.isNotEmpty()) {
+            AppLogger.warning(TAG, "[Restore] extraction skipped: ${report.problems.take(5)}")
+        }
         val root = BackupZip.packageRoot(extracted)
         val manifest = BackupPackageReader(root).readManifest()
         val avail = manifest.categories.keys.mapNotNull(BackupCategory::fromKey).toSet()
-        return PendingRestore(extracted, manifest, avail)
+        return PendingRestore(extracted, manifest, avail, extractionIssues = report.problems)
     }
 
     private fun setPending(pending: PendingRestore) {
@@ -998,6 +948,9 @@ class BackupViewModel(app: Application) : AndroidViewModel(app) {
                         onCount = { _restoreProgress.value = it },
                     )
                 }
+                // [T-backup-extraction-report] Skipped entries are named in the
+                // result the user reads — silence reads as a clean restore.
+                pending.extractionIssues.forEach { report.warnings.add(0, it) }
                 _report.value = report
                 _restoreProgress.value = null
                 _pending.value?.extractedRoot?.deleteRecursively()

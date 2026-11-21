@@ -26,11 +26,40 @@ class AlarmOffloadManager(private val context: Context) {
         private const val TAG = "AlarmOffloadManager"
         private const val PREFS_NAME = "minis_alarms_prefs"
         private const val KEY_ALARMS = "alarms_json"
+        private const val KEY_NEXT_REQUEST_CODE = "next_request_code"
         const val CHANNEL_ID = "minis_alarms"
         private const val CHANNEL_NAME = "Minis Alarms & Timers"
 
         const val EXTRA_ALARM_ID = "alarm_id"
         const val EXTRA_ALARM_LABEL = "alarm_label"
+
+        /**
+         * Guards [nextRequestCode]'s prefs read-modify-write. The lock lives
+         * on the companion, not the instance: [AlarmReceiver] (and any future
+         * scheduler) constructs fresh [AlarmOffloadManager] instances, so an
+         * instance monitor would not stop two of them from minting the same
+         * code concurrently.
+         */
+        private val requestCodeLock = Any()
+    }
+
+    /**
+     * PendingIntent request codes are process-global. A UUID hash can collide,
+     * and `FLAG_UPDATE_CURRENT` would silently replace an earlier alarm. Use a
+     * persisted monotonic code so the same sequence cannot be reused even after
+     * process restarts.
+     *
+     * The prefs read-modify-write must be atomic: concurrent schedulers that
+     * both read the same counter mint the same requestCode, and
+     * `FLAG_UPDATE_CURRENT` then silently replaces the first alarm with the
+     * second. The critical section is two prefs ops (the in-memory prefs
+     * update in `apply()` is synchronous), so the process-global lock never
+     * contends meaningfully.
+     */
+    private fun nextRequestCode(): Int = synchronized(requestCodeLock) {
+        val next = prefs.getInt(KEY_NEXT_REQUEST_CODE, 1)
+        prefs.edit().putInt(KEY_NEXT_REQUEST_CODE, if (next >= Int.MAX_VALUE) 1 else next + 1).apply()
+        next
     }
 
     private val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
@@ -64,7 +93,7 @@ class AlarmOffloadManager(private val context: Context) {
      */
     fun scheduleAlarm(label: String, hour: Int, minute: Int, repeatMode: RepeatMode): String {
         val id = UUID.randomUUID().toString()
-        val requestCode = id.hashCode() and 0x7FFFFFFF // positive int
+        val requestCode = nextRequestCode()
 
         // [T-android-alarm-rearm-chain] One shared "next occurrence" computation
         // for every mode: the first shot is registered below and the RECEIVER
@@ -108,7 +137,7 @@ class AlarmOffloadManager(private val context: Context) {
      */
     fun scheduleTimer(label: String, durationSec: Int): String {
         val id = UUID.randomUUID().toString()
-        val requestCode = id.hashCode() and 0x7FFFFFFF
+        val requestCode = nextRequestCode()
         val triggerAt = System.currentTimeMillis() + durationSec * 1000L
 
         val pendingIntent = buildPendingIntent(id, requestCode, label)

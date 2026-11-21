@@ -141,21 +141,34 @@ internal suspend fun ChatViewModel.executeShellCommand(
                             ExecutionCoordinator.NOT_STARTED_OUTPUT, false, toolTitle = toolTitle, notSent = true,
                         )
                     }
-                    val idx = toolBlocks.indexOfFirst { it.id == toolId }
-                    if (idx >= 0) {
-                        val mm = remaining / 60
-                        val ss = remaining % 60
-                        val countdown = if (mm > 0) String.format("%d:%02d", mm, ss) else "${ss}s"
-                        toolBlocks[idx] = toolBlocks[idx].copy(content = "⏳ Waiting $countdown before executing...")
+                    // [T-parallel-tool-calls] The countdown mutates the SHARED
+                    // allToolBlocks from this lane (Dispatchers.IO) while sibling
+                    // concurrent lanes mutate it under its monitor — mutate under
+                    // the SAME monitor and publish a snapshot, or the unchecked
+                    // index write races a sibling's add (CME) and the live-list
+                    // push iterates a mutating list.
+                    val countdownBlocks = synchronized(toolBlocks) {
+                        val idx = toolBlocks.indexOfFirst { it.id == toolId }
+                        if (idx >= 0) {
+                            val mm = remaining / 60
+                            val ss = remaining % 60
+                            val countdown = if (mm > 0) String.format("%d:%02d", mm, ss) else "${ss}s"
+                            toolBlocks[idx] = toolBlocks[idx].copy(content = "⏳ Waiting $countdown before executing...")
+                            toolBlocks.toList()
+                        } else null
+                    }
+                    if (countdownBlocks != null) {
                         withContext(Dispatchers.Main) {
-                            updateAssistantMessage(assistantId, currentText, true, toolBlocks)
+                            updateAssistantMessage(assistantId, currentText, true, countdownBlocks)
                         }
                     }
                     kotlinx.coroutines.delay(1000)
                 }
-                val idx = toolBlocks.indexOfFirst { it.id == toolId }
-                if (idx >= 0) {
-                    toolBlocks[idx] = toolBlocks[idx].copy(content = "")
+                synchronized(toolBlocks) {
+                    val idx = toolBlocks.indexOfFirst { it.id == toolId }
+                    if (idx >= 0) {
+                        toolBlocks[idx] = toolBlocks[idx].copy(content = "")
+                    }
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 delivery?.notSent()
@@ -206,10 +219,18 @@ internal suspend fun ChatViewModel.executeShellCommand(
         val preview = ShellOutputPreview(
             kotlinx.coroutines.CoroutineScope(kotlin.coroutines.coroutineContext + Dispatchers.Main),
         ) { text ->
-            val idx = toolBlocks.indexOfFirst { it.id == toolId }
-            if (idx >= 0) {
-                toolBlocks[idx] = toolBlocks[idx].copy(content = text)
-                updateAssistantMessage(assistantId, currentText, true, toolBlocks)
+            // [T-parallel-tool-calls] Render runs on Main while concurrent lanes
+            // mutate toolBlocks under its monitor on Dispatchers.IO — mutate
+            // under the SAME monitor and publish a snapshot taken inside it.
+            val snapshot = synchronized(toolBlocks) {
+                val idx = toolBlocks.indexOfFirst { it.id == toolId }
+                if (idx >= 0) {
+                    toolBlocks[idx] = toolBlocks[idx].copy(content = text)
+                    toolBlocks.toList()
+                } else null
+            }
+            if (snapshot != null) {
+                updateAssistantMessage(assistantId, currentText, true, snapshot)
             }
         }
         // [T-receipt-not-sent-parse] see the flag declaration above the try.

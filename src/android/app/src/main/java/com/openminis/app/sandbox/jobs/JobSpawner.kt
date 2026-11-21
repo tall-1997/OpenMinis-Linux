@@ -9,6 +9,7 @@ import com.openminis.app.sandbox.ProcLink
 import com.openminis.app.sandbox.ProcessTree
 import com.openminis.app.sandbox.SessionWorkspace
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -133,6 +134,24 @@ object JobSpawner {
                         return JobRegistry.SpawnedProcess.SHELL_LOST
                     }
                     Thread.sleep(pollMs)
+                    pollMs = (pollMs * 2).coerceAtMost(AWAIT_POLL_CAP_MS)
+                }
+            }
+
+            override suspend fun awaitSuspend(): Int {
+                // [T-job-watcher-nonblocking] The registry's completion
+                // watcher runs this instead of [await]: identical checks
+                // (exit sidecar, then shell liveness) and the same 100ms→1s
+                // backoff cadence, but the wait suspends between polls so the
+                // job does not pin a shared Dispatchers.IO thread for its
+                // whole lifetime.
+                var pollMs = AWAIT_POLL_INITIAL_MS
+                while (true) {
+                    pollExitCode?.let { return it }
+                    if (!ExecutionCoordinator.hasLiveShell(sessionId)) {
+                        return JobRegistry.SpawnedProcess.SHELL_LOST
+                    }
+                    delay(pollMs)
                     pollMs = (pollMs * 2).coerceAtMost(AWAIT_POLL_CAP_MS)
                 }
             }

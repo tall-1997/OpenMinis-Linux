@@ -757,6 +757,17 @@ class SecurityGateImpl : SecurityGate {
             val sub = argv.getOrNull(1) ?: return false
             return sub in SAFE_GIT_SUB
         }
+        if (bin == "find") {
+            // `find` is read-only only without mutating primaries. -exec and
+            // friends can delete/rewrite arbitrary matched paths, and tokenizing
+            // cannot prove their payload is safe; fail closed instead of asking
+            // ASK-mode users to recognize the risk.
+            val mutating = setOf(
+                "-exec", "-execdir", "-ok", "-okdir", "-delete",
+                "-fprintf", "-fprint", "-fprint0", "-fls",
+            )
+            return argv.none { it.lowercase() in mutating }
+        }
         return bin in SAFE_COMMANDS
     }
 }

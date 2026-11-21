@@ -269,9 +269,9 @@ class ToolLoopDetectorTest {
                 result = "no-progress", errorMessage = null)
         }
         val pre = detector.check("custom_widget", mapOf("k" to "v"))
-        assertEquals(Level.WARNING, pre.level)
-        assertTrue("warning expected, got: ${pre.message}",
-            pre.message?.contains("still runs") == true)
+        assertEquals(Level.CRITICAL, pre.level)
+        assertTrue("blocked message expected, got: ${pre.message}",
+            pre.message?.contains("LOOP BLOCKED") == true)
     }
 
     @Test

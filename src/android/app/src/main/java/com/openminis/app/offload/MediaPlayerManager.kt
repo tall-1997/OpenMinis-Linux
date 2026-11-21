@@ -22,7 +22,10 @@ object MediaPlayerManager {
 
     enum class PlayerState { IDLE, PLAYING, PAUSED, STOPPED }
 
-    private val sessions = mutableMapOf<String, Session>()
+    // Offload handlers may run on different worker threads, so every map access
+    // must be thread-safe. Completed players are released immediately; codec
+    // instances are scarce and an agent can play many files without stop().
+    private val sessions = java.util.concurrent.ConcurrentHashMap<String, Session>()
 
     private val audioExtensions = setOf(
         "mp3", "wav", "ogg", "flac", "aac", "m4a", "wma", "opus", "amr", "mid", "midi",
@@ -77,11 +80,22 @@ object MediaPlayerManager {
             player.setOnCompletionListener {
                 Log.d(TAG, "Playback completed: session=$sessionId")
                 session.state = PlayerState.STOPPED
+                // Completion is terminal: release the codec now. listSessions
+                // intentionally stops advertising it, rather than leaking it
+                // until an explicit stop that may never arrive.
+                removeSession(sessionId, session)
+                releaseSession(session)
             }
 
             player.setOnErrorListener { _, what, extra ->
                 Log.e(TAG, "MediaPlayer error: session=$sessionId what=$what extra=$extra")
+                // An errored player is terminal exactly like a completed one:
+                // only flipping the state would leave a dead codec parked in
+                // the map — unreachable by a fresh play() (which would have
+                // released it) and un-stoppable once the entry is gone.
                 session.state = PlayerState.STOPPED
+                removeSession(sessionId, session)
+                releaseSession(session)
                 true
             }
 
@@ -154,7 +168,7 @@ object MediaPlayerManager {
             ?: return "Error: no session '$sessionId'"
 
         releaseSession(session)
-        sessions.remove(sessionId)
+        sessions.remove(sessionId, session)
         return "Stopped and released session '$sessionId'"
     }
 
@@ -191,6 +205,18 @@ object MediaPlayerManager {
     }
 
     // ── Internal ────────────────────────────────────────────────────────
+
+    /**
+     * Removes the entry only when it still maps to THIS session object.
+     * A stale completion/error callback can race a new
+     * [play]`(sessionId, …)` on the same id: by the time it fires, the map
+     * may already hold the newer session, and an unconditional remove would
+     * delete that one — the new session would vanish from the map (no
+     * stop()/pause() handle) and its codec would leak.
+     */
+    private fun removeSession(sessionId: String, session: Session) {
+        sessions.remove(sessionId, session)
+    }
 
     private fun releaseSession(session: Session) {
         try {

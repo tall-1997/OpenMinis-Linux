@@ -924,6 +924,10 @@
     <string name="newer_db_body">這個 Minis Ultra 版本比建立您資料的版本還舊，因此無法安全地開啟它。\n\n沒有任何資料被刪除——您的對話在這台裝置上完好無缺。重新安裝較新版的 Minis Ultra，一切就會回來。</string>
     <string name="newer_db_versions">此版本支援資料格式 %1$d</string>
     <string name="newer_db_exit">關閉</string>
+    <string name="degraded_startup_title">部分啟動元件載入失敗</string>
+    <string name="degraded_startup_body">應用程式正以降級模式執行，部分功能在重新啟動前可能無法使用。</string>
+    <string name="degraded_startup_cause">原因：%1$s</string>
+    <string name="degraded_startup_dismiss">關閉</string>
     <string name="usage_attr_unknown_session">模型不明——該工作階段的紀錄已被刪除</string>
     <string name="usage_attr_removed">已不在您設定的供應商之中</string>
     <string name="usage_detail_output">輸出</string>
@@ -1395,6 +1399,8 @@
     <string name="backup_ready">備份已就緒</string>
     <string name="backup_result_excluded_too_large">已排除（檔案過大）</string>
     <string name="backup_result_files_not_included">未包含檔案</string>
+    <string name="backup_result_excluded_unreadable">已排除（無法讀取）</string>
+    <string name="backup_result_credentials_unreadable">憑證無法讀取</string>
     <string name="backup_result_local_only">僅儲存在這台裝置上。</string>
     <string name="backup_result_delivered">已儲存在這台裝置，並複製到 %2$d 個目的地中的 %1$d 個。</string>
     <string name="backup_local_removed">已移除本機副本——在這台裝置上釋出 %1$s</string>
@@ -2790,6 +2796,7 @@
     <string name="modeldetail_section_context_retry">上下文與重試</string>
     <string name="modeldetail_temperature">溫度（0.0–2.0）</string>
     <string name="modeldetail_temperature_invalid">請輸入 0.0 到 2.0 之間的數字，或留空以省略。</string>
+    <string name="modeldetail_harness_save_failed">無法儲存上下文預算覆寫。模型項目已儲存，請重試。</string>
     <string name="modeldetail_temperature_placeholder">省略</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">新增</string>

@@ -865,6 +865,10 @@
     <string name="newer_db_body">Minis Ultra สำเนานี้เก่ากว่าเวอร์ชันที่สร้างข้อมูลของคุณ จึงเปิดข้อมูลอย่างปลอดภัยไม่ได้\n\nไม่มีข้อมูลใดถูกลบ — บทสนทนาของคุณยังอยู่ครบในอุปกรณ์นี้ ติดตั้ง Minis Ultra เวอร์ชันที่ใหม่กว่าอีกครั้งแล้วทุกอย่างจะกลับมา</string>
     <string name="newer_db_versions">เวอร์ชันนี้รองรับรูปแบบข้อมูล %1$d</string>
     <string name="newer_db_exit">ปิด</string>
+    <string name="degraded_startup_title">โหลดคอมโพเนนต์บางส่วนตอนเริ่มทำงานไม่สำเร็จ</string>
+    <string name="degraded_startup_body">แอปกำลังทำงานด้วยฟังก์ชันที่ลดลง ฟีเจอร์บางอย่างอาจใช้ไม่ได้จนกว่าจะรีสตาร์ท</string>
+    <string name="degraded_startup_cause">สาเหตุ: %1$s</string>
+    <string name="degraded_startup_dismiss">ปิด</string>
     <string name="usage_attr_unknown_session">ไม่ทราบโมเดล — ระเบียนของเซสชันถูกลบไปแล้ว</string>
     <string name="usage_attr_removed">ไม่มีอยู่ในผู้ให้บริการที่คุณตั้งค่าไว้แล้ว</string>
     <string name="usage_detail_output">เอาต์พุต</string>
@@ -1323,6 +1327,8 @@
     <string name="backup_ready">ข้อมูลสำรองพร้อมแล้ว</string>
     <string name="backup_result_excluded_too_large">ยกเว้น (ใหญ่เกินไป)</string>
     <string name="backup_result_files_not_included">ไม่ได้รวมไฟล์</string>
+    <string name="backup_result_excluded_unreadable">ยกเว้น (อ่านไม่ได้)</string>
+    <string name="backup_result_credentials_unreadable">อ่านข้อมูลรับรองไม่ได้</string>
     <string name="backup_result_local_only">บันทึกไว้ในอุปกรณ์นี้เท่านั้น</string>
     <string name="backup_result_delivered">บันทึกไว้ในอุปกรณ์นี้ และคัดลอกไปยัง %1$d จาก %2$d ปลายทาง</string>
     <string name="backup_local_removed">ลบสำเนาในเครื่องแล้ว — คืนพื้นที่ %1$s ในอุปกรณ์นี้</string>
@@ -2750,6 +2756,7 @@
     <string name="modeldetail_section_context_retry">บริบทและการลองใหม่</string>
     <string name="modeldetail_temperature">อุณหภูมิ (0.0–2.0)</string>
     <string name="modeldetail_temperature_invalid">ใส่ตัวเลข 0.0 ถึง 2.0 หรือเว้นว่างเพื่อไม่ส่ง</string>
+    <string name="modeldetail_harness_save_failed">บันทึกการปรับตัวบทบางจริงไม่สำเร็จ บันทึกรายการโมเดลแล้ว ลองอีกครั้ง</string>
     <string name="modeldetail_temperature_placeholder">ไม่ส่ง</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">เพิ่ม</string>

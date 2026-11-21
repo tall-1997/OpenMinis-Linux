@@ -39,6 +39,14 @@ internal object BackupMemoryTree {
     private const val SIZE_CAP = "size_cap"
     private const val UNREADABLE = "unreadable"
     private const val NO_FILES = "no_files"
+
+    /** Package-tombstone reason string -> the run-level skip reason. */
+    private fun skipReason(wire: String): BackupBlobStore.SkipReason = when (wire) {
+        SIZE_CAP -> BackupBlobStore.SkipReason.SIZE_CAP
+        NO_FILES -> BackupBlobStore.SkipReason.NO_FILES
+        UNREADABLE -> BackupBlobStore.SkipReason.UNREADABLE
+        else -> BackupBlobStore.SkipReason.UNREADABLE
+    }
     private fun metadata(root: File, source: String): File = File(root, "${MemoryLifecycle.SIDECAR_DIR}/$source.json")
 
     fun isMemoryTemp(relative: String): Boolean =
@@ -54,7 +62,7 @@ internal object BackupMemoryTree {
         source: File,
         dest: File,
         maxDiaryBytes: Long? = null,
-        onSkip: (String, Long) -> Unit = { _, _ -> },
+        onSkip: (String, Long, BackupBlobStore.SkipReason) -> Unit = { _, _, _ -> },
     ): BackupManifest.CategoryStat {
         dest.mkdirs()
         var entries = 0
@@ -68,7 +76,7 @@ internal object BackupMemoryTree {
         val skipped = JSONArray()
         var skippedCategory: String? = null
         fun noteSkip(path: String, size: Long, reason: String) {
-            onSkip(path, size)
+            onSkip(path, size, skipReason(reason))
             skipped.put(JSONObject().put("path", path).put("size", size).put("reason", reason))
         }
         if (source.isDirectory) MemoryLifecycle.locked(source) { root ->

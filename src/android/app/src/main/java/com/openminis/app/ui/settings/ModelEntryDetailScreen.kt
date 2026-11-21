@@ -127,6 +127,10 @@ fun ModelEntryDetailScreen(
             com.openminis.app.data.HarnessConfigStore.forModel(harnessContext.filesDir, entryId).postAnchorBudgetTokens,
         )
     }
+    // [T-harness-config-store] A failed sidecar write must reach the user:
+    // the model row itself saves fine, so popping as if nothing happened hid
+    // the one part of the form that did not persist.
+    var harnessSaveError by remember { mutableStateOf(false) }
     var compactPercentInherited by remember { mutableStateOf(overrides.compactThresholdPercent == null) }
     var compactPercentText by remember {
         mutableStateOf(
@@ -215,9 +219,9 @@ fun ModelEntryDetailScreen(
                     // [T-harness-config-store] The model row is the authoritative
                     // record, so it must land FIRST: the sidecar used to be
                     // written first and a failing `updateEntry` then left the two
-                    // stores disagreeing. The save result is no longer discarded —
-                    // a failed sidecar write is reported instead of bouncing back
-                    // as if the override had been stored.
+                    // stores disagreeing. A failed sidecar write keeps the screen
+                    // open with the error inline — popping as if the override had
+                    // been stored would read as a save that never happened.
                     providerRepository.updateEntry(updated)
                     // [T-harness-config-preserve] Start from the model's CURRENT
                     // config, not from DEFAULT: the old `DEFAULT.copy(...)` wiped
@@ -239,6 +243,8 @@ fun ModelEntryDetailScreen(
                             "ModelEntryDetail",
                             "[T-harness-config-store] harness override not persisted for $entryId",
                         )
+                        harnessSaveError = true
+                        return@MinisButton
                     }
                     onBack()
                 },
@@ -368,7 +374,7 @@ fun ModelEntryDetailScreen(
                 subtitle = if (harnessCustom) harnessTailBudget.toString()
                     else stringResource(R.string.modeldetail_tail_budget_state_auto),
                 showChevron = false,
-                showDivider = false,
+                showDivider = harnessSaveError,
                 trailing = {
                     PlusMinusStepper(
                         value = harnessTailBudget,
@@ -382,6 +388,16 @@ fun ModelEntryDetailScreen(
                     )
                 },
             )
+            if (harnessSaveError) {
+                // Same inline-error shape as the temperature field above:
+                // the save was refused, the user stays here and can retry.
+                Text(
+                    text = stringResource(R.string.modeldetail_harness_save_failed),
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(bottom = 12.dp),
+                )
+            }
         }
             }
         }

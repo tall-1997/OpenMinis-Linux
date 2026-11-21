@@ -867,6 +867,10 @@
     <string name="newer_db_body">Эта копия Minis Ultra старше той, что создала ваши данные, поэтому не может безопасно их открыть.\n\nНичего не удалено — ваши переписки на устройстве целы. Переустановите более новую версию Minis Ultra, и всё вернётся на место.</string>
     <string name="newer_db_versions">Эта версия поддерживает формат данных %1$d</string>
     <string name="newer_db_exit">Закрыть</string>
+    <string name="degraded_startup_title">Не удалось загрузить некоторые компоненты запуска</string>
+    <string name="degraded_startup_body">Приложение работает с ограниченной функциональностью. Некоторые функции могут быть недоступны до перезапуска.</string>
+    <string name="degraded_startup_cause">Причина: %1$s</string>
+    <string name="degraded_startup_dismiss">Закрыть</string>
     <string name="usage_attr_unknown_session">Модель неизвестна — запись сессии была удалена</string>
     <string name="usage_attr_removed">Больше нет среди ваших настроенных провайдеров</string>
     <string name="usage_detail_output">Выходные</string>
@@ -1327,6 +1331,8 @@
     <string name="backup_ready">Копия готова</string>
     <string name="backup_result_excluded_too_large">Исключено (слишком большой)</string>
     <string name="backup_result_files_not_included">Файлы не включены</string>
+    <string name="backup_result_excluded_unreadable">Исключено (не удалось прочитать)</string>
+    <string name="backup_result_credentials_unreadable">Не удалось прочитать учётные данные</string>
     <string name="backup_result_local_only">Сохранено только на этом устройстве.</string>
     <string name="backup_result_delivered">Сохранено на этом устройстве и скопировано в %1$d из %2$d назначений.</string>
     <string name="backup_local_removed">Локальная копия удалена — освобождено %1$s на этом устройстве</string>
@@ -2758,6 +2764,7 @@
     <string name="modeldetail_section_context_retry">Контекст и повторы</string>
     <string name="modeldetail_temperature">Температура (0,0–2,0)</string>
     <string name="modeldetail_temperature_invalid">Введите число от 0,0 до 2,0 или оставьте поле пустым, чтобы не отправлять.</string>
+    <string name="modeldetail_harness_save_failed">Не удалось сохранить значение бюджета контекста. Запись модели сохранена — попробуйте ещё раз.</string>
     <string name="modeldetail_temperature_placeholder">Не отправлять</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">Добавить</string>

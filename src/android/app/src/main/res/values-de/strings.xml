@@ -864,6 +864,10 @@
     <string name="newer_db_body">Diese Kopie von Minis Ultra ist älter als die Version, die Ihre Daten erstellt hat, und kann sie daher nicht sicher öffnen.\n\nEs wurde nichts gelöscht — Ihre Unterhaltungen sind auf diesem Gerät unversehrt. Installieren Sie die neuere Version von Minis Ultra erneut, dann ist alles wieder da.</string>
     <string name="newer_db_versions">Diese Version unterstützt Datenformat %1$d</string>
     <string name="newer_db_exit">Schließen</string>
+    <string name="degraded_startup_title">Einige Startkomponenten konnten nicht geladen werden</string>
+    <string name="degraded_startup_body">Die App läuft mit eingeschränktem Funktionsumfang. Einige Funktionen sind möglicherweise erst nach einem Neustart verfügbar.</string>
+    <string name="degraded_startup_cause">Ursache: %1$s</string>
+    <string name="degraded_startup_dismiss">Schließen</string>
     <string name="usage_attr_unknown_session">Modell unbekannt — der Sitzungseintrag wurde gelöscht</string>
     <string name="usage_attr_removed">Nicht mehr unter Ihren eingerichteten Anbietern</string>
     <string name="usage_detail_output">Ausgabe</string>
@@ -1322,6 +1326,8 @@
     <string name="backup_ready">Sicherung bereit</string>
     <string name="backup_result_excluded_too_large">Ausgeschlossen (zu groß)</string>
     <string name="backup_result_files_not_included">Dateien nicht enthalten</string>
+    <string name="backup_result_excluded_unreadable">Ausgeschlossen (nicht lesbar)</string>
+    <string name="backup_result_credentials_unreadable">Zugangsdaten konnten nicht gelesen werden</string>
     <string name="backup_result_local_only">Nur auf diesem Gerät gesichert.</string>
     <string name="backup_result_delivered">Auf diesem Gerät gesichert und an %1$d von %2$d Ziel(en) übertragen.</string>
     <string name="backup_local_removed">Lokale Kopie entfernt — %1$s auf diesem Gerät freigegeben</string>
@@ -2667,6 +2673,7 @@
     <string name="modeldetail_section_context_retry">Kontext &amp; Wiederholungen</string>
     <string name="modeldetail_temperature">Temperatur (0,0–2,0)</string>
     <string name="modeldetail_temperature_invalid">Gib eine Zahl von 0,0 bis 2,0 ein, oder lasse das Feld leer, um sie wegzulassen.</string>
+    <string name="modeldetail_harness_save_failed">Die Kontextbudget-Abweichung konnte nicht gespeichert werden. Der Modelleintrag wurde gespeichert – bitte erneut versuchen.</string>
     <string name="modeldetail_temperature_placeholder">Weglassen</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">Hinzufügen</string>
