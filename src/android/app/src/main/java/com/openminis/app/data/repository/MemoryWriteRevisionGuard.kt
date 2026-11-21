@@ -46,7 +46,7 @@ internal object MemoryWriteRevisionGuard {
         // disguise: nothing else writes a zero-byte day log (every writer goes
         // through writeTextAtomic with frontmatter + an entry), so a caller
         // whose hash cannot match has nothing to lose by appending.
-        if (existing.isEmpty()) {
+        if (existingContent.isEmpty()) {
             return "Error: 今天的日志是空的，没有可校验的 revision。" +
                 "省略 revision 参数即可新建。"
         }
