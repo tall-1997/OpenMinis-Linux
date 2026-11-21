@@ -3337,6 +3337,10 @@
     <string name="guard_stop_on">Oturumu durdurabilir</string>
     <string name="guard_stop_off">Oturumu asla durdurmaz</string>
     <string name="guard_stop_footer">Açıkken koruma, aynı eylem çok sık tekrarlandığında oturumu durdurur. Kapalıyken yalnızca modeli uyarır; derleme gibi uzun beklemelerde işe yarar.</string>
+    <string name="goal_drift_section">Hedef sapma gözetimi</string>
+    <string name="goal_drift_threshold_title">Sapma hatırlatma eşiği</string>
+    <string name="goal_drift_threshold_value">%1$d araç turu</string>
+    <string name="goal_drift_footer">Bir hedef etkinken, ana hat plan panosunda hiçbir hareket olmadan bu kadar ardışık araç turunun geçmesine izin verilir; ardından ana bilgisayar modeli hedefine hatırlatır. Yüksek = daha az hatırlatma; düşük = daha sıkı gözetim.</string>
     <string name="token_usage_section_memory">Bellek</string>
     <string name="token_usage_memory_lines">Teslim edilen satırlar</string>
     <string name="token_usage_memory_shown">Gösterim sayısı</string>

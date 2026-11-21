@@ -3188,6 +3188,10 @@
     <string name="guard_stop_on">Darf die Sitzung stoppen</string>
     <string name="guard_stop_off">Stoppt die Sitzung nie</string>
     <string name="guard_stop_footer">Wenn aktiv, stoppt die Bremse die Sitzung, sobald sich dieselbe Aktion zu oft wiederholt. Wenn aus, erinnert sie das Modell nur - hilfreich bei langen Wartezeiten wie einem Build.</string>
+    <string name="goal_drift_section">Ziel-Abweichungsüberwachung</string>
+    <string name="goal_drift_threshold_title">Abweichungs-Erinnerungsschwelle</string>
+    <string name="goal_drift_threshold_value">%1$d Werkzeugdurchläufe</string>
+    <string name="goal_drift_footer">Solange ein Ziel aktiv ist, ist dies die Anzahl aufeinanderfolgender Werkzeugdurchläufe ohne jede Änderung der Planübersicht, bevor der Host das Modell an sein Ziel erinnert. Höher bedeutet weniger Erinnerungen; niedriger bedeutet strengere Kontrolle.</string>
     <string name="token_usage_section_memory">Gedächtnis</string>
     <string name="token_usage_memory_lines">Gelieferte Zeilen</string>
     <string name="token_usage_memory_shown">Anzahl Anzeigen</string>

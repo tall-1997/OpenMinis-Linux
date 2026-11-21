@@ -3344,6 +3344,10 @@
     <string name="guard_stop_on">Może zatrzymać sesję</string>
     <string name="guard_stop_off">Nigdy nie zatrzymuje sesji</string>
     <string name="guard_stop_footer">Gdy włączone, strażnik zatrzymuje sesję, gdy ta sama czynność powtarza się zbyt często. Gdy wyłączone, tylko przypomina modelowi, co pomaga podczas długiego oczekiwania, np. na kompilację.</string>
+    <string name="goal_drift_section">Nadzór nad dryfem celu</string>
+    <string name="goal_drift_threshold_title">Próg przypomnienia o dryfie</string>
+    <string name="goal_drift_threshold_value">%1$d tur narzędzia</string>
+    <string name="goal_drift_footer">Gdy cel jest aktywny, to liczba kolejnych tur narzędzia, które mogą upłynąć bez żadnej zmiany na tablicy planu, zanim host przypomni modelowi o celu. Wyżej = mniej przypomnień; niżej = surowszy nadzór.</string>
     <string name="token_usage_section_memory">Pamięć</string>
     <string name="token_usage_memory_lines">Dostarczone wiersze</string>
     <string name="token_usage_memory_shown">Liczba wyświetleń</string>
