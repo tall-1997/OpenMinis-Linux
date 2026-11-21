@@ -169,6 +169,20 @@ class MinisApp : Application(), ImageLoaderFactory {
         // T-android-safemode-lateinit-crash: prime AppLogger's Context before any early-return skips init.
         AppLogger.primeContext(this)
 
+        // [T-android-prefs-install] The typed prefs layer (config/PrefsAccess.kt) is
+        // the only sanctioned way to reach SharedPreferences: `Prefs.file(name)`
+        // resolves the file name through PrefsRegistry (typo = hard error instead
+        // of a silently-created empty file) and derives plain vs encrypted from the
+        // registry spec (never from the call site). Every one of those calls throws
+        // "Prefs is not installed" until a PrefsSource is bound, so bind it here,
+        // before ANY early return below and before any component reads a pref.
+        // It must stay ahead of shouldSkipMainInit(): non-main processes
+        // (sandbox job runners, widgets, the ACRA-less service processes) read
+        // prefs too, and they never reach the main-only init block.
+        com.openminis.app.config.Prefs.install(
+            com.openminis.app.config.AndroidPrefsSource(this),
+        )
+
         // Application subclasses run in EVERY process: sub-processes get minimal boot (rest is main-only).
         if (ProcessChecks.shouldSkipMainInit(this)) return
 
