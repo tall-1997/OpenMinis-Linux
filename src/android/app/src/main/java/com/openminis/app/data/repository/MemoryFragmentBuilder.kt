@@ -64,10 +64,17 @@ internal class MemoryFragmentBuilder(
     // call decides hit vs. rebuild. Callers get a memoized repository via
     // ChatViewModel.sessionMemoryRepo(), so the cache survives across turns
     // instead of being re-allocated with the repository.
+    //
+    // [T-memory-cache-snapshot] Key and value live in ONE immutable snapshot,
+    // published by a single @Volatile write. Two sibling @Volatile fields are
+    // not a cache: a reader between the writer's two stores could return
+    // value-of-new under key-of-old (a fingerprint's worth of the wrong
+    // content injected into a prompt), and two interleaved writers could
+    // publish key from one and value from the other permanently.
+    private class CacheEntry(val key: String?, val value: String?)
+
     @Volatile
-    private var globalFragCacheKey: String? = null
-    @Volatile
-    private var globalFragCacheValue: String? = null
+    private var globalFragCache: CacheEntry? = null
     // Daily logs are projected against the current lifecycle clock on every build.
 
     // [T-memory-instruction-dedupe] Raw GLOBAL.md body memo, keyed like the
@@ -75,9 +82,7 @@ internal class MemoryFragmentBuilder(
     // fragment is unusable for that: every scope prepends its own header and
     // envelope. Kept separate so the fragment cache keeps its exact semantics.
     @Volatile
-    private var globalBodyCacheKey: String? = null
-    @Volatile
-    private var globalBodyCacheValue: String? = null
+    private var globalBodyCache: CacheEntry? = null
 
     /**
      * [T-memory-instruction-dedupe] The raw `GLOBAL.md` text (no header, no
@@ -86,14 +91,13 @@ internal class MemoryFragmentBuilder(
     fun loadGlobalMemoryBody(sessionScoped: Boolean): String? {
         val globalFile = File(memoryDir, MemoryRepository.GLOBAL_FILE)
         val key = (if (sessionScoped) "S" else "G") + ":" + (fingerprint(globalFile) ?: "missing")
-        if (globalBodyCacheKey == key) return globalBodyCacheValue
+        globalBodyCache?.let { if (it.key == key) return it.value }
         val body = if (!globalFile.exists()) {
             null
         } else {
             readTextResilient(globalFile, "global-rules")?.takeIf { it.isNotEmpty() }
         }
-        globalBodyCacheKey = key
-        globalBodyCacheValue = body
+        globalBodyCache = CacheEntry(key, body)
         return body
     }
 
@@ -108,7 +112,7 @@ internal class MemoryFragmentBuilder(
         // file fingerprint (null when missing). Cache hit: return previous
         // result directly. Cache miss: full read, rebuild, store.
         val key = (if (sessionScoped) "S" else "G") + ":" + (fingerprint(globalFile) ?: "missing")
-        if (globalFragCacheKey == key) return globalFragCacheValue
+        globalFragCache?.let { if (it.key == key) return it.value }
         val result = loadGlobalMemoryFragmentUncached(globalFile, sessionScoped)
             ?.let {
                 MemoryAuthority.withEnvelope(
@@ -125,8 +129,7 @@ internal class MemoryFragmentBuilder(
                     use = InstructionUse.STANDING_INSTRUCTION,
                 )
             }
-        globalFragCacheKey = key
-        globalFragCacheValue = result
+        globalFragCache = CacheEntry(key, result)
         return result
     }
 

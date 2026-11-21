@@ -5,6 +5,7 @@ import com.openminis.app.sandbox.PRootKernel
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.nio.charset.Charset
 
 /** [T-mcp-refactor] file_read / file_write — path-gated workspace file tools. */
 internal fun fileTools(deps: McpToolDeps): List<McpToolSpec> = listOf(
@@ -37,6 +38,42 @@ internal fun fileTools(deps: McpToolDeps): List<McpToolSpec> = listOf(
 /** Max bytes per transfer direction — base64 inflates by 4/3, so an 8 MB
  *  payload arrives as ~10.7 MB of JSON; keep both under control. */
 private const val MAX_TRANSFER_BYTES = 8L * 1024 * 1024
+
+/** [T-mcp-fileread-oom] Text reads above this size are refused instead of
+ *  streamed or truncated: mirrors the agent-side FileReadTool's large-file
+ *  guard (the same 50 MB constant), so both file_read surfaces answer a
+ *  huge log the same way — with guidance — rather than silently reading it. */
+private val MAX_STREAM_FILE_SIZE = com.openminis.app.tools.FileReadTool.MAX_STREAM_FILE_SIZE
+
+/**
+ * [T-mcp-fileread-oom] Bounded text read: at most [maxChars] chars are
+ * decoded, the stream stops there, and the second value says whether more
+ * followed. `File.readText()` decoded the WHOLE file first (full byte[] plus
+ * String) only to throw away all but 80 KB — a multi-hundred-MB log OOMs the
+ * app before the truncation ever runs. Memory here stays at the output cap,
+ * never the file size.
+ */
+internal fun readTextBounded(file: File, charset: Charset, maxChars: Int): Pair<String, Boolean> {
+    val chars = CharArray(maxChars + 1)
+    var count = 0
+    file.reader(charset).use { reader ->
+        while (count < chars.size) {
+            val n = reader.read(chars, count, chars.size - count)
+            if (n < 0) break
+            count += n
+        }
+    }
+    val truncated = count > maxChars
+    var outChars = minOf(count, maxChars)
+    // Cutting between the two halves of a surrogate pair ends the output with
+    // a lone high surrogate — a string JSON.stringify serialises to invalid
+    // \uD8xx escape that strict clients reject wholesale. Drop the orphaned
+    // half; the truncated flag still reports honestly (one char less came out).
+    if (truncated && outChars > 0 && Character.isHighSurrogate(chars[outChars - 1])) {
+        outChars--
+    }
+    return String(chars, 0, outChars) to truncated
+}
 
 /** Shared prologue: require 'path', gate it, normalize, resolve to a host
  *  file through the mcp-server session tree. Returns (file, null) or
@@ -96,10 +133,19 @@ private fun fileRead(deps: McpToolDeps, arguments: JSONObject): McpServerCore.Ca
                 ),
             )
         }
-        val raw = file.readText(textCharset ?: Charsets.UTF_8)
-        val content = if (raw.length > McpToolShared.MAX_FILE_READ_CHARS) {
-            raw.take(McpToolShared.MAX_FILE_READ_CHARS) +
-                "\n... (truncated at ${McpToolShared.MAX_FILE_READ_CHARS} chars)"
+        // [T-mcp-fileread-oom] Refuse before streaming: a silent truncate would
+        // hand the model the head of a 300 MB log as if it were the file. The
+        // recoverable error points at the tools that CAN page through it.
+        if (size > MAX_STREAM_FILE_SIZE) {
+            return McpToolShared.error(
+                "Error: file is $size bytes, exceeds the " +
+                    "${MAX_STREAM_FILE_SIZE / (1024 * 1024)} MB file_read limit. " +
+                    "Use shell_exec with head/tail/grep/split for portions of large files."
+            )
+        }
+        val (raw, truncated) = readTextBounded(file, textCharset ?: Charsets.UTF_8, McpToolShared.MAX_FILE_READ_CHARS)
+        val content = if (truncated) {
+            raw + "\n... (truncated at ${McpToolShared.MAX_FILE_READ_CHARS} chars)"
         } else {
             raw
         }

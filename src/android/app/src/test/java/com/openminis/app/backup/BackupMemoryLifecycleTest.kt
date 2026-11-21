@@ -165,7 +165,7 @@ class BackupMemoryLifecycleTest {
         val skipped = mutableListOf<String>()
         assertEquals(
             0,
-            BackupMemoryTree.export(dir, pkg, maxDiaryBytes = 0L) { path, _ -> skipped += path }.entries,
+            BackupMemoryTree.export(dir, pkg, maxDiaryBytes = 0L) { path, _, _ -> skipped += path }.entries,
         )
         assertFalse("the persona must not be half-backed-up", File(pkg, "SOUL.md").exists())
         assertTrue("every excluded file is reported to the export UI", skipped.isNotEmpty())
@@ -240,7 +240,7 @@ class BackupMemoryLifecycleTest {
             if (which == "diary") body.appendText("user addendum\n".repeat(80))
             val capped = tmp.newFolder("capped-$which")
             val skipped = mutableListOf<String>()
-            assertEquals(1, BackupMemoryTree.export(from, capped, minOf(body.length(), sidecar.length())) { path, _ -> skipped += path }.entries)
+            assertEquals(1, BackupMemoryTree.export(from, capped, minOf(body.length(), sidecar.length())) { path, _, _ -> skipped += path }.entries)
             assertEquals(2, skipped.size)
             assertEquals(1, BackupMemoryTree.restore(capped, to).filesWritten)
             assertUnchanged(to, before)
@@ -340,7 +340,7 @@ class BackupMemoryLifecycleTest {
         File(global, "SOUL.md").writeText("portable persona")
         val globalPkg = tmp.newFolder("bad-global-pkg")
         val skipped = mutableListOf<String>()
-        assertEquals(1, BackupMemoryTree.export(global, globalPkg) { path, _ -> skipped += path }.entries)
+        assertEquals(1, BackupMemoryTree.export(global, globalPkg) { path, _, _ -> skipped += path }.entries)
         assertEquals(2, skipped.size)
         assertFalse(File(globalPkg, source).exists())
         assertFalse(File(globalPkg, ".memory-lifecycle/$source.json").exists())

@@ -63,8 +63,10 @@ import java.util.concurrent.ConcurrentHashMap
  *      model's intent regardless of completion order.
  *
  * Shared mutable state during phase 2: allToolBlocks index writes and the
- * loop detector are synchronized; every Main-thread UI push uses a toList()
- * snapshot so the UI never iterates a list a lane is mutating.
+ * loop detector are synchronized; every Main-thread UI push publishes a
+ * toList() snapshot taken INSIDE that monitor, so a push can never race a
+ * lane's add/set (a toList() taken after the monitor exits iterates a list
+ * another lane is mutating — CME or a torn publish).
  */
 
 /** Immutable snapshot of the turn state the executor needs. */
@@ -172,14 +174,24 @@ internal suspend fun ChatViewModel.preflightToolTurn(
             turnFinishReason = ctx.turnFinishReason,
         )
         if (preflight is ToolCallPreflight.Outcome.Rejected) {
-            val refusedIdx = ctx.allToolBlocks.indexOfFirst { it.id == id }
-            if (refusedIdx >= 0) {
-                val elapsed = System.currentTimeMillis() - ctx.allToolBlocks[refusedIdx].startTimeMs
-                ctx.allToolBlocks[refusedIdx] = ctx.allToolBlocks[refusedIdx].copy(
-                    toolStatus = ToolBlockStatus.FAILED,
-                    content = preflight.uiMessage,
-                    durationMs = elapsed,
-                )
+            // [T-parallel-tool-calls] Same contract as every other block
+            // mutation (file header): mutate INSIDE the monitor and publish
+            // the toList() snapshot taken there. Phase 1 runs sequentially
+            // today, but preflight is shared by three entry points and the
+            // guarantee must not depend on who calls it — a live-list push
+            // would race any lane's add/set the moment phase 1 ever runs off
+            // the single-threaded assumption.
+            val uiBlocks = synchronized(ctx.allToolBlocks) {
+                val refusedIdx = ctx.allToolBlocks.indexOfFirst { it.id == id }
+                if (refusedIdx >= 0) {
+                    val elapsed = System.currentTimeMillis() - ctx.allToolBlocks[refusedIdx].startTimeMs
+                    ctx.allToolBlocks[refusedIdx] = ctx.allToolBlocks[refusedIdx].copy(
+                        toolStatus = ToolBlockStatus.FAILED,
+                        content = preflight.uiMessage,
+                        durationMs = elapsed,
+                    )
+                }
+                ctx.allToolBlocks.toList()
             }
             toolLoopDetector.record(
                 name, parseToolParams(args.toString()),
@@ -193,7 +205,7 @@ internal suspend fun ChatViewModel.preflightToolTurn(
             ctx.toolInputChunkRings.remove(id)
             ctx.toolCallRawArgs.remove(id)
             withContext(Dispatchers.Main) {
-                updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, ctx.allToolBlocks)
+                updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, uiBlocks)
             }
             continue
         }
@@ -212,14 +224,19 @@ internal suspend fun ChatViewModel.preflightToolTurn(
             val duplicateMsg = "Error: replayed tool call ignored. This copy was not sent. " +
                 "Use the original result if it exists; otherwise verify delivery before repeating the operation."
             AppLogger.warning(ChatViewModel.TAG_STREAM, "[ToolReplay] refused duplicate dispatch id=$id name=$name")
-            val dupIdx = ctx.allToolBlocks.indexOfFirst { it.id == id }
-            if (dupIdx >= 0) {
-                val elapsedDup = System.currentTimeMillis() - ctx.allToolBlocks[dupIdx].startTimeMs
-                ctx.allToolBlocks[dupIdx] = ctx.allToolBlocks[dupIdx].copy(
-                    toolStatus = ToolBlockStatus.FAILED,
-                    content = "Duplicate call ignored (already executed)",
-                    durationMs = elapsedDup,
-                )
+            // [T-parallel-tool-calls] Mutate INSIDE the monitor, publish the
+            // snapshot taken there — same contract as the Rejected path above.
+            val uiBlocks = synchronized(ctx.allToolBlocks) {
+                val dupIdx = ctx.allToolBlocks.indexOfFirst { it.id == id }
+                if (dupIdx >= 0) {
+                    val elapsedDup = System.currentTimeMillis() - ctx.allToolBlocks[dupIdx].startTimeMs
+                    ctx.allToolBlocks[dupIdx] = ctx.allToolBlocks[dupIdx].copy(
+                        toolStatus = ToolBlockStatus.FAILED,
+                        content = "Duplicate call ignored (already executed)",
+                        durationMs = elapsedDup,
+                    )
+                }
+                ctx.allToolBlocks.toList()
             }
             refusedParts[id] = AgentContentPart.ToolResult(
                 id = id, name = name,
@@ -228,7 +245,7 @@ internal suspend fun ChatViewModel.preflightToolTurn(
             )
             ctx.toolInputChunkRings.remove(id)
             withContext(Dispatchers.Main) {
-                updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, ctx.allToolBlocks)
+                updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, uiBlocks)
             }
             continue
         }
@@ -243,14 +260,20 @@ internal suspend fun ChatViewModel.preflightToolTurn(
                 "[turn=${ctx.turn}] tool BLOCKED by loop detector name=$name msg=$blockedMsg")
             AppLogger.warning("ChatViewModel",
                 "tool blocked by loop detector name=$name reason=$blockedMsg")
-            val blockIdx = ctx.allToolBlocks.indexOfFirst { it.id == id }
-            if (blockIdx >= 0) {
-                val elapsed = System.currentTimeMillis() - ctx.allToolBlocks[blockIdx].startTimeMs
-                ctx.allToolBlocks[blockIdx] = ctx.allToolBlocks[blockIdx].copy(
-                    toolStatus = ToolBlockStatus.FAILED,
-                    content = blockedMsg,
-                    durationMs = elapsed,
-                )
+            // [T-parallel-tool-calls] Same monitor contract as the other two
+            // refusal paths (no UI push here — the assembled phase-2 pushes
+            // carry this block's FAILED state — so only the mutation needs
+            // the monitor, no snapshot).
+            synchronized(ctx.allToolBlocks) {
+                val blockIdx = ctx.allToolBlocks.indexOfFirst { it.id == id }
+                if (blockIdx >= 0) {
+                    val elapsed = System.currentTimeMillis() - ctx.allToolBlocks[blockIdx].startTimeMs
+                    ctx.allToolBlocks[blockIdx] = ctx.allToolBlocks[blockIdx].copy(
+                        toolStatus = ToolBlockStatus.FAILED,
+                        content = blockedMsg,
+                        durationMs = elapsed,
+                    )
+                }
             }
             // Record the blocked attempt so consecutive blocks still
             // count toward the unknown-tool / circuit-breaker windows.
@@ -330,7 +353,7 @@ internal suspend fun ChatViewModel.finalizePlannedCall(
     }
 
     val activeRun = com.openminis.app.service.ActiveRunContext.current()
-    synchronized(ctx.allToolBlocks) {
+    val uiBlocks = synchronized(ctx.allToolBlocks) {
         val blockIdx = ctx.allToolBlocks.indexOfFirst { it.id == id }
         if (blockIdx >= 0) {
             val elapsed = System.currentTimeMillis() - ctx.allToolBlocks[blockIdx].startTimeMs
@@ -433,9 +456,13 @@ internal suspend fun ChatViewModel.finalizePlannedCall(
                 imageFilePath = result.imageFilePath ?: ctx.allToolBlocks[blockIdx].imageFilePath,
             )
         }
+        // [T-parallel-tool-calls] Snapshot INSIDE the monitor: sibling lanes on
+        // Dispatchers.IO add/set concurrently, and a toList() taken on Main
+        // after the monitor exits would race them (CME / torn publish).
+        ctx.allToolBlocks.toList()
     }
     withContext(Dispatchers.Main) {
-        updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, ctx.allToolBlocks.toList())
+        updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, uiBlocks)
     }
 
     // [T-truncated-args-visibility #119] Tell the MODEL its own
@@ -504,7 +531,8 @@ private suspend fun ChatViewModel.settleReplayedCall(
     callId: String,
     part: AgentContentPart.ToolResult,
 ) {
-    synchronized(ctx.allToolBlocks) {
+    // [T-parallel-tool-calls] Snapshot INSIDE the monitor — see finalizePlannedCall.
+    val uiBlocks = synchronized(ctx.allToolBlocks) {
         val idx = ctx.allToolBlocks.indexOfFirst { it.id == callId }
         if (idx >= 0) {
             val prev = ctx.allToolBlocks[idx]
@@ -514,9 +542,10 @@ private suspend fun ChatViewModel.settleReplayedCall(
                 toolTitle = displayToolTitle(prev.toolName, prev.toolArgs, prev.toolTitle),
             )
         }
+        ctx.allToolBlocks.toList()
     }
     withContext(Dispatchers.Main) {
-        updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, ctx.allToolBlocks.toList())
+        updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, uiBlocks)
     }
 }
 
@@ -554,14 +583,16 @@ private suspend fun ChatViewModel.runPlannedCall(
         )
         // Flip PENDING → RUNNING right before the execute dispatch so the UI
         // (tool pill spinner) shows the exact moment execution begins.
-        synchronized(ctx.allToolBlocks) {
+        // [T-parallel-tool-calls] Snapshot INSIDE the monitor — see finalizePlannedCall.
+        val uiBlocks = synchronized(ctx.allToolBlocks) {
             val preIdx = ctx.allToolBlocks.indexOfFirst { it.id == call.id }
             if (preIdx >= 0 && ctx.allToolBlocks[preIdx].toolStatus == ToolBlockStatus.PENDING) {
                 ctx.allToolBlocks[preIdx] = ctx.allToolBlocks[preIdx].copy(toolStatus = ToolBlockStatus.RUNNING)
             }
+            ctx.allToolBlocks.toList()
         }
         withContext(Dispatchers.Main) {
-            updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, ctx.allToolBlocks.toList())
+            updateAssistantMessage(ctx.assistantId, ctx.accumulatedText, true, uiBlocks)
         }
         Log.d("ToolChain[VM]", "[turn=${ctx.turn}] executeTool START name=${call.name}")
         val result = executeTool(

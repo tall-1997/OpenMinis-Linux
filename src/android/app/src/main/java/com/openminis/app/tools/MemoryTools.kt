@@ -5,6 +5,8 @@ import com.openminis.app.data.authority.MemoryOrigin
 import com.openminis.app.data.repository.MemoryEntryOrigin
 import com.openminis.app.data.repository.MemoryLifecycle
 import com.openminis.app.data.repository.MemoryRepository
+import com.openminis.app.data.repository.MemoryRevision
+import com.openminis.app.data.repository.MemoryWriteRevisionGuard
 import org.json.JSONObject
 
 /**
@@ -50,6 +52,13 @@ object MemoryTools {
             val content = obj.optString("content", "")
             val toolTitle = obj.optString("tool_title", "memory_write")
             val revision = obj.optString("revision", "").takeIf { it.isNotBlank() }
+            // [F3] Shape-check at the argument layer: a garbled revision used to
+            // travel through parse/substring/message assembly and into the diary
+            // file lock before being refused. Failing here costs no IO, no lock,
+            // and returns the same copy the guard would produce.
+            if (revision != null && !MemoryRevision.wellFormed(revision)) {
+                return ToolResult(MemoryWriteRevisionGuard.malformedCopy(), false, toolTitle)
+            }
 
             if (content.isBlank()) {
                 ToolResult("Error: Missing required 'content' parameter", false, toolTitle)

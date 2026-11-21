@@ -163,9 +163,17 @@ internal fun ChatViewModel.projectChatRequest(
         verifiedRequestSpillPaths(normalized, ToolResultProjection.protectedSuffixStart(normalized, keepRecent), requestSessionId)
     } else emptySet()
     val aged = ContextSaverRuntime.planAge(normalized, window, pressure, verifiedPaths, keepRecent, config = harnessConfig)
+    // [T-micro-prune-post-aging-pressure] The prune trigger must meter the list
+    // it is about to prune. Aging runs FIRST and folds old results, so the
+    // pre-aging `pressure` is always an OVERESTIMATE of the aged request: reusing
+    // it re-fires the (lossy) head/tail trim on requests aging already brought
+    // under the trigger, breaking microPruneOldToolResults' pass-through
+    // contract. Same instance = aging folded nothing = the reading is current.
+    val prunePressure = if (aged.messages === normalized) pressure
+    else calibratedContextTokens(attribution, ContextTokenMeter.rawRequestTokens(addReminders(aged.messages), prompt?.prompt, tools))
     val pruned = microPruneOldToolResults(
         history = aged.messages,
-        usedTokens = pressure.toLong(),
+        usedTokens = prunePressure.toLong(),
         windowTokens = window.toLong(),
         keepRecent = keepRecent,
         triggerTokens = microTriggerTokens.toLong(),

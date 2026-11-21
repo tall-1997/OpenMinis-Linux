@@ -158,7 +158,26 @@ object WritePathGuard {
     fun normalize(path: String): String {
         var p = path.trim().replace('\\', '/')
         while (p.contains("//")) p = p.replace("//", "/")
-        if (p.length > 1 && p.endsWith("/")) p = p.dropLast(1)
-        return p
+        // Lexically collapse dot segments BEFORE prefix matching. A declared
+        // prefix does not authorize `prefix/../sibling`; the file resolver may
+        // later resolve that path to another workspace root.
+        val absolute = p.startsWith("/")
+        val out = ArrayDeque<String>()
+        p.split('/').forEach { segment ->
+            when (segment) {
+                "", "." -> if (out.isEmpty() && segment.isEmpty()) out.addLast("")
+                ".." -> {
+                    // Do not pop the synthetic root for absolute paths.
+                    if (out.isNotEmpty() && out.last() != "") out.removeLast()
+                    if (!absolute && (out.isEmpty() || out.last() == "")) out.addLast("..")
+                }
+                else -> out.addLast(segment)
+            }
+        }
+        var resolved = out.joinToString("/")
+        if (absolute && !resolved.startsWith("/")) resolved = "/$resolved"
+        while (resolved.length > 1 && resolved.endsWith("/")) resolved = resolved.dropLast(1)
+        if (resolved == "") resolved = if (absolute) "/" else "."
+        return resolved
     }
 }

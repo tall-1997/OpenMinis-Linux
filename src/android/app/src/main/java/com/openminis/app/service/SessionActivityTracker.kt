@@ -312,8 +312,14 @@ object SessionActivityTracker {
      */
     private fun presenceKeepAliveEnabled(): Boolean {
         val ctx = appContext ?: return true
-        return com.openminis.app.config.Prefs.file(PRESENCE_KEEP_ALIVE_PREFS)
-            .bool(PRESENCE_KEEP_ALIVE_KEY, true)
+        // This can run on the streaming hot path / main thread. Use the async
+        // prefs wrapper so a wedged filesystem cannot stall session transitions,
+        // and the CACHED instance so the read is not a fresh instance + loader
+        // thread per call: a new AsyncPrefs answers with the default until its
+        // own load lands, which briefly read a persisted OFF as ON.
+        return com.openminis.app.crash.AsyncPrefs
+            .cached(ctx, PRESENCE_KEEP_ALIVE_PREFS)
+            .getBoolean(PRESENCE_KEEP_ALIVE_KEY, true)
     }
 
     /**

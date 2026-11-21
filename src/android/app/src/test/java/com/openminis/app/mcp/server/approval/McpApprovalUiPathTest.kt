@@ -37,13 +37,15 @@ class McpApprovalUiPathTest {
     private lateinit var dispatcher: CountingDispatcher
     private lateinit var rpc: McpApprovalRpc
     private lateinit var manager: McpApprovalManager
+    private lateinit var store: McpApprovalStore
 
     @Before
     fun setUp() {
         McpApprovalStore.taskRootPrefix =
             File(System.getProperty("java.io.tmpdir"), "mcp-approval-ui-test").path + "/"
         dispatcher = CountingDispatcher()
-        manager = McpApprovalManager(McpApprovalStore(approvalFakePrefs()))
+        store = McpApprovalStore(approvalFakePrefs())
+        manager = McpApprovalManager(store)
         rpc = McpApprovalRpc(manager, McpApprovalExecutor(dispatcher))
     }
 
@@ -160,6 +162,45 @@ class McpApprovalUiPathTest {
 
         assertEquals(McpApprovalCore.ErrorCode.OPERATION_NOT_FOUND, outcome.error?.code)
         assertEquals(0, dispatcher.calls)
+    }
+
+    @Test
+    fun `ui run of a corrupt prefs task id fails closed instead of crashing`() {
+        // 模拟损坏的 prefs：一个 validId 拒绝的 taskId（".."）带着已批准的
+        // 操作混进了持久化状态。UI 的 run 按钮在裸 coroutine 里调
+        // executeApproved、没有 try/catch，taskRootFor 的 IAE 必须在这里被
+        // 收敛为 Outcome.Err —— 否则点"运行"直接把进程带走。
+        val corrupt = McpApprovalCore.State(
+            tasks = mapOf(
+                ".." to McpApprovalCore.Task(
+                    taskId = "..",
+                    name = "corrupt",
+                    status = McpApprovalCore.TaskStatus.ACTIVE,
+                    epoch = 1L,
+                    createdAtMs = 0L,
+                ),
+            ),
+            operations = mapOf(
+                "op-corrupt" to McpApprovalCore.Operation(
+                    operationId = "op-corrupt",
+                    taskId = "..",
+                    requestId = "r",
+                    tool = "shell_exec",
+                    argumentsJson = "{}",
+                    status = McpApprovalCore.OperationStatus.APPROVED,
+                    createdAtMs = 0L,
+                    approvedAtMs = System.currentTimeMillis(),
+                ),
+            ),
+        )
+        store.replace(corrupt)
+
+        val outcome = runUi(operationId = "op-corrupt")
+
+        assertEquals(McpApprovalCore.ErrorCode.INVALID_ID, outcome.error?.code)
+        assertEquals("the tool must never run against the shared root", 0, dispatcher.calls)
+        assertNull(outcome.result)
+        assertTrue("op-corrupt" !in manager.state().executedOperationIds)
     }
 
     @Test

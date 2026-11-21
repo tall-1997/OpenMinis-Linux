@@ -64,7 +64,9 @@ internal object McpToolSchemas {
     })
 
     val fileRead = "Read a file from the Linux filesystem. Restricted to /var/minis/ and /sdcard/ prefixes. " +
-        "Binary files return a type guess and a bounded hex preview instead of raw contents."
+        "Binary files return a type guess and a bounded hex preview instead of raw contents. " +
+        "Text output is capped at 80000 chars; files above 50 MB are refused — " +
+        "use shell_exec with head/tail/grep/split for portions of large files."
 
     val fileReadSchema = schema("path", props = JSONObject().apply {
         put("path", prop("string"))

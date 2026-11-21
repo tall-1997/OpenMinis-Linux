@@ -878,6 +878,10 @@
     <string name="newer_db_body">Minis Ultra\'in bu kopyası, verilerinizi oluşturan sürümden daha eski olduğu için onları güvenle açamıyor.\n\nHiçbir şey silinmedi — sohbetleriniz bu cihazda olduğu gibi duruyor. Minis Ultra\'in daha yeni sürümünü yeniden kurun, her şey yerinde olacak.</string>
     <string name="newer_db_versions">Bu sürüm %1$d veri biçimini destekler</string>
     <string name="newer_db_exit">Kapat</string>
+    <string name="degraded_startup_title">Bazı başlangıç bileşenleri yüklenemedi</string>
+    <string name="degraded_startup_body">Uygulama azaltılmış işlevsellikle çalışıyor. Yeniden başlatılana kadar bazı özellikler kullanılamayabilir.</string>
+    <string name="degraded_startup_cause">Neden: %1$s</string>
+    <string name="degraded_startup_dismiss">Kapat</string>
     <string name="usage_attr_unknown_session">Model bilinmiyor — oturum kaydı silinmiş</string>
     <string name="usage_attr_removed">Yapılandırdığınız sağlayıcılar arasında artık yok</string>
     <string name="usage_detail_output">Çıkış</string>
@@ -1343,6 +1347,8 @@
     <string name="backup_ready">Yedek Hazır</string>
     <string name="backup_result_excluded_too_large">Dışarıda bırakıldı (çok büyük)</string>
     <string name="backup_result_files_not_included">Dosyalar dahil edilmedi</string>
+    <string name="backup_result_excluded_unreadable">Dışarıda bırakıldı (okunamadı)</string>
+    <string name="backup_result_credentials_unreadable">Kimlik bilgileri okunamadı</string>
     <string name="backup_result_local_only">Yalnızca bu cihaza kaydedildi.</string>
     <string name="backup_result_delivered">Bu cihaza kaydedildi ve %2$d hedeften %1$d tanesine kopyalandı.</string>
     <string name="backup_local_removed">Yerel kopya kaldırıldı — bu cihazda %1$s yer açıldı</string>
@@ -2770,6 +2776,7 @@
     <string name="modeldetail_section_context_retry">Bağlam ve yeniden denemeler</string>
     <string name="modeldetail_temperature">Sıcaklık (0,0–2,0)</string>
     <string name="modeldetail_temperature_invalid">0,0 ile 2,0 arasında bir sayı gir ya da atlamak için boş bırak.</string>
+    <string name="modeldetail_harness_save_failed">Bağlam büçesi ayarı kaydedilemedi. Model kaydı kaydedildi — lütfen tekrar deneyin.</string>
     <string name="modeldetail_temperature_placeholder">Atla</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">Ekle</string>

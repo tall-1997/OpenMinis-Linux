@@ -3,10 +3,10 @@ package com.openminis.app.ui.tokens
 /**
  * 自动生成 —— 不要手改。生成器: scripts/ui/gen_tokens.py
  *
- * 扫描事实：565 个 ui 下的 .kt 文件 -> Color(0x...): 308 处 / 140 个不同色值；
- * dp 字面量 3710 处 / 87 个不同值；sp 36 处。
+ * 扫描事实：568 个 ui 下的 .kt 文件 -> Color(0x...): 310 处 / 140 个不同色值；
+ * dp 字面量 3721 处 / 87 个不同值；sp 37 处。
  * （已排除注释、字符串，以及标了 token-literal-ok 的行。）
- * 本文件命名 25 个色值，当前覆盖 137/308 = 44% 的颜色使用点。
+ * 本文件命名 25 个色值，当前覆盖 138/310 = 45% 的颜色使用点。
  * 剩下的未命名字面量由 scripts/ci/check_token_coverage.py 的按文件预算
  * 逐步压制 —— 那个脚本才是棘轮，本文件只负责统计。
  *
@@ -16,7 +16,7 @@ package com.openminis.app.ui.tokens
 
 /** 物理色。命名规则=来源，不改语义。语义槽在 [MinisColors]。 */
 object RawColors {
-    const val systemGreen: Long = 0xFF34C759L  // x 23
+    const val systemGreen: Long = 0xFF34C759L  // x 24
     const val systemOrange: Long = 0xFFFF9500L  // x 26
     const val systemBlue: Long = 0xFF007AFFL  // x 19
     const val systemRed: Long = 0xFFFF3B30L  // x 11
@@ -109,13 +109,13 @@ object RawColors {
 object RawSpace {
     const val xxs: Float = 2f  // x 171
     const val xs: Float = 4f  // x 295
-    const val sm: Float = 6f  // x 227
-    const val md: Float = 8f  // x 535
-    const val md2: Float = 10f  // x 231
+    const val sm: Float = 6f  // x 228
+    const val md: Float = 8f  // x 536
+    const val md2: Float = 10f  // x 234
     const val lg: Float = 12f  // x 379
-    const val lg2: Float = 14f  // x 213
-    const val xl: Float = 16f  // x 449
-    const val xl2: Float = 18f  // x 106
+    const val lg2: Float = 14f  // x 215
+    const val xl: Float = 16f  // x 451
+    const val xl2: Float = 18f  // x 107
     const val xxl: Float = 20f  // x 184
     const val xxl2: Float = 22f  // x 33
     const val xxl3: Float = 24f  // x 96

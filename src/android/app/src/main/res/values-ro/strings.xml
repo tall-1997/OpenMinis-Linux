@@ -879,6 +879,10 @@
     <string name="newer_db_body">Această copie a aplicației Minis Ultra este mai veche decât versiunea care ți-a creat datele, așa că nu le poate deschide în siguranță.\n\nNu s-a șters nimic — conversațiile tale sunt intacte pe acest dispozitiv. Reinstalează versiunea mai nouă de Minis Ultra și totul va fi la locul lui.</string>
     <string name="newer_db_versions">Această versiune acceptă formatul de date %1$d</string>
     <string name="newer_db_exit">Închide</string>
+    <string name="degraded_startup_title">Unele componente de pornire nu au putut fi încărcate</string>
+    <string name="degraded_startup_body">Aplicația rulează cu funcționalitate redusă. Unele funcții pot fi indisponibile până la repornire.</string>
+    <string name="degraded_startup_cause">Cauză: %1$s</string>
+    <string name="degraded_startup_dismiss">Închide</string>
     <string name="usage_attr_unknown_session">Model necunoscut — înregistrarea sesiunii a fost ștearsă</string>
     <string name="usage_attr_removed">Nu mai există printre furnizorii configurați</string>
     <string name="usage_detail_output">Ieșire</string>
@@ -1345,6 +1349,8 @@
     <string name="backup_ready">Copia de rezervă este gata</string>
     <string name="backup_result_excluded_too_large">Exclus (prea mare)</string>
     <string name="backup_result_files_not_included">Fișiere neincluse</string>
+    <string name="backup_result_excluded_unreadable">Exclus (nu s-a putut citi)</string>
+    <string name="backup_result_credentials_unreadable">Datele de autentificare nu s-au putut citi</string>
     <string name="backup_result_local_only">Salvat doar pe acest dispozitiv.</string>
     <string name="backup_result_delivered">Salvat pe acest dispozitiv și copiat la %1$d din %2$d destinații.</string>
     <string name="backup_local_removed">Copia locală a fost eliminată — s-au eliberat %1$s pe acest dispozitiv</string>
@@ -2774,6 +2780,7 @@
     <string name="modeldetail_section_context_retry">Context și reîncercări</string>
     <string name="modeldetail_temperature">Temperatură (0,0–2,0)</string>
     <string name="modeldetail_temperature_invalid">Introdu un număr de la 0,0 la 2,0, sau lasă gol pentru a omite.</string>
+    <string name="modeldetail_harness_save_failed">Nu s-a putut salva ajustarea bugetului de context. Intrarea modelului a fost salvată — încercați din nou.</string>
     <string name="modeldetail_temperature_placeholder">Omite</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">Adaugă</string>

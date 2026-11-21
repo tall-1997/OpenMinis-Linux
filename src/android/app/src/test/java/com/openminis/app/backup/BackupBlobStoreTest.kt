@@ -217,23 +217,55 @@ class BackupBlobStoreTest {
      * [T-backup-decode-honesty] An unreadable credential store is recorded as a
      * skip through the SAME accounting as a size-cap skip, so the run lands as
      * "completed with issues" naming the omission instead of packaging as a
-     * clean success that silently left every provider signed out.
+     * clean success that silently left every provider signed out — but it
+     * keeps its own reason, so the report blames the unreadable store and not
+     * the size cap.
      */
     @Test
     fun `recordSkip counts an external omission like a size-cap skip`() {
         val store = BackupBlobStore(staging, maxFileBytes = null)
         assertEquals(0, store.skippedFiles)
 
-        store.recordSkip("secrets/oauth_prefs (oauth token store unreadable)")
+        store.recordSkip(
+            "secrets/oauth_prefs (oauth token store unreadable)",
+            reason = BackupBlobStore.SkipReason.CREDENTIALS,
+        )
         assertEquals(1, store.skippedFiles)
         assertEquals(0L, store.skippedBytes)
         assertEquals("secrets/oauth_prefs (oauth token store unreadable)", store.skippedPaths.single().path)
+        assertEquals(
+            BackupBlobStore.SkipReason.CREDENTIALS,
+            store.skippedPaths.single().reason,
+        )
 
         // A skip is what makes the summary honest: skippedFiles > 0 is exactly
         // the condition the history record maps to COMPLETED_WITH_ISSUES.
-        store.recordSkip("secrets/another", size = 128)
+        store.recordSkip("secrets/another", size = 128, reason = BackupBlobStore.SkipReason.CREDENTIALS)
         assertEquals(2, store.skippedFiles)
         assertEquals(128L, store.skippedBytes)
         assertEquals(2, store.skippedPaths.size)
+    }
+
+    /**
+     * One counter, several causes: the reason carried per entry is what keeps
+     * the completion screen honest. A cap of 0 means "do not back up files"
+     * (nothing is "too large" then), while a real cap over is SIZE_CAP — and
+     * an unreadable source is neither.
+     */
+    @Test
+    fun `skip entries carry the reason that actually happened`() {
+        val capped = BackupBlobStore(staging, maxFileBytes = 100)
+        capped.addFile(file("over.bin", ByteArray(101)), "chats/s1/over.bin")
+        assertEquals(BackupBlobStore.SkipReason.SIZE_CAP, capped.skippedPaths.single().reason)
+        assertEquals("size_cap", capped.skippedPaths.single().reason.wireName)
+
+        val noFiles = BackupBlobStore(staging, maxFileBytes = 0)
+        noFiles.addFile(file("any.bin", byteArrayOf(1)), "chats/s1/any.bin")
+        assertEquals(BackupBlobStore.SkipReason.NO_FILES, noFiles.skippedPaths.single().reason)
+        assertEquals("no_files", noFiles.skippedPaths.single().reason.wireName)
+
+        val unreadable = BackupBlobStore(staging, maxFileBytes = null)
+        unreadable.recordSkip("chats/s1/broken-diary.md", 10, BackupBlobStore.SkipReason.UNREADABLE)
+        assertEquals("unreadable", unreadable.skippedPaths.single().reason.wireName)
     }
 }

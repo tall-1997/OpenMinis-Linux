@@ -116,7 +116,7 @@
     "src/android/app/src/main/java/com/openminis/app/config/ConfigBridge.kt": 926,
     "src/android/app/src/main/java/com/openminis/app/config/ConfigBuiltins.kt": 1217,
     "src/android/app/src/main/java/com/openminis/app/crash/CrashFrequencyDetector.kt": 911,
-    "src/android/app/src/main/java/com/openminis/app/data/repository/ChatRepository.kt": 1343,
+    "src/android/app/src/main/java/com/openminis/app/data/repository/ChatRepository.kt": 1208,
     "src/android/app/src/main/java/com/openminis/app/data/repository/ProviderRepository.kt": 1525,
     "src/android/app/src/main/java/com/openminis/app/data/repository/SkillRepository.kt": 2321,
     "src/android/app/src/main/java/com/openminis/app/debug/DebugMethodRegistry.kt": 878,
@@ -132,7 +132,7 @@
     "src/android/app/src/main/java/com/openminis/app/sandbox/offload/ModelUseOffloadHandler.kt": 2240,
     "src/android/app/src/main/java/com/openminis/app/sandbox/offload/PhotosOffloadHandler.kt": 986,
     "src/android/app/src/main/java/com/openminis/app/sandbox/offload/ShizukuOffloadHandler.kt": 1266,
-    "src/android/app/src/main/java/com/openminis/app/service/AgentForegroundService.kt": 1310,
+    "src/android/app/src/main/java/com/openminis/app/service/AgentForegroundService.kt": 1111,
     "src/android/app/src/main/java/com/openminis/app/service/ToolOverlayController.kt": 1003,
     "src/android/app/src/main/java/com/openminis/app/speech/SystemSpeechRecognitionEngine.kt": 1098,
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatFlatItems.kt": 1106,
@@ -152,7 +152,7 @@
     "src/android/app/src/main/java/com/openminis/app/ui/navigation/ChatSplitScaffold.kt": 952,
     "src/android/app/src/main/java/com/openminis/app/ui/sandbox/FilePreviewScreen.kt": 1250,
     "src/android/app/src/main/java/com/openminis/app/ui/sandbox/MirrorSettingsScreen.kt": 861,
-    "src/android/app/src/main/java/com/openminis/app/ui/sessions/SessionListScreen.kt": 3220,
+    "src/android/app/src/main/java/com/openminis/app/ui/sessions/SessionListScreen.kt": 3055,
     "src/android/app/src/main/java/com/openminis/app/ui/sessions/SessionListViewModel.kt": 1167,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/AddProviderScreen.kt": 890,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/AppearanceScreen.kt": 832,
@@ -161,6 +161,6 @@
     "src/android/app/src/main/java/com/openminis/app/ui/settings/SkillsManagementScreen.kt": 1116,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/SoulSettingsScreen.kt": 866,
     "src/android/app/src/main/java/com/openminis/app/ui/settings/backup/BackupAndRestoreScreen.kt": 1791,
-    "src/android/app/src/main/java/com/openminis/app/ui/settings/backup/BackupViewModel.kt": 1040
+    "src/android/app/src/main/java/com/openminis/app/ui/settings/backup/BackupViewModel.kt": 993
   }
 }

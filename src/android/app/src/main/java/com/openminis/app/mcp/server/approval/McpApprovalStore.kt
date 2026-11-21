@@ -57,8 +57,21 @@ class McpApprovalStore internal constructor(private val prefs: com.openminis.app
         @Volatile
         var taskRootHostResolver: ((String) -> String)? = null
 
-        /** Guest-visible task root: the path clients see in RPC payloads. */
-        fun taskRootFor(taskId: String): String = taskRootPrefix + taskId + "/"
+        /**
+         * Guest-visible task root: the path clients see in RPC payloads.
+         *
+         * [T-mcp-approval-taskid] Fails closed on ids [McpApprovalCore.validId]
+         * refuses. createTask is the only id entry point, but persisted state
+         * is deserialized verbatim by [parse], so a hand-edited or corrupt
+         * prefs file with taskId `..` must not make every taskRoot consumer
+         * (artifact writes, deleteRecursively) resolve onto the shared root.
+         */
+        fun taskRootFor(taskId: String): String {
+            if (!McpApprovalCore.validId(taskId)) {
+                throw IllegalArgumentException("taskId '$taskId' is not a valid path component")
+            }
+            return taskRootPrefix + taskId + "/"
+        }
 
         /** Host directory the phone actually writes into. */
         fun hostTaskRootFor(taskId: String): String {

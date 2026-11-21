@@ -141,15 +141,13 @@
       "module": "config",
       "modules": [
         "config",
-        "data",
-        "service"
+        "data"
       ],
       "encrypted": false,
-      "usage_count": 3,
+      "usage_count": 2,
       "usage_files": [
         "config/ConfigBuiltins.kt",
-        "data/repository/BackgroundSettingsRepository.kt",
-        "service/SessionActivityTracker.kt"
+        "data/repository/BackgroundSettingsRepository.kt"
       ],
       "keys": {
         "KEY_BG_OVERLAY_ENABLED": "backgroundOverlayEnabled",
@@ -714,7 +712,8 @@
         "offload/AlarmOffloadManager.kt"
       ],
       "keys": {
-        "KEY_ALARMS": "alarms_json"
+        "KEY_ALARMS": "alarms_json",
+        "KEY_NEXT_REQUEST_CODE": "next_request_code"
       },
       "dyn_keys": [],
       "open_key_space": false,
@@ -2568,9 +2567,18 @@
     {
       "name": "TAG",
       "a": "CrashFreqDetector",
-      "b": "NativeCrashHandler",
+      "b": "LaunchPhaseProbes",
       "files": [
         "crash/CrashFrequencyDetector.kt",
+        "crash/LaunchPhaseProbes.kt"
+      ]
+    },
+    {
+      "name": "TAG",
+      "a": "LaunchPhaseProbes",
+      "b": "NativeCrashHandler",
+      "files": [
+        "crash/LaunchPhaseProbes.kt",
         "crash/NativeCrashHandler.kt"
       ]
     },
@@ -5271,7 +5279,7 @@
       "b": "ReadAloud",
       "files": [
         "speech/ProviderSpeechRecognitionEngine.kt",
-        "speech/ReadAloudPlayer.kt"
+        "speech/ReadAloudAudio.kt"
       ]
     },
     {
@@ -6700,10 +6708,10 @@
   "totals": {
     "prefs_files": 103,
     "prefs_encrypted": 10,
-    "key_constants_attributed": 186,
+    "key_constants_attributed": 187,
     "orphan_keys": 34,
-    "usage_sites": 182,
-    "usage_files": 109,
-    "constant_conflicts": 520
+    "usage_sites": 181,
+    "usage_files": 108,
+    "constant_conflicts": 521
   }
 }

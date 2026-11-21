@@ -878,6 +878,10 @@
     <string name="newer_db_body">이 Minis Ultra는 데이터를 만든 버전보다 오래되어 안전하게 열 수 없습니다.\n\n삭제된 것은 없습니다. 대화는 이 기기에 그대로 남아 있습니다. 더 새로운 버전의 Minis Ultra를 다시 설치하면 모두 그대로 나타납니다.</string>
     <string name="newer_db_versions">이 버전이 지원하는 데이터 형식: %1$d</string>
     <string name="newer_db_exit">닫기</string>
+    <string name="degraded_startup_title">일부 시작 구성 요소를 로드하지 못했습니다</string>
+    <string name="degraded_startup_body">앱이 기능이 제한된 상태로 실행 중입니다. 다시 시작하기 전까지 일부 기능을 사용할 수 없습니다.</string>
+    <string name="degraded_startup_cause">원인: %1$s</string>
+    <string name="degraded_startup_dismiss">닫기</string>
     <string name="usage_attr_unknown_session">모델을 알 수 없음 — 세션 기록이 삭제되었습니다</string>
     <string name="usage_attr_removed">구성된 제공자 목록에 더 이상 없습니다</string>
     <string name="usage_detail_output">출력</string>
@@ -1342,6 +1346,8 @@
     <string name="backup_ready">백업 준비 완료</string>
     <string name="backup_result_excluded_too_large">제외됨(너무 큼)</string>
     <string name="backup_result_files_not_included">파일이 포함되지 않음</string>
+    <string name="backup_result_excluded_unreadable">제외됨(읽을 수 없음)</string>
+    <string name="backup_result_credentials_unreadable">자격 증명을 읽을 수 없음</string>
     <string name="backup_result_local_only">이 기기에만 저장했습니다.</string>
     <string name="backup_result_delivered">이 기기에 저장하고 대상 %2$d개 중 %1$d개로 복사했습니다.</string>
     <string name="backup_local_removed">로컬 사본을 삭제했습니다. 이 기기에서 %1$s을(를) 확보했습니다</string>
@@ -2769,6 +2775,7 @@
     <string name="modeldetail_section_context_retry">컨텍스트 및 재시도</string>
     <string name="modeldetail_temperature">온도(0.0–2.0)</string>
     <string name="modeldetail_temperature_invalid">0.0~2.0 사이의 숫자를 입력하거나 비워 두어 생략하세요.</string>
+    <string name="modeldetail_harness_save_failed">컨텍스트 예산 설정을 저장하지 못했습니다. 모델 항목은 저장되었습니다. 다시 시도해 주세요.</string>
     <string name="modeldetail_temperature_placeholder">생략</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">추가</string>

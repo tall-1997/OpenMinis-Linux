@@ -883,6 +883,10 @@
     <string name="newer_db_body">Salinan Minis Ultra ini lebih lama daripada versi yang membuat data Anda, sehingga tidak dapat membukanya dengan aman.\n\nTidak ada yang dihapus — percakapan Anda tetap utuh di perangkat ini. Pasang kembali Minis Ultra versi yang lebih baru dan semuanya akan kembali tersedia.</string>
     <string name="newer_db_versions">Versi ini mendukung format data %1$d</string>
     <string name="newer_db_exit">Tutup</string>
+    <string name="degraded_startup_title">Beberapa komponen startup gagal dimuat</string>
+    <string name="degraded_startup_body">Aplikasi berjalan dengan fungsi terbatas. Beberapa fitur mungkin tidak tersedia sampai aplikasi dimulai ulang.</string>
+    <string name="degraded_startup_cause">Penyebab: %1$s</string>
+    <string name="degraded_startup_dismiss">Tutup</string>
     <string name="usage_attr_unknown_session">Model tidak diketahui — catatan sesi telah dihapus</string>
     <string name="usage_attr_removed">Tidak lagi ada di penyedia yang Anda konfigurasikan</string>
     <string name="usage_detail_output">Output</string>
@@ -1348,6 +1352,8 @@
     <string name="backup_ready">Cadangan Siap</string>
     <string name="backup_result_excluded_too_large">Dikecualikan (terlalu besar)</string>
     <string name="backup_result_files_not_included">Berkas tidak disertakan</string>
+    <string name="backup_result_excluded_unreadable">Dikecualikan (tidak dapat dibaca)</string>
+    <string name="backup_result_credentials_unreadable">Kredensial tidak dapat dibaca</string>
     <string name="backup_result_local_only">Hanya tersimpan di perangkat ini.</string>
     <string name="backup_result_delivered">Tersimpan di perangkat ini, dan disalin ke %1$d dari %2$d tujuan.</string>
     <string name="backup_local_removed">Salinan lokal dihapus — %1$s dibebaskan di perangkat ini</string>
@@ -2775,6 +2781,7 @@
     <string name="modeldetail_section_context_retry">Konteks dan percobaan ulang</string>
     <string name="modeldetail_temperature">Temperatur (0,0–2,0)</string>
     <string name="modeldetail_temperature_invalid">Masukkan angka dari 0,0 hingga 2,0, atau biarkan kosong untuk menghilangkan.</string>
+    <string name="modeldetail_harness_save_failed">Tidak dapat menyimpan penyesuaian anggaran konteks. Entri model sudah disimpan — coba lagi.</string>
     <string name="modeldetail_temperature_placeholder">Hilangkan</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">Tambahkan</string>

@@ -877,6 +877,10 @@
     <string name="newer_db_body">Esta copia de Minis Ultra es más antigua que la que creó tus datos, así que no puede abrirlos de forma segura.\n\nNo se ha eliminado nada: tus conversaciones siguen intactas en este dispositivo. Vuelve a instalar la versión más reciente de Minis Ultra y todo estará ahí.</string>
     <string name="newer_db_versions">Esta versión admite el formato de datos %1$d</string>
     <string name="newer_db_exit">Cerrar</string>
+    <string name="degraded_startup_title">Algunos componentes de inicio no se cargaron</string>
+    <string name="degraded_startup_body">La app funciona con funcionalidad reducida. Algunas funciones pueden no estar disponibles hasta que se reinicie.</string>
+    <string name="degraded_startup_cause">Causa: %1$s</string>
+    <string name="degraded_startup_dismiss">Cerrar</string>
     <string name="usage_attr_unknown_session">Modelo desconocido: se eliminó el registro de la sesión</string>
     <string name="usage_attr_removed">Ya no está entre tus proveedores configurados</string>
     <string name="usage_detail_output">Salida</string>
@@ -1342,6 +1346,8 @@
     <string name="backup_ready">Copia lista</string>
     <string name="backup_result_excluded_too_large">Excluidos (demasiado grandes)</string>
     <string name="backup_result_files_not_included">Archivos no incluidos</string>
+    <string name="backup_result_excluded_unreadable">Excluidos (no se pudieron leer)</string>
+    <string name="backup_result_credentials_unreadable">No se pudieron leer las credenciales</string>
     <string name="backup_result_local_only">Guardada solo en este dispositivo.</string>
     <string name="backup_result_delivered">Guardada en este dispositivo y copiada a %1$d de %2$d destino(s).</string>
     <string name="backup_local_removed">Copia local eliminada: %1$s liberados en este dispositivo</string>
@@ -2687,6 +2693,7 @@
     <string name="modeldetail_section_context_retry">Contexto y reintentos</string>
     <string name="modeldetail_temperature">Temperatura (0,0–2,0)</string>
     <string name="modeldetail_temperature_invalid">Introduce un número de 0,0 a 2,0, o déjalo en blanco para omitirlo.</string>
+    <string name="modeldetail_harness_save_failed">No se pudo guardar la anulación del presupuesto de contexto. La entrada del modelo sí se guardó; inténtalo de nuevo.</string>
     <string name="modeldetail_temperature_placeholder">Omitir</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">Añadir</string>

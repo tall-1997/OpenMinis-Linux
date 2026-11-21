@@ -651,10 +651,15 @@
       "sp": 0,
       "dp": 12
     },
+    "src/android/app/src/main/java/com/openminis/app/ui/sessions/SessionListOnboarding.kt": {
+      "color": 1,
+      "sp": 1,
+      "dp": 13
+    },
     "src/android/app/src/main/java/com/openminis/app/ui/sessions/SessionListScreen.kt": {
       "color": 8,
       "sp": 0,
-      "dp": 140
+      "dp": 127
     },
     "src/android/app/src/main/java/com/openminis/app/ui/sessions/SessionRunNowMenuItem.kt": {
       "color": 0,
@@ -725,6 +730,11 @@
       "color": 5,
       "sp": 0,
       "dp": 15
+    },
+    "src/android/app/src/main/java/com/openminis/app/ui/settings/DegradedStartupBanner.kt": {
+      "color": 1,
+      "sp": 0,
+      "dp": 11
     },
     "src/android/app/src/main/java/com/openminis/app/ui/settings/DetailRows.kt": {
       "color": 0,

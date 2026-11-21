@@ -204,8 +204,10 @@ class BackupExporter(
                 BackupSecretsCollector.collect(context, staging, options.categories) { detail ->
                     // [T-backup-decode-honesty] An unreadable credential source
                     // rides the same skip record as a size-cap skip, so the
-                    // run lands as "with issues" naming the omission.
-                    blobStore.recordSkip(detail)
+                    // run lands as "with issues" naming the omission — but it
+                    // keeps its own reason, so the report blames the unreadable
+                    // store rather than the size cap.
+                    blobStore.recordSkip(detail, reason = BackupBlobStore.SkipReason.CREDENTIALS)
                 }
             }
 

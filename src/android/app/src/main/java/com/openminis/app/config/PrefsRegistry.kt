@@ -4,7 +4,7 @@ package com.openminis.app.config
  * 自动生成 —— 不要手改。
  * 生成器: scripts/prefs/gen_prefs_registry.py
  * 源目录: src/android/app/src/main/java/com/openminis/app
- * 规模:   103 个 prefs 文件（加密 10）/ 已归属键常量 186 / 182 处使用
+ * 规模:   103 个 prefs 文件（加密 10）/ 已归属键常量 187 / 181 处使用
  *
  * 目的: 把「SharedPreferences 文件名 + 键名」从 93 个文件里的裸字符串收敛为一处
  * 可枚举、可校验、可审计的数据表。
@@ -63,7 +63,7 @@ object PrefsRegistry {
         PrefsFileSpec(name = "agent_fgs", module = "service", scope = PrefsScope.PLAIN, keys = mapOf("KEY_CHANNEL_RESTORED" to "channel_visible_restored"), note = "1 usages across 1 file(s)"),
         PrefsFileSpec(name = "app_icon_prefs", module = "data", scope = PrefsScope.PLAIN, keys = mapOf("KEY_SELECTED_ID" to "selected_icon_id"), note = "1 usages across 1 file(s)"),
         PrefsFileSpec(name = "appearance_prefs", module = ".", scope = PrefsScope.PLAIN, keys = mapOf("KEY" to "chat.confirmBeforeStop", "KEY_AUTO_EXPAND_THINKING" to "chat.autoExpandThinking", "KEY_AUTO_FOCUS_AFTER_REPLY" to "chat.autoFocusAfterReply", "KEY_AUTO_GROUPING" to "autoGroupingEnabled", "KEY_COMPOSER_CONTEXT_GLOW" to "chat.composerContextGlow", "KEY_CURRENT_CHAT_SESSION_ID" to "minis.current_chat_session_id", "KEY_DYNAMIC_COLOR" to "chat.dynamicColor", "KEY_FOLD_AI_PROCESS" to "chat.foldAiProcess", "KEY_FONT_APP_BASE" to "font_app_base", "KEY_FONT_CHAT_INPUT" to "font_chat_input", "KEY_FONT_MESSAGE" to "font_message", "KEY_KEEP_SCREEN_AWAKE" to "keepScreenAwakeDuringTasks", "KEY_LANGUAGE" to "app_language", "KEY_LAUNCH_SESSION" to "launch_session", "KEY_RETURN_KEY_BEHAVIOR" to "returnKeyBehavior", "KEY_SHOW_CHAT_TITLE" to "appearance.show_chat_title", "KEY_SHOW_COMPLETED_TOOL_CARDS" to "chat.showCompletedToolCards", "KEY_SHOW_FLOATING_TOOL_BAR" to "chat.showFloatingToolBar", "KEY_SHOW_MESSAGE_TOKEN_USAGE" to "chat.showMessageTokenUsage", "KEY_SHOW_MIC_BUTTON" to "chat.showMicButton", "KEY_SHOW_SUBAGENT_BAR" to "chat.showSubAgentBar", "KEY_THEME_MODE" to "theme_mode", "KEY_TOOL_PREVIEW" to "tool_preview"), note = "6 usages across 5 file(s)"),
-        PrefsFileSpec(name = "background_settings", module = "config", scope = PrefsScope.PLAIN, keys = mapOf("KEY_BG_OVERLAY_ENABLED" to "backgroundOverlayEnabled", "KEY_BG_OVERLAY_X" to "backgroundOverlayX", "KEY_BG_OVERLAY_Y" to "backgroundOverlayY", "KEY_DYNAMIC_ISLAND_ENABLED" to "dynamicIslandEnabled", "KEY_TASK_NOTIFICATIONS" to "taskNotificationsEnabled", "PRESENCE_KEEP_ALIVE_KEY" to "presenceKeepAliveEnabled"), dynamicPrefixes = listOf("backgroundOverlayX", "backgroundOverlayY"), note = "3 usages across 3 file(s)"),
+        PrefsFileSpec(name = "background_settings", module = "config", scope = PrefsScope.PLAIN, keys = mapOf("KEY_BG_OVERLAY_ENABLED" to "backgroundOverlayEnabled", "KEY_BG_OVERLAY_X" to "backgroundOverlayX", "KEY_BG_OVERLAY_Y" to "backgroundOverlayY", "KEY_DYNAMIC_ISLAND_ENABLED" to "dynamicIslandEnabled", "KEY_TASK_NOTIFICATIONS" to "taskNotificationsEnabled", "PRESENCE_KEEP_ALIVE_KEY" to "presenceKeepAliveEnabled"), dynamicPrefixes = listOf("backgroundOverlayX", "backgroundOverlayY"), note = "2 usages across 2 file(s)"),
         PrefsFileSpec(name = "backup_rclone_remotes", module = "backup", scope = PrefsScope.PLAIN, openKeySpace = true, note = "1 usages across 1 file(s)"),
         PrefsFileSpec(name = "backup_rclone_secrets", module = "backup", scope = PrefsScope.ENCRYPTED, openKeySpace = true, note = "1 usages across 1 file(s)"),
         PrefsFileSpec(name = "backup_ui", module = "ui", scope = PrefsScope.PLAIN, keys = mapOf("KEY_CATEGORIES" to "selectedCategories", "KEY_ENCRYPT" to "encrypt", "KEY_MAX_FILE_MB" to "maxFileSizeMB"), note = "1 usages across 1 file(s)"),
@@ -93,7 +93,7 @@ object PrefsRegistry {
         PrefsFileSpec(name = "mcp_oauth_secrets", module = "mcp", scope = PrefsScope.ENCRYPTED, dynamicPrefixes = listOf("secret::", "tokens::"), note = "1 usages across 1 file(s)"),
         PrefsFileSpec(name = "mcp_server", module = "mcp", scope = PrefsScope.PLAIN, keys = mapOf("KEY_ENABLED" to "enabled", "KEY_PORT" to "port", "KEY_TOKEN" to "token"), note = "1 usages across 1 file(s)"),
         PrefsFileSpec(name = "mcp_server_secrets", module = "mcp", scope = PrefsScope.ENCRYPTED, note = "1 usages across 1 file(s)"),
-        PrefsFileSpec(name = "minis_alarms_prefs", module = ".", scope = PrefsScope.PLAIN, keys = mapOf("KEY_ALARMS" to "alarms_json"), note = "2 usages across 2 file(s)"),
+        PrefsFileSpec(name = "minis_alarms_prefs", module = ".", scope = PrefsScope.PLAIN, keys = mapOf("KEY_ALARMS" to "alarms_json", "KEY_NEXT_REQUEST_CODE" to "next_request_code"), note = "2 usages across 2 file(s)"),
         PrefsFileSpec(name = "minis_auto_compact_prefs", module = "data", scope = PrefsScope.PLAIN, keys = mapOf("KEY_ENABLED" to "autoCompactOnThreshold", "KEY_THRESHOLD" to "autoCompactThresholdPercent"), note = "1 usages across 1 file(s)"),
         PrefsFileSpec(name = "minis_cache_warming", module = "data", scope = PrefsScope.PLAIN, keys = mapOf("KEY_ENABLED" to "cacheWarmingEnabled"), note = "1 usages across 1 file(s)"),
         PrefsFileSpec(name = "minis_config_permission", module = "config", scope = PrefsScope.PLAIN, keys = mapOf("KEY" to "minis_config_enabled"), note = "1 usages across 1 file(s)"),

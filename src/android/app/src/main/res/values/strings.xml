@@ -1269,6 +1269,13 @@
     <string name="startup_failure_clear_title">Clear all app data?</string>
     <string name="startup_failure_clear_body">This deletes local chats, memories, settings and sandbox files on this device, then restarts the app. Backups you already exported are untouched. Only do this if restarting keeps failing.</string>
     <string name="startup_failure_clear_confirm">Clear and restart</string>
+    <!-- [T-startup-degraded-extended] Floating banner over the running app
+         when the EXTENDED startup block failed after the core subsystems were
+         already usable — the app works, but some features are degraded. -->
+    <string name="degraded_startup_title">Some startup components failed to load</string>
+    <string name="degraded_startup_body">The app is running with reduced functionality. Some features may be unavailable until it is restarted.</string>
+    <string name="degraded_startup_cause">Cause: %1$s</string>
+    <string name="degraded_startup_dismiss">Dismiss</string>
     <string name="usage_attr_unknown_session">Model unknown — the session record was deleted</string>
     <string name="usage_attr_removed">No longer in your configured providers</string>
     <string name="usage_detail_output">Output</string>
@@ -1438,6 +1445,7 @@
     <string name="modeldetail_temperature">Temperature (0.0–2.0)</string>
     <string name="modeldetail_temperature_placeholder">Omit</string>
     <string name="modeldetail_temperature_invalid">Enter a number from 0.0 to 2.0, or leave blank to omit.</string>
+    <string name="modeldetail_harness_save_failed">Could not save the context budget override. Try again — the model row was saved.</string>
     <string name="modeldetail_context_window">Context Window</string>
     <string name="modeldetail_thinking">Thinking</string>
     <!-- [T-thinking-ultra-manual] Manual thinking-level ceiling on the model params page. -->
@@ -1895,6 +1903,8 @@
     <string name="backup_ready">Backup Ready</string>
     <string name="backup_result_excluded_too_large">Excluded (too large)</string>
     <string name="backup_result_files_not_included">Files not included</string>
+    <string name="backup_result_excluded_unreadable">Excluded (could not be read)</string>
+    <string name="backup_result_credentials_unreadable">Credentials could not be read</string>
     <string name="backup_result_local_only">Saved on this device only.</string>
     <string name="backup_result_delivered">Saved on this device, and copied to %1$d of %2$d destination(s).</string>
     <string name="backup_local_removed">Local copy removed — %1$s freed on this device</string>

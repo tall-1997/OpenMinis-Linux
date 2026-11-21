@@ -879,6 +879,10 @@
     <string name="newer_db_body">Ta kopia aplikacji Minis Ultra jest starsza niż wersja, która utworzyła Twoje dane, więc nie może ich bezpiecznie otworzyć.\n\nNic nie zostało usunięte — Twoje rozmowy są nienaruszone na tym urządzeniu. Zainstaluj ponownie nowszą wersję Minis Ultra, a wszystko wróci.</string>
     <string name="newer_db_versions">Ta wersja obsługuje format danych %1$d</string>
     <string name="newer_db_exit">Zamknij</string>
+    <string name="degraded_startup_title">Nie udało się wczytać niektórych komponentów startowych</string>
+    <string name="degraded_startup_body">Aplikacja działa z ograniczoną funkcjonalnością. Niektóre funkcje mogą być niedostępne do czasu ponownego uruchomienia.</string>
+    <string name="degraded_startup_cause">Przyczyna: %1$s</string>
+    <string name="degraded_startup_dismiss">Zamknij</string>
     <string name="usage_attr_unknown_session">Nieznany model — rekord sesji został usunięty</string>
     <string name="usage_attr_removed">Nie ma go już wśród skonfigurowanych dostawców</string>
     <string name="usage_detail_output">Wyjście</string>
@@ -1346,6 +1350,8 @@
     <string name="backup_ready">Kopia zapasowa gotowa</string>
     <string name="backup_result_excluded_too_large">Pominięto (za duży)</string>
     <string name="backup_result_files_not_included">Pliki nieuwzględnione</string>
+    <string name="backup_result_excluded_unreadable">Pominięto (nie można odczytać)</string>
+    <string name="backup_result_credentials_unreadable">Nie można odczytać danych logowania</string>
     <string name="backup_result_local_only">Zapisano tylko na tym urządzeniu.</string>
     <string name="backup_result_delivered">Zapisano na tym urządzeniu i skopiowano do %1$d z %2$d miejsc docelowych.</string>
     <string name="backup_local_removed">Usunięto kopię lokalną — zwolniono %1$s na tym urządzeniu</string>
@@ -2777,6 +2783,7 @@
     <string name="modeldetail_section_context_retry">Kontekst i ponawianie</string>
     <string name="modeldetail_temperature">Temperatura (0,0–2,0)</string>
     <string name="modeldetail_temperature_invalid">Podaj liczbę od 0,0 do 2,0 albo zostaw puste, aby pominąć.</string>
+    <string name="modeldetail_harness_save_failed">Nie udało się zapisać wartości budżetu kontekstu. Wpis modelu został zapisany — spróbuj ponownie.</string>
     <string name="modeldetail_temperature_placeholder">Pomiń</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">Dodaj</string>
