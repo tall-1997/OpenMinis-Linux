@@ -626,6 +626,11 @@ tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
         showCauses = true
         showStackTraces = true
+        // [T-ci-test-hang] A hung test produces no output at all: the task
+        // sits for 15 minutes and dies on the timeout with no way to tell
+        // which test was running. Emitting "started" makes the last STARTED
+        // line in the log name the culprit. Costs one line per test (~7.3k).
+        events("started", "failed", "skipped")
     }
 }
 
