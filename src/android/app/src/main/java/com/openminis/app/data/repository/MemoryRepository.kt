@@ -281,10 +281,15 @@ class MemoryRepository(
                 AtomicFileWrite.readModifyWrite(file) write@{ text ->
                     val existing = if (hasUtf8Bom(file)) "\uFEFF$text" else text
                     if (expectedRevision != null) {
-                        val actual = Digest.sha256Hex(existing)
-                        if (!actual.startsWith(expectedRevision)) {
-                            return@write WriteOutcome("Error: MEMORY_CONFLICT — 日志文件已被并发更新（期望 revision $expectedRevision，实际 ${actual.take(16)}…）。请先 memory_get 重新读取后再写。")
-                        }
+                        // [T-memory-revision-day-scoped] Day tag first, hash second; the
+                        // classification lives in MemoryRevision, the wording in the guard.
+                        MemoryWriteRevisionGuard.refusal(
+                            expectedRevision = expectedRevision,
+                            fileName = fileName,
+                            dayFileExists = existing.isNotEmpty(),
+                            hashOf = { Digest.sha256Hex(it) },
+                            existingContent = existing,
+                        )?.let { return@write WriteOutcome(it) }
                     }
                     val header = MemoryMetadataParser.header(existing)
                     val bodyStart = header?.bodyStart ?: if (existing.startsWith('\uFEFF')) 1 else 0
@@ -340,8 +345,11 @@ class MemoryRepository(
 
     /** [T-memory-revision] 今日日志文件当前 revision（不存在返回 null）。 */
     fun currentDailyRevision(): String? = MemoryLifecycle.locked(memoryDir) { dir ->
-        val file = MemoryLifecycle.snapshotFiles(dir, todayFileName()).diary ?: return@locked null
-        file.inputStream().use { Digest.sha256Hex(it).take(16) }
+        val fileName = todayFileName()
+        val file = MemoryLifecycle.snapshotFiles(dir, fileName).diary ?: return@locked null
+        file.inputStream().use { stream ->
+            MemoryRevision.token(fileName.removeSuffix(".md"), stream.readBytes().toString(Charsets.UTF_8))
+        }
     }
 
     // -- memory_get --

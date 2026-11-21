@@ -137,7 +137,7 @@ object MemoryTools {
             val result = repository.getMemory(keywords, scope)
             val revision = repository.currentDailyRevision()
             val withRevision = if (revision != null) {
-                "$result\n\n[当前日志 revision: $revision — 用 memory_write 并发安全写入时，把它作为 revision 参数传入]"
+                "$result\n\n[当前日志 revision: $revision — 带日期前缀（YYYY-MM-DD:hash），只在当天有效；memory_write 并发安全写入时把它作为 revision 传入，跨天写入请省略该参数]"
             } else result
             ToolResult(withRevision, true, toolTitle)
         } catch (e: Exception) {
