@@ -244,11 +244,20 @@ internal fun RenderBlock(block: MdBlock) {
                                         com.openminis.app.ui.markdown.HighlightPalette.Light
                                     }
                                 }
-                                remember(block.code, block.language, palette) {
+                                // [T-cili-gold-pink-highlight] 小黄鱼 skin:
+                                // highlighted code sweeps gold -> pink instead
+                                // of VS Code hues; stock palettes otherwise.
+                                val skinBrush = if (
+                                    com.openminis.app.ui.theme.CiliSkin.isActive
+                                ) {
+                                    com.openminis.app.ui.theme.CiliSkin.goldPinkHighlightBrush()
+                                } else null
+                                remember(block.code, block.language, palette, skinBrush) {
                                     com.openminis.app.ui.markdown.SyntaxHighlighter.highlight(
                                         block.code,
                                         block.language,
                                         palette,
+                                        skinBrush,
                                     )
                                 }
                             }

@@ -62,7 +62,9 @@ fun ContextRing(
         )
     } else null
     val trackColor = ChatColors.toolBorder
-    val displayText = if (!usage.known) "?" else "${(ratio * 100f).toInt()}%"
+    // [T-ring-plain-number] Bare percent value only — the "%" glyph eats the
+    // tiny monospace budget (3 digits + % overflowed the ring at 100%).
+    val displayText = if (!usage.known) "?" else "${(ratio * 100f).toInt()}"
 
     val clickMod = if (onClick != null) {
         Modifier.clickable(

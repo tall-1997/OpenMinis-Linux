@@ -44,25 +44,20 @@ internal fun ChatViewModel.contextTokensForPolicy(): Int = when (
 }
 
 /**
- * [T-ring-policy-parity] The top-bar ring and the compact gate must read the
- * SAME number. The gate triggers on the full request shape (system prompt +
- * tool defs + history, [T-ring-policy-parity] in ChatViewModelRequestProjection);
- * the ring used a bare history estimate, so the displayed percent sat below
- * the real pressure and compaction fired "before reaching the percent".
- *
- * Ring basis = untrimmed history estimate (the policy's UNBUDGETED reading,
- * applyProgressiveTrim=false / applyTailBudget=false) + the cached
- * request-shape overhead [ChatViewModel.requestShapeOverheadTokens] that
- * projectChatRequest refreshes on every dispatch. The REQUEST tier still
- * re-anchors to measured tokens after each request
- * (ChatViewModelRequestSettlement), keeping the ring honest after real usage.
+ * [T-ring-semantic-single-source] The ring reads the SAME number the compact
+ * gate acts on: the policy's UNBUDGETED reading — untrimmed history only
+ * (applyProgressiveTrim=false / applyTailBudget=false), NO request-shape
+ * overhead. History is the only part compaction can shrink, so after a
+ * compact this drops hard and the operator sees the compaction work.
+ * Refreshed on session load (projection), after compact, and before send —
+ * never from the settle path (provider-measured input includes the fixed
+ * overhead and would pin the ring near 100% after every compact).
  */
 fun ChatViewModel.refreshContextUsage() {
     val history = estimateMessagesTokens(
         effectiveAgentHistoryUncounted(applyProgressiveTrim = false, applyTailBudget = false),
     )
-    val tokens = history + requestShapeOverheadTokens.coerceAtLeast(0)
-    refreshContextUsage(ContextTokenEstimate(tokens), currentModelContextWindow ?: 0)
+    refreshContextUsage(ContextTokenEstimate(history), currentModelContextWindow ?: 0)
 }
 
 internal fun ChatViewModel.refreshContextUsage(estimate: ContextTokenEstimate, contextWindow: Int) {

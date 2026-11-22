@@ -272,8 +272,13 @@ private fun CodeBlockView(
     val highlightPalette = remember(bgColor) {
         if (bgColor.luminance() < 0.5f) HighlightPalette.Dark else HighlightPalette.Light
     }
-    val highlighted = remember(block.code, block.language, highlightPalette) {
-        SyntaxHighlighter.highlight(block.code, block.language, highlightPalette)
+    // [T-cili-gold-pink-highlight] 小黄鱼 skin: highlighted code sweeps
+    // gold -> pink instead of VS Code hues; stock palette otherwise.
+    val skinBrush = if (com.openminis.app.ui.theme.CiliSkin.isActive) {
+        com.openminis.app.ui.theme.CiliSkin.goldPinkHighlightBrush()
+    } else null
+    val highlighted = remember(block.code, block.language, highlightPalette, skinBrush) {
+        SyntaxHighlighter.highlight(block.code, block.language, highlightPalette, skinBrush)
     }
     // Button shows only when a handler exists AND the fence language is one
     // the router can actually execute. Empty / unknown fences (java, rust,

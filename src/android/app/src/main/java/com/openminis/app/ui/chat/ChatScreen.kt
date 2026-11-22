@@ -1838,6 +1838,10 @@ fun ChatScreen(
         contentWindowInsets = WindowInsets(0),
         topBar = {
             MinisCenterTopBar(
+                // [T-topbar-full-bleed] The provider/model/thinking row owns
+                // the whole nav->actions gap (back-button right edge to the
+                // overflow menu's left edge) instead of a centered slot.
+                expandTitle = true,
                 title = {
                     ChatTopBarTitle(
                         viewModel = viewModel,

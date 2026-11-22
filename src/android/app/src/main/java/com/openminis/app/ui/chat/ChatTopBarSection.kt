@@ -109,6 +109,10 @@ internal fun ChatTopBarTitle(
                             }
                         }
                         Column(
+                            // [T-topbar-center-title] 标题行、分组行恢复居中：
+                            // 列 wrap 宽度由最宽子项（Layer 3 Row
+                            // fillMaxWidth）决定，CenterHorizontally 把 wrap
+                            // 子项在整行里居中；Layer 3 摊开逻辑见下。
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
                                 .clip(RoundedCornerShape(10.dp))
@@ -118,10 +122,11 @@ internal fun ChatTopBarTitle(
                                 // closes the dead-space gap between the model
                                 // name row and the TopAppBar bottom edge that
                                 // T-topbar-model-row-clip's 76dp overshoot left
-                                // behind. Horizontal 32dp keeps the fallback
-                                // pulse highlight comfortably padded around
-                                // the longest title.
-                                .padding(horizontal = 32.dp, vertical = 2.dp),
+                                // behind. [T-topbar-full-bleed] horizontal
+                                // 32dp→8dp: 32dp wasted a third of the row and
+                                // re-centered it; 8dp still pads the fallback
+                                // pulse highlight.
+                                .padding(horizontal = 8.dp, vertical = 2.dp),
                         ) {
                             // Nav title: current session title when one
                             // exists and the toggle is on, else fall back to
@@ -264,40 +269,47 @@ internal fun ChatTopBarTitle(
                                 // "供应商名称跟模型显示在同一行").
                                 if (providerName.isNotEmpty() || modelName.isNotEmpty()) {
                                     val thinkingLevelBadgeState by viewModel.thinkingLevel.collectAsStateWithLifecycle()
-                                    // [T-topbar-left-flow] Provider · model · thinking
-                                    // badge flow left -> right from the leading edge
-                                    // (user: 别写死，左右留白). fillMaxWidth makes the
-                                    // row consume the line so its content starts at
-                                    // the left edge instead of floating centered.
+                                    // [T-topbar-spread-center] Provider · model ·
+                                    // (thinking badge + context ring) flow left ->
+                                    // right as THREE tight groups; the row's free
+                                    // width spreads evenly BETWEEN the groups
+                                    // (SpaceEvenly = centered group layout with
+                                    // auto-assigned gaps — user: 居中显示并自动分配
+                                    // 间距，从左到右侧摊开). No per-text weights:
+                                    // every text renders its FULL content and only
+                                    // ellipsizes when the whole row truly can't fit
+                                    // it — the old weight(1f, fill=false) pair split
+                                    // the row in half and truncated a long model
+                                    // name even when space remained (user: 模型名
+                                    // 字太长右侧位置不够导致显示被截断).
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        horizontalArrangement = Arrangement.SpaceEvenly,
                                         modifier = Modifier.fillMaxWidth(),
                                     ) {
-                                        // [T-topbar-provider-inline] Provider sits
-                                        // LEFT of the model on the same line
-                                        // ("供应商 · 模型"). Weighted fill=false so a
-                                        // long provider SHARES the space with the
-                                        // model instead of starving it — both
-                                        // ellipsize proportionally when tight.
+                                        // Group 1: provider (+ dot when the model follows)
                                         if (providerName.isNotEmpty() && modelName.isNotEmpty()) {
-                                            Text(
-                                                text = providerName,
-                                                fontSize = 11.sp,
-                                                lineHeight = 13.sp,
-                                                color = ChatColors.tertiaryText,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                                style = noFontPad,
-                                                modifier = Modifier.weight(1f, fill = false),
-                                            )
-                                            Text(
-                                                text = "·",
-                                                fontSize = 11.sp,
-                                                lineHeight = 13.sp,
-                                                color = ChatColors.tertiaryText,
-                                                style = noFontPad,
-                                            )
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            ) {
+                                                Text(
+                                                    text = providerName,
+                                                    fontSize = 11.sp,
+                                                    lineHeight = 13.sp,
+                                                    color = ChatColors.tertiaryText,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    style = noFontPad,
+                                                )
+                                                Text(
+                                                    text = "·",
+                                                    fontSize = 11.sp,
+                                                    lineHeight = 13.sp,
+                                                    color = ChatColors.tertiaryText,
+                                                    style = noFontPad,
+                                                )
+                                            }
                                         } else if (providerName.isNotEmpty() && modelName.isEmpty()) {
                                             Text(
                                                 text = providerName,
@@ -307,70 +319,68 @@ internal fun ChatTopBarTitle(
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
                                                 style = noFontPad,
-                                                modifier = Modifier.weight(1f, fill = false),
                                             )
                                         }
-                                        // [T-codex-fast-mode] ⚡ badge ahead of the
-                                        // resolved model name — small orange circle
-                                        // + white bolt, shown only while Fast Mode
-                                        // is enabled AND the active model is
-                                        // eligible (iOS 9e3c76ef row-3 placement,
-                                        // 09944220 9pt sizing).
-                                        val fastBadgeEligible by viewModel.showFastModeToggle.collectAsStateWithLifecycle()
-                                        val fastBadgeOn by viewModel.fastModeEnabled.collectAsStateWithLifecycle()
-                                        if (fastBadgeEligible && fastBadgeOn) {
-                                            Box(
-                                                contentAlignment = Alignment.Center,
-                                                modifier = Modifier
-                                                    .size(11.dp)
-                                                    .background(cili(0xFFFF9500), CircleShape),
+                                        // Group 2: fast badge + vendor logo + model name
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        ) {
+                                            // [T-codex-fast-mode] lightning badge ahead of the
+                                            // resolved model name — small orange circle
+                                            // + white bolt, shown only while Fast Mode
+                                            // is enabled AND the active model is
+                                            // eligible (iOS 9e3c76ef row-3 placement).
+                                            val fastBadgeEligible by viewModel.showFastModeToggle.collectAsStateWithLifecycle()
+                                            val fastBadgeOn by viewModel.fastModeEnabled.collectAsStateWithLifecycle()
+                                            if (fastBadgeEligible && fastBadgeOn) {
+                                                Box(
+                                                    contentAlignment = Alignment.Center,
+                                                    modifier = Modifier
+                                                        .size(11.dp)
+                                                        .background(cili(0xFFFF9500), CircleShape),
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Bolt,
+                                                        contentDescription = null,
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(9.dp),
+                                                    )
+                                                }
+                                            }
+                                            // [T-usage-topbar-brand-icon] Vendor logo by model-name
+                                            // keyword scoring (relay labels carry no brand).
+                                            val brandSlug = remember(modelName) { ModelBrandResolver.resolve(modelName) }
+                                            ModelBrandIcon(slug = brandSlug, sizeDp = 13.dp)
+                                            Text(
+                                                text = modelName,
+                                                fontSize = 11.sp,
+                                                lineHeight = 13.sp,
+                                                color = ChatColors.tertiaryText,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                style = noFontPad,
+                                            )
+                                        }
+                                        // Group 3: thinking badge (when the model can
+                                        // reason). [T-ring-removed] The 2.1.15
+                                        // top-bar context ring is GONE (user:
+                                        // 去掉对话窗口顶部环形圈) — the ring lives on
+                                        // only in the session menu's Token Usage row.
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            if (viewModel.availableThinkingLevels.collectAsStateWithLifecycle().value.isNotEmpty() &&
+                                                (
+                                                    thinkingLevelBadgeState.isEnabled ||
+                                                        viewModel.currentModelSupportsReasoning
+                                                )
                                             ) {
-                                                Icon(
-                                                    Icons.Default.Bolt,
-                                                    contentDescription = null,
-                                                    tint = Color.White,
-                                                    modifier = Modifier.size(9.dp),
+                                                ThinkingLevelBadge(
+                                                    level = thinkingLevelBadgeState,
+                                                    onClick = { onShowThinkingLevelSheet() },
                                                 )
                                             }
-                                        }
-                                // [T-usage-topbar-brand-icon] Vendor logo by model-name
-                                // keyword scoring (relay labels carry no brand).
-                                val brandSlug = remember(modelName) { ModelBrandResolver.resolve(modelName) }
-                                        ModelBrandIcon(slug = brandSlug, sizeDp = 13.dp)
-                                        Text(
-                                            text = modelName,
-                                            fontSize = 11.sp,
-                                            lineHeight = 13.sp,
-                                            color = ChatColors.tertiaryText,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            style = noFontPad,
-                                            // Yield first when space is tight; the
-                                            // badge to the right stays intrinsic.
-                                            modifier = Modifier.weight(1f, fill = false),
-                                        )
-                                        // Show the badge whenever thinking is on,
-                                        // and ALSO when it's Off but the active
-                                        // model supports deep thinking (iOS
-                                        // parity, e6bd75efc): the icon + "Off"
-                                        // pill is then a discoverable tap target
-                                        // for enabling thinking via the level
-                                        // sheet. The Off pill is gated on
-                                        // currentModelSupportsReasoning so
-                                        // non-reasoning models don't grow a dead
-                                        // toggle; an enabled level still shows
-                                        // unconditionally (user may have opted in
-                                        // on an unknown-capability model).
-                                        if (viewModel.availableThinkingLevels.collectAsStateWithLifecycle().value.isNotEmpty() &&
-                                            (
-                                                thinkingLevelBadgeState.isEnabled ||
-                                                    viewModel.currentModelSupportsReasoning
-                                            )
-                                        ) {
-                                            ThinkingLevelBadge(
-                                                level = thinkingLevelBadgeState,
-                                                onClick = { onShowThinkingLevelSheet() },
-                                            )
                                         }
                                     }
                                 }

@@ -573,8 +573,8 @@ internal fun ToolDetailSheet(
                                         fontWeight = FontWeight.Medium,
                                         fontFamily = FontFamily.Monospace,
                                         color = ChatColors.primaryText,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
+                                        maxLines = Int.MAX_VALUE,
+                                        overflow = TextOverflow.Clip,
                                         modifier = Modifier.weight(1f, fill = false),
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
@@ -655,8 +655,8 @@ internal fun ToolDetailSheet(
                                                     fontSize = 12.sp,
                                                     fontFamily = FontFamily.Monospace,
                                                     color = ChatColors.secondaryText,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
+                                                    maxLines = Int.MAX_VALUE,
+                                                    overflow = TextOverflow.Clip,
                                                     modifier = Modifier.weight(1f),
                                                 )
                                             }
@@ -780,8 +780,8 @@ internal fun ToolDetailSheet(
                                             text = resolvedUrl,
                                             fontSize = 12.sp,
                                             color = Color(0xFF595959),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
+                                            maxLines = Int.MAX_VALUE,
+                                            overflow = TextOverflow.Clip,
                                             modifier = Modifier
                                                 .weight(1f)
                                                 .background(Color(0xFFD9D9D9), CircleShape)
@@ -1395,8 +1395,8 @@ private fun EditorCard(
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     color = titleColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    maxLines = Int.MAX_VALUE,
+                    overflow = TextOverflow.Clip,
                     modifier = Modifier.weight(1f),
                 )
                 if (sizeLabel != null) {

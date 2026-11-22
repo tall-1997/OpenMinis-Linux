@@ -190,17 +190,6 @@ internal fun ChatViewModel.projectChatRequest(
         val extra = calibratedContextTokens(attribution, requestLocalTokens)
         stableEstimate.copy(tokens = (stableEstimate.tokens.toLong() + extra).coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
     }
-    // [T-ring-policy-parity] Refresh the cached request-shape overhead (the
-    // calibrated system-prompt + tool-defs part of the payload, everything
-    // outside the chat history). The idle ring adds this on top of the
-    // untrimmed history estimate so the displayed percent matches the basis
-    // the compact gate actually acts on (this projection's `pressure`).
-    requestShapeOverheadTokens = calibratedContextTokens(
-        attribution,
-        ContextTokenMeter.rawRequestTokens(
-            ChatRequest(emptyList(), request.systemPrompt, maxTokens = 0, tools = request.tools),
-        ),
-    )
     return ProjectedChatRequest(
         request = request,
         prompt = prompt,

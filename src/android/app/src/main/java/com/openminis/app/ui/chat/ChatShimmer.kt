@@ -39,7 +39,8 @@ internal fun Modifier.runningShimmerSweep(active: Boolean): Modifier = composed 
             initialValue = 1.0f,
             targetValue = -0.4f,
             animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 3000, easing = LinearEasing),
+                // [T-shimmer-2s] user: 扫光效果从3秒缩回2秒一次.
+                animation = tween(durationMillis = 2000, easing = LinearEasing),
             ),
             label = "runningShimmerProgress",
         )

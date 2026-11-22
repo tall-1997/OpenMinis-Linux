@@ -40,6 +40,15 @@ fun MinisCenterTopBar(
     colors: TopAppBarColors = TopAppBarDefaults.centerAlignedTopAppBarColors(),
     windowInsets: WindowInsets = TopAppBarDefaults.windowInsets,
     expandedHeight: Dp = 64.dp,
+    /**
+     * [T-topbar-full-bleed] When true the title slot ALWAYS owns the full
+     * gap between the navigation icon and the actions row (left-aligned from
+     * the nav button's trailing edge to the actions' leading edge) instead of
+     * the iOS-style centered symmetric slot. ChatScreen's provider/model row
+     * uses this to stretch across the whole bar. Default false — every other
+     * caller keeps the centered look.
+     */
+    expandTitle: Boolean = false,
 ) {
     Surface(color = colors.containerColor, modifier = modifier) {
         CompositionLocalProvider(LocalContentColor provides colors.titleContentColor) {
@@ -76,12 +85,16 @@ fun MinisCenterTopBar(
                 val probe = subcompose("titleProbe") {
                     Box { title() }
                 }.first().measure(loose.copy(maxWidth = 10_000))
-                val expand = probe.width > symmetricMax && gapMax > symmetricMax
+                // [T-topbar-full-bleed] expandTitle forces the wide slot even
+                // when the probe content would fit between the symmetric
+                // insets — the slot width, not the content width, is what the
+                // caller wants to control.
+                val expand = expandTitle || (probe.width > symmetricMax && gapMax > symmetricMax)
                 val titleMax = if (expand) gapMax else symmetricMax
                 val titlePlaceable = subcompose("title") {
                     Box(
                         Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center,
+                        contentAlignment = if (expandTitle) Alignment.CenterStart else Alignment.Center,
                     ) {
                         ProvideTextStyle(
                             MaterialTheme.typography.titleLarge.copy(color = colors.titleContentColor),

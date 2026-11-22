@@ -65,6 +65,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -946,6 +947,17 @@ class ChatViewModel(
 
     internal val _sessionTitle = MutableStateFlow("New Chat")
     val sessionTitle: StateFlow<String> = _sessionTitle.asStateFlow()
+
+    /**
+     * [T-title-live-sync] Session-title DB observer, (re)armed by loadSession.
+     * The in-chat edit sheet writes straight to [_sessionTitle]; the session
+     * LIST's rename (and any other writer) only touches the DB — without this
+     * observer the top bar kept the stale title until a full reload (user:
+     * "无论从主页修改还是聊天窗口修改都要实时更新"). One collection per loaded
+     * session; a fast session switch cancels the previous session's stream so
+     * a late list emission can't write A's title into B.
+     */
+    internal var titleSyncJob: Job? = null
 
     /** T-chat-title-pill: category drives the icon shown in the sticky title
      *  pill (mirrors SessionRow's categoryStyle lookup). Null on draft sessions
@@ -2234,18 +2246,6 @@ class ChatViewModel(
 
     // [T-context-ring] Live context token counter for the session-menu ring.
     val contextUsage = MutableStateFlow(com.openminis.app.data.model.ContextUsage(0L, 0L))
-
-    /**
-     * [T-ring-policy-parity] Cached request-shape overhead (calibrated system
-     * prompt + tool definitions, the part of every dispatch payload OUTSIDE
-     * the chat history). projectChatRequest refreshes it each dispatch; the
-     * idle ring adds it on top of the untrimmed history estimate so the
-     * displayed percent uses the SAME basis the compact gate acts on. The
-     * compact gate triggers on the full request shape — without this the
-     * ring undershot the real pressure and users saw compaction "before
-     * reaching the displayed percent".
-     */
-    @Volatile internal var requestShapeOverheadTokens: Int = 0
 
     // ── Session token usage (iOS parity: TokenUsageSheet data) ─────────────
 

@@ -61,6 +61,19 @@ object CiliSkin {
     fun primaryButtonBrush(): Brush = Brush.horizontalGradient(
         primaryButtonColors.map { Color(it) },
     )
+
+    /**
+     * [T-cili-gold-pink-highlight] Gold -> pink sweep for highlighted content
+     * (syntax-highlighted code under the skin).
+     * [T-cili-highlight-deeper] user: 高亮必须颜色加深 — the stops re-based
+     * from the too-light #FFD98E to deep amber #E9A63C, bridged through the
+     * skin pink and out at the deep rose #F24FB8. Brush coordinates are
+     * relative to each Text's layout box, so every highlighted span shares
+     * one continuous sweep across the block.
+     */
+    fun goldPinkHighlightBrush(): Brush = Brush.horizontalGradient(
+        listOf(Color(0xFFE9A63C), Color(0xFFFF8FC0), Color(0xFFF24FB8)),
+    )
 }
 
 /**
