@@ -75,4 +75,17 @@ internal object LegacyToolReceiptStore {
             "abandoned" -> open.remove(attempt)
         }
     }
+
+    /**
+     * [T-session-sidecar-cleanup] Deleted session: drop the legacy JSONL.
+     *
+     * Same disambiguation as [readDiagnostics]: the old writer replaced unsafe
+     * characters with '_', so names containing them may SHARE a file with
+     * other sessions — those are deliberately left alone rather than deleted
+     * from under a live session. Idempotent.
+     */
+    fun deleteStored(filesDir: File, sessionId: String) {
+        if (!unambiguousId.matches(sessionId) || sessionId == "." || sessionId == "..") return
+        runCatching { File(File(filesDir, DIR), "$sessionId.jsonl").delete() }
+    }
 }

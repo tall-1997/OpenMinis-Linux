@@ -64,6 +64,15 @@ internal object SessionJournal {
         java.io.File(java.io.File(filesDir, DIR), "${safeSession(sessionId)}.jsonl")
 
     /**
+     * [T-session-sidecar-cleanup] Deleted session: drop the journal. Per-turn
+     * events accumulate up to 4MB — the largest single sidecar a deleted chat
+     * can leave behind. Part of SessionTeardown.deleteAll. Idempotent.
+     */
+    fun deleteStored(filesDir: java.io.File, sessionId: String) {
+        runCatching { file(filesDir, sessionId).delete() }
+    }
+
+    /**
      * Append one event. Best-effort by contract: callers must never branch on
      * the result and must never let an IO failure escape into the loop.
      *

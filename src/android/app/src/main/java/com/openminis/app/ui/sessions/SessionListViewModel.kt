@@ -16,6 +16,7 @@ import com.openminis.app.logging.AppLogger
 import com.openminis.app.sandbox.SessionWorkspace
 import com.openminis.app.provider.ProviderFactory
 import com.openminis.app.ui.chat.ChatViewModelStore
+import com.openminis.app.ui.chat.SessionTeardown
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -409,10 +410,8 @@ class SessionListViewModel(
 
     fun deleteSession(id: String) {
         viewModelScope.launch {
-            chatRepository.deleteSession(id)
+            chatRepository.deleteSession(id).also { runCatching { SessionTeardown.onSessionDeleted(context, id) } }
             ChatViewModelStore.release(id)
-            com.openminis.app.service.SessionBadgeStore.clear(id)
-            com.openminis.app.data.UnreadRegistry.forget(id)
         }
     }
 
@@ -710,9 +709,8 @@ class SessionListViewModel(
         viewModelScope.launch {
             val memberIds = chatRepository.sessionIdsInFolder(folderId)
             for (id in memberIds) {
-                chatRepository.deleteSession(id)
+                chatRepository.deleteSession(id).also { runCatching { SessionTeardown.onSessionDeleted(context, id) } }
                 ChatViewModelStore.release(id)
-                com.openminis.app.service.SessionBadgeStore.clear(id)
             }
             chatRepository.dissolveFolder(folderId)
             SessionWorkspace.deleteProject(context.filesDir, folderId)
