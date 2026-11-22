@@ -164,7 +164,12 @@ internal fun ChatFlatItemRow(
                             // [T-port-fold-tools] A folded run of tool calls: one row, members behind a tap.
                             is com.openminis.app.ui.chat.FlatChatItem.AssistantToolGroup -> {
                                 var open by rememberSaveable(item.key) { mutableStateOf(item.expanded) }
-                                ToolGroupRow(item.copy(expanded = open)) { open = !open }
+                                                            ToolGroupRow(
+                                item = item.copy(expanded = open),
+                                onToggle = { open = !open },
+                                onOpenDetail = { viewModel.openToolDetail(it) },
+                                onOpenTerminalWithCommand = onOpenTerminalWithCommand,
+                            )
                             }
                             is FlatChatItem.UserBubble -> {
                                 // User bubbles intentionally don't register

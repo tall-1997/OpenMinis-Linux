@@ -55,6 +55,20 @@ RE_HANDLE_BIND = re.compile(
  r'\b([A-Za-z_][A-Za-z0-9_]*)\s*(?::[^=\n]+)?=\s*'
  r'(?:[A-Za-z_][A-Za-z0-9_]*\s*\.\s*)*Prefs\s*\.\s*file\('
  r'\s*(?:"([^"]+)"|([A-Za-z_][A-Za-z0-9_]*))\s*\)')
+# [T-prefs-accessor-callsites] A file may expose an accessor function instead of
+# a handle variable: `fun getAppearancePrefs(ctx): PrefsHandle = Prefs.file(...)`,
+# then `getAppearancePrefs(context).bool(KEY_X, ...)` anywhere else. That shape
+# shipped an unregistered key (chat.showTurnChangesCard) and crashed on device,
+# because the receiver was a call, not a variable.
+RE_ACCESSOR = re.compile(
+ r'fun\s+([A-Za-z_][A-Za-z0-9_]*)\s*\([^)]*\)\s*:\s*'
+ r'(?:com\.openminis\.app\.config\.)?PrefsHandle\s*=\s*'
+ r'(?:[A-Za-z_][A-Za-z0-9_.]*\s*\.\s*)?Prefs\s*\.\s*file\(\s*'
+ r'(?:"([^"]+)"|([A-Za-z_][A-Za-z0-9_]*))\s*\)')
+RE_ACCESSOR_CALL = re.compile(
+ r'\b([A-Za-z_][A-Za-z0-9_]*)\s*\([^()]*\)\s*\.\s*('
+ r'(?:' + '|'.join(HANDLE_METHODS) + r'))\s*\(\s*'
+ r'(?:"([^"]+)"|([A-Za-z_][A-Za-z0-9_]*))')
 
 
 def strip_comments(src: str) -> str:
@@ -222,6 +236,42 @@ def scan():
                 continue
             if not accepts(hspec, hkey):
                 fails.append((p, hfile, hkey, hmeth, 'handle调用用了未登记的键'))
+    # [T-prefs-accessor-callsites] Accessor-function receivers, resolved
+    # globally (the accessor and its caller are usually in different files).
+    accessors = {}
+    for p, s in texts.items():
+        local = dict(consts_by_file[p])
+        for n, ref in RE_CONST_REF.findall(s):
+            v = resolve(p, ref)
+            if v and n not in local:
+                local[n] = v
+        for an, afile_lit, afile_ident in RE_ACCESSOR.findall(s):
+            afile = afile_lit or local.get(afile_ident) or resolve(p, afile_ident or '')
+            if afile:
+                accessors[an] = (afile, p)
+    for p, s in texts.items():
+        local = dict(consts_by_file[p])
+        for n, ref in RE_CONST_REF.findall(s):
+            v = resolve(p, ref)
+            if v and n not in local:
+                local[n] = v
+        for m in RE_ACCESSOR_CALL.finditer(s):
+            aname, ameth, akey_lit, akey_ident = m.groups()
+            if aname not in accessors:
+                continue
+            afile, _ = accessors[aname]
+            akey = akey_lit or local.get(akey_ident) or resolve(p, akey_ident or '')
+            if not akey:
+                continue
+            spec = specs.get(afile)
+            checked +=1
+            if spec is None:
+                fails.append((p, afile, akey, ameth, 'accessor 指向的文件名未在注册表中'))
+                continue
+            if spec.get('encrypted') or (spec.get('keys') == {} and not spec.get('dyn_keys')):
+                continue
+            if not accepts(spec, akey):
+                fails.append((p, afile, akey, ameth, 'accessor 调用用了未登记的键'))
     return fails, checked
 
 
@@ -256,7 +306,7 @@ def main() -> int:
     if '--selftest' in sys.argv:
         return selftest()
     if not INV.exists():
-        print(f'prefs call sites: SKIP ({INV} not found；先跑 gen_prefs_registry.py)')
+        print(f'prefs call sites: FAIL ({INV} not found；先跑 gen_prefs_registry.py)')
         return 0
     fails, checked = scan()
     if fails:

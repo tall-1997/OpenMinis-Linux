@@ -126,9 +126,11 @@
         "KEY_SHOW_CHAT_TITLE": "appearance.show_chat_title",
         "KEY_SHOW_COMPLETED_TOOL_CARDS": "chat.showCompletedToolCards",
         "KEY_SHOW_FLOATING_TOOL_BAR": "chat.showFloatingToolBar",
+        "KEY_SHOW_FULL_THINKING": "chat.showFullThinking",
         "KEY_SHOW_MESSAGE_TOKEN_USAGE": "chat.showMessageTokenUsage",
         "KEY_SHOW_MIC_BUTTON": "chat.showMicButton",
         "KEY_SHOW_SUBAGENT_BAR": "chat.showSubAgentBar",
+        "KEY_SHOW_TURN_CHANGES_CARD": "chat.showTurnChangesCard",
         "KEY_THEME_MODE": "theme_mode",
         "KEY_TOOL_PREVIEW": "tool_preview"
       },
@@ -6775,7 +6777,7 @@
   "totals": {
     "prefs_files": 105,
     "prefs_encrypted": 10,
-    "key_constants_attributed": 202,
+    "key_constants_attributed": 204,
     "orphan_keys": 34,
     "usage_sites": 183,
     "usage_files": 110,

@@ -71,6 +71,9 @@ private fun foldRun(messageId: String, runItems: List<FlatChatItem>): FlatChatIt
         messageId = messageId,
         runKey = runs[0].key,
         memberIds = members,
+            // [T-fold-expand-members] Keep the real blocks for the expanded row.
+            memberBlocks = runItems.mapNotNull { (it as? FlatChatItem.AssistantToolUse)?.block },
+            allToolBlocks = runItems.firstNotNullOfOrNull { (it as? FlatChatItem.AssistantToolUse)?.allToolBlocks } ?: emptyList(),
         toolCount = members.size,
         failedCount = failed,
         cancelledCount = cancelled,

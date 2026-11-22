@@ -1,10 +1,12 @@
 package com.openminis.app.ui.chat
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -38,7 +40,12 @@ import com.openminis.app.ui.util.expandToggleClickable
  * Tapping toggles the run open or closed in place.
  */
 @Composable
-internal fun ToolGroupRow(item: FlatChatItem.AssistantToolGroup, onToggle: () -> Unit) {
+internal fun ToolGroupRow(
+    item: FlatChatItem.AssistantToolGroup,
+    onToggle: () -> Unit,
+    onOpenDetail: (String) -> Unit = {},
+    onOpenTerminalWithCommand: ((String) -> Unit)? = null,
+    ) {
     val title = stringResource(R.string.tool_fold_ran_n_tools, item.toolCount)
     val failed = stringResource(R.string.tool_fold_n_failed, item.failedCount)
     val cancelled = stringResource(R.string.tool_fold_n_cancelled, item.cancelledCount)
@@ -66,11 +73,14 @@ internal fun ToolGroupRow(item: FlatChatItem.AssistantToolGroup, onToggle: () ->
             append(cancelled)
         }
     }
-    Row(modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .height(RawSpace.xxl4.dp)
+                // [T-fold-row-a11y] 48dp minimum touch target, grows with font scale
+                // instead of clipping at 28dp.
+                .heightIn(min = Dims.dimens.touchTargetMin.dp)
                 // [ISS-017] Expand/collapse row: no ripple (expandToggleClickable).
                 .expandToggleClickable(onClick = onToggle)
                 // [T-fold-row-chevron-align] No start inset: the chevron's
@@ -94,6 +104,24 @@ internal fun ToolGroupRow(item: FlatChatItem.AssistantToolGroup, onToggle: () ->
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+        }
+
+        // [T-fold-expand-members] Expanded: render every member as a ToolCallPill.
+        // The old group carried only ids, so the expanded row had nothing to show —
+        // the chevron turned and no member ever appeared.
+        if (item.expanded && item.memberBlocks.isNotEmpty()) {
+            item.memberBlocks.forEach { block ->
+                ToolCallPill(
+                    block = block,
+                    allToolBlocks = item.allToolBlocks,
+                    onRetry = null,
+                    onStop = null,
+                    onOpenTerminalWithCommand = onOpenTerminalWithCommand,
+                    onOpenDetail = { onOpenDetail(block.id) },
+                    onRerunFromHere = null,
+                )
+            }
         }
     }
 }

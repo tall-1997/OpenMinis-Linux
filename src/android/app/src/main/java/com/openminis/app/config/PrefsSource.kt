@@ -21,6 +21,15 @@ interface PrefsSource {
      * @throws IllegalArgumentException 未登记的文件名
      */
     fun backend(name: String): PrefsBackend
+
+    /**
+     * [T-prefs-guard-never-crashes] Backend for a file the registry never
+     * saw. Only reached when [Prefs] is lenient (shipped app): strict builds
+     * throw before getting here, so unit tests still catch the typo.
+     * Default: plain (non-encrypted) storage — an unclassifiable name must not
+     * be guessed into the encrypted store.
+     */
+    fun backendForUnregistered(name: String): PrefsBackend = backend(name)
 }
 
 /** 唯一需要 Android Context 的实现。 */
@@ -40,6 +49,12 @@ class AndroidPrefsSource(private val context: Context) : PrefsSource {
 
     /** 人工排查用：某文件的真实存储性质。 */
     fun scopeOf(name: String): PrefsScope = PrefsRegistry.require(name).scope
+
+    override fun backendForUnregistered(name: String): PrefsBackend =
+        PrefsBackends.wrap(
+            context.applicationContext.getSharedPreferences(name, Context.MODE_PRIVATE),
+            name,
+        )
 }
 
 /**
@@ -56,6 +71,9 @@ class InMemorySource(
         PrefsRegistry.require(name)
         return backends.getOrPut(name) { InMemoryPrefsBackend(name, seed[name].orEmpty()) }
     }
+
+    override fun backendForUnregistered(name: String): PrefsBackend =
+        backends.getOrPut(name) { InMemoryPrefsBackend(name, seed[name].orEmpty()) }
 
     /** 测试钩子：直接拿到某文件后端，用于断言落盘内容。 */
     fun inspect(name: String): InMemoryPrefsBackend? = backends[name] as? InMemoryPrefsBackend

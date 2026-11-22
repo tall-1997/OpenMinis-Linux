@@ -216,6 +216,13 @@
         "PREF_FAB_SWAPPED": "fab_swapped"
       },
       "reason": "shared-file: SessionListScreen 的 DualFabRow 读 Prefs.file(\"ui_prefs\")，但同一文件名被两个源文件使用，生成器的归属规则只登记另一处，fab_swapped 未进注册表；真机崩溃（2026-11-22 11:45 crash log）。"
+    },
+    "appearance_prefs": {
+      "keys": {
+        "KEY_SHOW_TURN_CHANGES_CARD": "chat.showTurnChangesCard",
+        "KEY_SHOW_FULL_THINKING": "chat.showFullThinking"
+      },
+      "reason": "shared-file + accessor: 这两个键由 ShowTurnChangesCardRow / ShowFullThinkingRow 里的常量经 getAppearancePrefs(context) 访问器读取；生成器按“文件唯一使用一个 prefs”归属，抓不到跨文件的常量引用。未登记即真机闪退 (chat.showTurnChangesCard 2026-11-22 13:50)。"
     }
   }
 }

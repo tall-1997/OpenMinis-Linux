@@ -204,7 +204,6 @@ internal sealed class FlatChatItem {
         override val contentType = "tool"
         override fun withKeySuffix(suffix: String): FlatChatItem = copy(keySuffix = suffix)
     }
-
     /** [T-port-fold-tools] One folded run of consecutive tool calls (upstream parity). */
     data class AssistantToolGroup(
         val messageId: String,
@@ -215,6 +214,7 @@ internal sealed class FlatChatItem {
         val cancelledCount: Int,
         val durationMs: Long?,
         val expanded: Boolean,
+        val memberBlocks: List<AssistantBlock> = emptyList(), val allToolBlocks: List<AssistantBlock> = emptyList(),
         private val keySuffix: String = "",
     ) : FlatChatItem() {
         override val key = FlatKeys.of(FlatKeys.KIND_TOOL, messageId, runKey) + keySuffix

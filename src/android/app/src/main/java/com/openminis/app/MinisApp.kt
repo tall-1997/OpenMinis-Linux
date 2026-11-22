@@ -168,6 +168,11 @@ class MinisApp : Application(), ImageLoaderFactory {
         com.openminis.app.config.Prefs.install(
             com.openminis.app.config.AndroidPrefsSource(this),
         )
+        // [T-prefs-guard-never-crashes] The registry is GENERATED, and its gaps
+        // used to be fatal to the user (five crash types in #419/#420). Unit
+        // tests keep strictKeyGuard = true so CI still catches every miss; the
+        // shipped app logs a breadcrumb and keeps the feature working.
+        com.openminis.app.config.Prefs.strictKeyGuard = false
         // T287-followup: ACRA's :acra reporter must not bind the socket / boot the DB (EADDRINUSE loop).
         if (ACRA.isACRASenderServiceProcess()) {
             Log.i("MinisApp", "skipping app init in :acra reporter process")

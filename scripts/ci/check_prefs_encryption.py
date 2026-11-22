@@ -85,6 +85,14 @@ def main() -> int:
             f'否则密钥改为明文落盘且无任何报错'
         )
 
+    # [T-encryption-pin-complete] A file that IS encrypted but not pinned is
+    # just as broken as the reverse: its downgrade passes silently.
+    for name in sorted(encrypted - pinned):
+        fails.append(
+        f"{name}: ENCRYPTED but not pinned — a downgrade to PLAIN would pass silently. "
+        f"Run --update-baseline to pin it, or confirm it should not be encrypted."
+        )
+
     if update:
         merged = sorted(encrypted | pinned)
         BASELINE.write_text(

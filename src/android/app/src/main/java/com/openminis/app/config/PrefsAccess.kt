@@ -223,8 +223,7 @@ class PrefsHandle internal constructor(
             return key
         }
         // 3. 有登记清单但不包含该键 —— 明确的错
-        throw IllegalArgumentException(
-            buildString {
+        val message = buildString {
                 append("key '$key' is not registered in PrefsRegistry for ${spec.name}")
                 if (spec.dynamicPrefixes.isNotEmpty()) {
                     append("; allowed dynamic prefixes in this file: ")
@@ -234,8 +233,33 @@ class PrefsHandle internal constructor(
                 append(key)
                 append("\"` in the source file, then re-run gen_prefs_registry.py")
             }
+        // [T-prefs-guard-never-crashes] strict builds (tests/CI) fail loudly; the
+        // shipped app logs a breadcrumb and keeps working like the old SP path.
+        if (Prefs.strictKeyGuard) throw IllegalArgumentException(message)
+        Prefs.reportUnregisteredKey(spec.name, key, message)
+        return key
+    }
+}
+
+/**
+ * [T-prefs-guard-never-crashes] A prefs file the generator never saw: strict
+ * builds throw (a typo must fail CI); the shipped app degrades to an
+ * open-key-space spec so the feature keeps working and logs a breadcrumb.
+ */
+private fun unregisteredFileSpec(name: String): PrefsFileSpec {
+    if (Prefs.strictKeyGuard) {
+        error(
+            "prefs file '$name' is not registered in PrefsRegistry. Add it to the "
+            + "source (Prefs.file(...)) and re-run gen_prefs_registry.py",
         )
     }
+    Prefs.reportUnregisteredKey(name, "<file>", "prefs file '$name' is not registered in PrefsRegistry")
+    return PrefsFileSpec(
+        name = name,
+        module = "unregistered",
+        scope = PrefsScope.PLAIN,
+        openKeySpace = true,
+    )
 }
 
 /**
@@ -246,6 +270,29 @@ object Prefs {
 
     private var source: PrefsSource? = null
     private val cache = LinkedHashMap<String, PrefsHandle>()
+
+    /**
+     * [T-prefs-guard-never-crashes] Whether an unregistered key is fatal.
+     *
+     * DEFAULT TRUE: unit tests run strict, so a key the generator missed fails
+     * CI instead of reaching a user. MinisApp sets this false for the shipped
+     * app: five production crashes (#419/#420) came from treating our
+     * registration gap as the user's problem.
+     */
+    @Volatile var strictKeyGuard: Boolean = true
+
+    /**
+     * Keys the guard rejected while lenient (release only). Diagnostics: logcat.
+     * Bounded so a runaway loop cannot grow it without limit.
+     */
+    val unregisteredKeys: MutableSet<String> = java.util.Collections.synchronizedSet(
+        java.util.LinkedHashSet<String>(),
+    )
+
+    internal fun reportUnregisteredKey(file: String, key: String, message: String) {
+        if (!unregisteredKeys.add("$file/$key")) return
+        com.openminis.app.logging.AppLogger.warning("PrefsRegistry", message)
+    }
 
     fun install(s: PrefsSource) {
         synchronized(this) {
@@ -261,9 +308,14 @@ object Prefs {
 
     fun file(name: String): PrefsHandle = synchronized(this) {
         cache.getOrPut(name) {
-            val spec = PrefsRegistry.require(name)
+            // [T-prefs-guard-never-crashes] Same policy for a file the generator never
+            // saw: strict builds throw (a typo must fail CI); the shipped app falls
+            // back to an open-key-space spec so the feature keeps working.
+            val registered = PrefsRegistry.files.firstOrNull { it.name == name }
+            val spec = registered ?: unregisteredFileSpec(name)
             val s = source ?: error("Prefs is not installed: call Prefs.install(...) from MinisApp.onCreate")
-            PrefsHandle(spec, s.backend(spec.name))
+            val backend = if (registered != null) s.backend(spec.name) else s.backendForUnregistered(spec.name)
+            PrefsHandle(spec, backend)
         }
     }
 

@@ -69,6 +69,14 @@ internal object AutoModelGroups {
     }
 
     /** 管理界面用的用户组（排除隐式组）。 */
+    /**
+     * [T-auto-groups-cold-start] Copy + sync, ready to publish: the loaded object
+     * stays untouched and the caller publishes one complete snapshot.
+     * ProviderConfig.copy() shares mutable lists, so modelGroups is cloned.
+     */
+    fun publishCopy(config: ProviderConfig): ProviderConfig =
+        config.copy(modelGroups = config.modelGroups.toMutableList()).also { syncInPlace(it) }
+
     fun userGroups(config: ProviderConfig): List<ModelGroup> =
         config.modelGroups.filterNot { isAutoId(it.id) }
 }
