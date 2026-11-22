@@ -13,7 +13,7 @@ import org.junit.Test
  * A round = one user message + the assistant/system messages after it up to
  * the next user message. A SETTLED round folds each run of ≥ 2 steps into one
  * card. A RUNNING round never cards: its thinking and tool rows render in
- * order at their own positions, and [applyToolFolds] merges a run of adjacent
+ * order at their own positions. [T-remove-tool-group-fold] The list-level
  * finished tools into one "Ran N tools" row. A single step stays inline.
  *
  * Cards own their steps: collapsed or expanded, the steps render inside the
@@ -60,7 +60,6 @@ class ChatFlatItemsProcessFoldTest {
 
     private fun kinds(items: List<FlatChatItem>): List<String> = items.map { item ->
         when (item) {
-                is FlatChatItem.AssistantToolGroup -> "toolgroup"
             is FlatChatItem.UserBubble -> "user"
             is FlatChatItem.AssistantHeader -> "header"
             is FlatChatItem.AssistantMarkdownBlock -> "md"
@@ -299,11 +298,11 @@ class ChatFlatItemsProcessFoldTest {
     }
 
     @Test
-    fun `a live run of adjacent tools folds into one group row`() {
-        // [T-live-round-inline] The running round renders its steps in the
-        // list, so the list-level fold is what keeps a long parallel run
-        // readable: three adjacent finished calls become one row and the
-        // single pills disappear.
+    fun `a live run of adjacent tools stays inline instead of merging`() {
+        // [T-remove-tool-group-fold] The second fold layer (ToolGroupRow) was
+        // reverted in 43595461 and re-added by #410 without touching this test
+        // set. Removing it means a live round renders each tool at its own
+        // position — that is the behaviour the revert chose.
         val items = buildFlatChatItems(
             listOf(
                 assistant(
@@ -314,11 +313,7 @@ class ChatFlatItemsProcessFoldTest {
             showCompletedToolCards = false,
             foldAiProcess = true,
         )
-        val groups = items.filterIsInstance<FlatChatItem.AssistantToolGroup>()
-        assertEquals("rows=${kinds(items)}", 1, groups.size)
-        assertEquals(3, groups.single().toolCount)
-        assertEquals(listOf("t1", "t2", "t3"), groups.single().memberIds)
-        assertEquals(0, items.count { it is FlatChatItem.AssistantToolUse })
+        assertEquals("rows=${kinds(items)}", 3, items.count { it is FlatChatItem.AssistantToolUse })
         assertTrue(kinds(items).contains("md"))
     }
 
