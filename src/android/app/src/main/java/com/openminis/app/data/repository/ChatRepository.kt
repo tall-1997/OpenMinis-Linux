@@ -14,7 +14,6 @@ import com.openminis.app.data.db.FolderEntity
 import com.openminis.app.data.db.MessageEntity
 import com.openminis.app.data.db.MessageVersionDao
 import com.openminis.app.data.db.MessageVersionEntity
-import com.openminis.app.data.db.RawQuerySql
 import com.openminis.app.data.model.ModelAttributionSnapshot
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.sandbox.ExecutionCoordinator
@@ -49,7 +48,7 @@ class ChatRepository(
         // here; existing call sites that omit it keep the prior
         // memoryEnabled=1 behavior (legacy default).
         memoryEnabled: Boolean = true,
-        permissionMode: String = com.openminis.app.security.SessionPermissionMode.SAFE_AUTO.toStoredToken(),
+        permissionMode: String = com.openminis.app.security.SessionPermissionMode.SAFEST.toStoredToken(),
     ): ChatSessionEntity {
         val now = System.currentTimeMillis()
         val session = ChatSessionEntity(
@@ -652,6 +651,10 @@ class ChatRepository(
                 dao.updateSortOrder(row.id, scratchBase + index)
             }
             val restoredRows = mutableListOf<MessageEntity>()
+            // INTENTIONAL BEHAVIOR CHANGE — an unverifiable offloaded body (bodyRef != null, sizeOf <= 0) is
+            // NOT restored and stays archived: blind restore produced a live row RequestHistory fail-closes
+            // on, permanently failing every later send. The archive is kept so a later blob repair can restore it.
+            val unrestorableArchiveIds = mutableSetOf<String>()
             order.forEachIndexed { index, entry ->
                 if (entry.restored) {
                     val v = restoredById.getValue(entry.id)
@@ -665,6 +668,11 @@ class ChatRepository(
                     // 2026-10-14 incident). Bodies still render either way:
                     // inline parts and bodyRef hydration are untouched.
                     val storedParts = v.partsJson ?: "[]"
+                    val offloadedBodyBytes = v.bodyRef?.let { bodyStore()?.sizeOf(it) } ?: 0L
+                    if (v.bodyRef != null && offloadedBodyBytes <= 0L) {
+                        unrestorableArchiveIds.add(v.id)
+                        return@forEachIndexed
+                    }
                     val row = MessageEntity(
                         id = v.messageId,
                         sessionId = sessionId,
@@ -686,7 +694,7 @@ class ChatRepository(
                         bodyBytes = if (v.bodyRef == null) {
                             storedParts.toByteArray(Charsets.UTF_8).size.toLong()
                         } else {
-                            bodyStore()?.sizeOf(v.bodyRef) ?: 0L
+                            offloadedBodyBytes
                         }
                     )
                     dao.insertMessage(row)
@@ -707,7 +715,8 @@ class ChatRepository(
             // the whole restore rolled back and the exception escaped the
             // caller's `viewModelScope.launch` uncaught. 500 sits under the
             // smallest cap we ship against.
-            restoredArchiveIds.chunked(ARCHIVE_DELETE_CHUNK).forEach { vdao.deleteByIds(it) }
+            restoredArchiveIds.filterNot { it in unrestorableArchiveIds }
+                .chunked(ARCHIVE_DELETE_CHUNK).forEach { vdao.deleteByIds(it) }
             restoredRows
         }
         val dbRef = db
@@ -905,6 +914,9 @@ class ChatRepository(
     // text extraction, and snippet trimming. Mirrors iOS
     // `ChatStore.swift` L774-1023 line-by-line so the offload tool's
     // output shape is identical across platforms.
+    // Implementations live in ChatRepositorySessionQueries.kt (extracted when
+    // this file hit its architecture ceiling); the one-line members below keep
+    // the public API and every call site unchanged.
 
     /**
      * Backs `minis-sessions-cli list`. Returns sessions ordered by
@@ -933,63 +945,7 @@ class ChatRepository(
         startMs: Long?,
         endMs: Long?,
         keywordsMatchBody: Boolean = true,
-    ): List<SessionMeta> {
-        val conditions = mutableListOf<String>()
-        val args = mutableListOf<Any>()
-
-        if (!sessionIds.isNullOrEmpty()) {
-            conditions += "s.id IN (${sessionIds.joinToString(",") { "?" }})"
-            args.addAll(sessionIds)
-        }
-        if (startMs != null) {
-            conditions += "s.updated_at >= ?"
-            args += startMs
-        }
-        if (endMs != null) {
-            conditions += "s.updated_at <= ?"
-            args += endMs
-        }
-        if (!keywords.isNullOrEmpty()) {
-            for (kw in keywords) {
-                val pat = "%$kw%"
-                if (keywordsMatchBody) {
-                    conditions +=
-                        "(s.title LIKE ? OR EXISTS (SELECT 1 FROM messages m " +
-                        "WHERE m.session_id = s.id AND " +
-                        "((m.body_ref IS NULL AND m.parts_json LIKE ?) OR " +
-                        "m.preview LIKE ?)))"
-                    args += pat
-                    args += pat
-                    args += pat
-                } else {
-                    conditions += "s.title LIKE ?"
-                    args += pat
-                }
-            }
-        }
-        val where = if (conditions.isEmpty()) "" else "WHERE " + conditions.joinToString(" AND ")
-        val sql = RawQuerySql.SESSIONS_META_SELECT +
-            " $where ORDER BY s.updated_at DESC LIMIT ?"
-        args += limit
-
-        val rows = dao.runSessionsMetaQuery(
-            androidx.sqlite.db.SimpleSQLiteQuery(sql, args.toTypedArray()),
-        )
-        return rows.map { r ->
-            val preview = r.firstUserMsg?.let { extractTextForOffload(it) }
-                ?.takeIf { it.isNotBlank() }
-                ?.take(60)
-            SessionMeta(
-                id = r.id,
-                title = r.title,
-                preview = preview,
-                source = r.source,
-                startedAt = r.createdAt,
-                lastActive = r.updatedAt,
-                messageCount = r.msgCount,
-            )
-        }
-    }
+    ): List<SessionMeta> = querySessionsMetaIn(sessionIds, keywords, limit, startMs, endMs, keywordsMatchBody)
 
     /**
      * Backs `minis-sessions-cli search`. Over-fetches `limit * 3` rows
@@ -1009,55 +965,7 @@ class ChatRepository(
         limit: Int,
         startMs: Long?,
         endMs: Long?,
-    ): List<MessageSearchMatch> {
-        if (keywords.isEmpty()) return emptyList()
-        val budget = limit.coerceIn(1, 32).toLong() * ResourceLimits.SQL_CELL_BYTES
-        if (!com.openminis.app.data.body.Admission.tryAdmit(budget)) return emptyList()
-        return try {
-        val conditions = mutableListOf<String>()
-        val args = mutableListOf<Any>()
-
-        for (kw in keywords) {
-            conditions += "((m.body_ref IS NULL AND m.parts_json LIKE ?) OR " +
-                "m.preview LIKE ?)"
-            args += "%$kw%"
-            args += "%$kw%"
-        }
-        if (!sessionIds.isNullOrEmpty()) {
-            conditions += "m.session_id IN (${sessionIds.joinToString(",") { "?" }})"
-            args.addAll(sessionIds)
-        }
-        if (startMs != null) {
-            conditions += "m.created_at >= ?"
-            args += startMs
-        }
-        if (endMs != null) {
-            conditions += "m.created_at <= ?"
-            args += endMs
-        }
-        val where = conditions.joinToString(" AND ")
-        // SELECT head + the alias/preview contract live in RawQuerySql.
-        val sql = RawQuerySql.MESSAGE_SEARCH_SELECT +
-            " WHERE $where ORDER BY m.created_at DESC LIMIT ?"
-        args += (limit * 3)
-
-        val rows = dao.runMessageSearchQuery(
-            androidx.sqlite.db.SimpleSQLiteQuery(sql, args.toTypedArray()),
-        )
-        val out = mutableListOf<MessageSearchMatch>()
-        for (r in rows) {
-            val text = extractTextForOffload(r.partsJson)
-            if (text.isBlank()) continue
-            val snip = keywordSnippet(text, keywords, SNIPPET_MAX)
-            if (snip.isBlank()) continue
-            out += MessageSearchMatch(r.sessionId, r.id, r.role, r.createdAt, snip)
-            if (out.size >= limit) break
-        }
-        out
-        } finally {
-            com.openminis.app.data.body.Admission.release(budget)
-        }
-    }
+    ): List<MessageSearchMatch> = searchMessagesIn(sessionIds, keywords, limit, startMs, endMs)
 
     /**
      * Backs `minis-sessions-cli messages --id ... --offset --limit`.
@@ -1078,24 +986,7 @@ class ChatRepository(
         // side, so existing callers keep the previous behaviour untouched.
         startMs: Long? = null,
         endMs: Long? = null,
-    ): List<MessagePageItem> {
-        val rows = if (startMs == null && endMs == null) {
-            dao.loadMessagesPage(sessionId, offset, limit)
-        } else {
-            dao.loadMessagesPageInRange(sessionId, offset, limit, startMs, endMs)
-        }
-        return rows.mapNotNull { e ->
-            val text = extractTextForOffload(e.partsJson)
-            if (text.isBlank()) return@mapNotNull null
-            MessagePageItem(
-                e.id, e.role, e.createdAt, text.take(maxChars),
-                // Mark messages that exceeded the cap so the caller can emit
-                // "truncated": true (mirrors iOS SessionsOffloadBridge).
-                truncated = text.length > maxChars,
-                bodyOffloaded = e.bodyRef != null,
-            )
-        }
-    }
+    ): List<MessagePageItem> = loadMessagePageIn(sessionId, offset, limit, maxChars, startMs, endMs)
 
     /**
      * [T-android-sessions-cli-messages-daterange] Count under the same optional
@@ -1171,32 +1062,6 @@ class ChatRepository(
         } catch (_: Exception) {
             stripSystemReminders(partsJson)
         }
-    }
-
-    /**
-     * Center a snippet of [maxLength] chars on the earliest keyword
-     * match (case-insensitive). Tail/head ellipses indicate truncation
-     * boundaries. If no keyword survives the parts_json → text reduction
-     * (rare but possible — a SQL LIKE hit on tool-use JSON that the text
-     * extractor strips), we return the leading [maxLength] chars so the
-     * offload caller still sees *something*.
-     */
-    private fun keywordSnippet(text: String, keywords: List<String>, maxLength: Int): String {
-        if (text.isEmpty()) return ""
-        val lower = text.lowercase()
-        var earliest = text.length
-        for (kw in keywords) {
-            val pos = lower.indexOf(kw.lowercase())
-            if (pos in 0 until earliest) earliest = pos
-        }
-        if (earliest == text.length) return text.take(maxLength)
-        val half = maxLength / 2
-        val start = (earliest - half).coerceAtLeast(0)
-        val end = (start + maxLength).coerceAtMost(text.length)
-        var s = text.substring(start, end)
-        if (start > 0) s = "…$s"
-        if (end < text.length) s = "$s…"
-        return s
     }
 
     internal data class StoredBody(

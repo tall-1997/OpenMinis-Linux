@@ -99,12 +99,12 @@ object ConfigConfirmationGate {
                 mutex.withLock {
                     if (!cont.isActive) return@withLock
                     awaiters[change.id] = cont
-                    timeouts[change.id] = scope.launch {
-                        delay(TIMEOUT_MS)
-                        timeout(change.id)
-                    }
                     if (_pending.value == null) {
                         _pending.value = change
+                        // Start the visible-dialog clock only when the request
+                        // becomes front-of-queue; queued requests must not burn
+                        // their review window behind another dialog.
+                        timeouts[change.id] = startTimeout(change.id)
                         // [T-android-config-confirm-timeout] If already
                         // backgrounded when this becomes front-of-queue, the
                         // user won't see the dialog — nudge them so they can
@@ -135,6 +135,11 @@ object ConfigConfirmationGate {
         resolve(id, ConfirmOutcome.TimedOut)
     }
 
+    private fun startTimeout(id: String): Job = scope.launch {
+        delay(TIMEOUT_MS)
+        timeout(id)
+    }
+
     /** Caller went away (offload watchdog / user cancel): drop the request. */
     private suspend fun cancel(id: String) {
         var advance = false
@@ -149,6 +154,7 @@ object ConfigConfirmationGate {
                 val next = queue.removeFirstOrNull()
                 _pending.value = next?.change
                 advancedTo = next?.change
+                next?.let { timeouts[it.change.id] = startTimeout(it.change.id) }
             } else if (!hadAwaiter) {
                 return
             }
@@ -170,6 +176,7 @@ object ConfigConfirmationGate {
                 val next = queue.removeFirstOrNull()
                 _pending.value = next?.change
                 advancedTo = next?.change
+                next?.let { timeouts[it.change.id] = startTimeout(it.change.id) }
             }
         }
         // The change is done — clear any pending-approval notification for it.

@@ -372,6 +372,18 @@
     <string name="token_usage_context_window">上下文窗口</string>
     <string name="token_usage_context_percent">上下文占用</string>
     <string name="token_usage_max_output">最大輸出</string>
+    <string name="token_usage_section_breakdown">組成</string>
+    <string name="token_usage_breakdown_hint">估計 ±10% — 下一次請求實際攜帶的內容</string>
+    <string name="token_usage_block_system_tools">系統與工具</string>
+    <string name="token_usage_block_skills_mcps">技能與 MCP</string>
+    <string name="token_usage_block_memory">記憶</string>
+    <string name="token_usage_block_runtime_tail">每輪上下文</string>
+    <string name="token_usage_block_goal_plan">目標與計畫</string>
+    <string name="token_usage_block_tool_schemas">工具結構定義</string>
+    <string name="token_usage_block_history">對話</string>
+    <string name="token_usage_block_pending">尚未送出的附件</string>
+    <string name="token_usage_breakdown_estimated">估計</string>
+    <string name="token_usage_breakdown_measured">實測</string>
     <string name="token_usage_section_thinking">思考</string>
     <string name="token_usage_thinking_label">思考</string>
     <string name="token_usage_thinking_level">級別</string>
@@ -685,10 +697,9 @@
     <string name="env_var_privacy_footer">開啟後，shell-execute 輸出中偵測到的環境變數值會在送達模型前被打碼（例如 `sk-1********ajhks`）。少於 8 個字元的值會被全部替換為 `*`。聊天中使用者可見的輸出維持不變。</string>
     <string name="outbound_mask_toggle">出站隱私遮蔽</string>
     <string name="outbound_mask_footer">選擇性開啟的形狀遮蔽：金鑰形狀字串（含程式碼內金鑰）、信箱與電話號碼會被替換為佔位符；下方 embedding API 金鑰以明文保存在應用私有 prefs 中。本機聊天記錄不變。</string>
-    <string name="chat_menu_perm_yoyo">YOLO · 全授權</string>
-    <string name="chat_menu_perm_safe_auto">安全自動 · 唯讀工具自動放行</string>
-    <string name="chat_menu_perm_ask">詢問 · 每次呼叫都確認</string>
-    <string name="chat_menu_perm_off">關閉 · 拒絕所有工具</string>
+    <string name="chat_menu_perm_yoyo">完全訪問</string>
+    <string name="chat_menu_perm_safe_auto">自主模式</string>
+    <string name="chat_menu_perm_ask">變更前確認</string>
     <string name="approval_action_allow_all_session">本工作階段總是允許</string>
     <string name="env_var_platform_header">平台整合</string>
     <string name="env_var_platform_tier_2">完整</string>
@@ -924,6 +935,10 @@
     <string name="newer_db_body">這個 Minis Ultra 版本比建立您資料的版本還舊，因此無法安全地開啟它。\n\n沒有任何資料被刪除——您的對話在這台裝置上完好無缺。重新安裝較新版的 Minis Ultra，一切就會回來。</string>
     <string name="newer_db_versions">此版本支援資料格式 %1$d</string>
     <string name="newer_db_exit">關閉</string>
+    <string name="degraded_startup_title">部分啟動元件載入失敗</string>
+    <string name="degraded_startup_body">應用程式正以降級模式執行，部分功能在重新啟動前可能無法使用。</string>
+    <string name="degraded_startup_cause">原因：%1$s</string>
+    <string name="degraded_startup_dismiss">關閉</string>
     <string name="usage_attr_unknown_session">模型不明——該工作階段的紀錄已被刪除</string>
     <string name="usage_attr_removed">已不在您設定的供應商之中</string>
     <string name="usage_detail_output">輸出</string>
@@ -1105,6 +1120,13 @@
     <string name="model_group_detail_name">名稱</string>
     <string name="model_group_detail_the_label_shown_in_the_model_picker_save">在模型選擇器裡顯示的標籤。點擊其他位置時自動儲存。</string>
     <string name="model_group_detail_routing_strategy">路由策略</string>
+    <string name="model_group_detail_more_strategies">更多策略</string>
+    <string name="model_group_detail_fewer_strategies">收合更多策略</string>
+    <string name="model_connection_title">模型與連線</string>
+    <string name="model_connection_providers_count">%1$d 個供應商 · %2$d 個模型</string>
+    <string name="model_connection_groups_count">%1$d 個群組</string>
+    <string name="model_connection_auto_groups">自動群組</string>
+    <string name="model_connection_not_set">未設定</string>
     <string name="model_group_detail_routing_quota_window_footer">主要成員服務至視窗配額耗盡，之後由下一位成員接手，直到視窗重置。</string>
     <string name="model_group_detail_routing_round_robin_footer">依順序輪流切換成員，每次呼叫輪換一位。</string>
     <string name="model_group_detail_routing_smart_footer">輕量請求發給最後一位（省錢）成員；長或複雜的請求發給第一位（效能強）成員。</string>
@@ -1395,6 +1417,8 @@
     <string name="backup_ready">備份已就緒</string>
     <string name="backup_result_excluded_too_large">已排除（檔案過大）</string>
     <string name="backup_result_files_not_included">未包含檔案</string>
+    <string name="backup_result_excluded_unreadable">已排除（無法讀取）</string>
+    <string name="backup_result_credentials_unreadable">憑證無法讀取</string>
     <string name="backup_result_local_only">僅儲存在這台裝置上。</string>
     <string name="backup_result_delivered">已儲存在這台裝置，並複製到 %2$d 個目的地中的 %1$d 個。</string>
     <string name="backup_local_removed">已移除本機副本——在這台裝置上釋出 %1$s</string>
@@ -2217,6 +2241,9 @@
     <string name="cot_translate_settings_language">目標語言</string>
     <string name="cot_translate_privacy_notice">展開的思考內容會傳送至所選翻譯服務，可能包含私人程式碼或對話細節。</string>
     <string name="cot_translate_anonymous_notice">Bing 與 Google 匿名介面無需登入或 API Key，但可能拒絕或限制請求。</string>
+    <string name="cot_translate_retry">重試</string>
+    <string name="cot_translate_privacy_accept">開啟</string>
+    <string name="cot_translate_privacy_decline">取消</string>
     <string name="git_panel_staged">已暫存</string>
     <string name="git_panel_changes_section">變更</string>
     <string name="git_panel_stats_files">已變更 %1$d 個檔案</string>
@@ -2790,6 +2817,7 @@
     <string name="modeldetail_section_context_retry">上下文與重試</string>
     <string name="modeldetail_temperature">溫度（0.0–2.0）</string>
     <string name="modeldetail_temperature_invalid">請輸入 0.0 到 2.0 之間的數字，或留空以省略。</string>
+    <string name="modeldetail_harness_save_failed">無法儲存上下文預算覆寫。模型項目已儲存，請重試。</string>
     <string name="modeldetail_temperature_placeholder">省略</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">新增</string>
@@ -3327,6 +3355,10 @@
     <string name="guard_stop_on">可以停止工作階段</string>
     <string name="guard_stop_off">永不停止工作階段</string>
     <string name="guard_stop_footer">開啟後，同一操作重複過多時由迴圈保護停止工作階段；關閉後只提醒模型，適合編譯等長時間等待。</string>
+    <string name="goal_drift_section">目標偏航監督</string>
+    <string name="goal_drift_threshold_title">偏航提醒閾值</string>
+    <string name="goal_drift_threshold_value">%1$d 個工具輪</string>
+    <string name="goal_drift_footer">目標進行中時，計畫板連續多少個工具輪沒有任何變化，宿主就會提醒模型回到目標。數值越大提醒越少，越小監督越緊。</string>
     <string name="token_usage_section_memory">記憶</string>
     <string name="token_usage_memory_lines">已投遞行數</string>
     <string name="token_usage_memory_shown">顯示次數</string>
@@ -3337,4 +3369,13 @@
     <string name="modeldetail_tail_budget_state_auto">自動（依視窗縮放，最多 60k）</string>
     <string name="modeldetail_tail_budget_state_specific">目前模型自訂</string>
     <string name="tool_limits_tool_concurrency">平行讀取工具數</string>
+ <string name="perm_mode_desc_ask">改檔案前先問我</string>
+ <string name="perm_mode_desc_auto">在有風險時詢問</string>
+ <string name="perm_mode_desc_full">減少確認次數</string>
+ <string name="perm_full_access_title">要啟用完全訪問嗎？</string>
+ <string name="perm_full_access_body">啟用後，Agent讀取、建立、修改和刪除檔案，執行終端機指令，存取網路或呼叫已連接的應用程式時都不再逐次詢問。這些操作可能造成資料遺失或外洩，請僅在信任任務內容時啟用；你可以隨時切回其他權限模式。</string>
+ <string name="perm_full_access_ack">我已了解風險，並對自己的資料安全負責。</string>
+ <string name="perm_full_access_confirm">確認啟用</string>
+ <string name="perm_guarded_risk_reason">確認這條風險指令</string>
+ <string name="perm_guarded_risk_message">自主模式判定這條指令有風險，確認一次後才會執行。</string>
 </resources>

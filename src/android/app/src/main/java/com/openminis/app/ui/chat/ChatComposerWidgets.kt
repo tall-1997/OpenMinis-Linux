@@ -67,7 +67,9 @@ import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.R
 import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.tokens.MinisTypography
 import com.openminis.app.ui.theme.cili
+
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -138,7 +140,7 @@ internal fun AttachmentChip(
                     // extension visible, which is what identifies the file.
                     Text(
                         text = attachment.fileName,
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = MinisTypography.cap2),
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
@@ -237,7 +239,7 @@ internal fun MicButton(
         if (!localeBadge.isNullOrEmpty()) {
             Text(
                 text = localeBadge,
-                fontSize = 8.sp,
+                fontSize = 8.sp,  // token-literal-ok: locale 徽章 Bold 8sp 是实现旁注，非排版档位
                 fontWeight = FontWeight.Bold,
                 color = Color.Red,
                 modifier = Modifier
@@ -340,7 +342,7 @@ internal fun ToolActivityPill(
         Spacer(modifier = Modifier.width(6.dp))
         Text(
             text = displayToolTitle(block.toolName, block.toolArgs, block.toolTitle),
-            fontSize = 13.sp,
+            fontSize = MinisTypography.body,
             fontWeight = FontWeight.Medium,
             color = ChatColors.primaryText,
             maxLines = 1,
@@ -351,7 +353,7 @@ internal fun ToolActivityPill(
             Spacer(modifier = Modifier.width(6.dp))
             Text(
                 text = elapsedText,
-                fontSize = 11.sp,
+                fontSize = MinisTypography.codeSm,
                 fontFamily = FontFamily.Monospace,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -448,7 +450,7 @@ internal fun ThinkingLevelPicker(
             ) {
                 Text(
                     text = level.localizedName(context),
-                    fontSize = 11.sp,
+                    fontSize = MinisTypography.codeSm,
                     fontWeight = if (isHighlighted) FontWeight.Bold else FontWeight.Normal,
                     color = fg,
                 )

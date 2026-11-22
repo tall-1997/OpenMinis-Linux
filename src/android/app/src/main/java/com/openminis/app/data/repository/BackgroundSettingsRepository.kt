@@ -1,7 +1,6 @@
 package com.openminis.app.data.repository
 
 import android.content.Context
-import android.content.SharedPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,11 +17,10 @@ import kotlinx.coroutines.flow.asStateFlow
  */
 class BackgroundSettingsRepository(context: Context) {
 
-    private val prefs: SharedPreferences =
-        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val prefs = com.openminis.app.config.Prefs.file(PREFS_NAME)
 
     private val _taskNotificationsEnabled =
-        MutableStateFlow(prefs.getBoolean(KEY_TASK_NOTIFICATIONS, DEFAULT_TASK_NOTIFICATIONS))
+        MutableStateFlow(prefs.bool(KEY_TASK_NOTIFICATIONS, DEFAULT_TASK_NOTIFICATIONS))
 
     /**
      * Live state of the toggle. Compose surfaces collect this so flipping
@@ -33,7 +31,7 @@ class BackgroundSettingsRepository(context: Context) {
         _taskNotificationsEnabled.asStateFlow()
 
     fun setTaskNotificationsEnabled(value: Boolean) {
-        prefs.edit().putBoolean(KEY_TASK_NOTIFICATIONS, value).apply()
+        prefs.set(KEY_TASK_NOTIFICATIONS, value)
         _taskNotificationsEnabled.value = value
     }
 
@@ -44,12 +42,12 @@ class BackgroundSettingsRepository(context: Context) {
      * we won't surface anything until the user opts in.
      */
     private val _backgroundOverlayEnabled =
-        MutableStateFlow(prefs.getBoolean(KEY_BG_OVERLAY_ENABLED, false))
+        MutableStateFlow(prefs.bool(KEY_BG_OVERLAY_ENABLED, false))
     val backgroundOverlayEnabled: StateFlow<Boolean> =
         _backgroundOverlayEnabled.asStateFlow()
 
     fun setBackgroundOverlayEnabled(value: Boolean) {
-        prefs.edit().putBoolean(KEY_BG_OVERLAY_ENABLED, value).apply()
+        prefs.set(KEY_BG_OVERLAY_ENABLED, value)
         _backgroundOverlayEnabled.value = value
     }
 
@@ -63,12 +61,12 @@ class BackgroundSettingsRepository(context: Context) {
      * appears/disappears without an app restart.
      */
     private val _dynamicIslandEnabled =
-        MutableStateFlow(prefs.getBoolean(KEY_DYNAMIC_ISLAND_ENABLED, false))
+        MutableStateFlow(prefs.bool(KEY_DYNAMIC_ISLAND_ENABLED, false))
     val dynamicIslandEnabled: StateFlow<Boolean> =
         _dynamicIslandEnabled.asStateFlow()
 
     fun setDynamicIslandEnabled(value: Boolean) {
-        prefs.edit().putBoolean(KEY_DYNAMIC_ISLAND_ENABLED, value).apply()
+        prefs.set(KEY_DYNAMIC_ISLAND_ENABLED, value)
         _dynamicIslandEnabled.value = value
     }
 
@@ -78,26 +76,26 @@ class BackgroundSettingsRepository(context: Context) {
      * controller pick a default near the bottom-left, 10 dp from each
      * edge" ([T-bg-overlay-polish]).
      */
-    fun getOverlayX(): Int = prefs.getInt(KEY_BG_OVERLAY_X, -1)
-    fun getOverlayY(): Int = prefs.getInt(KEY_BG_OVERLAY_Y, -1)
+    fun getOverlayX(): Int = prefs.int(KEY_BG_OVERLAY_X, -1)
+    fun getOverlayY(): Int = prefs.int(KEY_BG_OVERLAY_Y, -1)
     fun setOverlayPosition(x: Int, y: Int) {
-        prefs.edit().putInt(KEY_BG_OVERLAY_X, x).putInt(KEY_BG_OVERLAY_Y, y).apply()
+        prefs.write { putInt(KEY_BG_OVERLAY_X, x); putInt(KEY_BG_OVERLAY_Y, y) }
     }
 
     /** 横竖屏各记一份位置。没有单独记录时回退到旧的共用值。 */
     fun getOverlayPosition(portrait: Boolean): Pair<Int, Int> {
         val suffix = if (portrait) "Portrait" else "Landscape"
-        val x = prefs.getInt(KEY_BG_OVERLAY_X + suffix, -1)
-        val y = prefs.getInt(KEY_BG_OVERLAY_Y + suffix, -1)
+        val x = prefs.int(KEY_BG_OVERLAY_X + suffix, -1)
+        val y = prefs.int(KEY_BG_OVERLAY_Y + suffix, -1)
         return if (x >= 0 && y >= 0) x to y else getOverlayX() to getOverlayY()
     }
 
     fun setOverlayPosition(portrait: Boolean, x: Int, y: Int) {
         val suffix = if (portrait) "Portrait" else "Landscape"
-        prefs.edit()
-            .putInt(KEY_BG_OVERLAY_X + suffix, x)
-            .putInt(KEY_BG_OVERLAY_Y + suffix, y)
-            .apply()
+        prefs.write {
+            putInt(KEY_BG_OVERLAY_X + suffix, x)
+            putInt(KEY_BG_OVERLAY_Y + suffix, y)
+        }
     }
 
     companion object {

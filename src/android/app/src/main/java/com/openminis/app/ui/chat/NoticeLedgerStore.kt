@@ -64,4 +64,12 @@ internal object NoticeLedgerStore {
             }
         }
     }
+
+    /**
+     * [T-session-sidecar-cleanup] Deleted session: drop the notice ledger.
+     * Part of [SessionTeardown.deleteAll]. Idempotent.
+     */
+    fun deleteStored(filesDir: File, sessionId: String) {
+        runCatching { file(filesDir, sessionId).delete() }
+    }
 }

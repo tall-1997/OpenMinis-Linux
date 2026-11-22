@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import com.openminis.app.R
 import com.openminis.app.scheduled.ScheduledRun
 import com.openminis.app.util.IsoTime
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * [T-android-scheduled-tasks-run-records] Execution log for one scheduled
@@ -71,12 +72,12 @@ fun ScheduledTaskRunsScreen(
                         Text(
                             stringResource(R.string.scheduled_task_runs_title),
                             fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp,
+                            fontSize = MinisTypography.head,
                         )
                         if (task != null && task.label.isNotBlank()) {
                             Text(
                                 task.label,
-                                fontSize = 12.sp,
+                                fontSize = MinisTypography.foot,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -141,14 +142,14 @@ private fun RunRow(run: ScheduledRun, onOpenSession: (String) -> Unit) {
             Text(
                 text = formatRunTime(run.firedAt),
                 fontWeight = FontWeight.Medium,
-                fontSize = 14.sp,
+                fontSize = MinisTypography.bodyLg,
             )
             val preview = run.preview
             if (!preview.isNullOrBlank()) {
                 Text(
                     text = preview,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
+                    fontSize = MinisTypography.foot,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )

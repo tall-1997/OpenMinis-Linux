@@ -114,7 +114,7 @@ fun ContextRing(
         }
         Text(
             text = displayText,
-            fontSize = 8.sp,
+            fontSize = 8.sp,  // token-literal-ok: 低于最小档，环心极限尺寸
             fontFamily = FontFamily.Monospace,
             color = when {
                 !usage.known -> ChatColors.secondaryText

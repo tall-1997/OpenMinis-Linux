@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
+import com.openminis.app.ui.tokens.MinisTypography
 
 /** [T-android-soul-custom-icon] 头像来源菜单。单独成文件：SoulSettingsScreen 已到行数 ceiling。 */
 @Composable
@@ -35,7 +36,7 @@ internal fun SoulIconMenu(
                     // accepted and the rounded clip is what makes them look right.)
                     Text(
                         text = stringResource(R.string.soul_icon_image_hint),
-                        fontSize = 12.sp,
+                        fontSize = MinisTypography.foot,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -49,7 +50,7 @@ internal fun SoulIconMenu(
                     Text(stringResource(R.string.soul_icon_use_model))
                     Text(
                         text = stringResource(R.string.soul_icon_use_model_hint),
-                        fontSize = 12.sp,
+                        fontSize = MinisTypography.foot,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }

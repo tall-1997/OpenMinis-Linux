@@ -25,10 +25,10 @@ object VoiceCorrectionConsent {
 
     /** True when the user has agreed to store learning data. Default false. */
     fun isEnabled(context: Context): Boolean =
-        prefs(context).getBoolean(KEY_ENABLED, false)
+        prefs().bool(KEY_ENABLED, false)
 
     fun setEnabled(context: Context, enabled: Boolean) {
-        prefs(context).edit().putBoolean(KEY_ENABLED, enabled).apply()
+        prefs().set(KEY_ENABLED, enabled)
     }
 
     /**
@@ -36,12 +36,11 @@ object VoiceCorrectionConsent {
      * answer was. It never fires again after that.
      */
     fun hasPrompted(context: Context): Boolean =
-        prefs(context).getBoolean(KEY_PROMPTED, false)
+        prefs().bool(KEY_PROMPTED, false)
 
     fun setPrompted(context: Context, prompted: Boolean) {
-        prefs(context).edit().putBoolean(KEY_PROMPTED, prompted).apply()
+        prefs().set(KEY_PROMPTED, prompted)
     }
 
-    private fun prefs(context: Context) =
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private fun prefs() = com.openminis.app.config.Prefs.file(PREFS)
 }

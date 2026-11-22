@@ -324,6 +324,18 @@
     <string name="token_usage_context_used">Nagamit na Konteksto</string>
     <string name="token_usage_context_window">Bintana ng context</string>
     <string name="token_usage_max_output">Max na Output</string>
+    <string name="token_usage_section_breakdown">Komposisyon</string>
+    <string name="token_usage_breakdown_hint">Tantya ±10% — ang dala ng susunod na kahilingan</string>
+    <string name="token_usage_block_system_tools">System at mga tool</string>
+    <string name="token_usage_block_skills_mcps">Mga skill at MCP</string>
+    <string name="token_usage_block_memory">Memorya</string>
+    <string name="token_usage_block_runtime_tail">Konteksto kada turno</string>
+    <string name="token_usage_block_goal_plan">Layunin at plano</string>
+    <string name="token_usage_block_tool_schemas">Mga schema ng tool</string>
+    <string name="token_usage_block_history">Pag-uusap</string>
+    <string name="token_usage_block_pending">Mga hindi pa naipadalang attachment</string>
+    <string name="token_usage_breakdown_estimated">Tantya</string>
+    <string name="token_usage_breakdown_measured">Sinukat</string>
     <string name="token_usage_section_thinking">Pag-iisip</string>
     <string name="token_usage_thinking_label">Pag-iisip</string>
     <string name="token_usage_thinking_level">Antas</string>
@@ -635,10 +647,9 @@
     <string name="env_var_privacy_footer">Kapag naka-enable, pinapalitan ng nakatakip na anyo (hal. `sk-1********ajhks`) ang anumang halaga ng environment variable na lumalabas sa output ng shell-execute bago ito makarating sa model. Nagiging puro `*` ang mga halagang mas maikli sa 8 karakter. Hindi nagbabago ang output na nakikita ng user sa chat.</string>
     <string name="outbound_mask_toggle">Mask ng privacy sa papalabas</string>
     <string name="outbound_mask_footer">Opt-in shape masking: key-shaped strings (kasama ang code), emails, at phone-like numbers nagiging placeholder. Ang embedding API key sa ibaba ay plain text sa app-private prefs. Hindi nagbabago ang device history.</string>
-    <string name="chat_menu_perm_yoyo">YOLO · buong awtomatiko</string>
-    <string name="chat_menu_perm_safe_auto">Ligtas na auto · ang read-only na tools ay papayagan</string>
-    <string name="chat_menu_perm_ask">Magtanong · kumpirmahin bawat tawag</string>
-    <string name="chat_menu_perm_off">Naka-off · tanggihan lahat ng tools</string>
+    <string name="chat_menu_perm_yoyo">Buong access</string>
+    <string name="chat_menu_perm_safe_auto">Autonomous</string>
+    <string name="chat_menu_perm_ask">Magtanong bago magbago</string>
     <string name="gate_approval_allow_all">Palaging payagan sa session na ito (kasalukuyang target)</string>
     <string name="approval_action_allow_all_session">Palaging payagan sa session na ito</string>
     <string name="env_var_section_header">Mga Variable</string>
@@ -865,6 +876,10 @@
     <string name="newer_db_body">Mas luma ang kopyang ito ng Minis Ultra kaysa sa bersyong gumawa ng data mo, kaya hindi ito ligtas na mabubuksan.\n\nWalang nabura — buo pa rin ang mga usapan mo sa device na ito. I-install muli ang mas bagong bersyon ng Minis Ultra at babalik ang lahat.</string>
     <string name="newer_db_versions">Sinusuportahan ng bersyong ito ang data format %1$d</string>
     <string name="newer_db_exit">Isara</string>
+    <string name="degraded_startup_title">May mga bahagi ng pag-startup na hindi na-load</string>
+    <string name="degraded_startup_body">Tumatakbo ang app na may pinait na functionality. Ang ilang feature ay maaaring hindi magamit hanggang sa i-restart ito.</string>
+    <string name="degraded_startup_cause">Dahilan: %1$s</string>
+    <string name="degraded_startup_dismiss">Isara</string>
     <string name="usage_attr_unknown_session">Hindi alam ang model — nabura na ang record ng session</string>
     <string name="usage_attr_removed">Wala na sa mga provider na naitakda mo</string>
     <string name="usage_detail_output">Output</string>
@@ -1046,6 +1061,13 @@
     <string name="model_group_detail_name">Pangalan</string>
     <string name="model_group_detail_the_label_shown_in_the_model_picker_save">Ang label na ipinapakita sa model picker. Awtomatikong nase-save kapag nag-tap ka sa ibang bahagi.</string>
     <string name="model_group_detail_routing_strategy">Estratehiya sa Pagruruta</string>
+    <string name="model_group_detail_more_strategies">Higit pang estratehiya</string>
+    <string name="model_group_detail_fewer_strategies">Mas kaunting estratehiya</string>
+    <string name="model_connection_title">Model at Koneksyon</string>
+    <string name="model_connection_providers_count">%1$d provider · %2$d modelo</string>
+    <string name="model_connection_groups_count">%1$d grupo</string>
+    <string name="model_connection_auto_groups">Mga awtomatikong grupo</string>
+    <string name="model_connection_not_set">Hindi nakatakda</string>
     <string name="model_group_detail_routing_quota_window_footer">Nagseserbisyo ang pangunahing miyembro hanggang maubos ang quota ng window, pagkatapos ay papalit ang susunod na miyembro hanggang mag-reset.</string>
     <string name="model_group_detail_routing_round_robin_footer">Iikot sa mga miyembro nang paisa-isang tawag, ayon sa pagkakasunod-sunod.</string>
     <string name="model_group_detail_routing_smart_footer">Ang magagaan na kahilingan ay sa huling (murang) miyembro; ang mahahaba o kumplikado ay sa unang (malakas) na miyembro.</string>
@@ -1323,6 +1345,8 @@
     <string name="backup_ready">Handa na ang Backup</string>
     <string name="backup_result_excluded_too_large">Hindi isinama (masyadong malaki)</string>
     <string name="backup_result_files_not_included">Hindi kasama ang mga file</string>
+    <string name="backup_result_excluded_unreadable">Hindi isinama (hindi mabasa)</string>
+    <string name="backup_result_credentials_unreadable">Hindi mabasa ang mga kredensyal</string>
     <string name="backup_result_local_only">Naka-save sa device na ito lamang.</string>
     <string name="backup_result_delivered">Naka-save sa device na ito, at nakopya sa %1$d ng %2$d destinasyon.</string>
     <string name="backup_local_removed">Inalis ang lokal na kopya — %1$s ang nabakante sa device na ito</string>
@@ -2136,6 +2160,9 @@
     <string name="cot_translate_settings_language">Target na wika</string>
     <string name="cot_translate_privacy_notice">Ang pinalawak na pangangatwiran ay ipinapadala sa napiling serbisyo ng pagsasalin. Maaari itong maglaman ng pribadong code o mga detalye ng pag-uusap.</string>
     <string name="cot_translate_anonymous_notice">Hindi kailangan ng Bing at Google ng pag-login o API key. Maaaring tanggihan o limitahan ng kanilang mga anonymous na endpoint ang mga kahilingan.</string>
+    <string name="cot_translate_retry">Subukan muli</string>
+    <string name="cot_translate_privacy_accept">I-on</string>
+    <string name="cot_translate_privacy_decline">Kanselahin</string>
     <string name="git_panel_staged">Naka-stage</string>
     <string name="git_panel_changes_section">Mga pagbabago</string>
     <string name="git_panel_stats_files">%1$d na file ang nabago</string>
@@ -2750,6 +2777,7 @@
     <string name="modeldetail_section_context_retry">Context at retries</string>
     <string name="modeldetail_temperature">Temperature (0.0–2.0)</string>
     <string name="modeldetail_temperature_invalid">Maglagay ng numero mula 0.0 hanggang 2.0, o iwanang blangko para i-omit.</string>
+    <string name="modeldetail_harness_save_failed">Hindi ma-save ang pag-override ng context budget. Na-save ang entry ng model — subukan muli.</string>
     <string name="modeldetail_temperature_placeholder">I-omit</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">Magdagdag</string>
@@ -3330,6 +3358,10 @@
     <string name="guard_stop_on">Maaaring ihinto ang session</string>
     <string name="guard_stop_off">Hindi kailanman ihihinto ang session</string>
     <string name="guard_stop_footer">Kapag naka-on, ihihinto ng pigil ang session kapag masyadong madalas umulit ang parehong aksyon. Kapag naka-off, pagpapaalala lang sa modelo, kapaki-pakinabang sa mahabang paghihintay tulad ng build.</string>
+    <string name="goal_drift_section">Pagsubaybay sa paglihis ng layunin</string>
+    <string name="goal_drift_threshold_title">Threshold ng paalala sa paglihis</string>
+    <string name="goal_drift_threshold_value">%1$d tool turn</string>
+    <string name="goal_drift_footer">Habang aktib ang layunin, ito ang bilang ng magkasunod na tool turn na maaaring lumipas nang walang anumang galaw ng plan board bago i-remind ng host ang modelo sa layunin nito. Mas mataas = mas kaunting paalala; mas mababa = mas mahigpit na pagsubaybay.</string>
     <string name="token_usage_section_memory">Memorya</string>
     <string name="token_usage_memory_lines">Mga linyang naipadala</string>
     <string name="token_usage_memory_shown">Bilang ng pagpapakita</string>
@@ -3340,4 +3372,13 @@
     <string name="modeldetail_tail_budget_state_auto">Awtomatiko (umaayon sa window, hanggang 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Sarili para sa modelong ito</string>
     <string name="tool_limits_tool_concurrency">Mga parallel na tool sa pagbasa</string>
+ <string name="perm_mode_desc_ask">Nagtatanong bago baguhin ang file</string>
+ <string name="perm_mode_desc_auto">Nagtatanong lang kapag may panganib</string>
+ <string name="perm_mode_desc_full">Mas kaunting kumpirmasyon</string>
+ <string name="perm_full_access_title">I-enable ang buong access?</string>
+ <string name="perm_full_access_body">Magbabasa, gagawa at magbubura ng file ang agent, magpapatakbo ng terminal command, at gagamit ng network o konektadong app nang hindi nagtatanong tuwing gagawin. Maaaring mawala o tumagas ang data, kaya i-enable lang ito kung pinagkakatiwalaan mo ang gawain. Puwede kang bumalik anumang oras.</string>
+ <string name="perm_full_access_ack">Naiintindihan ko ang panganib at ako ang may pananagutan sa aking data.</string>
+ <string name="perm_full_access_confirm">I-enable</string>
+ <string name="perm_guarded_risk_reason">Kumpirmahin ang delikadong utos</string>
+ <string name="perm_guarded_risk_message">Itinuring ng autonomous mode na delikado ang utos na ito. Kumpirmahin isang beses para patakbuhin.</string>
 </resources>

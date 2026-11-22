@@ -1,11 +1,14 @@
 package com.openminis.app.ui.settings
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.tokens.RawSpace
 
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,19 +16,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
-import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -36,21 +38,21 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import com.openminis.app.ui.components.SectionDesign
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.produceState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import androidx.compose.animation.core.animateDpAsState
@@ -89,6 +91,8 @@ fun ProviderListScreen(
     onAddProvider: () -> Unit,
     onProviderClick: (String) -> Unit,
     onVoiceServiceClick: (String) -> Unit,
+    /** [T-model-connection] true 时不画 Scaffold 顶栏，交给「模型与连接」聚合页承载分段控件。 */
+    embedded: Boolean = false,
 ) {
     val config by providerRepository.config.collectAsStateWithLifecycle()
     val credentialRevision by providerRepository.credentialRevision.collectAsStateWithLifecycle()
@@ -287,10 +291,7 @@ fun ProviderListScreen(
         }
     }
 
-    SettingsScaffold(
-        title = stringResource(R.string.provider_list_providers),
-        onBack = null,
-        actions = {
+    val listActions: @Composable () -> Unit = {
             IconButton(
                 onClick = {
                     if (isSyncing) return@IconButton
@@ -336,8 +337,9 @@ fun ProviderListScreen(
             IconButton(onClick = { showMenu = true }) {
                 Icon(m3Icon(Icons.Default.Add), contentDescription = stringResource(R.string.provider_list_add_provider))
             }
-        },
-    ) {
+    }
+
+    val listBody: @Composable () -> Unit = {
         // [FIX-R2-16] Persistent state banner (not dismissible — it tracks a
         // condition, not an event) shown while the provider configuration is
         // unreadable. Every config-protected mutation no-ops until a load
@@ -683,6 +685,36 @@ fun ProviderListScreen(
             },
         )
     }
+
+    if (embedded) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(SectionDesign.screenBackgroundColor()),
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = RawSpace.xs.dp),
+                horizontalArrangement = Arrangement.End,
+            ) { listActions() }
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                listBody()
+            }
+        }
+    } else {
+        SettingsScaffold(
+            title = stringResource(R.string.provider_list_providers),
+            onBack = null,
+            actions = listActions,
+        ) {
+            listBody()
+        }
+    }
 }
 
 @Composable
@@ -730,61 +762,6 @@ private fun ProviderSwipeableRow(
             },
             onClick = { onProviderClick(instance.id) },
             syncResult = syncResult,
-        )
-    }
-}
-
-/** One shadow Voice Service row: name + ASR/TTS model counts. */
-@Composable
-private fun ShadowVoiceRow(
-    shadow: ProviderRepository.ShadowVoiceProvider,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = m3Icon(Icons.Outlined.GraphicEq),
-            contentDescription = null,
-            modifier = Modifier.size(20.dp),
-            tint = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(Modifier.width(12.dp))
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Text(
-                text = shadow.displayName,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            val parts = buildList {
-                if (shadow.inputModels.isNotEmpty()) {
-                    add(stringResource(R.string.voice_services_stt_count, shadow.inputModels.size))
-                }
-                if (shadow.outputModels.isNotEmpty()) {
-                    add(stringResource(R.string.voice_services_tts_count, shadow.outputModels.size))
-                }
-            }
-            if (parts.isNotEmpty()) {
-                Text(
-                    text = parts.joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        Icon(
-            imageVector = m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-            modifier = Modifier.size(20.dp),
         )
     }
 }

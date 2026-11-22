@@ -195,7 +195,22 @@ class SessionsOffloadHandler(
         val endMs = parseEndDate(args.get("end"))
         val limit = parseLimit(args)
 
-        val matches = runBlocking { repo.searchMessages(ids, kws, limit, startMs, endMs) }
+        val matches = try {
+            runBlocking { repo.searchMessages(ids, kws, limit, startMs, endMs) }
+        } catch (e: com.openminis.app.data.SearchAdmissionUnavailable) {
+            // Same envelope shape as every other failure here ({ok:false, tool,
+            // action, data:{error, message}}): callers classify on data.error,
+            // so a bare {error, reason} object is unclassifiable.
+            val err = errorEnvelope(
+                "search",
+                "TEMP_UNAVAILABLE",
+                e.message ?: "search admission temporarily unavailable",
+            )
+            return NativeOffloadResult(
+                EXIT_EXEC_FAILED,
+                OffloadOutput.formatBody(err.toString(2), args) + "\n" + HELP_TEXT,
+            )
+        }
 
         val msgs = JSONArray()
         for (m in matches) {
@@ -355,6 +370,8 @@ class SessionsOffloadHandler(
         // iOS NOFF_EXIT_INVALID_ARGS — the shell convention is exit 2
         // for invalid CLI args, distinct from exit 1 for runtime errors.
         private const val EXIT_INVALID_ARGS = 2
+        // Generic runtime failure (same convention as shell tools).
+        private const val EXIT_EXEC_FAILED = 1
         // Same code ConfigOffloadHandler uses for permission_denied, so a
         // caller can classify the failure without reading the message.
         private const val EXIT_PERMISSION_DENIED = 126

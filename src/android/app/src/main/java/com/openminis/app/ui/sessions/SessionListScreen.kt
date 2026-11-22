@@ -44,8 +44,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.ContentCopy
@@ -101,6 +99,7 @@ import com.openminis.app.ui.components.MinisButton
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.components.SectionDesign
 import com.openminis.app.ui.components.SectionTextField
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.TextButton
@@ -161,7 +160,6 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
@@ -189,6 +187,7 @@ import kotlinx.coroutines.withContext
 import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.TimeUnit
+import com.openminis.app.ui.tokens.MinisTypography
 import com.openminis.app.ui.theme.cili
 
 
@@ -197,23 +196,23 @@ internal data class CategoryStyle(val icon: ImageVector, val color: Color)
 // 16 categories matching iOS (ContentView.swift:1897-1916)
 internal fun categoryStyle(category: String?): CategoryStyle {
     return when (category?.lowercase()) {
-        "code"         -> CategoryStyle(Icons.Outlined.Code, cili(0xFFF09A37))
-        "writing"      -> CategoryStyle(Icons.Outlined.Description, cili(0xFF3478F6))
-        "research"     -> CategoryStyle(Icons.Outlined.Language, cili(0xFF30B0C7))
-        "analysis"     -> CategoryStyle(Icons.Outlined.BarChart, cili(0xFF5856D6))
-        "creative"     -> CategoryStyle(Icons.Outlined.Brush, cili(0xFFFF2D55))
-        "chat"         -> CategoryStyle(Icons.Outlined.Forum, cili(0xFF34C759))
+        "code"         -> CategoryStyle(Icons.Outlined.Code, Color(0xFFF09A37))
+        "writing"      -> CategoryStyle(Icons.Outlined.Description, Color(0xFF3478F6))
+        "research"     -> CategoryStyle(Icons.Outlined.Language, cili(RawC.systemTealAlt))
+        "analysis"     -> CategoryStyle(Icons.Outlined.BarChart, cili(RawC.systemPurple))
+        "creative"     -> CategoryStyle(Icons.Outlined.Brush, cili(RawC.systemPink))
+        "chat"         -> CategoryStyle(Icons.Outlined.Forum, cili(RawC.systemGreen))
         "math"         -> CategoryStyle(Icons.Outlined.Calculate, Color(0xFF9B59B6))
-        "translation"  -> CategoryStyle(Icons.Outlined.Translate, cili(0xFF00BCD4))
-        "health"       -> CategoryStyle(Icons.Outlined.Favorite, cili(0xFFFF3B30))
+        "translation"  -> CategoryStyle(Icons.Outlined.Translate, Color(0xFF00BCD4))
+        "health"       -> CategoryStyle(Icons.Outlined.Favorite, cili(RawC.systemRed))
         "finance"      -> CategoryStyle(Icons.Outlined.Payments, Color(0xFF00C7BE))
-        "travel"       -> CategoryStyle(Icons.Outlined.Map, cili(0xFFF09A37))
-        "education"    -> CategoryStyle(Icons.Outlined.Book, cili(0xFF3478F6))
-        "design"       -> CategoryStyle(Icons.Outlined.Palette, cili(0xFFFF2D55))
-        "productivity" -> CategoryStyle(Icons.Outlined.CalendarMonth, cili(0xFFFFCC00))
+        "travel"       -> CategoryStyle(Icons.Outlined.Map, Color(0xFFF09A37))
+        "education"    -> CategoryStyle(Icons.Outlined.Book, Color(0xFF3478F6))
+        "design"       -> CategoryStyle(Icons.Outlined.Palette, cili(RawC.systemPink))
+        "productivity" -> CategoryStyle(Icons.Outlined.CalendarMonth, cili(RawC.systemYellow))
         "support"      -> CategoryStyle(Icons.Outlined.Settings, Color(0xFF8B6914))
-        "other"        -> CategoryStyle(Icons.Outlined.GridView, cili(0xFF8E8E93))
-        else           -> CategoryStyle(Icons.Outlined.Forum, cili(0xFF8E8E93))
+        "other"        -> CategoryStyle(Icons.Outlined.GridView, cili(RawC.systemGray))
+        else           -> CategoryStyle(Icons.Outlined.Forum, cili(RawC.systemGray))
     }
 }
 
@@ -585,6 +584,9 @@ fun SessionListScreen(
     var showBrowserSheet by remember { mutableStateOf(false) }
     var showBrowserSettings by remember { mutableStateOf(false) }
     val browserTabPool = remember { com.openminis.app.browser.BrowserTabPool(context) }
+    DisposableEffect(Unit) {
+        onDispose { browserTabPool.dispose() }
+    }
 
     // [T-android-session-grouping] Groups are pulled out FIRST; only the
     // leftovers go through date bucketing. Assembly order below is
@@ -627,7 +629,7 @@ fun SessionListScreen(
             .filter {
                 com.openminis.app.data.UnreadRegistry.isUnread(
                     it.updatedAt,
-                    com.openminis.app.data.UnreadRegistry.lastReadAtMs(context, it.id),
+                    com.openminis.app.data.UnreadRegistry.lastReadAtMs(it.id),
                 )
             }
             .map { it.id }.toSet()
@@ -1120,7 +1122,7 @@ fun SessionListScreen(
                                 // Folder names are user data — verbatim.
                                 Text(
                                     bar.folder.name,
-                                    fontSize = 14.sp,
+                                    fontSize = MinisTypography.bodyLg,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurface,
                                     maxLines = 1,
@@ -1370,7 +1372,7 @@ fun SessionListScreen(
 
 // ─── Dual FAB Row (matching iOS fabRow) ─────────────────────────────────────
 
-/** Persisted preference key for FAB order swap. */
+// [T-prefs-shared-file] ui_prefs is shared by two source files with different\n// constants; the registry generator attributes keys by file, so the\n// SessionListScreen-only key needs the documented extra-keys list.\n/** Persisted preference key for FAB order swap. */
 private const val PREF_FAB_SWAPPED = "fab_swapped"
 
 @Composable
@@ -1389,7 +1391,7 @@ private fun DualFabRow(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("ui_prefs", Context.MODE_PRIVATE) }
+    val prefs = remember { com.openminis.app.config.Prefs.file("ui_prefs") }
     // [T-android-sessionlist-prefs-io] The FIRST getBoolean on a cold
     // process synchronously loads the XML on the calling thread — and this
     // `remember` runs inside a composition frame. Same storage-stall
@@ -1398,7 +1400,7 @@ private fun DualFabRow(
     var isSwapped by remember { mutableStateOf(false) }
     LaunchedEffect(prefs) {
         isSwapped = withContext(Dispatchers.IO) {
-            prefs.getBoolean(PREF_FAB_SWAPPED, false)
+            prefs.bool(PREF_FAB_SWAPPED, false)
         }
     }
 
@@ -1443,7 +1445,7 @@ private fun DualFabRow(
                         onDragEnd = {
                             if (kotlin.math.abs(chatDragX) > swapThreshold) {
                                 isSwapped = !isSwapped
-                                prefs.edit().putBoolean(PREF_FAB_SWAPPED, isSwapped).apply()
+                                prefs.set(PREF_FAB_SWAPPED, isSwapped)
                             }
                             chatDragX = 0f
                         },
@@ -1532,7 +1534,7 @@ private fun DualFabRow(
                                 onDragEnd = {
                                     if (kotlin.math.abs(searchDragX) > swapThreshold) {
                                         isSwapped = !isSwapped
-                                        prefs.edit().putBoolean(PREF_FAB_SWAPPED, isSwapped).apply()
+                                        prefs.set(PREF_FAB_SWAPPED, isSwapped)
                                     }
                                     searchDragX = 0f
                                 },
@@ -1665,7 +1667,7 @@ private fun SectionHeader(title: String) {
         }
         Text(
             text = title,
-            fontSize = 14.sp,
+            fontSize = MinisTypography.bodyLg,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1934,7 +1936,6 @@ private fun SessionItemContent(
             }
         }
     }
-
 
 }
 
@@ -2241,7 +2242,7 @@ private fun FolderCard(
                 // User data — rendered verbatim, never a string lookup.
                 Text(
                     block.folder.name,
-                    fontSize = 16.sp,
+                    fontSize = MinisTypography.titleLg,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -2259,7 +2260,7 @@ private fun FolderCard(
                             stringResource(R.string.group_n_chats, block.totalCount)
                         else -> stringResource(R.string.group_empty)
                     },
-                    fontSize = 14.sp,
+                    fontSize = MinisTypography.bodyLg,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -2272,7 +2273,7 @@ private fun FolderCard(
             ) {
                 Text(
                     dateText,
-                    fontSize = 13.sp,
+                    fontSize = MinisTypography.body,
                     color = MaterialTheme.colorScheme.outline,
                 )
                 Row(
@@ -2658,7 +2659,7 @@ private fun SessionRow(
             if (searchQuery.isNotBlank()) {
                 Text(
                     text = highlightedAnnotatedString(titleText, searchQuery),
-                    fontSize = 16.sp,
+                    fontSize = MinisTypography.titleLg,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -2667,7 +2668,7 @@ private fun SessionRow(
             } else {
                 Text(
                     text = titleText,
-                    fontSize = 16.sp,
+                    fontSize = MinisTypography.titleLg,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -2679,7 +2680,7 @@ private fun SessionRow(
             if (searchQuery.isNotBlank() && searchSnippet != null) {
                 Text(
                     text = highlightedAnnotatedString(searchSnippet, searchQuery),
-                    fontSize = 14.sp,
+                    fontSize = MinisTypography.bodyLg,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -2688,7 +2689,7 @@ private fun SessionRow(
                 Text(
                     text = lastMessageForDisplay(session.lastMessage)
                         ?: stringResource(R.string.sessionlist_no_messages),
-                    fontSize = 14.sp,
+                    fontSize = MinisTypography.bodyLg,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -2698,7 +2699,7 @@ private fun SessionRow(
 
         Text(
             text = timeText,
-            fontSize = 13.sp,
+            fontSize = MinisTypography.body,
             color = MaterialTheme.colorScheme.outline,
             modifier = Modifier.padding(top = 12.dp),
         )
@@ -2799,7 +2800,7 @@ private fun SessionBadgeOverlay(
                     .background(
                         // Solid system-orange. Picked over yellow so the
                         // alert reads as "attention" rather than "info".
-                        color = cili(0xFFFF9500),
+                        color = cili(RawC.systemOrange),
                         shape = CircleShape,
                     )
                     .border(
@@ -2824,172 +2825,6 @@ private fun SessionBadgeOverlay(
             // not produced yet. Render nothing rather than a placeholder
             // so a stray persisted entry from a future build doesn't
             // surface a debug-looking icon on the current build.
-        }
-    }
-}
-
-// ─── Onboarding Landing (iOS-style 3-step setup) ───────────────────────────
-
-@Composable
-private fun OnboardingLanding(
-    hasProviders: Boolean,
-    hasGroups: Boolean,
-    onAddProvider: () -> Unit,
-    onSelectModels: () -> Unit,
-    onStartConversation: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            // Bottom padding ≈ top-bar height so the content visually centers
-            // relative to the whole screen, not just the Scaffold inner area.
-            .padding(horizontal = 32.dp)
-            .padding(bottom = 64.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Icon(
-            imageVector = Icons.Default.AutoAwesome,
-            contentDescription = null,
-            modifier = Modifier.size(56.dp),
-            tint = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(Modifier.height(16.dp))
-
-        Text(
-            text = stringResource(R.string.sessionlist_welcome_title),
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = stringResource(R.string.sessionlist_welcome_subtitle),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-
-        Spacer(Modifier.height(32.dp))
-
-        Column(
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            SetupStepCard(
-                number = 1,
-                title = stringResource(R.string.sessionlist_welcome_step1_title),
-                subtitle = if (hasProviders) {
-                    stringResource(R.string.sessionlist_welcome_step_done)
-                } else {
-                    stringResource(R.string.sessionlist_welcome_step1_subtitle)
-                },
-                isDone = hasProviders,
-                isLocked = false,
-                onClick = { if (!hasProviders) onAddProvider() },
-            )
-
-            SetupStepCard(
-                number = 2,
-                title = stringResource(R.string.sessionlist_welcome_step2_title),
-                subtitle = when {
-                    hasGroups -> stringResource(R.string.sessionlist_welcome_step_done)
-                    hasProviders -> stringResource(R.string.sessionlist_welcome_step2_subtitle)
-                    else -> stringResource(R.string.sessionlist_welcome_step2_locked)
-                },
-                isDone = hasGroups,
-                isLocked = !hasProviders,
-                onClick = { if (hasProviders && !hasGroups) onSelectModels() },
-            )
-
-            SetupStepCard(
-                number = 3,
-                title = stringResource(R.string.sessionlist_welcome_step3_title),
-                subtitle = if (hasGroups) {
-                    stringResource(R.string.sessionlist_welcome_step3_subtitle)
-                } else {
-                    stringResource(R.string.sessionlist_welcome_step3_locked)
-                },
-                isDone = false,
-                isLocked = !hasGroups,
-                onClick = { if (hasGroups) onStartConversation() },
-            )
-        }
-    }
-}
-
-@Composable
-private fun SetupStepCard(
-    number: Int,
-    title: String,
-    subtitle: String,
-    isDone: Boolean,
-    isLocked: Boolean,
-    onClick: () -> Unit,
-) {
-    val isEnabled = !isDone && !isLocked
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                shape = RoundedCornerShape(12.dp),
-            )
-            .clickable(enabled = isEnabled, onClick = onClick)
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .background(
-                    color = if (isDone) cili(0xFF34C759) else MaterialTheme.colorScheme.primary,
-                    shape = CircleShape,
-                ),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (isDone) {
-                Icon(
-                    imageVector = m3Icon(Icons.Default.Check),
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(16.dp),
-                )
-            } else {
-                Text(
-                    text = "$number",
-                    color = Color.White,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-        }
-
-        Column(
-            modifier = Modifier.weight(1f).height(56.dp),
-            verticalArrangement = Arrangement.Center,
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                color = if (isDone) MaterialTheme.colorScheme.onSurfaceVariant
-                else MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-
-        if (!isDone && isEnabled) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-            )
         }
     }
 }
@@ -3115,7 +2950,7 @@ internal fun SessionEditSheet(
                             Spacer(Modifier.height(4.dp))
                             Text(
                                 cat,
-                                fontSize = 11.sp,
+                                fontSize = MinisTypography.cap,
                                 color = if (isSelected) monetIconTint(style.color)
                                 else MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
@@ -3193,8 +3028,7 @@ private fun exportSession(
         } catch (t: Throwable) {
             android.widget.Toast.makeText(
                 context,
-                context.getString(R.string.export_progress_failed),
-                android.widget.Toast.LENGTH_LONG,
+                context.getString(R.string.export_progress_failed), android.widget.Toast.LENGTH_LONG,
             ).show()
         }
     }
@@ -3209,8 +3043,7 @@ private fun shareZip(context: Context, uri: android.net.Uri, subject: String) {
     }
     val chooser = Intent.createChooser(
         intent,
-        context.getString(R.string.sessionlist_export),
-    ).apply { addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        context.getString(R.string.sessionlist_export),  ).apply { addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
     context.startActivity(chooser)
 }
 

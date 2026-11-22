@@ -19,21 +19,20 @@ interface VscreenPrefs {
 
 /** SharedPreferences-backed store for the vscreen package. */
 class SharedPrefsVscreenPrefs(context: Context) : VscreenPrefs {
-    private val prefs = context.applicationContext
-        .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val prefs = com.openminis.app.config.Prefs.file(PREFS_NAME)
 
-    override fun getString(key: String): String? = prefs.getString(key, null)
+    override fun getString(key: String): String? = prefs.stringOrNull(key)
 
     override fun putString(key: String, value: String) {
-        prefs.edit().putString(key, value).apply()
+        prefs.set(key, value)
     }
 
     override fun remove(key: String) {
-        prefs.edit().remove(key).apply()
+        prefs.remove(key)
     }
 
     override fun all(): Map<String, String> =
-        prefs.all.mapValues { it.value?.toString() ?: "" }
+        prefs.snapshot().mapValues { it.value?.toString() ?: "" }
 
     companion object {
         const val PREFS_NAME = "vscreen"

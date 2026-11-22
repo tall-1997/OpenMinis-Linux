@@ -77,18 +77,51 @@ class BackupBlobStore(
     /** Paths dropped by the cap, surfaced on the completion screen (§3.4). */
     val skippedPaths = mutableListOf<SkippedPath>()
 
-    data class SkippedPath(val path: String, val size: Long)
+    /**
+     * Why a file stayed out of the package. The counter alone cannot carry
+     * this: "too large", "excluded on purpose" and "could not be read" are
+     * different problems wearing one number, and the completion screen used
+     * to label the whole count with whichever of them happened to match the
+     * current size-cap setting.
+     */
+    enum class SkipReason {
+        /** Above the user's §3.4 per-file cap. */
+        SIZE_CAP,
+        /** Cap 0 — "do not back up files"; nothing exceeded anything. */
+        NO_FILES,
+        /** Unreadable / invalid at export time (diary pair, corrupt source). */
+        UNREADABLE,
+        /** A credential source could not be read (oauth token store, …). */
+        CREDENTIALS,
+        ;
+
+        /**
+         * Stored in the history record and the package tombstones. Same
+         * vocabulary [BackupMemoryTree] already writes into its inventory.
+         */
+        val wireName: String
+            get() = when (this) {
+                SIZE_CAP -> "size_cap"
+                NO_FILES -> "no_files"
+                UNREADABLE -> "unreadable"
+                CREDENTIALS -> "credentials"
+            }
+    }
+
+    data class SkippedPath(val path: String, val size: Long, val reason: SkipReason)
 
     /**
      * [T-backup-decode-honesty] Record a skip that happened OUTSIDE the blob
      * pipeline (e.g. an unreadable credential store) so it surfaces exactly
-     * like a size-cap skip: [skippedFiles] drives the run's "with issues"
-     * status and the entry lands in the history record's skipped list.
+     * like a size-cap skip in the counts ([skippedFiles] drives the run's
+     * "with issues" status and the entry lands in the history record's
+     * skipped list) — while keeping its OWN reason, so the report can say
+     * what actually went wrong instead of blaming the size cap.
      */
-    fun recordSkip(logicalPath: String, size: Long = 0) {
+    fun recordSkip(logicalPath: String, size: Long = 0, reason: SkipReason) {
         skippedFiles += 1
         skippedBytes += size
-        skippedPaths.add(SkippedPath(logicalPath, size))
+        skippedPaths.add(SkippedPath(logicalPath, size, reason))
     }
 
     sealed interface Outcome {
@@ -154,7 +187,7 @@ class BackupBlobStore(
         if (maxFileBytes != null && size > maxFileBytes) {
             skippedFiles += 1
             skippedBytes += size
-            skippedPaths.add(SkippedPath(logicalPath, size))
+            skippedPaths.add(SkippedPath(logicalPath, size, capSkipReason))
             AppLogger.info(TAG, "[Backup] skip (size cap) $logicalPath size=$size > $maxFileBytes")
             return Outcome.SkippedTooLarge(size)
         }
@@ -256,7 +289,7 @@ class BackupBlobStore(
         if (maxFileBytes != null && size > maxFileBytes) {
             skippedFiles += 1
             skippedBytes += size
-            skippedPaths.add(SkippedPath(logicalPath, size))
+            skippedPaths.add(SkippedPath(logicalPath, size, capSkipReason))
             return Outcome.SkippedTooLarge(size)
         }
         val digest = Digest.sha256Hex(data)
@@ -273,6 +306,16 @@ class BackupBlobStore(
     }
 
     private fun blobFile(digest: String) = File(File(blobsRoot, digest.take(2)), digest)
+
+    /**
+     * A cap of 0 is "do not back up files" (§3.4's sentinel): nothing is
+     * "too large" then, everything is excluded on purpose. Reporting both
+     * states under one reason made the completion screen lie in whichever
+     * direction the wording did not match. Exposed for the diary-pair skip
+     * path, which records its members through [recordSkip] directly.
+     */
+    internal val capSkipReason: SkipReason
+        get() = if (maxFileBytes != null && maxFileBytes <= 0L) SkipReason.NO_FILES else SkipReason.SIZE_CAP
 
     companion object {
         private const val TAG = "Backup"

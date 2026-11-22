@@ -55,6 +55,7 @@ import com.openminis.app.scheduled.ScheduledRepeatMode
 import com.openminis.app.scheduled.ScheduledTask
 import com.openminis.app.scheduled.viewState
 import com.openminis.app.util.IsoTime
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * [T-android-scheduled-tasks-design / T-android-scheduled-tasks-run-records]
@@ -94,7 +95,7 @@ fun ScheduledTasksScreen(
                     Text(
                         stringResource(R.string.automation_title),
                         fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp,
+                        fontSize = MinisTypography.display,
                     )
                 },
                 navigationIcon = {
@@ -236,7 +237,7 @@ private fun ScheduledTaskRow(
                 Text(
                     text = task.label.ifBlank { task.prompt.take(40) },
                     fontWeight = FontWeight.Medium,
-                    fontSize = 15.sp,
+                    fontSize = MinisTypography.title,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -244,7 +245,7 @@ private fun ScheduledTaskRow(
                 Text(
                     text = formatScheduleSummary(task),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
+                    fontSize = MinisTypography.foot,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -256,7 +257,7 @@ private fun ScheduledTaskRow(
                     Text(
                         text = it,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontSize = 11.sp,
+                        fontSize = MinisTypography.cap,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )

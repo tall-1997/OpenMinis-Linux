@@ -1,7 +1,7 @@
 package com.openminis.app.mcp.server.tools
 
 import com.openminis.app.mcp.server.McpServerCore
-import com.openminis.app.mcp.server.approval.ApprovalFakePrefs
+import com.openminis.app.mcp.server.approval.approvalFakePrefs
 import com.openminis.app.mcp.server.approval.McpApprovalCore
 import com.openminis.app.mcp.server.approval.McpApprovalExecutor
 import com.openminis.app.mcp.server.approval.McpApprovalManager
@@ -51,7 +51,7 @@ class ApprovalToolsTest {
     fun setUp() {
         val tmp = File(System.getProperty("java.io.tmpdir"), "mcp-approval-tools-test")
         McpApprovalStore.taskRootPrefix = tmp.path + "/"
-        store = McpApprovalStore(ApprovalFakePrefs())
+        store = McpApprovalStore(approvalFakePrefs())
         manager = McpApprovalManager(store)
         biz = FakeDispatcher()
         rpc = McpApprovalRpc(manager, McpApprovalExecutor(biz))

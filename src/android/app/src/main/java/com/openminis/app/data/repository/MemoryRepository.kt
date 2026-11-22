@@ -331,7 +331,14 @@ class MemoryRepository(
                             dayFileExists = existing.isNotEmpty(),
                             hashOf = { Digest.sha256Hex(it) },
                             existingContent = existing,
-                        )?.let { return@write WriteOutcome(it) }
+                        )?.let {
+                            // [F4] Refusals were previously invisible (only success
+                            // Log.i and exception Log.e logged) — one warning per refusal
+                            // with the full copy (longest ~100 chars), never the entry
+                            // body; no truncation: a clipped tail once hid the guidance.
+                            Log.w(TAG, "memory write rejected: $fileName — $it")
+                            return@write WriteOutcome(it)
+                        }
                     }
                     val header = MemoryMetadataParser.header(existing)
                     val bodyStart = header?.bodyStart ?: if (existing.startsWith('\uFEFF')) 1 else 0
@@ -363,7 +370,7 @@ class MemoryRepository(
                     val separator = if (header != null && !prefix.endsWith('\n') && !prefix.endsWith('\r')) "\n" else ""
                     val newContent = prefix + separator + headerForNewFile + entry + body
                     writeLifecycleAtomic(file, newContent)
-                    val newRevision = Digest.sha256Hex(newContent).take(16)
+                    val newRevision = MemoryRevision.token(fileName.removeSuffix(".md"), newContent)
                     Log.i(TAG, "Memory written to $fileName (${content.length} chars, revision $newRevision)")
                     indexForEmbeddingsAsync(file)
                     WriteOutcome("Memory saved to $fileName (${content.length} chars, revision $newRevision)")
@@ -412,7 +419,13 @@ class MemoryRepository(
 
         return MemorySources.withScope(memoryDir, now, includeStanding = true) { sources ->
             val files = sources.filter { source ->
-                source.name != LearnedPrefsStore.FILE_NAME && (source.name != GLOBAL_FILE || scope == "all")
+                when (scope) {
+                    // "all" sweeps everything including the persona files; any
+                    // narrower scope searches memory entries only — the standing
+                    // persona/prefs files are never diary content.
+                    "all" -> source.name != LearnedPrefsStore.FILE_NAME
+                    else -> !MemorySources.isStandingSource(source.name)
+                }
             }.sortedWith(compareByDescending<MemorySources.Source> { it.name == GLOBAL_FILE }.thenByDescending { it.name })
             searchMemory(files, keywordList)
         } ?: "No memory files found."

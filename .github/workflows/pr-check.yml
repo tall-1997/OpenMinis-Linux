@@ -127,6 +127,12 @@ jobs:
       # ran, taking down the whole app. SchemaMigrationDriftTest covers this
       # inside the unit-test job above; this standalone replay gives a
       # two-second local check with the same verdict before any gradle work.
+      # [T-verify-all] 单入口。逐条 step 保留（日志归属清晰），但本地与 CI
+      # 必须能一条命令跑完全部静态守卫，否则「改完自己没跑全」是常态。
+      # 这一步同时暴露静态检查（括号/引号配平），逐条 step 里没有对应项。
+      - name: All static gates (single entry)
+        run: python3 scripts/ci/verify_all.py -j 4
+
       - name: Migration DDL matches exported schema
         run: python3 scripts/ci/check_schema_drift.py
 
@@ -179,6 +185,105 @@ jobs:
       # through resolveToolTitle / displayToolTitle.
       - name: preAnchor budget + tool title contract
         run: python3 scripts/ci/check_tool_title_and_budget_contract.py
+
+      # [T-prefs-registry] config/PrefsRegistry.kt is generated but it *decides*
+      # the key-name guard on every typed prefs read/write. If prefs source
+      # changed without re-running the generator, the register drifts and the
+      # guard starts rejecting live code (or silently letting junk through) —
+      # a runtime failure with no compile-time signal.
+      - name: Submodule mapping is consistent
+        run: python3 scripts/ci/check_submodule_mapping.py
+
+      - name: Prefs registry matches source
+        run: python3 scripts/ci/check_prefs_registry.py
+
+      # [T-prefs-calls] The registry check above proves the generated file
+      # matches source — not that the generator attributed each key to the
+      # RIGHT prefs file. A key filed under the wrong name still generates
+      # cleanly, still compiles, then throws at runtime:
+      #   key 'chat.confirmBeforeStop' is not registered in PrefsRegistry
+      #   for appearance_prefs
+      # This check bypasses the generator's attribution and matches call sites
+      # against each file's own key list, so it catches the attribution itself.
+      - name: Prefs call sites use registered keys
+        run: |
+          python3 scripts/ci/check_prefs_call_sites.py --selftest
+          python3 scripts/ci/check_prefs_call_sites.py
+
+      # [T-prefs-encryption] `Prefs.file(name)` decides encrypted-vs-plain from
+      # the REGISTRY, not from the call site. So migrating a file from
+      # `EncryptedPrefsFactory.safeCreate(ctx, "x")` to `Prefs.file("x")` erases
+      # the only evidence the generator used to see — the file silently becomes
+      # PLAIN, every other check still passes, and credentials start landing in
+      # a cleartext XML. Measured: minis_network_secrets and
+      # backup_rclone_secrets were downgraded exactly this way in one migration.
+      # Pinned names may only be added, never removed.
+      - name: Encrypted prefs are not silently downgraded
+        run: python3 scripts/ci/check_prefs_encryption.py
+
+      # [T-prefs-api] PrefsHandle (int/bool/set/observe) and SharedPreferences
+      # (getInt/getBoolean/edit) share almost no method names. A migration that
+      # renames the call but leaves the receiver's declared type behind (or the
+      # reverse) fails as "unresolved reference: int" AT THE CALL SITE, which
+      # points at the symptom instead of the declaration.
+      - name: Prefs receivers match their API
+        run: python3 scripts/ci/check_prefs_api_usage.py
+
+      # [T-ui-tokens] MinisTokens.kt aggregates every Color(0x...) literal in
+      # ui/. Stale tokens fail at the call site (unresolved reference), which
+      # reads like a normal typo rather than "the generator was not re-run".
+      - name: UI design tokens are regenerable
+        run: python3 scripts/ci/check_ui_tokens.py
+
+      # [T-token-coverage] The generator proves the token file matches source;
+      # it says nothing about whether code *uses* the tokens. Measured: 284
+      # unnamed color literals, 0 unnamed sp, 3488 unnamed dp remain. Without
+      # a ratchet those counts only grow — writing 16.sp is always cheaper than
+      # finding the semantic slot, so the table drifts into decoration. Budget is
+      # per-file (a total hides "A removed 20, B added 20") and may only go down.
+      - name: Design token coverage ratchet
+        run: |
+          python3 scripts/ci/check_token_coverage.py --selftest
+          python3 scripts/ci/check_token_coverage.py
+
+      # [T-token-semantics] The generator proves MinisTokens.kt matches source;
+      # it says nothing about whether the Light/Dark pair is *correct*. A slot
+      # copied from Light into Dark, a swapped background, or a text color that
+      # silently drops under 4.5:1 all compile and all render wrong — the first
+      # one only in dark mode, which CI screenshots never show.
+      - name: Design token semantics (dark parity, contrast)
+        run: python3 scripts/ci/check_token_semantics.py
+
+      # [T-composition-local-wire] A declared CompositionLocal with no
+      # `provides` anywhere keeps its default forever. PR #126 shipped exactly
+      # that (provider mounted, no consumer) and called it a fix; the token
+      # layer hit the mirror-image version (consumer, no provider). Both are
+      # invisible at compile time and mostly invisible at runtime.
+      - name: CompositionLocals are all provided
+        run: python3 scripts/ci/check_composition_locals.py
+
+      # [T-token-scope] The layering guard above proves every CompositionLocal has
+      # a provider; it says nothing about *where* the token readers are called.
+      # `MinisTypography.body` is `@Composable`-only, and `remember {}` marks its
+      # lambda `@DisallowComposableCalls` — so `remember { MinisTypography.body }`
+      # throws at runtime. The nastier half: remember's lambda only runs on a
+      # cache miss, so the bug hides under incremental builds and detonates on
+      # the first cold start or font-scale change. Measured while migrating 13.sp
+      # (this guard found one live instance in CodeEditorField). inline lambdas
+      # (forEach / let / run) are NOT flagged — composable context does flow
+      # through them, and false positives are how a guard gets switched off.
+      - name: Token readers stay out of non-composable lambdas
+        run: |
+          python3 scripts/ci/check_token_scope.py --selftest
+          python3 scripts/ci/check_token_scope.py
+
+      # [T-token-runtime-probe] The two checks above are static. This one
+      # actually compiles MinisTokens.kt on a plain JVM and asserts the values:
+      # dark surfaces really are darker, diff colors point the right way, text
+      # clears 4.5:1. It caught Light.diffAddedText sitting at 3.52:1 on day one.
+      # Needs kotlinc; the script self-skips when it is absent.
+      - name: Design token runtime probe
+        run: bash scripts/ui/probe/run_probe.sh
 
       # [T-announced-tools-core] The plan board fragment told the model to
       # "advance items with agent_plan" while agent_plan was long-tail, so the

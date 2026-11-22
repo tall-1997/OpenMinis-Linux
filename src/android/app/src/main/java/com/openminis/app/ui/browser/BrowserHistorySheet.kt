@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import com.openminis.app.browser.BrowserHistoryStore
 import com.openminis.app.util.IsoTime
 import com.openminis.app.ui.components.MinisTextButton
+import com.openminis.app.ui.tokens.MinisTypography
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -177,7 +178,7 @@ fun BrowserHistorySheet(
                                 }
                                 Text(
                                     IsoTime.formatPattern(entry.timestamp, "HH:mm"),
-                                    fontSize = 11.sp,
+                                    fontSize = MinisTypography.cap,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                                 )
                             }

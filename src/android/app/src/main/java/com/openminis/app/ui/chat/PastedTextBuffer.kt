@@ -41,6 +41,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * [T-android-paste-placeholder] A long block of text the user pasted, held out
@@ -407,13 +408,13 @@ fun PastedTextChip(
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = "#${pasted.id}",
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = MinisTypography.chip),
                 color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
             )
             Text(
                 text = "${pasted.text.length}",
-                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = MinisTypography.cap2),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
             )

@@ -444,6 +444,22 @@ private fun receiptProof(key: String, wire: String, token: String): String =
 private fun validReceiptUuid(id: String): Boolean =
     id.length == 36 && runCatching { UUID.fromString(id).toString() == id }.getOrDefault(false)
 
+/**
+ * [T-session-sidecar-cleanup] Deleted session: drop THIS session's v1 receipt
+ * files (<sessionDigest>.json/.lock). The 256-bucket shard files
+ * (<sha[0..1]>.json) are shared across sessions and deliberately kept — they
+ * are a bounded legacy read source, not per-session storage. Idempotent.
+ */
+internal fun deleteReceiptFiles(directory: File, sessionId: String) {
+    // sessionDigest = receiptDigest("session", sessionId); called directly so
+    // this does not depend on the identity class's name (renamed by #410).
+    val sha = receiptDigest("session", sessionId)
+    runCatching {
+        File(directory, "$sha.json").delete()
+        File(directory, "$sha.lock").delete()
+    }
+}
+
 private fun replaceReceiptShard(target: File, bytes: ByteArray) {
     val temp = File(target.parentFile, "${target.name}.tmp")
     try {

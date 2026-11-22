@@ -760,23 +760,21 @@ class BackupImporter(
             "shellTimeoutSec", "fileReadMaxChars", "fileReadMaxLines",
             "subagentMaxTurns", "mainSessionMaxTurns",
         )
-        val editor = context.getSharedPreferences(
-            com.openminis.app.data.ToolLimitPrefs.PREFS, android.content.Context.MODE_PRIVATE,
-        ).edit()
+        val prefs = com.openminis.app.config.Prefs.file(com.openminis.app.data.ToolLimitPrefs.PREFS)
         var applied = 0
-        for (key in limits.keys()) {
-            if (key !in allowed) continue
-            when (val v = limits.opt(key)) {
-                // Braces: Kotlin 2.1's when grammar has no `-> stmt; stmt`
-                // entries (a `;`-sequence must be a block body).
-                is Int -> { editor.putInt(key, v); applied++ }
-                is Long -> { editor.putLong(key, v); applied++ }
-                is Boolean -> { editor.putBoolean(key, v); applied++ }
-                is String -> { editor.putString(key, v); applied++ }
+        // 一次事务写全部限制：导入中途失败不会留下「一半字段是备份值、一半是旧值」
+        prefs.write {
+            for (key in limits.keys()) {
+                if (key !in allowed) continue
+                when (val v = limits.opt(key)) {
+                    is Int -> { putInt(key, v); applied++ }
+                    is Long -> { putLong(key, v); applied++ }
+                    is Boolean -> { putBoolean(key, v); applied++ }
+                    is String -> { putString(key, v); applied++ }
+                }
             }
         }
         if (applied > 0) {
-            editor.apply()
             AppLogger.info(TAG, "[Restore] tool limits applied: $applied")
         }
     }

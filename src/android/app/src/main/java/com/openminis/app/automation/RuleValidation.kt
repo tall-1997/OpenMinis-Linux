@@ -21,9 +21,10 @@ object RuleValidation {
     /**
      * [#31][T-rule-off-safe-auto] Normalize a stored permission token to the
      * four-tier session token: explicit tokens pass through their tier
-     * verbatim; OFF/DENY_ALL degrade to SAFE_AUTO (the documented unattended
-     * contract); unknown/garbage degrades to SAFE_AUTO so a hallucinated
-     * value can never widen (or stall) an unattended run. Shared by
+     * verbatim through [SessionPermissionMode.fromStored], which maps every
+     * legacy token (OFF/DENY_ALL included) onto one of the three tiers; unknown
+     * or garbage values land on the safest tier so a hallucinated value can never
+     * widen an unattended run. Shared by
      * [validate] (create/update) AND the fire seam
      * ([AutomationAgentRunner.start]) — rules stored by older builds keep
      * their raw `OFF` token in spec_json, so the mapping must run at fire
@@ -31,19 +32,10 @@ object RuleValidation {
      */
     fun normalizePermissionModeToken(stored: String?): String? =
         stored?.trim()?.takeIf { it.isNotEmpty() }?.let { raw ->
-            // [T-rule-off-safe-auto] ASK_ALL is ASK's canonical stored token
-            // (SessionPermissionMode.toStoredToken) — missing it downgraded
-            // strict ask-everything rules to SAFE_AUTO at fire time.
-            val known = setOf("ASK", "ASK_ALL", "YOLO", "YOYO", "SAFE_AUTO", "OFF", "DENY_ALL")
-            val mode = if (raw.uppercase().trim() in known) {
-                when (raw.uppercase().trim()) {
-                    "OFF", "DENY_ALL" -> com.openminis.app.security.SessionPermissionMode.SAFE_AUTO
-                    else -> com.openminis.app.security.SessionPermissionMode.fromStored(raw)
-                }
-            } else {
-                com.openminis.app.security.SessionPermissionMode.SAFE_AUTO
-            }
-            mode.toStoredToken()
+            // [T-perm-three-modes] One mapping point: fromStored normalises the
+            // stored token to the canonical three-tier token, so a rule written by an
+            // older build keeps its meaning at fire time too.
+            com.openminis.app.security.SessionPermissionMode.fromStored(raw).toStoredToken()
         }
 
     /**

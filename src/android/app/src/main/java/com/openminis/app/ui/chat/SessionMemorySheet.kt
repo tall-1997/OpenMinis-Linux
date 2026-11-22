@@ -1,4 +1,5 @@
 package com.openminis.app.ui.chat
+import com.openminis.app.ui.tokens.MinisTypography
 import com.openminis.app.ui.theme.m3Icon
 
 import androidx.compose.foundation.background
@@ -38,7 +39,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -461,7 +461,7 @@ private fun MemoryToolRow(
                 ) {
                     Text(
                         opLabel,
-                        fontSize = 10.sp,
+                        fontSize = MinisTypography.chip,
                         fontWeight = FontWeight.Medium,
                         fontFamily = FontFamily.Monospace,
                         color = opColor,

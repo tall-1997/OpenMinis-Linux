@@ -324,6 +324,18 @@
     <string name="token_usage_context_used">Konteks Digunakan</string>
     <string name="token_usage_context_window">Tetingkap Konteks</string>
     <string name="token_usage_max_output">Output Maksimum</string>
+    <string name="token_usage_section_breakdown">Komposisi</string>
+    <string name="token_usage_breakdown_hint">Anggaran ±10% — kandungan permintaan seterusnya</string>
+    <string name="token_usage_block_system_tools">Sistem &amp; alat</string>
+    <string name="token_usage_block_skills_mcps">Kemahiran &amp; MCP</string>
+    <string name="token_usage_block_memory">Memori</string>
+    <string name="token_usage_block_runtime_tail">Konteks setiap pusingan</string>
+    <string name="token_usage_block_goal_plan">Matlamat &amp; rancangan</string>
+    <string name="token_usage_block_tool_schemas">Skema alat</string>
+    <string name="token_usage_block_history">Perbualan</string>
+    <string name="token_usage_block_pending">Lampiran belum dihantar</string>
+    <string name="token_usage_breakdown_estimated">Anggaran</string>
+    <string name="token_usage_breakdown_measured">Diukur</string>
     <string name="token_usage_section_thinking">Penaakulan</string>
     <string name="token_usage_thinking_label">Penaakulan</string>
     <string name="token_usage_thinking_level">Tahap</string>
@@ -635,10 +647,9 @@
     <string name="env_var_privacy_footer">Apabila didayakan, sebarang nilai pemboleh ubah persekitaran yang muncul dalam output shell-execute akan digantikan dengan bentuk bertopeng (cth. `sk-1********ajhks`) sebelum sampai kepada model. Nilai yang lebih pendek daripada 8 aksara menjadi `*` sepenuhnya. Output yang dilihat pengguna dalam sembang kekal tidak berubah.</string>
     <string name="outbound_mask_toggle">Topeng privasi data keluar</string>
     <string name="outbound_mask_footer">Penyamaran bentuk opt-in: rentetan berbentuk kunci (termasuk kod), e-mel dan nombor telefon menjadi pemegang tempat. Kunci API embedding di bawah disimpan teks jelas dalam prefs peribadi. Sejarah peranti tidak berubah.</string>
-    <string name="chat_menu_perm_yoyo">YOLO · automatik penuh</string>
-    <string name="chat_menu_perm_safe_auto">Auto selamat · alat baca sahaja dibenarkan</string>
-    <string name="chat_menu_perm_ask">Tanya · sahkan setiap panggilan</string>
-    <string name="chat_menu_perm_off">Mati · tolak semua alat</string>
+    <string name="chat_menu_perm_yoyo">Akses penuh</string>
+    <string name="chat_menu_perm_safe_auto">Autonomi</string>
+    <string name="chat_menu_perm_ask">Tanya sebelum ubah</string>
     <string name="gate_approval_allow_all">Sentiasa benarkan sesi ini (sasaran semasa)</string>
     <string name="approval_action_allow_all_session">Sentiasa benarkan dalam sesi ini</string>
     <string name="env_var_section_header">Pemboleh Ubah</string>
@@ -865,6 +876,10 @@
     <string name="newer_db_body">Salinan Minis Ultra ini lebih lama daripada versi yang mencipta data anda, jadi ia tidak dapat membukanya dengan selamat.\n\nTiada apa-apa yang dipadam — perbualan anda kekal utuh pada peranti ini. Pasang semula Minis Ultra versi yang lebih baharu dan semuanya akan kembali tersedia.</string>
     <string name="newer_db_versions">Versi ini menyokong format data %1$d</string>
     <string name="newer_db_exit">Tutup</string>
+    <string name="degraded_startup_title">Sesetengah komponen permulaan gagal dimuatkan</string>
+    <string name="degraded_startup_body">Aplikasi berjalan dengan fungsi berkurangan. Sesetengah ciri mungkin tidak tersedia sehingga ia dimulakan semula.</string>
+    <string name="degraded_startup_cause">Punca: %1$s</string>
+    <string name="degraded_startup_dismiss">Tutup</string>
     <string name="usage_attr_unknown_session">Model tidak diketahui — rekod sesi telah dipadam</string>
     <string name="usage_attr_removed">Tiada lagi dalam pembekal yang anda tetapkan</string>
     <string name="usage_detail_output">Output</string>
@@ -1046,6 +1061,13 @@
     <string name="model_group_detail_name">Nama</string>
     <string name="model_group_detail_the_label_shown_in_the_model_picker_save">Label yang dipaparkan dalam pemilih model. Disimpan secara automatik apabila anda mengetik di tempat lain.</string>
     <string name="model_group_detail_routing_strategy">Strategi Penghalaan</string>
+    <string name="model_group_detail_more_strategies">Lagi strategi</string>
+    <string name="model_group_detail_fewer_strategies">Kurangkan strategi</string>
+    <string name="model_connection_title">Model &amp; Sambungan</string>
+    <string name="model_connection_providers_count">%1$d pembekal · %2$d model</string>
+    <string name="model_connection_groups_count">%1$d kumpulan</string>
+    <string name="model_connection_auto_groups">Kumpulan automatik</string>
+    <string name="model_connection_not_set">Belum ditetapkan</string>
     <string name="model_group_detail_routing_quota_window_footer">Ahli utama melayan sehingga kuota tetingkap habis, kemudian ahli seterusnya mengambil alih sehingga diset semula.</string>
     <string name="model_group_detail_routing_round_robin_footer">Memusing ahli satu panggilan pada satu masa, mengikut urutan.</string>
     <string name="model_group_detail_routing_smart_footer">Permintaan ringan ke ahli terakhir (jimat); permintaan panjang atau kompleks ke ahli pertama (kuat).</string>
@@ -1323,6 +1345,8 @@
     <string name="backup_ready">Sandaran Sedia</string>
     <string name="backup_result_excluded_too_large">Dikecualikan (terlalu besar)</string>
     <string name="backup_result_files_not_included">Fail tidak disertakan</string>
+    <string name="backup_result_excluded_unreadable">Dikecualikan (tidak dapat dibaca)</string>
+    <string name="backup_result_credentials_unreadable">Kelayakan tidak dapat dibaca</string>
     <string name="backup_result_local_only">Hanya tersimpan pada peranti ini.</string>
     <string name="backup_result_delivered">Tersimpan pada peranti ini, dan disalin ke %1$d daripada %2$d destinasi.</string>
     <string name="backup_local_removed">Salinan setempat dibuang — %1$s dibebaskan pada peranti ini</string>
@@ -2136,6 +2160,9 @@
     <string name="cot_translate_settings_language">Bahasa sasaran</string>
     <string name="cot_translate_privacy_notice">Penaakulan yang diperluas dihantar ke perkhidmatan terjemahan yang dipilih. Ia mungkin mengandungi kod peribadi atau butiran perbualan.</string>
     <string name="cot_translate_anonymous_notice">Bing dan Google tidak memerlukan log masuk atau kunci API. Titik akhir tanpa nama mereka mungkin menolak atau mengehadkan permintaan.</string>
+    <string name="cot_translate_retry">Cuba semula</string>
+    <string name="cot_translate_privacy_accept">Dayakan</string>
+    <string name="cot_translate_privacy_decline">Batal</string>
     <string name="git_panel_staged">Dipentas</string>
     <string name="git_panel_changes_section">Perubahan</string>
     <string name="git_panel_stats_files">%1$d fail diubah</string>
@@ -2750,6 +2777,7 @@
     <string name="modeldetail_section_context_retry">Konteks dan cubaan semula</string>
     <string name="modeldetail_temperature">Suhu (0,0–2,0)</string>
     <string name="modeldetail_temperature_invalid">Masukkan nombor dari 0,0 hingga 2,0, atau biarkan kosong untuk tidak dihantar.</string>
+    <string name="modeldetail_harness_save_failed">Tidak dapat menyimpan pengubah bajet konteks. Entri model telah disimpan — cuba lagi.</string>
     <string name="modeldetail_temperature_placeholder">Tiada</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">Tambah</string>
@@ -3330,6 +3358,10 @@
     <string name="guard_stop_on">Boleh menghentikan sesi</string>
     <string name="guard_stop_off">Tidak pernah menghentikan sesi</string>
     <string name="guard_stop_footer">Apabila hidup, pengawal menghentikan sesi selepas tindakan sama berulang terlalu kerap. Apabila mati, ia hanya mengingatkan model, berguna semasa menunggu lama seperti binaan.</string>
+    <string name="goal_drift_section">Pengawasan sisihan matlamat</string>
+    <string name="goal_drift_threshold_title">Ambang peringatan sisihan</string>
+    <string name="goal_drift_threshold_value">%1$d giliran alat</string>
+    <string name="goal_drift_footer">Semasa matlamat aktif, ini bilangan giliran alat berturut-turut yang boleh berlalu tanpa sebarang pergerakan papan rancangan sebelum hos mengingatkan model tentang matlamatnya. Lebih tinggi bermakna lebih sedikit peringatan; lebih rendah bermakna pengawasan lebih ketat.</string>
     <string name="token_usage_section_memory">Memori</string>
     <string name="token_usage_memory_lines">Baris dihantar</string>
     <string name="token_usage_memory_shown">Bilangan dipaparkan</string>
@@ -3340,4 +3372,13 @@
     <string name="modeldetail_tail_budget_state_auto">Automatik (mengikut tetingkap, sehingga 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Khusus untuk model ini</string>
     <string name="tool_limits_tool_concurrency">Alat baca selari</string>
+ <string name="perm_mode_desc_ask">Bertanya sebelum fail diubah</string>
+ <string name="perm_mode_desc_auto">Bertanya hanya jika ada risiko</string>
+ <string name="perm_mode_desc_full">Kurang pengesahan</string>
+ <string name="perm_full_access_title">Dayakan akses penuh?</string>
+ <string name="perm_full_access_body">Ejen akan membaca, mencipta dan memadam fail, menjalankan arahan terminal, serta menggunakan rangkaian atau aplikasi bersambung tanpa bertanya setiap kali. Tindakan ini boleh menyebabkan data hilang atau bocor, jadi dayakan hanya jika anda mempercayai tugasan itu. Anda boleh kembali bila-bila masa.</string>
+ <string name="perm_full_access_ack">Saya faham risikonya dan bertanggungjawab atas data saya.</string>
+ <string name="perm_full_access_confirm">Dayakan</string>
+ <string name="perm_guarded_risk_reason">Sahkan arahan berisiko</string>
+ <string name="perm_guarded_risk_message">Mod autonomi menilai arahan ini berisiko. Sahkan sekali untuk menjalankannya.</string>
 </resources>

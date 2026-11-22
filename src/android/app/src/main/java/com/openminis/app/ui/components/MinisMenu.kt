@@ -48,6 +48,8 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.tokens.MinisMotion
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * App-wide popup menu with a unified look: softer rounded corners, a lifted
@@ -164,11 +166,14 @@ fun MinisMenu(
         AnimatedVisibility(
             visibleState = visibleState,
             enter = scaleIn(
-                animationSpec = tween(200),
+                animationSpec = tween(MinisMotion.BASE),
                 initialScale = 0.85f,
                 transformOrigin = origin,
-            ) + fadeIn(animationSpec = tween(200)),
-            exit = scaleOut(animationSpec = tween(120)) + fadeOut(animationSpec = tween(120)),
+            ) + fadeIn(animationSpec = tween(MinisMotion.BASE)),
+            // 退场比入场快一档：菜单消失若和出现同速，会显得「拖沓、不走」。
+            // FAST/BASE 的比值就是这条节奏，改令牌时两处一起变，不会失衡。
+            exit = scaleOut(animationSpec = tween(MinisMotion.FAST)) +
+                fadeOut(animationSpec = tween(MinisMotion.FAST)),
         ) {
             Surface(
                 // [T-android-minis-menu-width] Size to the CONTENT's intrinsic
@@ -243,7 +248,7 @@ fun MinisMenuSectionHeader(
     ) {
         Text(
             text = title,
-            fontSize = 11.sp,
+            fontSize = MinisTypography.cap,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

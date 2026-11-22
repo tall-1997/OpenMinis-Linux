@@ -22,7 +22,7 @@ cd OpenMinis-Linux
 git submodule update --init deps/proot
 ```
 
-Android 沙箱只需要子模块 `deps/proot`。`deps/ish`（OpenMinis/ish-arm64）是历史遗留的 iOS 子模块，本仓库的安装包不编译它，`deps/build_ish.sh` 与 `deps/ISH_INTEGRATION.md` 也只在 iOS 分支上有意义——所以两条 CI workflow（`android-apk.yml`、`native-deps.yml`）都改成 `submodules: false` 加显式 `git submodule update --init deps/proot`，不再在每次 Android 构建里克隆一个不编译的仓库。子模块仍然注册在 `.gitmodules` 里，需要 iOS 那一侧的人自己 `git submodule update --init deps/ish`。
+Android 沙箱只需要子模块 `deps/proot`。两条 CI workflow（`android-apk.yml`、`native-deps.yml`）都用 `submodules: false` 加显式 `git submodule update --init deps/proot`，避免每次 Android 构建都去克隆无关仓库。
 
 构建前复制一份可空的配置即可编译运行：
 

@@ -71,22 +71,20 @@ fun BrowserSettingsSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("browser_prefs", android.content.Context.MODE_PRIVATE) }
+    val prefs = remember { com.openminis.app.config.Prefs.file("browser_prefs") }
 
     var selectedProfile by remember {
         mutableStateOf(
-            prefs.getString("user_agent_profile", "MOBILE_CHROME")
+            prefs.string("user_agent_profile", "MOBILE_CHROME")
                 ?.let { try { UserAgentProfile.valueOf(it) } catch (_: Exception) { null } }
                 ?: UserAgentProfile.MOBILE_CHROME
         )
     }
-    var customUA by remember { mutableStateOf(prefs.getString("custom_user_agent", "") ?: "") }
+    var customUA by remember { mutableStateOf(prefs.string("custom_user_agent", "") ?: "") }
     var showClearConfirm by remember { mutableStateOf(false) }
     var idleTimeoutText by remember {
         mutableStateOf(
-            prefs.getInt(
-                BrowserTabPool.PREF_IDLE_TIMEOUT_MINUTES,
-                BrowserTabPool.DEFAULT_IDLE_TIMEOUT_MINUTES,
+            prefs.int(BrowserTabPool.PREF_IDLE_TIMEOUT_MINUTES, BrowserTabPool.DEFAULT_IDLE_TIMEOUT_MINUTES,
             ).toString()
         )
     }
@@ -219,9 +217,7 @@ fun BrowserSettingsSheet(
                         selected = selectedProfile == profile,
                         onClick = {
                             selectedProfile = profile
-                            prefs.edit()
-                                .putString("user_agent_profile", profile.name)
-                                .apply()
+                            prefs.set("user_agent_profile", profile.name)
                             tabPool.setUserAgentFromUI(profile, if (profile == UserAgentProfile.CUSTOM) customUA else null)
                         },
                     )
@@ -244,7 +240,7 @@ fun BrowserSettingsSheet(
                     value = customUA,
                     onValueChange = {
                         customUA = it
-                        prefs.edit().putString("custom_user_agent", it).apply()
+                        prefs.set("custom_user_agent", it)
                     },
                     label = { Text(stringResource(R.string.browser_settings_custom_ua_label)) },
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),

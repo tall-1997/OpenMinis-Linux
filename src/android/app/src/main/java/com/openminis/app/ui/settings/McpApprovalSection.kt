@@ -34,11 +34,11 @@ import com.openminis.app.mcp.server.approval.McpApprovalCore
 import com.openminis.app.mcp.server.approval.McpApprovalExecutor
 import com.openminis.app.mcp.server.approval.McpApprovalManager
 import com.openminis.app.mcp.server.approval.McpApprovalRpc
-import com.openminis.app.ui.components.SettingsRowDivider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * [T-mcp-approval-ui] The phone's side of the three-phase approval flow.
@@ -356,7 +356,7 @@ private fun ApprovalPill(
             text = label,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = if (primary) FontWeight.SemiBold else FontWeight.Normal,
-            fontSize = 13.sp,
+            fontSize = MinisTypography.body,
             color = if (primary) MaterialTheme.colorScheme.primary
             else MaterialTheme.colorScheme.onSurfaceVariant,
         )

@@ -26,17 +26,46 @@ class AlarmOffloadManager(private val context: Context) {
         private const val TAG = "AlarmOffloadManager"
         private const val PREFS_NAME = "minis_alarms_prefs"
         private const val KEY_ALARMS = "alarms_json"
+        private const val KEY_NEXT_REQUEST_CODE = "next_request_code"
         const val CHANNEL_ID = "minis_alarms"
         private const val CHANNEL_NAME = "Minis Alarms & Timers"
 
         const val EXTRA_ALARM_ID = "alarm_id"
         const val EXTRA_ALARM_LABEL = "alarm_label"
+
+        /**
+         * Guards [nextRequestCode]'s prefs read-modify-write. The lock lives
+         * on the companion, not the instance: [AlarmReceiver] (and any future
+         * scheduler) constructs fresh [AlarmOffloadManager] instances, so an
+         * instance monitor would not stop two of them from minting the same
+         * code concurrently.
+         */
+        private val requestCodeLock = Any()
+    }
+
+    /**
+     * PendingIntent request codes are process-global. A UUID hash can collide,
+     * and `FLAG_UPDATE_CURRENT` would silently replace an earlier alarm. Use a
+     * persisted monotonic code so the same sequence cannot be reused even after
+     * process restarts.
+     *
+     * The prefs read-modify-write must be atomic: concurrent schedulers that
+     * both read the same counter mint the same requestCode, and
+     * `FLAG_UPDATE_CURRENT` then silently replaces the first alarm with the
+     * second. The critical section is two prefs ops (the in-memory prefs
+     * update in `apply()` is synchronous), so the process-global lock never
+     * contends meaningfully.
+     */
+    private fun nextRequestCode(): Int = synchronized(requestCodeLock) {
+        val next = prefs.int(KEY_NEXT_REQUEST_CODE, 1)
+        prefs.set(KEY_NEXT_REQUEST_CODE, if (next >= Int.MAX_VALUE) 1 else next + 1)
+        next
     }
 
     private val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     private val notificationManager =
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val prefs = com.openminis.app.config.Prefs.file(PREFS_NAME)
 
     init {
         createNotificationChannel()
@@ -64,7 +93,7 @@ class AlarmOffloadManager(private val context: Context) {
      */
     fun scheduleAlarm(label: String, hour: Int, minute: Int, repeatMode: RepeatMode): String {
         val id = UUID.randomUUID().toString()
-        val requestCode = id.hashCode() and 0x7FFFFFFF // positive int
+        val requestCode = nextRequestCode()
 
         // [T-android-alarm-rearm-chain] One shared "next occurrence" computation
         // for every mode: the first shot is registered below and the RECEIVER
@@ -108,7 +137,7 @@ class AlarmOffloadManager(private val context: Context) {
      */
     fun scheduleTimer(label: String, durationSec: Int): String {
         val id = UUID.randomUUID().toString()
-        val requestCode = id.hashCode() and 0x7FFFFFFF
+        val requestCode = nextRequestCode()
         val triggerAt = System.currentTimeMillis() + durationSec * 1000L
 
         val pendingIntent = buildPendingIntent(id, requestCode, label)
@@ -200,7 +229,7 @@ class AlarmOffloadManager(private val context: Context) {
             kept.put(a)
         }
         if (removed > 0) {
-            prefs.edit().putString(KEY_ALARMS, kept.toString()).apply()
+            prefs.set(KEY_ALARMS, kept.toString())
             AppLogger.info(TAG, "swept $removed expired ONCE alarm(s)/timer(s)")
         }
         return removed
@@ -228,7 +257,7 @@ class AlarmOffloadManager(private val context: Context) {
             val nonRepeating = a.optString("type") == "timer" || mode == "ONCE"
             if (nonRepeating) {
                 alarms.remove(i)
-                prefs.edit().putString(KEY_ALARMS, alarms.toString()).apply()
+                prefs.set(KEY_ALARMS, alarms.toString())
                 AppLogger.info(TAG, "alarm id=$alarmId mode=$mode fired — removed from prefs")
                 return
             }
@@ -239,7 +268,7 @@ class AlarmOffloadManager(private val context: Context) {
             val repeat = runCatching { RepeatMode.valueOf(mode) }.getOrNull()
             if (repeat == null || !a.has("hour") || !a.has("minute")) {
                 alarms.remove(i)
-                prefs.edit().putString(KEY_ALARMS, alarms.toString()).apply()
+                prefs.set(KEY_ALARMS, alarms.toString())
                 AppLogger.warning(TAG, "alarm id=$alarmId mode=$mode not re-armable — dropped from prefs")
                 return
             }
@@ -249,7 +278,7 @@ class AlarmOffloadManager(private val context: Context) {
             val firedAtMs = maxOf(System.currentTimeMillis(), a.optLong("triggerAtMs", 0L))
             val next = nextOccurrenceMs(a.getInt("hour"), a.getInt("minute"), repeat, firedAtMs)
             a.put("triggerAtMs", next)
-            prefs.edit().putString(KEY_ALARMS, alarms.toString()).apply()
+            prefs.set(KEY_ALARMS, alarms.toString())
             val registered = registerExact(
                 a.optString("id"),
                 a.optInt("requestCode"),
@@ -326,7 +355,7 @@ class AlarmOffloadManager(private val context: Context) {
 
         if (!found) return "Error: no alarm found with id=$alarmId"
 
-        prefs.edit().putString(KEY_ALARMS, alarms.toString()).apply()
+        prefs.set(KEY_ALARMS, alarms.toString())
         return "Alarm cancelled: id=$alarmId"
     }
 
@@ -349,7 +378,7 @@ class AlarmOffloadManager(private val context: Context) {
             alarmManager.cancel(pi)
             pi.cancel()
         }
-        prefs.edit().remove(KEY_ALARMS).apply()
+        prefs.remove(KEY_ALARMS)
         return n
     }
 
@@ -429,7 +458,7 @@ class AlarmOffloadManager(private val context: Context) {
     }
 
     private fun loadAlarms(): JSONArray {
-        val raw = prefs.getString(KEY_ALARMS, null) ?: return JSONArray()
+        val raw = prefs.stringOrNull(KEY_ALARMS) ?: return JSONArray()
         return try {
             JSONArray(raw)
         } catch (_: Exception) {
@@ -440,6 +469,6 @@ class AlarmOffloadManager(private val context: Context) {
     private fun persistAlarm(entry: JSONObject) {
         val alarms = loadAlarms()
         alarms.put(entry)
-        prefs.edit().putString(KEY_ALARMS, alarms.toString()).apply()
+        prefs.set(KEY_ALARMS, alarms.toString())
     }
 }

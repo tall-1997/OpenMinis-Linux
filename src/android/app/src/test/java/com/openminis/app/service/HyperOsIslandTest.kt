@@ -26,17 +26,12 @@ class HyperOsIslandTest {
         assertTrue(host("Xiaomi", "Xiaomi", "Xiaomi/hyperos/apollo:16/..."))
         assertTrue(host("Redmi", "Redmi", "Redmi/pnx_eea/..."))
         assertTrue(host("POCO", "POCO", "POCO/marble_ru/..."))
-        // A Xiaomi-built device with a custom AOSP ROM still reports Xiaomi
-        // hardware — host detection says yes, but the protocol probe (absent
-        // settings key) keeps the island off. That split is by design.
         assertTrue(host("Xiaomi", "Xiaomi", "LineageOS/apollo/..."))
     }
 
     @Test fun hostDetectionRejectsNonXiaomiOems() {
         assertFalse(host("samsung", "samsung", "samsung/qssi/..."))
         assertFalse(host("Google", "google", "google/oriole/..."))
-        // ZUI is a forked SystemUI (SystemUiHost must keep quiet templates
-        // there) but it is NOT a HyperOS island host.
         assertFalse(host("Lenovo", "Lenovo", "Lenovo/zui/..."))
         assertFalse(host("", "", ""))
     }
@@ -50,15 +45,19 @@ class HyperOsIslandTest {
     // Capability decision
     // ------------------------------------------------------------------
 
-    @Test fun islandCapabilityRequiresOs3ProtocolOrIslandProperty() {
+/**
+ * [T-island-protocol-v1] `notification_focus_protocol` is1 on HyperOS1,
+ *2 on HyperOS2 and3 on the超级岛 era; all three carry miui.focus.param.
+ * Requiring3 (the old rule) meant HyperOS1/2 devices got no focus
+ * notification at all - the reported "焦点通知失效".
+ */
+    @Test fun everyFocusProtocolCarriesTheTemplate() {
+        assertTrue(HyperOsIsland.islandProtocolCapable(1, false))
+        assertTrue(HyperOsIsland.islandProtocolCapable(2, false))
         assertTrue(HyperOsIsland.islandProtocolCapable(3, false))
         assertTrue(HyperOsIsland.islandProtocolCapable(4, false))
         assertTrue(HyperOsIsland.islandProtocolCapable(0, true))
-        // OS2 speaks 焦点通知 but has no island UI — must NOT enable the
-        // island surface.
-        assertFalse(HyperOsIsland.islandProtocolCapable(2, false))
-        assertFalse(HyperOsIsland.islandProtocolCapable(1, false))
-        assertFalse(HyperOsIsland.islandProtocolCapable(0, false))
+        assertFalse("a device with neither signal is not an island host", HyperOsIsland.islandProtocolCapable(0, false))
     }
 
     // ------------------------------------------------------------------
@@ -72,8 +71,7 @@ class HyperOsIslandTest {
         bigTitle = "Shell",
         bigContent = "1 task running",
         baseTitle = "Shell",
-        baseContent = "1 session | 1 task running",
-        hintTitle = "1 task running",
+        baseContent = "1 session |1 task running",
     )
 
     private fun v2(c: HyperOsIsland.IslandContent = content()): JSONObject =
@@ -85,15 +83,10 @@ class HyperOsIslandTest {
         assertEquals("agent", v2.getString("business"))
         assertEquals(true, v2.getBoolean("updatable"))
         assertEquals(true, v2.getBoolean("islandFirstFloat"))
-        // enableFloat=false: updates never auto-expand the big island.
         assertEquals(false, v2.getBoolean("enableFloat"))
-        // filterWhenNoPermission=false: a missing per-app permission must
-        // degrade to a normal notification row, not a filtered-out post.
         assertEquals(false, v2.getBoolean("filterWhenNoPermission"))
         assertEquals("Minis", v2.getString("ticker"))
         assertEquals("Minis", v2.getString("aodTitle"))
-        // Pic keys referenced by the JSON must be the documented constants so
-        // the miui.focus.pics Bundle and the JSON stay in sync.
         assertEquals(HyperOsIsland.PIC_TICKER, v2.getString("tickerPic"))
         assertEquals(HyperOsIsland.PIC_AOD, v2.getString("aodPic"))
 
@@ -112,23 +105,23 @@ class HyperOsIslandTest {
         assertEquals(HyperOsIsland.PIC_SMALL, small.getString("pic"))
 
         val base = v2.getJSONObject("baseInfo")
-        assertEquals(1, base.getInt("type"))
+        assertEquals("OS2 focus-notification card shape (DshGo XiaomiFocus)",2, base.getInt("type"))
         assertEquals("Shell", base.getString("title"))
-        assertEquals("1 session | 1 task running", base.getString("content"))
+        assertEquals("1 session |1 task running", base.getString("content"))
+    }
 
-        // Island button: hintInfo (按钮组件3) at param_v2 root, ONE
-        // actionInfo referencing the miui.focus.actions Bundle. There is
-        // deliberately NO root-level `actions` array — that field belongs
-        // to the progress component and renders stray blank buttons when
-        // shipped at the root.
-        val hint = v2.getJSONObject("hintInfo")
-        assertEquals(1, hint.getInt("type"))
-        assertEquals("1 task running", hint.getString("title"))
-        assertEquals(
-            HyperOsIsland.ACTION_STOP,
-            hint.getJSONObject("actionInfo").getString("action"),
-        )
+/**
+ * [T-island-no-hintinfo] The old payload put an `actionInfo.action` in
+ * hintInfo that pointed at a `miui.focus.actions` entry. A finished run has
+ * no Stop action, so the JSON referenced a key the Bundle never carried -
+ * SystemUI then rendered a blank button or dropped the payload. DshGo ships
+ * no hintInfo at all.
+ */
+    @Test fun focusParamJsonReferencesNoActionTheBundleMightNotCarry() {
+        val v2 = v2()
+        assertFalse("hintInfo was removed with its dangling action reference", v2.has("hintInfo"))
         assertFalse(v2.has("actions"))
+        assertFalse(v2.getJSONObject("param_island").has("hintInfo"))
     }
 
     @Test fun focusParamJsonEscapesQuotesNewlinesAndUnicode() {
@@ -140,7 +133,6 @@ class HyperOsIslandTest {
             bigContent = "line\nbreak",
             baseTitle = "标题",
             baseContent = "内容",
-            hintTitle = "状态\"行\"",
         )
         val v2 = v2(tricky)
         assertEquals("a\"b", v2.getString("business"))
@@ -153,17 +145,34 @@ class HyperOsIslandTest {
     }
 
     @Test fun focusParamJsonCarriesNoTimerOrProgressTemplates() {
-        // Forked-SystemUI discipline: the shade row stays static, and the
-        // island must not opt into timer/progress templates either — those
-        // are the components whose per-second updates crash OEM islands.
         val v2 = v2()
         val island = v2.getJSONObject("param_island")
         assertFalse(v2.has("timerInfo"))
         assertFalse(v2.has("progressInfo"))
         assertFalse(island.has("timerInfo"))
         assertFalse(island.has("progressInfo"))
-        // Sanity: the areas we DO ship are present.
         assertTrue(island.has("bigIslandArea"))
         assertTrue(island.has("smallIslandArea"))
+    }
+
+/**
+ * [T-island-payload-cap] HyperOS silently drops a focus payload above3072
+ * UTF-8 bytes. The clamp must keep the JSON valid AND under the cap.
+ */
+    @Test fun anOversizedPayloadIsTrimmedUnderTheProtocolCap() {
+        val huge = HyperOsIsland.IslandContent(
+            business = "agent",
+            ticker = "Minis",
+            aodTitle = "Minis",
+            bigTitle = "执行中",
+            bigContent = "1 task running",
+            baseTitle = "超长标题" + "标".repeat(2_000),
+            baseContent = "超长内容" + "文".repeat(4_000),
+        )
+        val raw = HyperOsIsland.buildFocusParamJson(huge)
+        assertTrue("fixture must exceed the cap", raw.toByteArray(Charsets.UTF_8).size <= HyperOsIsland.PARAM_MAX_BYTES)
+        val base = JSONObject(raw).getJSONObject("param_v2").getJSONObject("baseInfo")
+        assertTrue("the trimmed payload must still be valid JSON", base.getString("title").isNotEmpty())
+        assertEquals(2, base.getInt("type"))
     }
 }

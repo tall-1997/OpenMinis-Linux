@@ -19,14 +19,13 @@ object PrivacyPermissionPolicy {
     )
 
     fun get(context: Context): OffloadPermissionManager.PermissionLevel {
-        val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, null)
+        val raw = com.openminis.app.config.Prefs.file(PREFS).stringOrNull(KEY)
         return raw?.let { runCatching { OffloadPermissionManager.PermissionLevel.valueOf(it) }.getOrNull() }
             ?: OffloadPermissionManager.PermissionLevel.ASK_ONCE
     }
 
     fun set(context: Context, level: OffloadPermissionManager.PermissionLevel) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putString(KEY, level.name).apply()
+        com.openminis.app.config.Prefs.file(PREFS).set(KEY, level.name)
         _version.value++
     }
 

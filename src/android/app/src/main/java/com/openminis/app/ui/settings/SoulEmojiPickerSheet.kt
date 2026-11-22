@@ -59,7 +59,7 @@ internal fun SoulEmojiPickerSheet(
         ) {
             Text(
                 text = stringResource(R.string.soul_icon_emoji_title),
-                fontSize = 17.sp,
+                fontSize = 17.sp,  // token-literal-ok: Sheet 标题：17sp 夹在 16/18 之间，是为对齐 RoundedCorner 视觉边界
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface,
             )
@@ -76,7 +76,7 @@ internal fun SoulEmojiPickerSheet(
             ) {
                 Text(
                     text = draft.ifEmpty { SoulMetadata.DISPLAY_EMOJI },
-                    fontSize = 30.sp,
+                    fontSize = 30.sp,  // token-literal-ok: emoji 预览字形：字号即图形尺寸，Token 表不在这个尺度
                 )
             }
             Spacer(Modifier.height(20.dp))
@@ -97,7 +97,7 @@ internal fun SoulEmojiPickerSheet(
                                 )
                                 .clickable { draft = e },
                             contentAlignment = Alignment.Center,
-                        ) { Text(text = e, fontSize = 22.sp) }
+                        ) { Text(text = e, fontSize = 22.sp) }  // token-literal-ok: emoji 网格字形：字号即图形尺寸，Token 表不在这个尺度
                     }
                 }
                 Spacer(Modifier.height(8.dp))

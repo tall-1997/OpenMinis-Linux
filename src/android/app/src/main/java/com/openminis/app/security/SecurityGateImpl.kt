@@ -6,6 +6,15 @@ import org.json.JSONObject
 import java.security.MessageDigest
 import java.util.concurrent.CopyOnWriteArrayList
 
+/** [T-perm-guarded-i18n] ASCII sentinels; the UI layer localizes them (the gate has no Context). */
+// [T-perm-guarded-i18n] Readable English, not an opaque id: paths that
+// surface a Decision verbatim (code-run preview, MCP reason) must stay
+// legible; SecurityGateHolder.intercept swaps in the localized text.
+internal const val GUARDED_RISK_REASON = "Autonomous mode asks before risky commands"
+internal const val GUARDED_RISK_PREVIEW = "This command is risky; approve once to run it."
+
+
+
 /**
  * Default SecurityGate.
  *
@@ -332,8 +341,11 @@ class SecurityGateImpl : SecurityGate {
         // by hand is relaxed.
         if (cmd.toolName in SHELL_TOOLS) {
             val command = extractCommand(cmd)
+            // [T-perm-guarded-path] 自主模式 must NOT skip this fence:
+            // cross-session transcripts and minis.db are a hard boundary,
+            // not a "risk" a single confirmation may waive.
             if (mode != PermissionMode.ALLOW_ALL) {
-                SuPathPolicy.denial(command, callerSession.get())
+            SuPathPolicy.denial(command, callerSession.get())
                     ?.let { return Decision.Denied(it, hard = true) }
             }
             // Not mode-gated: this refusal is about CORRECTNESS, not permission.
@@ -422,7 +434,7 @@ class SecurityGateImpl : SecurityGate {
                 return Decision.Denied(it, hard = true)
             }
             GuestWorkloadPolicy.rootDeletionRefusal(command)?.let {
-                if (mode == PermissionMode.ALLOW_ALL) {
+                if (mode == PermissionMode.ALLOW_ALL || mode == PermissionMode.GUARDED) {
                     return Decision.NeedConfirm(
                         it,
                         "⚠️ 不可逆操作：删除文件系统根目录\n\nYOYO 模式下仍需你确认一次，确认后会真正执行。\n\n${preview(cmd)}",
@@ -442,7 +454,20 @@ class SecurityGateImpl : SecurityGate {
             }
         }
 
-        // [5] YOYO: everything except fatal-confirm is auto-run.
+        // [5a] [T-perm-guarded]自主模式 (ZCode `guarded`): the agent works
+        // unattended, and only a command the risk table rates DANGEROUS stops to
+        // ask. Everything else - writes, reads, ordinary shell - runs.
+        if (mode == PermissionMode.GUARDED) {
+            if (risk == RiskLevel.DANGEROUS) {
+                // [T-perm-guarded-i18n] Sentinel tokens: the gate is pure (no Context),
+                // and hardcoded CJK here is what the CJK ratchet exists to stop.
+                // SecurityGateHolder.intercept maps these to localized resources.
+                return Decision.NeedConfirm(GUARDED_RISK_REASON, GUARDED_RISK_PREVIEW)
+            }
+            return Decision.Allow("Autonomous: auto-run")
+        }
+
+        // [5b] YOYO /完全访问: everything except fatal-confirm is auto-run.
         if (mode == PermissionMode.ALLOW_ALL) {
             return Decision.Allow("YOYO：自动执行")
         }
@@ -756,6 +781,17 @@ class SecurityGateImpl : SecurityGate {
         if (bin == "git") {
             val sub = argv.getOrNull(1) ?: return false
             return sub in SAFE_GIT_SUB
+        }
+        if (bin == "find") {
+            // `find` is read-only only without mutating primaries. -exec and
+            // friends can delete/rewrite arbitrary matched paths, and tokenizing
+            // cannot prove their payload is safe; fail closed instead of asking
+            // ASK-mode users to recognize the risk.
+            val mutating = setOf(
+                "-exec", "-execdir", "-ok", "-okdir", "-delete",
+                "-fprintf", "-fprint", "-fprint0", "-fls",
+            )
+            return argv.none { it.lowercase() in mutating }
         }
         return bin in SAFE_COMMANDS
     }

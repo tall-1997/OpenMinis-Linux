@@ -7,120 +7,168 @@ import com.openminis.app.config.ConfigField
 import com.openminis.app.config.ConfigRisk
 import com.openminis.app.config.ConfigSchema
 import com.openminis.app.config.ConfigValue
+import com.openminis.app.config.PrefsBackend
+import com.openminis.app.config.SharedPrefsBackend
 
 /**
- * Convenience wrappers for the most common backend (SharedPreferences).
- * Mirror iOS `AppStorage*Field`s. Add new variants here when a new
- * primitive type starts to recur — the bridge cares only about the
- * [ConfigValue] shape, so wrappers translate.
+ * Field wrappers over a key/value store. Mirrors iOS `AppStorage*Field`s.
+ *
+ * Everything here reads/writes through [PrefsBackend] instead of
+ * `SharedPreferences` directly. That single indirection is what makes the
+ * config layer testable: `InMemoryPrefsBackend` drives these classes on a
+ * plain JVM, with no Android runtime.
+ *
+ * Each class keeps a secondary constructor taking `SharedPreferences` so
+ * existing call sites (`ConfigBuiltins`, 16 construction sites) compile
+ * unchanged — they get wrapped automatically.
+ *
+ * Shared behaviours live in [PrefsBinding] so the seven classes stay short
+ * and differ only where the persisted representation actually differs.
  */
+
+/** Read/write helper bound to one (backend, key) pair. */
+internal class PrefsBinding(
+    val backend: PrefsBackend,
+    val key: String,
+) {
+    fun bool(defaultValue: Boolean): Boolean = backend.readBoolean(key, defaultValue)
+    fun int(defaultValue: Int): Int = backend.readInt(key, defaultValue)
+    fun long(defaultValue: Long): Long = backend.readLong(key, defaultValue)
+    fun float(defaultValue: Float): Float = backend.readFloat(key, defaultValue)
+    fun string(defaultValue: String?): String? = backend.readString(key, defaultValue)
+    fun stringSet(defaultValue: Set<String>?): Set<String>? = backend.readStringSet(key, defaultValue)
+
+    fun putBool(v: Boolean) = backend.write { putBoolean(key, v) }
+    fun putInt(v: Int) = backend.write { putInt(key, v) }
+    fun putLong(v: Long) = backend.write { putLong(key, v) }
+    fun putFloat(v: Float) = backend.write { putFloat(key, v) }
+    fun putString(v: String?) = backend.write { putString(key, v) }
+}
+
+private fun wrap(prefs: SharedPreferences): PrefsBackend = SharedPrefsBackend(prefs)
+
+// ─── Boolean ────────────────────────────────────────────────────────────────
 
 class PrefsBoolField(
     override val path: String,
     override val displayName: String,
     override val description: String,
-    private val prefs: SharedPreferences,
-    private val key: String,
+    prefs: PrefsBackend,
+    key: String,
     private val defaultValue: Boolean,
     override val risk: ConfigRisk = ConfigRisk.NORMAL,
 ) : ConfigField {
+    constructor(
+        path: String, displayName: String, description: String,
+        prefs: SharedPreferences, key: String, defaultValue: Boolean,
+        risk: ConfigRisk = ConfigRisk.NORMAL,
+    ) : this(path, displayName, description, wrap(prefs), key, defaultValue, risk)
+
+    private val b = PrefsBinding(prefs, key)
     override val valueSchema: ConfigSchema get() = ConfigSchema.Bool
     override val access: ConfigAccess get() = ConfigAccess.READWRITE
     override val revertable: Boolean get() = true
 
-    override fun read(): ConfigValue = ConfigValue.Bool(
-        if (prefs.contains(key)) prefs.getBoolean(key, defaultValue) else defaultValue
-    )
+    override fun read(): ConfigValue = ConfigValue.Bool(b.bool(defaultValue))
     override fun write(value: ConfigValue) {
         valueSchema.validate(value)
-        val b = (value as ConfigValue.Bool).value
-        prefs.edit().putBoolean(key, b).apply()
+        b.putBool((value as ConfigValue.Bool).value)
     }
 }
+
+// ─── Int ────────────────────────────────────────────────────────────────────
 
 class PrefsIntField(
     override val path: String,
     override val displayName: String,
     override val description: String,
-    private val prefs: SharedPreferences,
-    private val key: String,
+    prefs: PrefsBackend,
+    key: String,
     private val defaultValue: Int,
     private val minValue: Int? = null,
     private val maxValue: Int? = null,
     override val risk: ConfigRisk = ConfigRisk.NORMAL,
 ) : ConfigField {
-    override val valueSchema: ConfigSchema
-        get() = ConfigSchema.Int(min = minValue, max = maxValue)
+    constructor(
+        path: String, displayName: String, description: String,
+        prefs: SharedPreferences, key: String, defaultValue: Int,
+        minValue: Int? = null, maxValue: Int? = null,
+        risk: ConfigRisk = ConfigRisk.NORMAL,
+    ) : this(path, displayName, description, wrap(prefs), key, defaultValue, minValue, maxValue, risk)
+
+    private val b = PrefsBinding(prefs, key)
+    override val valueSchema: ConfigSchema get() = ConfigSchema.Int(min = minValue, max = maxValue)
     override val access: ConfigAccess get() = ConfigAccess.READWRITE
     override val revertable: Boolean get() = true
 
-    override fun read(): ConfigValue = ConfigValue.Int(
-        if (prefs.contains(key)) prefs.getInt(key, defaultValue) else defaultValue
-    )
+    override fun read(): ConfigValue = ConfigValue.Int(b.int(defaultValue))
     override fun write(value: ConfigValue) {
         valueSchema.validate(value)
-        val i = (value as ConfigValue.Int).value
-        prefs.edit().putInt(key, i).apply()
+        b.putInt((value as ConfigValue.Int).value)
     }
 }
+
+// ─── Long (surfaced as Int — the bridge has no Long) ────────────────────────
 
 class PrefsLongField(
     override val path: String,
     override val displayName: String,
     override val description: String,
-    private val prefs: SharedPreferences,
-    private val key: String,
+    prefs: PrefsBackend,
+    key: String,
     private val defaultValue: Long,
     private val minValue: Long? = null,
     private val maxValue: Long? = null,
     override val risk: ConfigRisk = ConfigRisk.NORMAL,
 ) : ConfigField {
-    // Long values are surfaced as Int in the schema (Kotlin's range is
-    // wider than the bridge's ConfigValue.Int — for the few sync.maxFileSize
-    // -style fields we accept downcasting; the agent never sees > 2^31 here).
+    constructor(
+        path: String, displayName: String, description: String,
+        prefs: SharedPreferences, key: String, defaultValue: Long,
+        minValue: Long? = null, maxValue: Long? = null,
+        risk: ConfigRisk = ConfigRisk.NORMAL,
+    ) : this(path, displayName, description, wrap(prefs), key, defaultValue, minValue, maxValue, risk)
+
+    private val b = PrefsBinding(prefs, key)
     override val valueSchema: ConfigSchema
-        get() = ConfigSchema.Int(
-            min = minValue?.toInt(),
-            max = maxValue?.toInt(),
-        )
+        get() = ConfigSchema.Int(min = minValue?.toInt(), max = maxValue?.toInt())
     override val access: ConfigAccess get() = ConfigAccess.READWRITE
     override val revertable: Boolean get() = true
 
-    override fun read(): ConfigValue {
-        val v = if (prefs.contains(key)) prefs.getLong(key, defaultValue) else defaultValue
-        return ConfigValue.Int(v.toInt())
-    }
+    override fun read(): ConfigValue = ConfigValue.Int(b.long(defaultValue).toInt())
     override fun write(value: ConfigValue) {
         valueSchema.validate(value)
-        val i = (value as ConfigValue.Int).value
-        prefs.edit().putLong(key, i.toLong()).apply()
+        b.putLong((value as ConfigValue.Int).value.toLong())
     }
 }
+
+// ─── Double (persisted as Float — the store has no Double) ──────────────────
 
 class PrefsDoubleField(
     override val path: String,
     override val displayName: String,
     override val description: String,
-    private val prefs: SharedPreferences,
-    private val key: String,
+    prefs: PrefsBackend,
+    key: String,
     private val defaultValue: Double,
     private val minValue: Double? = null,
     private val maxValue: Double? = null,
     override val risk: ConfigRisk = ConfigRisk.NORMAL,
 ) : ConfigField {
-    // SharedPreferences has no native Double; persist as Float bits via
-    // `Float.toRawBits` packed into a Long for full precision. Most call
-    // sites here use small floats (rate / pitch / volume) so the cast is
-    // lossless in practice.
-    override val valueSchema: ConfigSchema
-        get() = ConfigSchema.Double(min = minValue, max = maxValue)
+    constructor(
+        path: String, displayName: String, description: String,
+        prefs: SharedPreferences, key: String, defaultValue: Double,
+        minValue: Double? = null, maxValue: Double? = null,
+        risk: ConfigRisk = ConfigRisk.NORMAL,
+    ) : this(path, displayName, description, wrap(prefs), key, defaultValue, minValue, maxValue, risk)
+
+    private val b = PrefsBinding(prefs, key)
+    override val valueSchema: ConfigSchema get() = ConfigSchema.Double(min = minValue, max = maxValue)
     override val access: ConfigAccess get() = ConfigAccess.READWRITE
     override val revertable: Boolean get() = true
 
-    override fun read(): ConfigValue {
-        val v = if (prefs.contains(key)) prefs.getFloat(key, defaultValue.toFloat()).toDouble() else defaultValue
-        return ConfigValue.Double(v)
-    }
+    override fun read(): ConfigValue =
+        ConfigValue.Double(b.float(defaultValue.toFloat()).toDouble())
+
     override fun write(value: ConfigValue) {
         valueSchema.validate(value)
         val d = when (value) {
@@ -128,93 +176,115 @@ class PrefsDoubleField(
             is ConfigValue.Int -> value.value.toDouble()
             else -> throw ConfigError.TypeMismatch("double")
         }
-        prefs.edit().putFloat(key, d.toFloat()).apply()
+        b.putFloat(d.toFloat())
     }
 }
+
+// ─── String ─────────────────────────────────────────────────────────────────
 
 class PrefsStringField(
     override val path: String,
     override val displayName: String,
     override val description: String,
-    private val prefs: SharedPreferences,
-    private val key: String,
+    prefs: PrefsBackend,
+    key: String,
     private val defaultValue: String,
     private val maxLength: Int? = null,
     private val regex: String? = null,
     override val risk: ConfigRisk = ConfigRisk.NORMAL,
 ) : ConfigField {
+    constructor(
+        path: String, displayName: String, description: String,
+        prefs: SharedPreferences, key: String, defaultValue: String,
+        maxLength: Int? = null, regex: String? = null,
+        risk: ConfigRisk = ConfigRisk.NORMAL,
+    ) : this(path, displayName, description, wrap(prefs), key, defaultValue, maxLength, regex, risk)
+
+    private val b = PrefsBinding(prefs, key)
     override val valueSchema: ConfigSchema
         get() = ConfigSchema.Str(maxLength = maxLength, regex = regex)
     override val access: ConfigAccess get() = ConfigAccess.READWRITE
     override val revertable: Boolean get() = true
 
-    override fun read(): ConfigValue =
-        ConfigValue.Str(prefs.getString(key, null) ?: defaultValue)
+    override fun read(): ConfigValue = ConfigValue.Str(b.string(null) ?: defaultValue)
     override fun write(value: ConfigValue) {
         valueSchema.validate(value)
-        val s = (value as ConfigValue.Str).value
-        prefs.edit().putString(key, s).apply()
+        b.putString((value as ConfigValue.Str).value)
     }
 }
 
-/**
- * String-enum stored as a raw string in SharedPreferences. Schema's
- * StrEnum validates before write.
- */
+// ─── String enum stored as string ───────────────────────────────────────────
+
 class PrefsEnumField(
     override val path: String,
     override val displayName: String,
     override val description: String,
-    private val prefs: SharedPreferences,
-    private val key: String,
+    prefs: PrefsBackend,
+    key: String,
     private val cases: List<String>,
     private val defaultValue: String,
     override val risk: ConfigRisk = ConfigRisk.NORMAL,
 ) : ConfigField {
+    constructor(
+        path: String, displayName: String, description: String,
+        prefs: SharedPreferences, key: String, cases: List<String>, defaultValue: String,
+        risk: ConfigRisk = ConfigRisk.NORMAL,
+    ) : this(path, displayName, description, wrap(prefs), key, cases, defaultValue, risk)
+
+    private val b = PrefsBinding(prefs, key)
     override val valueSchema: ConfigSchema get() = ConfigSchema.StrEnum(cases)
     override val access: ConfigAccess get() = ConfigAccess.READWRITE
     override val revertable: Boolean get() = true
 
     override fun read(): ConfigValue {
-        val raw = prefs.getString(key, null) ?: defaultValue
+        val raw = b.string(null) ?: defaultValue
         return ConfigValue.Str(if (raw in cases) raw else defaultValue)
     }
+
     override fun write(value: ConfigValue) {
         valueSchema.validate(value)
-        prefs.edit().putString(key, (value as ConfigValue.Str).value).apply()
+        b.putString((value as ConfigValue.Str).value)
     }
 }
 
+// ─── String enum stored as Int index ────────────────────────────────────────
+
 /**
- * Some legacy app preferences store the picker index as Int (e.g.
- * `theme_mode` is 0=System / 1=Light / 2=Dark) but we want the agent
- * to see clean string tokens. Reads map index → case; writes map case
- * → index. Mirrors iOS `AppStorageIntCodedEnumField`.
+ * Legacy pickers store the index (`theme_mode` = 0 System / 1 Light / 2 Dark)
+ * but the agent sees clean tokens. Reads map index → case, writes case → index.
  */
 class PrefsIntCodedEnumField(
     override val path: String,
     override val displayName: String,
     override val description: String,
-    private val prefs: SharedPreferences,
-    private val key: String,
+    prefs: PrefsBackend,
+    key: String,
     private val cases: List<String>,
     private val defaultIndex: Int,
     override val risk: ConfigRisk = ConfigRisk.NORMAL,
 ) : ConfigField {
+    constructor(
+        path: String, displayName: String, description: String,
+        prefs: SharedPreferences, key: String, cases: List<String>, defaultIndex: Int,
+        risk: ConfigRisk = ConfigRisk.NORMAL,
+    ) : this(path, displayName, description, wrap(prefs), key, cases, defaultIndex, risk)
+
+    private val b = PrefsBinding(prefs, key)
     override val valueSchema: ConfigSchema get() = ConfigSchema.StrEnum(cases)
     override val access: ConfigAccess get() = ConfigAccess.READWRITE
     override val revertable: Boolean get() = true
 
     override fun read(): ConfigValue {
-        val idx = if (prefs.contains(key)) prefs.getInt(key, defaultIndex) else defaultIndex
-        val safe = if (idx in 0..cases.lastIndex) idx else defaultIndex
+        val idx = b.int(defaultIndex)
+        val safe = if (idx in cases.indices) idx else defaultIndex
         return ConfigValue.Str(cases[safe])
     }
+
     override fun write(value: ConfigValue) {
         valueSchema.validate(value)
         val s = (value as ConfigValue.Str).value
         val idx = cases.indexOf(s)
         if (idx < 0) throw ConfigError.InvalidValue("must be one of: ${cases.joinToString(", ")}")
-        prefs.edit().putInt(key, idx).apply()
+        b.putInt(idx)
     }
 }

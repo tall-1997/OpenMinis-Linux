@@ -57,6 +57,18 @@ private fun openAIContentFiltered(statusCode: Int, lower: String): Boolean =
 internal fun OpenAIProvider.mapError(error: Throwable): LLMError = mapThrowableToLLMError(error)
 
 /**
+ * [T-canceled-io-mapping] Stable prefix of the [LLMError.TransientError] the
+ * OpenAI-family mapper folds a locally-cancelled stream into (the watchdog
+ * cancel cascade). No production code message-sniffs this text anymore:
+ * [com.openminis.app.provider.FirstEventWatchdog.realProviderVerdict]
+ * classifies the timeout boundary by error KIND only ([T-watchdog-answer-
+ * whitelist] — a TransientError of any wording yields to the timeout), so the
+ * prefix now pins the mapped cascade shape for the FirstEventWatchdogTest
+ * regression tests that guard the teardown mapping itself.
+ */
+internal const val CANCELED_STREAM_TEARDOWN_PREFIX = "stream was cancelled mid-run (local teardown)"
+
+/**
  * [T-zen-structured-error] Parses an OpenCode Zen structured refusal body —
  * `{"type":"error","error":{"type":"FreeTierError"|"ModelError"|"RegionError",
  * "message":…}}` — into a precise [LLMError]; null when the body is not one, so
@@ -120,7 +132,7 @@ internal fun mapThrowableToLLMError(error: Throwable): LLMError {
     // a transient stall so consumers retry on a fresh connection instead of
     // surfacing "Network error: Canceled".
     if (error is java.io.IOException && error.message == "Canceled") {
-        return LLMError.TransientError("stream was cancelled mid-run (local teardown) — retrying on a fresh connection")
+        return LLMError.TransientError("$CANCELED_STREAM_TEARDOWN_PREFIX — retrying on a fresh connection")
     }
     if (error is java.io.IOException) return LLMError.NetworkError(error)
     return LLMError.Unknown(error)

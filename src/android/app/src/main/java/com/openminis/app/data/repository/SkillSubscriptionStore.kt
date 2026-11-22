@@ -31,7 +31,7 @@ object SkillSubscriptionStore {
     private const val KEY_FEEDS = "feeds_json"
 
     fun list(context: Context): List<SkillFeed> {
-        val raw = prefs(context).getString(KEY_FEEDS, "[]") ?: "[]"
+        val raw = prefs().string(KEY_FEEDS, "[]") ?: "[]"
         return try {
             parseFeeds(raw)
         } catch (_: Exception) {
@@ -51,7 +51,7 @@ object SkillSubscriptionStore {
     fun save(context: Context, feeds: List<SkillFeed>) {
         val arr = JSONArray()
         for (f in feeds) arr.put(toJson(f))
-        prefs(context).edit().putString(KEY_FEEDS, arr.toString()).apply()
+        prefs().set(KEY_FEEDS, arr.toString())
     }
 
     internal fun parseFeeds(raw: String): List<SkillFeed> {
@@ -132,8 +132,8 @@ object SkillSubscriptionStore {
         put("skillIds", JSONArray(f.skillIds))
     }
 
-    private fun prefs(context: Context) =
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private fun prefs() =
+        com.openminis.app.config.Prefs.file(PREFS)
 }
 
 object SkillSubscriptionSync {

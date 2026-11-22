@@ -324,6 +324,18 @@
     <string name="token_usage_context_used">Kullanılan Bağlam</string>
     <string name="token_usage_context_window">Bağlam Penceresi</string>
     <string name="token_usage_max_output">En Fazla Çıktı</string>
+    <string name="token_usage_section_breakdown">Bileşim</string>
+    <string name="token_usage_breakdown_hint">Tahmini ±10% — sonraki isteğin taşıdığı içerik</string>
+    <string name="token_usage_block_system_tools">Sistem ve araçlar</string>
+    <string name="token_usage_block_skills_mcps">Beceriler ve MCP</string>
+    <string name="token_usage_block_memory">Bellek</string>
+    <string name="token_usage_block_runtime_tail">Tur başına bağlam</string>
+    <string name="token_usage_block_goal_plan">Hedef ve plan</string>
+    <string name="token_usage_block_tool_schemas">Araç şemaları</string>
+    <string name="token_usage_block_history">Konuşma</string>
+    <string name="token_usage_block_pending">Gönderilmemiş ekler</string>
+    <string name="token_usage_breakdown_estimated">Tahmini</string>
+    <string name="token_usage_breakdown_measured">Ölçülen</string>
     <string name="token_usage_section_thinking">Düşünme</string>
     <string name="token_usage_thinking_label">Düşünme</string>
     <string name="token_usage_thinking_level">Düzey</string>
@@ -635,10 +647,9 @@
     <string name="env_var_privacy_footer">Etkinleştirildiğinde, shell-execute çıktısında görünen her ortam değişkeni değeri, modele ulaşmadan önce maskelenmiş biçimiyle (örn. `sk-1********ajhks`) değiştirilir. 8 karakterden kısa değerler tümüyle `*` olur. Sohbette kullanıcının gördüğü çıktı değişmez.</string>
     <string name="outbound_mask_toggle">Giden gizlilik maskeleme</string>
     <string name="outbound_mask_footer">Opt-in şekil maskeleme: anahtar biçimli dizeler (kod dahil), e-postalar ve telefon benzeri sayılar yer tutucuya dönüşür. Aşağıdaki embedding API anahtarı uygulama prefs’te düz metin saklanır. Cihaz geçmişi değişmez.</string>
-    <string name="chat_menu_perm_yoyo">YOLO · tam otomatik</string>
-    <string name="chat_menu_perm_safe_auto">Güvenli otomatik · salt okunur araçlar serbest çalışır</string>
-    <string name="chat_menu_perm_ask">Sor · her çağrıyı onayla</string>
-    <string name="chat_menu_perm_off">Kapalı · tüm araçları reddet</string>
+    <string name="chat_menu_perm_yoyo">Tam erişim</string>
+    <string name="chat_menu_perm_safe_auto">Otonom</string>
+    <string name="chat_menu_perm_ask">Değişiklikten önce sor</string>
     <string name="gate_approval_allow_all">Bu oturumda her zaman izin ver (geçerli hedef)</string>
     <string name="approval_action_allow_all_session">Bu oturumda her zaman izin ver</string>
     <string name="env_var_section_header">Değişkenler</string>
@@ -865,6 +876,10 @@
     <string name="newer_db_body">Minis Ultra\'in bu kopyası, verilerinizi oluşturan sürümden daha eski olduğu için onları güvenle açamıyor.\n\nHiçbir şey silinmedi — sohbetleriniz bu cihazda olduğu gibi duruyor. Minis Ultra\'in daha yeni sürümünü yeniden kurun, her şey yerinde olacak.</string>
     <string name="newer_db_versions">Bu sürüm %1$d veri biçimini destekler</string>
     <string name="newer_db_exit">Kapat</string>
+    <string name="degraded_startup_title">Bazı başlangıç bileşenleri yüklenemedi</string>
+    <string name="degraded_startup_body">Uygulama azaltılmış işlevsellikle çalışıyor. Yeniden başlatılana kadar bazı özellikler kullanılamayabilir.</string>
+    <string name="degraded_startup_cause">Neden: %1$s</string>
+    <string name="degraded_startup_dismiss">Kapat</string>
     <string name="usage_attr_unknown_session">Model bilinmiyor — oturum kaydı silinmiş</string>
     <string name="usage_attr_removed">Yapılandırdığınız sağlayıcılar arasında artık yok</string>
     <string name="usage_detail_output">Çıkış</string>
@@ -1046,6 +1061,13 @@
     <string name="model_group_detail_name">Ad</string>
     <string name="model_group_detail_the_label_shown_in_the_model_picker_save">Model seçicide görünen etiket. Başka bir yere dokunduğunuzda kendiliğinden kaydedilir.</string>
     <string name="model_group_detail_routing_strategy">Yönlendirme Stratejisi</string>
+    <string name="model_group_detail_more_strategies">Daha fazla strateji</string>
+    <string name="model_group_detail_fewer_strategies">Daha az strateji</string>
+    <string name="model_connection_title">Model ve bağlantı</string>
+    <string name="model_connection_providers_count">%1$d sağlayıcı · %2$d model</string>
+    <string name="model_connection_groups_count">%1$d grup</string>
+    <string name="model_connection_auto_groups">Otomatik gruplar</string>
+    <string name="model_connection_not_set">Ayarlanmadı</string>
     <string name="model_group_detail_routing_quota_window_footer">Birincil üye pencere kotası bitene kadar hizmet verir, ardından sıfırlanana dek sonraki üye devralır.</string>
     <string name="model_group_detail_routing_round_robin_footer">Üyeleri sırayla, her seferinde bir çağrı olacak şekilde döndürür.</string>
     <string name="model_group_detail_routing_smart_footer">Hafif istekler son (uygun fiyatlı) üyeye; uzun veya karmaşık istekler ilk (güçlü) üyeye gider.</string>
@@ -1323,6 +1345,8 @@
     <string name="backup_ready">Yedek Hazır</string>
     <string name="backup_result_excluded_too_large">Dışarıda bırakıldı (çok büyük)</string>
     <string name="backup_result_files_not_included">Dosyalar dahil edilmedi</string>
+    <string name="backup_result_excluded_unreadable">Dışarıda bırakıldı (okunamadı)</string>
+    <string name="backup_result_credentials_unreadable">Kimlik bilgileri okunamadı</string>
     <string name="backup_result_local_only">Yalnızca bu cihaza kaydedildi.</string>
     <string name="backup_result_delivered">Bu cihaza kaydedildi ve %2$d hedeften %1$d tanesine kopyalandı.</string>
     <string name="backup_local_removed">Yerel kopya kaldırıldı — bu cihazda %1$s yer açıldı</string>
@@ -2136,6 +2160,9 @@
     <string name="cot_translate_settings_language">Hedef dil</string>
     <string name="cot_translate_privacy_notice">Genişletilmiş akıl yürütme, seçilen çeviri hizmetine gönderilir. Özel kod veya konuşma ayrıntıları içerebilir.</string>
     <string name="cot_translate_anonymous_notice">Bing ve Google çeviri için oturum açma veya API anahtarı gerektirmez. Anonim uç noktaları istekleri reddedebilir veya sınırlayabilir.</string>
+    <string name="cot_translate_retry">Yeniden dene</string>
+    <string name="cot_translate_privacy_accept">Etkinleştir</string>
+    <string name="cot_translate_privacy_decline">İptal</string>
     <string name="git_panel_staged">Hazırlandı</string>
     <string name="git_panel_changes_section">Değişiklikler</string>
     <string name="git_panel_stats_files">%1$d dosya değiştirildi</string>
@@ -2750,6 +2777,7 @@
     <string name="modeldetail_section_context_retry">Bağlam ve yeniden denemeler</string>
     <string name="modeldetail_temperature">Sıcaklık (0,0–2,0)</string>
     <string name="modeldetail_temperature_invalid">0,0 ile 2,0 arasında bir sayı gir ya da atlamak için boş bırak.</string>
+    <string name="modeldetail_harness_save_failed">Bağlam büçesi ayarı kaydedilemedi. Model kaydı kaydedildi — lütfen tekrar deneyin.</string>
     <string name="modeldetail_temperature_placeholder">Atla</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">Ekle</string>
@@ -3330,6 +3358,10 @@
     <string name="guard_stop_on">Oturumu durdurabilir</string>
     <string name="guard_stop_off">Oturumu asla durdurmaz</string>
     <string name="guard_stop_footer">Açıkken koruma, aynı eylem çok sık tekrarlandığında oturumu durdurur. Kapalıyken yalnızca modeli uyarır; derleme gibi uzun beklemelerde işe yarar.</string>
+    <string name="goal_drift_section">Hedef sapma gözetimi</string>
+    <string name="goal_drift_threshold_title">Sapma hatırlatma eşiği</string>
+    <string name="goal_drift_threshold_value">%1$d araç turu</string>
+    <string name="goal_drift_footer">Bir hedef etkinken, ana hat plan panosunda hiçbir hareket olmadan bu kadar ardışık araç turunun geçmesine izin verilir; ardından ana bilgisayar modeli hedefine hatırlatır. Yüksek = daha az hatırlatma; düşük = daha sıkı gözetim.</string>
     <string name="token_usage_section_memory">Bellek</string>
     <string name="token_usage_memory_lines">Teslim edilen satırlar</string>
     <string name="token_usage_memory_shown">Gösterim sayısı</string>
@@ -3340,4 +3372,13 @@
     <string name="modeldetail_tail_budget_state_auto">Otomatik (pencereye göre, en çok 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Bu modele özel</string>
     <string name="tool_limits_tool_concurrency">Paralel okuma araçları</string>
+ <string name="perm_mode_desc_ask">Dosyalar değişmeden önce sorar</string>
+ <string name="perm_mode_desc_auto">Yalnızca risk olduğunda sorar</string>
+ <string name="perm_mode_desc_full">Daha az onay</string>
+ <string name="perm_full_access_title">Tam erişim açılsın mı?</string>
+ <string name="perm_full_access_body">Ajan her seferinde sormadan dosya okur, oluşturur ve siler, terminal komutları çalıştırır, ağa veya bağlı uygulamalara erişir. Bu işlemler veri kaybına ya da sızıntısına yol açabilir; yalnızca göreve güveniyorsan aç. İstediğin an geri dönebilirsin.</string>
+ <string name="perm_full_access_ack">Riski anlıyorum ve verilerimin güvenliğinin sorumluluğunu alıyorum.</string>
+ <string name="perm_full_access_confirm">Aç</string>
+ <string name="perm_guarded_risk_reason">Riskli komutu onayla</string>
+ <string name="perm_guarded_risk_message">Otonom mod bu komutu riskli buldu. Çalıştırmak için bir kez onayla.</string>
 </resources>

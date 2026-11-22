@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
 import kotlinx.coroutines.launch
+import com.openminis.app.ui.tokens.MinisTypography
 
 @Composable
 internal fun RenderTable(block: MdBlock.Table) {
@@ -191,10 +192,16 @@ internal fun RenderTable(block: MdBlock.Table) {
                             val cellText = cells.getOrElse(colIndex) { "" }
                             MdText(
                                 text = MarkdownParseCaches.inline(cellText, colors),
-                                fontSize = 14.sp,
+                                fontSize = MinisTypography.bodyLg,
                                 fontWeight = if (isHeader) FontWeight.SemiBold else null,
                                 color = colors.text,
-                                inlineContent = rememberKatexInlineContent(14.sp, MarkdownParseCaches.mathLatex(cellText)),
+                                // 内联公式基准字号与单元格正文同源（上一行的 bodyLg）：
+                                // 同一格里正文 14sp、公式另写 14.sp 是两条独立来源，
+                                // 令牌一调就错位。
+                                inlineContent = rememberKatexInlineContent(
+                                    MinisTypography.bodyLg,
+                                    MarkdownParseCaches.mathLatex(cellText),
+                                ),
                                 // Long-press selects the whole cell rather than a
                                 // sentence-fragment of it: a cell holding "1,200"
                                 // or "v1.2, beta" would otherwise stop at the

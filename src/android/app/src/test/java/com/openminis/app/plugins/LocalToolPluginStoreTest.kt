@@ -103,6 +103,22 @@ class LocalToolPluginStoreTest {
     }
 
     @Test
+    fun `materialize rejects input redirect and process substitution`() {
+        // [T-local-tool-procsub] The guest shell is bash: a value like
+        // "<(touch /tmp/x)" interpolates into command position and EXECUTES
+        // the inner command while containing none of the previously refused
+        // metacharacters. "<" (input redirect, process substitution) must be
+        // refused like the rest.
+        for (evil in listOf("a<b", "<(touch /tmp/pwn)", "diff <(ls a) <(ls b)")) {
+            val r = LocalToolPluginStore.materialize(tool(), mapOf("msg" to evil))
+            assertTrue("value '$evil' should be unsafe", r is LocalToolPluginStore.MaterializeResult.UnsafeParam)
+        }
+        // allowUnsafe stays the documented escape hatch.
+        val r = LocalToolPluginStore.materialize(tool(), mapOf("msg" to "<(ls)"), allowUnsafe = true)
+        assertEquals("echo <(ls)", (r as LocalToolPluginStore.MaterializeResult.Ok).command)
+    }
+
+    @Test
     fun `materialize allowUnsafe passes through`() {
         val r = LocalToolPluginStore.materialize(tool(), mapOf("msg" to "a;b"), allowUnsafe = true)
         assertEquals("echo a;b", (r as LocalToolPluginStore.MaterializeResult.Ok).command)

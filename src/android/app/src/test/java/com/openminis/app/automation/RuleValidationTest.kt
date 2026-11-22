@@ -131,18 +131,18 @@ class RuleValidationTest {
 
     @Test
     fun permissionModeNormalizesToSessionTokens() {
-        // [#31] Four-tier tokens; unknown values degrade to SAFE_AUTO (the
-        // old "ASK" gate behaviour) so they can never widen the gate.
-        assertEquals("YOLO", ok(base().copy(permissionMode = "yoyo")).permissionMode)
-        assertEquals("SAFE_AUTO", ok(base().copy(permissionMode = "whatever")).permissionMode)
-        assertEquals("SAFE_AUTO", ok(base().copy(permissionMode = "SAFE_AUTO")).permissionMode)
-        // [T-rule-off-safe-auto] OFF/DENY_ALL execute as SAFE_AUTO in
-        // unattended runs, per the documented AutomationRuleTools contract.
-        assertEquals("SAFE_AUTO", ok(base().copy(permissionMode = "OFF")).permissionMode)
-        assertEquals("SAFE_AUTO", ok(base().copy(permissionMode = "DENY_ALL")).permissionMode)
-        // [#31] The legacy "ASK" token normalizes to SAFE_AUTO — the gate
-        // behaviour the two-tier era actually meant.
-        assertEquals("SAFE_AUTO", ok(base().copy(permissionMode = "ASK")).permissionMode)
+        // [T-perm-no-widening] Three-tier tokens; unknown and legacy values
+        // degrade to ASK_BEFORE_CHANGES so no unattended run widens.
+        assertEquals("FULL_ACCESS", ok(base().copy(permissionMode = "yoyo")).permissionMode)
+        assertEquals("ASK_BEFORE_CHANGES", ok(base().copy(permissionMode = "whatever")).permissionMode)
+        // [T-perm-no-widening] SAFE_AUTO / ASK meant "reads auto, the rest
+        // asks" - ASK_BEFORE_CHANGES. Mapping them to AUTONOMOUS would let
+        // every existing scheduled rule write files with no confirmation.
+        assertEquals("ASK_BEFORE_CHANGES", ok(base().copy(permissionMode = "SAFE_AUTO")).permissionMode)
+        assertEquals("ASK_BEFORE_CHANGES", ok(base().copy(permissionMode = "OFF")).permissionMode)
+        assertEquals("ASK_BEFORE_CHANGES", ok(base().copy(permissionMode = "DENY_ALL")).permissionMode)
+        assertEquals("ASK_BEFORE_CHANGES", ok(base().copy(permissionMode = "ASK")).permissionMode)
+        assertEquals("AUTONOMOUS", ok(base().copy(permissionMode = "AUTONOMOUS")).permissionMode)
         assertNull(ok(base().copy(permissionMode = " ")).permissionMode)
     }
 

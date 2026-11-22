@@ -1,7 +1,6 @@
 package com.openminis.app.data.repository
 
 import android.content.Context
-import android.content.SharedPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,15 +16,14 @@ import org.json.JSONArray
  */
 class MultiAgentSettingsRepository(context: Context) {
 
-    private val prefs: SharedPreferences =
-        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val prefs = com.openminis.app.config.Prefs.file(PREFS_NAME)
 
-    private val _enabled = MutableStateFlow(prefs.getBoolean(KEY_ENABLED, DEFAULT_ENABLED))
+    private val _enabled = MutableStateFlow(prefs.bool(KEY_ENABLED, DEFAULT_ENABLED))
     val enabled: StateFlow<Boolean> = _enabled.asStateFlow()
 
     private val _maxConcurrent = MutableStateFlow(
         MultiAgentSettings.clampConcurrent(
-            prefs.getInt(KEY_MAX_CONCURRENT, MultiAgentSettings.DEFAULT_CONCURRENT),
+            prefs.int(KEY_MAX_CONCURRENT, MultiAgentSettings.DEFAULT_CONCURRENT),
         ),
     )
     val maxConcurrent: StateFlow<Int> = _maxConcurrent.asStateFlow()
@@ -35,27 +33,27 @@ class MultiAgentSettingsRepository(context: Context) {
 
     private val _subagentMaxTurns = MutableStateFlow(
         MultiAgentSettings.clampTurns(
-            prefs.getInt(KEY_SUBAGENT_MAX_TURNS, MultiAgentSettings.DEFAULT_SUBAGENT_TURNS),
+            prefs.int(KEY_SUBAGENT_MAX_TURNS, MultiAgentSettings.DEFAULT_SUBAGENT_TURNS),
         ),
     )
     val subagentMaxTurns: StateFlow<Int> = _subagentMaxTurns.asStateFlow()
 
     private val _subagentMaxAttempts = MutableStateFlow(
         MultiAgentSettings.clampAttempts(
-            prefs.getInt(KEY_SUBAGENT_MAX_ATTEMPTS, MultiAgentSettings.DEFAULT_SUBAGENT_ATTEMPTS),
+            prefs.int(KEY_SUBAGENT_MAX_ATTEMPTS, MultiAgentSettings.DEFAULT_SUBAGENT_ATTEMPTS),
         ),
     )
     val subagentMaxAttempts: StateFlow<Int> = _subagentMaxAttempts.asStateFlow()
 
     // Worker seat of a Supervisor-Worker chat: "" = follow the session model.
     private val _workerModelEntryId = MutableStateFlow(
-        prefs.getString(KEY_WORKER_MODEL_ID, null)?.trim().orEmpty(),
+        prefs.stringOrNull(KEY_WORKER_MODEL_ID)?.trim().orEmpty(),
     )
     val workerModelEntryId: StateFlow<String> = _workerModelEntryId.asStateFlow()
 
     private val _supervisorMaxWorkerTurns = MutableStateFlow(
         MultiAgentSettings.clampSupervisorTurns(
-            prefs.getInt(KEY_SUPERVISOR_MAX_WORKER_TURNS, MultiAgentSettings.DEFAULT_SUPERVISOR_TURNS),
+            prefs.int(KEY_SUPERVISOR_MAX_WORKER_TURNS, MultiAgentSettings.DEFAULT_SUPERVISOR_TURNS),
         ),
     )
     val supervisorMaxWorkerTurns: StateFlow<Int> = _supervisorMaxWorkerTurns.asStateFlow()
@@ -68,13 +66,13 @@ class MultiAgentSettingsRepository(context: Context) {
     val selectedThinkingLevels: StateFlow<List<String>> = _selectedThinkingLevels.asStateFlow()
 
     fun setEnabled(value: Boolean) {
-        prefs.edit().putBoolean(KEY_ENABLED, value).apply()
+        prefs.set(KEY_ENABLED, value)
         _enabled.value = value
     }
 
     fun setMaxConcurrent(value: Int) {
         val clamped = MultiAgentSettings.clampConcurrent(value)
-        prefs.edit().putInt(KEY_MAX_CONCURRENT, clamped).apply()
+        prefs.set(KEY_MAX_CONCURRENT, clamped)
         _maxConcurrent.value = clamped
         val resized = MultiAgentSettings.resizeSlots(_selectedModelEntryIds.value, clamped)
         if (resized != _selectedModelEntryIds.value) writeSelectedIds(resized)
@@ -86,25 +84,25 @@ class MultiAgentSettingsRepository(context: Context) {
 
     fun setSubagentMaxTurns(value: Int) {
         val clamped = MultiAgentSettings.clampTurns(value)
-        prefs.edit().putInt(KEY_SUBAGENT_MAX_TURNS, clamped).apply()
+        prefs.set(KEY_SUBAGENT_MAX_TURNS, clamped)
         _subagentMaxTurns.value = clamped
     }
 
     fun setSubagentMaxAttempts(value: Int) {
         val clamped = MultiAgentSettings.clampAttempts(value)
-        prefs.edit().putInt(KEY_SUBAGENT_MAX_ATTEMPTS, clamped).apply()
+        prefs.set(KEY_SUBAGENT_MAX_ATTEMPTS, clamped)
         _subagentMaxAttempts.value = clamped
     }
 
     fun setWorkerModelEntryId(id: String) {
         val trimmed = id.trim()
-        prefs.edit().putString(KEY_WORKER_MODEL_ID, trimmed).apply()
+        prefs.set(KEY_WORKER_MODEL_ID, trimmed)
         _workerModelEntryId.value = trimmed
     }
 
     fun setSupervisorMaxWorkerTurns(value: Int) {
         val clamped = MultiAgentSettings.clampSupervisorTurns(value)
-        prefs.edit().putInt(KEY_SUPERVISOR_MAX_WORKER_TURNS, clamped).apply()
+        prefs.set(KEY_SUPERVISOR_MAX_WORKER_TURNS, clamped)
         _supervisorMaxWorkerTurns.value = clamped
     }
 
@@ -158,13 +156,13 @@ class MultiAgentSettingsRepository(context: Context) {
         if (next != _selectedModelEntryIds.value) writeSelectedIds(next)
         val worker = _workerModelEntryId.value
         if (worker.isNotBlank() && worker !in liveIds) {
-            prefs.edit().putString(KEY_WORKER_MODEL_ID, "").apply()
+            prefs.set(KEY_WORKER_MODEL_ID, "")
             _workerModelEntryId.value = ""
         }
     }
 
     private fun readSelectedIds(): List<String> {
-        val raw = prefs.getString(KEY_MODEL_IDS, null) ?: return MultiAgentSettings.resizeSlots(
+        val raw = prefs.stringOrNull(KEY_MODEL_IDS) ?: return MultiAgentSettings.resizeSlots(
             emptyList(),
             _maxConcurrent.value,
         )
@@ -183,7 +181,7 @@ class MultiAgentSettingsRepository(context: Context) {
     private fun writeSelectedIds(ids: List<String>) {
         val arr = JSONArray()
         ids.forEach { arr.put(it) }
-        prefs.edit().putString(KEY_MODEL_IDS, arr.toString()).apply()
+        prefs.set(KEY_MODEL_IDS, arr.toString())
         _selectedModelEntryIds.value = ids
         val resizedThinking = MultiAgentSettings.resizeSlots(
             _selectedThinkingLevels.value,

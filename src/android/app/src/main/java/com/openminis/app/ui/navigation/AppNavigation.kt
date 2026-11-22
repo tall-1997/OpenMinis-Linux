@@ -193,7 +193,7 @@ fun AppNavigation(
         // the Activity it was composed in).
         val (rawMode, mode) = withContext(Dispatchers.IO) {
             val app = context.applicationContext
-            val raw = getAppearancePrefs(app).getInt(KEY_LAUNCH_SESSION, 0)
+            val raw = getAppearancePrefs(app).int(KEY_LAUNCH_SESSION, 0)
             // Hang-detector circuit breaker: if the previous launches racked up
             // ≥3 main-thread hangs, force mode = 3 (home) so we don't reopen
             // the session/chat that was hanging. The user clears this either
@@ -461,6 +461,7 @@ fun AppNavigation(
                 onBack = { navController.safePopBackStack() },
                 onProvidersClick = { navController.safeNavigate(Routes.PROVIDER_LIST) },
                 onModelGroupsClick = { navController.safeNavigate(Routes.MODEL_GROUPS) },
+                onModelConnectionClick = { navController.safeNavigate(Routes.MODEL_CONNECTION) },
                 onRootfsClick = { navController.safeNavigate(Routes.STORAGE) },
                 onBackupClick = { navController.safeNavigate(Routes.BACKUP) },
                 onNetworkClick = { navController.safeNavigate(Routes.NETWORK) },
@@ -482,7 +483,6 @@ fun AppNavigation(
                 onTranslateClick = { navController.safeNavigate(Routes.TRANSLATE) },
                 onOpenBrowser = { navController.safeNavigate(Routes.HOME_BROWSER) },
                 onBrowserSettings = { navController.safeNavigate(Routes.HOME_BROWSER_SETTINGS) },
-
                 onLogsClick = { navController.safeNavigate(Routes.LOGS) },
                 onAboutClick = { navController.safeNavigate(Routes.ABOUT) },
                 onMountedFoldersClick = { navController.safeNavigate(Routes.MOUNTED_FOLDERS) },

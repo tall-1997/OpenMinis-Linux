@@ -210,7 +210,19 @@ class McpApprovalRpc(
             ?: return ExecutionOutcome(error = Outcome.Err(ErrorCode.OPERATION_NOT_FOUND, "operation '$operationId' not found"))
         // Write into the host directory; report the guest path back so the
         // client can open the artifacts it just produced.
-        val taskRoot = manager.hostTaskRootFor(op.taskId)
+        // [T-mcp-approval-taskid] taskRootFor fails closed on ids validId
+        // refuses (corrupt prefs can carry taskId ".."). This is also the
+        // approvals UI's direct call path — the sheet launches it in a bare
+        // coroutine with no handler, so the failure MUST surface as an
+        // Outcome, never as an exception that would crash the process.
+        val taskRoot = runCatching { manager.hostTaskRootFor(op.taskId) }.getOrElse {
+            return ExecutionOutcome(
+                error = Outcome.Err(
+                    ErrorCode.INVALID_ID,
+                    "task '${op.taskId}' has an invalid id and cannot be resolved to a task root",
+                ),
+            )
+        }
 
         val run = executor.execute(op, taskRoot, sourceContext)
         if (!run.ok) {

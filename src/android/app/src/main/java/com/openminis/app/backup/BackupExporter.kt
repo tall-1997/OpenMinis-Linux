@@ -204,8 +204,10 @@ class BackupExporter(
                 BackupSecretsCollector.collect(context, staging, options.categories) { detail ->
                     // [T-backup-decode-honesty] An unreadable credential source
                     // rides the same skip record as a size-cap skip, so the
-                    // run lands as "with issues" naming the omission.
-                    blobStore.recordSkip(detail)
+                    // run lands as "with issues" naming the omission — but it
+                    // keeps its own reason, so the report blames the unreadable
+                    // store rather than the size cap.
+                    blobStore.recordSkip(detail, reason = BackupBlobStore.SkipReason.CREDENTIALS)
                 }
             }
 
@@ -567,10 +569,8 @@ class BackupExporter(
     private fun exportSettings(dataDir: File) {
         val toolLimits = JSONObject()
         runCatching {
-            val prefs = context.getSharedPreferences(
-                com.openminis.app.data.ToolLimitPrefs.PREFS, android.content.Context.MODE_PRIVATE,
-            )
-            for ((key, value) in prefs.all) {
+            val prefs = com.openminis.app.config.Prefs.file(com.openminis.app.data.ToolLimitPrefs.PREFS)
+            for ((key, value) in prefs.snapshot()) {
                 when (value) {
                     is Int -> toolLimits.put(key, value)
                     is Long -> toolLimits.put(key, value)

@@ -2,9 +2,7 @@ package com.openminis.app.ui.sandbox
 
 import com.openminis.app.ui.settings.SettingsSwitch
 import com.openminis.app.R
-
 import android.content.Context
-import android.content.SharedPreferences
 import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -243,8 +241,8 @@ object MirrorSpeedTestViewModel {
 
     @Volatile private var loaded = false
 
-    private fun prefs(context: Context): SharedPreferences =
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    /** [T-prefs-typed] File name + dynamic key prefixes are declared in PrefsRegistry. */
+    private val prefs get() = com.openminis.app.config.Prefs.file(PREFS)
 
     fun ensureLoaded(context: Context) {
         if (loaded) return
@@ -253,29 +251,30 @@ object MirrorSpeedTestViewModel {
             loaded = true
             // [T-android-mirror-prefs-io] First prefs read loads XML synchronously on the caller (main thread in composition) — do it on IO; SnapshotStateMaps are thread-safe so publishing is fine.
             scope.launch {
-                val p = prefs(context.applicationContext)
+                val p = prefs
                 for (cat in MirrorCategory.entries) {
-                    val savedUrl = p.getString("mirror.selected.${cat.key}", null)
+                    val savedUrl = p.stringOrNull("mirror.selected.${cat.key}")
                     if (savedUrl != null) {
                         val entry = MirrorCatalog.findByBaseURL(savedUrl)
                         if (entry != null) selectedMirrorId[cat] = entry.id
                     }
-                    useCustomMirror[cat] = p.getBoolean("mirror.useCustom.${cat.key}", false)
+                    useCustomMirror[cat] = p.bool("mirror.useCustom.${cat.key}", false)
                 }
             }
         }
     }
 
-    private fun persist(context: Context, category: MirrorCategory) {
-        val p = prefs(context)
-        val editor = p.edit()
+    private fun persist(category: MirrorCategory) {
         val mirrorId = selectedMirrorId[category]
         val entry = mirrorId?.let { MirrorCatalog.findById(it) }
-        if (entry != null) {
-            editor.putString("mirror.selected.${category.key}", entry.baseURL)
+        // One batch write; PrefsHandle commits both keys in a single transaction
+        // (same atomicity the old single Editor gave us).
+        prefs.write {
+            if (entry != null) {
+                putString("mirror.selected.${category.key}", entry.baseURL)
+            }
+            putBoolean("mirror.useCustom.${category.key}", useCustomMirror[category] == true)
         }
-        editor.putBoolean("mirror.useCustom.${category.key}", useCustomMirror[category] == true)
-        editor.apply()
     }
 
     // -- Speed Test --
@@ -316,7 +315,7 @@ object MirrorSpeedTestViewModel {
                         val fastest = sorted[cat]?.firstOrNull { it.isSuccess }
                         if (fastest != null) {
                             selectedMirrorId[cat] = fastest.mirror.id
-                            persist(context, cat)
+                            persist(cat)
                         }
                     }
                 }
@@ -389,7 +388,7 @@ object MirrorSpeedTestViewModel {
 
     fun selectMirror(context: Context, mirror: MirrorEntry) {
         selectedMirrorId[mirror.category] = mirror.id
-        persist(context, mirror.category)
+        persist(mirror.category)
         if (useCustomMirror[mirror.category] == true) {
             applyMirror(context, mirror.category)
         }
@@ -397,7 +396,7 @@ object MirrorSpeedTestViewModel {
 
     fun setUseCustom(context: Context, category: MirrorCategory, enabled: Boolean) {
         useCustomMirror[category] = enabled
-        persist(context, category)
+        persist(category)
         if (enabled) {
             applyMirror(context, category)
         } else {
@@ -427,9 +426,9 @@ object MirrorSpeedTestViewModel {
      */
     fun autoDetectOnceIfNeeded(context: Context) {
         ensureLoaded(context)
-        val p = prefs(context)
-        if (!p.getBoolean("rootfs.freshInstall", false)) return
-        p.edit().remove("rootfs.freshInstall").apply()
+        val p = prefs
+        if (!p.bool("rootfs.freshInstall", false)) return
+        p.remove("rootfs.freshInstall")
         Log.i(TAG, "Fresh rootfs detected — running auto mirror detection")
 
         scope.launch {
@@ -442,7 +441,7 @@ object MirrorSpeedTestViewModel {
                     if (fastest.mirror.isOfficial) continue
                     selectedMirrorId[cat] = fastest.mirror.id
                     useCustomMirror[cat] = true
-                    persist(context, cat)
+                    persist(cat)
                     applyMirror(context, cat)
                 }
                 Log.i(TAG, "Auto mirror detection applied")

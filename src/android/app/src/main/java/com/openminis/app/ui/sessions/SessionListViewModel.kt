@@ -16,6 +16,7 @@ import com.openminis.app.logging.AppLogger
 import com.openminis.app.sandbox.SessionWorkspace
 import com.openminis.app.provider.ProviderFactory
 import com.openminis.app.ui.chat.ChatViewModelStore
+import com.openminis.app.ui.chat.SessionTeardown
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -214,7 +215,7 @@ class SessionListViewModel(
      * [loadCollapsedFolderIds] performs the first read on IO; after that every
      * main-thread access returns the cached instance.
      */
-    internal val uiPrefs by lazy { context.getSharedPreferences("session_list_ui", Context.MODE_PRIVATE) }
+    internal val uiPrefs by lazy { com.openminis.app.config.Prefs.file("session_list_ui") }
     val collapsedFolderIds = MutableStateFlow<Set<String>>(emptySet())
 
     /**
@@ -409,10 +410,8 @@ class SessionListViewModel(
 
     fun deleteSession(id: String) {
         viewModelScope.launch {
-            chatRepository.deleteSession(id)
+            chatRepository.deleteSession(id).also { runCatching { SessionTeardown.onSessionDeleted(context, id) } }
             ChatViewModelStore.release(id)
-            com.openminis.app.service.SessionBadgeStore.clear(id)
-            com.openminis.app.data.UnreadRegistry.forget(context, id)
         }
     }
 
@@ -710,9 +709,8 @@ class SessionListViewModel(
         viewModelScope.launch {
             val memberIds = chatRepository.sessionIdsInFolder(folderId)
             for (id in memberIds) {
-                chatRepository.deleteSession(id)
+                chatRepository.deleteSession(id).also { runCatching { SessionTeardown.onSessionDeleted(context, id) } }
                 ChatViewModelStore.release(id)
-                com.openminis.app.service.SessionBadgeStore.clear(id)
             }
             chatRepository.dissolveFolder(folderId)
             SessionWorkspace.deleteProject(context.filesDir, folderId)
@@ -1110,8 +1108,7 @@ class SessionListViewModel(
         all.firstOrNull { it.id == FolderEntity.DEFAULT_ID }?.id?.let { return it }
         all.firstOrNull()?.id?.let { return it }
         return chatRepository.ensureDefaultWorkspace(
-            context.getString(R.string.group_default_workspace),
-        ).id
+            context.getString(R.string.group_default_workspace),  ).id
     }
 
     fun createNewSession(groupId: String? = null, folderId: String? = null): String? {

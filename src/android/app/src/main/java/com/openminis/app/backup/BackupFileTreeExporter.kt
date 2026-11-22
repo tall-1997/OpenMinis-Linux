@@ -133,7 +133,7 @@ class BackupFileTreeExporter(
                 val cap = blobStore.maxFileBytesForManifest
                 if (cap != null && files.any { it.second.length() > cap }) {
                     files.map { (path, member) ->
-                        blobStore.recordSkip(path, member.length())
+                        blobStore.recordSkip(path, member.length(), blobStore.capSkipReason)
                         BackupFileIndexEntry.sizeSkipped(path, member.length(), category)
                     }
                 } else BackupDiaryPairs.withSnapshot(pair, file.name, blobStore.stagingRoot) { staged ->
@@ -154,7 +154,7 @@ class BackupFileTreeExporter(
         } catch (e: Exception) {
             AppLogger.warning(TAG, "[Backup] cannot include diary $logicalPath: ${e.message}")
             files.map { (path, member) ->
-                blobStore.recordSkip(path, member.length())
+                blobStore.recordSkip(path, member.length(), BackupBlobStore.SkipReason.UNREADABLE)
                 BackupFileIndexEntry.unreadable(path, member.length(), category)
             }
         }

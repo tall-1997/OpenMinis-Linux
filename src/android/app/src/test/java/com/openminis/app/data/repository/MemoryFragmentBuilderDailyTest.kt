@@ -159,4 +159,55 @@ class MemoryFragmentBuilderDailyTest {
         assertEquals(listOf(yesterday, older1), injection.fragments.map { it.date })
         assertTrue(injection.fragments[0].text.contains("Yesterday's daily log ($yesterday.md):"))
     }
+
+    // ── [T-memory-cache-snapshot] GLOBAL.md fragment/body cache contract ──
+    //
+    // Key and value must publish together: an edit to GLOBAL.md changes the
+    // fingerprint, so the very next read reflects the edit. A cache whose key
+    // advanced while its value stayed behind would answer a NEW fingerprint
+    // with the OLD content — the exact torn-pair state this contract forbids.
+
+    @Test
+    fun globalFragmentCacheReflectsAnEditOnTheNextRead() {
+        val fx = fixture()
+        fx.write("GLOBAL.md", "first rule set")
+        val first = fx.builder.loadGlobalMemoryFragment(sessionScoped = false)
+        assertTrue(first!!.contains("first rule set"))
+
+        // Same content: the stat key matches, the cached fragment returns.
+        val again = fx.builder.loadGlobalMemoryFragment(sessionScoped = false)
+        assertEquals(first, again)
+
+        // Edited content: a new fingerprint must NOT be answered with the
+        // previous fragment. (Lengths differ so the stat key cannot collide
+        // even on coarse-mtime filesystems.)
+        fx.write("GLOBAL.md", "second, edited rule set")
+        val updated = fx.builder.loadGlobalMemoryFragment(sessionScoped = false)
+        assertTrue(updated!!.contains("second, edited rule set"))
+        assertFalse(updated.contains("first rule set"))
+    }
+
+    @Test
+    fun globalBodyCacheTracksItsOwnKey() {
+        val fx = fixture()
+        fx.write("GLOBAL.md", "body one")
+        assertEquals("body one", fx.builder.loadGlobalMemoryBody(sessionScoped = false))
+        // Session scope and global scope are different keys over one cache:
+        // each gets its own entry, neither corrupting the other.
+        assertEquals("body one", fx.builder.loadGlobalMemoryBody(sessionScoped = true))
+        fx.write("GLOBAL.md", "body two, edited")
+        assertEquals("body two, edited", fx.builder.loadGlobalMemoryBody(sessionScoped = false))
+        assertEquals("body two, edited", fx.builder.loadGlobalMemoryBody(sessionScoped = true))
+    }
+
+    @Test
+    fun deletingGlobalMemoryClearsTheFragmentCacheOutcome() {
+        val fx = fixture()
+        fx.write("GLOBAL.md", "to be removed")
+        assertNotNull(fx.builder.loadGlobalMemoryFragment(sessionScoped = false))
+        File(fx.dir, "GLOBAL.md").delete()
+        assertNull("a missing file must not be answered with the cached fragment",
+            fx.builder.loadGlobalMemoryFragment(sessionScoped = false))
+        assertNull(fx.builder.loadGlobalMemoryBody(sessionScoped = false))
+    }
 }

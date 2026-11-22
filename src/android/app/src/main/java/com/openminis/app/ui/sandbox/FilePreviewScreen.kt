@@ -1,4 +1,5 @@
 package com.openminis.app.ui.sandbox
+import com.openminis.app.ui.tokens.MinisTypography
 import com.openminis.app.ui.theme.m3Icon
 
 import com.openminis.app.R
@@ -72,7 +73,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
 import androidx.core.graphics.drawable.toBitmap
@@ -432,8 +432,8 @@ private fun TextPreview(item: FileItem) {
                             text = content!!,
                             style = MaterialTheme.typography.bodySmall.copy(
                                 fontFamily = FontFamily.Monospace,
-                                fontSize = 12.sp,
-                                lineHeight = 18.sp,
+                                fontSize = MinisTypography.foot,
+                                lineHeight = MinisTypography.lineCode,
                             ),
                             softWrap = false,
                             modifier = Modifier.padding(12.dp),
@@ -677,7 +677,7 @@ private fun CsvPreview(item: FileItem) {
                                     text = cell,
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         fontFamily = FontFamily.Monospace,
-                                        fontSize = 12.sp,
+                                        fontSize = MinisTypography.foot,
                                         fontWeight = if (rowIdx == 0) FontWeight.Bold else FontWeight.Normal,
                                     ),
                                     modifier = Modifier.padding(end = 16.dp).width(140.dp),
@@ -771,8 +771,8 @@ private fun JsonPreview(item: FileItem) {
                         text = pretty!!,
                         style = MaterialTheme.typography.bodySmall.copy(
                             fontFamily = FontFamily.Monospace,
-                            fontSize = 12.sp,
-                            lineHeight = 18.sp,
+                            fontSize = MinisTypography.foot,
+                            lineHeight = MinisTypography.lineCode,
                         ),
                         softWrap = false,
                         modifier = Modifier.padding(12.dp),
@@ -999,7 +999,7 @@ private fun ArchivePreview(item: FileItem) {
                                     e.name,
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         fontFamily = FontFamily.Monospace,
-                                        fontSize = 12.sp,
+                                        fontSize = MinisTypography.foot,
                                     ),
                                     maxLines = 1,
                                 )

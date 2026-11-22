@@ -40,16 +40,12 @@ object LocalToolPluginStore {
     // ─── persistence ───────────────────────────────────────────────────
 
     fun load(context: Context): List<LocalToolDef> {
-        val text = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(KEY, null) ?: return emptyList()
+        val text = com.openminis.app.config.Prefs.file(PREFS).stringOrNull(KEY) ?: return emptyList()
         return runCatching { parse(text) }.getOrDefault(emptyList())
     }
 
     fun save(context: Context, tools: List<LocalToolDef>) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putString(KEY, serialize(tools))
-            .apply()
+        com.openminis.app.config.Prefs.file(PREFS).set(KEY, serialize(tools))
     }
 
     fun upsert(context: Context, tool: LocalToolDef) {
@@ -101,8 +97,7 @@ object LocalToolPluginStore {
 
     /** Cheap change stamp for tool-list memoization: hash of the raw JSON, no parse. */
     fun toolsStamp(context: Context): Long =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(KEY, null)?.hashCode()?.toLong() ?: 0L
+        com.openminis.app.config.Prefs.file(PREFS).stringOrNull(KEY)?.hashCode()?.toLong() ?: 0L
 
     // ─── JSON codec ────────────────────────────────────────────────────
 
@@ -195,10 +190,18 @@ object LocalToolPluginStore {
     /**
      * Substitute `{{param}}` placeholders with call arguments. Rules:
      * - missing required param (no default) → [MaterializeResult.MissingParam]
-     * - value containing any of `;|&$>` `` ` `` or newline → [MaterializeResult.UnsafeParam]
+     * - value containing any of `;|&$>` `` ` `` `<` or newline → [MaterializeResult.UnsafeParam]
      *   unless [allowUnsafe] is true (the caller then OWNS quoting)
      * - unknown placeholders are left verbatim so template typos are visible
      *   in the executed command rather than silently dropped
+     *
+     * `<` is refused so a param value cannot smuggle bash process
+     * substitution into command position: the guest shell is bash, and
+     * `<(…)` in an interpolated value executes the inner command despite
+     * containing none of the other refused metacharacters ([T-local-tool-procsub]).
+     * A `<(...)` the tool AUTHOR wrote into the template stays legal — the
+     * template is the author's own command shape; only call-time values are
+     * gated.
      */
     fun materialize(
         tool: LocalToolDef,
@@ -211,7 +214,7 @@ object LocalToolPluginStore {
                 if (p.required) return MaterializeResult.MissingParam(p.name)
                 null
             } ?: continue
-            if (!allowUnsafe && raw.any { it in ";|&$>`\n" }) {
+            if (!allowUnsafe && raw.any { it in ";|&$>`<\n" }) {
                 return MaterializeResult.UnsafeParam(p.name, raw)
             }
             command = command.replace("{{${p.name}}}", raw)

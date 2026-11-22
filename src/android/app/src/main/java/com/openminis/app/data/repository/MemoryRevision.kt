@@ -24,6 +24,15 @@ internal object MemoryRevision {
     private const val HASH_CHARS = 16
     private const val SEPARATOR = ':'
 
+    // [T-memory-revision-degenerate-inputs] A defensive predicate must never be
+    // driven by a parsed value the parser did not fully shape: `startsWith("")`
+    // is always true, so `revision="2026-11-21:"` (empty hash), any 1..15-char
+    // prefix, or a multi-colon form walked straight past the concurrency check
+    // (reproduced on JVM before the fix). Both segments are shape-checked here,
+    // and the guard compares hashes for FULL equality, never as a prefix.
+    private val DAY_SHAPE = Regex("""\d{4}-\d{2}-\d{2}""")
+    private val HASH_SHAPE = Regex("""[0-9a-f]{16}""")
+
     /** `2026-11-20:ca9639251e3d29e3` — the canonical token for [day] + [content]. */
     fun token(day: String, content: String): String =
         "$day$SEPARATOR" + Digest.sha256Hex(content).take(HASH_CHARS)
@@ -38,6 +47,9 @@ internal object MemoryRevision {
      * get the cross-midnight diagnosis.
      */
     internal sealed interface Rejection {
+        /** The revision does not fit `YYYY-MM-DD:hash16` (nor a legacy hash16). */
+        data class Malformed(val revision: String) : Rejection
+
         /** The revision belongs to a different day; the log rolled over. */
         data class DayRolledOver(
             val revisionDay: String,
@@ -61,11 +73,41 @@ internal object MemoryRevision {
     }
 
     /**
+     * Shape gate for the tool parameter ([F3]): true only for a token or a
+     * legacy 16-hex hash. Cheaper than [rejection] and usable before any file
+     * IO, so a garbled parameter fails at the argument layer.
+     */
+    fun wellFormed(revision: String): Boolean {
+        val parsed = parse(revision)
+        if (parsed.day != null && !DAY_SHAPE.matches(parsed.day)) return false
+        return HASH_SHAPE.matches(parsed.hash)
+    }
+
+    /**
+     * Full-equality comparison of a FULL sha256 hex (as the guard's [hashOf]
+     * produces, 64 chars) against a minted token hash (16 chars). The guard
+     * must never re-derive this as `fullDigestHex.startsWith(expected)` — that
+     * form is always true for an empty expected hash and weakened for any
+     * short one (the F1 hole, JVM-reproduced). Both inputs are shape-gated
+     * before this runs.
+     */
+    fun hashMatches(fullDigestHex: String, expectedHash: String): Boolean =
+        fullDigestHex.take(HASH_CHARS) == expectedHash
+
+    /**
      * Classifies [revision] against [day]'s file.
      *
      * [dayFileExists] is required: "no log today" and "log was rewritten" both
      * fail a hash comparison but mean opposite things, and only the file's
      * existence tells them apart.
+     *
+     * Diagnosis order: a day segment that is not `yyyy-MM-dd`-**shaped** is
+     * [Rejection.Malformed] (no rollover can be claimed for it — note the shape
+     * gate is calendar-blind, so a well-shaped but nonexistent date such as
+     * `2026-13-45` classifies by day comparison and may report a rollover); a
+     * legal day that is not today is [Rejection.DayRolledOver] (the actionable
+     * diagnosis, whatever the hash looks like); only a legal day equal to
+     * today goes on to demand a well-shaped hash.
      */
     fun rejection(
         revision: String,
@@ -74,9 +116,11 @@ internal object MemoryRevision {
         dayFileExists: Boolean,
     ): Rejection? {
         val parsed = parse(revision)
-        if (parsed.day != null && parsed.day != day) {
-            return Rejection.DayRolledOver(parsed.day, day, dayFileExists)
+        if (parsed.day != null) {
+            if (!DAY_SHAPE.matches(parsed.day)) return Rejection.Malformed(revision)
+            if (parsed.day != day) return Rejection.DayRolledOver(parsed.day, day, dayFileExists)
         }
+        if (!HASH_SHAPE.matches(parsed.hash)) return Rejection.Malformed(revision)
         if (!dayFileExists) return Rejection.NoLogToday(fileName)
         return null
     }

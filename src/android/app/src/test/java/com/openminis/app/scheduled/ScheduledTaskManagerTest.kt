@@ -2,6 +2,9 @@ package com.openminis.app.scheduled
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.openminis.app.config.AndroidPrefsSource
+import com.openminis.app.config.Prefs
+import java.util.Calendar
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -11,7 +14,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import java.util.Calendar
 
 /**
  * [T-scheduled-end-window-autodisable] Pins the active-window contract on
@@ -30,6 +32,7 @@ class ScheduledTaskManagerTest {
 
     @Before
     fun setUp() {
+        Prefs.install(AndroidPrefsSource(context))
         ScheduledTaskStore(context).clear()
         manager = ScheduledTaskManager(context)
     }

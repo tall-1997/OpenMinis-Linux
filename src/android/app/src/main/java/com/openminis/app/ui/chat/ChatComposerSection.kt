@@ -48,6 +48,7 @@ import com.openminis.app.R
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * [T-slash-picker-fixed-height port from iOS 73f1b94a] Locked popup
@@ -107,8 +108,12 @@ private val SLASH_PICKER_MAX_HEIGHT: Dp = 280.dp
  */
 @Composable
 private fun slashPickerHeight(
-    titleSp: TextUnit = 14.sp,
-    subtitleSp: TextUnit = 11.sp,
+    // 这里的两档默认值必须对应「无参调用方」渲染的真实字号：
+    // ChatComposerSection:240 的 slash 菜单行用 bodyLg(14sp) 标题 + cap(11sp)
+    // 副标题（见 238 行注释），所以默认 14sp 是对的，不能改成 13sp。
+    // 另两个调用方（427/568）显式传 body(13sp)，那是它们自己的行。
+    titleSp: TextUnit = MinisTypography.bodyLg,
+    subtitleSp: TextUnit = MinisTypography.cap,
     verticalPadding: Dp = 7.dp,
     iconSize: Dp = 18.dp,
 ): Dp {
@@ -308,7 +313,7 @@ internal fun ChatComposerSlashAndMentionPopups(
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = "/${cmd.title.lowercase()}",
-                                            fontSize = 14.sp,
+                                            fontSize = MinisTypography.bodyLg,
                                             fontWeight = FontWeight.SemiBold,
                                             color = titleColor,
                                             maxLines = 1,
@@ -322,7 +327,7 @@ internal fun ChatComposerSlashAndMentionPopups(
                                         // crowding the menu visually.
                                         Text(
                                             text = cmd.subtitle,
-                                            fontSize = 11.sp,
+                                            fontSize = MinisTypography.cap,
                                             color = subtitleColor,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,
@@ -399,14 +404,14 @@ internal fun ChatComposerSlashAndMentionPopups(
                             if (groupChatMentioning) {
                                 Text(
                                     text = stringResource(R.string.mention_model_caption),
-                                    fontSize = 11.sp,
+                                    fontSize = MinisTypography.cap,
                                     color = ChatColors.secondaryText,
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                                 )
                                 if (groupMentions.isEmpty()) {
                                     Text(
                                         text = stringResource(R.string.mention_no_model),
-                                        fontSize = 13.sp,
+                                        fontSize = MinisTypography.body,
                                         color = ChatColors.secondaryText,
                                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                                     )
@@ -424,8 +429,8 @@ internal fun ChatComposerSlashAndMentionPopups(
                                             .fillMaxWidth()
                                             .height(
                                                 slashPickerHeight(
-                                                    titleSp = 13.sp,
-                                                    subtitleSp = 11.sp,
+                                                    titleSp = MinisTypography.body,
+                                                    subtitleSp = MinisTypography.cap,
                                                     verticalPadding = 8.dp,
                                                     iconSize = 16.dp,
                                                 ),
@@ -471,7 +476,7 @@ internal fun ChatComposerSlashAndMentionPopups(
                                                 Column(modifier = Modifier.weight(1f)) {
                                                     Text(
                                                         text = entry.name,
-                                                        fontSize = 13.sp,
+                                                        fontSize = MinisTypography.body,
                                                         fontWeight = FontWeight.Medium,
                                                         color = ChatColors.primaryText,
                                                         maxLines = 1,
@@ -487,7 +492,7 @@ internal fun ChatComposerSlashAndMentionPopups(
                                                                 entry.modelId != entry.name -> entry.modelId
                                                             else -> stringResource(R.string.mention_model_only)
                                                         },
-                                                        fontSize = 11.sp,
+                                                        fontSize = MinisTypography.cap,
                                                         color = ChatColors.secondaryText,
                                                         maxLines = 1,
                                                         overflow = TextOverflow.Ellipsis,
@@ -499,7 +504,7 @@ internal fun ChatComposerSlashAndMentionPopups(
                                                         if (entry.host) R.string.group_chat_host_suffix
                                                         else R.string.mention_model_badge
                                                     ),
-                                                    fontSize = 10.sp,
+                                                    fontSize = MinisTypography.chip,
                                                     fontWeight = FontWeight.Medium,
                                                     color = ChatColors.secondaryText,
                                                     modifier = Modifier
@@ -533,7 +538,7 @@ internal fun ChatComposerSlashAndMentionPopups(
                                             if (isMentionScanning) R.string.mention_scanning
                                             else R.string.mention_no_match
                                         ),
-                                        fontSize = 13.sp,
+                                        fontSize = MinisTypography.body,
                                         color = ChatColors.secondaryText,
                                     )
                                 }
@@ -565,8 +570,8 @@ internal fun ChatComposerSlashAndMentionPopups(
                                         // inheriting the slash row's.
                                         .height(
                                             slashPickerHeight(
-                                                titleSp = 13.sp,
-                                                subtitleSp = 11.sp,
+                                                titleSp = MinisTypography.body,
+                                                subtitleSp = MinisTypography.cap,
                                                 verticalPadding = 8.dp,
                                                 iconSize = 16.dp,
                                             ),
@@ -616,7 +621,7 @@ internal fun ChatComposerSlashAndMentionPopups(
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text(
                                                     text = entry.basename,
-                                                    fontSize = 13.sp,
+                                                    fontSize = MinisTypography.body,
                                                     fontWeight = FontWeight.Medium,
                                                     color = ChatColors.primaryText,
                                                     maxLines = 1,
@@ -624,7 +629,7 @@ internal fun ChatComposerSlashAndMentionPopups(
                                                 )
                                                 Text(
                                                     text = entry.displayPath,
-                                                    fontSize = 11.sp,
+                                                    fontSize = MinisTypography.cap,
                                                     color = ChatColors.secondaryText,
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis,
@@ -634,7 +639,7 @@ internal fun ChatComposerSlashAndMentionPopups(
                                             // Scope / mount badge — matches iOS capsule.
                                             Text(
                                                 text = entry.mountName ?: entry.scope.displayLabel,
-                                                fontSize = 10.sp,
+                                                fontSize = MinisTypography.chip,
                                                 fontWeight = FontWeight.Medium,
                                                 color = ChatColors.secondaryText,
                                                 modifier = Modifier

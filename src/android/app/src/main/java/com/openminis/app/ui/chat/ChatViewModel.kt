@@ -1645,8 +1645,11 @@ class ChatViewModel(
     internal val _supervisorArmed = MutableStateFlow(false)
     val supervisorArmed: StateFlow<Boolean> = _supervisorArmed.asStateFlow()
 
-    // [#31] Four-tier gate. New chats start at SAFE_AUTO (the two-tier "ASK" behaviour) — zero change for upgrades.
-    internal val _permissionMode = MutableStateFlow(com.openminis.app.security.SessionPermissionMode.SAFE_AUTO)
+    // [T-perm-three-modes]变更前确认 /自主模式 /完全访问. A chat with no
+    // stored choice starts at the last mode the user picked (new chats inherit
+    // it, ZCode's "new sessions in this project inherit the mode" rule); a row
+    // that does carry a choice overrides this in loadSession().
+    internal val _permissionMode = MutableStateFlow(com.openminis.app.data.SessionPermissionPrefs.current())
     val permissionMode: StateFlow<com.openminis.app.security.SessionPermissionMode> = _permissionMode.asStateFlow()
 
     /**
@@ -1782,29 +1785,13 @@ class ChatViewModel(
         approvePendingTool(id)
     }
 
-    /**
-     * [#31] Faithful four-tier persistence. The old implementation folded
-     * every non-YOLO value into ASK — SAFE_AUTO/OFF choices would have been
-     * silently lost, so this now stores the tier verbatim.
-     */
-    fun setSessionPermissionMode(mode: com.openminis.app.security.SessionPermissionMode) {
-        _permissionMode.value = mode
-        applyGateMode(mode)
-        val sid = realSessionId.ifEmpty { sessionId }
-        if (!isDraft && sid.isNotBlank() && !sid.startsWith("__new__")) {
-            viewModelScope.launch {
-                runCatching { chatRepository.dao.updatePermissionMode(sid, mode.toStoredToken()) }
-            }
-        }
-    }
-
     internal fun applyGateMode(mode: com.openminis.app.security.SessionPermissionMode) {
         val sid = realSessionId.ifEmpty { sessionId }
         SecurityGateHolder.setActiveSessionMode(mode, sid)
         // Preserve legacy behavior for older callers, but all gate state writes
         // above and below are explicitly keyed by this ViewModel's session.
         ApprovalGate.bindSession(sid)
-        if (mode.isYolo()) ApprovalGate.enableSessionAllowAll(sid)
+        if (mode.isFullAccess()) ApprovalGate.enableSessionAllowAll(sid)
         else ApprovalGate.resetSessionAllowAll(sid)
     }
 
@@ -1897,8 +1884,7 @@ class ChatViewModel(
         _autoCompactEnabled.value = enabled
     }
 
-    internal fun groupChatPrefs() =
-        context.getSharedPreferences("minis_group_chat", android.content.Context.MODE_PRIVATE)
+    internal fun groupChatPrefs() = com.openminis.app.config.Prefs.file("minis_group_chat")
 
     /**
      * Prefs must not read [realSessionId] while properties above it initialize.
@@ -1915,18 +1901,18 @@ class ChatViewModel(
 
     internal fun roundStartKey() = "round:$groupChatPrefsId"
 
-    private val _groupChatEnabled = MutableStateFlow(groupChatPrefs().getBoolean(groupChatKey(), false))
+    private val _groupChatEnabled = MutableStateFlow(groupChatPrefs().bool(groupChatKey(), false))
     val groupChatEnabled: StateFlow<Boolean> = _groupChatEnabled.asStateFlow()
 
     @Volatile
     internal var groupChatCloseRequested = false
 
     @Volatile
-    internal var groupChatClosedAfterId: String? = groupChatPrefs().getString(closedKey(), null)
+    internal var groupChatClosedAfterId: String? = groupChatPrefs().stringOrNull(closedKey())
 
     /** Tail when this open began. Keeps an unfinished previous round out of the new one. */
     @Volatile
-    internal var groupChatRoundStartId: String? = groupChatPrefs().getString(roundStartKey(), null)
+    internal var groupChatRoundStartId: String? = groupChatPrefs().stringOrNull(roundStartKey())
 
     /** Set when group chat is opened before any message is loaded. */
     @Volatile
@@ -1935,30 +1921,29 @@ class ChatViewModel(
     internal fun migrateGroupChatPrefs(fromId: String, toId: String) {
         if (fromId == toId || fromId.isEmpty() || toId.isEmpty()) return
         val prefs = groupChatPrefs()
-        val editor = prefs.edit()
-        if (prefs.contains("enabled:$fromId")) {
-            editor.putBoolean("enabled:$toId", prefs.getBoolean("enabled:$fromId", false))
-            editor.remove("enabled:$fromId")
+        // 四个键一起搬。分四次事务会出现「新 id 有一半、旧 id 还有另一半」，
+        // 下次打开群聊就读到半套配置。
+        prefs.write {
+            if (prefs.contains("enabled:$fromId")) {
+                putBoolean("enabled:$toId", prefs.bool("enabled:$fromId", false))
+                remove("enabled:$fromId")
+            }
+            prefs.stringOrNull("closed:$fromId")?.let { closed ->
+                putString("closed:$toId", closed); remove("closed:$fromId")
+            }
+            prefs.stringOrNull("round:$fromId")?.let { round ->
+                putString("round:$toId", round); remove("round:$fromId")
+            }
+            prefs.stringOrNull("opening:$fromId")?.let { opening ->
+                putString("opening:$toId", opening); remove("opening:$fromId")
+            }
         }
-        prefs.getString("closed:$fromId", null)?.let { closed ->
-            editor.putString("closed:$toId", closed)
-            editor.remove("closed:$fromId")
-        }
-        prefs.getString("round:$fromId", null)?.let { round ->
-            editor.putString("round:$toId", round)
-            editor.remove("round:$fromId")
-        }
-        prefs.getString("opening:$fromId", null)?.let { opening ->
-            editor.putString("opening:$toId", opening)
-            editor.remove("opening:$fromId")
-        }
-        editor.apply()
         groupChatPrefsId = toId
     }
 
     fun setGroupChatEnabled(enabled: Boolean) {
         val opening = enabled && !_groupChatEnabled.value
-        groupChatPrefs().edit().putBoolean(groupChatKey(), enabled).apply()
+        groupChatPrefs().set(groupChatKey(), enabled)
         _groupChatEnabled.value = enabled
         if (!enabled) groupChatCloseRequested = false
         if (opening) groupChatAnchorPending = !anchorGroupRound()
@@ -1967,7 +1952,7 @@ class ChatViewModel(
 
     /** Prefs can outlive the in-memory flag after a restart. Do not dismiss the @ menu. */
     internal fun adoptStoredGroupChatEnabled() {
-        if (!_groupChatEnabled.value && groupChatPrefs().getBoolean(groupChatKey(), false)) {
+        if (!_groupChatEnabled.value && groupChatPrefs().bool(groupChatKey(), false)) {
             _groupChatEnabled.value = true
         }
     }
@@ -4247,7 +4232,7 @@ class ChatViewModel(
                     TAG,
                     "cleanupIfEmptyOnExit: deleting empty session $sid (no persisted messages)",
                 )
-                chatRepository.deleteSession(sid)
+                chatRepository.deleteSession(sid).also { runCatching { SessionTeardown.onSessionDeleted(context, sid) } }
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                     ChatViewModelStore.release(sid)
                 }

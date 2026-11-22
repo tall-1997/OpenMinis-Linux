@@ -82,10 +82,13 @@
     <string name="cot_translate_show_translation">Translate</string>
     <string name="cot_translate_show_original">Original</string>
     <string name="cot_translate_failed">Translation unavailable — tap to retry</string>
+    <string name="cot_translate_retry">Retry</string>
     <string name="cot_translate_settings_header">Reasoning translation</string>
     <string name="cot_translate_settings_enabled">Enable reasoning translation</string>
     <string name="cot_translate_settings_provider">Provider</string>
     <string name="cot_translate_settings_language">Target language</string>
     <string name="cot_translate_privacy_notice">Expanded reasoning is sent to the selected translation service. It may contain private code or conversation details.</string>
     <string name="cot_translate_anonymous_notice">Bing and Google need no translation login or API key. Their anonymous endpoints may reject or limit requests.</string>
+    <string name="cot_translate_privacy_accept">Turn on</string>
+    <string name="cot_translate_privacy_decline">Cancel</string>
 </resources>

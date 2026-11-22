@@ -324,6 +324,18 @@
     <string name="token_usage_context_used">Contexto usado</string>
     <string name="token_usage_context_window">Ventana de contexto</string>
     <string name="token_usage_max_output">Salida máxima</string>
+    <string name="token_usage_section_breakdown">Composición</string>
+    <string name="token_usage_breakdown_hint">Estimado ±10 % — lo que lleva la próxima solicitud</string>
+    <string name="token_usage_block_system_tools">Sistema y herramientas</string>
+    <string name="token_usage_block_skills_mcps">Skills y MCP</string>
+    <string name="token_usage_block_memory">Memoria</string>
+    <string name="token_usage_block_runtime_tail">Contexto por turno</string>
+    <string name="token_usage_block_goal_plan">Objetivo y plan</string>
+    <string name="token_usage_block_tool_schemas">Esquemas de herramientas</string>
+    <string name="token_usage_block_history">Conversación</string>
+    <string name="token_usage_block_pending">Adjuntos sin enviar</string>
+    <string name="token_usage_breakdown_estimated">Estimado</string>
+    <string name="token_usage_breakdown_measured">Medido</string>
     <string name="token_usage_section_thinking">Razonamiento</string>
     <string name="token_usage_thinking_label">Razonamiento</string>
     <string name="token_usage_thinking_level">Nivel</string>
@@ -635,10 +647,9 @@
     <string name="env_var_privacy_footer">Cuando está activado, cualquier valor de variable de entorno que aparezca en la salida de shell se reemplaza por una forma enmascarada (por ejemplo, `sk-1********ajhks`) antes de llegar al modelo. Los valores de menos de 8 caracteres se convierten en `*`. La salida visible en el chat no cambia.</string>
     <string name="outbound_mask_toggle">Enmascarado de privacidad saliente</string>
     <string name="outbound_mask_footer">Enmascarado opcional por forma: cadenas tipo clave (código incluido), correos y números telefónicos se sustituyen. La clave API de embedding se guarda en texto plano en prefs privadas. Historial del dispositivo sin cambios.</string>
-    <string name="chat_menu_perm_yoyo">YOLO · todo automático</string>
-    <string name="chat_menu_perm_safe_auto">Auto seguro · las herramientas de lectura pasan libres</string>
-    <string name="chat_menu_perm_ask">Preguntar · confirmar cada llamada</string>
-    <string name="chat_menu_perm_off">Apagado · denegar todas las herramientas</string>
+    <string name="chat_menu_perm_yoyo">Acceso total</string>
+    <string name="chat_menu_perm_safe_auto">Autónomo</string>
+    <string name="chat_menu_perm_ask">Preguntar antes de cambios</string>
     <string name="gate_approval_allow_all">Permitir siempre en esta sesión (objetivo actual)</string>
     <string name="env_var_section_header">Variables</string>
     <string name="env_var_section_footer">Las variables de entorno se inyectan en la shell del entorno aislado al iniciar la sesión. Los nombres se convierten a mayúsculas y deben cumplir las reglas de variables de shell POSIX.</string>
@@ -864,6 +875,10 @@
     <string name="newer_db_body">Esta copia de Minis Ultra es más antigua que la que creó tus datos, así que no puede abrirlos de forma segura.\n\nNo se ha eliminado nada: tus conversaciones siguen intactas en este dispositivo. Vuelve a instalar la versión más reciente de Minis Ultra y todo estará ahí.</string>
     <string name="newer_db_versions">Esta versión admite el formato de datos %1$d</string>
     <string name="newer_db_exit">Cerrar</string>
+    <string name="degraded_startup_title">Algunos componentes de inicio no se cargaron</string>
+    <string name="degraded_startup_body">La app funciona con funcionalidad reducida. Algunas funciones pueden no estar disponibles hasta que se reinicie.</string>
+    <string name="degraded_startup_cause">Causa: %1$s</string>
+    <string name="degraded_startup_dismiss">Cerrar</string>
     <string name="usage_attr_unknown_session">Modelo desconocido: se eliminó el registro de la sesión</string>
     <string name="usage_attr_removed">Ya no está entre tus proveedores configurados</string>
     <string name="usage_detail_output">Salida</string>
@@ -1045,6 +1060,13 @@
     <string name="model_group_detail_name">Nombre</string>
     <string name="model_group_detail_the_label_shown_in_the_model_picker_save">La etiqueta que se muestra en el selector de modelos. Se guarda automáticamente al tocar en otro lugar.</string>
     <string name="model_group_detail_routing_strategy">Estrategia de enrutamiento</string>
+    <string name="model_group_detail_more_strategies">Más estrategias</string>
+    <string name="model_group_detail_fewer_strategies">Menos estrategias</string>
+    <string name="model_connection_title">Modelo y conexión</string>
+    <string name="model_connection_providers_count">%1$d proveedores · %2$d modelos</string>
+    <string name="model_connection_groups_count">%1$d grupos</string>
+    <string name="model_connection_auto_groups">Grupos automáticos</string>
+    <string name="model_connection_not_set">Sin configurar</string>
     <string name="model_group_detail_routing_quota_window_footer">El miembro principal atiende hasta agotar la cuota de la ventana; luego toma el relevo el siguiente miembro hasta el reinicio.</string>
     <string name="model_group_detail_routing_round_robin_footer">Rota entre los miembros una llamada a la vez, en orden.</string>
     <string name="model_group_detail_routing_smart_footer">Las solicitudes ligeras van al último miembro (económico); las largas o complejas, al primero (potente).</string>
@@ -1322,6 +1344,8 @@
     <string name="backup_ready">Copia lista</string>
     <string name="backup_result_excluded_too_large">Excluidos (demasiado grandes)</string>
     <string name="backup_result_files_not_included">Archivos no incluidos</string>
+    <string name="backup_result_excluded_unreadable">Excluidos (no se pudieron leer)</string>
+    <string name="backup_result_credentials_unreadable">No se pudieron leer las credenciales</string>
     <string name="backup_result_local_only">Guardada solo en este dispositivo.</string>
     <string name="backup_result_delivered">Guardada en este dispositivo y copiada a %1$d de %2$d destino(s).</string>
     <string name="backup_local_removed">Copia local eliminada: %1$s liberados en este dispositivo</string>
@@ -2667,6 +2691,7 @@
     <string name="modeldetail_section_context_retry">Contexto y reintentos</string>
     <string name="modeldetail_temperature">Temperatura (0,0–2,0)</string>
     <string name="modeldetail_temperature_invalid">Introduce un número de 0,0 a 2,0, o déjalo en blanco para omitirlo.</string>
+    <string name="modeldetail_harness_save_failed">No se pudo guardar la anulación del presupuesto de contexto. La entrada del modelo sí se guardó; inténtalo de nuevo.</string>
     <string name="modeldetail_temperature_placeholder">Omitir</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">Añadir</string>
@@ -3181,6 +3206,10 @@
     <string name="guard_stop_on">Puede detener la sesión</string>
     <string name="guard_stop_off">Nunca detiene la sesión</string>
     <string name="guard_stop_footer">Si está activo, el freno detiene la sesión cuando la misma acción se repite demasiadas veces. Si está desactivado, solo avisa al modelo, útil en esperas largas como una compilación.</string>
+    <string name="goal_drift_section">Supervisión de desvío del objetivo</string>
+    <string name="goal_drift_threshold_title">Umbral de recordatorio de desvío</string>
+    <string name="goal_drift_threshold_value">%1$d turnos de herramienta</string>
+    <string name="goal_drift_footer">Mientras un objetivo esté activo, esta es la cantidad de turnos de herramienta consecutivos que pueden pasar sin ningún movimiento del tablero del plan antes de que el host recuerde al modelo su objetivo. Más alto significa menos recordatorios; más bajo significa una supervisión más estricta.</string>
     <string name="token_usage_section_memory">Memoria</string>
     <string name="token_usage_memory_lines">Líneas entregadas</string>
     <string name="token_usage_memory_shown">Veces mostradas</string>
@@ -3191,4 +3220,13 @@
     <string name="modeldetail_tail_budget_state_auto">Automático (escala con la ventana, hasta 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Propio de este modelo</string>
     <string name="tool_limits_tool_concurrency">Herramientas de lectura en paralelo</string>
+ <string name="perm_mode_desc_ask">Pregunta antes de cambiar archivos</string>
+ <string name="perm_mode_desc_auto">Pregunta solo si hay riesgo</string>
+ <string name="perm_mode_desc_full">Menos confirmaciones</string>
+ <string name="perm_full_access_title">¿Activar el acceso total?</string>
+ <string name="perm_full_access_body">El agente leerá, creará y borrará archivos, ejecutará comandos de terminal y usará la red o apps conectadas sin preguntar cada vez. Estas acciones pueden causar pérdida o filtración de datos, así que actívalo solo si confías en la tarea. Puedes volver atrás cuando quieras.</string>
+ <string name="perm_full_access_ack">Entiendo el riesgo y asumo la responsabilidad de mis datos.</string>
+ <string name="perm_full_access_confirm">Activar</string>
+ <string name="perm_guarded_risk_reason">Confirmar comando de riesgo</string>
+ <string name="perm_guarded_risk_message">El modo autónomo considera este comando riesgoso. Confirma una vez para ejecutarlo.</string>
 </resources>

@@ -359,9 +359,9 @@ lang: "auto"
      * [upgradeStaleDefault] still replaces the known shipped starter.
      */
     fun forceOverwriteOnce(context: Context) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        if (prefs.getBoolean(FORCE_OVERWRITE_KEY, false)) return
-        prefs.edit().putBoolean(FORCE_OVERWRITE_KEY, true).apply()
+        val prefs = com.openminis.app.config.Prefs.file(PREFS_NAME)
+        if (prefs.bool(FORCE_OVERWRITE_KEY, false)) return
+        prefs.set(FORCE_OVERWRITE_KEY, true)
         AppLogger.info(TAG, "skipped force-overwrite of SOUL.md; upgrade keeps the user file")
     }
 

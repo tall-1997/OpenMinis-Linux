@@ -1,5 +1,7 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.ui.tokens.RawColors
+import com.openminis.app.ui.tokens.asColor
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.NoteAdd
 import androidx.compose.material.icons.filled.AdminPanelSettings
@@ -52,40 +54,40 @@ internal fun formatStepTimestamp(epochMs: Long): String =
 // consistent: file tools cyan/blue, agent tools indigo, web tools blue,
 // image tools purple, memory/goal pink, interactive prompts blue.
 internal fun toolAccentColor(toolName: String): Color = when (toolName) {
-    "shell_execute", "shell_exec", "agent_terminal" -> cili(0xFF34C759)
-    "file_read" -> cili(0xFF32ADE6)
-    "file_write" -> cili(0xFF007AFF)
-    "file_edit", "multi_edit" -> cili(0xFFFF9500)
-    "file_checkpoint" -> cili(0xFF8E8E93)
-    "browser_use" -> cili(0xFF007AFF)
-    "read_image", "ocr_image" -> cili(0xFFAF52DE)
-    "memory_write", "memory_get" -> cili(0xFFFF2D55)
-    "web_search" -> cili(0xFF32ADE6)    // iOS: .cyan for search
-    "web_fetch" -> cili(0xFF007AFF)
-    "grep", "grep_source" -> cili(0xFF64D2FF)
-    "glob", "list_dir" -> cili(0xFF32ADE6)
-    "code_graph" -> cili(0xFF5856D6)
-    "search_sessions", "read_session" -> cili(0xFF64D2FF)
-    "spawn_agent", "run_subagent", "dispatch_agents", "wolfpack_run", "check_agent" -> cili(0xFF5856D6)
-    "agent_plan" -> cili(0xFF5856D6)
-    "agent_report" -> cili(0xFF30B0C7)
-    "update_goal" -> cili(0xFFFF2D55)
-    "evolution" -> cili(0xFFAF52DE)
-    "ask_user_question" -> cili(0xFF007AFF)
-    "ask_reasoning" -> cili(0xFFFF9500)
-    "execute_code" -> cili(0xFF5856D6)
-    "su_exec" -> cili(0xFFFF9500)
-    "ssh_exec", "env_exec" -> cili(0xFF32ADE6)
-    "ui_read", "ui_action" -> cili(0xFF64D2FF)
-    "invoke_skill", "ui_skill", "skill_manage" -> cili(0xFF007AFF)
-    "cronjob" -> cili(0xFFFF9500)
-    "background_job" -> cili(0xFF64D2FF)
-    "get_screen_time" -> cili(0xFF64D2FF)
-    "present_file", "deliverable" -> Color(0xFF30D158)     // deliverable green
+    "shell_execute", "shell_exec", "agent_terminal" -> cili(RawColors.systemGreen)
+    "file_read" -> cili(RawColors.systemTeal)
+    "file_write" -> cili(RawColors.systemBlue)
+    "file_edit", "multi_edit" -> cili(RawColors.systemOrange)
+    "file_checkpoint" -> cili(RawColors.systemGray)
+    "browser_use" -> cili(RawColors.systemBlue)
+    "read_image", "ocr_image" -> cili(RawColors.systemPurpleAlt)
+    "memory_write", "memory_get" -> cili(RawColors.systemPink)
+    "web_search" -> cili(RawColors.systemTeal)    // iOS: .cyan for search
+    "web_fetch" -> cili(RawColors.systemBlue)
+    "grep", "grep_source" -> cili(RawColors.systemCyan)
+    "glob", "list_dir" -> cili(RawColors.systemTeal)
+    "code_graph" -> cili(RawColors.systemPurple)
+    "search_sessions", "read_session" -> cili(RawColors.systemCyan)
+    "spawn_agent", "run_subagent", "dispatch_agents", "wolfpack_run", "check_agent" -> cili(RawColors.systemPurple)
+    "agent_plan" -> cili(RawColors.systemPurple)
+    "agent_report" -> cili(RawColors.systemTealAlt)
+    "update_goal" -> cili(RawColors.systemPink)
+    "evolution" -> cili(RawColors.systemPurpleAlt)
+    "ask_user_question" -> cili(RawColors.systemBlue)
+    "ask_reasoning" -> cili(RawColors.systemOrange)
+    "execute_code" -> cili(RawColors.systemPurple)
+    "su_exec" -> cili(RawColors.systemOrange)
+    "ssh_exec", "env_exec" -> cili(RawColors.systemTeal)
+    "ui_read", "ui_action" -> cili(RawColors.systemCyan)
+    "invoke_skill", "ui_skill", "skill_manage" -> cili(RawColors.systemBlue)
+    "cronjob" -> cili(RawColors.systemOrange)
+    "background_job" -> cili(RawColors.systemCyan)
+    "get_screen_time" -> cili(RawColors.systemCyan)
+    "present_file", "deliverable" -> cili(RawColors.systemGreenAlt)     // deliverable green
     else -> when {
-        toolName.startsWith("mcp__") -> cili(0xFF5856D6)   // server-provided tools
-        toolName.startsWith("online_") -> cili(0xFF007AFF)
-        else -> cili(0xFF8E8E93)                            // unknown = neutral gray
+        toolName.startsWith("mcp__") -> cili(RawColors.systemPurple)   // server-provided tools
+        toolName.startsWith("online_") -> cili(RawColors.systemBlue)
+        else -> cili(RawColors.systemGray)                            // unknown = neutral gray
     }
 }
 

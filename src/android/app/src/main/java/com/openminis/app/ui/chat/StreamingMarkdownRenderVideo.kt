@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.openminis.app.ui.tokens.MinisTypography
 
 @Composable
 internal fun RenderMdVideo(block: MdBlock.Video) {
@@ -130,7 +131,7 @@ internal fun RenderMdVideo(block: MdBlock.Video) {
             Spacer(modifier = Modifier.width(4.dp))
             MdText(
                 text = AnnotatedString(filename),
-                fontSize = 12.sp,
+                fontSize = MinisTypography.foot,
                 color = colors.blockquote,
                 maxLines = 1,
             )

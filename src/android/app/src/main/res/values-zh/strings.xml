@@ -488,10 +488,9 @@
     <string name="settings_storage_subtitle">管理 Ubuntu rootfs 并浏览文件</string>
     <string name="settings_section_permissions">权限</string>
     <string name="settings_permissions_subtitle">系统权限与逐工具访问：无障碍、Shizuku、主机 su、隐私档位；各工具的 Agent 权限在此页逐项配置。</string>
-    <string name="chat_menu_perm_yoyo">YOLO · 全授权</string>
-    <string name="chat_menu_perm_safe_auto">安全自动 · 只读工具自动放行</string>
-    <string name="chat_menu_perm_ask">询问 · 每次调用都确认</string>
-    <string name="chat_menu_perm_off">关闭 · 拒绝所有工具</string>
+    <string name="chat_menu_perm_yoyo">完全访问</string>
+    <string name="chat_menu_perm_safe_auto">自主模式</string>
+    <string name="chat_menu_perm_ask">变更前确认</string>
 <string name="settings_section_logs">日志</string>
     <string name="settings_logs_subtitle">查看与导出应用日志</string>
     <string name="settings_section_about">关于</string>
@@ -549,6 +548,18 @@
     <string name="token_usage_context_window">上下文窗口</string>
     <string name="token_usage_context_percent">上下文占用</string>
     <string name="token_usage_max_output">最大输出</string>
+    <string name="token_usage_section_breakdown">构成</string>
+    <string name="token_usage_breakdown_hint">估计 ±10% — 下一次请求实际携带的内容</string>
+    <string name="token_usage_block_system_tools">系统与工具</string>
+    <string name="token_usage_block_skills_mcps">技能与 MCP</string>
+    <string name="token_usage_block_memory">记忆</string>
+    <string name="token_usage_block_runtime_tail">每轮上下文</string>
+    <string name="token_usage_block_goal_plan">目标与计划</string>
+    <string name="token_usage_block_tool_schemas">工具结构定义</string>
+    <string name="token_usage_block_history">对话</string>
+    <string name="token_usage_block_pending">尚未发送的附件</string>
+    <string name="token_usage_breakdown_estimated">估计</string>
+    <string name="token_usage_breakdown_measured">实测</string>
     <string name="token_usage_section_thinking">思考</string>
     <string name="token_usage_thinking_label">思考</string>
     <string name="token_usage_thinking_level">级别</string>
@@ -1151,6 +1162,10 @@
     <string name="startup_failure_clear_title">确认清除全部应用数据？</string>
     <string name="startup_failure_clear_body">这会删除本机上的本地会话、记忆、设置与沙箱文件，然后重启应用。已导出的备份不受影响。仅在反复重启失败时使用。</string>
     <string name="startup_failure_clear_confirm">清除并重启</string>
+    <string name="degraded_startup_title">部分启动组件加载失败</string>
+    <string name="degraded_startup_body">应用正以降级模式运行，部分功能在重启前可能不可用。</string>
+    <string name="degraded_startup_cause">原因：%1$s</string>
+    <string name="degraded_startup_dismiss">关闭</string>
     <string name="usage_attr_unknown_session">无法确定模型 —— 会话记录已删除</string>
     <string name="usage_attr_removed">已不在当前配置的服务商中</string>
     <string name="usage_detail_output">输出</string>
@@ -1306,6 +1321,7 @@
     <string name="modeldetail_temperature">温度（0.0–2.0）</string>
     <string name="modeldetail_temperature_placeholder">不发送</string>
     <string name="modeldetail_temperature_invalid">请输入 0.0 到 2.0 的数字，或留空以不发送。</string>
+    <string name="modeldetail_harness_save_failed">无法保存上下文预算覆盖。模型条目已保存，请重试。</string>
     <string name="modeldetail_context_window">上下文窗口</string>
     <string name="modeldetail_thinking">思考</string>
     <!-- [T-thinking-ultra-manual] 模型参数页手动思考等级上限。 -->
@@ -1349,6 +1365,13 @@
     <string name="model_group_detail_name">名称</string>
     <string name="model_group_detail_the_label_shown_in_the_model_picker_save">在模型选择器里显示的标签。点击其它位置时自动保存。</string>
     <string name="model_group_detail_routing_strategy">路由策略</string>
+    <string name="model_connection_title">模型与连接</string>
+    <string name="model_connection_providers_count">%1$d 个供应商 · %2$d 个模型</string>
+    <string name="model_connection_groups_count">%1$d 个组</string>
+    <string name="model_connection_auto_groups">自动组</string>
+    <string name="model_connection_not_set">未设置</string>
+    <string name="model_group_detail_more_strategies">更多策略</string>
+    <string name="model_group_detail_fewer_strategies">收起更多策略</string>
     <string name="model_group_detail_routing_quota_window_footer">主成员服务至窗口配额耗尽，之后由下一位成员接管，直到窗口重置。</string>
     <string name="model_group_detail_routing_round_robin_footer">按顺序轮流切换成员，每次调用轮换一位。</string>
     <string name="model_group_detail_routing_smart_footer">轻量请求发给最后一位（省钱）成员；长或复杂的请求发给第一位（性能强）成员。</string>
@@ -1681,6 +1704,8 @@
     <string name="backup_ready">备份已就绪</string>
     <string name="backup_result_excluded_too_large">已排除（过大）</string>
     <string name="backup_result_files_not_included">未包含文件</string>
+    <string name="backup_result_excluded_unreadable">已排除（无法读取）</string>
+    <string name="backup_result_credentials_unreadable">凭据无法读取</string>
     <string name="backup_result_local_only">仅保存在本机。</string>
     <string name="backup_result_delivered">已保存在本机，并已复制到 %2$d 个目的地中的 %1$d 个。</string>
     <string name="backup_local_removed">已删除本机副本——释放 %1$s</string>
@@ -2173,6 +2198,8 @@
     <string name="settings_translate">翻译</string>
     <string name="settings_translate_subtitle">目标语言、调用模型、气泡开关和独立翻译</string>
     <string name="display_regex_pattern">正则</string>
+    <string name="display_regex_replacement">替换成</string>
+    <string name="display_regex_add">添加规则</string>
     <string name="high_refresh_title">高刷新率</string>
     <string name="high_refresh_sub">让窗口使用这块屏幕的最高刷新率</string>
     <string name="high_refresh_footer">关闭后窗口回到系统默认刷新率。</string>
@@ -2714,6 +2741,9 @@
     <string name="cot_translate_settings_language">目标语言</string>
     <string name="cot_translate_privacy_notice">展开的思考内容将发送至所选翻译服务，其中可能包含私有代码或对话细节。</string>
     <string name="cot_translate_anonymous_notice">Bing 与 Google 匿名接口无需登录或 API Key，但可能拒绝或限制请求。</string>
+    <string name="cot_translate_retry">重试</string>
+    <string name="cot_translate_privacy_accept">开启</string>
+    <string name="cot_translate_privacy_decline">取消</string>
     <string name="git_panel_staged">已暂存</string>
     <string name="git_panel_changes_section">更改</string>
     <string name="git_panel_stats_files">已更改 %1$d 个文件</string>
@@ -2965,6 +2995,10 @@
     <string name="guard_stop_on">可以停止会话</string>
     <string name="guard_stop_off">永不停止会话</string>
     <string name="guard_stop_footer">开启后，同一操作重复过多时由循环保护停止会话；关闭后只提醒模型，适合编译等长时间等待。</string>
+    <string name="goal_drift_section">目标偏航监督</string>
+    <string name="goal_drift_threshold_title">偏航提醒阈值</string>
+    <string name="goal_drift_threshold_value">%1$d 个工具轮</string>
+    <string name="goal_drift_footer">目标进行中时，计划板连续多少个工具轮没有任何变化，宿主就会提醒模型回到目标。数值越大提醒越少，越小监督越紧。</string>
     <string name="token_usage_section_memory">记忆</string>
     <string name="token_usage_memory_lines">已投递行数</string>
     <string name="token_usage_memory_shown">展示次数</string>
@@ -2975,4 +3009,13 @@
     <string name="modeldetail_tail_budget_state_auto">自动（随窗口缩放，最多 60k）</string>
     <string name="modeldetail_tail_budget_state_specific">当前模型自定义</string>
     <string name="tool_limits_tool_concurrency">并行读工具数</string>
+ <string name="perm_mode_desc_ask">改文件前先问我</string>
+ <string name="perm_mode_desc_auto">在有风险时询问</string>
+ <string name="perm_mode_desc_full">减少确认次数</string>
+ <string name="perm_full_access_title">要启用完全访问吗？</string>
+ <string name="perm_full_access_body">启用后，Agent读取、创建、修改和删除文件，运行终端命令，访问网络或调用已连接的应用时都不再逐次询问。这些操作可能造成数据丢失或泄露，请仅在信任任务内容时启用；你可以随时切回其他权限模式。</string>
+ <string name="perm_full_access_ack">我已了解风险，并对自己的数据安全负责。</string>
+ <string name="perm_full_access_confirm">确认启用</string>
+ <string name="perm_guarded_risk_reason">确认这条风险命令</string>
+ <string name="perm_guarded_risk_message">自主模式判定这条命令有风险，确认一次后才会执行。</string>
 </resources>

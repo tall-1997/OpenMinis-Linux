@@ -1,7 +1,6 @@
 package com.openminis.app.data
 
 import android.content.Context
-import android.content.SharedPreferences
 
 /**
  * App-level persisted "auto-compact on threshold" toggle.
@@ -43,8 +42,7 @@ object AutoCompactPrefs {
     @Volatile
     private var cachedThresholdPercent: Int = DEFAULT_THRESHOLD_PERCENT
 
-    private fun prefs(context: Context): SharedPreferences =
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private fun prefs() = com.openminis.app.config.Prefs.file(PREFS)
 
     /**
      * Capture the app context and warm the cache. Called from MinisApp.onCreate,
@@ -53,8 +51,8 @@ object AutoCompactPrefs {
      */
     fun prime(context: Context) {
         appContext = context.applicationContext
-        cachedEnabled = prefs(context).getBoolean(KEY_ENABLED, true)
-        cachedThresholdPercent = prefs(context).getInt(KEY_THRESHOLD, DEFAULT_THRESHOLD_PERCENT)
+        cachedEnabled = prefs().bool(KEY_ENABLED, true)
+        cachedThresholdPercent = prefs().int(KEY_THRESHOLD, DEFAULT_THRESHOLD_PERCENT)
             .coerceIn(50, 95)
     }
 
@@ -66,18 +64,18 @@ object AutoCompactPrefs {
     fun setThresholdPercent(percent: Int) {
         cachedThresholdPercent = percent.coerceIn(50, 95)
         appContext?.let {
-            prefs(it).edit().putInt(KEY_THRESHOLD, cachedThresholdPercent).apply()
+            prefs().set(KEY_THRESHOLD, cachedThresholdPercent)
         }
     }
 
     fun setThresholdPercent(context: Context, percent: Int) {
         cachedThresholdPercent = percent.coerceIn(50, 95)
-        prefs(context).edit().putInt(KEY_THRESHOLD, cachedThresholdPercent).apply()
+        prefs().set(KEY_THRESHOLD, cachedThresholdPercent)
     }
 
     fun setEnabled(context: Context, enabled: Boolean) {
         cachedEnabled = enabled
-        prefs(context).edit().putBoolean(KEY_ENABLED, enabled).apply()
+        prefs().set(KEY_ENABLED, enabled)
     }
 
     /**
@@ -88,6 +86,6 @@ object AutoCompactPrefs {
      */
     fun setEnabled(enabled: Boolean) {
         cachedEnabled = enabled
-        appContext?.let { prefs(it).edit().putBoolean(KEY_ENABLED, enabled).apply() }
+        appContext?.let { prefs().set(KEY_ENABLED, enabled) }
     }
 }

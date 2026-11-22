@@ -324,6 +324,18 @@
     <string name="token_usage_context_used">บริบทที่ใช้ไป</string>
     <string name="token_usage_context_window">ขนาดบริบท</string>
     <string name="token_usage_max_output">เอาต์พุตสูงสุด</string>
+    <string name="token_usage_section_breakdown">องค์ประกอบ</string>
+    <string name="token_usage_breakdown_hint">ประมาณการ ±10% — สิ่งที่คำขอถัดไปบรรจุ</string>
+    <string name="token_usage_block_system_tools">ระบบและเครื่องมือ</string>
+    <string name="token_usage_block_skills_mcps">สกิลและ MCP</string>
+    <string name="token_usage_block_memory">หน่วยความจำ</string>
+    <string name="token_usage_block_runtime_tail">บริบทต่อรอบ</string>
+    <string name="token_usage_block_goal_plan">เป้าหมายและแผน</string>
+    <string name="token_usage_block_tool_schemas">สคีมาเครื่องมือ</string>
+    <string name="token_usage_block_history">บทสนทนา</string>
+    <string name="token_usage_block_pending">ไฟล์แนบที่ยังไม่ส่ง</string>
+    <string name="token_usage_breakdown_estimated">ประมาณการ</string>
+    <string name="token_usage_breakdown_measured">วัดได้</string>
     <string name="token_usage_section_thinking">การคิด</string>
     <string name="token_usage_thinking_label">การคิด</string>
     <string name="token_usage_thinking_level">ระดับ</string>
@@ -635,10 +647,9 @@
     <string name="env_var_privacy_footer">เมื่อเปิดใช้ ค่าของตัวแปรสภาพแวดล้อมใดๆ ที่ปรากฏในผลลัพธ์ของ shell-execute จะถูกแทนที่ด้วยรูปแบบปกปิด (เช่น `sk-1********ajhks`) ก่อนส่งถึงโมเดล ค่าที่สั้นกว่า 8 อักขระจะกลายเป็น `*` ทั้งหมด ส่วนผลลัพธ์ที่ผู้ใช้เห็นในแชทจะไม่เปลี่ยนแปลง</string>
     <string name="outbound_mask_toggle">การปกปิดความเป็นส่วนตัวขาออก</string>
     <string name="outbound_mask_footer">มาสกิงแบบเลือกเปิด: สตริงรูปแบบคีย์ (รวมในโค้ด) อีเมล และเลขคล้ายเบอร์โทรจะถูกแทนที่ คีย์ API embedding ด้านล่างเก็บเป็นข้อความล้วนใน prefs ส่วนตัวของแอป ประวัติในเครื่องไม่เปลี่ยน</string>
-    <string name="chat_menu_perm_yoyo">YOLO · อัตโนมัติทั้งหมด</string>
-    <string name="chat_menu_perm_safe_auto">อัตโนมัติปลอดภัย · เครื่องมืออ่านอย่างเดียวทำงานอิสระ</string>
-    <string name="chat_menu_perm_ask">ถาม · ยืนยันทุกการเรียก</string>
-    <string name="chat_menu_perm_off">ปิด · ปฏิเสธเครื่องมือทั้งหมด</string>
+    <string name="chat_menu_perm_yoyo">เข้าถึงเต็มรูปแบบ</string>
+    <string name="chat_menu_perm_safe_auto">โหมดอัตโนมัติ</string>
+    <string name="chat_menu_perm_ask">ถามก่อนเปลี่ยนแปลง</string>
     <string name="gate_approval_allow_all">อนุญาตเซสชันนี้ตลอด (เป้าหมายปัจจุบัน)</string>
     <string name="approval_action_allow_all_session">อนุญาตเสมอในเซสชันนี้</string>
     <string name="env_var_section_header">ตัวแปร</string>
@@ -865,6 +876,10 @@
     <string name="newer_db_body">Minis Ultra สำเนานี้เก่ากว่าเวอร์ชันที่สร้างข้อมูลของคุณ จึงเปิดข้อมูลอย่างปลอดภัยไม่ได้\n\nไม่มีข้อมูลใดถูกลบ — บทสนทนาของคุณยังอยู่ครบในอุปกรณ์นี้ ติดตั้ง Minis Ultra เวอร์ชันที่ใหม่กว่าอีกครั้งแล้วทุกอย่างจะกลับมา</string>
     <string name="newer_db_versions">เวอร์ชันนี้รองรับรูปแบบข้อมูล %1$d</string>
     <string name="newer_db_exit">ปิด</string>
+    <string name="degraded_startup_title">โหลดคอมโพเนนต์บางส่วนตอนเริ่มทำงานไม่สำเร็จ</string>
+    <string name="degraded_startup_body">แอปกำลังทำงานด้วยฟังก์ชันที่ลดลง ฟีเจอร์บางอย่างอาจใช้ไม่ได้จนกว่าจะรีสตาร์ท</string>
+    <string name="degraded_startup_cause">สาเหตุ: %1$s</string>
+    <string name="degraded_startup_dismiss">ปิด</string>
     <string name="usage_attr_unknown_session">ไม่ทราบโมเดล — ระเบียนของเซสชันถูกลบไปแล้ว</string>
     <string name="usage_attr_removed">ไม่มีอยู่ในผู้ให้บริการที่คุณตั้งค่าไว้แล้ว</string>
     <string name="usage_detail_output">เอาต์พุต</string>
@@ -1046,6 +1061,13 @@
     <string name="model_group_detail_name">ชื่อ</string>
     <string name="model_group_detail_the_label_shown_in_the_model_picker_save">ป้ายกำกับที่แสดงในตัวเลือกโมเดล ระบบจะบันทึกอัตโนมัติเมื่อคุณแตะที่อื่น</string>
     <string name="model_group_detail_routing_strategy">กลยุทธ์การกำหนดเส้นทาง</string>
+    <string name="model_group_detail_more_strategies">กลยุทธ์เพิ่มเติม</string>
+    <string name="model_group_detail_fewer_strategies">ย่อกลยุทธ์</string>
+    <string name="model_connection_title">โมเดลและการเชื่อมต่อ</string>
+    <string name="model_connection_providers_count">%1$d ผู้ให้บริการ · %2$d โมเดล</string>
+    <string name="model_connection_groups_count">%1$d กลุ่ม</string>
+    <string name="model_connection_auto_groups">กลุ่มอัตโนมัติ</string>
+    <string name="model_connection_not_set">ยังไม่ตั้งค่า</string>
     <string name="model_group_detail_routing_quota_window_footer">สมาชิกหลักให้บริการจนโควตาหน้าต่างหมด แล้วสมาชิกถัดไปรับช่วงจนกว่าจะรีเซ็ต</string>
     <string name="model_group_detail_routing_round_robin_footer">วนสมาชิกทีละหนึ่งคำขอตามลำดับ</string>
     <string name="model_group_detail_routing_smart_footer">คำขอเบาไปที่สมาชิกสุดท้าย (ประหยัด) ส่วนคำขอยาวหรือซับซ้อนไปที่สมาชิกแรก (แรง)</string>
@@ -1323,6 +1345,8 @@
     <string name="backup_ready">ข้อมูลสำรองพร้อมแล้ว</string>
     <string name="backup_result_excluded_too_large">ยกเว้น (ใหญ่เกินไป)</string>
     <string name="backup_result_files_not_included">ไม่ได้รวมไฟล์</string>
+    <string name="backup_result_excluded_unreadable">ยกเว้น (อ่านไม่ได้)</string>
+    <string name="backup_result_credentials_unreadable">อ่านข้อมูลรับรองไม่ได้</string>
     <string name="backup_result_local_only">บันทึกไว้ในอุปกรณ์นี้เท่านั้น</string>
     <string name="backup_result_delivered">บันทึกไว้ในอุปกรณ์นี้ และคัดลอกไปยัง %1$d จาก %2$d ปลายทาง</string>
     <string name="backup_local_removed">ลบสำเนาในเครื่องแล้ว — คืนพื้นที่ %1$s ในอุปกรณ์นี้</string>
@@ -2136,6 +2160,9 @@
     <string name="cot_translate_settings_language">ภาษาเป้าหมาย</string>
     <string name="cot_translate_privacy_notice">กระบวนการคิดแบบขยายจะถูกส่งไปยังบริการแปลที่เลือก ซึ่งอาจมีโค้ดส่วนตัวหรือรายละเอียดบทสนทนา</string>
     <string name="cot_translate_anonymous_notice">Bing และ Google ไม่ต้องเข้าสู่ระบบหรือคีย์ API ปลายทางแบบไม่ระบุตัวตนอาจปฏิเสธหรือจำกัดคำขอ</string>
+    <string name="cot_translate_retry">ลองใหม่</string>
+    <string name="cot_translate_privacy_accept">เปิดใช้</string>
+    <string name="cot_translate_privacy_decline">ยกเลิก</string>
     <string name="git_panel_staged">สเตจแล้ว</string>
     <string name="git_panel_changes_section">การเปลี่ยนแปลง</string>
     <string name="git_panel_stats_files">ไฟล์ที่เปลี่ยนแปลง %1$d รายการ</string>
@@ -2750,6 +2777,7 @@
     <string name="modeldetail_section_context_retry">บริบทและการลองใหม่</string>
     <string name="modeldetail_temperature">อุณหภูมิ (0.0–2.0)</string>
     <string name="modeldetail_temperature_invalid">ใส่ตัวเลข 0.0 ถึง 2.0 หรือเว้นว่างเพื่อไม่ส่ง</string>
+    <string name="modeldetail_harness_save_failed">บันทึกการปรับตัวบทบางจริงไม่สำเร็จ บันทึกรายการโมเดลแล้ว ลองอีกครั้ง</string>
     <string name="modeldetail_temperature_placeholder">ไม่ส่ง</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">เพิ่ม</string>
@@ -3330,6 +3358,10 @@
     <string name="guard_stop_on">หยุดเซสชันได้</string>
     <string name="guard_stop_off">ไม่หยุดเซสชัน</string>
     <string name="guard_stop_footer">เมื่อเปิด ตัวป้องกันจะหยุดเซสชันเมื่อการกระทำเดิมซ้ำบ่อยเกินไป เมื่อปิดจะเพียงเตือนโมเดล เหมาะกับการรอนาน เช่น การบิลด์</string>
+    <string name="goal_drift_section">การตรวจจับการเบี่ยงเบนของเป้าหมาย</string>
+    <string name="goal_drift_threshold_title">เกณฑ์การเตือนการเบี่ยงเบน</string>
+    <string name="goal_drift_threshold_value">%1$d รอบเครื่องมือ</string>
+    <string name="goal_drift_footer">ขณะที่เป้าหมายยังใช้งานอยู่ นี่คือจำนวนรอบเครื่องมือต่อเนื่องที่ผ่านไปได้โดยไม่มีการเปลี่ยนแปลงใดๆ ในกระดานแผน ก่อนที่โฮสต์จะเตือนโมเดลถึงเป้าหมาย ยิ่งสูง = เตือนน้อยลง ยิ่งต่ำ = ควบคุมเข้มงวดขึ้น</string>
     <string name="token_usage_section_memory">ความจำ</string>
     <string name="token_usage_memory_lines">บรรทัดที่ส่ง</string>
     <string name="token_usage_memory_shown">จำนวนครั้งที่แสดง</string>
@@ -3340,4 +3372,13 @@
     <string name="modeldetail_tail_budget_state_auto">อัตโนมัติ (ปรับตามหน้าต่าง สูงสุด 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">เฉพาะโมเดลนี้</string>
     <string name="tool_limits_tool_concurrency">เครื่องมืออ่านแบบขนาน</string>
+ <string name="perm_mode_desc_ask">ถามก่อนแก้ไขไฟล์</string>
+ <string name="perm_mode_desc_auto">ถามเมื่อมีความเสี่ยงเท่านั้น</string>
+ <string name="perm_mode_desc_full">ยืนยันน้อยลง</string>
+ <string name="perm_full_access_title">เปิดใช้การเข้าถึงเต็มรูปแบบหรือไม่</string>
+ <string name="perm_full_access_body">เอเจนต์จะอ่าน สร้าง และลบไฟล์ รันคำสั่งในเทอร์มินัล และใช้เครือข่ายหรือแอปที่เชื่อมต่อได้โดยไม่ถามทุกครั้ง การกระทำเหล่านี้อาจทำให้ข้อมูลสูญหายหรือรั่วไหล โปรดเปิดใช้เมื่อคุณไว้วางใจงานนี้เท่านั้น และกลับมาเปลี่ยนได้ทุกเมื่อ</string>
+ <string name="perm_full_access_ack">ฉันเข้าใจความเสี่ยงและรับผิดชอบต่อความปลอดภัยของข้อมูลตัวเอง</string>
+ <string name="perm_full_access_confirm">เปิดใช้</string>
+ <string name="perm_guarded_risk_reason">ยืนยันคำสั่งที่มีความเสี่ยง</string>
+ <string name="perm_guarded_risk_message">โหมดอัตโนมัติเห็นว่าคำสั่งนี้มีความเสี่ยง ยืนยันหนึ่งครั้งเพื่อรัน</string>
 </resources>

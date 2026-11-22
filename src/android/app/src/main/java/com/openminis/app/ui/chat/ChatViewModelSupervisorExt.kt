@@ -23,11 +23,13 @@ import androidx.lifecycle.viewModelScope
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Live supervisor sessions keyed by session id. The host is the single
@@ -47,9 +49,16 @@ internal object SupervisorSessionHost {
 
     private val sessions = ConcurrentHashMap<String, Live>()
 
-    fun register(live: Live) {
-        sessions[live.sessionId] = live
-    }
+    /**
+     * [T-supervisor-register-race] Registers [live] unless the session id is
+     * already taken, and returns the pre-existing registration when it is
+     * (null when [live] was inserted). An overwrite here orphaned the first
+     * loop: two concurrent starts both pass the [isLive] check (the window
+     * widened when the seat provider resolution moved to Dispatchers.IO), the
+     * second put clobbered the first, and the first kept running with no host
+     * entry — input routing and halt lost it.
+     */
+    fun register(live: Live): Live? = sessions.putIfAbsent(live.sessionId, live)
 
     fun remove(sessionId: String) {
         sessions.remove(sessionId)
@@ -192,8 +201,12 @@ internal suspend fun ChatViewModel.startSupervisorSession(
 
     val supervisorEntry = resolveSupervisorEntry() ?: return false
     val workerEntry = resolveWorkerEntry() ?: return false
-    val supervisorProvider = providerForModelEntry(supervisorEntry) ?: return false
-    val workerProvider = providerForModelEntry(workerEntry) ?: return false
+    // [T-supervisor-provider-io] providerForModelEntry refreshes OAuth tokens
+    // under runBlocking — network I/O. send()/resume reach here from
+    // viewModelScope (Dispatchers.Main.immediate), so resolve both seats on
+    // IO or the refresh parks the main thread for the whole round trip.
+    val supervisorProvider = withContext(Dispatchers.IO) { providerForModelEntry(supervisorEntry) } ?: return false
+    val workerProvider = withContext(Dispatchers.IO) { providerForModelEntry(workerEntry) } ?: return false
 
     val maxWorkerTurns = multiAgentSettings.supervisorMaxWorkerTurns.value
     val inbox = SupervisorChat.SupervisorInbox()
@@ -203,8 +216,10 @@ internal suspend fun ChatViewModel.startSupervisorSession(
     // Written before the job launches so a halt that lands before the first
     // suspension point still has a record to mark USER_HALTED — markTerminal
     // no-ops on a missing head, and a lost record means a phantom "running"
-    // run the next time the session is opened. Same ordering for the UI
-    // state: the bar must appear the instant the send is consumed.
+    // run the next time the session is opened. The status bar follows the
+    // same no-suspension stretch (register → start → INSTRUCTING all run in
+    // one Main continuation below), so it still appears the instant the send
+    // is consumed.
     val run = try {
         SupervisorRunStore.start(sessionId, context, trimmed, maxWorkerTurns, recovery, objectiveRowId)
     } catch (e: java.io.IOException) {
@@ -212,13 +227,13 @@ internal suspend fun ChatViewModel.startSupervisorSession(
         return false
     }
     val receiptScope = com.openminis.app.tools.ToolReceiptScope.supervisor(sessionId, run.id)
-    SupervisorUiHost.reset(sessionId)
-    SupervisorUiHost.update(sessionId, SupervisorUiHost.Phase.INSTRUCTING, trimmed, 0)
 
     // [T-supervisor-register-race] The Live must be registered before the
     // loop body can run: a terminal that overtakes register would leave a
     // dead session in the host, permanently "live". LAZY start keeps the
-    // body from starting until the register above has landed.
+    // body from starting until the register above has landed. The status bar
+    // is repainted only AFTER register wins the slot: a raced loser used to
+    // reset/update the bar here and clobber the winner's INSTRUCTING state.
     val job = viewModelScope.launch(start = CoroutineStart.LAZY) {
         runSupervisorSession(
             sessionId = sessionId,
@@ -235,17 +250,29 @@ internal suspend fun ChatViewModel.startSupervisorSession(
             completedWorkerRounds = run.workerTurns,
         )
     }
-    SupervisorSessionHost.register(
+    val racedLoser = SupervisorSessionHost.register(
         SupervisorSessionHost.Live(sessionId, trimmed, inbox, job),
-    )
-    if (!job.start()) {
-        // Halt landed between register and start: the loop body never ran,
-        // so the terminal observer cannot fire — settle the record and the
-        // bar here, same terminal shape as the halt path.
-        SupervisorSessionHost.remove(sessionId)
-        SupervisorRunStore.markTerminal(sessionId, context, SupervisorRunStore.STATE_USER_HALTED, null)
-        SupervisorUiHost.update(sessionId, SupervisorUiHost.Phase.HALTED, trimmed, 0)
+    ) != null
+    if (racedLoser || !job.start()) {
+        // A concurrent start won the putIfAbsent race after the isLive() check
+        // above (the IO window in the seat resolution let two starts through),
+        // or a halt landed between register and start. Either way the loop
+        // body never ran, so the terminal observer cannot fire — cancel the
+        // never-started job and settle the same terminal shape as the halt
+        // path. But only when THIS start still owns the slot: a raced loser
+        // must not evict the winner's live registration (input routing and
+        // halt would lose the running loop), mark its run USER_HALTED, or
+        // overwrite its status bar.
+        job.cancel()
+        if (!racedLoser) {
+            SupervisorSessionHost.remove(sessionId)
+            SupervisorRunStore.markTerminal(sessionId, context, SupervisorRunStore.STATE_USER_HALTED, null)
+            SupervisorUiHost.update(sessionId, SupervisorUiHost.Phase.HALTED, trimmed, 0)
+        }
+        return false
     }
+    SupervisorUiHost.reset(sessionId)
+    SupervisorUiHost.update(sessionId, SupervisorUiHost.Phase.INSTRUCTING, trimmed, 0)
     return true
 }
 

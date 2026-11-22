@@ -57,20 +57,20 @@ object ContextSaverPrefs {
     private const val KEY_MODE = "mode"
 
     @Volatile
-    private var prefs: android.content.SharedPreferences? = null
+    private var prefs: com.openminis.app.config.PrefsHandle? = null
 
     private val _revision = MutableStateFlow(0)
     val revision: StateFlow<Int> = _revision.asStateFlow()
 
     fun prime(context: Context) {
-        prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        prefs = com.openminis.app.config.Prefs.file(PREFS)
         _revision.value++
     }
 
-    fun mode(): Mode = Mode.fromId(prefs?.getString(KEY_MODE, Mode.BALANCED.id))
+    fun mode(): Mode = Mode.fromId(prefs?.stringOrNull(KEY_MODE))
 
     fun setMode(mode: Mode) {
-        prefs?.edit()?.putString(KEY_MODE, mode.id)?.apply()
+        prefs?.set(KEY_MODE, mode.id)
         _revision.value++
     }
 

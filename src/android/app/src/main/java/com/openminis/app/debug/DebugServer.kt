@@ -28,6 +28,21 @@ class DebugServer(
     companion object {
         private const val TAG = "DebugServer"
 
+        /**
+         * [T-debugserver-request-limits] Request-size caps, mirroring
+         * McpHttpServer (MAX_BODY_BYTES = 4 MB → 413, header block = 64 KiB →
+         * 431): the debug server shares its threat model — a local process (or
+         * LAN client with the token) that can otherwise allocate the app to
+         * death with one declared Content-Length or one endless header line.
+         * A line count cap [MAX_HEADER_COUNT] bounds header-count games on top
+         * of the byte budget. Like nginx's 100 it counts HEADER lines only —
+         * the request line and the empty terminator are not headers, so they
+         * must not eat into the budget.
+         */
+        const val MAX_BODY_BYTES = 4 * 1024 * 1024
+        const val MAX_HEADER_BYTES = 64 * 1024
+        const val MAX_HEADER_COUNT = 100
+
         /** [Wave3 #13] LAN-listen opt-in prefs (debug builds only, default OFF). */
         private const val LAN_LISTEN_PREFS = "debug_server_prefs"
         private const val LAN_LISTEN_KEY = "lan_listen"
@@ -102,8 +117,8 @@ class DebugServer(
     private fun lanListenEnabled(): Boolean {
         if (!com.openminis.app.BuildConfig.DEBUG) return false
         return runCatching {
-            context.getSharedPreferences(LAN_LISTEN_PREFS, Context.MODE_PRIVATE)
-                .getBoolean(LAN_LISTEN_KEY, false)
+            com.openminis.app.config.Prefs.file(LAN_LISTEN_PREFS)
+                .bool(LAN_LISTEN_KEY, false)
         }.getOrDefault(false)
     }
 
@@ -183,8 +198,17 @@ class DebugServer(
                 // response can honour it.
                 var origin: String? = null
 
-                // Read HTTP request line
-                val requestLine = reader.readLine() ?: return
+                // [T-debugserver-request-limits] Read HTTP request line. The
+                // head budget (request line + headers together) is enforced
+                // INSIDE HttpRequestReader.readLine — a single oversized line
+                // must not buffer unbounded bytes before any check runs — so
+                // both read sites answer 431 and close.
+                val requestLine = try {
+                    reader.readLine()
+                } catch (e: RequestHeadTooLarge) {
+                    sendHeadTooLarge(writer, origin)
+                    return
+                } ?: return
                 val parts = requestLine.split(" ", limit = 3)
                 if (parts.size < 2) {
                     sendResponse(writer, 400, rpcHandler.errorJSON(-32700, "Parse error"), origin = origin)
@@ -206,7 +230,12 @@ class DebugServer(
                 var providedToken: String? = null
                 var accept = ""
                 while (true) {
-                    val headerLine = reader.readLine() ?: break
+                    val headerLine = try {
+                        reader.readLine()
+                    } catch (e: RequestHeadTooLarge) {
+                        sendHeadTooLarge(writer, origin)
+                        return
+                    } ?: break
                     if (headerLine.isEmpty()) break
                     val lower = headerLine.lowercase()
                     if (lower.startsWith("content-length:")) {
@@ -233,8 +262,12 @@ class DebugServer(
 
                 // [T-android-debugserver-auth] Gate BEFORE any RPC dispatch:
                 // loopback (adb forward) is exempt; LAN clients need the token.
+                // The exemption short-circuits BEFORE the token lazy is read:
+                // loopback needs no filesystem access at all, so the hot
+                // adb-forward path never touches filesDir.
                 val isLoopback = s.inetAddress?.isLoopbackAddress == true
-                if (!isAuthorized(isLoopback, providedToken, authToken)) {
+                val authorized = isLoopback || isAuthorized(false, providedToken, authToken)
+                if (!authorized) {
                     Log.w(TAG, "401 unauthorized ${if (isLoopback) "loopback" else s.inetAddress?.hostAddress ?: "?"} (missing/wrong token)")
                     sendResponse(writer, 401, rpcHandler.errorJSON(-32000, "Unauthorized — send X-Minis-Token (see `adb shell run-as com.openminis.app cat files/debug_server_token`)"), origin = origin)
                     return
@@ -287,6 +320,17 @@ class DebugServer(
 
                 if (contentLength <= 0) {
                     sendResponse(writer, 400, rpcHandler.errorJSON(-32700, "Empty body"), origin = origin)
+                    return
+                }
+
+                // [T-debugserver-request-limits] Refuse BEFORE allocating:
+                // contentLength is client-controlled and ByteArray(contentLength)
+                // on a declared gigabyte is an instant OOM. The cap matches
+                // McpHttpServer.MAX_BODY_BYTES; the response goes out without
+                // reading any of the oversized body.
+                if (contentLength > MAX_BODY_BYTES) {
+                    Log.w(TAG, "413 body too large: $contentLength bytes (limit $MAX_BODY_BYTES)")
+                    sendResponse(writer, 413, rpcHandler.errorJSON(-32700, "body too large"), origin = origin)
                     return
                 }
 
@@ -394,6 +438,17 @@ class DebugServer(
             "Access-Control-Allow-Origin: null\r\n"
         } else ""
 
+    /** [T-debugserver-request-limits] The one answer to an oversized request
+     *  head: 431 with the reason logged, connection closed right after. */
+    private fun sendHeadTooLarge(writer: PrintWriter, origin: String?) {
+        Log.w(
+            TAG,
+            "431 request head rejected: request line + headers exceed " +
+                "$MAX_HEADER_BYTES bytes or $MAX_HEADER_COUNT header lines",
+        )
+        sendResponse(writer, 431, rpcHandler.errorJSON(-32700, "request head too large"), origin = origin)
+    }
+
     private fun sendResponse(
         writer: PrintWriter,
         statusCode: Int,
@@ -406,6 +461,8 @@ class DebugServer(
             400 -> "Bad Request"
             401 -> "Unauthorized"
             405 -> "Method Not Allowed"
+            413 -> "Payload Too Large"
+            431 -> "Request Header Fields Too Large"
             503 -> "Service Unavailable"
             else -> "Error"
         }
@@ -423,6 +480,14 @@ class DebugServer(
     }
 
     /**
+     * [T-debugserver-request-limits] Raised by [HttpRequestReader.readLine]
+     * the moment the request-head budget trips; the caller answers 431 and
+     * closes. Only the request line and header block flow through readLine,
+     * so a throw can never mean "the body was too large".
+     */
+    private class RequestHeadTooLarge(message: String) : java.io.IOException(message)
+
+    /**
      * Minimal byte-level HTTP request reader.
      *
      * Exists because the header block and the body need DIFFERENT treatment on
@@ -432,9 +497,27 @@ class DebugServer(
      * and it read ahead, so body bytes could already sit in its buffer and be
      * lost to a byte-level read. This reads one byte at a time for header lines
      * and hands the still-undrained stream to the body read.
+     *
+     * [T-debugserver-request-limits] readLine also OWNS the request-head
+     * budget ([MAX_HEADER_BYTES] bytes across the request line + headers,
+     * [MAX_HEADER_COUNT] header lines — the request line and the empty
+     * terminator do not count against the line cap, matching nginx's
+     * large_client_header_buffers semantics): it throws
+     * [RequestHeadTooLarge] mid-line, so a single oversized line is cut off
+     * at the cap instead of buffering unbounded bytes before any caller-side
+     * check could run.
      */
     private class HttpRequestReader(private val input: java.io.InputStream) {
         private val buf = java.io.ByteArrayOutputStream(128)
+
+        /** Bytes consumed from the request head so far (all readLine data). */
+        private var headBytes = 0
+
+        /** Header lines completed so far (request line and terminator excluded). */
+        private var headerLines = 0
+
+        /** The first [readLine] call delivers the request line, not a header. */
+        private var sawRequestLine = false
 
         /** Reads one CRLF/LF-terminated line as ASCII; null at end of stream. */
         fun readLine(): String? {
@@ -444,7 +527,29 @@ class DebugServer(
                 val b = input.read()
                 if (b < 0) return if (sawAny) buf.toString("UTF-8") else null
                 sawAny = true
-                if (b == '\n'.code) return buf.toString("UTF-8")
+                if (b == '\n'.code) {
+                    val line = buf.toString("UTF-8")
+                    // Only real header lines count against MAX_HEADER_COUNT:
+                    // an empty line is the head terminator and the first line
+                    // is the request line — neither is a header, and counting
+                    // them would refuse two headers earlier than the cap
+                    // claims. readLine is never called past the terminator
+                    // (the body goes through [read]), so this stays exact.
+                    if (sawRequestLine && line.isNotEmpty()) {
+                        headerLines++
+                        if (headerLines > MAX_HEADER_COUNT) {
+                            throw RequestHeadTooLarge(
+                                "request head exceeds $MAX_HEADER_COUNT header lines"
+                            )
+                        }
+                    }
+                    sawRequestLine = true
+                    return line
+                }
+                headBytes++
+                if (headBytes > MAX_HEADER_BYTES) {
+                    throw RequestHeadTooLarge("request head exceeds $MAX_HEADER_BYTES bytes")
+                }
                 if (b != '\r'.code) buf.write(b)
             }
         }

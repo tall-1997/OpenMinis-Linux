@@ -33,6 +33,7 @@ import com.openminis.app.ui.components.MinisTextButton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.openminis.app.ui.tokens.MinisTypography
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -119,7 +120,7 @@ fun SoulPromptEditorScreen(
         )
         Text(
             text = soulBodyCountTextAndroid(body),
-            fontSize = 12.sp,
+            fontSize = MinisTypography.codeFoot,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
         )

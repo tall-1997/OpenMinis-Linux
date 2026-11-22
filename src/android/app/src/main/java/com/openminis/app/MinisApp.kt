@@ -44,6 +44,7 @@ import com.openminis.app.sandbox.RootfsManager
 import com.openminis.app.sandbox.HostEventHooks
 import com.openminis.app.service.SessionActivityTracker
 import com.openminis.app.ui.MinisImageFetcher
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 class MinisApp : Application(), ImageLoaderFactory {
@@ -55,9 +56,29 @@ class MinisApp : Application(), ImageLoaderFactory {
     @Volatile
     var subsystemsInitialized: Boolean = false
 
-    /** [T-android-startup-splash-hang] Why the subsystem block failed, for the recovery screen in MainActivity. */
-    var subsystemInitFailure: String? = null
-        private set
+    /**
+     * [T-android-startup-splash-hang] Why the subsystem block failed, for the
+     * recovery screen in MainActivity.
+     *
+     * Backed by a StateFlow rather than a bare var: the CORE init failure is
+     * read synchronously by MainActivity (which only reaches it while
+     * [subsystemsInitialized] is false), but the EXTENDED init failure in
+     * [onCreate] happens after the flag is already true — without the flow,
+     * the degraded state had no reader at all and was silently dropped.
+     * [subsystemInitFailureFlow] is what the degraded banner in the running
+     * app observes.
+     */
+    private val _subsystemInitFailure = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+
+    /** Observable degraded-startup cause; null while startup ran clean. */
+    val subsystemInitFailureFlow: kotlinx.coroutines.flow.StateFlow<String?> =
+        _subsystemInitFailure.asStateFlow()
+
+    var subsystemInitFailure: String?
+        get() = _subsystemInitFailure.value
+        private set(value) {
+            _subsystemInitFailure.value = value
+        }
 
     /** [T-android-downgrade-compat] Why init was skipped: newer-build DB vs genuine init failure, for accurate MainActivity guidance. */
     @Volatile
@@ -139,6 +160,17 @@ class MinisApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
 
+        // [T-acra-prefs-order] Bind the typed-prefs source BEFORE this early return:
+        // the :acra reporter process leaves here without ever reaching the main
+        // install point below, and any prefs read in that process used to throw
+        // "Prefs is not installed". Installing is pure object wiring (no file is
+        // opened), so paying it in every process costs nothing.
+        // [T-prefs-guard-never-crashes] One call: install + go lenient. The registry
+        // is GENERATED and its gaps are our bug, not the user's crash: unit tests
+        // keep strictKeyGuard = true so CI still catches every miss.
+        com.openminis.app.config.Prefs.installLenient(
+            com.openminis.app.config.AndroidPrefsSource(this),
+        )
         // T287-followup: ACRA's :acra reporter must not bind the socket / boot the DB (EADDRINUSE loop).
         if (ACRA.isACRASenderServiceProcess()) {
             Log.i("MinisApp", "skipping app init in :acra reporter process")
@@ -190,7 +222,9 @@ class MinisApp : Application(), ImageLoaderFactory {
 
         // The pre-send context check and the in-chat opt-in read this with no Activity context.
         com.openminis.app.data.AutoCompactPrefs.prime(this)
+        com.openminis.app.data.SessionPermissionPrefs.prime(this) // [T-perm-inherit] new chats start at the last chosen mode
         com.openminis.app.data.GuardPrefs.prime(this)  // [T-guard-stop-policy] loop-guard stop switch
+        com.openminis.app.data.GoalDriftPrefs.prime(this)  // [T-goal-drift-reconciler] stall-threshold knob
         // [GH#221] Per-provider custom request headers are read by
         // ProviderFactory.create() from call sites without a Context.
         com.openminis.app.provider.ProviderHeaderStore.prime(this)
@@ -383,27 +417,30 @@ class MinisApp : Application(), ImageLoaderFactory {
         }
 
         // [Wave3 #12] SoulStore chain + GLOBAL.md seeding moved off the critical path (readers collect reactively or read files on demand).
-        appCoroutineScopes.io.launch {
-            // Load assets first (DEFAULT_CONTENT shipped persona); do not force-overwrite SOUL.md.
-            runCatching {
-                com.openminis.app.agent.SoulStore.loadDefaultFromAssets(this@MinisApp)
-                com.openminis.app.agent.SoulStore.forceOverwriteOnce(this@MinisApp)
-                com.openminis.app.agent.SoulStore.ensureExists(this@MinisApp)
-                com.openminis.app.agent.SoulStore.upgradeStaleDefault(this@MinisApp)
-                com.openminis.app.agent.SoulStore.renameStockProduct(this@MinisApp)
-                // [GH#299] 升级用户可能带着 interim 构建的旧 icon 引用；启动时迁移
-                // 一次，避免"不再保存 SOUL.md 就永远进不了备份根"（幂等）。
-                com.openminis.app.agent.SoulIconMigration.migrateLegacyRefOnStartup(this@MinisApp)
-                com.openminis.app.agent.SoulStore.refreshCache(this@MinisApp)
+        // [T-startup-degraded-extended] Everything after the DB/repository backstop is also degraded-mode
+        // isolated: a broken pref, bind plan or service init must not turn the whole process into a crash loop.
+        runCatching {
+            appCoroutineScopes.io.launch {
+                // Load assets first (DEFAULT_CONTENT shipped persona); do not force-overwrite SOUL.md.
+                runCatching {
+                    com.openminis.app.agent.SoulStore.loadDefaultFromAssets(this@MinisApp)
+                    com.openminis.app.agent.SoulStore.forceOverwriteOnce(this@MinisApp)
+                    com.openminis.app.agent.SoulStore.ensureExists(this@MinisApp)
+                    com.openminis.app.agent.SoulStore.upgradeStaleDefault(this@MinisApp)
+                    com.openminis.app.agent.SoulStore.renameStockProduct(this@MinisApp)
+                    // [GH#299] 升级用户可能带着 interim 构建的旧 icon 引用；启动时迁移
+                    // 一次，避免"不再保存 SOUL.md 就永远进不了备份根"（幂等）。
+                    com.openminis.app.agent.SoulIconMigration.migrateLegacyRefOnStartup(this@MinisApp)
+                    com.openminis.app.agent.SoulStore.refreshCache(this@MinisApp)
 
-                // [T-global-md-seed + T-default-assets] Seed GLOBAL.md starter template on first launch (create-only).
-                com.openminis.app.agent.SystemPromptBuilder.loadIdentityFromAssets(this@MinisApp)
-                com.openminis.app.data.repository.MemoryRepository.loadGlobalDefaultFromAssets(this@MinisApp)
-                com.openminis.app.data.repository.MemoryRepository.ensureGlobalExists(this@MinisApp)
-            }.onFailure {
-                android.util.Log.e("MinisApp", "soul/memory asset seeding failed", it)
+                    // [T-global-md-seed + T-default-assets] Seed GLOBAL.md starter template on first launch (create-only).
+                    com.openminis.app.agent.SystemPromptBuilder.loadIdentityFromAssets(this@MinisApp)
+                    com.openminis.app.data.repository.MemoryRepository.loadGlobalDefaultFromAssets(this@MinisApp)
+                    com.openminis.app.data.repository.MemoryRepository.ensureGlobalExists(this@MinisApp)
+                }.onFailure {
+                    android.util.Log.e("MinisApp", "soul/memory asset seeding failed", it)
+                }
             }
-        }
 
         appCoroutineScopes.io.launch {
             runCatching { chatRepository.warmupWorkspaceOwners() }.onFailure {
@@ -677,6 +714,13 @@ class MinisApp : Application(), ImageLoaderFactory {
         }.onFailure { Log.w("MinisApp", "MCP server init failed: ${it.message}") }
 
         // [T268] Ghost-alarm migration call moved into the startup IO block above.
+        }.onFailure { t ->
+            Log.e("MinisApp", "extended subsystem init failed — continuing degraded", t)
+            subsystemInitFailure = buildString {
+                append(t.javaClass.simpleName)
+                t.message?.take(300)?.let { append(": ").append(it) }
+            }
+        }
     }
 
     /** Coil ImageLoader: MinisImageFetcher resolves `minis://`; SvgDecoder is required for res/raw vendor logos. */

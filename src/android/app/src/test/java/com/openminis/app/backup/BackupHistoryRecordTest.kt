@@ -172,6 +172,29 @@ class BackupHistoryRecordTest {
         assertEquals("huge video.mp4", e.fileName)
     }
 
+    /**
+     * The reason rides with the entry and survives the history round-trip:
+     * "size_cap" and "unreadable" name different problems, so a record must
+     * not flatten them, and a pre-reason entry (older build) must still
+     * decode with a null reason.
+     */
+    @Test
+    fun `skipped entry reason round-trips through json`() {
+        val original = record(status = BackupHistory.Status.COMPLETED_WITH_ISSUES).copy(
+            skippedFiles = 2,
+            skippedEntries = listOf(
+                BackupHistory.SkippedEntry("chats/s1/big.zip", 900, reason = "size_cap"),
+                BackupHistory.SkippedEntry("chats/s2/broken.md", 10, reason = "unreadable"),
+            ),
+        )
+        val decoded = json.decodeFromString(listSer, json.encodeToString(listSer, listOf(original))).single()
+        assertEquals(listOf("size_cap", "unreadable"), decoded.skippedEntries.map { it.reason })
+
+        // Older builds wrote no reason at all.
+        val legacy = BackupHistory.SkippedEntry("chats/s1/old.bin", 5)
+        assertNull(legacy.reason)
+    }
+
     // -- [T-backup-decode-honesty] Corrupt history quarantine -------------
 
     /**

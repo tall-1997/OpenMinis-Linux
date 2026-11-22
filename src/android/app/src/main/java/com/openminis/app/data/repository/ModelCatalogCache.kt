@@ -38,7 +38,7 @@ import kotlinx.coroutines.launch
 internal class ModelCatalogCache(
     private val repo: ProviderRepository,
     private val context: Context,
-    private val prefs: SharedPreferences,
+    private val prefs: com.openminis.app.config.PrefsHandle,
 ) {
     /**
      * [T-model-refresh-generation] Per-instance refresh generation guard (pi
@@ -67,12 +67,12 @@ internal class ModelCatalogCache(
 
     /** Record the time of a successful model fetch for [instanceId]. */
     internal fun markInstanceFetched(instanceId: String) {
-        prefs.edit().putLong(lastFetchKey(instanceId), System.currentTimeMillis()).apply()
+        prefs.set(lastFetchKey(instanceId), System.currentTimeMillis())
     }
 
     /** Whether the cached model list for [instanceId] is older than the TTL. */
     private fun isInstanceStale(instanceId: String): Boolean {
-        val last = prefs.getLong(lastFetchKey(instanceId), 0L)
+        val last = prefs.long(lastFetchKey(instanceId), 0L)
         return last == 0L || (System.currentTimeMillis() - last) > MODEL_CACHE_TTL_MS
     }
 
@@ -85,7 +85,7 @@ internal class ModelCatalogCache(
      * `updateInstance` / `removeInstance`.
      */
     fun invalidateModelCache(instanceId: String) {
-        prefs.edit().remove(lastFetchKey(instanceId)).apply()
+        prefs.remove(lastFetchKey(instanceId))
         // [T-key-cache-invalidate] 模型刷新后旧 ProviderFactory 的 memo
         // 缓存必须作废 —— 否则已构造的 provider 带着旧 key/旧配置继续
         // 存活，表现为“刷新了模型但发送用的还是旧 key”。
@@ -539,7 +539,7 @@ internal class ModelCatalogCache(
      */
     fun refreshAllModelsIfNeeded(scope: kotlinx.coroutines.CoroutineScope) {
         val key = "lastModelsRefreshDate"
-        val lastMs = prefs.getLong(key, 0L)
+        val lastMs = prefs.long(key, 0L)
         val now = System.currentTimeMillis()
         if (lastMs > 0L && isSameCalendarDay(lastMs, now)) {
             android.util.Log.i("ProviderRepo", "[ModelList] refreshAllModelsIfNeeded SKIP — already refreshed today")
@@ -561,7 +561,7 @@ internal class ModelCatalogCache(
             }
 
             android.util.Log.i("ProviderRepo", "[ModelList] refreshAllModelsIfNeeded FIRE — ${enabled.size} instances")
-            prefs.edit().putLong(key, now).apply()
+            prefs.set(key, now)
 
             for (instance in enabled) {
                 scope.launch { autoRefreshModels(instance) }

@@ -18,7 +18,7 @@ import java.io.File
  */
 object MemoryCenterStats {
 
-    /** Session directories examined, newest names first. */
+    /** Session directories examined, most recently modified first. */
     const val MAX_SESSION_DIRS = 120
 
     /** Diary files opened while counting sediments. */
@@ -56,7 +56,9 @@ object MemoryCenterStats {
         val sessions = File(filesDir, "minis-sessions")
             .listFiles()
             ?.filter { it.isDirectory }
-            ?.sortedByDescending { it.name }
+            // UUIDs are opaque, so name order is not "newest"; use the workspace
+            // mtime as a bounded best-effort recency signal for the capped walk.
+            ?.sortedByDescending { it.lastModified() }
             ?.take(MAX_SESSION_DIRS)
             .orEmpty()
 

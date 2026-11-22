@@ -44,7 +44,7 @@ object SandboxJobKeepAlive {
     }
 
     fun rememberedSessions(context: Context): List<String> {
-        val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY_SESSIONS, "[]")
+        val raw = com.openminis.app.config.Prefs.file(PREFS).string(KEY_SESSIONS, "[]")
         return runCatching {
             val arr = JSONArray(raw)
             (0 until arr.length()).map { arr.getString(it) }
@@ -64,7 +64,6 @@ object SandboxJobKeepAlive {
         if (sessionId !in cur) cur += sessionId
         val arr = JSONArray()
         cur.takeLast(16).forEach { arr.put(it) }
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putString(KEY_SESSIONS, arr.toString()).apply()
+        com.openminis.app.config.Prefs.file(PREFS).set(KEY_SESSIONS, arr.toString())
     }
 }

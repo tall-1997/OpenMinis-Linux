@@ -1,5 +1,6 @@
 package com.openminis.app.mcp.server
 
+import com.openminis.app.mcp.server.tools.McpToolShared
 import com.openminis.app.security.AuditEntry
 import com.openminis.app.security.AuditChainVerification
 import com.openminis.app.security.Capability
@@ -13,6 +14,7 @@ import com.openminis.app.security.SecurityGate
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -218,5 +220,34 @@ class McpToolDispatcherTest {
         val gate = FakeGate(Decision.Allow("fine"))
         runCatching { call(dispatcher(gate), "shell_exec", """{"command":"x","timeout_sec":99999}""") }
         assertEquals(Decision.Allow::class, gate.lastAuditedDecision!!::class)
+    }
+
+    // ─── shell_exec 超时语义（GH#358-adjacent） ───────────────────────────
+
+    @Test
+    fun `runInGuest host failure does not borrow the timeout exit code`() {
+        // JVM 下 ExecutionCoordinator 未 init（appContext 为 null），execute
+        // 抛异常 → runInGuest 的兜底。124 是 GNU timeout 惯例、真实看门狗
+        // 超时专用；宿主侧故障必须用别的码，且 timedOut 保持 false —— 否则
+        // MCP 客户端会把"执行器坏了"读成"命令超时"。
+        val result = McpToolShared.runInGuest("echo hi")
+        assertEquals(-1, result.exitCode)
+        assertFalse(result.timedOut)
+        assertTrue(result.output.startsWith("Execution failed"))
+    }
+
+    @Test
+    fun `shell exec result carries the timed_out field structurally`() {
+        // Allow 路径在 JVM 下落到 runInGuest 的宿主失败兜底（见上），此时
+        // timed_out=false；字段本身必须存在 —— 真实超时时它是 true 且
+        // exit_code 保留 GNU 惯例的 124，调用方无需嗅探输出文本。
+        val gate = FakeGate(Decision.Allow("fine"))
+        val r = call(dispatcher(gate), "shell_exec", """{"command":"echo hi"}""")
+        val json = JSONObject(firstText(r))
+        assertTrue(json.has("timed_out"))
+        assertFalse(json.getBoolean("timed_out"))
+        assertEquals(-1, json.getInt("exit_code"))
+        assertTrue(json.has("output"))
+        assertTrue(json.has("duration_ms"))
     }
 }

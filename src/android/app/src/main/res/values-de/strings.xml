@@ -324,6 +324,18 @@
     <string name="token_usage_context_used">Genutzter Kontext</string>
     <string name="token_usage_context_window">Kontextfenster</string>
     <string name="token_usage_max_output">Max. Ausgabe</string>
+    <string name="token_usage_section_breakdown">Zusammensetzung</string>
+    <string name="token_usage_breakdown_hint">Geschätzt ±10 % — was die nächste Anfrage enthält</string>
+    <string name="token_usage_block_system_tools">System &amp; Tools</string>
+    <string name="token_usage_block_skills_mcps">Skills &amp; MCP</string>
+    <string name="token_usage_block_memory">Speicher</string>
+    <string name="token_usage_block_runtime_tail">Kontext pro Runde</string>
+    <string name="token_usage_block_goal_plan">Ziel &amp; Plan</string>
+    <string name="token_usage_block_tool_schemas">Tool-Schemata</string>
+    <string name="token_usage_block_history">Verlauf</string>
+    <string name="token_usage_block_pending">Ungesendete Anhänge</string>
+    <string name="token_usage_breakdown_estimated">Geschätzt</string>
+    <string name="token_usage_breakdown_measured">Gemessen</string>
     <string name="token_usage_section_thinking">Denken</string>
     <string name="token_usage_thinking_label">Denken</string>
     <string name="token_usage_thinking_level">Stufe</string>
@@ -635,10 +647,9 @@
     <string name="env_var_privacy_footer">Wenn aktiviert, werden in der Ausgabe von shell-execute erkannte Werte von Umgebungsvariablen vor der Weitergabe an das Modell maskiert (z. B. `sk-1********ajhks`). Werte mit weniger als 8 Zeichen werden vollständig durch `*` ersetzt. Die für den Nutzer sichtbare Ausgabe im Chat bleibt unverändert.</string>
     <string name="outbound_mask_toggle">Ausgehende Datenschutz-Maskierung</string>
     <string name="outbound_mask_footer">Opt-in-Formmaskierung: schlüsselförmige Strings (auch im Code), E-Mails und telefonähnliche Zahlen werden ersetzt. Der Embedding-API-Schlüssel unten liegt Klartext in App-Prefs. Geräteverlauf unverändert.</string>
-    <string name="chat_menu_perm_yoyo">YOLO · vollautomatisch</string>
-    <string name="chat_menu_perm_safe_auto">Sicher automatisch · Lese-Tools laufen frei</string>
-    <string name="chat_menu_perm_ask">Fragen · jeden Aufruf bestätigen</string>
-    <string name="chat_menu_perm_off">Aus · alle Tools verweigern</string>
+    <string name="chat_menu_perm_yoyo">Voller Zugriff</string>
+    <string name="chat_menu_perm_safe_auto">Autonom</string>
+    <string name="chat_menu_perm_ask">Vor Änderungen fragen</string>
     <string name="gate_approval_allow_all">Für diese Sitzung immer erlauben (aktuelles Ziel)</string>
     <string name="env_var_section_header">Variablen</string>
     <string name="env_var_section_footer">Umgebungsvariablen werden beim Sitzungsstart in die Sandbox-Shell eingespeist. Namen werden in Großbuchstaben umgewandelt und müssen den POSIX-Shell-Regeln entsprechen.</string>
@@ -864,6 +875,10 @@
     <string name="newer_db_body">Diese Kopie von Minis Ultra ist älter als die Version, die Ihre Daten erstellt hat, und kann sie daher nicht sicher öffnen.\n\nEs wurde nichts gelöscht — Ihre Unterhaltungen sind auf diesem Gerät unversehrt. Installieren Sie die neuere Version von Minis Ultra erneut, dann ist alles wieder da.</string>
     <string name="newer_db_versions">Diese Version unterstützt Datenformat %1$d</string>
     <string name="newer_db_exit">Schließen</string>
+    <string name="degraded_startup_title">Einige Startkomponenten konnten nicht geladen werden</string>
+    <string name="degraded_startup_body">Die App läuft mit eingeschränktem Funktionsumfang. Einige Funktionen sind möglicherweise erst nach einem Neustart verfügbar.</string>
+    <string name="degraded_startup_cause">Ursache: %1$s</string>
+    <string name="degraded_startup_dismiss">Schließen</string>
     <string name="usage_attr_unknown_session">Modell unbekannt — der Sitzungseintrag wurde gelöscht</string>
     <string name="usage_attr_removed">Nicht mehr unter Ihren eingerichteten Anbietern</string>
     <string name="usage_detail_output">Ausgabe</string>
@@ -1045,6 +1060,13 @@
     <string name="model_group_detail_name">Name</string>
     <string name="model_group_detail_the_label_shown_in_the_model_picker_save">Das in der Modellauswahl angezeigte Label. Wird automatisch gespeichert, wenn du an anderer Stelle tippst.</string>
     <string name="model_group_detail_routing_strategy">Routing-Strategie</string>
+    <string name="model_group_detail_more_strategies">Weitere Strategien</string>
+    <string name="model_group_detail_fewer_strategies">Weniger Strategien</string>
+    <string name="model_connection_title">Modell &amp; Verbindung</string>
+    <string name="model_connection_providers_count">%1$d Anbieter · %2$d Modelle</string>
+    <string name="model_connection_groups_count">%1$d Gruppen</string>
+    <string name="model_connection_auto_groups">Automatische Gruppen</string>
+    <string name="model_connection_not_set">Nicht festgelegt</string>
     <string name="model_group_detail_routing_quota_window_footer">Das primäre Mitglied bedient, bis das Fensterkontingent aufgebraucht ist, dann übernimmt das nächste Mitglied bis zur Zurücksetzung.</string>
     <string name="model_group_detail_routing_round_robin_footer">Rotiert die Mitglieder der Reihe nach durch, ein Aufruf nach dem anderen.</string>
     <string name="model_group_detail_routing_smart_footer">Leichte Anfragen gehen an das letzte (günstige) Mitglied; lange oder komplexe Anfragen an das erste (starke) Mitglied.</string>
@@ -1322,6 +1344,8 @@
     <string name="backup_ready">Sicherung bereit</string>
     <string name="backup_result_excluded_too_large">Ausgeschlossen (zu groß)</string>
     <string name="backup_result_files_not_included">Dateien nicht enthalten</string>
+    <string name="backup_result_excluded_unreadable">Ausgeschlossen (nicht lesbar)</string>
+    <string name="backup_result_credentials_unreadable">Zugangsdaten konnten nicht gelesen werden</string>
     <string name="backup_result_local_only">Nur auf diesem Gerät gesichert.</string>
     <string name="backup_result_delivered">Auf diesem Gerät gesichert und an %1$d von %2$d Ziel(en) übertragen.</string>
     <string name="backup_local_removed">Lokale Kopie entfernt — %1$s auf diesem Gerät freigegeben</string>
@@ -2667,6 +2691,7 @@
     <string name="modeldetail_section_context_retry">Kontext &amp; Wiederholungen</string>
     <string name="modeldetail_temperature">Temperatur (0,0–2,0)</string>
     <string name="modeldetail_temperature_invalid">Gib eine Zahl von 0,0 bis 2,0 ein, oder lasse das Feld leer, um sie wegzulassen.</string>
+    <string name="modeldetail_harness_save_failed">Die Kontextbudget-Abweichung konnte nicht gespeichert werden. Der Modelleintrag wurde gespeichert – bitte erneut versuchen.</string>
     <string name="modeldetail_temperature_placeholder">Weglassen</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">Hinzufügen</string>
@@ -3181,6 +3206,10 @@
     <string name="guard_stop_on">Darf die Sitzung stoppen</string>
     <string name="guard_stop_off">Stoppt die Sitzung nie</string>
     <string name="guard_stop_footer">Wenn aktiv, stoppt die Bremse die Sitzung, sobald sich dieselbe Aktion zu oft wiederholt. Wenn aus, erinnert sie das Modell nur - hilfreich bei langen Wartezeiten wie einem Build.</string>
+    <string name="goal_drift_section">Ziel-Abweichungsüberwachung</string>
+    <string name="goal_drift_threshold_title">Abweichungs-Erinnerungsschwelle</string>
+    <string name="goal_drift_threshold_value">%1$d Werkzeugdurchläufe</string>
+    <string name="goal_drift_footer">Solange ein Ziel aktiv ist, ist dies die Anzahl aufeinanderfolgender Werkzeugdurchläufe ohne jede Änderung der Planübersicht, bevor der Host das Modell an sein Ziel erinnert. Höher bedeutet weniger Erinnerungen; niedriger bedeutet strengere Kontrolle.</string>
     <string name="token_usage_section_memory">Gedächtnis</string>
     <string name="token_usage_memory_lines">Gelieferte Zeilen</string>
     <string name="token_usage_memory_shown">Anzahl Anzeigen</string>
@@ -3191,4 +3220,13 @@
     <string name="modeldetail_tail_budget_state_auto">Automatisch (skaliert mit dem Fenster, bis 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Eigen für dieses Modell</string>
     <string name="tool_limits_tool_concurrency">Parallele Lesetools</string>
+ <string name="perm_mode_desc_ask">Fragt vor Dateiänderungen</string>
+ <string name="perm_mode_desc_auto">Fragt nur bei Risiko</string>
+ <string name="perm_mode_desc_full">Weniger Bestätigungen</string>
+ <string name="perm_full_access_title">Vollen Zugriff aktivieren?</string>
+ <string name="perm_full_access_body">Der Agent liest, erstellt und löscht Dateien, führt Terminalbefehle aus und nutzt Netzwerk oder verbundene Apps, ohne jedes Mal zu fragen. Das kann Datenverlust oder -lecks verursachen. Nur aktivieren, wenn du der Aufgabe vertraust. Du kannst jederzeit zurückwechseln.</string>
+ <string name="perm_full_access_ack">Ich kenne das Risiko und übernehme Verantwortung für meine Daten.</string>
+ <string name="perm_full_access_confirm">Aktivieren</string>
+ <string name="perm_guarded_risk_reason">Riskanten Befehl bestätigen</string>
+ <string name="perm_guarded_risk_message">Der autonome Modus stuft diesen Befehl als riskant ein. Einmal bestätigen, um ihn auszuführen.</string>
 </resources>

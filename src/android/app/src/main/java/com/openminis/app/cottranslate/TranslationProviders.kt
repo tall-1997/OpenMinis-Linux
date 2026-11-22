@@ -35,7 +35,10 @@ fun interface TranslationHttp {
  * handle passes `Locale.getDefault().language` (e.g. "zh" on a zh-CN device).
  */
 internal fun resolveTargetLanguage(tag: String, localeLanguage: String): String =
-    if (tag.trim().lowercase() == "auto") localeLanguage else tag
+    // Trim the explicit tag too: an untrimmed value ("  ja  ") would be
+    // spliced straight into the request URL / `to=` parameter, producing an
+    // invalid language code and a rejected request.
+    if (tag.trim().lowercase() == "auto") localeLanguage else tag.trim()
 
 /** Target-language tags normalized per provider (Google/Bing spellings differ). */
 internal fun normalizedLanguage(tag: String, provider: TranslationProvider): String {

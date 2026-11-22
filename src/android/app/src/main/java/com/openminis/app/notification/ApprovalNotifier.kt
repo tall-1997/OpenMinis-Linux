@@ -72,10 +72,7 @@ class ApprovalNotifier(private val context: Context) {
         const val ACTION_DENY = ApprovalIntents.ACTION_DENY
         const val EXTRA_REQUEST_ID = ApprovalIntents.EXTRA_REQUEST_ID
 
-        // Different requestCode per action so the system doesn't collapse them
-        // into a single PendingIntent (which would make approve/deny indistinguishable).
-        private const val REQ_APPROVE = 0x1A1
-        private const val REQ_DENY    = 0x1B2
+        // Request codes are derived per request/action in notifyApproval.
         private const val NOTIF_BASE = 0x2C300
 
         fun notificationId(requestId: String): Int = NOTIF_BASE xor requestId.hashCode()
@@ -172,13 +169,19 @@ class ApprovalNotifier(private val context: Context) {
         }
         val launchIntent = buildLaunchIntent()
 
+        // Request-id + action in the code: a fixed code lets a second pending
+        // approval overwrite this PendingIntent's extras, so tapping request A
+        // would resolve request B.
+        fun actionRequestCode(approved: Boolean): Int =
+            ((requestId.hashCode() * 31 + if (approved) 1 else 0) and 0x7fffffff)
+
         fun actionPending(approved: Boolean): PendingIntent {
             val intent = Intent(context, ApprovalBroadcastReceiver::class.java).apply {
                 action = if (approved) ACTION_APPROVE else ACTION_DENY
                 putExtra(EXTRA_REQUEST_ID, requestId)
                 setPackage(context.packageName) // explicit package so the PendingIntent resolves reliably
             }
-            val reqCode = if (approved) REQ_APPROVE else REQ_DENY
+            val reqCode = actionRequestCode(approved)
             return PendingIntent.getBroadcast(
                 context, reqCode, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
@@ -188,7 +191,7 @@ class ApprovalNotifier(private val context: Context) {
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle(context.getString(R.string.notify_approval_title, toolName))
             .setContentText(preview.take(200).ifBlank { context.getString(R.string.notify_approval_default_text) })
-            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setSmallIcon(R.drawable.ic_notification_status)
             .setContentIntent(launchIntent)
             .addAction(android.R.drawable.ic_menu_send, context.getString(R.string.notify_approval_action_approve), actionPending(true))
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, context.getString(R.string.notify_approval_action_deny), actionPending(false))
@@ -202,7 +205,7 @@ class ApprovalNotifier(private val context: Context) {
             .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setPublicVersion(
                 NotificationCompat.Builder(context, CHANNEL_ID)
-                    .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                    .setSmallIcon(R.drawable.ic_notification_status)
                     .setContentTitle(context.getString(R.string.notify_approval_public_title))
                     .setContentText(context.getString(R.string.notify_approval_public_text))
                     .setContentIntent(launchIntent)

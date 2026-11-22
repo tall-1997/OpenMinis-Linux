@@ -46,14 +46,17 @@ object DevSuiteStore {
 
     private val lock = Any()
 
-    private fun prefs(context: Context) =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    /**
+     * [T-prefs-typed] 键是组件 id（jdk/python/node/...），属于开放键空间 ——
+     * PrefsRegistry 里以 openKeySpace 声明，否则守卫会拒绝每一个组件键。
+     */
+    private fun prefs() = com.openminis.app.config.Prefs.file(PREFS)
 
     private fun readFromDisk(context: Context): Map<String, ComponentState> {
-        val p = prefs(context)
+        val p = prefs()
         val out = mutableMapOf<String, ComponentState>()
-        for (id in p.all.keys) {
-            out[id] = decodeComponentState(id, p.getString(id, null)) ?: continue
+        for (id in p.rawKeys()) {
+            out[id] = decodeComponentState(id, p.string(id)) ?: continue
         }
         return out
     }
@@ -96,9 +99,7 @@ object DevSuiteStore {
         // recovery (recoverInterrupted) only needs the status marker, and
         // it overwrites the line anyway.
         if (shouldPersistComponentState(previous?.status, status)) {
-            prefs(context).edit()
-                .putString(componentId, encodeComponentState(status, progressLine, next.updatedAtMs))
-                .apply()
+            prefs().set(componentId, encodeComponentState(status, progressLine, next.updatedAtMs))
         }
         _states.value = _states.value + (componentId to next)
     }

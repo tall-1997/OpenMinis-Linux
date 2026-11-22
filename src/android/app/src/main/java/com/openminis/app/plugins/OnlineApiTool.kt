@@ -93,7 +93,7 @@ object OnlineApiTool {
 
     fun execute(name: String, argsJson: String, context: Context): ToolExecutionResult {
         val parsed = parseName(name) ?: return ToolExecutionResult("Unknown online tool: $name", false)
-        val plugin = PluginRegistry.cached(context).find { it.id == parsed.first }
+        val plugin = PluginRegistry.cached().find { it.id == parsed.first }
             ?: return ToolExecutionResult("Plugin ${parsed.first} is not in the local catalog. Open Settings → Plugin market.", false)
         if (!OnlinePluginStore.isInstalled(context, plugin)) {
             return ToolExecutionResult("Plugin ${plugin.name} is not installed.", false)

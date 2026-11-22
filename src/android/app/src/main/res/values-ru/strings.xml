@@ -326,6 +326,18 @@
     <string name="token_usage_context_used">Использовано контекста</string>
     <string name="token_usage_context_window">Окно контекста</string>
     <string name="token_usage_max_output">Макс. вывод</string>
+    <string name="token_usage_section_breakdown">Состав</string>
+    <string name="token_usage_breakdown_hint">Оценка ±10% — что содержит следующий запрос</string>
+    <string name="token_usage_block_system_tools">Система и инструменты</string>
+    <string name="token_usage_block_skills_mcps">Навыки и MCP</string>
+    <string name="token_usage_block_memory">Память</string>
+    <string name="token_usage_block_runtime_tail">Контекст на ход</string>
+    <string name="token_usage_block_goal_plan">Цель и план</string>
+    <string name="token_usage_block_tool_schemas">Схемы инструментов</string>
+    <string name="token_usage_block_history">Диалог</string>
+    <string name="token_usage_block_pending">Неотправленные вложения</string>
+    <string name="token_usage_breakdown_estimated">Оценка</string>
+    <string name="token_usage_breakdown_measured">Измерено</string>
     <string name="token_usage_section_thinking">Размышление</string>
     <string name="token_usage_thinking_label">Размышление</string>
     <string name="token_usage_thinking_level">Уровень</string>
@@ -637,10 +649,9 @@
     <string name="env_var_privacy_footer">Когда включено, любое значение переменной окружения, появляющееся в выводе выполнения команд оболочки, заменяется маскированной формой (например, `sk-1********ajhks`) перед передачей модели. Значения короче 8 символов заменяются полностью на `*`. Вывод, видимый пользователю в чате, остаётся неизменным.</string>
     <string name="outbound_mask_toggle">Маскирование исходящих данных</string>
     <string name="outbound_mask_footer">Опт-ин маскировка по форме: строки в форме ключей (в т.ч. в коде), эл. почта и телефоноподобные числа заменяются. Ключ embedding API ниже хранится открытым текстом в приватных prefs. История устройства не меняется.</string>
-    <string name="chat_menu_perm_yoyo">YOLO · полностью автоматически</string>
-    <string name="chat_menu_perm_safe_auto">Безопасное авто · инструменты чтения выполняются свободно</string>
-    <string name="chat_menu_perm_ask">Спрашивать · подтверждать каждый вызов</string>
-    <string name="chat_menu_perm_off">Выкл · отклонять все инструменты</string>
+    <string name="chat_menu_perm_yoyo">Полный доступ</string>
+    <string name="chat_menu_perm_safe_auto">Автономный</string>
+    <string name="chat_menu_perm_ask">Спрашивать перед изменениями</string>
     <string name="gate_approval_allow_all">Всегда разрешать в этой сессии (текущая цель)</string>
     <string name="approval_action_allow_all_session">Всегда разрешать в этой сессии</string>
     <string name="env_var_section_header">Переменные</string>
@@ -867,6 +878,10 @@
     <string name="newer_db_body">Эта копия Minis Ultra старше той, что создала ваши данные, поэтому не может безопасно их открыть.\n\nНичего не удалено — ваши переписки на устройстве целы. Переустановите более новую версию Minis Ultra, и всё вернётся на место.</string>
     <string name="newer_db_versions">Эта версия поддерживает формат данных %1$d</string>
     <string name="newer_db_exit">Закрыть</string>
+    <string name="degraded_startup_title">Не удалось загрузить некоторые компоненты запуска</string>
+    <string name="degraded_startup_body">Приложение работает с ограниченной функциональностью. Некоторые функции могут быть недоступны до перезапуска.</string>
+    <string name="degraded_startup_cause">Причина: %1$s</string>
+    <string name="degraded_startup_dismiss">Закрыть</string>
     <string name="usage_attr_unknown_session">Модель неизвестна — запись сессии была удалена</string>
     <string name="usage_attr_removed">Больше нет среди ваших настроенных провайдеров</string>
     <string name="usage_detail_output">Выходные</string>
@@ -1048,6 +1063,13 @@
     <string name="model_group_detail_name">Имя</string>
     <string name="model_group_detail_the_label_shown_in_the_model_picker_save">Метка, отображаемая в выборе моделей. Сохраняется автоматически при нажатии в другом месте.</string>
     <string name="model_group_detail_routing_strategy">Стратегия маршрутизации</string>
+    <string name="model_group_detail_more_strategies">Ещё стратегии</string>
+    <string name="model_group_detail_fewer_strategies">Свернуть стратегии</string>
+    <string name="model_connection_title">Модель и подключение</string>
+    <string name="model_connection_providers_count">%1$d провайдеров · %2$d моделей</string>
+    <string name="model_connection_groups_count">%1$d групп</string>
+    <string name="model_connection_auto_groups">Автогруппы</string>
+    <string name="model_connection_not_set">Не задано</string>
     <string name="model_group_detail_routing_quota_window_footer">Основной участник обрабатывает запросы, пока не исчерпана квота окна, затем до сброса его сменяет следующий.</string>
     <string name="model_group_detail_routing_round_robin_footer">Перебирает участников по кругу — один вызов за раз, по порядку.</string>
     <string name="model_group_detail_routing_smart_footer">Лёгкие запросы идут последнему (дешёвому) участнику; длинные и сложные — первому (мощному).</string>
@@ -1327,6 +1349,8 @@
     <string name="backup_ready">Копия готова</string>
     <string name="backup_result_excluded_too_large">Исключено (слишком большой)</string>
     <string name="backup_result_files_not_included">Файлы не включены</string>
+    <string name="backup_result_excluded_unreadable">Исключено (не удалось прочитать)</string>
+    <string name="backup_result_credentials_unreadable">Не удалось прочитать учётные данные</string>
     <string name="backup_result_local_only">Сохранено только на этом устройстве.</string>
     <string name="backup_result_delivered">Сохранено на этом устройстве и скопировано в %1$d из %2$d назначений.</string>
     <string name="backup_local_removed">Локальная копия удалена — освобождено %1$s на этом устройстве</string>
@@ -2144,6 +2168,9 @@
     <string name="cot_translate_settings_language">Целевой язык</string>
     <string name="cot_translate_privacy_notice">Развёрнутые рассуждения отправляются в выбранный сервис перевода. Они могут содержать частный код или детали разговора.</string>
     <string name="cot_translate_anonymous_notice">Bing и Google не требуют входа или ключа API. Их анонимные endpoints могут отклонять или ограничивать запросы.</string>
+    <string name="cot_translate_retry">Повторить</string>
+    <string name="cot_translate_privacy_accept">Включить</string>
+    <string name="cot_translate_privacy_decline">Отмена</string>
     <string name="git_panel_staged">Индексировано</string>
     <string name="git_panel_changes_section">Изменения</string>
     <string name="git_panel_stats_files">Изменено файлов: %1$d</string>
@@ -2758,6 +2785,7 @@
     <string name="modeldetail_section_context_retry">Контекст и повторы</string>
     <string name="modeldetail_temperature">Температура (0,0–2,0)</string>
     <string name="modeldetail_temperature_invalid">Введите число от 0,0 до 2,0 или оставьте поле пустым, чтобы не отправлять.</string>
+    <string name="modeldetail_harness_save_failed">Не удалось сохранить значение бюджета контекста. Запись модели сохранена — попробуйте ещё раз.</string>
     <string name="modeldetail_temperature_placeholder">Не отправлять</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">Добавить</string>
@@ -3338,6 +3366,10 @@
     <string name="guard_stop_on">Может остановить сеанс</string>
     <string name="guard_stop_off">Никогда не останавливает сеанс</string>
     <string name="guard_stop_footer">Если включено, защита останавливает сеанс, когда одно и то же действие повторяется слишком часто. Если выключено, она только напоминает модели - полезно при долгом ожидании, например сборки.</string>
+    <string name="goal_drift_section">Контроль отклонения цели</string>
+    <string name="goal_drift_threshold_title">Порог напоминания об отклонении</string>
+    <string name="goal_drift_threshold_value">%1$d ходов инструмента</string>
+    <string name="goal_drift_footer">Пока цель активна, это количество последовательных ходов инструмента, которые могут пройти без каких-либо изменений на плановой доске, прежде чем хост напомнит модели о её цели. Выше — меньше напоминаний; ниже — строже контроль.</string>
     <string name="token_usage_section_memory">Память</string>
     <string name="token_usage_memory_lines">Передано строк</string>
     <string name="token_usage_memory_shown">Показов</string>
@@ -3348,4 +3380,13 @@
     <string name="modeldetail_tail_budget_state_auto">Автоматически (по окну модели, до 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Только для этой модели</string>
     <string name="tool_limits_tool_concurrency">Параллельные инструменты чтения</string>
+ <string name="perm_mode_desc_ask">Спрашивает перед изменением файлов</string>
+ <string name="perm_mode_desc_auto">Спрашивает только при риске</string>
+ <string name="perm_mode_desc_full">Меньше подтверждений</string>
+ <string name="perm_full_access_title">Включить полный доступ?</string>
+ <string name="perm_full_access_body">Агент будет читать, создавать и удалять файлы, выполнять команды терминала и использовать сеть или подключённые приложения, не спрашивая каждый раз. Это может привести к потере или утечке данных, поэтому включайте, только если доверяете задаче. Вернуться можно в любой момент.</string>
+ <string name="perm_full_access_ack">Я понимаю риск и отвечаю за безопасность своих данных.</string>
+ <string name="perm_full_access_confirm">Включить</string>
+ <string name="perm_guarded_risk_reason">Подтвердить рискованную команду</string>
+ <string name="perm_guarded_risk_message">Автономный режим счёл эту команду рискованной. Подтвердите один раз, чтобы выполнить её.</string>
 </resources>

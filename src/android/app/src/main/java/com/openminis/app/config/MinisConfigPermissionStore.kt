@@ -24,7 +24,7 @@ object MinisConfigPermissionStore {
     /** Default: true (preserves existing behaviour for upgrade users). */
     private const val DEFAULT_ENABLED = true
 
-    private var prefs: SharedPreferences? = null
+    private var prefs: com.openminis.app.config.PrefsHandle? = null
 
     private val _enabled = MutableStateFlow(DEFAULT_ENABLED)
     val enabled: StateFlow<Boolean> = _enabled.asStateFlow()
@@ -35,14 +35,14 @@ object MinisConfigPermissionStore {
     /** Call once early — typically from MinisApp.onCreate. Idempotent. */
     fun init(context: Context) {
         if (prefs != null) return
-        val p = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val p = com.openminis.app.config.Prefs.file(PREFS)
         prefs = p
-        _enabled.value = if (p.contains(KEY)) p.getBoolean(KEY, DEFAULT_ENABLED) else DEFAULT_ENABLED
+        _enabled.value = if (p.contains(KEY)) p.bool(KEY, DEFAULT_ENABLED) else DEFAULT_ENABLED
     }
 
     /** UI toggle. Persists eagerly. */
     fun setEnabled(value: Boolean) {
-        prefs?.edit()?.putBoolean(KEY, value)?.apply()
+        prefs?.set(KEY, value)
         _enabled.value = value
     }
 }

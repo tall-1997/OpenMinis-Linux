@@ -23,7 +23,7 @@ object OnlinePluginStore {
     }
 
     fun installedIds(context: Context): Set<String> {
-        val registry = PluginRegistry.cached(context)
+        val registry = PluginRegistry.cached()
         return registry.filter { isInstalled(context, it) }.mapTo(mutableSetOf()) { it.id }
     }
 
@@ -97,7 +97,7 @@ object OnlinePluginStore {
     fun toolDefinitions(context: Context): List<AgentToolDefinition> {
         val installed = installedIds(context)
         if (installed.isEmpty()) return emptyList()
-        return PluginRegistry.cached(context)
+        return PluginRegistry.cached()
             .filter { it.id in installed && isInstalled(context, it) }
             .flatMap { plugin -> plugin.tools.map { OnlineApiTool.definition(plugin, it) } }
     }

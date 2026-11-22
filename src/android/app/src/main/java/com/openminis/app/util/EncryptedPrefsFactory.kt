@@ -63,8 +63,27 @@ object EncryptedPrefsFactory {
     /** True when [fileName]'s store is the non-persisting degraded fallback. */
     fun isDegraded(fileName: String): Boolean = synchronized(lock) { fileName in degradedFiles }
 
+    /**
+     * [T-ci-test-hang] Robolectric has no AndroidKeyStore provider, so
+     * `EncryptedSharedPreferences.create` does not fail fast there — it blocks
+     * forever inside Tink's keystore lookup, and the test JVM hangs until the
+     * task times out (run 44929803764: SessionOpenProjectionTest sat 13.5
+     * minutes with zero output). Tests that need a store behind this factory
+     * install a fake [Ops] here; production always goes through [AndroidOps].
+     * Cleared by [resetCacheForTest], so a test cannot leak it into another.
+     */
+    private var testOps: ((Context) -> Ops)? = null
+
+    internal fun installOpsForTest(factory: ((Context) -> Ops)?) = synchronized(lock) {
+        testOps = factory
+        cache.clear()
+        degradedFiles.clear()
+    }
+
     fun safeCreate(context: Context, fileName: String): SharedPreferences =
-        cached(fileName) { open(AndroidOps(context.applicationContext), fileName) }
+        cached(fileName) {
+            open(testOps?.invoke(context) ?: AndroidOps(context.applicationContext), fileName)
+        }
 
     /** One instance per file per process; the lock also serialises every create. */
     internal fun cached(fileName: String, create: () -> SharedPreferences): SharedPreferences =
@@ -72,6 +91,7 @@ object EncryptedPrefsFactory {
 
     /** Test hook: forget opened stores. */
     internal fun resetCacheForTest() = synchronized(lock) {
+        testOps = null
         cache.clear()
         degradedFiles.clear()
     }

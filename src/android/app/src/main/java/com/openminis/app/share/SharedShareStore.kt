@@ -51,7 +51,7 @@ object SharedShareStore {
      * replaced (its staged files are cleaned so they don't leak).
      */
     fun savePendingShare(context: Context, share: PendingShare) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = com.openminis.app.config.Prefs.file(PREFS_NAME)
         val existing = loadPendingShare(context)
         val now = System.currentTimeMillis()
         val merged = if (existing != null && now - existing.timestampMs <= MERGE_MAX_AGE_MS) {
@@ -75,13 +75,13 @@ object SharedShareStore {
         } else {
             share
         }
-        prefs.edit().putString(KEY_PENDING_SHARE, merged.toJson().toString()).apply()
+        prefs.set(KEY_PENDING_SHARE, merged.toJson().toString())
         AppLogger.info(TAG, "saved pending share with ${merged.items.size} item(s)")
     }
 
     fun loadPendingShare(context: Context): PendingShare? {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val raw = prefs.getString(KEY_PENDING_SHARE, null) ?: return null
+        val prefs = com.openminis.app.config.Prefs.file(PREFS_NAME)
+        val raw = prefs.stringOrNull(KEY_PENDING_SHARE) ?: return null
         return try {
             PendingShare.fromJson(JSONObject(raw))
         } catch (e: Exception) {
@@ -91,8 +91,7 @@ object SharedShareStore {
     }
 
     fun clearPendingShare(context: Context) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit().remove(KEY_PENDING_SHARE).apply()
+        com.openminis.app.config.Prefs.file(PREFS_NAME).remove(KEY_PENDING_SHARE)
     }
 
     /**

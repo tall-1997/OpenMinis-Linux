@@ -324,6 +324,18 @@
     <string name="token_usage_context_used">使用済みコンテキスト</string>
     <string name="token_usage_context_window">コンテキストウィンドウ</string>
     <string name="token_usage_max_output">最大出力</string>
+    <string name="token_usage_section_breakdown">構成</string>
+    <string name="token_usage_breakdown_hint">推定 ±10% — 次回リクエストに含まれる内容</string>
+    <string name="token_usage_block_system_tools">システムとツール</string>
+    <string name="token_usage_block_skills_mcps">スキルと MCP</string>
+    <string name="token_usage_block_memory">メモリ</string>
+    <string name="token_usage_block_runtime_tail">ターンごとのコンテキスト</string>
+    <string name="token_usage_block_goal_plan">ゴールと計画</string>
+    <string name="token_usage_block_tool_schemas">ツールスキーマ</string>
+    <string name="token_usage_block_history">会話</string>
+    <string name="token_usage_block_pending">未送信の添付ファイル</string>
+    <string name="token_usage_breakdown_estimated">推定</string>
+    <string name="token_usage_breakdown_measured">実測</string>
     <string name="token_usage_section_thinking">思考</string>
     <string name="token_usage_thinking_label">思考</string>
     <string name="token_usage_thinking_level">レベル</string>
@@ -635,10 +647,9 @@
     <string name="env_var_privacy_footer">有効にすると、shell-execute の出力に含まれる環境変数の値はモデルに渡される前にマスクされます（例: `sk-1********ajhks`）。8 文字未満の値はすべて `*` に置き換えられます。チャットに表示される出力は変更されません。</string>
     <string name="outbound_mask_toggle">送信プライバシーマスキング</string>
     <string name="outbound_mask_footer">オプトインの形状マスキング：鍵型の文字列（コード内を含む）、メール、電話番号型の数字をプレースホルダーに置換。下の embedding API キーはアプリ非公開 prefs に平文保存。端末内履歴は変更なし。</string>
-    <string name="chat_menu_perm_yoyo">YOLO · 全自動</string>
-    <string name="chat_menu_perm_safe_auto">安全自動 · 読み取り系ツールは自動実行</string>
-    <string name="chat_menu_perm_ask">確認 · 毎回の呼び出しを確認</string>
-    <string name="chat_menu_perm_off">オフ · すべてのツールを拒否</string>
+    <string name="chat_menu_perm_yoyo">フルアクセス</string>
+    <string name="chat_menu_perm_safe_auto">自律モード</string>
+    <string name="chat_menu_perm_ask">変更前に確認</string>
     <string name="gate_approval_allow_all">このセッションで常に許可（現在の対象）</string>
     <string name="approval_action_allow_all_session">このセッションでは常に許可</string>
     <string name="env_var_section_header">変数</string>
@@ -865,6 +876,10 @@
     <string name="newer_db_body">この Minis Ultra は、データを作成したバージョンより古いため、安全に開くことができません。\n\n何も削除されていません。会話はこの端末に無事残っています。新しいバージョンの Minis Ultra を再インストールすれば、すべて元どおりになります。</string>
     <string name="newer_db_versions">このバージョンが対応するデータ形式：%1$d</string>
     <string name="newer_db_exit">閉じる</string>
+    <string name="degraded_startup_title">一部の起動コンポーネントの読み込みに失敗しました</string>
+    <string name="degraded_startup_body">アプリは機能を制限して動作しています。再起動するまで一部の機能が利用できない場合があります。</string>
+    <string name="degraded_startup_cause">原因: %1$s</string>
+    <string name="degraded_startup_dismiss">閉じる</string>
     <string name="usage_attr_unknown_session">モデル不明 — セッションの記録が削除されています</string>
     <string name="usage_attr_removed">設定済みのプロバイダーに含まれていません</string>
     <string name="usage_detail_output">出力</string>
@@ -1046,6 +1061,13 @@
     <string name="model_group_detail_name">名前</string>
     <string name="model_group_detail_the_label_shown_in_the_model_picker_save">モデルピッカーに表示されるラベル。他の場所をタップすると自動的に保存されます。</string>
     <string name="model_group_detail_routing_strategy">ルーティング戦略</string>
+    <string name="model_group_detail_more_strategies">その他の戦略</string>
+    <string name="model_group_detail_fewer_strategies">戦略を折りたたむ</string>
+    <string name="model_connection_title">モデルと接続</string>
+    <string name="model_connection_providers_count">%1$d プロバイダー · %2$d モデル</string>
+    <string name="model_connection_groups_count">%1$d グループ</string>
+    <string name="model_connection_auto_groups">自動グループ</string>
+    <string name="model_connection_not_set">未設定</string>
     <string name="model_group_detail_routing_quota_window_footer">プライマリメンバーがウィンドウのクォータを使い切るまで処理し、その後リセットまで次のメンバーが引き継ぎます。</string>
     <string name="model_group_detail_routing_round_robin_footer">メンバーを順番に1回の呼び出しずつローテーションします。</string>
     <string name="model_group_detail_routing_smart_footer">軽いリクエストは最後の（安価な）メンバーへ、長い・複雑なリクエストは最初の（高性能な）メンバーへ送ります。</string>
@@ -1322,6 +1344,8 @@
     <string name="backup_ready">バックアップの準備ができました</string>
     <string name="backup_result_excluded_too_large">除外（サイズ超過）</string>
     <string name="backup_result_files_not_included">ファイルは含まれていません</string>
+    <string name="backup_result_excluded_unreadable">除外（読み取り不可）</string>
+    <string name="backup_result_credentials_unreadable">認証情報を読み取れませんでした</string>
     <string name="backup_result_local_only">この端末にのみ保存しました。</string>
     <string name="backup_result_delivered">この端末に保存し、%2$d 件中 %1$d 件の保存先にコピーしました。</string>
     <string name="backup_local_removed">ローカルのコピーを削除しました。この端末で %1$s を解放しました</string>
@@ -2133,6 +2157,9 @@
     <string name="cot_translate_settings_language">翻訳先の言語</string>
     <string name="cot_translate_privacy_notice">展開された思考内容は選択した翻訳サービスに送信されます。プライベートなコードや会話の詳細が含まれる場合があります。</string>
     <string name="cot_translate_anonymous_notice">Bing と Google の匿名エンドポイントはログインや API キー不要ですが、リクエストを拒否または制限する場合があります。</string>
+    <string name="cot_translate_retry">再試行</string>
+    <string name="cot_translate_privacy_accept">有効にする</string>
+    <string name="cot_translate_privacy_decline">キャンセル</string>
     <string name="git_panel_staged">ステージ済み</string>
     <string name="git_panel_changes_section">変更</string>
     <string name="git_panel_stats_files">%1$d 件のファイルを変更</string>
@@ -2749,6 +2776,7 @@
     <string name="modeldetail_section_context_retry">コンテキストと再試行</string>
     <string name="modeldetail_temperature">温度（0.0–2.0）</string>
     <string name="modeldetail_temperature_invalid">0.0 ～ 2.0 の数値を入力するか、空欄のままで省略してください。</string>
+    <string name="modeldetail_harness_save_failed">コンテキスト予算の上書きを保存できませんでした。モデル項目は保存済みです。もう一度お試しください。</string>
     <string name="modeldetail_temperature_placeholder">省略</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">追加</string>
@@ -3329,6 +3357,10 @@
     <string name="guard_stop_on">セッションを停止できる</string>
     <string name="guard_stop_off">セッションを停止しない</string>
     <string name="guard_stop_footer">オンの場合、同じ操作が繰り返されるとセッションを停止します。オフの場合、モデルへの注意のみを行い、ビルド待ちなどの長い待機に適しています。</string>
+    <string name="goal_drift_section">目標逸脱の監視</string>
+    <string name="goal_drift_threshold_title">逸脱リマインダーのしきい値</string>
+    <string name="goal_drift_threshold_value">%1$d ツールターン</string>
+    <string name="goal_drift_footer">目標がアクティブな間、プランボードに何も変化がないまま連続でこの数のツールターンが経過すると、ホストがモデルに目標を思い出させます。大きいほどリマインダーは少なく、小さいほど監視は厳しくなります。</string>
     <string name="token_usage_section_memory">メモリ</string>
     <string name="token_usage_memory_lines">配信された行</string>
     <string name="token_usage_memory_shown">表示回数</string>
@@ -3339,4 +3371,13 @@
     <string name="modeldetail_tail_budget_state_auto">自動（ウィンドウに合わせて調整、最大60k）</string>
     <string name="modeldetail_tail_budget_state_specific">このモデル専用</string>
     <string name="tool_limits_tool_concurrency">並列読み取りツール数</string>
+ <string name="perm_mode_desc_ask">ファイル変更の前に確認します</string>
+ <string name="perm_mode_desc_auto">リスクがあるときだけ確認します</string>
+ <string name="perm_mode_desc_full">確認の回数を減らします</string>
+ <string name="perm_full_access_title">フルアクセスを有効にしますか？</string>
+ <string name="perm_full_access_body">エージェントは毎回確認せずに、ファイルの読み取り・作成・削除、ターミナルコマンドの実行、ネットワークや接続アプリの利用を行います。データの消失や漏えいにつながる可能性があるため、タスクを信頼できる場合のみ有効にしてください。いつでも元に戻せます。</string>
+ <string name="perm_full_access_ack">リスクを理解し、自分のデータの安全に責任を持ちます。</string>
+ <string name="perm_full_access_confirm">有効にする</string>
+ <string name="perm_guarded_risk_reason">リスクのあるコマンドを確認</string>
+ <string name="perm_guarded_risk_message">自律モードがこのコマンドをリスクありと判定しました。一度確認すると実行します。</string>
 </resources>

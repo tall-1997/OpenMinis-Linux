@@ -10,24 +10,24 @@ object TranslationPrefs {
     private const val KEY_LANG = "lang"
     private const val KEY_ENTRY = "entry_id"
 
-    fun prefs(context: Context): SharedPreferences =
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    fun prefs(context: Context): com.openminis.app.config.PrefsHandle =
+        com.openminis.app.config.Prefs.file(PREFS)
 
-    fun isEnabled(context: Context): Boolean = prefs(context).getBoolean(KEY_ENABLED, true)
+    fun isEnabled(context: Context): Boolean = prefs(context).bool(KEY_ENABLED, true)
 
-    fun lang(context: Context): String = prefs(context).getString(KEY_LANG, "中文")?.ifBlank { "中文" } ?: "中文"
+    fun lang(context: Context): String = prefs(context).string(KEY_LANG, "中文")?.ifBlank { "中文" } ?: "中文"
 
-    fun entryId(context: Context): String? = prefs(context).getString(KEY_ENTRY, null)?.ifBlank { null }
+    fun entryId(context: Context): String? = prefs(context).stringOrNull(KEY_ENTRY)?.ifBlank { null }
 
     fun setEnabled(context: Context, enabled: Boolean) {
-        prefs(context).edit().putBoolean(KEY_ENABLED, enabled).apply()
+        prefs(context).set(KEY_ENABLED, enabled)
     }
 
     fun setLang(context: Context, lang: String) {
-        prefs(context).edit().putString(KEY_LANG, lang.trim().ifBlank { "中文" }).apply()
+        prefs(context).set(KEY_LANG, lang.trim().ifBlank { "中文" })
     }
 
     fun setEntryId(context: Context, id: String?) {
-        prefs(context).edit().putString(KEY_ENTRY, id).apply()
+        prefs(context).set(KEY_ENTRY, id)
     }
 }

@@ -325,6 +325,18 @@
     <string name="token_usage_context_used">Context folosit</string>
     <string name="token_usage_context_window">Fereastră de context</string>
     <string name="token_usage_max_output">Ieșire maximă</string>
+    <string name="token_usage_section_breakdown">Compoziție</string>
+    <string name="token_usage_breakdown_hint">Estimat ±10% — ce conține următoarea cerere</string>
+    <string name="token_usage_block_system_tools">Sistem și unelte</string>
+    <string name="token_usage_block_skills_mcps">Abilități și MCP</string>
+    <string name="token_usage_block_memory">Memorie</string>
+    <string name="token_usage_block_runtime_tail">Context pe tură</string>
+    <string name="token_usage_block_goal_plan">Obiectiv și plan</string>
+    <string name="token_usage_block_tool_schemas">Scheme de unelte</string>
+    <string name="token_usage_block_history">Conversație</string>
+    <string name="token_usage_block_pending">Atașamente netrimise</string>
+    <string name="token_usage_breakdown_estimated">Estimat</string>
+    <string name="token_usage_breakdown_measured">Măsurat</string>
     <string name="token_usage_section_thinking">Gândire</string>
     <string name="token_usage_thinking_label">Gândire</string>
     <string name="token_usage_thinking_level">Nivel</string>
@@ -636,10 +648,9 @@
     <string name="env_var_privacy_footer">Când este activat, orice valoare a unei variabile de mediu care apare în ieșirea shell-execute este înlocuită cu o formă mascată (ex. `sk-1********ajhks`) înainte de a ajunge la model. Valorile mai scurte de 8 caractere devin integral `*`. Ieșirea vizibilă utilizatorului în conversație rămâne neschimbată.</string>
     <string name="outbound_mask_toggle">Mascare confidențialitate la ieșire</string>
     <string name="outbound_mask_footer">Mascares opt-in după formă: șiruri tip cheie (inclusiv în cod), e-mailuri și numere de telefon devin substituenți. Cheia API de embedding de mai jos e stocată în clar în prefs private. Istoricul dispozitivului neschimbat.</string>
-    <string name="chat_menu_perm_yoyo">YOLO · complet automat</string>
-    <string name="chat_menu_perm_safe_auto">Auto sigur · uneltele de citire rulează liber</string>
-    <string name="chat_menu_perm_ask">Întreabă · confirmă fiecare apel</string>
-    <string name="chat_menu_perm_off">Dezactivat · refuză toate uneltele</string>
+    <string name="chat_menu_perm_yoyo">Acces complet</string>
+    <string name="chat_menu_perm_safe_auto">Autonom</string>
+    <string name="chat_menu_perm_ask">Întreabă înainte de modificări</string>
     <string name="gate_approval_allow_all">Permite întotdeauna în această sesiune (ținta curentă)</string>
     <string name="approval_action_allow_all_session">Permite întotdeauna în această sesiune</string>
     <string name="env_var_section_header">Variabile</string>
@@ -866,6 +877,10 @@
     <string name="newer_db_body">Această copie a aplicației Minis Ultra este mai veche decât versiunea care ți-a creat datele, așa că nu le poate deschide în siguranță.\n\nNu s-a șters nimic — conversațiile tale sunt intacte pe acest dispozitiv. Reinstalează versiunea mai nouă de Minis Ultra și totul va fi la locul lui.</string>
     <string name="newer_db_versions">Această versiune acceptă formatul de date %1$d</string>
     <string name="newer_db_exit">Închide</string>
+    <string name="degraded_startup_title">Unele componente de pornire nu au putut fi încărcate</string>
+    <string name="degraded_startup_body">Aplicația rulează cu funcționalitate redusă. Unele funcții pot fi indisponibile până la repornire.</string>
+    <string name="degraded_startup_cause">Cauză: %1$s</string>
+    <string name="degraded_startup_dismiss">Închide</string>
     <string name="usage_attr_unknown_session">Model necunoscut — înregistrarea sesiunii a fost ștearsă</string>
     <string name="usage_attr_removed">Nu mai există printre furnizorii configurați</string>
     <string name="usage_detail_output">Ieșire</string>
@@ -1047,6 +1062,13 @@
     <string name="model_group_detail_name">Nume</string>
     <string name="model_group_detail_the_label_shown_in_the_model_picker_save">Eticheta afișată în selectorul de modele. Se salvează automat când atingi în altă parte.</string>
     <string name="model_group_detail_routing_strategy">Strategie de rutare</string>
+    <string name="model_group_detail_more_strategies">Mai multe strategii</string>
+    <string name="model_group_detail_fewer_strategies">Mai puține strategii</string>
+    <string name="model_connection_title">Model și conexiune</string>
+    <string name="model_connection_providers_count">%1$d furnizori · %2$d modele</string>
+    <string name="model_connection_groups_count">%1$d grupuri</string>
+    <string name="model_connection_auto_groups">Grupuri automate</string>
+    <string name="model_connection_not_set">Nesetat</string>
     <string name="model_group_detail_routing_quota_window_footer">Membrul principal servește până se epuizează cota ferestrei, apoi preia următorul membru până la resetare.</string>
     <string name="model_group_detail_routing_round_robin_footer">Rotește membrii câte un apel, în ordine.</string>
     <string name="model_group_detail_routing_smart_footer">Cererile ușoare merg la ultimul membru (ieftin); cele lungi sau complexe la primul (puternic).</string>
@@ -1325,6 +1347,8 @@
     <string name="backup_ready">Copia de rezervă este gata</string>
     <string name="backup_result_excluded_too_large">Exclus (prea mare)</string>
     <string name="backup_result_files_not_included">Fișiere neincluse</string>
+    <string name="backup_result_excluded_unreadable">Exclus (nu s-a putut citi)</string>
+    <string name="backup_result_credentials_unreadable">Datele de autentificare nu s-au putut citi</string>
     <string name="backup_result_local_only">Salvat doar pe acest dispozitiv.</string>
     <string name="backup_result_delivered">Salvat pe acest dispozitiv și copiat la %1$d din %2$d destinații.</string>
     <string name="backup_local_removed">Copia locală a fost eliminată — s-au eliberat %1$s pe acest dispozitiv</string>
@@ -2140,6 +2164,9 @@
     <string name="cot_translate_settings_language">Limbă țintă</string>
     <string name="cot_translate_privacy_notice">Raționamentul extins este trimis serviciului de traducere selectat. Poate conține cod privat sau detalii ale conversației.</string>
     <string name="cot_translate_anonymous_notice">Bing și Google nu necesită autentificare sau cheie API. Punctele lor finale anonime pot respinge sau limita cererile.</string>
+    <string name="cot_translate_retry">Reîncearcă</string>
+    <string name="cot_translate_privacy_accept">Activează</string>
+    <string name="cot_translate_privacy_decline">Anulează</string>
     <string name="git_panel_staged">În staging</string>
     <string name="git_panel_changes_section">Modificări</string>
     <string name="git_panel_stats_files">%1$d fișiere modificate</string>
@@ -2754,6 +2781,7 @@
     <string name="modeldetail_section_context_retry">Context și reîncercări</string>
     <string name="modeldetail_temperature">Temperatură (0,0–2,0)</string>
     <string name="modeldetail_temperature_invalid">Introdu un număr de la 0,0 la 2,0, sau lasă gol pentru a omite.</string>
+    <string name="modeldetail_harness_save_failed">Nu s-a putut salva ajustarea bugetului de context. Intrarea modelului a fost salvată — încercați din nou.</string>
     <string name="modeldetail_temperature_placeholder">Omite</string>
     <!-- backfill: strings_network.xml -->
     <string name="network_add">Adaugă</string>
@@ -3334,6 +3362,10 @@
     <string name="guard_stop_on">Poate opri sesiunea</string>
     <string name="guard_stop_off">Nu oprește niciodată sesiunea</string>
     <string name="guard_stop_footer">Când este activ, protecția oprește sesiunea după ce aceeași acțiune se repetă prea des. Când este inactiv, doar îi reamintește modelului, util la așteptări lungi precum o compilare.</string>
+    <string name="goal_drift_section">Supravegherea derivei obiectivului</string>
+    <string name="goal_drift_threshold_title">Prag de memento pentru derivă</string>
+    <string name="goal_drift_threshold_value">%1$d ture de instrument</string>
+    <string name="goal_drift_footer">Cât timp un obiectiv este activ, acesta este numărul de ture consecutive de instrument care pot trece fără nicio mișcare a tablei planului înainte ca gazda să reamintească modelului obiectivul său. Mai mare = mai puține memento-uri; mai mic = supraveghere mai strictă.</string>
     <string name="token_usage_section_memory">Memorie</string>
     <string name="token_usage_memory_lines">Linii livrate</string>
     <string name="token_usage_memory_shown">Număr afișări</string>
@@ -3344,4 +3376,13 @@
     <string name="modeldetail_tail_budget_state_auto">Automat (se adaptează ferestrei, până la 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Personalizat pentru acest model</string>
     <string name="tool_limits_tool_concurrency">Instrumente de citire în paralel</string>
+ <string name="perm_mode_desc_ask">Întreabă înainte de a modifica fișiere</string>
+ <string name="perm_mode_desc_auto">Întreabă doar când există risc</string>
+ <string name="perm_mode_desc_full">Mai puține confirmări</string>
+ <string name="perm_full_access_title">Activezi accesul complet?</string>
+ <string name="perm_full_access_body">Agentul va citi, crea șișterge fișiere, va rula comenzi de terminal și va folosi rețeaua sau aplicații conectate fără să întrebe de fiecare dată. Aceste acțiuni pot provoca pierderea sau scurgerea datelor, așa că activează doar dacă ai încredere în sarcină. Poți reveni oricând.</string>
+ <string name="perm_full_access_ack">Înțeleg riscul și îmi asum responsabilitatea pentru datele mele.</string>
+ <string name="perm_full_access_confirm">Activează</string>
+ <string name="perm_guarded_risk_reason">Confirmă comanda riscantă</string>
+ <string name="perm_guarded_risk_message">Modul autonom a considerat această comandă riscantă. Confirmă o dată pentru a o rula.</string>
 </resources>

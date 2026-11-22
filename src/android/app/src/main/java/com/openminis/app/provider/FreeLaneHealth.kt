@@ -150,7 +150,7 @@ internal object FreeLaneHealth {
     /** Test seam: the clock every TTL decision reads. */
     internal var nowProvider: () -> Long = { System.currentTimeMillis() }
 
-    private var prefs: SharedPreferences? = null
+    private var prefs: com.openminis.app.config.PrefsHandle? = null
     private val memory = mutableMapOf<String, Long>()
 
     /**
@@ -167,7 +167,7 @@ internal object FreeLaneHealth {
     fun initialize(context: Context?) {
         if (context == null) return
         val app = context.applicationContext
-        prefs = app.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs = com.openminis.app.config.Prefs.file(PREFS_NAME)
         val onDisk = readDisk(prefs)
         if (onDisk.isNotEmpty()) {
             // A lane that stops shipping leaves its scoped entries behind, and
@@ -185,7 +185,7 @@ internal object FreeLaneHealth {
         }
         // First run after the rename: adopt the flat Zen-only store, scoping
         // every entry to the lane that wrote it.
-        val legacy = app.getSharedPreferences(LEGACY_PREFS_NAME, Context.MODE_PRIVATE)
+        val legacy = com.openminis.app.config.Prefs.file(LEGACY_PREFS_NAME)
         val migrated = readDisk(legacy).mapKeys { (k, _) -> scopeLegacyKey(k) }
         if (migrated.isNotEmpty()) {
             migrated.forEach { (k, at) -> memory.putIfAbsent(k, at) }
@@ -253,8 +253,8 @@ internal object FreeLaneHealth {
         if (memory.remove(k) != null) writeDisk()
     }
 
-    private fun readDisk(source: SharedPreferences?): Map<String, Long> {
-        val raw = source?.getString(KEY_DEAD, null) ?: return emptyMap()
+    private fun readDisk(source: com.openminis.app.config.PrefsHandle?): Map<String, Long> {
+        val raw = source?.stringOrNull(KEY_DEAD) ?: return emptyMap()
         return runCatching {
             val json = JSONObject(raw)
             buildMap { json.keys().forEach { k -> put(k, json.optLong(k)) } }
@@ -262,17 +262,17 @@ internal object FreeLaneHealth {
     }
 
     private fun writeDisk() {
-        val editor = prefs?.edit() ?: return
+        val p = prefs ?: return
         val json = JSONObject()
         memory.forEach { (k, at) -> json.put(k, at) }
-        editor.putString(KEY_DEAD, json.toString()).apply()
+        p.set(KEY_DEAD, json.toString())
     }
 
     /** Test seams. */
     internal fun resetForTest() {
         memory.clear()
         registeredLanes.clear()
-        prefs?.edit()?.remove(KEY_DEAD)?.apply()
+        prefs?.remove(KEY_DEAD)
     }
 
     internal fun deadIdsForTest(lane: String? = null): Set<String> =

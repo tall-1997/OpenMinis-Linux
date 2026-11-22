@@ -82,7 +82,7 @@ cd src/android && ./gradlew :app:assembleRelease
 
 Notes:
 
-- `deps/proot` is the only submodule the Android build needs; `deps/ish` is a legacy iOS submodule that is not compiled.
+- `deps/proot` is the only submodule the Android build needs.
 - Only the release variant exists — `debug` variants are disabled in `app/build.gradle.kts`.
 - Do not replace the guest's aarch64 `aapt2` with the sdkmanager x86_64 package. Network mirrors are provided by the built-in `android-sdk-mirrors` skill.
 

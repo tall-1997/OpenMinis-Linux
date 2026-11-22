@@ -53,7 +53,10 @@ object GoalTool {
             ),
             "objective" to AgentToolParam(
                 "string",
-                "Required for op=create: the concrete completion objective, in one sentence.",
+                "Required for op=create: the completion objective plus its acceptance criteria — one " +
+                    "criterion per line after the objective sentence (e.g. 'migrate auth to v2\n" +
+                    "acceptance: unit tests green\nacceptance: no regression on login flow'). Rendered into " +
+                    "<goal_context> every request and quoted by goal-drift nudges.",
             ),
             "token_budget" to AgentToolParam("integer", "Optional positive token budget for op=create."),
             "condition" to AgentToolParam("string", "Specific unmet condition when op=blocked; repeated identical reports are counted."),
