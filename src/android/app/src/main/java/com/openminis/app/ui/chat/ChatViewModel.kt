@@ -4219,7 +4219,7 @@ class ChatViewModel(
                     TAG,
                     "cleanupIfEmptyOnExit: deleting empty session $sid (no persisted messages)",
                 )
-                chatRepository.deleteSession(sid)
+                chatRepository.deleteSession(sid).also { runCatching { SessionTeardown.onSessionDeleted(context, sid) } }
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                     ChatViewModelStore.release(sid)
                 }

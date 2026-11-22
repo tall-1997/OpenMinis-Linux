@@ -63,4 +63,14 @@ internal object GoalDriftStore {
             )
         }
     }
+
+    /**
+     * [T-session-sidecar-cleanup] Deleted session: drop the drift state file.
+     * Part of [com.openminis.app.ui.chat.SessionTeardown.deleteAll] —
+     * the sidecar files that [ChatRepository.deleteSession]'s workspace wipe
+     * does not reach. Idempotent.
+     */
+    fun deleteStored(filesDir: File, sessionId: String) {
+        runCatching { file(filesDir, sessionId).delete() }
+    }
 }
