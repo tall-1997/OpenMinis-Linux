@@ -15,9 +15,9 @@ import org.junit.Test
  * the background settings bridge, and the MCP shell policy. Unit tests never
  * touched those paths, so the whole suite stayed green.
  *
- * The gate is the real guard (`check_prefs_call_sites.py` now scans handle
- * receivers); this test is the runtime proof that the list below is registered
- * and readable.
+ * `ui_prefs/fab_swapped` (DualFabRow in SessionListScreen) was the next one —
+ * a real crash log from a Redmi 25102RKBEC on 2026-11-22. The registry now
+ * carries it and the handle reads it without throwing.
  */
 class PrefsRegistryProductionKeysTest {
 
@@ -37,6 +37,7 @@ class PrefsRegistryProductionKeysTest {
             "background_notifications_enabled",
         ),
         "mcp_server" to listOf("shell_policy"),
+        "ui_prefs" to listOf("fab_swapped"),
     )
 
     @Test

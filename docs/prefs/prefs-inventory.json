@@ -1829,7 +1829,8 @@
       ],
       "keys": {
         "KEY_LIST_COLLAPSED": "tablet_list_pane_collapsed",
-        "KEY_LIST_PANE_WIDTH": "tablet_list_pane_width_dp"
+        "KEY_LIST_PANE_WIDTH": "tablet_list_pane_width_dp",
+        "PREF_FAB_SWAPPED": "fab_swapped"
       },
       "dyn_keys": [],
       "open_key_space": false,
@@ -6774,7 +6775,7 @@
   "totals": {
     "prefs_files": 105,
     "prefs_encrypted": 10,
-    "key_constants_attributed": 201,
+    "key_constants_attributed": 202,
     "orphan_keys": 34,
     "usage_sites": 183,
     "usage_files": 110,
