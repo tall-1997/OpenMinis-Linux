@@ -697,10 +697,9 @@
     <string name="env_var_privacy_footer">開啟後，shell-execute 輸出中偵測到的環境變數值會在送達模型前被打碼（例如 `sk-1********ajhks`）。少於 8 個字元的值會被全部替換為 `*`。聊天中使用者可見的輸出維持不變。</string>
     <string name="outbound_mask_toggle">出站隱私遮蔽</string>
     <string name="outbound_mask_footer">選擇性開啟的形狀遮蔽：金鑰形狀字串（含程式碼內金鑰）、信箱與電話號碼會被替換為佔位符；下方 embedding API 金鑰以明文保存在應用私有 prefs 中。本機聊天記錄不變。</string>
-    <string name="chat_menu_perm_yoyo">YOLO · 全授權</string>
-    <string name="chat_menu_perm_safe_auto">安全自動 · 唯讀工具自動放行</string>
-    <string name="chat_menu_perm_ask">詢問 · 每次呼叫都確認</string>
-    <string name="chat_menu_perm_off">關閉 · 拒絕所有工具</string>
+    <string name="chat_menu_perm_yoyo">完全訪問</string>
+    <string name="chat_menu_perm_safe_auto">自主模式</string>
+    <string name="chat_menu_perm_ask">變更前確認</string>
     <string name="approval_action_allow_all_session">本工作階段總是允許</string>
     <string name="env_var_platform_header">平台整合</string>
     <string name="env_var_platform_tier_2">完整</string>
@@ -3370,4 +3369,13 @@
     <string name="modeldetail_tail_budget_state_auto">自動（依視窗縮放，最多 60k）</string>
     <string name="modeldetail_tail_budget_state_specific">目前模型自訂</string>
     <string name="tool_limits_tool_concurrency">平行讀取工具數</string>
+ <string name="perm_mode_desc_ask">改檔案前先問我</string>
+ <string name="perm_mode_desc_auto">在有風險時詢問</string>
+ <string name="perm_mode_desc_full">減少確認次數</string>
+ <string name="perm_full_access_title">要啟用完全訪問嗎？</string>
+ <string name="perm_full_access_body">啟用後，Agent讀取、建立、修改和刪除檔案，執行終端機指令，存取網路或呼叫已連接的應用程式時都不再逐次詢問。這些操作可能造成資料遺失或外洩，請僅在信任任務內容時啟用；你可以隨時切回其他權限模式。</string>
+ <string name="perm_full_access_ack">我已了解風險，並對自己的資料安全負責。</string>
+ <string name="perm_full_access_confirm">確認啟用</string>
+ <string name="perm_guarded_risk_reason">確認這條風險指令</string>
+ <string name="perm_guarded_risk_message">自主模式判定這條指令有風險，確認一次後才會執行。</string>
 </resources>

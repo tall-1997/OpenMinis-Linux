@@ -647,10 +647,9 @@
     <string name="env_var_privacy_footer">Quando ativado, qualquer valor de variável de ambiente que apareça na saída do shell-execute é substituído por uma forma mascarada (ex.: `sk-1********ajhks`) antes de chegar ao modelo. Valores com menos de 8 caracteres viram só `*`. A saída visível para você na conversa não muda.</string>
     <string name="outbound_mask_toggle">Máscara de privacidade de saída</string>
     <string name="outbound_mask_footer">Máscara opcional por forma: strings tipo chave (incluindo código), e-mails e números telefônicos viram placeholders. A chave API de embedding é salva em texto plano nas prefs privadas. Histórico do dispositivo inalterado.</string>
-    <string name="chat_menu_perm_yoyo">YOLO · totalmente automático</string>
-    <string name="chat_menu_perm_safe_auto">Auto seguro · ferramentas de leitura passam livremente</string>
-    <string name="chat_menu_perm_ask">Perguntar · confirmar cada chamada</string>
-    <string name="chat_menu_perm_off">Desligado · negar todas as ferramentas</string>
+    <string name="chat_menu_perm_yoyo">Acesso total</string>
+    <string name="chat_menu_perm_safe_auto">Autônomo</string>
+    <string name="chat_menu_perm_ask">Perguntar antes de mudar</string>
     <string name="gate_approval_allow_all">Sempre permitir nesta sessão (destino atual)</string>
     <string name="approval_action_allow_all_session">Sempre permitir nesta sessão</string>
     <string name="env_var_section_header">Variáveis</string>
@@ -3373,4 +3372,13 @@
     <string name="modeldetail_tail_budget_state_auto">Automático (acompanha a janela, até 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Personalizado para este modelo</string>
     <string name="tool_limits_tool_concurrency">Ferramentas de leitura em paralelo</string>
+ <string name="perm_mode_desc_ask">Pergunta antes de alterar arquivos</string>
+ <string name="perm_mode_desc_auto">Pergunta apenas quando há risco</string>
+ <string name="perm_mode_desc_full">Menos confirmações</string>
+ <string name="perm_full_access_title">Ativar acesso total?</string>
+ <string name="perm_full_access_body">O agente vai ler, criar e apagar arquivos, executar comandos de terminal e usar a rede ou apps conectados sem perguntar a cada vez. Isso pode causar perda ou vazamento de dados, então ative apenas se confiar na tarefa. Você pode voltar a qualquer momento.</string>
+ <string name="perm_full_access_ack">Entendo o risco e assumo a responsabilidade pelos meus dados.</string>
+ <string name="perm_full_access_confirm">Ativar</string>
+ <string name="perm_guarded_risk_reason">Confirmar comando de risco</string>
+ <string name="perm_guarded_risk_message">O modo autônomo considerou este comando arriscado. Confirme uma vez para executá-lo.</string>
 </resources>

@@ -652,10 +652,9 @@
     <string name="env_var_privacy_footer">Jika aktif, setiap nilai variabel lingkungan yang muncul pada keluaran shell-execute akan diganti dengan bentuk tersamar (mis. `sk-1********ajhks`) sebelum sampai ke model. Nilai yang lebih pendek dari 8 karakter menjadi `*` seluruhnya. Keluaran yang terlihat oleh pengguna di obrolan tidak berubah.</string>
     <string name="outbound_mask_toggle">Penyamaran privasi keluar</string>
     <string name="outbound_mask_footer">Masking bentuk opt-in: string berbentuk kunci (termasuk kode), email, dan angka menyerupai telepon jadi placeholder. Kunci API embedding di bawah tersimpan plain text di prefs pribadi aplikasi. Riwayat perangkat tidak berubah.</string>
-    <string name="chat_menu_perm_yoyo">YOLO · otomatis penuh</string>
-    <string name="chat_menu_perm_safe_auto">Auto aman · alat read-only berjalan bebas</string>
-    <string name="chat_menu_perm_ask">Tanya · konfirmasi setiap panggilan</string>
-    <string name="chat_menu_perm_off">Mati · tolak semua alat</string>
+    <string name="chat_menu_perm_yoyo">Akses penuh</string>
+    <string name="chat_menu_perm_safe_auto">Otonom</string>
+    <string name="chat_menu_perm_ask">Tanya sebelum diubah</string>
     <string name="gate_approval_allow_all">Selalu izinkan sesi ini (target saat ini)</string>
     <string name="approval_action_allow_all_session">Selalu izinkan di sesi ini</string>
     <string name="env_var_section_header">Variabel</string>
@@ -3378,4 +3377,13 @@
     <string name="modeldetail_tail_budget_state_auto">Otomatis (mengikuti jendela, maksimal 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Khusus untuk model ini</string>
     <string name="tool_limits_tool_concurrency">Alat baca paralel</string>
+ <string name="perm_mode_desc_ask">Bertanya sebelum file diubah</string>
+ <string name="perm_mode_desc_auto">Bertanya hanya saat ada risiko</string>
+ <string name="perm_mode_desc_full">Lebih sedikit konfirmasi</string>
+ <string name="perm_full_access_title">Aktifkan akses penuh?</string>
+ <string name="perm_full_access_body">Agen akan membaca, membuat, dan menghapus file, menjalankan perintah terminal, serta memakai jaringan atau aplikasi terhubung tanpa bertanya setiap kali. Tindakan ini bisa menyebabkan data hilang atau bocor, jadi aktifkan hanya jika Anda memercayai tugasnya. Anda bisa kembali kapan saja.</string>
+ <string name="perm_full_access_ack">Saya memahami risikonya dan bertanggung jawab atas data saya.</string>
+ <string name="perm_full_access_confirm">Aktifkan</string>
+ <string name="perm_guarded_risk_reason">Konfirmasi perintah berisiko</string>
+ <string name="perm_guarded_risk_message">Mode otonom menilai perintah ini berisiko. Konfirmasi sekali untuk menjalankannya.</string>
 </resources>

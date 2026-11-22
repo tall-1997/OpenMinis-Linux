@@ -179,7 +179,7 @@ data class ScheduledTask(
      */
     fun newSessionPermissionToken(): String =
         if (com.openminis.app.security.SessionPermissionMode
-                .fromStored(newSessionPermissionMode) == com.openminis.app.security.SessionPermissionMode.YOLO
+                .fromStored(newSessionPermissionMode).isFullAccess()
         ) "YOLO" else "SAFE_AUTO"
 
     /**

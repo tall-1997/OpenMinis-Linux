@@ -1632,8 +1632,11 @@ class ChatViewModel(
     internal val _supervisorArmed = MutableStateFlow(false)
     val supervisorArmed: StateFlow<Boolean> = _supervisorArmed.asStateFlow()
 
-    // [#31] Four-tier gate. New chats start at SAFE_AUTO (the two-tier "ASK" behaviour) — zero change for upgrades.
-    internal val _permissionMode = MutableStateFlow(com.openminis.app.security.SessionPermissionMode.SAFE_AUTO)
+    // [T-perm-three-modes]变更前确认 /自主模式 /完全访问. A chat with no
+    // stored choice starts at the last mode the user picked (new chats inherit
+    // it, ZCode's "new sessions in this project inherit the mode" rule); a row
+    // that does carry a choice overrides this in loadSession().
+    internal val _permissionMode = MutableStateFlow(com.openminis.app.data.SessionPermissionPrefs.current())
     val permissionMode: StateFlow<com.openminis.app.security.SessionPermissionMode> = _permissionMode.asStateFlow()
 
     /**
@@ -1769,29 +1772,13 @@ class ChatViewModel(
         approvePendingTool(id)
     }
 
-    /**
-     * [#31] Faithful four-tier persistence. The old implementation folded
-     * every non-YOLO value into ASK — SAFE_AUTO/OFF choices would have been
-     * silently lost, so this now stores the tier verbatim.
-     */
-    fun setSessionPermissionMode(mode: com.openminis.app.security.SessionPermissionMode) {
-        _permissionMode.value = mode
-        applyGateMode(mode)
-        val sid = realSessionId.ifEmpty { sessionId }
-        if (!isDraft && sid.isNotBlank() && !sid.startsWith("__new__")) {
-            viewModelScope.launch {
-                runCatching { chatRepository.dao.updatePermissionMode(sid, mode.toStoredToken()) }
-            }
-        }
-    }
-
     internal fun applyGateMode(mode: com.openminis.app.security.SessionPermissionMode) {
         val sid = realSessionId.ifEmpty { sessionId }
         SecurityGateHolder.setActiveSessionMode(mode, sid)
         // Preserve legacy behavior for older callers, but all gate state writes
         // above and below are explicitly keyed by this ViewModel's session.
         ApprovalGate.bindSession(sid)
-        if (mode.isYolo()) ApprovalGate.enableSessionAllowAll(sid)
+        if (mode.isFullAccess()) ApprovalGate.enableSessionAllowAll(sid)
         else ApprovalGate.resetSessionAllowAll(sid)
     }
 

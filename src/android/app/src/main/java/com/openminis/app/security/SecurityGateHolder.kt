@@ -37,14 +37,14 @@ object SecurityGateHolder {
             p.set(KEY_MODE, PermissionMode.ASK.name)
         }
         activeSessionModes.clear()
-        legacyActiveSessionMode = SessionPermissionMode.ASK
+        legacyActiveSessionMode = SessionPermissionMode.SAFEST
         gate.setPermissionMode(PermissionMode.ASK)
     }
 
     // [#31] Session tiers (OFF/ASK/SAFE_AUTO/YOLO), stored faithfully — the
     // old two-value registry folded everything non-YOLO into ASK.
     private val activeSessionModes = java.util.concurrent.ConcurrentHashMap<String, SessionPermissionMode>()
-    @Volatile private var legacyActiveSessionMode: SessionPermissionMode = SessionPermissionMode.ASK
+    @Volatile private var legacyActiveSessionMode: SessionPermissionMode = SessionPermissionMode.SAFEST
 
     fun setActiveSessionMode(mode: SessionPermissionMode, sessionId: String? = null) {
         if (sessionId.isNullOrBlank()) legacyActiveSessionMode = mode
@@ -55,9 +55,21 @@ object SecurityGateHolder {
         // decisions pass the caller's explicit mode.
     }
 
+    /**
+     * [T-perm-draft-gate-drift] Carry the gate tier across the draft -> real
+     * session id hop. ApprovalGate migrates its own state; without the same
+     * hop here the first turn after promotion read SAFEST and re-asked for a
+     * mode the user had already chosen on the draft.
+     */
+    fun migrateSession(oldSid: String?, newSid: String?) {
+        if (oldSid.isNullOrBlank() || newSid.isNullOrBlank() || oldSid == newSid) return
+        val mode = activeSessionModes.remove(oldSid) ?: return
+        activeSessionModes[newSid] = mode
+    }
+
     fun activeSessionMode(sessionId: String? = null): SessionPermissionMode =
         if (sessionId.isNullOrBlank()) legacyActiveSessionMode
-        else activeSessionModes[sessionId] ?: SessionPermissionMode.ASK
+        else activeSessionModes[sessionId] ?: SessionPermissionMode.SAFEST
 
     /**
      * @param callerSessionId the chat that is asking, so the isolation policies
@@ -82,7 +94,7 @@ object SecurityGateHolder {
         // state must never turn an unbound operation into YOYO.
         // [#31] The stored value is the session TIER; compile it to the gate
         // mode here so decide() keeps speaking plain PermissionMode.
-        val storedTier = callerSessionId?.let(::activeSessionMode) ?: SessionPermissionMode.ASK
+        val storedTier = callerSessionId?.let(::activeSessionMode) ?: SessionPermissionMode.SAFEST
         val mode = effectivePermissionMode(storedTier.toGateMode(), sessionAllowAll)
         val decision = gate.withCallerSession(callerSessionId) { gate.decide(cmd, mode) }
         gate.audit(cmd, decision, null)
@@ -106,11 +118,14 @@ object SecurityGateHolder {
                 )
             }
             is Decision.NeedConfirm -> {
-                val preview = decision.preview.take(240).ifBlank { decision.reason }
+                // [T-perm-guarded-i18n] The pure gate emits ASCII sentinels; the
+                // localized wording for自主模式 lands here, where a Context exists.
+                val reason = localizeGateReason(context, decision.reason)
+                val preview = localizeGateReason(context, decision.preview).take(240).ifBlank { reason }
                 val id = ApprovalGate.requestApproval(
-                    callerSessionId,
-                    canonical,
-                    preview,
+                callerSessionId,
+                canonical,
+                preview,
                     mustPrompt = decision.mustPrompt,
                     // [#36] Gist-keyed allowlist: "always allow this session"
                     // stores tool+target, and the next identical call skips
@@ -153,4 +168,11 @@ object SecurityGateHolder {
             }
         }
     }
-}
+    }
+
+    /** [T-perm-guarded-i18n] Map the gate's ASCII sentinels to localized text. */
+    internal fun localizeGateReason(context: Context, raw: String): String = when (raw) {
+        GUARDED_RISK_REASON -> context.getString(com.openminis.app.R.string.perm_guarded_risk_reason)
+        GUARDED_RISK_PREVIEW -> context.getString(com.openminis.app.R.string.perm_guarded_risk_message)
+        else -> raw
+    }

@@ -6,6 +6,12 @@ package com.openminis.app.security
  */
 enum class PermissionMode {
     ALLOW_ALL,
+    /**
+     * [T-perm-guarded] ZCode `guarded` /自主模式: the agent runs unattended and
+     * only a command the shell risk table rates DANGEROUS stops to ask. Backs
+     * `SessionPermissionMode.AUTONOMOUS`.
+     */
+    GUARDED,
     ASK,
     /**
      * [#31] Strict asking: EVERY tool call confirms, read-only tools

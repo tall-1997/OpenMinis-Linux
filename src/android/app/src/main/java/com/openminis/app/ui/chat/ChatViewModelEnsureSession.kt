@@ -26,6 +26,13 @@ internal suspend fun ChatViewModel.ensureSession(): String {
     // runs — otherwise a "全部允许" tapped on the draft stops matching, and
     // an approval request filed pre-persist becomes unreachable.
         com.openminis.app.service.ApprovalGate.migrateSession(oldSid = sessionId, newSid = session.id)
+        // [T-perm-draft-gate-drift] Same drift for the gate tier: without
+        // this hop the first turn after promotion read SAFEST and re-asked
+        // for a mode the user had already chosen on the draft.
+        com.openminis.app.security.SecurityGateHolder.migrateSession(
+            oldSid = sessionId,
+            newSid = session.id,
+        )
         // [T-plan-board-draft-drift] Same drift class as the approval gate
         // above: the board can be seeded under the route's draft key before
         // the session is promoted — carry it over, or a todo list started

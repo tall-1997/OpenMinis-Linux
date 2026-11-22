@@ -647,10 +647,9 @@
     <string name="env_var_privacy_footer">Etkinleştirildiğinde, shell-execute çıktısında görünen her ortam değişkeni değeri, modele ulaşmadan önce maskelenmiş biçimiyle (örn. `sk-1********ajhks`) değiştirilir. 8 karakterden kısa değerler tümüyle `*` olur. Sohbette kullanıcının gördüğü çıktı değişmez.</string>
     <string name="outbound_mask_toggle">Giden gizlilik maskeleme</string>
     <string name="outbound_mask_footer">Opt-in şekil maskeleme: anahtar biçimli dizeler (kod dahil), e-postalar ve telefon benzeri sayılar yer tutucuya dönüşür. Aşağıdaki embedding API anahtarı uygulama prefs’te düz metin saklanır. Cihaz geçmişi değişmez.</string>
-    <string name="chat_menu_perm_yoyo">YOLO · tam otomatik</string>
-    <string name="chat_menu_perm_safe_auto">Güvenli otomatik · salt okunur araçlar serbest çalışır</string>
-    <string name="chat_menu_perm_ask">Sor · her çağrıyı onayla</string>
-    <string name="chat_menu_perm_off">Kapalı · tüm araçları reddet</string>
+    <string name="chat_menu_perm_yoyo">Tam erişim</string>
+    <string name="chat_menu_perm_safe_auto">Otonom</string>
+    <string name="chat_menu_perm_ask">Değişiklikten önce sor</string>
     <string name="gate_approval_allow_all">Bu oturumda her zaman izin ver (geçerli hedef)</string>
     <string name="approval_action_allow_all_session">Bu oturumda her zaman izin ver</string>
     <string name="env_var_section_header">Değişkenler</string>
@@ -3373,4 +3372,13 @@
     <string name="modeldetail_tail_budget_state_auto">Otomatik (pencereye göre, en çok 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Bu modele özel</string>
     <string name="tool_limits_tool_concurrency">Paralel okuma araçları</string>
+ <string name="perm_mode_desc_ask">Dosyalar değişmeden önce sorar</string>
+ <string name="perm_mode_desc_auto">Yalnızca risk olduğunda sorar</string>
+ <string name="perm_mode_desc_full">Daha az onay</string>
+ <string name="perm_full_access_title">Tam erişim açılsın mı?</string>
+ <string name="perm_full_access_body">Ajan her seferinde sormadan dosya okur, oluşturur ve siler, terminal komutları çalıştırır, ağa veya bağlı uygulamalara erişir. Bu işlemler veri kaybına ya da sızıntısına yol açabilir; yalnızca göreve güveniyorsan aç. İstediğin an geri dönebilirsin.</string>
+ <string name="perm_full_access_ack">Riski anlıyorum ve verilerimin güvenliğinin sorumluluğunu alıyorum.</string>
+ <string name="perm_full_access_confirm">Aç</string>
+ <string name="perm_guarded_risk_reason">Riskli komutu onayla</string>
+ <string name="perm_guarded_risk_message">Otonom mod bu komutu riskli buldu. Çalıştırmak için bir kez onayla.</string>
 </resources>

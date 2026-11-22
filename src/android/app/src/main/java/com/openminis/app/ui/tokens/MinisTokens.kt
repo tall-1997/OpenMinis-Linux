@@ -3,8 +3,8 @@ package com.openminis.app.ui.tokens
 /**
  * 自动生成 —— 不要手改。生成器: scripts/ui/gen_tokens.py
  *
- * 扫描事实：570 个 ui 下的 .kt 文件 -> Color(0x...): 310 处 / 140 个不同色值；
- * dp 字面量 3701 处 / 87 个不同值；sp 35 处。
+ * 扫描事实：572 个 ui 下的 .kt 文件 -> Color(0x...): 310 处 / 140 个不同色值；
+ * dp 字面量 3700 处 / 87 个不同值；sp 35 处。
  * （已排除注释、字符串，以及标了 token-literal-ok 的行。）
  * 本文件命名 25 个色值，当前覆盖 138/310 = 45% 的颜色使用点。
  * 剩下的未命名字面量由 scripts/ci/check_token_coverage.py 的按文件预算
@@ -114,7 +114,7 @@ object RawSpace {
     const val md2: Float = 10f  // x 234
     const val lg: Float = 12f  // x 374
     const val lg2: Float = 14f  // x 213
-    const val xl: Float = 16f  // x 451
+    const val xl: Float = 16f  // x 450
     const val xl2: Float = 18f  // x 107
     const val xxl: Float = 20f  // x 184
     const val xxl2: Float = 22f  // x 33

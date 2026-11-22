@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Bolt
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Compress
@@ -39,7 +40,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -433,38 +436,89 @@ internal fun ChatTopBarActions(
                             }
                             // [P0-6] 会话段：本会话的行为开关。
                             MinisMenuSectionHeader(stringResource(R.string.chat_menu_section_session))
-                            // [#31] Four-tier tool gate. The row shows the
-                            // current tier and cycles on tap:
-                            // ASK → SAFE_AUTO → YOLO → OFF → ASK.
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        when (sessionPerm) {
-                                            SessionPermissionMode.OFF -> stringResource(R.string.chat_menu_perm_off)
-                                            SessionPermissionMode.ASK -> stringResource(R.string.chat_menu_perm_ask)
-                                            SessionPermissionMode.SAFE_AUTO -> stringResource(R.string.chat_menu_perm_safe_auto)
-                                            SessionPermissionMode.YOLO -> stringResource(R.string.chat_menu_perm_yoyo)
-                                        }
-                                    )
-                                },
-                                onClick = { viewModel.setSessionPermissionMode(sessionPerm.next()) },
-                                leadingIcon = {
-                                    Icon(
-                                        if (sessionPerm.isYolo()) Icons.Filled.Bolt else Icons.Filled.Shield,
-                                        contentDescription = null,
-                                    )
-                                },
-                                // "Cycles on tap" must be visible or the row
-                                // reads as a static status line.
-                                trailingIcon = {
-                                    Icon(
-                                        m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp),
-                                    )
-                                },
+                                                                                    // [T-perm-three-modes] ZCode parity: exactly three session modes, each
+                            // listed with its one-line meaning. The active one is checked;
+                            //完全访问 first arms an inline risk confirmation instead of switching
+                            // silently on a stray tap.
+                            var fullAccessArmed by remember { mutableStateOf(false) }
+                            val permissionModes = listOf(
+                                SessionPermissionMode.ASK_BEFORE_CHANGES,
+                                SessionPermissionMode.AUTONOMOUS,
+                                SessionPermissionMode.FULL_ACCESS,
                             )
-                            val groupChatOn by viewModel.groupChatEnabled.collectAsStateWithLifecycle()
+                            permissionModes.forEach { mode ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            stringResource(
+                                                when (mode) {
+                                                    SessionPermissionMode.ASK_BEFORE_CHANGES -> R.string.chat_menu_perm_ask
+                                                    SessionPermissionMode.AUTONOMOUS -> R.string.chat_menu_perm_safe_auto
+                                                    SessionPermissionMode.FULL_ACCESS -> R.string.chat_menu_perm_yoyo
+                                                },
+                                            ) + " · " + stringResource(
+                                                when (mode) {
+                                                    SessionPermissionMode.ASK_BEFORE_CHANGES -> R.string.perm_mode_desc_ask
+                                                    SessionPermissionMode.AUTONOMOUS -> R.string.perm_mode_desc_auto
+                                                    SessionPermissionMode.FULL_ACCESS -> R.string.perm_mode_desc_full
+                                                },
+                                            ),
+                                        )
+                                    },
+                                    onClick = {
+                                        if (mode == SessionPermissionMode.FULL_ACCESS && !sessionPerm.isFullAccess()) {
+                                            fullAccessArmed = true
+                                        } else {
+                                            showChatMenu.value = false
+                                            fullAccessArmed = false
+                                            viewModel.setSessionPermissionMode(mode)
+                                        }
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            when (mode) {
+                                                SessionPermissionMode.ASK_BEFORE_CHANGES -> Icons.Filled.Shield
+                                                SessionPermissionMode.AUTONOMOUS -> Icons.Filled.Psychology
+                                                SessionPermissionMode.FULL_ACCESS -> Icons.Filled.Bolt
+                                            },
+                                            contentDescription = null,
+                                        )
+                                    },
+                                    trailingIcon = if (mode == sessionPerm) {
+                                        { Icon(Icons.Filled.Check, contentDescription = null) }
+                                    } else {
+                                        null
+                                    },
+                                )
+                            }
+                            if (fullAccessArmed) {
+                                MinisMenuDivider()
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            stringResource(R.string.perm_full_access_title) + "\n" +
+                                                stringResource(R.string.perm_full_access_body) + "\n\n" +
+                                                stringResource(R.string.perm_full_access_ack),
+                                        )
+                                    },
+                                    onClick = {},
+                                    leadingIcon = { Icon(Icons.Filled.Bolt, contentDescription = null) },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.perm_full_access_confirm)) },
+                                    onClick = {
+                                        fullAccessArmed = false
+                                        showChatMenu.value = false
+                                        viewModel.setSessionPermissionMode(SessionPermissionMode.FULL_ACCESS)
+                                    },
+                                    leadingIcon = { Icon(Icons.Filled.Check, contentDescription = null) },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.common_cancel)) },
+                                    onClick = { fullAccessArmed = false },
+                                )
+                            }
+val groupChatOn by viewModel.groupChatEnabled.collectAsStateWithLifecycle()
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.chat_menu_group_chat)) },
                                 onClick = { viewModel.setGroupChatEnabled(!groupChatOn) },

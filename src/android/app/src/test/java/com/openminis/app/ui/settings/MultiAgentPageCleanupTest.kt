@@ -78,8 +78,12 @@ class MultiAgentPageCleanupTest {
     fun permissionModeIsStillEditableInChat() {
         // The edit point that replaced the misleading jump: the in-chat
         // approval UI owns the mode, so removing the row lost nothing.
-        val vm = ProductionSources.read("ui/chat/ChatViewModel.kt")
-        assertTrue(vm.contains("fun setSessionPermissionMode"))
+        // [T-perm-three-modes] The setter moved to its own extension file
+        // (ChatViewModel.kt hit the architecture ceiling); the guard is about
+        // the behaviour, so read wherever it lives now.
+        val vm = ProductionSources.read("ui/chat/ChatViewModel.kt") +
+            ProductionSources.read("ui/chat/ChatViewModelPermissionExt.kt")
+        assertTrue(vm.contains("fun ChatViewModel.setSessionPermissionMode"))
         // [T-chat-screen-sections] 顶栏审批入口随四区块抽取迁至 ChatTopBarSection。
         val chat = ProductionSources.read("ui/chat/ChatTopBarSection.kt")
         assertTrue(chat.contains("setSessionPermissionMode"))

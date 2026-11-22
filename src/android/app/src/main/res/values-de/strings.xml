@@ -647,10 +647,9 @@
     <string name="env_var_privacy_footer">Wenn aktiviert, werden in der Ausgabe von shell-execute erkannte Werte von Umgebungsvariablen vor der Weitergabe an das Modell maskiert (z. B. `sk-1********ajhks`). Werte mit weniger als 8 Zeichen werden vollständig durch `*` ersetzt. Die für den Nutzer sichtbare Ausgabe im Chat bleibt unverändert.</string>
     <string name="outbound_mask_toggle">Ausgehende Datenschutz-Maskierung</string>
     <string name="outbound_mask_footer">Opt-in-Formmaskierung: schlüsselförmige Strings (auch im Code), E-Mails und telefonähnliche Zahlen werden ersetzt. Der Embedding-API-Schlüssel unten liegt Klartext in App-Prefs. Geräteverlauf unverändert.</string>
-    <string name="chat_menu_perm_yoyo">YOLO · vollautomatisch</string>
-    <string name="chat_menu_perm_safe_auto">Sicher automatisch · Lese-Tools laufen frei</string>
-    <string name="chat_menu_perm_ask">Fragen · jeden Aufruf bestätigen</string>
-    <string name="chat_menu_perm_off">Aus · alle Tools verweigern</string>
+    <string name="chat_menu_perm_yoyo">Voller Zugriff</string>
+    <string name="chat_menu_perm_safe_auto">Autonom</string>
+    <string name="chat_menu_perm_ask">Vor Änderungen fragen</string>
     <string name="gate_approval_allow_all">Für diese Sitzung immer erlauben (aktuelles Ziel)</string>
     <string name="env_var_section_header">Variablen</string>
     <string name="env_var_section_footer">Umgebungsvariablen werden beim Sitzungsstart in die Sandbox-Shell eingespeist. Namen werden in Großbuchstaben umgewandelt und müssen den POSIX-Shell-Regeln entsprechen.</string>
@@ -3221,4 +3220,13 @@
     <string name="modeldetail_tail_budget_state_auto">Automatisch (skaliert mit dem Fenster, bis 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Eigen für dieses Modell</string>
     <string name="tool_limits_tool_concurrency">Parallele Lesetools</string>
+ <string name="perm_mode_desc_ask">Fragt vor Dateiänderungen</string>
+ <string name="perm_mode_desc_auto">Fragt nur bei Risiko</string>
+ <string name="perm_mode_desc_full">Weniger Bestätigungen</string>
+ <string name="perm_full_access_title">Vollen Zugriff aktivieren?</string>
+ <string name="perm_full_access_body">Der Agent liest, erstellt und löscht Dateien, führt Terminalbefehle aus und nutzt Netzwerk oder verbundene Apps, ohne jedes Mal zu fragen. Das kann Datenverlust oder -lecks verursachen. Nur aktivieren, wenn du der Aufgabe vertraust. Du kannst jederzeit zurückwechseln.</string>
+ <string name="perm_full_access_ack">Ich kenne das Risiko und übernehme Verantwortung für meine Daten.</string>
+ <string name="perm_full_access_confirm">Aktivieren</string>
+ <string name="perm_guarded_risk_reason">Riskanten Befehl bestätigen</string>
+ <string name="perm_guarded_risk_message">Der autonome Modus stuft diesen Befehl als riskant ein. Einmal bestätigen, um ihn auszuführen.</string>
 </resources>

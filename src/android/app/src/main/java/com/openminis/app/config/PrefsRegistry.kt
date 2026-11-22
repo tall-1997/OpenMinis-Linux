@@ -4,7 +4,7 @@ package com.openminis.app.config
  * 自动生成 —— 不要手改。
  * 生成器: scripts/prefs/gen_prefs_registry.py
  * 源目录: src/android/app/src/main/java/com/openminis/app
- * 规模:   104 个 prefs 文件（加密 10）/ 已归属键常量 189 / 182 处使用
+ * 规模:   105 个 prefs 文件（加密 10）/ 已归属键常量 190 / 183 处使用
  *
  * 目的: 把「SharedPreferences 文件名 + 键名」从 93 个文件里的裸字符串收敛为一处
  * 可枚举、可校验、可审计的数据表。
@@ -136,6 +136,7 @@ object PrefsRegistry {
         PrefsFileSpec(name = "sandbox_job_keepalive", module = "sandbox", scope = PrefsScope.PLAIN, keys = mapOf("KEY_SESSIONS" to "sessions"), note = "2 usages across 1 file(s)"),
         PrefsFileSpec(name = "sandbox_notify_dyn", module = "notification", scope = PrefsScope.PLAIN, dynamicPrefixes = listOf("dyn:"), note = "2 usages across 1 file(s)"),
         PrefsFileSpec(name = "security_gate", module = "security", scope = PrefsScope.PLAIN, keys = mapOf("KEY_MODE" to "permission_mode"), note = "1 usages across 1 file(s)"),
+        PrefsFileSpec(name = "session-permission", module = "data", scope = PrefsScope.PLAIN, keys = mapOf("KEY_MODE" to "lastMode"), note = "1 usages across 1 file(s)"),
         PrefsFileSpec(name = "session_badge_store", module = "service", scope = PrefsScope.PLAIN, keys = mapOf("KEY" to "badge_state_by_session", "KEY_V2" to "badge_state_by_session_v2"), note = "1 usages across 1 file(s)"),
         PrefsFileSpec(name = "session_list_ui", module = "ui", scope = PrefsScope.PLAIN, openKeySpace = true, note = "1 usages across 1 file(s)"),
         PrefsFileSpec(name = "share_prefs", module = "share", scope = PrefsScope.PLAIN, keys = mapOf("KEY_PENDING_SHARE" to "pending_share"), note = "3 usages across 1 file(s)"),

@@ -1521,6 +1521,24 @@
       "ephemeral": false
     },
     {
+      "name": "session-permission",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "data/SessionPermissionPrefs.kt"
+      ],
+      "keys": {
+        "KEY_MODE": "lastMode"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
       "name": "session_badge_store",
       "module": "service",
       "modules": [
@@ -2820,9 +2838,27 @@
     {
       "name": "PREFS",
       "a": "minis_plan_discussion_prefs",
-      "b": "minis_storage_scan",
+      "b": "session-permission",
       "files": [
         "data/PlanDiscussionPrefs.kt",
+        "data/SessionPermissionPrefs.kt"
+      ]
+    },
+    {
+      "name": "KEY_MODE",
+      "a": "planDiscussionMode",
+      "b": "lastMode",
+      "files": [
+        "data/PlanDiscussionPrefs.kt",
+        "data/SessionPermissionPrefs.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "session-permission",
+      "b": "minis_storage_scan",
+      "files": [
+        "data/SessionPermissionPrefs.kt",
         "data/StorageScanner.kt"
       ]
     },
@@ -5096,10 +5132,10 @@
     },
     {
       "name": "KEY_MODE",
-      "a": "planDiscussionMode",
+      "a": "lastMode",
       "b": "permission_mode",
       "files": [
-        "data/PlanDiscussionPrefs.kt",
+        "data/SessionPermissionPrefs.kt",
         "security/SecurityGateHolder.kt"
       ]
     },
@@ -6734,12 +6770,12 @@
     "UNKNOWN_MODEL_KEY"
   ],
   "totals": {
-    "prefs_files": 104,
+    "prefs_files": 105,
     "prefs_encrypted": 10,
-    "key_constants_attributed": 189,
+    "key_constants_attributed": 190,
     "orphan_keys": 34,
-    "usage_sites": 182,
-    "usage_files": 109,
-    "constant_conflicts": 522
+    "usage_sites": 183,
+    "usage_files": 110,
+    "constant_conflicts": 524
   }
 }
