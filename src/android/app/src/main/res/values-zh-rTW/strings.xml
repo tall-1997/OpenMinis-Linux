@@ -3123,6 +3123,7 @@
     <string name="quota_unsupported_no_api">這個供應商不提供餘額或配額查詢。</string>
     <string name="quota_unsupported_passive">這個供應商只在回應時附帶配額資訊；尚不支援顯示。</string>
     <string name="quota_unsupported_probe_failed">這個端點沒有回應餘額查詢。Minis 明天會再查，或點按重新整理立即查詢。</string>
+    <string name="quota_unsupported_insecure">這個端點使用未加密的 http，因此已關閉餘額查詢。聊天功能不受影響。</string>
     <string name="quota_unsupported_type">尚不支援這個供應商的餘額查詢。</string>
     <string name="quota_unsupported_unknown_endpoint">這個端點無法使用餘額查詢。</string>
     <string name="quota_updated">已更新</string>
