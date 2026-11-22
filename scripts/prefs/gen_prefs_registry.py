@@ -72,6 +72,32 @@ def iter_kt(root):
                     continue
 
 
+def _rel(p, src_root):
+    """源文件 → 仓库相对路径，分隔符统一成 '/'。
+
+    裸 `os.path.relpath` 在 Windows 上给出 `accessibility\\A11yAppPolicy.kt`，
+    写进 `usage_files` 后与 Linux 生成物逐字节不等 —— 1168 行全部对不上，
+    门禁在任何 Windows 检出上必红（Linux CI 反而不暴露）。所有写路径的地方都必须走这里。
+    """
+    return os.path.relpath(p, src_root).replace(os.sep, '/')
+
+
+def _norm_paths(obj):
+    """比对前把生成物里所有相对路径的分隔符归一成 '/'。
+
+    生成器已改为只写 '/'，但历史提交里的 inventory 可能是 Windows 版生成的；
+    两侧都归一，才能让同一个检出不因平台得出不同结论。
+    只动以 `.kt` 结尾的字符串 —— prefs 键名不会是这种形状，不会误伤内容。
+    """
+    if isinstance(obj, dict):
+        return {k: _norm_paths(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_norm_paths(v) for v in obj]
+    if isinstance(obj, str) and obj.endswith('.kt') and '\\' in obj:
+        return obj.replace('\\', '/')
+    return obj
+
+
 def module_of(rel):
     parts = rel.replace('\\', '/').split('/')
     return parts[0] if len(parts) > 1 else '.'
@@ -111,7 +137,7 @@ def scan(src_root):
 
     consts, const_owner, conflicts = {}, {}, []
     for p, s in files:
-        rel = os.path.relpath(p, src_root)
+        rel = _rel(p, src_root)
         for m in RE_CONST_ANY.finditer(s):
             n, lit = m.group(1), m.group(2)
             if n in consts and consts[n] != lit:
@@ -128,7 +154,7 @@ def scan(src_root):
                 if n in consts or ref not in consts:
                     continue
                 consts[n] = consts[ref]
-                const_owner[n] = os.path.relpath(p, src_root)
+                const_owner[n] = _rel(p, src_root)
                 changed = True
         if not changed:
             break
@@ -143,7 +169,7 @@ def scan(src_root):
         return e
 
     for p, s in files:
-        rel = os.path.relpath(p, src_root)
+        rel = _rel(p, src_root)
         for m in RE_GET_LIT.finditer(s):
             touch(m.group(1), rel, 'literal', False)
         local_consts = local_const_map(s, consts)
@@ -174,7 +200,7 @@ def scan(src_root):
 
     # 键常量归属：某文件只用到一个 prefs 文件 → 该文件里的 KEY_* 归它
     for p, s in files:
-        rel = os.path.relpath(p, src_root)
+        rel = _rel(p, src_root)
         local = {n for n, e in prefs.items() if any(u['file'] == rel for u in e.get('usages', []))}
         keys = [(n, l) for n, l in RE_KEY_CONST.findall(s)
                 # KEY_PREFIX / KEY_SUFFIX 是拼接用的片段，不是完整的键名。
@@ -435,7 +461,8 @@ def main():
 
     if a.check:
         old = open(kt_path, encoding='utf-8').read() if os.path.exists(kt_path) else ''
-        if old != kt:
+        # 行尾也归一：Windows 检出可能是 CRLF，内容相同就不是问题。
+        if old.replace('\r\n', '\n') != kt.replace('\r\n', '\n'):
             print('STALE: PrefsRegistry.kt 与源码不一致，请重跑生成器', file=sys.stderr)
             return 2
         # inventory 也是生成物：它记录每个 prefs 文件的键清单，是审计与迁移的依据，
@@ -447,7 +474,7 @@ def main():
             # src_root 是绝对路径，换机器必然不同，比较时排除
             for d in (disk, inv):
                 d.pop('src_root', None)
-            if disk != inv:
+            if _norm_paths(disk) != _norm_paths(inv):
                 print('STALE: prefs-inventory.json 与源码不一致，请重跑生成器',
                       file=sys.stderr)
                 return 2
@@ -458,9 +485,11 @@ def main():
     inv_dir = a.inventory_out or a.out
     if inv_dir:
         os.makedirs(inv_dir, exist_ok=True)
-    with open(os.path.join(inv_dir, 'prefs-inventory.json'), 'w', encoding='utf-8') as f:
+    # newline='\n'：Windows 上默认把 \n 转成 CRLF，会让生成物与仓库归一化后的 LF 不一致，
+    # 门禁在 Windows 检出上必红（内容相同，只是行尾）。
+    with open(os.path.join(inv_dir, 'prefs-inventory.json'), 'w', encoding='utf-8', newline='\n') as f:
         json.dump(inv, f, ensure_ascii=False, indent=2)
-    with open(kt_path, 'w', encoding='utf-8') as f:
+    with open(kt_path, 'w', encoding='utf-8', newline='\n') as f:
         f.write(kt)
 
     t = inv['totals']
