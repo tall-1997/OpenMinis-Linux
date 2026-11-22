@@ -1370,7 +1370,7 @@ fun SessionListScreen(
 
 // ─── Dual FAB Row (matching iOS fabRow) ─────────────────────────────────────
 
-/** Persisted preference key for FAB order swap. */
+// [T-prefs-shared-file] ui_prefs is shared by two source files with different\n// constants; the registry generator attributes keys by file, so the\n// SessionListScreen-only key needs the documented extra-keys list.\n/** Persisted preference key for FAB order swap. */
 private const val PREF_FAB_SWAPPED = "fab_swapped"
 
 @Composable

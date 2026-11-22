@@ -4,7 +4,7 @@ package com.openminis.app.config
  * 自动生成 —— 不要手改。
  * 生成器: scripts/prefs/gen_prefs_registry.py
  * 源目录: src/android/app/src/main/java/com/openminis/app
- * 规模:   105 个 prefs 文件（加密 10）/ 已归属键常量 201 / 183 处使用
+ * 规模:   105 个 prefs 文件（加密 10）/ 已归属键常量 202 / 183 处使用
  *
  * 目的: 把「SharedPreferences 文件名 + 键名」从 93 个文件里的裸字符串收敛为一处
  * 可枚举、可校验、可审计的数据表。
@@ -152,7 +152,7 @@ object PrefsRegistry {
         PrefsFileSpec(name = "sub_agent_types", module = "tools", scope = PrefsScope.PLAIN, keys = mapOf("KEY" to "types_json"), note = "2 usages across 1 file(s)"),
         PrefsFileSpec(name = "text_segmenter", module = "shared", scope = PrefsScope.PLAIN, keys = mapOf("KEY_DICT_VERSION" to "jieba_dict_version"), note = "1 usages across 1 file(s)"),
         PrefsFileSpec(name = "translate_settings", module = "i18n", scope = PrefsScope.PLAIN, keys = mapOf("KEY_ENABLED" to "enabled", "KEY_ENTRY" to "entry_id", "KEY_LANG" to "lang"), note = "1 usages across 1 file(s)"),
-        PrefsFileSpec(name = "ui_prefs", module = "ui", scope = PrefsScope.PLAIN, keys = mapOf("KEY_LIST_COLLAPSED" to "tablet_list_pane_collapsed", "KEY_LIST_PANE_WIDTH" to "tablet_list_pane_width_dp"), note = "2 usages across 2 file(s)"),
+        PrefsFileSpec(name = "ui_prefs", module = "ui", scope = PrefsScope.PLAIN, keys = mapOf("KEY_LIST_COLLAPSED" to "tablet_list_pane_collapsed", "KEY_LIST_PANE_WIDTH" to "tablet_list_pane_width_dp", "PREF_FAB_SWAPPED" to "fab_swapped"), note = "2 usages across 2 file(s)"),
         PrefsFileSpec(name = "update_download_prefs", module = "data", scope = PrefsScope.EPHEMERAL, keys = mapOf("KEY_WIFI_ONLY" to "wifi_only"), note = "2 usages across 1 file(s)"),
         PrefsFileSpec(name = "update_sources", module = "data", scope = PrefsScope.PLAIN, keys = mapOf("KEY_INCLUDE_ROLLING" to "include_rolling", "KEY_PREFERRED" to "preferred_source_id"), note = "1 usages across 1 file(s)"),
         PrefsFileSpec(name = "voice_announcement_prefs", module = "speech", scope = PrefsScope.PLAIN, dynamicPrefixes = listOf("scene."), note = "3 usages across 1 file(s)"),

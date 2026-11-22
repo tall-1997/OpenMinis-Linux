@@ -210,6 +210,12 @@
         "KEY_BG_NOTIFICATIONS": "background_notifications_enabled"
       },
       "reason": "shared-file: ConfigBuiltins单文件同时操作多个 prefs文件，且这两个键经 PrefsBoolField(key = ...)间接传递，扫描器的归属规则无法把常量映射到这个文件。"
+    },
+    "ui_prefs": {
+      "keys": {
+        "PREF_FAB_SWAPPED": "fab_swapped"
+      },
+      "reason": "shared-file: SessionListScreen 的 DualFabRow 读 Prefs.file(\"ui_prefs\")，但同一文件名被两个源文件使用，生成器的归属规则只登记另一处，fab_swapped 未进注册表；真机崩溃（2026-11-22 11:45 crash log）。"
     }
   }
 }
