@@ -3356,6 +3356,10 @@
     <string name="guard_stop_on">可以停止工作階段</string>
     <string name="guard_stop_off">永不停止工作階段</string>
     <string name="guard_stop_footer">開啟後，同一操作重複過多時由迴圈保護停止工作階段；關閉後只提醒模型，適合編譯等長時間等待。</string>
+    <string name="goal_drift_section">目標偏航監督</string>
+    <string name="goal_drift_threshold_title">偏航提醒閾值</string>
+    <string name="goal_drift_threshold_value">%1$d 個工具輪</string>
+    <string name="goal_drift_footer">目標進行中時，計畫板連續多少個工具輪沒有任何變化，宿主就會提醒模型回到目標。數值越大提醒越少，越小監督越緊。</string>
     <string name="token_usage_section_memory">記憶</string>
     <string name="token_usage_memory_lines">已投遞行數</string>
     <string name="token_usage_memory_shown">顯示次數</string>

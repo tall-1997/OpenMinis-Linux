@@ -3359,6 +3359,10 @@
     <string name="guard_stop_on">หยุดเซสชันได้</string>
     <string name="guard_stop_off">ไม่หยุดเซสชัน</string>
     <string name="guard_stop_footer">เมื่อเปิด ตัวป้องกันจะหยุดเซสชันเมื่อการกระทำเดิมซ้ำบ่อยเกินไป เมื่อปิดจะเพียงเตือนโมเดล เหมาะกับการรอนาน เช่น การบิลด์</string>
+    <string name="goal_drift_section">การตรวจจับการเบี่ยงเบนของเป้าหมาย</string>
+    <string name="goal_drift_threshold_title">เกณฑ์การเตือนการเบี่ยงเบน</string>
+    <string name="goal_drift_threshold_value">%1$d รอบเครื่องมือ</string>
+    <string name="goal_drift_footer">ขณะที่เป้าหมายยังใช้งานอยู่ นี่คือจำนวนรอบเครื่องมือต่อเนื่องที่ผ่านไปได้โดยไม่มีการเปลี่ยนแปลงใดๆ ในกระดานแผน ก่อนที่โฮสต์จะเตือนโมเดลถึงเป้าหมาย ยิ่งสูง = เตือนน้อยลง ยิ่งต่ำ = ควบคุมเข้มงวดขึ้น</string>
     <string name="token_usage_section_memory">ความจำ</string>
     <string name="token_usage_memory_lines">บรรทัดที่ส่ง</string>
     <string name="token_usage_memory_shown">จำนวนครั้งที่แสดง</string>

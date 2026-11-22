@@ -4,7 +4,7 @@ package com.openminis.app.config
  * 自动生成 —— 不要手改。
  * 生成器: scripts/prefs/gen_prefs_registry.py
  * 源目录: src/android/app/src/main/java/com/openminis/app
- * 规模:   103 个 prefs 文件（加密 10）/ 已归属键常量 188 / 181 处使用
+ * 规模:   104 个 prefs 文件（加密 10）/ 已归属键常量 189 / 182 处使用
  *
  * 目的: 把「SharedPreferences 文件名 + 键名」从 93 个文件里的裸字符串收敛为一处
  * 可枚举、可校验、可审计的数据表。
@@ -102,6 +102,7 @@ object PrefsRegistry {
         PrefsFileSpec(name = "minis_enhanced_cache_prefs", module = "data", scope = PrefsScope.PLAIN, keys = mapOf("KEY_CONFIRMED" to "enhancedCacheConfirmed"), note = "1 usages across 1 file(s)"),
         PrefsFileSpec(name = "minis_evolution_prefs", module = "evolution", scope = PrefsScope.PLAIN, keys = mapOf("KEY_DAILY_CAP" to "evolution.daily_cap", "KEY_ENABLED" to "evolution.enabled", "KEY_LAST_HARVEST" to "evolution.last_harvest_at", "KEY_LAST_REFLECT" to "evolution.last_reflect_at", "KEY_LLM_COUNT" to "evolution.llm_count", "KEY_LLM_DAY" to "evolution.llm_day", "KEY_LLM_FAILS" to "evolution.llm_fails"), note = "1 usages across 1 file(s)"),
         PrefsFileSpec(name = "minis_fast_mode_prefs", module = "data", scope = PrefsScope.PLAIN, keys = mapOf("KEY_ENABLED" to "codexFastModeEnabled"), note = "1 usages across 1 file(s)"),
+        PrefsFileSpec(name = "minis_goal_drift_prefs", module = "data", scope = PrefsScope.PLAIN, keys = mapOf("KEY_STALL_TURNS" to "goalDriftStallTurns"), note = "1 usages across 1 file(s)"),
         PrefsFileSpec(name = "minis_group_chat", module = "ui", scope = PrefsScope.PLAIN, dynamicPrefixes = listOf("closed:", "enabled:", "opening:", "round:"), note = "1 usages across 1 file(s)"),
         PrefsFileSpec(name = "minis_guard_prefs", module = "data", scope = PrefsScope.PLAIN, keys = mapOf("KEY_STOP_ENABLED" to "loopGuardStopEnabled"), note = "1 usages across 1 file(s)"),
         PrefsFileSpec(name = "minis_memory_prefs", module = "config", scope = PrefsScope.PLAIN, keys = mapOf("KEY_GLOBAL_ENABLED" to "memory.global.enabled"), note = "2 usages across 2 file(s)"),

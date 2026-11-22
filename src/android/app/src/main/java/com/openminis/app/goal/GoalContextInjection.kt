@@ -3,8 +3,15 @@ package com.openminis.app.goal
 import com.openminis.app.data.db.GoalStatus
 import com.openminis.app.data.db.SessionGoalEntity
 
-private fun quoteObjective(value: String): String = buildString {
-    append('"')
+
+/**
+ * [T-goal-drift-reconciler] Shared escaper for untrusted text mounted inside
+ * `<goal_context>`: control characters are JSON-escaped and angle brackets
+ * neutralized (`\u003C`/`\u003E`) so a criterion line cannot close the
+ * wrapper and speak outside the envelope. [quoteObjective] wraps it for the
+ * JSON block.
+ */
+private fun escapeUntrusted(value: String): String = buildString {
     for (char in value) {
         when (char) {
             '"' -> append("\\\"")
@@ -19,6 +26,11 @@ private fun quoteObjective(value: String): String = buildString {
             else -> if (char.code < 0x20) append("\\u%04X".format(char.code)) else append(char)
         }
     }
+}
+
+private fun quoteObjective(value: String): String = buildString {
+    append('"')
+    append(escapeUntrusted(value))
     append('"')
 }
 

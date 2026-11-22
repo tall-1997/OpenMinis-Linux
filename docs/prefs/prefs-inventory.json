@@ -874,6 +874,24 @@
       "ephemeral": false
     },
     {
+      "name": "minis_goal_drift_prefs",
+      "module": "data",
+      "modules": [
+        "data"
+      ],
+      "encrypted": false,
+      "usage_count": 1,
+      "usage_files": [
+        "data/GoalDriftPrefs.kt"
+      ],
+      "keys": {
+        "KEY_STALL_TURNS": "goalDriftStallTurns"
+      },
+      "dyn_keys": [],
+      "open_key_space": false,
+      "ephemeral": false
+    },
+    {
       "name": "minis_group_chat",
       "module": "ui",
       "modules": [
@@ -2685,9 +2703,18 @@
     {
       "name": "PREFS",
       "a": "minis_fast_mode_prefs",
-      "b": "minis_guard_prefs",
+      "b": "minis_goal_drift_prefs",
       "files": [
         "data/FastModePrefs.kt",
+        "data/GoalDriftPrefs.kt"
+      ]
+    },
+    {
+      "name": "PREFS",
+      "a": "minis_goal_drift_prefs",
+      "b": "minis_guard_prefs",
+      "files": [
+        "data/GoalDriftPrefs.kt",
         "data/GuardPrefs.kt"
       ]
     },
@@ -6707,12 +6734,12 @@
     "UNKNOWN_MODEL_KEY"
   ],
   "totals": {
-    "prefs_files": 103,
+    "prefs_files": 104,
     "prefs_encrypted": 10,
-    "key_constants_attributed": 188,
+    "key_constants_attributed": 189,
     "orphan_keys": 34,
-    "usage_sites": 181,
-    "usage_files": 108,
-    "constant_conflicts": 521
+    "usage_sites": 182,
+    "usage_files": 109,
+    "constant_conflicts": 522
   }
 }

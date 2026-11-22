@@ -3359,6 +3359,10 @@
     <string name="guard_stop_on">Boleh menghentikan sesi</string>
     <string name="guard_stop_off">Tidak pernah menghentikan sesi</string>
     <string name="guard_stop_footer">Apabila hidup, pengawal menghentikan sesi selepas tindakan sama berulang terlalu kerap. Apabila mati, ia hanya mengingatkan model, berguna semasa menunggu lama seperti binaan.</string>
+    <string name="goal_drift_section">Pengawasan sisihan matlamat</string>
+    <string name="goal_drift_threshold_title">Ambang peringatan sisihan</string>
+    <string name="goal_drift_threshold_value">%1$d giliran alat</string>
+    <string name="goal_drift_footer">Semasa matlamat aktif, ini bilangan giliran alat berturut-turut yang boleh berlalu tanpa sebarang pergerakan papan rancangan sebelum hos mengingatkan model tentang matlamatnya. Lebih tinggi bermakna lebih sedikit peringatan; lebih rendah bermakna pengawasan lebih ketat.</string>
     <string name="token_usage_section_memory">Memori</string>
     <string name="token_usage_memory_lines">Baris dihantar</string>
     <string name="token_usage_memory_shown">Bilangan dipaparkan</string>

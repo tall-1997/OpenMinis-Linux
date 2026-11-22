@@ -1326,6 +1326,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     goalSessionId,
                     turnUsageTokens,
                     (System.currentTimeMillis() - turnStartedAtMs).coerceAtLeast(0),
+                    context,
                 )
             }.onFailure { AppLogger.warning(ChatViewModel.TAG_STREAM, "Goal usage accounting failed: ${it.message}") }.isSuccess
         }
@@ -1389,38 +1390,9 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             subAgentCollectNudges < ChatViewModel.MAX_SUBAGENT_COLLECT_NUDGES &&
             activeRun?.isStopped != true
         ) {
-            val batchRegistry = com.openminis.app.tools.SubAgentBatchRegistry
-            val pending = runCatching {
-                batchRegistry.unfinished(goalSessionId, context)
-            }.getOrElse { e ->
-                AppLogger.warning(ChatViewModel.TAG_STREAM, "sub-agent registry read failed: ${e.message}")
-                emptyList()
-            }
+            val pending = AgentLoopNudges.pendingSubAgentCollects(goalSessionId, context)
             if (pending.isNotEmpty()) {
-                val nudge = buildString {
-                    append("<system-reminder>\n")
-                    append(batchRegistry.renderPending(pending))
-                    append('\n')
-                    pending.forEach { b ->
-                        append("- dispatch ").append(b.id.take(8)).append(": ")
-                        append(
-                            if (b.complete) {
-                                "finished, reports NOT collected yet"
-                            } else {
-                                "${b.running}/${b.lanes.size} lane(s) still running"
-                            },
-                        )
-                        append(" (").append(b.done).append(" done, ").append(b.failed).append(" failed)\n")
-                    }
-                    append(
-                        "\nDo not end the turn as if nothing had been dispatched. Call check_agent now: " +
-                            "op=await with timeout_sec to wait for running lanes, op=collect to read the finished " +
-                            "reports, then fold those results into your answer. If a lane genuinely cannot finish " +
-                            "in time, say so explicitly — name the dispatch id, state that it is still running, and " +
-                            "tell the user it can be collected later with check_agent.",
-                    )
-                    append("\n</system-reminder>")
-                }
+                val nudge = AgentLoopNudges.renderSubAgentCollectNudge(pending)
                 // Same shape as the Goal continuation above: persist this turn's
                 // assistant output first, otherwise history would carry two
                 // consecutive user messages and providers reject the sequence.
@@ -1444,6 +1416,18 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 if (turn >= maxTurns - 1) { loopExitedNormally = true; break }
                 continue
             }
+        }
+
+        // [T-goal-drift-reconciler] Drift nudge delivery: the stall counter ticks per
+        // tool turn inside GoalManager.recordUsage; the voice only speaks here, once
+        // per distinct stalled board state, never alongside the other two nudges.
+        val driftNudge = runCatching { goalManager.driftNudgeIfOwed(goalSessionId, context) }.getOrNull()
+        if (driftNudge != null && activeRun?.isStopped != true) {
+            persistTurn()
+            appendBoundedHistory(LLMMessage(role = LLMMessage.Role.USER, content = driftNudge, contentParts = listOf(AgentContentPart.Text(driftNudge))))
+            AppLogger.info(ChatViewModel.TAG_STREAM, "goal drift nudge delivered (session=$goalSessionId)")
+            if (turn >= maxTurns - 1) { loopExitedNormally = true; break }
+            continue
         }
 
         // If no tool calls and no Goal continuation, we're done.
@@ -1720,6 +1704,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 goalSessionId,
                 turnUsageTokens,
                 (System.currentTimeMillis() - turnStartedAtMs).coerceAtLeast(0),
+                context,
             )
         }.onFailure { AppLogger.warning(ChatViewModel.TAG_STREAM, "Goal usage accounting failed: ${it.message}") }
         else Result.success(null)
@@ -1731,6 +1716,9 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             loopExitedNormally = true
             break
         }
+
+        // [T-goal-drift-reconciler] Per-tool-turn stall accounting rides
+        // recordUsage above (context passed there). Delivery at natural end below.
 
         // [T-no-mid-task-speech] No stall nudge; repeats get a hint inside the tool result.
 

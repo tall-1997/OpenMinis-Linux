@@ -3358,6 +3358,10 @@
     <string name="guard_stop_on">세션을 중지할 수 있음</string>
     <string name="guard_stop_off">세션을 중지하지 않음</string>
     <string name="guard_stop_footer">켜면 같은 작업이 너무 자주 반복될 때 세션을 중지합니다. 끄면 모델에 알림만 하며, 빌드 같은 긴 대기에 유용합니다.</string>
+    <string name="goal_drift_section">목표 이탈 감시</string>
+    <string name="goal_drift_threshold_title">이탈 알림 임계값</string>
+    <string name="goal_drift_threshold_value">도구 턴 %1$d회</string>
+    <string name="goal_drift_footer">목표가 활성화된 동안 플랜 보드에 아무 변화 없이 연속으로 이 횟수만큼 도구 턴이 지나면 호스트가 모델에게 목표를 상기시킵니다. 높을수록 알림이 적고, 낮을수록 감시가 엄격합니다.</string>
     <string name="token_usage_section_memory">메모리</string>
     <string name="token_usage_memory_lines">전달된 줄</string>
     <string name="token_usage_memory_shown">표시 횟수</string>

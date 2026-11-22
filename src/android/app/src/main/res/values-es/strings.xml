@@ -3207,6 +3207,10 @@
     <string name="guard_stop_on">Puede detener la sesión</string>
     <string name="guard_stop_off">Nunca detiene la sesión</string>
     <string name="guard_stop_footer">Si está activo, el freno detiene la sesión cuando la misma acción se repite demasiadas veces. Si está desactivado, solo avisa al modelo, útil en esperas largas como una compilación.</string>
+    <string name="goal_drift_section">Supervisión de desvío del objetivo</string>
+    <string name="goal_drift_threshold_title">Umbral de recordatorio de desvío</string>
+    <string name="goal_drift_threshold_value">%1$d turnos de herramienta</string>
+    <string name="goal_drift_footer">Mientras un objetivo esté activo, esta es la cantidad de turnos de herramienta consecutivos que pueden pasar sin ningún movimiento del tablero del plan antes de que el host recuerde al modelo su objetivo. Más alto significa menos recordatorios; más bajo significa una supervisión más estricta.</string>
     <string name="token_usage_section_memory">Memoria</string>
     <string name="token_usage_memory_lines">Líneas entregadas</string>
     <string name="token_usage_memory_shown">Veces mostradas</string>

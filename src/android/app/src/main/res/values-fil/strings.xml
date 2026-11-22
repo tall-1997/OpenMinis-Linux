@@ -3359,6 +3359,10 @@
     <string name="guard_stop_on">Maaaring ihinto ang session</string>
     <string name="guard_stop_off">Hindi kailanman ihihinto ang session</string>
     <string name="guard_stop_footer">Kapag naka-on, ihihinto ng pigil ang session kapag masyadong madalas umulit ang parehong aksyon. Kapag naka-off, pagpapaalala lang sa modelo, kapaki-pakinabang sa mahabang paghihintay tulad ng build.</string>
+    <string name="goal_drift_section">Pagsubaybay sa paglihis ng layunin</string>
+    <string name="goal_drift_threshold_title">Threshold ng paalala sa paglihis</string>
+    <string name="goal_drift_threshold_value">%1$d tool turn</string>
+    <string name="goal_drift_footer">Habang aktib ang layunin, ito ang bilang ng magkasunod na tool turn na maaaring lumipas nang walang anumang galaw ng plan board bago i-remind ng host ang modelo sa layunin nito. Mas mataas = mas kaunting paalala; mas mababa = mas mahigpit na pagsubaybay.</string>
     <string name="token_usage_section_memory">Memorya</string>
     <string name="token_usage_memory_lines">Mga linyang naipadala</string>
     <string name="token_usage_memory_shown">Bilang ng pagpapakita</string>

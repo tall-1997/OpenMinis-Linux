@@ -53,6 +53,9 @@ fun ToolLimitsSettingsScreen(onBack: () -> Unit) {
     val guardRevision by com.openminis.app.data.GuardPrefs.revision.collectAsStateWithLifecycle()
     val guardStopEnabled = remember(guardRevision) { com.openminis.app.data.GuardPrefs.stopEnabled() }
     val guardContext = androidx.compose.ui.platform.LocalContext.current
+    // [T-goal-drift-reconciler] The stall-threshold knob (tool-limits page).
+    val driftRevision by com.openminis.app.data.GoalDriftPrefs.revision.collectAsStateWithLifecycle()
+    val driftTurns = remember(driftRevision) { com.openminis.app.data.GoalDriftPrefs.stallTurns() }
 
     // Nested under multi-agent (and the tool-limits deep link), not a
     // first-level settings page. 1.36.16 keeps the back arrow here; 1.36.37
@@ -205,6 +208,23 @@ fun ToolLimitsSettingsScreen(onBack: () -> Unit) {
                 onCheckedChange = { on ->
                     com.openminis.app.data.GuardPrefs.setStopEnabled(guardContext, on)
                 },
+            )
+        }
+        // [T-goal-drift-reconciler] How many silent tool turns the drift
+        // reconciler tolerates before nudging the model back toward the goal.
+        SettingsSection(
+            header = stringResource(R.string.goal_drift_section),
+            footer = stringResource(R.string.goal_drift_footer),
+        ) {
+            LimitStepper(
+                title = stringResource(R.string.goal_drift_threshold_title),
+                valueLabel = stringResource(R.string.goal_drift_threshold_value, driftTurns),
+                value = driftTurns,
+                min = com.openminis.app.goal.GoalDriftReconciler.STALL_TURNS_MIN,
+                max = com.openminis.app.goal.GoalDriftReconciler.STALL_TURNS_MAX,
+                step = 1,
+                onChange = com.openminis.app.data.GoalDriftPrefs::setStallTurns,
+                showDivider = false,
             )
         }
     }

@@ -3367,6 +3367,10 @@
     <string name="guard_stop_on">Может остановить сеанс</string>
     <string name="guard_stop_off">Никогда не останавливает сеанс</string>
     <string name="guard_stop_footer">Если включено, защита останавливает сеанс, когда одно и то же действие повторяется слишком часто. Если выключено, она только напоминает модели - полезно при долгом ожидании, например сборки.</string>
+    <string name="goal_drift_section">Контроль отклонения цели</string>
+    <string name="goal_drift_threshold_title">Порог напоминания об отклонении</string>
+    <string name="goal_drift_threshold_value">%1$d ходов инструмента</string>
+    <string name="goal_drift_footer">Пока цель активна, это количество последовательных ходов инструмента, которые могут пройти без каких-либо изменений на плановой доске, прежде чем хост напомнит модели о её цели. Выше — меньше напоминаний; ниже — строже контроль.</string>
     <string name="token_usage_section_memory">Память</string>
     <string name="token_usage_memory_lines">Передано строк</string>
     <string name="token_usage_memory_shown">Показов</string>
