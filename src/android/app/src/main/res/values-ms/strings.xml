@@ -615,6 +615,7 @@
     <string name="appearance_context_glow_subtitle">Tepi kotak input berpendar berputar apabila konteks hampir had</string>
     <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
     <string name="chat_usage_footer_cache">cache %1$d%%</string>
+    <string name="chat_usage_footer_speed">%1$d tok/s</string>
     <string name="appearance_section_grouping">Pengumpulan</string>
     <string name="appearance_auto_grouping">Pengumpulan Automatik</string>
     <string name="appearance_auto_grouping_subtitle">Masukkan sembang baharu ke kumpulan yang sepadan</string>

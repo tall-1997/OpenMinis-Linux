@@ -615,6 +615,7 @@
     <string name="appearance_context_glow_subtitle">Bağlam sınıra yaklaşırken giriş kutusunun kenarı dönen bir ışıkla parlar</string>
     <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
     <string name="chat_usage_footer_cache">önbellek %1$d%%</string>
+    <string name="chat_usage_footer_speed">%1$d tok/s</string>
     <string name="appearance_section_grouping">Gruplama</string>
     <string name="appearance_auto_grouping">Otomatik Gruplama</string>
     <string name="appearance_auto_grouping_subtitle">Yeni sohbetleri eşleşen bir gruba yerleştir</string>

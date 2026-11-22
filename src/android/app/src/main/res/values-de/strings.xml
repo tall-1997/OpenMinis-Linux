@@ -615,6 +615,7 @@
     <string name="appearance_context_glow_subtitle">Der Rand des Eingabefelds leuchtet rotierend, wenn der Kontext sich dem Limit nähert</string>
     <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
     <string name="chat_usage_footer_cache">Cache %1$d%%</string>
+    <string name="chat_usage_footer_speed">%1$d tok/s</string>
     <string name="appearance_section_grouping">Gruppierung</string>
     <string name="appearance_auto_grouping">Automatische Gruppierung</string>
     <string name="appearance_auto_grouping_subtitle">Neue Chats in eine passende Gruppe einsortieren</string>

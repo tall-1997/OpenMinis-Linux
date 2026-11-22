@@ -615,6 +615,7 @@
     <string name="appearance_context_glow_subtitle">Le bord du champ de saisie s\'illumine en rotation quand le contexte approche la limite</string>
     <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
     <string name="chat_usage_footer_cache">cache %1$d%%</string>
+    <string name="chat_usage_footer_speed">%1$d tok/s</string>
     <string name="appearance_section_grouping">Regroupement</string>
     <string name="appearance_auto_grouping">Regroupement automatique</string>
     <string name="appearance_auto_grouping_subtitle">Classer les nouveaux chats dans un groupe correspondant</string>

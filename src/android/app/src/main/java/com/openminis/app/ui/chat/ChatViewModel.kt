@@ -613,30 +613,6 @@ class ChatViewModel(
     internal val _isLoadingHistory = MutableStateFlow(false)
     val isLoadingHistory: StateFlow<Boolean> = _isLoadingHistory.asStateFlow()
 
-    internal fun notePersistedUiRow(uiMessageId: String?, dbMessageId: String) {
-        if (uiMessageId != null) {
-            _messages.value = _messages.value.map { message ->
-                if (message.id == uiMessageId && dbMessageId !in message.sourceDbIds) {
-                    message.copy(sourceDbIds = message.sourceDbIds + dbMessageId)
-                } else message
-            }
-        }
-        viewModelScope.launch {
-            val sort = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                chatRepository.dao.sortOrderOf(dbMessageId)
-            }
-            val newest = timeline.newestSortOrder
-            // count == 1 is this row alone. Anything larger is a gap under it.
-            // Jumping the cursor over that gap would hide the missing rows.
-            val skipped = newest != null && withContext(kotlinx.coroutines.Dispatchers.IO) {
-                chatRepository.dao.countMessagesAfterSort(sessionId, newest) > 1
-            }
-            if (!skipped && sort != null && (newest == null || sort > newest)) {
-                timeline.extendNewest(sort)
-            }
-            refreshHistoryEdges()
-        }
-    }
 
     // [T-android-split-chat-historypage] loadOlderMessages / loadOlderPage /
     // ensureSessionTailLoaded / drainMissingTail moved verbatim to

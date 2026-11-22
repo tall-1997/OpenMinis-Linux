@@ -340,6 +340,10 @@ internal fun ChatViewModel.toChatMessages(
             attachmentUris = restoredAttachmentUris,
             toolBlocks = blocks,
             sourceDbIds = listOf(entity.id),
+            // [T-message-usage-footer-time] Wall-clock display time for the
+            // usage footer's three-tier time tier (today HH:mm / this year
+            // M/d HH:mm / older yyyy/M/d HH:mm). entity.createdAt is NOT NULL.
+            createdAt = entity.createdAt,
             speakerName = speakerName,
             speakerVendor = speakerVendor,
             // [T-error-persist-android] Restore the persisted terminal error
@@ -393,6 +397,10 @@ internal fun ChatViewModel.toChatMessages(
                     // to the LAST assistant row of the turn, so the later row
                     // (`msg`) wins; fall back to `prev` if only it carried one.
                     error = msg.error ?: prev.error,
+                    // [T-message-usage-footer-time] Same last-row-wins rule as
+                    // the error sticker: the merged bubble displays the time
+                    // of its newest source row.
+                    createdAt = msg.createdAt ?: prev.createdAt,
                 )
             } else {
                 merged.add(msg)

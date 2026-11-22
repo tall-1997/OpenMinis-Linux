@@ -617,6 +617,7 @@
     <string name="appearance_context_glow_subtitle">Край поля ввода светится вращающимся бегунком, когда контекст близок к лимиту</string>
     <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
     <string name="chat_usage_footer_cache">кэш %1$d%%</string>
+    <string name="chat_usage_footer_speed">%1$d tok/s</string>
     <string name="appearance_section_grouping">Группировка</string>
     <string name="appearance_auto_grouping">Автогруппировка</string>
     <string name="appearance_auto_grouping_subtitle">Помещать новые чаты в подходящую группу</string>

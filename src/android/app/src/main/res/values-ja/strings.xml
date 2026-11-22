@@ -615,6 +615,7 @@
     <string name="appearance_context_glow_subtitle">コンテキストが上限に近づくと入力欄の縁が回転して光ります</string>
     <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
     <string name="chat_usage_footer_cache">キャッシュ %1$d%%</string>
+    <string name="chat_usage_footer_speed">%1$d tok/s</string>
     <string name="appearance_section_grouping">グループ分け</string>
     <string name="appearance_auto_grouping">自動グループ分け</string>
     <string name="appearance_auto_grouping_subtitle">新しいチャットを適したグループに振り分けます</string>

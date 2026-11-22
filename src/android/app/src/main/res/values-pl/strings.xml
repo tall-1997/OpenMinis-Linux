@@ -617,6 +617,7 @@
     <string name="appearance_context_glow_subtitle">Krawędź pola wprowadzania świeci obracającym się blaskiem, gdy kontekst zbliża się do limitu</string>
     <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
     <string name="chat_usage_footer_cache">cache %1$d%%</string>
+    <string name="chat_usage_footer_speed">%1$d tok/s</string>
     <string name="appearance_section_grouping">Grupowanie</string>
     <string name="appearance_auto_grouping">Automatyczne grupowanie</string>
     <string name="appearance_auto_grouping_subtitle">Umieszczaj nowe czaty w pasującej grupie</string>

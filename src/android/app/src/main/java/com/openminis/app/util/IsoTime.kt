@@ -43,6 +43,12 @@ object IsoTime {
         DateTimeFormatter.ofPattern("yyyy/MM/dd").withZone(ZoneId.systemDefault())
     private val MONTH_DAY_HM: DateTimeFormatter =
         DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(ZoneId.systemDefault())
+    private val DISPLAY_HHMM: DateTimeFormatter =
+        DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
+    private val DISPLAY_MD_HM: DateTimeFormatter =
+        DateTimeFormatter.ofPattern("M/d HH:mm").withZone(ZoneId.systemDefault())
+    private val DISPLAY_YMD_HM: DateTimeFormatter =
+        DateTimeFormatter.ofPattern("yyyy/M/d HH:mm").withZone(ZoneId.systemDefault())
     private val LOCAL_MILLIS: DateTimeFormatter =
         DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS").withZone(ZoneId.systemDefault())
     private val OFFSET: DateTimeFormatter =
@@ -81,6 +87,23 @@ object IsoTime {
         PATH_DATE.format(Instant.ofEpochMilli(ms))
 
     fun formatMonthDayHm(ms: Long): String = MONTH_DAY_HM.format(Instant.ofEpochMilli(ms))
+
+    /**
+     * [T-message-usage-footer-time] Three-tier display time for message rows:
+     * today → 24h clock (`01:13`); this year → `M/d HH:mm` (`11/22 01:13`);
+     * older → `yyyy/M/d HH:mm` (`2025/11/22 01:13`). [nowMs] is injectable
+     * so tests pin the tier boundaries (midnight, year rollover).
+     */
+    fun formatMessageDisplayTime(ms: Long, nowMs: Long = System.currentTimeMillis()): String {
+        val zone = ZoneId.systemDefault()
+        val t = Instant.ofEpochMilli(ms).atZone(zone)
+        val now = Instant.ofEpochMilli(nowMs).atZone(zone)
+        return when {
+            t.toLocalDate() == now.toLocalDate() -> DISPLAY_HHMM.format(Instant.ofEpochMilli(ms))
+            t.year == now.year -> DISPLAY_MD_HM.format(Instant.ofEpochMilli(ms))
+            else -> DISPLAY_YMD_HM.format(Instant.ofEpochMilli(ms))
+        }
+    }
 
     fun formatLocalMillis(ms: Long): String =
         LOCAL_MILLIS.format(Instant.ofEpochMilli(ms))

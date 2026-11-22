@@ -76,6 +76,11 @@ data class ChatMessage(
     // ChatMessage.sourceSortOrder, which serves the same UI↔raw mapping
     // role (AIChatViewModel.swift:3411, 3421).
     val sourceDbIds: List<String> = emptyList(),
+    /** [T-message-usage-footer-time] Wall-clock creation time (ms epoch) of the
+     *  LAST source DB row — the bubble's display time for the usage footer's
+     *  three-tier time tier (today `HH:mm` / this year `M/d HH:mm` / older
+     *  `yyyy/M/d HH:mm`). Null on in-memory drafts (no DB row yet). */
+    val createdAt: Long? = null,
     /** Set for an AI group-chat utterance. Keeps that model's bubble separate. */
     val speakerName: String? = null,
     /** Vendor key for the speaker mark. Empty on ordinary assistant turns. */
