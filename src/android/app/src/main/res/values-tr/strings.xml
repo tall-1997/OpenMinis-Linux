@@ -3089,6 +3089,7 @@
     <string name="quota_unsupported_no_api">Bu sağlayıcı bakiye veya kota sorgusu sunmuyor.</string>
     <string name="quota_unsupported_passive">Bu sağlayıcı kotayı yalnızca yanıtlarla birlikte bildirir; gösterme henüz desteklenmiyor.</string>
     <string name="quota_unsupported_probe_failed">Bu uç bakiye sorgusuna yanıt vermedi. Minis yarın yeniden bakacak; hemen bakmak için yenile\'ye dokun.</string>
+    <string name="quota_unsupported_insecure">Bu uç nokta şifrelenmemiş http kullandığı için bakiye sorgusu kapalı. Sohbet çalışmaya devam eder.</string>
     <string name="quota_unsupported_type">Bu sağlayıcı için bakiye sorgusu henüz desteklenmiyor.</string>
     <string name="quota_unsupported_unknown_endpoint">Bu uç için bakiye sorgusu yok.</string>
     <string name="quota_updated">Güncellendi</string>

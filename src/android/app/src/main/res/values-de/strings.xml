@@ -2968,6 +2968,7 @@
     <string name="quota_unsupported_no_api">Dieser Anbieter bietet keine Guthaben- oder Kontingentabfrage.</string>
     <string name="quota_unsupported_passive">Dieser Anbieter meldet Kontingent nur zusammen mit Antworten; die Anzeige wird noch nicht unterstützt.</string>
     <string name="quota_unsupported_probe_failed">Dieser Endpunkt antwortete nicht auf die Guthabenabfrage. Minis prüft morgen wieder, oder tippe auf Aktualisieren für einen sofortigen Versuch.</string>
+    <string name="quota_unsupported_insecure">Die Guthabenabfrage ist für diesen Endpunkt deaktiviert, weil er unverschlüsseltes HTTP nutzt. Der Chat funktioniert weiterhin.</string>
     <string name="quota_unsupported_type">Guthabenabfrage wird für diesen Anbieter noch nicht unterstützt.</string>
     <string name="quota_unsupported_unknown_endpoint">Guthabenabfrage ist für diesen Endpunkt nicht verfügbar.</string>
     <string name="quota_updated">Aktualisiert</string>

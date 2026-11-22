@@ -3097,6 +3097,7 @@
     <string name="quota_unsupported_no_api">У этого провайдера нет запроса баланса или квоты.</string>
     <string name="quota_unsupported_passive">Этот провайдер сообщает квоту только вместе с ответами; показ пока не поддерживается.</string>
     <string name="quota_unsupported_probe_failed">Эндпоинт не ответил на запрос баланса. Minis проверит завтра, или нажмите «Обновить», чтобы проверить сейчас.</string>
+    <string name="quota_unsupported_insecure">Проверка баланса отключена для этой конечной точки: она использует незашифрованный http. Чат продолжает работать.</string>
     <string name="quota_unsupported_type">Запрос баланса для этого провайдера пока не поддерживается.</string>
     <string name="quota_unsupported_unknown_endpoint">Запрос баланса для этого эндпоинта недоступен.</string>
     <string name="quota_updated">Обновлено</string>

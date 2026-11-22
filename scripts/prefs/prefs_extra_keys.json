@@ -80,9 +80,10 @@
         "LITERAL_voice_in": "voice.input.overrideEntryId",
         "LITERAL_voice_out": "voice.output.overrideEntryId",
         "LITERAL_last_used": "lastUsedModelEntryId",
-        "LITERAL_config": "config"
+        "LITERAL_config": "config",
+        "KEY_LAST_MODELS_REFRESH_DATE": "lastModelsRefreshDate"
       },
-      "reason": "dynamic-prefix ×4: keypool_<instanceId>（凭据池）、modelsLastFetchAt_<instanceId>（模型目录缓存时间）、voiceShadowDisabled.<instanceId>（语音影子开关）；另 4 个字面量键直接写在源码里。config 是 downgrade 兼容 JSON 镜像（ProviderRepositoryLoad.stringOrNull(\"config\") / Persist.set(\"config\")），漏登记会让 PrefsHandle.check 抛 IllegalArgumentException，导致初始 config 加载必然失败、addInstance 返回 false —— 实测就是这个让 ProviderRepository 永远停在未加载状态。",
+      "reason": "constructor-injected: ModelCatalogCache 的 PrefsHandle 由 ProviderRepository 构造时注入（ModelCatalogCache(this, context, configStore.prefs)），文件里没有 Prefs.file(\"provider_config\") 字样，生成器的归属规则无法把常量映射到该文件。未登记导致每日模型刷新一读就抛，整个 extended init 中止（降级横幅），且模型列表从不自动更新（2026-11-22 真机日志）。",
       "dynPrefixes": [
         "keypool_",
         "modelsLastFetchAt_",

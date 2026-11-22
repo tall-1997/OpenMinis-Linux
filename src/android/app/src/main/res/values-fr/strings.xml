@@ -3089,6 +3089,7 @@
     <string name="quota_unsupported_no_api">Ce fournisseur n\'offre pas de consultation du solde ou du quota.</string>
     <string name="quota_unsupported_passive">Ce fournisseur ne signale le quota qu\'avec les réponses ; son affichage n\'est pas encore pris en charge.</string>
     <string name="quota_unsupported_probe_failed">Ce point de terminaison n\'a pas répondu à la consultation du solde. Minis vérifiera demain, ou touchez actualiser pour vérifier maintenant.</string>
+    <string name="quota_unsupported_insecure">La consultation du solde est désactivée pour ce point de terminaison car il utilise http non chiffré. Le chat fonctionne toujours.</string>
     <string name="quota_unsupported_type">La consultation du solde n\'est pas encore prise en charge pour ce fournisseur.</string>
     <string name="quota_unsupported_unknown_endpoint">La consultation du solde n\'est pas disponible pour ce point de terminaison.</string>
     <string name="quota_updated">Mis à jour</string>

@@ -1395,6 +1395,7 @@
         "data/repository/ProviderConfigStore.kt"
       ],
       "keys": {
+        "KEY_LAST_MODELS_REFRESH_DATE": "lastModelsRefreshDate",
         "LITERAL_config": "config",
         "LITERAL_last_used": "lastUsedModelEntryId",
         "LITERAL_voice_in": "voice.input.overrideEntryId",
@@ -6766,6 +6767,7 @@
     "KEY_GOAL",
     "KEY_IDS",
     "KEY_LAST_BUILD_TIME",
+    "KEY_LAST_MODELS_REFRESH_DATE",
     "KEY_LAST_USED_ENTRY",
     "KEY_LEARNED",
     "KEY_PAID",
@@ -6786,8 +6788,8 @@
   "totals": {
     "prefs_files": 105,
     "prefs_encrypted": 10,
-    "key_constants_attributed": 204,
-    "orphan_keys": 34,
+    "key_constants_attributed": 205,
+    "orphan_keys": 35,
     "usage_sites": 183,
     "usage_files": 110,
     "constant_conflicts": 524

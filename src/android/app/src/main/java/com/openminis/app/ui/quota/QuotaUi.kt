@@ -223,6 +223,7 @@ object QuotaText {
             QuotaSubject.UnsupportedReason.providerTypeUnsupported -> R.string.quota_unsupported_type
             QuotaSubject.UnsupportedReason.passiveNotImplemented -> R.string.quota_unsupported_passive
             QuotaSubject.UnsupportedReason.capabilityProbeFailed -> R.string.quota_unsupported_probe_failed
+            QuotaSubject.UnsupportedReason.insecureTransport -> R.string.quota_unsupported_insecure
         },
     )
 

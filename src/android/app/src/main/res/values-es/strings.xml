@@ -2968,6 +2968,7 @@
     <string name="quota_unsupported_no_api">Este proveedor no ofrece consulta de saldo ni de cuota.</string>
     <string name="quota_unsupported_passive">Este proveedor solo informa la cuota junto con las respuestas; mostrarla aún no está soportado.</string>
     <string name="quota_unsupported_probe_failed">Este endpoint no respondió a la consulta de saldo. Minis lo comprobará mañana, o toca actualizar para comprobarlo ahora.</string>
+    <string name="quota_unsupported_insecure">La consulta de saldo está desactivada para este endpoint porque usa http sin cifrar. El chat sigue funcionando.</string>
     <string name="quota_unsupported_type">La consulta de saldo aún no está soportada para este proveedor.</string>
     <string name="quota_unsupported_unknown_endpoint">La consulta de saldo no está disponible para este endpoint.</string>
     <string name="quota_updated">Actualizado</string>
