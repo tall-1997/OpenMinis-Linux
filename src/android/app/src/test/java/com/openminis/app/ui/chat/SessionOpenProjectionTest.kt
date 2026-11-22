@@ -72,10 +72,13 @@ class SessionOpenProjectionTest {
         // test for 13.5 min). The fixture below only needs the store to hold an
         // API key for the duration of one test, so back it with the platform
         // SharedPreferences that Robolectric does implement.
+        // [T-prefs-test-ops] resetCacheForTest() clears testOps as well, so it must
+        // run BEFORE installOpsForTest. The original order installed the fake ops and
+        // immediately dropped them, leaving the test on the real Keystore path.
+        EncryptedPrefsFactory.resetCacheForTest()
         EncryptedPrefsFactory.installOpsForTest { ctx -> PlainPrefsOps(ctx) }
         app.appContainer.multiAgentSettingsRepository = MultiAgentSettingsRepository(app)
         ProviderHeaderStore.resetForTest()
-        EncryptedPrefsFactory.resetCacheForTest()
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
             .allowMainThreadQueries()
             .build()

@@ -172,9 +172,10 @@
       "keys": {
         "KEY_ENABLED": "enabled",
         "KEY_PORT": "port",
-        "KEY_TOKEN": "token"
+        "KEY_TOKEN": "token",
+        "KEY_SHELL_POLICY": "shell_policy"
       },
-      "reason": "literal-key: 三个常量名不符合 KEY_* 归属规则（KEY_ENABLED 等），扫描器漏抓"
+      "reason": "shared-file: McpServerConfigStore单文件同时用 Prefs.file(\"mcp_server\")与 EncryptedPrefsFactory.safeCreate(\"mcp_server_secrets\")，扫描器的归属规则无法把 KEY_SHELL_POLICY 映射到 mcp_server，导致运行期 stringOrNull(\"shell_policy\")抛 \"key is not registered\"。"
     },
     "minis_network": {
       "keys": {
@@ -202,6 +203,13 @@
         "proxy."
       ],
       "reason": "加密文件：代理密码。迁移到 Prefs.file 后源码里不再有 EncryptedPrefsFactory 字面量，扫描器看不到加密性，必须在此声明，否则静默退化成明文 XML。键是 \"proxy.\"+proxyId 拼接。"
+    },
+    "background_settings": {
+      "keys": {
+        "KEY_ENHANCED_BG": "enhanced_background_execution",
+        "KEY_BG_NOTIFICATIONS": "background_notifications_enabled"
+      },
+      "reason": "shared-file: ConfigBuiltins单文件同时操作多个 prefs文件，且这两个键经 PrefsBoolField(key = ...)间接传递，扫描器的归属规则无法把常量映射到这个文件。"
     }
   }
 }

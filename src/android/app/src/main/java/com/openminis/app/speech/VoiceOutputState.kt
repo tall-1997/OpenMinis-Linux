@@ -27,7 +27,11 @@ import kotlinx.coroutines.flow.asStateFlow
 object VoiceOutputState {
 
     private const val PREFS = "voice_prefs"
-    private const val KEY_ENABLED = "readReplies"
+    // [T-prefs-name-collision] `voice_prefs` is shared with HandsFreePrefs, whose
+    // own `KEY_ENABLED` is the different key `handsFree.enabled`. Same constant NAME, different value,
+    // same file: the generator kept only the last one, so `readReplies` was never
+    // registered and every read of it threw. Distinct names are the fix.
+    private const val KEY_READ_REPLIES = "readReplies"
     private const val KEY_MUTED = "readReplies.muted"
     private const val KEY_SPEED = "readReplies.speed"
     private const val KEY_VOLUME = "readReplies.volume"
@@ -165,7 +169,7 @@ object VoiceOutputState {
      * "不自动朗读". Once the user flips the switch either way, their choice is
      * persisted and never overridden again.
      */
-    val wasEverConfigured: Boolean get() = prefs?.contains(KEY_ENABLED) == true
+    val wasEverConfigured: Boolean get() = prefs?.contains(KEY_READ_REPLIES) == true
 
     /**
      * [T-android-tts-stop-on-capture] Silence EVERY live player because the mic
@@ -197,7 +201,7 @@ object VoiceOutputState {
         if (prefs != null) return
         val p = com.openminis.app.config.Prefs.file(PREFS)
         prefs = p
-        _isEnabled.value = p.bool(KEY_ENABLED, false)
+        _isEnabled.value = p.bool(KEY_READ_REPLIES, false)
         _isMuted.value = p.bool(KEY_MUTED, false)
         _speed.value = p.float(KEY_SPEED, 1.0f)
         _volume.value = p.float(KEY_VOLUME, 1.0f).coerceIn(1.0f, 2.0f)
@@ -232,7 +236,7 @@ object VoiceOutputState {
     fun setEnabled(value: Boolean) {
         if (_isEnabled.value == value) return
         _isEnabled.value = value
-        prefs?.set(KEY_ENABLED, value)
+        prefs?.set(KEY_READ_REPLIES, value)
         if (!value) {
             // Off → stop whatever is being read, drop the queue, clear the
             // temporary mute (meaningless once fully off; a fresh enable

@@ -71,6 +71,9 @@ GATES: list[Gate] = [
     # ── 结构 / 架构 ──────────────────────────────────────────────────────────
     Gate("architecture-policy", _py("check_architecture_policy.py")),
     Gate("composition-locals", _py("check_composition_locals.py")),
+    # [T-submodule-mapping] A gitlink without a .gitmodules entry breaks
+    # `git submodule status` / `update --init` for every checkout.
+    Gate("submodule-mapping", _py("check_submodule_mapping.py")),
 
     # ── 构建配置单点化 ───────────────────────────────────────────────────────
     Gate("no-inline-versions", _py("check_no_inline_versions.py"), pre_selftest=True),
