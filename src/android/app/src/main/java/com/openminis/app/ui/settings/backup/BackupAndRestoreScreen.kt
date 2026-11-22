@@ -101,6 +101,7 @@ import com.openminis.app.ui.components.MinisOutlinedButton
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.settings.SettingsScaffold
 import com.openminis.app.ui.settings.SettingsSection
+import com.openminis.app.ui.theme.cili
 
 /**
  * [T-backup-primary-action] Shared content for the two primary actions —
@@ -1713,9 +1714,9 @@ private fun categoryTint(cat: BackupCategory): Color = when (cat) {
     BackupCategory.CHATS -> IosBlue                 // blue
     BackupCategory.SHARED_FILES -> IosIndigo         // indigo
     BackupCategory.SKILLS -> IosOrange              // orange
-    BackupCategory.MEMORY -> Color(0xFFE63C93)             // pink
+    BackupCategory.MEMORY -> cili(0xFFFF2D55)             // pink
     BackupCategory.PROVIDERS -> IosTeal         // teal
-    BackupCategory.MCP_SERVERS -> Color(0xFFFFB3D1)      // cyan
+    BackupCategory.MCP_SERVERS -> cili(0xFF32ADE6)      // cyan
     BackupCategory.ENVIRONMENT_VARIABLES -> Color(0xFFA2845E) // brown
     BackupCategory.VOICE_CORRECTIONS -> IosPurple // purple
     BackupCategory.ROOTFS -> IosGreen             // green

@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
+import com.openminis.app.ui.theme.cili
 
 /**
  * Tool-pill + clipboard-format helpers extracted from
@@ -58,7 +59,7 @@ internal fun ToolStopButton(
                 modifier = Modifier
                     .size(10.dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(Color(0xFFFF6B6B)),
+                    .background(cili(0xFFFF3B30)),
             )
         }
     }

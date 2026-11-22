@@ -11,6 +11,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
@@ -86,6 +87,8 @@ import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.decorLinearSweep
 import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.delay
+import com.openminis.app.ui.theme.cili
+import com.openminis.app.ui.theme.CiliSkin
 @Composable
 internal fun AssistantHeader(speakerName: String? = null, speakerVendor: String? = null) {
     // [T-soul-md] Identity header = icon + SOUL.md-driven `name`.
@@ -166,32 +169,52 @@ internal fun BoundsTrackedBlock(
 @Composable
 internal fun InlineErrorBanner(error: String, onRetry: (() -> Unit)? = null) {
     val clipboard = LocalClipboardManager.current
+    // [T-cili-skin-gate] While the 小黄鱼 skin is active (dynamic OFF + dark)
+    // the strip icon carries the left->right skin gradient and the retry
+    // pill sits on the skin gradient; outside the gate everything keeps the
+    // original solid iOS red.
+    val skin = CiliSkin.isActive
+    val accent = if (skin) null else cili(0xFFFF3B30)
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .widthIn(min = 200.dp)
             .padding(top = 4.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFFFF6B6B).copy(alpha = 0.12f))
+            .background(cili(0xFFFF3B30).copy(alpha = 0.12f))
             .combinedClickable(
                 onClick = {},
                 onLongClick = {
                     clipboard.setText(androidx.compose.ui.text.AnnotatedString(error))
                 },
             )
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            // [T-interrupted-padding] Tighter content-to-border breathing
+            // room (user: 内容与上下边框间距缩小点): vertical 6dp -> 3dp.
+            .padding(horizontal = 10.dp, vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            imageVector = m3Icon(Icons.Default.Error),
-            contentDescription = null,
-            tint = Color(0xFFFF6B6B),
-            modifier = Modifier.size(14.dp),
-        )
+        // [T-cili-skin-gate] Skin branch tints the exclamation mark with the
+        // gradient's far-end hue (#FF7AD9) — the strip's retry pill next to it
+        // carries the full left->right gradient.
+        if (skin) {
+            Icon(
+                imageVector = m3Icon(Icons.Default.Error),
+                contentDescription = null,
+                tint = Color(0xFFFF7AD9),
+                modifier = Modifier.size(14.dp),
+            )
+        } else {
+            Icon(
+                imageVector = m3Icon(Icons.Default.Error),
+                contentDescription = null,
+                tint = accent!!, // non-null when !skin
+                modifier = Modifier.size(14.dp),
+            )
+        }
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = error,
-            color = Color(0xFFFF6B6B),
+            color = accent ?: Color(0xFFFFEFF6),
             fontSize = 12.sp,
             lineHeight = 16.sp,
             maxLines = 3,
@@ -204,7 +227,15 @@ internal fun InlineErrorBanner(error: String, onRetry: (() -> Unit)? = null) {
                 modifier = Modifier
                     .minimumInteractiveComponentSize()
                     .clip(RoundedCornerShape(50))
-                    .background(Color(0xFFFF6B6B).copy(alpha = 0.15f))
+                    .then(
+                        if (skin) {
+                            Modifier.background(
+                                Brush.horizontalGradient(CiliSkin.primaryButtonColors.map { Color(it) }),
+                            )
+                        } else {
+                            Modifier.background(cili(0xFFFF3B30).copy(alpha = 0.15f))
+                        },
+                    )
                     .clickable(onClick = onRetry)
                     .padding(horizontal = 10.dp, vertical = 3.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -212,15 +243,23 @@ internal fun InlineErrorBanner(error: String, onRetry: (() -> Unit)? = null) {
                 Icon(
                     imageVector = m3Icon(Icons.Default.Refresh),
                     contentDescription = null,
-                    tint = Color(0xFFFF6B6B),
+                    // On the skin gradient the pale red tint is unreadable —
+                    // dark on-accent color matches the skin's button style.
+                    tint = if (skin) Color(0xFF2A0F1A) else accent!!, // non-null when !skin
                     modifier = Modifier.size(10.dp),
                 )
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(stringResource(R.string.chat_longpress_retry), color = Color(0xFFFF6B6B), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    stringResource(R.string.chat_longpress_retry),
+                    color = if (skin) Color(0xFF2A0F1A) else accent!!, // non-null when !skin
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
         }
     }
 }
+
 
 
 // ─── Tool Call Capsule (iOS: Capsule(), inline, tool-colored icon + title + duration) ─
@@ -542,7 +581,7 @@ internal fun ThinkingBlock(
         }
         wasStreaming = isStreaming
     }
-    val thinkingBlue = Color(0xFFFF7AD9)
+    val thinkingBlue = cili(0xFF007AFF)
     val charCount = block.content.length
     val charLabel = when {
         charCount >= 1000 -> "${charCount / 1000}K"
@@ -766,4 +805,3 @@ internal fun ThinkingBlock(
         }
     }
 }
-

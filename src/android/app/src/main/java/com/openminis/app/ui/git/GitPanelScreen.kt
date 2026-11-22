@@ -32,13 +32,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openminis.app.R
+import com.openminis.app.ui.theme.cili
 
 // iOS system palette, matching the colours ChatToolDetailUI already uses for
 // tool status — the diff view should read like the rest of the app.
-internal val GitAddGreen = Color(0xFF4CAF50)
+internal val GitAddGreen = cili(0xFF34C759)
 internal val GitDelRed = Color(0xFFFF453A)
-internal val GitHunkBlue = Color(0xFFFF7AD9)
-internal val GitMetaGrey = Color(0xFFB9A3B0)
+internal val GitHunkBlue = cili(0xFF007AFF)
+internal val GitMetaGrey = cili(0xFF8E8E93)
 internal val GitHairline = Color(0xFFE5E5EA)
 
 /**

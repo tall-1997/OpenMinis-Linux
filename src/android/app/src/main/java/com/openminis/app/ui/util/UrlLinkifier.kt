@@ -8,6 +8,7 @@ import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
+import com.openminis.app.ui.theme.cili
 
 /**
  * Convert a plain-text string into an [AnnotatedString] where any http(s) URL
@@ -37,7 +38,7 @@ import androidx.compose.ui.text.withLink
 fun linkifyUrls(
     text: String,
     onClick: (String) -> Unit,
-    linkColor: Color = Color(0xFFFF7AD9),
+    linkColor: Color = cili(0xFF0A84FF),
 ): AnnotatedString {
     if (text.isEmpty()) return AnnotatedString(text)
     val matcher = android.util.Patterns.WEB_URL.matcher(text)

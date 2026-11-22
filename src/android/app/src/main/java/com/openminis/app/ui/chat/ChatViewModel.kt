@@ -2235,6 +2235,18 @@ class ChatViewModel(
     // [T-context-ring] Live context token counter for the session-menu ring.
     val contextUsage = MutableStateFlow(com.openminis.app.data.model.ContextUsage(0L, 0L))
 
+    /**
+     * [T-ring-policy-parity] Cached request-shape overhead (calibrated system
+     * prompt + tool definitions, the part of every dispatch payload OUTSIDE
+     * the chat history). projectChatRequest refreshes it each dispatch; the
+     * idle ring adds it on top of the untrimmed history estimate so the
+     * displayed percent uses the SAME basis the compact gate acts on. The
+     * compact gate triggers on the full request shape — without this the
+     * ring undershot the real pressure and users saw compaction "before
+     * reaching the displayed percent".
+     */
+    @Volatile internal var requestShapeOverheadTokens: Int = 0
+
     // ── Session token usage (iOS parity: TokenUsageSheet data) ─────────────
 
     /**

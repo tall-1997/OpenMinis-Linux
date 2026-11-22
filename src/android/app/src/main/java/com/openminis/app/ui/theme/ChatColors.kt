@@ -9,26 +9,17 @@ import androidx.compose.ui.graphics.Color
 // Semantic chat colors mirroring iOS ChatColors (AIChatView.swift).
 // Resolved from LocalChatPalette, which is provided by MinisTheme.
 //
-// [T-xhy-skin] Global reskin (2026-11-22): both palettes now carry the
-// 小黄鱼 (CiliDownloader) "01 暗色·炭粉" dark palette, extracted verbatim from
-// that project's values-night/colors.xml (authoritative skin source). The
-// light palette intentionally wears the same dark skin with isDark=true so
-// every isDark behavioral branch (menu ink, math render, brand accents)
-// picks dark-side contrast — the user asked for the dark skin to cover 100%
-// of pages/buttons/text. Mapping highlights:
-//   bg_dark        #0A0609 -> background / codeBlockBg(#160C13 shimmer-b)
-//   surface_dark   #1A1116 -> secondaryBg / inputBg / toolBg / sheetHeaderBg
-//   nav_bg         #120A0F -> inputIconBg / toolCapsuleBg
-//   thumb_bg       #2A1620 -> inlineCodeBg
-//   primary        #FFB3D1 -> sendButton / thinking
-//   primary_dark   #FF7AD9 -> link / fabAccent / blockquoteBar
-//   card_gold_top  #3A1F2B -> userBubble (gradient face color)
-//   text_light     #FFEFF6 -> primaryText
-//   text_dim       #D3BDC9 -> secondaryText
-//   text_soft      #B9A3B0 -> tertiaryText
-//   gold_line      #59FFB3D1 -> toolBorder / thumbnailBorder
-//   gold_text      #FFD9E8 -> inlineCodeText
-//   error #FF6B6B / ok #4CAF50 handled at the token level (ChatScreenSections).
+// iOS reference:
+//   systemBackground        -> background
+//   secondarySystemBackground -> secondaryBg
+//   tertiarySystemFill      -> userBubble
+//   tertiarySystemGroupedBackground -> toolBg
+//   label                   -> primaryText
+//   secondaryLabel          -> secondaryText
+//   tertiaryLabel           -> tertiaryText
+//   quaternaryLabel         -> sendButtonDisabled
+//   separator               -> border
+//   systemGray6             -> inlineCodeBg / toolCapsuleBg
 @Immutable
 data class ChatPalette(
     val isDark: Boolean,
@@ -68,83 +59,101 @@ data class ChatPalette(
     val fabOnAccent: Color,
 )
 
-// [T-xhy-skin] The 小黄鱼 dark skin applied globally. isDark=true so contrast
-// branches (MinisMenu ink, KaTeX, brand accents) behave as dark everywhere.
 val LightChatPalette = ChatPalette(
-    isDark = true,
-    background = Color(0xFF0A0609),
-    secondaryBg = Color(0xFF1A1116),
-    inputBg = Color(0xFF1A1116),
-    inputIconBg = Color(0xFF120A0F),
-    inputIconBorder = Color(0x4DFFB3D1),
-    inputBorder = Color(0x26FFB3D1),
-    primaryText = Color(0xFFFFEFF6),
-    secondaryText = Color(0xFFD3BDC9),
-    tertiaryText = Color(0xFFB9A3B0),
-    disabledText = Color(0x59FFEFF6),
-    userBubble = Color(0xFF3A1F2B),
-    toolBg = Color(0xFF1A1116),
-    toolBorder = Color(0x59FFB3D1),
-    toolCapsuleBg = Color(0xFF120A0F),
-    separator = Color(0x14FFFFFF),
-    sendButton = Color(0xFFFFB3D1),
-    sendButtonDisabled = Color(0x26FFB3D1),
-    codeBlockBg = Color(0xFF160C13),
-    codeBlockText = Color(0xFFFFB3D1),
-    inlineCodeBg = Color(0xFF2A1620),
-    inlineCodeText = Color(0xFFFFD9E8),
-    link = Color(0xFFFF7AD9),
-    blockquoteBar = Color(0x80FF7AD9),
-    thinking = Color(0xFFFFB3D1),
-    warningBg = Color(0x1AFFF3C4),
-    warningText = Color(0xFFFFF3C4),
-    tableBorder = Color(0x33FFB3D1),
-    inputShadow = Color(0x80000000),
-    toastBg = Color(0x2EFFB3D1),
-    thumbnailBorder = Color(0x4DFFB3D1),
-    sheetHeaderBg = Color(0xFF1A1116),
-    sheetHeaderBorder = Color(0x33FFB3D1),
-    fabAccent = Color(0xFFFF7AD9),
-    fabOnAccent = Color(0xFF2A0F1A),
+    isDark = false,
+    background = Color.White,
+    secondaryBg = Color(0xFFF2F2F7),
+    inputBg = Color.White,
+    inputIconBg = Color(0xFFF2F2F7),
+    inputIconBorder = Color.Transparent,
+    inputBorder = Color(0x4D3C3C43),
+    primaryText = Color(0xFF000000),
+    secondaryText = Color(0x993C3C43),
+    tertiaryText = Color(0x4D3C3C43),
+    disabledText = Color(0x2E3C3C43),
+    userBubble = Color(0x1E787880),
+    toolBg = Color(0xFFF2F2F7),
+    toolBorder = Color(0x14000000),
+    toolCapsuleBg = Color(0xFFF2F2F7),
+    separator = Color(0x4D3C3C43),
+    sendButton = Color(0xFF000000),
+    sendButtonDisabled = Color(0x2E3C3C43),
+    codeBlockBg = Color(0xFF000000),
+    codeBlockText = Color(0xFF34C759),
+    inlineCodeBg = Color(0xFFF2F2F7),
+    inlineCodeText = Color(0xFFFF9500),
+    link = Color(0xFF007AFF),
+    blockquoteBar = Color(0x80FF9500),
+    thinking = Color(0xFF007AFF),
+    warningBg = Color(0x14FF9500),
+    warningText = Color(0x73000000),
+    tableBorder = Color(0x1F000000),
+    inputShadow = Color.Transparent,
+    toastBg = Color(0x2E007AFF),
+    thumbnailBorder = Color(0x33808080),
+    sheetHeaderBg = Color(0xFFFFFFFF),
+    sheetHeaderBorder = Color(0x1A000000),
+    fabAccent = Color(0xFFB7AF96),
+    fabOnAccent = Color.White,
 )
 
-// [T-xhy-skin] Same skin as Light — the reskin is global by design.
+// T153: Android-specific dark palette tweaks. iOS borrows the system
+// palette (#1C1C1E / #2C2C2E etc.) which reads as "layered dark grey"
+// on a 1000+ nit display, but on a typical Android phone (Pixel 6 ≈
+// 500 nits, mid-range OEMs even less) those layers crush together
+// into a single near-black wash and the user can't tell tool capsules
+// from background or input from message list. Lift the non-background
+// layers ~6-10% so the contrast survives the brightness gap; the pure
+// `background` itself stays #000 because every other color is keyed
+// to "darker than this".
 val DarkChatPalette = ChatPalette(
     isDark = true,
-    background = Color(0xFF0A0609),
-    secondaryBg = Color(0xFF1A1116),
-    inputBg = Color(0xFF1A1116),
-    inputIconBg = Color(0xFF120A0F),
-    inputIconBorder = Color(0x4DFFB3D1),
-    inputBorder = Color(0x26FFB3D1),
-    primaryText = Color(0xFFFFEFF6),
-    secondaryText = Color(0xFFD3BDC9),
-    tertiaryText = Color(0xFFB9A3B0),
-    disabledText = Color(0x59FFEFF6),
-    userBubble = Color(0xFF3A1F2B),
-    toolBg = Color(0xFF1A1116),
-    toolBorder = Color(0x59FFB3D1),
-    toolCapsuleBg = Color(0xFF120A0F),
-    separator = Color(0x14FFFFFF),
-    sendButton = Color(0xFFFFB3D1),
-    sendButtonDisabled = Color(0x26FFB3D1),
-    codeBlockBg = Color(0xFF160C13),
-    codeBlockText = Color(0xFFFFB3D1),
-    inlineCodeBg = Color(0xFF2A1620),
-    inlineCodeText = Color(0xFFFFD9E8),
-    link = Color(0xFFFF7AD9),
-    blockquoteBar = Color(0x80FF7AD9),
-    thinking = Color(0xFFFFB3D1),
-    warningBg = Color(0x1AFFF3C4),
-    warningText = Color(0xFFFFF3C4),
-    tableBorder = Color(0x33FFB3D1),
+    background = Color(0xFF000000),
+    secondaryBg = Color(0xFF26262A),
+    inputBg = Color(0xFF2C2C30),
+    inputIconBg = Color(0xFF1C1C1E),
+    inputIconBorder = Color(0xFF595959),
+    inputBorder = Color(0x40545458),
+    primaryText = Color(0xFFFFFFFF),
+    secondaryText = Color(0x99EBEBF5),
+    tertiaryText = Color(0x4DEBEBF5),
+    disabledText = Color(0x2EEBEBF5),
+    // [T-android-user-bubble-dark-contrast] The old 0x247676D7 was a 14%-alpha
+    // translucent blue-grey that washed out to near-invisible on the #000 chat
+    // background on real (≈500-nit) displays — exactly the "crush to a near-black
+    // wash" failure the palette header warns about. Use an OPAQUE cool slate-blue
+    // so the user's own messages read as a distinct accent; white primaryText
+    // stays legible on it.
+    userBubble = Color(0xFF2F3A5C),
+    toolBg = Color(0xFF3A3A3F),
+    toolBorder = Color(0x40545458),
+    toolCapsuleBg = Color(0xFF28282C),
+    separator = Color(0x99545458),
+    sendButton = Color(0xFFFFFFFF),
+    sendButtonDisabled = Color(0x2EEBEBF5),
+    codeBlockBg = Color(0xFF262626),
+    codeBlockText = Color(0xFF8CF38C),
+    // [T-inline-code-dark-bg-android] Lifted into the T153 ramp — the old
+    // #1C1C1E chip was invisible on the #000 chat background (the comment
+    // block above explains why non-background layers need the ~6-10% lift;
+    // this one was missed). #34343A sits between inputBg (#2C2C30) and
+    // toolBg (#3A3A3F), clearly above codeBlockBg (#262626) so small inline
+    // chips read against both the wash and fenced blocks.
+    inlineCodeBg = Color(0xFF34343A),
+    inlineCodeText = Color(0xFFFF9F0A),
+    link = Color(0xFF0A84FF),
+    blockquoteBar = Color(0x80FF9F0A),
+    thinking = Color(0xFF0A84FF),
+    warningBg = Color(0x14FF9F0A),
+    warningText = Color(0x73FFFFFF),
+    tableBorder = Color(0xFF38383A),
     inputShadow = Color(0x80000000),
-    toastBg = Color(0x2EFFB3D1),
-    thumbnailBorder = Color(0x4DFFB3D1),
-    sheetHeaderBg = Color(0xFF1A1116),
-    sheetHeaderBorder = Color(0x33FFB3D1),
-    fabAccent = Color(0xFFFF7AD9),
-    fabOnAccent = Color(0xFF2A0F1A),
+    toastBg = Color(0x2E0A84FF),
+    thumbnailBorder = Color(0x20545458),
+    sheetHeaderBg = Color(0xFF2C2C2E),
+    sheetHeaderBorder = Color(0x33FFFFFF),
+    fabAccent = Color(0xFF504C42),
+    fabOnAccent = Color.White,
 )
 
 val LocalChatPalette = compositionLocalOf { LightChatPalette }
@@ -154,3 +163,46 @@ val ChatColors: ChatPalette
     @Composable
     @ReadOnlyComposable
     get() = LocalChatPalette.current
+
+
+// [T-cili-skin] 小黄鱼 charcoal-pink palette — the 2.1.12 reskin body, kept
+// verbatim as a THIRD palette. MinisTheme provides it as LocalChatPalette
+// only while dynamic color is OFF and dark mode is ON; dynamic and light
+// modes keep the original palettes above so wallpaper theming is never pink.
+val CiliChatPalette = ChatPalette(
+    isDark = true,
+    background = Color(0xFF0A0609),
+    secondaryBg = Color(0xFF1A1116),
+    inputBg = Color(0xFF1A1116),
+    inputIconBg = Color(0xFF120A0F),
+    inputIconBorder = Color(0x4DFFB3D1),
+    inputBorder = Color(0x26FFB3D1),
+    primaryText = Color(0xFFFFEFF6),
+    secondaryText = Color(0xFFD3BDC9),
+    tertiaryText = Color(0xFFB9A3B0),
+    disabledText = Color(0x59FFEFF6),
+    userBubble = Color(0xFF3A1F2B),
+    toolBg = Color(0xFF1A1116),
+    toolBorder = Color(0x59FFB3D1),
+    toolCapsuleBg = Color(0xFF120A0F),
+    separator = Color(0x14FFFFFF),
+    sendButton = Color(0xFFFFB3D1),
+    sendButtonDisabled = Color(0x26FFB3D1),
+    codeBlockBg = Color(0xFF160C13),
+    codeBlockText = Color(0xFFFFB3D1),
+    inlineCodeBg = Color(0xFF2A1620),
+    inlineCodeText = Color(0xFFFFD9E8),
+    link = Color(0xFFFF7AD9),
+    blockquoteBar = Color(0x80FF7AD9),
+    thinking = Color(0xFFFFB3D1),
+    warningBg = Color(0x1AFFF3C4),
+    warningText = Color(0xFFFFF3C4),
+    tableBorder = Color(0x33FFB3D1),
+    inputShadow = Color(0x80000000),
+    toastBg = Color(0x2EFFB3D1),
+    thumbnailBorder = Color(0x4DFFB3D1),
+    sheetHeaderBg = Color(0xFF1A1116),
+    sheetHeaderBorder = Color(0x33FFB3D1),
+    fabAccent = Color(0xFFFF7AD9),
+    fabOnAccent = Color(0xFF2A0F1A),
+)

@@ -45,6 +45,7 @@ import com.openminis.app.network.NetworkAlertEvent
 import com.openminis.app.network.NetworkHub
 import com.openminis.app.navigation.Routes
 import com.openminis.app.ui.navigation.safeNavigate
+import com.openminis.app.ui.theme.cili
 
 /**
  * [FEAT-261021-05, iOS e720112cf] The floating banner at the top of the app
@@ -147,7 +148,7 @@ internal fun failureReason(failureClass: String): String = stringResource(
 internal fun NetworkFailureNote(event: NetworkAlertEvent, modifier: Modifier = Modifier) {
     Column(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.Warning, contentDescription = null, tint = Color(0xFFF0A32B), modifier = Modifier.size(16.dp))
+            Icon(Icons.Filled.Warning, contentDescription = null, tint = cili(0xFFFF9500), modifier = Modifier.size(16.dp))
             Spacer(Modifier.size(6.dp))
             Text(
                 stringResource(R.string.network_alert_note, event.failures, failureReason(event.failureClass)),

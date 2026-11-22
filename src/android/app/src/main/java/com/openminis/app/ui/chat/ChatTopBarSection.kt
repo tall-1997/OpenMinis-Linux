@@ -64,6 +64,7 @@ import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.data.repository.MemoryRepository
 import com.openminis.app.data.repository.SkillRepository
 import com.openminis.app.data.repository.MCPRepository
+import com.openminis.app.ui.theme.cili
 
 /**
  * ChatScreen top bar TITLE column: session title + model/group/provider rows
@@ -263,9 +264,15 @@ internal fun ChatTopBarTitle(
                                 // "供应商名称跟模型显示在同一行").
                                 if (providerName.isNotEmpty() || modelName.isNotEmpty()) {
                                     val thinkingLevelBadgeState by viewModel.thinkingLevel.collectAsStateWithLifecycle()
+                                    // [T-topbar-left-flow] Provider · model · thinking
+                                    // badge flow left -> right from the leading edge
+                                    // (user: 别写死，左右留白). fillMaxWidth makes the
+                                    // row consume the line so its content starts at
+                                    // the left edge instead of floating centered.
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        modifier = Modifier.fillMaxWidth(),
                                     ) {
                                         // [T-topbar-provider-inline] Provider sits
                                         // LEFT of the model on the same line
@@ -316,7 +323,7 @@ internal fun ChatTopBarTitle(
                                                 contentAlignment = Alignment.Center,
                                                 modifier = Modifier
                                                     .size(11.dp)
-                                                    .background(Color(0xFFF0A32B), CircleShape),
+                                                    .background(cili(0xFFFF9500), CircleShape),
                                             ) {
                                                 Icon(
                                                     Icons.Default.Bolt,

@@ -193,6 +193,7 @@ import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.ui.browser.BrowserSheet
 import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.theme.CiliSkin
 
 // [T-android-split-chat] Shared color/limit constants, ScrollFollowKey and
 // HistoryEdgeVisible moved verbatim to ChatScreenSections.kt (architecture
@@ -5450,19 +5451,23 @@ fun ChatScreen(
                                 Box(
                                     modifier = Modifier
                                         .size(35.dp)
-                                        // [T-xhy-skin] 小黄鱼 primary-button gradient
-                                        // (btn_primary_bg: #FFB3D1 -> #FF7AD9) on the
-                                        // active send button; disabled stays flat.
+                                        // [T-cili-skin-gate] 小黄鱼 primary-button gradient
+                                        // (btn_primary_bg: #FFB3D1 -> #FF7AD9), left -> right,
+                                        // only while the skin gate is active; otherwise the
+                                        // original solid iOS sendButton color applies.
                                         .then(
-                                            if (canActivate) {
-                                                Modifier.background(
-                                                    Brush.linearGradient(
+                                            when {
+                                                canActivate && CiliSkin.isActive -> Modifier.background(
+                                                    Brush.horizontalGradient(
                                                         listOf(Color(0xFFFFB3D1), Color(0xFFFF7AD9)),
                                                     ),
                                                     CircleShape,
                                                 )
-                                            } else {
-                                                Modifier.background(
+                                                canActivate -> Modifier.background(
+                                                    ChatColors.sendButton,
+                                                    CircleShape,
+                                                )
+                                                else -> Modifier.background(
                                                     ChatColors.sendButtonDisabled,
                                                     CircleShape,
                                                 )

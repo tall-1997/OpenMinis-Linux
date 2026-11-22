@@ -72,6 +72,7 @@ import okhttp3.Request
 import java.io.File
 import java.net.URI
 import java.util.concurrent.TimeUnit
+import com.openminis.app.ui.theme.cili
 
 // ─── Data Model ──────────────────────────────────────────────────────────────
 
@@ -94,8 +95,8 @@ enum class MirrorCategory(
     val iconColor: Color
         get() = when (this) {
             UBUNTU -> Color(0xFFE95420)
-            PIP -> Color(0xFF4CAF50)
-            NPM -> Color(0xFFFF6B6B)
+            PIP -> cili(0xFF34C759)
+            NPM -> cili(0xFFFF3B30)
         }
 }
 
@@ -542,7 +543,7 @@ fun MirrorsSectionView(onNavigate: (MirrorCategory) -> Unit) {
     ListItem(
         headlineContent = { Text(if (vm.isTesting) stringResource(R.string.mirror_test_speed_testing) else stringResource(R.string.mirror_detect_fast_label)) },
         leadingContent = {
-            CircleIconBadge(icon = Icons.Filled.Bolt, tint = Color(0xFFF0A32B))
+            CircleIconBadge(icon = Icons.Filled.Bolt, tint = cili(0xFFFF9500))
         },
         modifier = Modifier
             .fillMaxWidth()
@@ -627,9 +628,9 @@ private fun CircleIconBadge(icon: ImageVector, tint: Color) {
 @Composable
 private fun LatencyBadge(ms: Int) {
     val color = when {
-        ms < 200 -> Color(0xFF4CAF50)
-        ms < 500 -> Color(0xFFF0A32B)
-        else -> Color(0xFFFF6B6B)
+        ms < 200 -> cili(0xFF34C759)
+        ms < 500 -> cili(0xFFFF9500)
+        else -> cili(0xFFFF3B30)
     }
     Box(
         modifier = Modifier
@@ -770,7 +771,7 @@ fun MirrorCategoryDetailScreen(
             ListItem(
                 headlineContent = { Text(if (vm.isTesting) stringResource(R.string.mirror_test_speed_testing) else stringResource(R.string.mirror_test_speed_label)) },
                 leadingContent = {
-                    CircleIconBadge(icon = Icons.Filled.Bolt, tint = Color(0xFFF0A32B))
+                    CircleIconBadge(icon = Icons.Filled.Bolt, tint = cili(0xFFFF9500))
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -859,4 +860,3 @@ private fun MirrorRow(
         }
     }
 }
-

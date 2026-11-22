@@ -51,6 +51,7 @@ import com.openminis.app.data.model.hasAudioInput
 import com.openminis.app.data.model.hasAudioOutput
 import com.openminis.app.data.model.hasImageInput
 import com.openminis.app.data.model.normalizeModalities
+import com.openminis.app.ui.theme.cili
 
 /**
  * [T-android-provider-voice] First-class modality scoping for the shared
@@ -597,7 +598,7 @@ fun providerDotColor(providerType: ProviderType?): Color = when (providerType) {
     ProviderType.anthropic -> Color(0xFFAB47BC)
     ProviderType.gemini -> Color(0xFF42A5F5)
     ProviderType.openAI -> Color(0xFF4CAF50)
-    ProviderType.openRouter -> Color(0xFFF0A32B)
+    ProviderType.openRouter -> cili(0xFF00BCD4)
     ProviderType.xAI -> Color(0xFFFF7043)
     ProviderType.kimiCode -> Color(0xFF5C6BC0) // indigo — Kimi accent
     // [T-android-provider-type-parity] Responses API instances are
@@ -605,6 +606,6 @@ fun providerDotColor(providerType: ProviderType?): Color = when (providerType) {
     // the neutral gray used for "no provider".
     ProviderType.openAIResponses -> Color(0xFF4CAF50)
     ProviderType.antigravity,
-    ProviderType.unsupported -> Color(0xFFB9A3B0)
-    null -> Color(0xFFB9A3B0)
+    ProviderType.unsupported -> cili(0xFF8E8E93)
+    null -> cili(0xFF8E8E93)
 }

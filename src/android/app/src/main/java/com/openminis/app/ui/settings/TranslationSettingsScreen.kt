@@ -32,6 +32,7 @@ import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.i18n.TranslationPrefs
 import com.openminis.app.ui.components.DialogTextField
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.components.MinisGradientSwitch
 
 @Composable
 fun TranslationSettingsScreen(
@@ -74,7 +75,7 @@ fun TranslationSettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Switch(
+                MinisGradientSwitch(
                     checked = enabled,
                     onCheckedChange = {
                         enabled = it

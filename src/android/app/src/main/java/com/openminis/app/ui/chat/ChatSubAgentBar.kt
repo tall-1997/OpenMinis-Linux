@@ -57,6 +57,7 @@ import com.openminis.app.service.SubAgentActivityTracker
 import com.openminis.app.tools.SubAgentRunner
 import com.openminis.app.ui.markdown.MarkdownText
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.theme.cili
 
 /**
  * [T-wave-e-subagent-card] Live roster bar for concurrent spawn_agent
@@ -279,7 +280,7 @@ private fun SubAgentDetailSheet(
                     Icon(
                         Icons.Filled.Stop,
                         contentDescription = stringResource(R.string.subagent_stop_desc, member.title),
-                        tint = Color(0xFFFF6B6B),
+                        tint = cili(0xFFFF3B30),
                     )
                 }
             }
@@ -518,10 +519,10 @@ private fun memberLabel(member: SubAgentActivityTracker.Member): String =
     }
 
 private fun phaseColor(phase: String): Color = when (phase) {
-    "调用工具" -> Color(0xFFF0A32B)
-    "执行中" -> Color(0xFF4CAF50)
-    "回复中" -> Color(0xFFE63C93)
-    else -> Color(0xFFFF7AD9)
+    "调用工具" -> cili(0xFFFF9500)
+    "执行中" -> cili(0xFF34C759)
+    "回复中" -> cili(0xFF5856D6)
+    else -> cili(0xFF007AFF)
 }
 
 internal fun subAgentToolTitle(name: String, args: String): String {

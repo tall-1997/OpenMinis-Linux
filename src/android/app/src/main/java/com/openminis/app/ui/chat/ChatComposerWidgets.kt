@@ -67,6 +67,7 @@ import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.R
 import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.theme.cili
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -359,7 +360,7 @@ internal fun ToolActivityPill(
             Icon(
                 Icons.Default.Stop,
                 contentDescription = stringResource(R.string.cd_stop),
-                tint = Color(0xFFFF6B6B),
+                tint = cili(0xFFFF3B30),
                 modifier = Modifier
                     .size(24.dp)
                     .clip(CircleShape)
@@ -406,7 +407,7 @@ internal fun ThinkingLevelPicker(
     // up-arrow, signalling "your setting is higher, this model caps here".
     val maxAvailable = availableLevels.lastOrNull { it != ThinkingLevel.OFF }
     val isClamped = current.isEnabled && maxAvailable != null && current.rank > maxAvailable.rank
-    val clampOrange = Color(0xFFF0A32B)
+    val clampOrange = cili(0xFFFF9500)
     Row(
         modifier = Modifier
             .background(

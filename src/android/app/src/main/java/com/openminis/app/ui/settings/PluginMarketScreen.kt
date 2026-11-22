@@ -28,6 +28,7 @@ import com.openminis.app.data.repository.MCPRepository
 import com.openminis.app.plugins.LocalToolPluginStore
 import com.openminis.app.plugins.OnlinePluginStore
 import com.openminis.app.plugins.PluginRegistry
+import com.openminis.app.ui.components.MinisGradientSwitch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -332,7 +333,7 @@ private fun LocalToolEditorDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Switch(checked = enabled, onCheckedChange = { enabled = it })
+                    MinisGradientSwitch(checked = enabled, onCheckedChange = { enabled = it })
                     Text(
                         stringResource(R.string.plugin_market_local_enabled),
                         modifier = Modifier.padding(start = 8.dp),

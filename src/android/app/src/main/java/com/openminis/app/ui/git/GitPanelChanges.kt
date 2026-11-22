@@ -36,6 +36,7 @@ import com.openminis.app.R
 import com.openminis.app.git.GitCli.GitFileEntry
 import com.openminis.app.git.GitCli.GitStashEntry
 import com.openminis.app.git.GitCli.NumStat
+import com.openminis.app.ui.theme.cili
 
 /**
  * Changes tab: stats bar, staged/working sections and per-file rows with
@@ -322,10 +323,10 @@ private fun FileEntryRow(
 
 /** Status-letter badge colour — shared by changes rows and diff headers. */
 internal fun statusColor(code: Char): Color = when (code.uppercaseChar()) {
-    'M', 'T' -> Color(0xFFF0A32B) // modified — orange
+    'M', 'T' -> cili(0xFFFF9500) // modified — orange
     'A' -> GitAddGreen // added — green
     'D' -> GitDelRed // deleted — red
     'R', 'C' -> GitHunkBlue // renamed/copied — blue
     '?' -> GitMetaGrey // untracked — gray
-    else -> Color(0xFFE63C93) // conflicts & friends — pink
+    else -> cili(0xFFFF2D55) // conflicts & friends — pink
 }

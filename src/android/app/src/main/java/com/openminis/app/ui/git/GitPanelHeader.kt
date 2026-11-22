@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
+import com.openminis.app.ui.theme.cili
 
 /**
  * Repository head card, pinned above the tab row: branch pill, ↑↓
@@ -141,7 +142,7 @@ internal fun GitPanelHeader(
                     Icon(
                         Icons.Filled.WarningAmber,
                         contentDescription = null,
-                        tint = Color(0xFFF0A32B),
+                        tint = cili(0xFFFF9500),
                         modifier = Modifier.size(14.dp),
                     )
                     Spacer(Modifier.width(6.dp))
@@ -150,7 +151,7 @@ internal fun GitPanelHeader(
                         // unreadable on dark-theme surfaces.
                         stringResource(R.string.git_panel_no_identity),
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFFF0A32B),
+                        color = cili(0xFFFF9500),
                     )
                 }
             }

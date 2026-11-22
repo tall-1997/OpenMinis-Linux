@@ -72,6 +72,7 @@ import java.math.BigDecimal
 import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
+import com.openminis.app.ui.theme.cili
 
 // [T-provider-quota] Shared quota visuals: the provider page section, the
 // detail sheet and (stage 2) the picker pills all draw pools through these, so
@@ -153,9 +154,9 @@ fun QuotaTone.color(): Color {
     val dark = LocalChatPalette.current.isDark
     return when (this) {
         QuotaTone.normal -> MaterialTheme.colorScheme.onSurfaceVariant
-        QuotaTone.healthy -> if (dark) Color(0xFF30D158) else Color(0xFF4CAF50)
-        QuotaTone.caution -> if (dark) Color(0xFFFF9F0A) else Color(0xFFF0A32B)
-        QuotaTone.critical -> if (dark) Color(0xFFFF453A) else Color(0xFFFF6B6B)
+        QuotaTone.healthy -> if (dark) Color(0xFF30D158) else cili(0xFF34C759)
+        QuotaTone.caution -> if (dark) Color(0xFFFF9F0A) else cili(0xFFFF9500)
+        QuotaTone.critical -> if (dark) Color(0xFFFF453A) else cili(0xFFFF3B30)
         QuotaTone.muted -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
     }
 }
@@ -553,9 +554,9 @@ fun QuotaCircleIcon(icon: ImageVector, tint: Color, size: Int = 22) {
 }
 
 fun scopeIcon(t: QuotaPoolBinding.Target): Pair<ImageVector, Color> = when (t) {
-    QuotaPoolBinding.Target.Subject -> Icons.Filled.Group to Color(0xFFFF7AD9)
-    is QuotaPoolBinding.Target.Model, is QuotaPoolBinding.Target.ModelFamily -> Icons.Filled.Memory to Color(0xFFA81E77)
-    is QuotaPoolBinding.Target.Product -> Icons.Filled.Inventory2 to Color(0xFFE63C93)
+    QuotaPoolBinding.Target.Subject -> Icons.Filled.Group to cili(0xFF007AFF)
+    is QuotaPoolBinding.Target.Model, is QuotaPoolBinding.Target.ModelFamily -> Icons.Filled.Memory to cili(0xFFAF52DE)
+    is QuotaPoolBinding.Target.Product -> Icons.Filled.Inventory2 to cili(0xFF5856D6)
 }
 
 /**
@@ -574,7 +575,7 @@ fun QuotaConsoleLinkRow(url: String, onOpen: () -> Unit, modifier: Modifier = Mo
             .semantics { contentDescription = context.getString(R.string.quota_console_link) + ", " + hint }
             .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
-        QuotaCircleIcon(Icons.Filled.Language, Color(0xFFFF7AD9), size = 28)
+        QuotaCircleIcon(Icons.Filled.Language, cili(0xFF007AFF), size = 28)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(stringResource(R.string.quota_console_link), style = MaterialTheme.typography.bodyLarge)

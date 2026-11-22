@@ -1,5 +1,10 @@
 pluginManagement {
+    // [T-local-kdsl] kotlin-dsl marker/impl 5.1.1 resolved from disk: the CN
+    // mirrors return HTML 404s disguised as HTTP 200 for these paths, so
+    // Gradle's metadata parsing fails even though the artifacts exist
+    // upstream. Serve them from the hand-built local repo first.
     repositories {
+        maven { url = uri("file:///root/.m2/local-kdsl") }
         // CN mirrors first — build-logic is an included build and does NOT
         // inherit the root settings.gradle.kts mirror logic. Without these it
         // resolves plugins against google()/mavenCentral()/gradlePluginPortal()

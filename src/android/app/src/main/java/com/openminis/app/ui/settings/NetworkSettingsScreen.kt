@@ -77,6 +77,7 @@ import com.openminis.app.ui.components.MinisTextButton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.openminis.app.ui.theme.cili
 
 /**
  * [FEAT-261021-04, iOS c77be4fb6] The pages of Settings > Network, each its
@@ -187,7 +188,7 @@ fun NetworkSettingsScreen(
                 SettingsRow(
                     title = stringResource(R.string.network_paused_title),
                     icon = Icons.Outlined.Restore,
-                    iconColor = Color(0xFFF0A32B),
+                    iconColor = cili(0xFFFF9500),
                     trailing = {
                         MinisTextButton(onClick = { NetworkHub.resume() }) {
                             Text(stringResource(R.string.network_turn_back_on))
@@ -344,7 +345,7 @@ fun NetworkSettingsScreen(
                     trailing = if (keepsFailing) ({
                         Text(
                             stringResource(R.string.network_alert_keeps_failing),
-                            color = Color(0xFFF0A32B),
+                            color = cili(0xFFFF9500),
                             style = MaterialTheme.typography.labelSmall,
                         )
                     }) else null,
@@ -414,7 +415,7 @@ fun NetworkSettingsScreen(
             SettingsSection {
                 Text(
                     err,
-                    color = Color(0xFFF0A32B),
+                    color = cili(0xFFFF9500),
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(16.dp),
                 )
@@ -543,7 +544,7 @@ fun NetworkSettingsScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 Modifier.size(8.dp).background(
-                                    if (p.online) Color(0xFF4CAF50) else MaterialTheme.colorScheme.outline,
+                                    if (p.online) cili(0xFF34C759) else MaterialTheme.colorScheme.outline,
                                     CircleShape,
                                 ),
                             )

@@ -34,6 +34,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 import com.openminis.app.service.SubAgentActivityTracker
+import com.openminis.app.ui.components.MinisGradientSwitch
 
 /**
  * [T-wave-e-stop-options] Two-tier stop for the composer's stop button.
@@ -128,7 +129,7 @@ internal fun StopButtonWithOptions(
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.stop_menu_confirm_toggle)) },
                 trailingIcon = {
-                    Switch(
+                    MinisGradientSwitch(
                         checked = confirmEnabled,
                         onCheckedChange = {
                             confirmEnabled = it

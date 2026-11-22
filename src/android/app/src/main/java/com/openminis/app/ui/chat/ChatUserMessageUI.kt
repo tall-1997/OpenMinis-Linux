@@ -83,6 +83,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.openminis.app.ui.DisplayBitmapLimits.limitDisplaySize
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.theme.cili
 
 // ─── User Message (right-aligned, iOS: tertiarySystemFill bubble, 18dp radius) ─
 
@@ -267,7 +268,7 @@ internal fun UserMessageBubble(
                                 Icon(
                                     imageVector = Icons.Filled.Cancel,
                                     contentDescription = "Withdraw queued message",
-                                    tint = Color(0xFFFF6B6B),
+                                    tint = cili(0xFFFF3B30),
                                     modifier = Modifier.size(24.dp),
                                 )
                             }
@@ -652,4 +653,3 @@ private fun ImageGalleryDialog(
 // LazyListState anchors on a stable per-item key, so only the trailing streaming item
 // changes height while earlier items remain frozen and their scroll positions
 // untouched.
-

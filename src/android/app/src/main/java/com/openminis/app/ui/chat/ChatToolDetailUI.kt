@@ -91,6 +91,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.sp
 import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.theme.cili
 /**
  * The page URL a `browser_use` block points at: [block]'s live `browserURL` →
  * its own `url` argument ([argsUrl]) → the nearest PRECEDING `browser_use`
@@ -450,7 +451,7 @@ internal fun ToolDetailSheet(
                                             text = linkified,
                                             fontSize = 13.sp,
                                             fontFamily = FontFamily.Monospace,
-                                            color = Color(0xFF4CAF50),  // iOS .green
+                                            color = cili(0xFF34C759),  // iOS .green
                                             lineHeight = 18.sp,
                                         )
                                     }
@@ -474,14 +475,14 @@ internal fun ToolDetailSheet(
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Medium,
                                             fontFamily = FontFamily.Monospace,
-                                            color = Color(0xFF4CAF50),  // iOS .green
+                                            color = cili(0xFF34C759),  // iOS .green
                                         )
                                         Text(
                                             text = sheetMonitor.formattedMem(),
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.Medium,
                                             fontFamily = FontFamily.Monospace,
-                                            color = Color(0xFF4CAF50),
+                                            color = cili(0xFF34C759),
                                         )
                                     }
                                 }
@@ -562,7 +563,7 @@ internal fun ToolDetailSheet(
                                     Icon(
                                         Icons.Default.EditNote,
                                         contentDescription = null,
-                                        tint = Color(0xFFF0A32B),
+                                        tint = cili(0xFFFF9500),
                                         modifier = Modifier.size(12.dp),
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
@@ -767,7 +768,7 @@ internal fun ToolDetailSheet(
                                             fontWeight = FontWeight.SemiBold,
                                             color = Color.White,
                                             modifier = Modifier
-                                                .background(Color(0xFFFF7AD9), CircleShape)
+                                                .background(cili(0xFF007AFF), CircleShape)
                                                 .padding(horizontal = 10.dp, vertical = 2.dp),
                                         )
                                     }
@@ -1126,7 +1127,7 @@ internal fun ToolDetailSheet(
                             Box(
                                 modifier = Modifier
                                     .size(7.dp)
-                                    .background(Color(0xFF4CAF50), CircleShape),
+                                    .background(cili(0xFF34C759), CircleShape),
                             )
                             Text(
                                 "Live",
@@ -1402,7 +1403,7 @@ private fun EditorCard(
                     Text(
                         text = if (isStreaming) "($sizeLabel received)" else "($sizeLabel)",
                         fontSize = 11.sp,
-                        color = if (isStreaming) Color(0xFFF0A32B).copy(alpha = 0.8f) else sizeColor,
+                        color = if (isStreaming) cili(0xFFFF9500).copy(alpha = 0.8f) else sizeColor,
                     )
                 }
             }

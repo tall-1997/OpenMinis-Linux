@@ -63,15 +63,16 @@ import com.termux.view.TerminalView
 import com.termux.view.TerminalViewClient
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
+import com.openminis.app.ui.theme.cili
 
 // iOS-matched palette
 private val TerminalBg = Color(0xFF000000)
 private val TerminalFg = Color(0xFFD4D4D4)
-private val TerminalGreen = Color(0xFF4CAF50)
+private val TerminalGreen = cili(0xFF34C759)
 private val AccessoryBg = Color(0xFF1F1F1F)
 private val AccButtonBg = Color(0xFF404040)
-private val AccButtonActive = Color(0xFFFF7AD9)
-private val TopButtonBg = Color(0xFF1A1116)
+private val AccButtonActive = cili(0xFF007AFF)
+private val TopButtonBg = cili(0xFF2C2C2E)
 
 /**
  * Full-screen terminal — now backed by [Termux TerminalView] instead of the

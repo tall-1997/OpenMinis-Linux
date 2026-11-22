@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.theme.cili
 
 /**
  * [T-brand-accent-color] Brand accent used for the usage-page share bars.
@@ -35,11 +36,11 @@ internal object BrandAccent {
         "wenxin" to Color(0xFF012F8D),
         "minimax" to Color(0xFFE2167E),
         "hailuo" to Color(0xFF1FA2B8),
-        "kimi" to Color(0xFF160C13),
-        "openai" to Color(0xFF160C13),
-        "grok" to Color(0xFF160C13),
-        "qwen" to Color(0xFF160C13),
-        "moonshot" to Color(0xFF160C13),
+        "kimi" to cili(0xFF16161A),
+        "openai" to cili(0xFF16161A),
+        "grok" to cili(0xFF16161A),
+        "qwen" to cili(0xFF16161A),
+        "moonshot" to cili(0xFF16161A),
         "meta" to Color(0xFF0668E1),
         "mistral" to Color(0xFFFF7000),
         "cohere" to Color(0xFF39594D),

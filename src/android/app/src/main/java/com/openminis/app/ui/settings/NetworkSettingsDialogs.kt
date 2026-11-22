@@ -78,6 +78,7 @@ import com.openminis.app.ui.components.MinisTextButton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.openminis.app.ui.theme.cili
 
 /**
  * [PAR-261021-01, iOS AddProviderRoutesView] Gives several providers the same
@@ -185,8 +186,8 @@ internal fun StatusRow(ts: TailscaleStatus, applying: Boolean, paused: Boolean) 
     val (label, color) = when {
         paused -> stringResource(R.string.network_status_off) to MaterialTheme.colorScheme.onSurfaceVariant
         applying && !ts.running -> stringResource(R.string.network_status_starting) to MaterialTheme.colorScheme.onSurfaceVariant
-        ts.isLoggedIn -> stringResource(R.string.network_status_connected) to Color(0xFF4CAF50)
-        ts.needsLogin -> stringResource(R.string.network_status_not_logged_in) to Color(0xFFF0A32B)
+        ts.isLoggedIn -> stringResource(R.string.network_status_connected) to cili(0xFF34C759)
+        ts.needsLogin -> stringResource(R.string.network_status_not_logged_in) to cili(0xFFFF9500)
         ts.running -> stringResource(R.string.network_status_connecting) to MaterialTheme.colorScheme.onSurfaceVariant
         else -> stringResource(R.string.network_status_off) to MaterialTheme.colorScheme.onSurfaceVariant
     }
@@ -230,9 +231,9 @@ internal fun DiagnosticsSection() {
             Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
                 for (c in r.checks) {
                     val color = when (c.result) {
-                        NetworkDiagnostics.Result.PASS -> Color(0xFF4CAF50)
+                        NetworkDiagnostics.Result.PASS -> cili(0xFF34C759)
                         NetworkDiagnostics.Result.FAIL -> MaterialTheme.colorScheme.error
-                        NetworkDiagnostics.Result.WARN -> Color(0xFFF0A32B)
+                        NetworkDiagnostics.Result.WARN -> cili(0xFFFF9500)
                         NetworkDiagnostics.Result.SKIP -> MaterialTheme.colorScheme.onSurfaceVariant
                     }
                     Row(Modifier.padding(vertical = 3.dp)) {
@@ -338,7 +339,7 @@ internal fun ProxyEditorDialog(proxy: ProxyServer, isNew: Boolean, onDismiss: ()
                 }
                 testResult?.let { (ok, msg) ->
                     Text(msg, style = MaterialTheme.typography.bodySmall,
-                        color = if (ok) Color(0xFF4CAF50) else MaterialTheme.colorScheme.error)
+                        color = if (ok) cili(0xFF34C759) else MaterialTheme.colorScheme.error)
                 }
                 // [FEAT-261021-05] Opened from the "keeps failing" banner: say
                 // why, and let the user stop using it without deleting it.

@@ -92,6 +92,7 @@ import org.intellij.markdown.ast.getTextInNode
 import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.components.MinisTextButton
+import com.openminis.app.ui.theme.cili
 // ─── Bordered Markdown Table (iOS style: bordered cells with grid lines) ─────
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -490,7 +491,7 @@ private fun CompactSummarySheet(
                 Icon(
                     imageVector = if (copied) m3Icon(Icons.Default.Check) else m3Icon(Icons.Default.ContentCopy),
                     contentDescription = "Copy",
-                    tint = if (copied) Color(0xFF4CAF50) else ChatColors.secondaryText,
+                    tint = if (copied) cili(0xFF34C759) else ChatColors.secondaryText,
                 )
             }
         },
@@ -736,7 +737,7 @@ internal fun rememberBrowserLiveSnapshot(
  */
 @Composable
 internal fun ResumeBanner(onResume: () -> Unit) {
-    val orange = Color(0xFFF0A32B)
+    val orange = cili(0xFFFF9500)
     // [T-android-c3a-resume-one-tap] Crash-aware resume. When the previous app
     // cycle ended in crash_or_stall we surface a one-line warning as CONTEXT
     // (the user is about to re-enter the load that killed the last cycle), but

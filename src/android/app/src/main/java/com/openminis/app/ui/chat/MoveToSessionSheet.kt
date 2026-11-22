@@ -63,6 +63,7 @@ import kotlinx.coroutines.withContext
 import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.TimeUnit
+import com.openminis.app.ui.theme.cili
 
 /**
  * Bottom sheet listing all chat sessions except the current one. Tapping
@@ -284,23 +285,23 @@ private data class CategoryStyle(val icon: ImageVector, val color: Color)
 
 private fun categoryStyle(category: String?): CategoryStyle {
     return when (category?.lowercase()) {
-        "code"         -> CategoryStyle(Icons.Outlined.Code, Color(0xFFF0A32B))
-        "writing"      -> CategoryStyle(Icons.Outlined.Description, Color(0xFFFF7AD9))
-        "research"     -> CategoryStyle(Icons.Outlined.Language, Color(0xFFFF7AD9))
-        "analysis"     -> CategoryStyle(Icons.Outlined.BarChart, Color(0xFFE63C93))
-        "creative"     -> CategoryStyle(Icons.Outlined.Brush, Color(0xFFE63C93))
-        "chat"         -> CategoryStyle(Icons.Outlined.Forum, Color(0xFF4CAF50))
+        "code"         -> CategoryStyle(Icons.Outlined.Code, cili(0xFFF09A37))
+        "writing"      -> CategoryStyle(Icons.Outlined.Description, cili(0xFF3478F6))
+        "research"     -> CategoryStyle(Icons.Outlined.Language, cili(0xFF30B0C7))
+        "analysis"     -> CategoryStyle(Icons.Outlined.BarChart, cili(0xFF5856D6))
+        "creative"     -> CategoryStyle(Icons.Outlined.Brush, cili(0xFFFF2D55))
+        "chat"         -> CategoryStyle(Icons.Outlined.Forum, cili(0xFF34C759))
         "math"         -> CategoryStyle(Icons.Outlined.Calculate, Color(0xFF9B59B6))
-        "translation"  -> CategoryStyle(Icons.Outlined.Translate, Color(0xFFF0A32B))
-        "health"       -> CategoryStyle(Icons.Outlined.Favorite, Color(0xFFFF6B6B))
+        "translation"  -> CategoryStyle(Icons.Outlined.Translate, cili(0xFF00BCD4))
+        "health"       -> CategoryStyle(Icons.Outlined.Favorite, cili(0xFFFF3B30))
         "finance"      -> CategoryStyle(Icons.Outlined.Payments, Color(0xFF00C7BE))
-        "travel"       -> CategoryStyle(Icons.Outlined.Map, Color(0xFFF0A32B))
-        "education"    -> CategoryStyle(Icons.Outlined.Book, Color(0xFFFF7AD9))
-        "design"       -> CategoryStyle(Icons.Outlined.Palette, Color(0xFFE63C93))
-        "productivity" -> CategoryStyle(Icons.Outlined.CalendarMonth, Color(0xFFFFD070))
+        "travel"       -> CategoryStyle(Icons.Outlined.Map, cili(0xFFF09A37))
+        "education"    -> CategoryStyle(Icons.Outlined.Book, cili(0xFF3478F6))
+        "design"       -> CategoryStyle(Icons.Outlined.Palette, cili(0xFFFF2D55))
+        "productivity" -> CategoryStyle(Icons.Outlined.CalendarMonth, cili(0xFFFFCC00))
         "support"      -> CategoryStyle(Icons.Outlined.Settings, Color(0xFF8B6914))
-        "other"        -> CategoryStyle(Icons.Outlined.GridView, Color(0xFFB9A3B0))
-        else           -> CategoryStyle(Icons.Outlined.Forum, Color(0xFFB9A3B0))
+        "other"        -> CategoryStyle(Icons.Outlined.GridView, cili(0xFF8E8E93))
+        else           -> CategoryStyle(Icons.Outlined.Forum, cili(0xFF8E8E93))
     }
 }
 

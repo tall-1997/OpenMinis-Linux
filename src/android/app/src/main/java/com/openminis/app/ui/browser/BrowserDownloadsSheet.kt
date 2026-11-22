@@ -1,4 +1,5 @@
 package com.openminis.app.ui.browser
+import com.openminis.app.ui.theme.cili
 import com.openminis.app.ui.theme.m3Icon
 
 import android.content.Context
@@ -133,7 +134,7 @@ private fun DownloadRow(
             BrowserTabPool.DownloadState.DOWNLOADING ->
                 m3Icon(Icons.Default.Download) to MaterialTheme.colorScheme.primary
             BrowserTabPool.DownloadState.COMPLETED ->
-                m3Icon(Icons.Default.CheckCircle) to androidx.compose.ui.graphics.Color(0xFF4CAF50)
+                m3Icon(Icons.Default.CheckCircle) to cili(0xFF34C759)
             BrowserTabPool.DownloadState.FAILED ->
                 Icons.Default.ErrorOutline to MaterialTheme.colorScheme.error
         }

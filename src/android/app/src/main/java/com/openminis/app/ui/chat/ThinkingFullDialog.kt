@@ -36,6 +36,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.openminis.app.R
 import com.openminis.app.ui.components.MinisTextButton
+import com.openminis.app.ui.theme.cili
 
 /**
  * [T-thinking-render-perf-android] / [#467] Full-screen viewer for thinking
@@ -67,7 +68,7 @@ internal fun ThinkingFullContentDialog(content: String, onDismiss: () -> Unit) {
                         text = stringResource(R.string.chat_thinking_header),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFFFF7AD9),
+                        color = cili(0xFF007AFF),
                     )
                     Spacer(modifier = Modifier.weight(1f))
                     MinisTextButton(onClick = onDismiss) {

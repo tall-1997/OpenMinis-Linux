@@ -96,9 +96,18 @@ data class ContextPolicy(
                 // history of tool results is far more expensive than a
                 // summary plus a short verbatim tail, so refusing to compact
                 // here only guaranteed the window ceiling gets hit instead.
-                // Compaction now fires BEFORE the offload line so the heavy
-                // tool payloads get folded while there is still headroom.
-                compactThreshold = bufferedThreshold ?: (contextWindow - 15_000),
+                //
+                // [T-ring-policy-parity] The fixed `contextWindow - 15_000`
+                // bypassed the operator's compact percent entirely (user
+                // report: "还没到百分比就压缩了" — the ring showed 60% while
+                // this tier already compacted at ~77% of a 64K window). All
+                // compactable tiers now share ONE rule: the percent threshold
+                // the ring displays. The offload line (window - 10_000) stays
+                // ahead of it as the tool-payload safety net; if the operator
+                // raises the percent past the offload line, offload fires
+                // first, folds the heavy payloads, and compact still lands on
+                // the displayed percent.
+                compactThreshold = bufferedThreshold ?: percentThreshold,
                 exhaustedOnly = false,
                 manualCompactAllowed = true,
             )
