@@ -293,8 +293,10 @@ class MemoryRepository(
                             // [F4] Refusals were previously invisible: the only logs on this
                             // path were success (Log.i) and exception (Log.e), so an audit of
                             // "why did my write not land" had nothing to read. One warning
-                            // per refusal, copy prefix only — never the entry body.
-                            Log.w(TAG, "memory write rejected: $fileName — ${it.take(80)}")
+                            // per refusal, the full copy (longest is ~100 chars) — never
+                            // the entry body, and no truncation: a clipped tail once hid
+                            // the "omit revision" guidance from the audit trail.
+                            Log.w(TAG, "memory write rejected: $fileName — $it")
                             return@write WriteOutcome(it)
                         }
                     }

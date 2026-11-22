@@ -348,4 +348,38 @@ class MemoryRevisionTest {
             ),
         )
     }
+
+    @Test
+    fun `the guard compares the 16-char prefix of a FULL sha256 digest`() {
+        // [P3 review follow-up] Every other guard fake yields a 16-char digest,
+        // so take(16) inside hashMatches is the identity there and a regression
+        // that drops it ("compare the strings as-is") would go unnoticed. The
+        // REAL contract: the guard's hashOf produces the full 64-char sha256
+        // and hashMatches compares its 16-char prefix — this test only passes
+        // while that prefix comparison exists.
+        val fullDigest = com.openminis.app.util.Digest.sha256Hex("today's body")
+        assertEquals(64, fullDigest.length)
+        val tokenHash = fullDigest.take(16)
+        // Prefix of the full digest matches the token → proceed. Under a naive
+        // full-string equality this would be a 64-vs-16 mismatch → CONFLICT.
+        assertNull(
+            MemoryWriteRevisionGuard.refusal(
+                expectedRevision = "2026-11-20:$tokenHash",
+                fileName = "2026-11-20.md",
+                dayFileExists = true,
+                hashOf = { fullDigest },
+                existingContent = "today's body",
+            ),
+        )
+        // A token that is not the digest's head conflicts as usual.
+        val msg = MemoryWriteRevisionGuard.refusal(
+            expectedRevision = "2026-11-20:ffffffffffffffff",
+            fileName = "2026-11-20.md",
+            dayFileExists = true,
+            hashOf = { fullDigest },
+            existingContent = "today's body",
+        )
+        requireNotNull(msg)
+        assertTrue(msg.contains("MEMORY_CONFLICT"))
+    }
 }
