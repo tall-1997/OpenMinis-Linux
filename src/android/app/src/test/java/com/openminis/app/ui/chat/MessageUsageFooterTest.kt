@@ -102,6 +102,22 @@ class MessageUsageFooterTest {
     }
 
     @Test
+    fun `merge keeps output speed when only some rows carry a window`() {
+        // [T-usage-tok-s-merge] Long multi-tool-turn replies merge rows from
+        // different persist paths; the turn-persist path stamps a stream
+        // window, the others don't. One un-windowed row must not drop the
+        // whole bubble's speed — the merge aggregates the windows present.
+        val windowed = MessageUsageStats.fromJson(
+            """{"inputTokens":100,"outputTokens":90,"cacheCreationTokens":0,"cacheReadTokens":0,"streamDurationMs":2000}""",
+        )!!
+        val merged = mergeMessageUsageStats(listOf(windowed, MessageUsageStats(10, 5, 0, 0)))!!
+        assertEquals(95, merged.outputTokens)
+        assertEquals(2000L, merged.streamDurationMs)
+        // 95 tokens over 2s of windowed time — reads slightly fast, but visible.
+        assertEquals(47, merged.outputTokensPerSecond)
+    }
+
+    @Test
     fun `merging nothing yields null`() {
         assertNull(mergeMessageUsageStats(emptyList()))
         assertNull(mergeMessageUsageStats(listOf(null, null)))

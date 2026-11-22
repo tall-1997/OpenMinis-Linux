@@ -101,14 +101,27 @@ internal data class MessageUsageStats(
 // callers — the footer path pre-parses rows (usageByUiMessageId) and merges
 // via mergeMessageUsageStats; the raw-row variant existed only for its test.
 
-/** Sum pre-parsed rows (see [usageByUiMessageId]); null entries skipped. Pure. */
+/**
+ * Sum pre-parsed rows (see [usageByUiMessageId]); null entries skipped.
+ *
+ * [T-usage-tok-s-merge] A merged bubble's rows come from different persist
+ * paths — the turn-persist path stamps a stream window, the others don't.
+ * The binary [MessageUsageStats.plus] keeps its all-or-nothing window gate,
+ * but THIS merge — the one the footer actually uses — aggregates the windows
+ * that ARE present, so one un-windowed row no longer drops tok/s for the
+ * whole bubble. The speed then reads slightly fast (un-windowed rows still
+ * contribute tokens to the numerator), which beats a footer that loses its
+ * speed segment on every long multi-tool-turn reply. Pure.
+ */
 internal fun mergeMessageUsageStats(stats: List<MessageUsageStats?>): MessageUsageStats? {
     var merged: MessageUsageStats? = null
+    var windowedMs = 0L
     for (parsed in stats) {
         if (parsed == null) continue
         merged = merged?.plus(parsed) ?: parsed
+        parsed.streamDurationMs?.let { windowedMs += it }
     }
-    return merged
+    return merged?.copy(streamDurationMs = windowedMs.takeIf { it > 0L })
 }
 
 /**
