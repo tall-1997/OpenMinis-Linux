@@ -18,7 +18,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
 import org.json.JSONObject
 
 /**
@@ -97,7 +96,8 @@ internal suspend fun ChatViewModel.finishStoppedRun(
     interruptedLabel: String,
 ) {
     run?.awaitPersistenceDrained()
-    var partialText = run?.unpersistedAssistantText().orEmpty()
+    val partial = run?.unpersistedAssistantTextTail().orEmpty()
+    var parts = partial.map { AgentContentPart.Text(it.text, it.isProcessText) }
     run?.setCurrentTool(null, null)
     var capturedAssistantDbIds = emptyList<String>()
 
@@ -117,22 +117,25 @@ internal suspend fun ChatViewModel.finishStoppedRun(
             // content when this run committed nothing durable yet; otherwise
             // the already-persisted round rows plus this row render the same
             // reply twice after a reload.
-            if (partialText.isEmpty()) {
-                partialText = resolveInterruptedPartialText(
-                    unpersisted = "",
-                    capturedContent = captured?.content.orEmpty(),
-                    runPersistedAny = run?.hasPersistedAssistantText() == true,
-                )
+            if (parts.isEmpty()) {
+                val fallback = resolveInterruptedPartialText("", captured?.content.orEmpty(), run?.hasPersistedAssistantText() == true)
+                if (fallback.isNotEmpty()) parts = listOf(AgentContentPart.Text(fallback))
             }
+            val byId = partial.associateBy { it.id }.toMutableMap()
             _messages.value = _messages.value.map { message ->
                 if (message.role == "assistant" && message.id == capturedAssistantId) {
                     val cancelledBlocks = message.toolBlocks.map { block ->
-                        if (block.kind == "tool_use" && block.toolStatus in setOf(
+                        val tail = byId.remove(block.id)
+                        when {
+                            tail != null -> block.copy(content = tail.text, isProcessText = tail.isProcessText)
+                            block.kind == "tool_use" && block.toolStatus in setOf(
                                 ToolBlockStatus.STREAMING, ToolBlockStatus.PENDING, ToolBlockStatus.RUNNING,
-                            )
-                        ) block.copy(toolStatus = ToolBlockStatus.CANCELLED) else block
-                    }
+                            ) -> block.copy(toolStatus = ToolBlockStatus.CANCELLED)
+                            else -> block
+                        }
+                    } + byId.values.map { AssistantBlock(it.id, "text", it.text, isProcessText = it.isProcessText) }
                     message.copy(
+                        content = if (partial.isEmpty()) message.content else AssistantReplyText.joined(cancelledBlocks),
                         toolBlocks = cancelledBlocks,
                         isStreaming = false,
                         isAwaitingModelResponse = false,
@@ -154,7 +157,7 @@ internal suspend fun ChatViewModel.finishStoppedRun(
             if (chatRepository.getSession(stoppedSessionId) == null || !ownsStoppedTurn()) return@withContext emptyList()
             chatRepository.persistUserStop(
                 sessionId = stoppedSessionId,
-                partialText = partialText,
+                partial = parts,
                 modelSnapshot = capturedModelSnapshot,
                 capturedAssistantDbIds = capturedAssistantDbIds,
                 ownsWrite = ::ownsStoppedTurn,
@@ -188,23 +191,23 @@ internal suspend fun ChatViewModel.finishStoppedRun(
 /** Only persist observed Stop state. A current-tool snapshot is not a durable call or result. */
 internal suspend fun ChatRepository.persistUserStop(
     sessionId: String,
-    partialText: String,
+    partial: List<AgentContentPart.Text>,
     modelSnapshot: ModelAttributionSnapshot? = null,
     capturedAssistantDbIds: List<String> = emptyList(),
     ownsWrite: () -> Boolean = { true },
 ): List<LLMMessage> {
     val rows = buildList {
-        if (partialText.isNotEmpty()) {
+        if (partial.isNotEmpty()) {
             add(PendingTurnRow(
                 role = "assistant",
-                partsJson = JSONArray().put(JSONObject().put("type", "text").put("value", partialText)).toString(),
+                partsJson = buildAssistantPartsJson(partial, emptyMap()),
                 modelSnapshot = modelSnapshot,
                 errorInfo = PersistedMessageStatus.INTERRUPTED_INFO,
             ))
         }
         add(PendingTurnRow("user", hostReminderPartsJson(JSONObject.quote(USER_STOP_NOTE))))
     }
-    val stickerRow = if (partialText.isEmpty() && capturedAssistantDbIds.isNotEmpty()) {
+    val stickerRow = if (partial.isEmpty() && capturedAssistantDbIds.isNotEmpty()) {
         lastAssistantMessageId(sessionId)?.takeIf { it in capturedAssistantDbIds }
     } else null
     val saved = appendTurnRows(sessionId, rows, ownsWrite = ownsWrite)
@@ -220,11 +223,10 @@ internal suspend fun ChatRepository.persistUserStop(
     }
     return saved.map { row ->
         val isNote = row.role == "user"
-        val text = if (isNote) USER_STOP_NOTE else partialText
         LLMMessage(
             role = if (isNote) LLMMessage.Role.USER else LLMMessage.Role.ASSISTANT,
-            content = text,
-            contentParts = listOf(AgentContentPart.Text(text)),
+            content = if (isNote) USER_STOP_NOTE else partial.joinToString("") { it.text },
+            contentParts = if (isNote) listOf(AgentContentPart.Text(USER_STOP_NOTE)) else partial,
             dbMessageId = row.id,
             isHostGenerated = isNote,
         )

@@ -17,6 +17,8 @@ import java.io.File
  */
 internal object GoalDriftStore {
 
+    private const val STALL_COUNT_VERSION = 1
+
     data class DriftState(
         /** Fingerprint of the board as last seen; null when no board existed. */
         val lastBoardSha: String? = null,
@@ -38,7 +40,11 @@ internal object GoalDriftStore {
             val json = JSONObject(file.readText())
             DriftState(
                 lastBoardSha = json.optString("lastBoardSha").takeIf { it.isNotBlank() },
-                stallTurns = json.optInt("stallTurns", 0).coerceAtLeast(0),
+                // Legacy counts mixed tool and delivery ticks. Keep the board
+                // baseline and delivered marker, but don't inherit those ticks.
+                stallTurns = if (json.optInt("stallCountVersion") == STALL_COUNT_VERSION) {
+                    json.optInt("stallTurns", 0).coerceAtLeast(0)
+                } else 0,
                 nudgedBoardSha = json.optString("nudgedBoardSha").takeIf { it.isNotBlank() },
             )
         }.getOrDefault(DriftState())
@@ -56,6 +62,7 @@ internal object GoalDriftStore {
             file.parentFile?.mkdirs()
             file.writeText(
                 JSONObject()
+                    .put("stallCountVersion", STALL_COUNT_VERSION)
                     .put("lastBoardSha", state.lastBoardSha ?: "")
                     .put("stallTurns", state.stallTurns)
                     .put("nudgedBoardSha", state.nudgedBoardSha ?: "")

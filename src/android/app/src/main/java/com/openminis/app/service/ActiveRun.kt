@@ -39,44 +39,37 @@ class ActiveRun internal constructor(
     var assistantMessageId: String? = null
         private set
 
-    private var lastPersistedAssistantText: String = ""
-    private var currentAssistantText: String = ""
+    data class AssistantTextTail(val id: String, val text: String, val isProcessText: Boolean)
+
+    private var persistedAssistantTurn = false
+    private var pendingAssistantText = emptyList<AssistantTextTail>()
     private val progressLock = Any()
 
-    fun attachAssistantMessage(messageId: String) {
-        assistantMessageId = messageId
+    fun attachAssistantMessage(messageId: String) = synchronized(progressLock) {
+        if (assistantMessageId != messageId) {
+            persistedAssistantTurn = false
+            pendingAssistantText = emptyList()
+            assistantMessageId = messageId
+        }
     }
 
     fun associateSession(sessionId: String) {
         ActiveRunRegistry.associate(this, sessionId)
     }
 
-    fun updateAssistantText(text: String) = synchronized(progressLock) {
-        if (!stopped.get()) currentAssistantText = text
+    /** Only the current turn's uncommitted parts; never subtract a cumulative string by value. */
+    fun updateAssistantText(messageId: String, parts: List<AssistantTextTail>) = synchronized(progressLock) {
+        if (assistantMessageId == messageId) pendingAssistantText = parts
     }
 
-    fun markAssistantTurnPersisted(text: String) = synchronized(progressLock) {
-        lastPersistedAssistantText = text
-        currentAssistantText = text
+    fun markAssistantTurnPersisted() = synchronized(progressLock) {
+        persistedAssistantTurn = true
+        pendingAssistantText = emptyList()
     }
 
-    /**
-     * [T-android-stop-dup-row] True once ANY round of this run committed an
-     * assistant row (each round persist marks [lastPersistedAssistantText]).
-     * The stop-path partial-text fallback must NOT re-persist the canonical
-     * message's cumulative content when rounds are already durable — that
-     * wrote a second full-text assistant row and rendered the whole reply
-     * twice after reload.
-     */
-    fun hasPersistedAssistantText(): Boolean = synchronized(progressLock) {
-        lastPersistedAssistantText.isNotEmpty()
-    }
+    fun hasPersistedAssistantText(): Boolean = synchronized(progressLock) { persistedAssistantTurn }
 
-    fun unpersistedAssistantText(): String = synchronized(progressLock) {
-        val current = currentAssistantText
-        val persisted = lastPersistedAssistantText
-        if (current.startsWith(persisted)) current.drop(persisted.length) else current
-    }
+    fun unpersistedAssistantTextTail(): List<AssistantTextTail> = synchronized(progressLock) { pendingAssistantText }
 
     private val ownersLock = Any()
     private val mutableOwnerSessionIds = ownerSessionIds.toMutableSet()

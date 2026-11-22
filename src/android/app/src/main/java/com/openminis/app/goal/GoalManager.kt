@@ -1,13 +1,14 @@
 package com.openminis.app.goal
 
+import android.content.Context
 import com.openminis.app.data.GoalDriftPrefs
 import com.openminis.app.data.db.GoalOrigin
 import com.openminis.app.data.db.GoalStatus
 import com.openminis.app.data.db.SessionGoalEntity
-import android.content.Context
 import com.openminis.app.data.repository.ChatRepository
 import com.openminis.app.goal.GoalCompletionVerifier.Verification
 import com.openminis.app.tools.AgentPlanStore
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
@@ -34,8 +35,11 @@ private class RepositoryGoalPersistence(private val repository: ChatRepository) 
 }
 
 /** Session-scoped Goal API used by the slash UI, tool dispatcher and agent loop. */
-class GoalManager internal constructor(private val persistence: GoalPersistence) {
-    constructor(repository: ChatRepository) : this(RepositoryGoalPersistence(repository))
+class GoalManager internal constructor(
+    private val persistence: GoalPersistence,
+    private val driftFilesDir: File? = null,
+) {
+    constructor(repository: ChatRepository) : this(RepositoryGoalPersistence(repository), repository.filesDir)
 
     companion object {
         /**
@@ -70,6 +74,12 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
     private suspend fun <T> locked(sessionId: String, block: suspend () -> T): T =
         locks[(sessionId.hashCode() and Int.MAX_VALUE) % locks.size].withLock { block() }
 
+    // Use the same sidecar directory for lifecycle actions that have no Context.
+    // Call inside the session lock, after the Goal write has succeeded.
+    private fun resetDrift(sessionId: String) {
+        driftFilesDir?.let { GoalDriftStore.deleteStored(it, sessionId) }
+    }
+
     suspend fun get(sessionId: String): SessionGoalEntity? = persistence.load(sessionId)
 
     suspend fun createByUser(sessionId: String, objective: String, tokenBudget: Long? = null): SessionGoalEntity =
@@ -83,6 +93,7 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
                 GoalOrigin.USER,
             ).also {
                 persistence.insert(it)
+                resetDrift(sessionId)
                 bump()
             }
         }
@@ -127,6 +138,7 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
             GoalOrigin.MODEL,
         ).also {
             persistence.insert(it)
+            resetDrift(sessionId)
             bump()
         }
     }
@@ -145,36 +157,32 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
         val current = persistence.load(sessionId) ?: return@locked null
         val updated = if (paused) GoalStateMachine.pause(current, System.currentTimeMillis())
         else GoalStateMachine.resume(current, System.currentTimeMillis())
+        saveTransition(current, updated)
+    }
+
+    private suspend fun saveTransition(current: SessionGoalEntity, updated: SessionGoalEntity): SessionGoalEntity {
         persistence.save(updated)
+        if (current.status != updated.status) resetDrift(updated.sessionId)
         bump()
-        updated
+        return updated
     }
 
     suspend fun updateBudgetByUser(sessionId: String, tokenBudget: Long?): SessionGoalEntity = locked(sessionId) {
         val current = checkNotNull(persistence.load(sessionId)) { "No Goal exists for this session" }
-        GoalStateMachine.setBudget(current, tokenBudget, System.currentTimeMillis()).also {
-            persistence.save(it)
-            bump()
-        }
+        saveTransition(current, GoalStateMachine.setBudget(current, tokenBudget, System.currentTimeMillis()))
     }
 
     suspend fun updateObjectiveByUser(sessionId: String, objective: String): SessionGoalEntity = locked(sessionId) {
         val normalized = objective.trim()
         require(normalized.isNotEmpty() && normalized.length <= GoalStateMachine.MAX_OBJECTIVE_LENGTH)
         val current = checkNotNull(persistence.load(sessionId)) { "No Goal exists for this session" }
-        current.copy(objective = normalized, updatedAt = System.currentTimeMillis()).also {
-            persistence.save(it)
-            bump()
-        }
+        saveTransition(current, current.copy(objective = normalized, updatedAt = System.currentTimeMillis()))
     }
 
     /** Model tools cannot create goals or pause/resume them. */
     suspend fun updateByModel(sessionId: String, status: String, condition: String?): SessionGoalEntity = locked(sessionId) {
         val current = checkNotNull(persistence.load(sessionId)) { "No Goal exists for this session" }
-        GoalStateMachine.modelUpdate(current, status, condition, System.currentTimeMillis()).also {
-            persistence.save(it)
-            bump()
-        }
+        saveTransition(current, GoalStateMachine.modelUpdate(current, status, condition, System.currentTimeMillis()))
     }
 
     /**
@@ -242,10 +250,7 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
         if (verification.allowed) {
             completionRejections.remove(sessionId)
             return@locked VerifiedCompletion.Accepted(
-                goal = GoalStateMachine.modelUpdate(current, GoalStatus.COMPLETE, null, System.currentTimeMillis()).also {
-                    persistence.save(it)
-                    bump()
-                },
+                goal = saveTransition(current, GoalStateMachine.modelUpdate(current, GoalStatus.COMPLETE, null, System.currentTimeMillis())),
                 verification = verification,
             )
         }
@@ -257,21 +262,16 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
         // Limit reached: accept the model's call, record the disagreement.
         completionRejections.remove(sessionId)
         VerifiedCompletion.Forced(
-            goal = GoalStateMachine.modelUpdate(current, GoalStatus.COMPLETE, null, System.currentTimeMillis()).also {
-                persistence.save(it)
-                bump()
-            },
+            goal = saveTransition(current, GoalStateMachine.modelUpdate(current, GoalStatus.COMPLETE, null, System.currentTimeMillis())),
             verification = verification,
             forcedReason = GoalCompletionVerifier.forcedAcceptanceReason(planStatuses),
         )
     }
 
     /**
-     * Per-tool-turn Goal accounting: usage counters PLUS the drift reconciler's
-     * stall tick ([T-goal-drift-reconciler]) — both are O(1) host-side writes
-     * riding the same locked transaction, so the drift signal costs no model
-     * turn. Delivery happens at the natural turn end via [driftNudgeIfOwed];
-     * mid-run this only counts.
+     * Account for model usage. Pass [context] only after committing a tool
+     * call/result pair: its presence opts in to one stall tick against the
+     * current plan board. Tool-free turns pass null and only account for usage.
      */
     suspend fun recordUsage(
         sessionId: String,
@@ -279,58 +279,63 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
         elapsedMs: Long,
         context: Context? = null,
     ): SessionGoalEntity? = locked(sessionId) {
-        val current = persistence.load(sessionId) ?: return@locked null
-        val updated = GoalStateMachine.recordProgress(current, tokens.coerceAtLeast(0), elapsedMs.coerceAtLeast(0), System.currentTimeMillis())
-            .also {
-                persistence.save(it)
-                bump()
-            }
-        // [T-goal-drift-reconciler] Advance the stall counter against the plan
-        // board. Failure-bounded: a drift bookkeeping hiccup must not fail the
-        // usage write the loop already depends on.
+        val current = persistence.load(sessionId)
+        val updated = current?.let {
+            saveTransition(it, GoalStateMachine.recordProgress(it, tokens.coerceAtLeast(0), elapsedMs.coerceAtLeast(0), System.currentTimeMillis()))
+        }
+        // Drift bookkeeping must not turn a successful usage write into a failure.
         if (context != null) runCatching {
-            val fingerprint = GoalDriftReconciler.boardFingerprint(
-                runCatching { AgentPlanStore.list(sessionId, context) }.getOrElse { emptyList() },
-            )
-            GoalDriftStore.save(
-                context.filesDir,
-                sessionId,
-                GoalDriftReconciler.next(
-                    GoalDriftStore.load(context.filesDir, sessionId),
-                    goalActive = updated.status == GoalStatus.ACTIVE,
-                    fingerprint = fingerprint,
-                ),
-            )
+            val filesDir = context.filesDir
+            if (updated?.status != GoalStatus.ACTIVE) {
+                GoalDriftStore.deleteStored(filesDir, sessionId)
+            } else {
+                val fingerprint = GoalDriftReconciler.boardFingerprint(readPlans(sessionId, context))
+                val state = GoalDriftStore.load(filesDir, sessionId)
+                GoalDriftStore.save(filesDir, sessionId, GoalDriftReconciler.next(state, goalActive = true, fingerprint = fingerprint))
+            }
         }
         updated
     }
 
+    private fun readPlans(sessionId: String, context: Context) =
+        runCatching { AgentPlanStore.list(sessionId, context) }.getOrElse { emptyList() }
+
+    /** Observe user/plan changes before a tool can rewrite the board. This never spends a tick. */
+    internal suspend fun observeDriftBoard(sessionId: String, context: Context) = locked(sessionId) {
+        val state = GoalDriftStore.load(context.filesDir, sessionId)
+        val active = persistence.load(sessionId)?.status == GoalStatus.ACTIVE
+        val fingerprint = if (active) GoalDriftReconciler.boardFingerprint(readPlans(sessionId, context)) else null
+        val observed = GoalDriftReconciler.observe(state, active, fingerprint)
+        if (observed != state) GoalDriftStore.save(context.filesDir, sessionId, observed)
+    }
+
     /**
-     * [T-goal-drift-reconciler] Natural-turn-end drift delivery: advances the
-     * stall counter against the current board, and when the threshold is
-     * crossed on a not-yet-nudged fingerprint returns the reminder text and
-     * records the delivered-once marker. The loop appends it as a user
-     * message under the persist-then-append contract. Null = silent.
+     * Claim a reminder at a natural, tool-free turn end with a dispatch slot
+     * left. Recheck the current Goal and board without ticking. Only claiming
+     * a reminder marks its fingerprint delivered; otherwise persist resets only.
      */
     suspend fun driftNudgeIfOwed(sessionId: String, context: Context?): String? = locked(sessionId) {
-        val current = persistence.load(sessionId) ?: return@locked null
         val filesDir = context?.filesDir ?: return@locked null
-        val driftState = GoalDriftStore.load(filesDir, sessionId)
-        val plans = runCatching { AgentPlanStore.list(sessionId, context) }.getOrElse { emptyList() }
-        val fingerprint = GoalDriftReconciler.boardFingerprint(plans)
-        val updated = GoalDriftReconciler.next(
-            driftState,
-            goalActive = current.status == GoalStatus.ACTIVE,
-            fingerprint = fingerprint,
+        val current = persistence.load(sessionId)
+        if (current?.status != GoalStatus.ACTIVE) {
+            GoalDriftStore.deleteStored(filesDir, sessionId)
+            return@locked null
+        }
+        val state = GoalDriftStore.load(filesDir, sessionId)
+        val plans = readPlans(sessionId, context)
+        val observed = GoalDriftReconciler.observe(
+            state,
+            goalActive = true,
+            fingerprint = GoalDriftReconciler.boardFingerprint(plans),
         )
         val nudge = GoalDriftReconciler.nudgeIfOwed(
-            updated,
+            observed,
             objective = current.objective,
             pendingCount = plans.count { it.status != "done" },
             threshold = GoalDriftPrefs.stallTurns(),
         )
-        val finalState = if (nudge != null) updated.copy(nudgedBoardSha = updated.lastBoardSha) else updated
-        GoalDriftStore.save(filesDir, sessionId, finalState)
+        val finalState = if (nudge != null) observed.copy(nudgedBoardSha = observed.lastBoardSha) else observed
+        if (finalState != state) GoalDriftStore.save(filesDir, sessionId, finalState)
         nudge
     }
 

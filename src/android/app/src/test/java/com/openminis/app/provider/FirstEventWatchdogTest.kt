@@ -1,5 +1,7 @@
 package com.openminis.app.provider
 
+import com.openminis.app.data.model.AssistantTextPhase.COMMENTARY
+import com.openminis.app.data.model.AssistantTextPhase.FINAL_ANSWER
 import com.openminis.app.data.model.LLMError
 import com.openminis.app.data.model.LLMStreamChunk
 import kotlinx.coroutines.flow.toList
@@ -74,6 +76,39 @@ class FirstEventWatchdogTest {
         assertEquals(origTool.id, backTool.id)
         assertEquals(origTool.name, backTool.name)
         assertEquals(origTool.args.toString(), backTool.args.toString())
+    }
+
+    @Test
+    fun `stream trace replays text item phases and late updates in order`() = runBlocking {
+        val chunks = listOf(
+            LLMStreamChunk.Text("Looking", COMMENTARY, "msg_work"),
+            LLMStreamChunk.Text("Done", itemId = "msg_answer"),
+            LLMStreamChunk.TextPhase("msg_answer", FINAL_ANSWER),
+            LLMStreamChunk.Finished("stop"),
+        )
+        assertEquals(chunks, StreamTrace.replay(StreamTrace.decode(StreamTrace.encode(chunks))).toList())
+    }
+
+    @Test
+    fun `stream trace reads old text and ignores unknown phase metadata`() {
+        val decoded = StreamTrace.decode("""
+            [
+                {"kind":"text","text":"legacy"},
+                {"kind":"text","text":"unknown","itemId":"msg_1","phase":"FUTURE"},
+                {"kind":"text_phase","itemId":"msg_1","phase":"FUTURE"},
+                {"kind":"text_phase","itemId":null,"phase":"FINAL_ANSWER"},
+                {"kind":"finished","stopReason":"stop"}
+            ]
+        """.trimIndent())
+
+        assertEquals(
+            listOf(
+                LLMStreamChunk.Text("legacy"),
+                LLMStreamChunk.Text("unknown", itemId = "msg_1"),
+                LLMStreamChunk.Finished("stop"),
+            ),
+            decoded,
+        )
     }
 
     // ── [T-watchdog-real-error-preserved] the timeout boundary's captured ──

@@ -182,5 +182,21 @@ abstract class ProviderDatabase : RoomDatabase() {
                     .also { INSTANCE = it }
             }
         }
+
+        /**
+         * [T-provider-db-test-reset] Robolectric sandboxes keep this singleton
+         * alive across test classes, but each test gets a fresh filesDir — a
+         * handle built in an earlier test points at a deleted provider.db and
+         * every later DAO read fails ("refusing JSON fallback" instead of an
+         * empty config). Tests that create the singleton close and drop it in
+         * teardown so the next class binds to its own directory. Production
+         * never calls this.
+         */
+        fun resetForTest() {
+            synchronized(this) {
+                runCatching { INSTANCE?.close() }
+                INSTANCE = null
+            }
+        }
     }
 }

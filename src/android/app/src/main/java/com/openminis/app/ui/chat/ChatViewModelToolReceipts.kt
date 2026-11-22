@@ -123,10 +123,32 @@ internal suspend fun ChatViewModel.logLegacyToolReceiptDiagnostics(sessionId: St
     }
 }
 
-internal suspend fun ChatViewModel.pendingToolReceiptNotice(sessionId: String, userTurnId: String? = null): String? {
-    if (sessionId.isBlank()) return null
-    return toolReceiptNotice(sessionId, ToolReceiptScope.userTurn(sessionId, userTurnId))
+/**
+ * [T-receipt-notice-scope] The pending-delivery reminder describes ONE anchor's
+ * ledger — the user turn or run the request itself dispatches under. The old
+ * session-wide fallback counted every unresolved receipt ever recorded in the
+ * session, so a handful of interrupted calls pinned the "Delivery pending
+ * confirmation" reminder onto EVERY later request and the model kept steering
+ * toward verifying old deliveries instead of finishing the answer.
+ * No anchor (or a foreign session) means silence, never the session-wide nag.
+ */
+internal suspend fun ChatViewModel.pendingToolReceiptNotice(sessionId: String, scope: ToolReceiptScope?): String? {
+    if (sessionId.isBlank() || scope == null || scope.sessionSha != ToolReceiptScope.sessionDigest(sessionId)) return null
+    return toolReceiptNotice(sessionId, scope)
 }
+
+/**
+ * [T-receipt-notice-scope] One pending-delivery reminder per anchor. The anchor
+ * mirror is the SAME scope the request's own dispatches write under, so old
+ * turns' pins never re-nag; a genuine in-flight receipt is already described by
+ * its own result advisory, and re-warning every retry would steer the model
+ * toward verifying old deliveries instead of finishing the answer.
+ */
+internal suspend fun ChatViewModel.boundedReceiptNotice(
+    sessionId: String,
+    anchor: ToolReceiptScope?,
+    alreadyDeliveredSha: String?,
+): String? = if (anchor?.parentSha == alreadyDeliveredSha) null else pendingToolReceiptNotice(sessionId, anchor)
 
 internal suspend fun ChatViewModel.toolReceiptNotice(sessionId: String, scope: ToolReceiptScope?): String? =
     withContext(Dispatchers.IO) {

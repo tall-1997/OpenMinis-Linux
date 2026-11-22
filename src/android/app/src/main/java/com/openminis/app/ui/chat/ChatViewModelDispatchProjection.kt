@@ -73,6 +73,7 @@ internal suspend fun ChatViewModel.buildDispatchProjection(
     prompt: MemoryDeliveryPrompt?,
     tools: List<AgentToolDefinition>,
     stallNote: String?,
+    receiptNotice: String?,
 ): ProjectedChatRequest? = withContext(Dispatchers.IO) {
     if (activeSessionId != sessionId) return@withContext null
     val history = agentHistorySnapshot()
@@ -80,7 +81,7 @@ internal suspend fun ChatViewModel.buildDispatchProjection(
     val window = requestContextWindow(provider, model)
     val policy = ContextPolicy.forContextWindow(window, effectiveCompactPercent())
     val harness = activeHarnessConfig(requestEntryId(model))
-    val receipt = pendingToolReceiptNotice(sessionId)
+    val receipt = receiptNotice
     val compact = requestCompactStateFor(history, sessionId)
     if (activeSessionId != sessionId) return@withContext null
     val clock = requestClockNote(sessionId, history)

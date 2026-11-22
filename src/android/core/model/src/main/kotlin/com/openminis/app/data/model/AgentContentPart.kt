@@ -8,7 +8,8 @@ import org.json.JSONObject
  * that providers serialize into their native format.
  */
 sealed class AgentContentPart {
-    data class Text(val text: String) : AgentContentPart()
+    /** [isProcessText] is presentation metadata. Providers still receive [text] verbatim. */
+    data class Text(val text: String, val isProcessText: Boolean = false) : AgentContentPart()
 
     class ToolUse private constructor(
         val id: String,

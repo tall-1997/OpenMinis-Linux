@@ -2,9 +2,22 @@ package com.openminis.app.data.model
 
 import org.json.JSONObject
 
+/** Optional provider phase of a visible assistant message. */
+enum class AssistantTextPhase { COMMENTARY, FINAL_ANSWER }
+
 sealed class LLMStreamChunk {
     data object Started : LLMStreamChunk()
-    data class Text(val text: String) : LLMStreamChunk()
+
+    /** [itemId] is an opaque key scoped to this response, when available. */
+    data class Text(
+        val text: String,
+        val phase: AssistantTextPhase? = null,
+        val itemId: String? = null,
+    ) : LLMStreamChunk()
+
+    /** A late phase update for text already emitted with the same [itemId]. */
+    data class TextPhase(val itemId: String, val phase: AssistantTextPhase) : LLMStreamChunk()
+
     data class Usage(val usage: LLMUsage) : LLMStreamChunk()
     // [port-upstream-1.16][FIX-261018-12] `refusalCategory` / `refusalExplanation`:
     // Anthropic's `stop_details` when `stopReason` is "refusal" (e.g. category

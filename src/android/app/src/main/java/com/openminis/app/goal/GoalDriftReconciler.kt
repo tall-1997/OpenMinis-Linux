@@ -54,22 +54,30 @@ internal object GoalDriftReconciler {
     }
 
     /**
-     * Advance the stall counter one tool turn. Reset rules:
-     *  - Goal not ACTIVE → fresh state (the reconciler must not nag a paused,
-     *    completed or blocked goal — those statuses have their own exits)
-     *  - no board → fresh state (nothing to reconcile against)
-     *  - fingerprint changed → the board moved → fresh state; the delivered-once
-     *    marker clears with it so a NEW stall can earn its own nudge
-     *  - unchanged → stallTurns + 1
+     * Recheck the current Goal and board without counting a turn. Losing the
+     * ACTIVE goal or the board resets everything; a changed board starts a
+     * new baseline at zero and clears the delivered-once marker.
      */
-    fun next(
+    fun observe(
         state: GoalDriftStore.DriftState,
         goalActive: Boolean,
         fingerprint: String?,
     ): GoalDriftStore.DriftState = when {
         !goalActive || fingerprint == null -> GoalDriftStore.DriftState()
-        fingerprint == state.lastBoardSha -> state.copy(stallTurns = state.stallTurns + 1)
-        else -> GoalDriftStore.DriftState(lastBoardSha = fingerprint, stallTurns = 0)
+        fingerprint != state.lastBoardSha -> GoalDriftStore.DriftState(lastBoardSha = fingerprint)
+        else -> state
+    }
+
+    /** Count one committed tool turn, but only if it left the board unchanged. */
+    fun next(
+        state: GoalDriftStore.DriftState,
+        goalActive: Boolean,
+        fingerprint: String?,
+    ): GoalDriftStore.DriftState {
+        val observed = observe(state, goalActive, fingerprint)
+        return if (observed.lastBoardSha != null && observed.lastBoardSha == state.lastBoardSha) {
+            observed.copy(stallTurns = observed.stallTurns + 1)
+        } else observed
     }
 
     /**

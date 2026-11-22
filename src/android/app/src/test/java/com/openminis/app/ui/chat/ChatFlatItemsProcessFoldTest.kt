@@ -29,6 +29,9 @@ class ChatFlatItemsProcessFoldTest {
     private fun text(id: String = "tx1", content: String = "hello") =
         AssistantBlock(id = id, kind = "text", content = content)
 
+    private fun progress(id: String = "p1", content: String = "Checking the sample.") =
+        text(id, content).copy(isProcessText = true)
+
     private fun tool(
         id: String = "tool1",
         name: String = "bash",
@@ -64,6 +67,7 @@ class ChatFlatItemsProcessFoldTest {
             is FlatChatItem.AssistantHeader -> "header"
             is FlatChatItem.AssistantMarkdownBlock -> "md"
             is FlatChatItem.AssistantProcessSummary -> "summary"
+            is FlatChatItem.AssistantProcessText -> "processText"
             is FlatChatItem.AssistantThinking -> "thinking"
             is FlatChatItem.AssistantToolUse -> "tool:${item.block.toolName}"
             is FlatChatItem.AssistantPresentCard -> "present"
@@ -86,6 +90,69 @@ class ChatFlatItemsProcessFoldTest {
         assertTrue(kinds(items).contains("thinking"))
         assertTrue(kinds(items).contains("tool:bash"))
         assertTrue(kinds(items).contains("md"))
+    }
+
+    @Test
+    fun `progress is in one card in order and only the final reply feeds body actions`() {
+        val first = progress()
+        val second = progress("p2", "The sample has two items.")
+        val answer = text(content = "Both items match.")
+        val blocks = listOf(thinking(), first, tool("t1", "count_items"), second, tool("t2", "read_sample"), answer)
+        val messages = listOf(assistant(blocks = blocks).copy(content = blocks.joinToString("\n") { it.content }))
+        val collapsed = buildFlatChatItems(messages, foldAiProcess = true)
+        val collapsedCard = collapsed.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single()
+        val expanded = buildFlatChatItems(messages, foldAiProcess = true, expandedProcessIds = setOf(collapsedCard.messageId))
+        for ((items, isExpanded) in listOf(collapsed to false, expanded to true)) {
+            assertEquals(listOf("header", "summary", "md"), kinds(items))
+            val card = items.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single()
+            assertEquals(collapsedCard.key, card.key)
+            assertEquals(isExpanded, card.expanded)
+            assertEquals(1, card.thinkingCount)
+            assertEquals(2, card.toolCount)
+            assertEquals(blocks.dropLast(1), card.steps.map { it.block })
+            val reply = items.filterIsInstance<FlatChatItem.AssistantMarkdownBlock>().single()
+            assertEquals(answer.content, reply.rawText)
+            assertEquals(answer.content, reply.messageMarkdown)
+            assertEquals(answer.content, reply.segmentText)
+            assertTrue(reply.showTranslate)
+            assertTrue(reply.translateWholeReply)
+        }
+    }
+
+    @Test
+    fun `fold off renders progress once before its tool and keeps body translation separate`() {
+        val status = progress()
+        val answer = text(content = "The sample matches.")
+        val items = buildFlatChatItems(listOf(assistant(blocks = listOf(status, tool(name = "read_sample"), answer))))
+        assertEquals(listOf("header", "processText", "tool:read_sample", "md"), kinds(items))
+        assertEquals(status, items.filterIsInstance<FlatChatItem.AssistantProcessText>().single().block)
+        val reply = items.filterIsInstance<FlatChatItem.AssistantMarkdownBlock>().single()
+        assertEquals(answer.content, reply.messageMarkdown)
+        assertEquals(answer.content, reply.segmentText)
+        assertTrue(reply.showTranslate)
+        assertFalse(reply.translateWholeReply)
+    }
+
+    @Test
+    fun `lone progress stays inline in either fold mode and never falls back to body`() {
+        val status = progress()
+        val message = assistant(blocks = listOf(status)).copy(content = status.content)
+        for (fold in listOf(false, true)) {
+            val rows = buildFlatChatItems(listOf(message), foldAiProcess = fold)
+            assertEquals(listOf("header", "processText"), kinds(rows))
+            assertEquals(status, rows.filterIsInstance<FlatChatItem.AssistantProcessText>().single().block)
+        }
+    }
+
+    @Test
+    fun `question deliverable and error cards stay visible between progress rows`() {
+        val question = tool("q", "ask_user_question")
+        val deliverable = tool("d", "present_file").copy(content = "Path: /var/minis/shared/sample.txt")
+        val message = assistant(blocks = listOf(progress(), question, progress("p2"), deliverable, progress("p3")))
+            .copy(error = "The sample was incomplete.")
+        val items = buildFlatChatItems(listOf(message), showCompletedToolCards = false, foldAiProcess = true)
+        assertEquals(listOf("header", "processText", "tool:ask_user_question", "processText", "present", "processText", "error"), kinds(items))
+        assertEquals(listOf("p1", "p2", "p3"), items.filterIsInstance<FlatChatItem.AssistantProcessText>().map { it.block.id })
     }
 
     @Test
@@ -539,6 +606,102 @@ class ChatFlatItemsProcessFoldTest {
         // The run's steps never leak back into the list beside the card.
         assertEquals(0, rows.count { it is FlatChatItem.AssistantThinking })
         assertEquals(0, rows.count { it is FlatChatItem.AssistantToolUse })
+    }
+
+    @Test
+    fun `frozen progress appears once when a live tool joins it and keeps its card key through the reply`() {
+        val status = progress()
+        val prefix = listOf(user(), assistant(id = "a1", blocks = listOf(status)))
+        val split = prefix.size
+        val frozen = boundaryBuild(prefix, fromIndex = 0, boundary = split)
+        val waiting = assistant(id = "a2", streaming = true, awaiting = true, blocks = emptyList())
+        val waitingRows = frozen + boundaryBuild(prefix + waiting, fromIndex = split, boundary = split)
+        assertEquals(status, waitingRows.filterIsInstance<FlatChatItem.AssistantProcessText>().single().block)
+
+        val runningTool = tool(id = "t1", name = "read_sample", status = ToolBlockStatus.RUNNING)
+        val running = waiting.copy(isAwaitingModelResponse = false, toolBlocks = listOf(runningTool))
+        val liveRows = frozen + boundaryBuild(prefix + running, fromIndex = split, boundary = split)
+        val liveCard = liveRows.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single()
+        assertTrue(liveCard.running)
+        assertEquals(listOf(status, runningTool), liveCard.steps.map { it.block })
+        assertEquals(0, liveCard.thinkingCount)
+        assertEquals(1, liveCard.toolCount)
+        assertFalse(liveRows.any { it is FlatChatItem.AssistantProcessText || it is FlatChatItem.AssistantToolUse })
+
+        val answer = text(content = "The sample is ready.")
+        val done = running.copy(isStreaming = false, toolBlocks = listOf(runningTool.copy(toolStatus = ToolBlockStatus.SUCCESS), answer))
+        val settledRows = frozen + boundaryBuild(prefix + done, fromIndex = split, boundary = split)
+        val settledCard = settledRows.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single()
+        val fullCard = buildFlatChatItems(prefix + done, foldAiProcess = true)
+            .filterIsInstance<FlatChatItem.AssistantProcessSummary>().single()
+        assertEquals(liveCard.key, settledCard.key)
+        assertEquals(fullCard.key, settledCard.key)
+        assertFalse(settledCard.running)
+        assertEquals(answer.content, settledRows.filterIsInstance<FlatChatItem.AssistantMarkdownBlock>().single().messageMarkdown)
+    }
+
+    @Test
+    fun `progress across assistant and system rows has one owner across the split`() {
+        val first = progress("p1", "Checking the sample.")
+        val second = progress("p1", "Checking the second part.")
+        val divider = assistant(id = "s1", role = "system", blocks = listOf(AssistantBlock("i1", "info", "notice")))
+        val prefix = listOf(
+            user(),
+            assistant(id = "a1", blocks = listOf(first)),
+            divider,
+            assistant(id = "a2", blocks = listOf(second)),
+            divider.copy(id = "s2"),
+            assistant(id = "a3", blocks = emptyList()),
+        )
+        val split = prefix.size
+        val frozen = boundaryBuild(prefix, fromIndex = 0, boundary = split)
+        val stagedReply = progress("p2", "The sample is ready.")
+        val live = assistant(id = "a4", streaming = true, blocks = listOf(stagedReply))
+        val streamingRows = frozen + boundaryBuild(prefix + live, fromIndex = split, boundary = split)
+        val runningCard = streamingRows.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single()
+        assertEquals(listOf("a1" to first, "a2" to second, "a4" to stagedReply), runningCard.steps.map { it.messageId to it.block })
+        assertEquals(0, runningCard.toolCount)
+        assertEquals(0, runningCard.thinkingCount)
+        assertTrue(runningCard.running)
+        assertEquals(2, streamingRows.count { it is FlatChatItem.AssistantInfo })
+        assertFalse(streamingRows.any { it is FlatChatItem.AssistantProcessText || it is FlatChatItem.AssistantMarkdownBlock })
+
+        val answer = stagedReply.copy(isProcessText = false)
+        val done = live.copy(isStreaming = false, toolBlocks = listOf(answer))
+        val settledRows = frozen + boundaryBuild(prefix + done, fromIndex = split, boundary = split)
+        val settledCard = settledRows.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single()
+        assertEquals(runningCard.key, settledCard.key)
+        assertFalse(settledCard.running)
+        assertEquals(listOf(first, second), settledCard.steps.map { it.block })
+        assertFalse(settledRows.any { it is FlatChatItem.AssistantProcessText })
+        assertEquals(answer.content, settledRows.filterIsInstance<FlatChatItem.AssistantMarkdownBlock>().single().messageMarkdown)
+    }
+
+    @Test
+    fun `lone frozen tool keeps its action target when live progress folds it`() {
+        val cancelled = tool("t1", status = ToolBlockStatus.CANCELLED)
+        val divider = assistant(id = "s1", role = "system", blocks = listOf(AssistantBlock("i1", "info", "notice")))
+        val prefix = listOf(user(), assistant(id = "a1", blocks = listOf(cancelled)), divider)
+        val split = prefix.size
+        val frozen = boundaryBuild(prefix, fromIndex = 0, boundary = split)
+        val waiting = assistant(id = "a2", streaming = true, awaiting = true, blocks = emptyList())
+        val waitingRows = frozen + boundaryBuild(prefix + waiting, fromIndex = split, boundary = split)
+        val pill = waitingRows.filterIsInstance<FlatChatItem.AssistantToolUse>().single()
+        assertTrue(pill.isLastCancelled)
+        assertFalse(waitingRows.any { it is FlatChatItem.AssistantProcessSummary })
+
+        val status = progress()
+        val resumed = waiting.copy(isAwaitingModelResponse = false, toolBlocks = listOf(status, progress("p2", "Checking again.")))
+        val resumedRows = frozen + boundaryBuild(prefix + resumed, fromIndex = split, boundary = split)
+        val card = resumedRows.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single()
+        assertEquals(1, card.toolCount)
+        assertEquals(0, card.thinkingCount)
+        assertTrue(card.usesToolPill)
+        val toolStep = card.steps.single { it.kind == "tool_use" }
+        assertEquals(pill.messageId, toolStep.messageId)
+        assertEquals(pill.block, toolStep.block)
+        assertTrue(toolStep.isLastCancelled)
+        assertFalse(resumedRows.any { it is FlatChatItem.AssistantToolUse || it is FlatChatItem.AssistantProcessText })
     }
 
     @Test

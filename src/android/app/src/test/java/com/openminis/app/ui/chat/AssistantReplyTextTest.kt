@@ -93,6 +93,48 @@ class AssistantReplyTextTest {
         assertEquals("后段", parts.getJSONObject(1).getString("value"))
     }
 
+    @Test
+    fun `whole reply translation leaves progress in place including a trailing progress part`() {
+        val progress = text("Checking the sample.").put("display", "process")
+        val report = text("The sample is ready.")
+        val tail = text("Preparing the follow-up.").put("display", "process")
+        val progressOnlyRow = JSONArray().put(progress).toString()
+        val replyRow = JSONArray().put(text("Sample found.")).put(tool("count_items"))
+            .put(progress).put(report).put(tail).toString()
+        val rows = listOf("progress" to progressOnlyRow, "reply" to replyRow)
+
+        val (id, raw) = AssistantReplyText.rewriteStoredParts(rows, "样本已准备好。").single()
+        assertEquals("reply", id)
+        val parts = JSONArray(raw)
+        assertEquals(5, parts.length())
+        assertEquals("", parts.getJSONObject(0).getString("value"))
+        assertEquals("toolUse", parts.getJSONObject(1).getString("type"))
+        assertEquals(progress.toString(), parts.getJSONObject(2).toString())
+        assertEquals("样本已准备好。", parts.getJSONObject(3).getString("value"))
+        assertEquals(tail.toString(), parts.getJSONObject(4).toString())
+        assertTrue(AssistantReplyText.rewriteStoredParts(rows.take(1), "译文").isEmpty())
+    }
+
+    @Test
+    fun `paragraph translation skips identical progress in both UI and stored parts`() {
+        val line = "Sample ready."
+        val blocks = listOf(
+            AssistantBlock(id = "p", kind = "text", content = line, isProcessText = true),
+            AssistantBlock(id = "a", kind = "text", content = line),
+            AssistantBlock(id = "b", kind = "text", content = "$line\n"),
+        )
+        val progress = text(line).put("display", "process")
+        val row = JSONArray().put(progress).put(text(line)).put(text("$line\n")).toString()
+        val occurrence = AssistantReplyText.textOccurrence(blocks, "b", line)
+        assertEquals(1, occurrence)
+        assertEquals(-1, AssistantReplyText.textOccurrence(blocks, "p", line))
+        val updated = AssistantReplyText.replaceVisibleOccurrence(listOf("row" to row), line, "样本好了。", occurrence)!!
+        val parts = JSONArray(updated.second)
+        assertEquals(progress.toString(), parts.getJSONObject(0).toString())
+        assertEquals(line, parts.getJSONObject(1).getString("value"))
+        assertEquals("样本好了。", parts.getJSONObject(2).getString("value"))
+    }
+
     private fun text(value: String) =
         org.json.JSONObject().put("type", "text").put("value", value)
 

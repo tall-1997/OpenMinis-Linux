@@ -1,54 +1,33 @@
 package com.openminis.app.ui.chat
 
-import androidx.lifecycle.viewModelScope
-import com.openminis.app.agent.StreamDropReminder
 import com.openminis.app.data.model.AgentContentPart
-import com.openminis.app.data.model.LLMMessage
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import com.openminis.app.data.repository.AssistantDisplayUpdate
 
-/**
- * Commit the "your reply was cut off in transit — continue from there"
- * reminder for the session whose stream just dropped, in memory AND in the DB.
- *
- * Why the DB copy matters and not just [ChatViewModel.appendBoundedHistory]:
- *
- * A dropped stream leaves a PARTIAL assistant turn as the history tail, and
- * [com.openminis.app.agent.InterruptedTailDetector] classifies a plain
- * assistant reply as a COMPLETED turn (`NONE`). So if the reminder only lives
- * in memory, any reload or process death between the drop and the user's next
- * tap erases the evidence that the turn was interrupted: `canResume` comes
- * back false, the Resume affordance never appears, and the only thing left on
- * screen is the error banner — whose Retry then has nothing to resume.
- *
- * With the reminder persisted, the tail is a `CONTINUE_REMINDER` shape, which
- * the detector recognises across a cold start, so "continue where you left
- * off" survives exactly as long as the partial reply it refers to.
- *
- * The row is registered with a null UI id ([ChatViewModel.notePersistedUiRow])
- * so the synthetic turn never renders as a user bubble — same treatment the
- * deliberate-stop reminder gets in [resume].
- */
-internal fun ChatViewModel.commitStreamDropReminder() {
-    val reminder = StreamDropReminder.TEXT
-    appendBoundedHistory(
-        LLMMessage(
-            role = LLMMessage.Role.USER,
-            content = reminder,
-            contentParts = listOf(AgentContentPart.Text(reminder)),
-            isHostGenerated = true,
-        ),
-    )
-    // Read the session id up front: the IO hop below can outlive a session
-    // switch, and a reminder written into the wrong session's history would
-    // make THAT session look interrupted.
-    val sid = activeSessionId
-    viewModelScope.launch(Dispatchers.IO) {
-        val partsJson = hostReminderPartsJson(escapeJson(reminder))
-        val persisted = chatRepository.appendMessage(sid, "user", partsJson)
-        withContext(Dispatchers.Main.immediate) {
-            notePersistedUiRow(null, persisted.id)
+/** Only the immediately following accepted text response can finish this partial answer. */
+internal data class StreamReplyPrefix(
+    val rowId: String,
+    val replyBlockIds: List<String>,
+    val completedParts: List<AgentContentPart.Text>,
+) {
+    fun displayUpdate() = AssistantDisplayUpdate(rowId, buildAssistantPartsJson(completedParts, emptyMap()))
+
+    /**
+     * Fold the cut-off prose into the continuation's first reply block. Upgrading the
+     * old block in place would leave the answer split across two paragraphs mid-sentence.
+     */
+    fun applyTo(blocks: MutableList<AssistantBlock>) {
+        val ids = replyBlockIds.toHashSet()
+        if (ids.isEmpty()) return
+        val lastPrefixIndex = blocks.indexOfLast { it.id in ids }
+        val merged = blocks.filterIndexed { i, b -> i <= lastPrefixIndex && b.id in ids }.joinToString("") { it.content }
+        if (merged.isEmpty()) return
+        val target = (lastPrefixIndex + 1 until blocks.size).firstOrNull { blocks[it].kind == "text" }
+            ?: return
+        for (i in 0..lastPrefixIndex) {
+            val block = blocks[i]
+            if (block.id in ids) blocks[i] = block.copy(content = "")
         }
+        val block = blocks[target]
+        blocks[target] = block.copy(content = merged + block.content, isProcessText = false)
     }
 }

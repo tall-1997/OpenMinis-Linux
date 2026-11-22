@@ -42,6 +42,16 @@ class GoalDriftStoreTest {
     }
 
     @Test
+    fun `legacy mixed turn counts reset without forgetting a delivered fingerprint`() {
+        val dir = tmp.newFolder("goal-drift")
+        dir.resolve("session-a.json").writeText(
+            """{"lastBoardSha":"fp-1","stallTurns":9,"nudgedBoardSha":"fp-1"}""",
+        )
+        val reloaded = GoalDriftStore.load(tmp.root, "session-a")
+        assertEquals(GoalDriftStore.DriftState(lastBoardSha = "fp-1", nudgedBoardSha = "fp-1"), reloaded)
+    }
+
+    @Test
     fun `a fresh state deletes the file instead of tombstoning`() {
         GoalDriftStore.save(tmp.root, "session-a", GoalDriftStore.DriftState(lastBoardSha = "fp-1", stallTurns = 3))
         val file = tmp.root.resolve("goal-drift/session-a.json")

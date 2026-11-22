@@ -63,6 +63,26 @@ class ToolReceiptDispatchTest {
         assertEquals(2, approvals.get())
     }
 
+    @Test fun `pending deliveries are counted per anchor not across the whole session`() = runBlocking {
+        val directory = temp.newFolder()
+        val store = ToolReceiptStore(directory)
+        val otherTurn = ToolReceiptScope.userTurn("session-a", "user-b")!!
+        suspend fun strand(target: ToolReceiptKey, wire: String) = ToolReceiptDispatch(ToolReceiptStore(directory)).run(
+            target, wire, authorize = { null },
+        ) { delivery ->
+            // A transport loss: claimed, never settled — the pin this fix scopes.
+            throw java.io.IOException("connection lost")
+        }
+        strand(key("lost-this-turn"), "wire-a")
+        strand(otherTurn.call("file_write", """{"path":"older"}""")!!, "wire-b")
+
+        // The interrupted delivery pins its own anchor's ledger...
+        assertEquals(ToolReceiptStore.Pending(1, 0), store.pending(turn.sessionSha, turn.parentSha))
+        // ...without counting the other anchor's, and never the session-wide sum.
+        assertEquals(ToolReceiptStore.Pending(1, 0), store.pending(turn.sessionSha, otherTurn.parentSha))
+        assertEquals(ToolReceiptStore.Pending(2, 0), store.pending(turn.sessionSha))
+    }
+
     @Test fun `approval rejection and cancellation before claim never dispatch and later attempts reauthorize`() = runBlocking {
         val store = ToolReceiptStore(temp.newFolder())
         val dispatch = ToolReceiptDispatch(store)

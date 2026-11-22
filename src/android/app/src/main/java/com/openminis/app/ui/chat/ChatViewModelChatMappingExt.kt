@@ -215,15 +215,16 @@ internal fun ChatViewModel.toChatMessages(
                             if (it != raw) it.trim() else it
                         }
                         if (t.isEmpty()) continue
-                        text += t
-                        // For assistant messages, also push the text as a block so
-                        // the renderer can preserve the original text↔tool ordering.
-                        // For user messages we keep using the `text` field only.
+                        val processText = entity.role == "assistant" &&
+                            com.openminis.app.data.AssistantTextPartJson.isProcessText(obj)
+                        if (!processText) text += t
+                        // Keep assistant progress in chronological order without adding it to the reply.
                         if (entity.role == "assistant") {
                             blocks.add(AssistantBlock(
                                 id = "text_restored_${entity.id}_${textBlockCounter++}",
                                 kind = "text",
                                 content = t,
+                                isProcessText = processText,
                             ))
                         }
                     }
@@ -452,12 +453,10 @@ internal fun mapStoredLLMMessage(
                     // messages byte-identical so `.content` consumers
                     // (summary, title fallback, edit) see the same string
                     // as a fresh turn and don't get the XML twice.
-                    if (value.contains("<user-attached-files>")) {
-                        contentParts.add(AgentContentPart.Text(value))
-                    } else {
-                        textContent += value
-                        contentParts.add(AgentContentPart.Text(value))
-                    }
+                    if (!value.contains("<user-attached-files>")) textContent += value
+                    contentParts.add(AgentContentPart.Text(
+                        value, r == LLMMessage.Role.ASSISTANT && com.openminis.app.data.AssistantTextPartJson.isProcessText(obj),
+                    ))
                 }
                 "toolUse" -> {
                     contentParts.add(readTranscriptToolUse(obj.getJSONObject("value")))

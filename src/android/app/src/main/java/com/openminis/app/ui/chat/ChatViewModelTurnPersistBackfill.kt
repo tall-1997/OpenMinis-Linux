@@ -1,6 +1,14 @@
 package com.openminis.app.ui.chat
 
 import com.openminis.app.data.model.AgentContentPart
+import com.openminis.app.data.repository.AssistantDisplayUpdate
+import com.openminis.app.data.repository.PendingTurnRow
+import com.openminis.app.data.repository.appendTurnRows
+import com.openminis.app.provider.selectableThinkingLevels
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import com.openminis.app.data.model.ContextUsageAnchor
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.LLMUsage
@@ -14,32 +22,90 @@ import com.openminis.app.service.ActiveRun
  * compact-marker 的边界解析依赖 dbMessageId。只将 DB id 和用量锚回填到
  * 本轮尚未持久化的 assistant，不能误挂到更早的轮次。
  */
-internal suspend fun ChatViewModel.persistAssistantTurnForRunAndBackfill(
-    run: ActiveRun?,
-    turnParts: List<AgentContentPart>,
-    blockMeta: Map<String, AssistantBlock>,
-    lastUsage: LLMUsage?,
-    turnReasoningContent: String?,
-    accumulatedText: String,
-    agentHistory: MutableList<LLMMessage>,
-    // [T-thinking-dual-ledger] passthrough — see persistAssistantTurnForRun.
-    requestedLevel: ThinkingLevel? = null,
-    modelSnapshot: ModelAttributionSnapshot? = null,
-    contextUsageAnchor: ContextUsageAnchor? = null,
-): String? {
-    val assistant = agentHistory.lastOrNull()
-    val anchor = turnContextUsageAnchor(lastUsage, modelSnapshot, contextUsageAnchor)
-    val assistantDbId = persistAssistantTurnForRun(
-        checkNotNull(run) { "Agent loop has no persistence owner" },
-        turnParts, lastUsage, turnReasoningContent, blockMeta, accumulatedText,
-        requestedLevel = requestedLevel,
-        modelSnapshot = modelSnapshot,
-        contextUsageAnchor = anchor,
-    )
-    if (assistantDbId != null && agentHistory.lastOrNull() === assistant) {
-        backfillPersistedAssistantTurn(agentHistory, assistantDbId, anchor, turnParts)
+internal suspend fun ChatViewModel.persistAgentTextTurn(
+    run: ActiveRun,
+    sid: String,
+    epoch: Long,
+    assistantId: String,
+    parts: List<AgentContentPart.Text>,
+    usage: LLMUsage?,
+    reasoningContent: String?,
+    requestedLevel: ThinkingLevel?,
+    modelSnapshot: ModelAttributionSnapshot?,
+    contextUsageAnchor: ContextUsageAnchor?,
+    recoveryNote: String? = null,
+    continuationPrefix: StreamReplyPrefix? = null,
+    onCommitted: () -> Unit,
+): String? = run.withPersistencePermit {
+    if (parts.isEmpty() && recoveryNote == null && continuationPrefix == null) return@withPersistencePermit null
+    withContext(NonCancellable + Dispatchers.IO) {
+        fun ownsWrite() = ownsTranscript(sid, epoch, run)
+        val assistant = agentHistory.lastOrNull()
+        val anchor = turnContextUsageAnchor(usage, modelSnapshot, contextUsageAnchor)
+        val thinking = requestedLevel?.let {
+            resolveTurnThinkingUsage(it, !reasoningContent.isNullOrEmpty(), currentModel?.selectableThinkingLevels.orEmpty())
+        }
+        // A completed continuation replaces the cut-off row's visible parts: one row, one paragraph.
+        val settledParts = continuationPrefix?.let { prefix ->
+            val all = prefix.completedParts.map { AgentContentPart.Text(it.text, false) } +
+                parts.map { AgentContentPart.Text(it.text, it.isProcessText) }
+            // One contiguous answer = one text part, so copy/translate/preview see one paragraph.
+            if (all.all { !it.isProcessText }) listOf(AgentContentPart.Text(all.joinToString("") { it.text }))
+            else all
+        }
+        val rows = buildList {
+            if (parts.isNotEmpty() && continuationPrefix == null) add(PendingTurnRow(
+                role = "assistant", partsJson = buildAssistantPartsJson(parts, emptyMap()),
+                tokenUsage = buildTurnTokenUsageJson(usage, run.streamRate.takeDurationMs(), thinking, anchor),
+                reasoningContent = reasoningContent,
+                modelSnapshot = modelSnapshot ?: anchor?.modelSnapshot ?: currentModelSnapshot(),
+            ))
+            recoveryNote?.let { add(PendingTurnRow("user", hostReminderPartsJson(JSONObject.quote(it)))) }
+        }
+        val displayUpdate = continuationPrefix?.let { prefix ->
+            AssistantDisplayUpdate(prefix.rowId, buildAssistantPartsJson(settledParts.orEmpty(), emptyMap()))
+        }
+        val saved = chatRepository.appendTurnRows(sid, rows, displayUpdate, ::ownsWrite)
+        // A merged continuation commits through the row update; it appends no new assistant row.
+        if (saved.isEmpty() && displayUpdate == null) return@withContext null
+        val insertedId = saved.firstOrNull { it.role == "assistant" }?.id
+        if (insertedId != null) run.markAssistantTurnPersisted()
+        withContext(Dispatchers.Main.immediate) {
+            if (ownsTranscript(sid, epoch, run = null)) {
+                if (continuationPrefix != null) {
+                    // The continuation turn's own row never existed; fold it back into the settled row.
+                    if (assistant?.role == LLMMessage.Role.ASSISTANT && assistant.dbMessageId == null) {
+                        agentHistory.removeAt(agentHistory.lastIndex)
+                    }
+                    for (i in agentHistory.indices.reversed()) {
+                        val entry = agentHistory[i]
+                        if (entry.role != LLMMessage.Role.ASSISTANT || entry.dbMessageId != continuationPrefix.rowId) continue
+                        agentHistory[i] = entry.copy(
+                            content = settledParts.orEmpty().joinToString("") { it.text },
+                            contentParts = settledParts.orEmpty(),
+                        )
+                        break
+                    }
+                    notePersistedUiRow(assistantId, continuationPrefix.rowId)
+                } else if (insertedId != null) {
+                    if (agentHistory.lastOrNull() === assistant) backfillPersistedAssistantTurn(agentHistory, insertedId, anchor, parts)
+                    notePersistedUiRow(assistantId, insertedId)
+                } else if (assistant != null && agentHistory.lastOrNull() === assistant) {
+                    agentHistory.removeAt(agentHistory.lastIndex)
+                }
+                if (recoveryNote != null) {
+                    val noteId = saved.last().id
+                    appendBoundedHistory(LLMMessage(
+                        LLMMessage.Role.USER, recoveryNote, contentParts = listOf(AgentContentPart.Text(recoveryNote)),
+                        dbMessageId = noteId, isHostGenerated = true,
+                    ))
+                    notePersistedUiRow(null, noteId)
+                }
+                onCommitted()
+            }
+        }
+        insertedId ?: continuationPrefix?.rowId
     }
-    return assistantDbId
 }
 
 /** Call before appending the next tool-result or nudge row. Never search older turns. */
