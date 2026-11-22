@@ -205,22 +205,6 @@ internal sealed class FlatChatItem {
         override fun withKeySuffix(suffix: String): FlatChatItem = copy(keySuffix = suffix)
     }
     /** [T-port-fold-tools] One folded run of consecutive tool calls (upstream parity). */
-    data class AssistantToolGroup(
-        val messageId: String,
-        val runKey: String,
-        val memberIds: List<String>,
-        val toolCount: Int,
-        val failedCount: Int,
-        val cancelledCount: Int,
-        val durationMs: Long?,
-        val expanded: Boolean,
-        val memberBlocks: List<AssistantBlock> = emptyList(), val allToolBlocks: List<AssistantBlock> = emptyList(),
-        private val keySuffix: String = "",
-    ) : FlatChatItem() {
-        override val key = FlatKeys.of(FlatKeys.KIND_TOOL, messageId, runKey) + keySuffix
-        override val contentType = "toolgroup"
-        override fun withKeySuffix(suffix: String): FlatChatItem = copy(keySuffix = suffix)
-    }
     data class AssistantInfo(
         val messageId: String,
         val block: AssistantBlock,
@@ -673,20 +657,23 @@ internal fun buildFlatChatItems(
     // message can hold several cards.
     expandedProcessIds: Set<String> = emptySet(),
     activeSubAgentToolIds: Set<String> = emptySet(),
-    // [T-live-round-inline] Index the frozen/live builds split at: the frozen
-    // prefix passes its own (truncated) size, the live suffix passes its
-    // fromIndex, and a plain full build leaves -1. A run whose last block ends
-    // at `processCardBoundary - 1` continues into the streamed message: it
-    // belongs to the RUNNING round, which never cards, so the frozen build must
-    // not hide its blocks behind a card either. Such a run is marked
-    // [ProcessSegment.deferredCard] and renders inline on both sides — hiding
-    // it on one side while the other owns the card dropped its steps entirely.
+    // [P-process-card-dup] Frozen/live split index; see [ProcessSegment.deferredCard].
     processCardBoundary: Int = -1,
 ): List<FlatChatItem> {
     val out = mutableListOf<FlatChatItem>()
     val usedKeys = if (seedKeys.isEmpty()) mutableSetOf() else seedKeys.toMutableSet()
     val roundSplit = if (foldAiProcess) {
         splitRounds(messages, activeSubAgentToolIds, processCardBoundary, fromIndex)
+    } else null
+    // [P-process-card-dup] The frozen build's boundary card: emitted FIRST on
+    // the live side, exactly where a single-pass build would have put it.
+    val boundaryCard: Pair<ChatRound, ProcessSegment>? = if (roundSplit != null && fromIndex > 0 &&
+        processCardBoundary == fromIndex
+    ) {
+        roundSplit.roundAt(fromIndex - 1)?.let { round ->
+            round.segments.firstOrNull { it.deferredCard && it.lastMessageIdx == fromIndex - 1 }
+                ?.let { round to it }
+        }
     } else null
     fun dedupe(item: FlatChatItem): FlatChatItem {
         // Defensive: duplicated keys crash LazyColumn. If any slip through, suffix
@@ -724,6 +711,10 @@ internal fun buildFlatChatItems(
         )
     }
     for (idx in fromIndex until messages.size) {
+        // [P-process-card-dup] The boundary card lands FIRST on the live side.
+        if (idx == fromIndex) {
+            boundaryCard?.let { (round, segment) -> out.add(dedupe(processCard(round, segment))) }
+        }
         val rawMessage = messages[idx]
         // Speaker / sub-agent visibility filters live in [effectiveBlocks] so
         // the round pre-pass and this row loop can never disagree about what
@@ -810,12 +801,8 @@ internal fun buildFlatChatItems(
         // them whenever ANY card existed in the round, which silently
         // dropped the lone thinking (user: "只有一步思考的气泡被丢弃了").
         val foldedBlockIds: Set<String> =
-            if (round == null || isSystem || round.isRunning) emptySet()
-            // [T-live-round-inline] A run crossing the frozen/live build split
-            // belongs to the RUNNING round on the live side even when the
-            // frozen prefix cannot see the streaming message, so it can never
-            // card: both sides render its blocks inline and the steps survive.
-            else round.segments.filterNot { it.deferredCard }.flatMapTo(mutableSetOf()) { it.blockIds }
+            if (round == null || isSystem) emptySet()
+            else round.segments.flatMapTo(mutableSetOf()) { it.blockIds }
         val roundFolded = foldedBlockIds.isNotEmpty()
         val replyText = AssistantReplyText.joined(blocks)
         // [T-android-fold-toolonly-blank] A turn whose entire visible payload
@@ -966,9 +953,11 @@ internal fun buildFlatChatItems(
             }
             // [P-process-card] The card follows the run's LAST block, so under
             // reverseLayout it sits visually ABOVE the reply that comes next.
-            if (round != null && !isSystem && !round.isRunning) {
-                // A `deferredCard` run belongs to the running round and never
-                // cards: its steps render inline on both sides of the split.
+            if (round != null && !isSystem) {
+                // [P-process-card-dup] A `deferredCard` run is the one the
+                // frozen prefix handed to this build — its row is emitted at
+                // the head of the live rows instead, never down here at a
+                // message the suffix build does not render.
                 val segment = round.segments.firstOrNull {
                     it.lastMessageIdx == idx && it.lastBlockId == block.id && !it.deferredCard
                 }
@@ -1043,7 +1032,7 @@ internal fun buildFlatChatItems(
             }
         }
     }
-    return if (foldAiProcess) applyToolFolds(out) else out
+    return out
 }
 
 // ── [P1-3] Row rhythm ───────────────────────────────────────────────────
@@ -1069,7 +1058,7 @@ internal val ChatRowDefaultGap: Dp = 8.dp
 
 internal fun isProcessRow(item: FlatChatItem): Boolean =
     item is FlatChatItem.AssistantThinking ||
-        item is FlatChatItem.AssistantToolUse || item is FlatChatItem.AssistantToolGroup ||
+        item is FlatChatItem.AssistantToolUse ||
         item is FlatChatItem.AssistantProcessSummary
 
 private fun isTextRow(item: FlatChatItem): Boolean =
