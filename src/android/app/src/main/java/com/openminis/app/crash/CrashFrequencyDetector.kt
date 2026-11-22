@@ -218,8 +218,8 @@ object CrashFrequencyDetector {
             }
             val all = logsDir.listFiles { f ->
                 val n = f.name
-                (n.startsWith("crash-") || n.startsWith("native-crash-")) && n.endsWith(".log")
-            } ?: return
+                (n.startsWith("crash-") || n.startsWith("native-crash-") || n == "startup-degraded.log") && n.endsWith(".log")
+            }
             val now = System.currentTimeMillis()
             // Dismiss is now window-scoped, not permanent. While the
             // dismiss timestamp is still inside the 1-hour window we keep

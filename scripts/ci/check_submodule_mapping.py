@@ -64,7 +64,7 @@ def main() -> int:
     mapping = registered()
 
     missing = [p for p in links if p not in mapping]
-    empty_url = [p for p in missing if p in mapping and not mapping[p]]
+    empty_url = [p for p in links if p in mapping and not mapping[p].strip()]
 
     for p in missing:
         print(f" {p}: gitlink in the index but no [submodule] entry in .gitmodules")

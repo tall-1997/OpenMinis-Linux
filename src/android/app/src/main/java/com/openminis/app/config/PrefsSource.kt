@@ -29,7 +29,7 @@ interface PrefsSource {
      * Default: plain (non-encrypted) storage — an unclassifiable name must not
      * be guessed into the encrypted store.
      */
-    fun backendForUnregistered(name: String): PrefsBackend = backend(name)
+    fun backendForUnregistered(spec: PrefsFileSpec): PrefsBackend = backend(spec.name)
 }
 
 /** 唯一需要 Android Context 的实现。 */
@@ -50,11 +50,16 @@ class AndroidPrefsSource(private val context: Context) : PrefsSource {
     /** 人工排查用：某文件的真实存储性质。 */
     fun scopeOf(name: String): PrefsScope = PrefsRegistry.require(name).scope
 
-    override fun backendForUnregistered(name: String): PrefsBackend =
-        PrefsBackends.wrap(
-            context.applicationContext.getSharedPreferences(name, Context.MODE_PRIVATE),
-            name,
-        )
+    override fun backendForUnregistered(spec: PrefsFileSpec): PrefsBackend {
+        // Honour the fallback spec's scope: a credential-looking name must stay
+        // encrypted instead of silently landing in a plaintext XML file.
+        val delegate = if (spec.isEncrypted()) {
+            EncryptedPrefsFactory.safeCreate(context.applicationContext, spec.name)
+        } else {
+            context.applicationContext.getSharedPreferences(spec.name, Context.MODE_PRIVATE)
+        }
+        return PrefsBackends.wrap(delegate, spec.name)
+    }
 }
 
 /**
@@ -72,8 +77,8 @@ class InMemorySource(
         return backends.getOrPut(name) { InMemoryPrefsBackend(name, seed[name].orEmpty()) }
     }
 
-    override fun backendForUnregistered(name: String): PrefsBackend =
-        backends.getOrPut(name) { InMemoryPrefsBackend(name, seed[name].orEmpty()) }
+    override fun backendForUnregistered(spec: PrefsFileSpec): PrefsBackend =
+        backends.getOrPut(spec.name) { InMemoryPrefsBackend(spec.name, seed[spec.name].orEmpty()) }
 
     /** 测试钩子：直接拿到某文件后端，用于断言落盘内容。 */
     fun inspect(name: String): InMemoryPrefsBackend? = backends[name] as? InMemoryPrefsBackend

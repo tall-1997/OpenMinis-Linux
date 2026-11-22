@@ -292,8 +292,8 @@ def main() -> int:
     if "--root" in argv:
         root = Path(argv[argv.index("--root") + 1])
     if not root.exists():
-        print(f"composition locals: SKIP ({root} not found)")
-        return 0
+        print(f"composition locals: FAIL ({root} not found)")
+        return 1
     files = sorted(root.rglob("*.kt"))
     fails: list[str] = []
     for f in files:

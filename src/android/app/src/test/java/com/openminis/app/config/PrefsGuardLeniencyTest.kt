@@ -25,6 +25,16 @@ class PrefsGuardLeniencyTest {
     }
 
     @Test
+    fun installLenientIsTheSingleAppEntryPoint() {
+        Prefs.strictKeyGuard = true
+        Prefs.installLenient(InMemorySource())
+        assertFalse("the app install must also flip the guard", Prefs.strictKeyGuard)
+        // And it must already be lenient for the very first read.
+        val handle = Prefs.file("appearance_prefs")
+        assertFalse(handle.bool("chat.notRegisteredYet", false))
+    }
+
+    @Test
     fun strictModeFailsOnAnUnregisteredKey() {
         Prefs.strictKeyGuard = true
         Prefs.install(InMemorySource())

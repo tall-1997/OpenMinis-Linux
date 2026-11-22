@@ -112,6 +112,7 @@ internal fun ToolGroupRow(
         // the chevron turned and no member ever appeared.
         if (item.expanded && item.memberBlocks.isNotEmpty()) {
             item.memberBlocks.forEach { block ->
+                androidx.compose.runtime.key(block.id) {
                 ToolCallPill(
                     block = block,
                     allToolBlocks = item.allToolBlocks,
@@ -121,6 +122,7 @@ internal fun ToolGroupRow(
                     onOpenDetail = { onOpenDetail(block.id) },
                     onRerunFromHere = null,
                 )
+                }
             }
         }
     }

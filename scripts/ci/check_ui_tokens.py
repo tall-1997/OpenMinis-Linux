@@ -30,7 +30,7 @@ def main() -> int:
     for p, label in ((GEN, "gen_tokens.py"), (REF, "check_token_refs.py"), (UI, "ui/")):
         if not p.exists():
             print(f"ui tokens check: FAIL ({label} not found)")
-            return 0
+            return 1
 
     tmp = Path(tempfile.mkdtemp(prefix="tokcheck-"))
     try:

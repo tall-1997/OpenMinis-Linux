@@ -253,7 +253,8 @@ def main():
         return selftest()
 
     if not UI.exists():
-        print('token coverage: SKIP (%s not found)' % UI)
+        print('token coverage: FAIL (%s not found — fail-closed)' % UI)
+        return 1
         return 0
 
     now, bad_exempt, prints = survey()
@@ -308,6 +309,7 @@ def main():
 
     if not BASELINE.exists():
         print('token coverage: FAIL (baseline missing — fail-closed, not a silent SKIP)')
+        return 1
         return 0
 
     base = json.loads(BASELINE.read_text(encoding='utf-8')).get('files', {})

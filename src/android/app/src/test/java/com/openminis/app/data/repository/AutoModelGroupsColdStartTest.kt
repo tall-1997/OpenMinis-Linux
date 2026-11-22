@@ -48,19 +48,22 @@ class AutoModelGroupsColdStartTest {
     fun aFreshlyLoadedConfigGainsImplicitGroups() {
         val loaded = config()
         assertTrue("the on-disk shape has no implicit groups", loaded.modelGroups.none { AutoModelGroups.isAutoId(it.id) })
-        // What the load path now does: copy, sync, then publish.
-        val synced = loaded.copy(modelGroups = loaded.modelGroups.toMutableList())
-        AutoModelGroups.syncInPlace(synced)
+        // The real load path: publishCopy both clones and syncs. If it is ever
+        // removed or stops cloning, this fails (the old test copied the
+        // implementation by hand and could never catch that).
+        val synced = AutoModelGroups.publishCopy(loaded)
         assertTrue("an implicit group must exist after a cold load", synced.modelGroups.any { AutoModelGroups.isAutoId(it.id) })
         assertTrue("the on-disk object is left untouched", loaded.modelGroups.none { AutoModelGroups.isAutoId(it.id) })
     }
 
     @Test
     fun theImplicitGroupContainsEveryUnhiddenModelOfTheInstance() {
-        val synced = config().also { AutoModelGroups.syncInPlace(it) }
-        val group = synced.modelGroups.single { AutoModelGroups.isAutoId(it.id) }
+        val cfg = config()
+        AutoModelGroups.syncInPlace(cfg)
+        val group = cfg.modelGroups.single { AutoModelGroups.isAutoId(it.id) }
         assertEquals("auto-inst_a", group.id)
-        assertEquals(listOf("m1", "m2").size, group.memberEntryIds.size)
+        // Members are the model entries' real ids (uuids), in config order.
+        assertEquals(cfg.modelEntries.map { it.id }, group.memberEntryIds)
     }
 
     @Test

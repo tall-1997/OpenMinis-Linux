@@ -38,11 +38,12 @@ class ToolGroupMemberBlocksTest {
     }
 
     @Test
-    fun expandingOnlyFlipsTheFlagAndKeepsTheBlocks() {
+    fun theGroupKeyStaysStableWhenExpanded() {
         val group = applyToolFolds(listOf(toolItem(), toolItem(), textItem()))
             .filterIsInstance<FlatChatItem.AssistantToolGroup>().single()
-        val expanded = group.copy(expanded = true)
-        assertEquals("expanding must not lose the member blocks", group.memberBlocks, expanded.memberBlocks)
-        assertEquals(group.memberIds, expanded.memberIds)
+        // rememberSaveable is keyed on item.key; the expanded flag must not
+        // change the identity, or every tap would reset the list item state.
+        assertEquals(group.key, group.copy(expanded = true).key)
+        assertEquals(2, group.memberBlocks.size)
     }
 }

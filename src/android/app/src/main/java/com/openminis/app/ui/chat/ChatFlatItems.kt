@@ -1069,7 +1069,7 @@ internal val ChatRowDefaultGap: Dp = 8.dp
 
 internal fun isProcessRow(item: FlatChatItem): Boolean =
     item is FlatChatItem.AssistantThinking ||
-        item is FlatChatItem.AssistantToolUse ||
+        item is FlatChatItem.AssistantToolUse || item is FlatChatItem.AssistantToolGroup ||
         item is FlatChatItem.AssistantProcessSummary
 
 private fun isTextRow(item: FlatChatItem): Boolean =

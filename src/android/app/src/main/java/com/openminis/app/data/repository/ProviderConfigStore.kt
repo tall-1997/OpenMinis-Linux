@@ -286,8 +286,6 @@ internal class ProviderConfigStore(
                 }
                 // [T-auto-groups-cold-start] Publish a copy that already has the groups.
                 repo._config.value = AutoModelGroups.publishCopy(loaded)
-                // [T-auto-model-groups] 首次加载后补隐式组；之后由 saveConfig 重建。
-                AutoModelGroups.syncInPlace(repo._config.value)
                 repo._configLoaded.value = true
             }
         }

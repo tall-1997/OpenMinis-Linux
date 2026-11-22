@@ -54,8 +54,8 @@ def parse_registry(src: str):
 def main() -> int:
     update = '--update-baseline' in sys.argv
     if not REGISTRY.exists():
-        print(f'prefs encryption: SKIP ({REGISTRY} not found)')
-        return 0
+        print(f'prefs encryption: FAIL ({REGISTRY} not found)')
+        return 1
     files = parse_registry(REGISTRY.read_text(encoding='utf-8'))
     if not files:
         print('prefs encryption: FAILED —— 注册表里一个 PrefsFileSpec 都没解析到，正则已失效')

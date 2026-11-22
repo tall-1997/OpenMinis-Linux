@@ -201,29 +201,24 @@ class PrefsHandle internal constructor(
         }
 
     /**
-     * 键名守卫，规则见类注释。
-     * 登记清单用 [PrefsFileSpec.keys] 的**值**（真实字符串键），不是常量名。
-     *
-     * 三条放行路径，按优先级：
+     * 键名守卫。三条判定共用同一套失败策略：
      *   1. [PrefsFileSpec.accepts] —— 静态登记 / 动态前缀 / 开放键空间
-     *   2. keys 与 dynamicPrefixes 都为空 —— 扫描器没抓到清单，退回最弱的
-     *      「前缀.名字」约定（这本身是扫描器缺陷，但守卫不能因此崩溃）
-     *   3. 其余 —— 明确的错
+     *   2. 空白键；或该文件没有任何登记清单时不符合「前缀.名字」约定
+     *   3. 有登记清单但不含该键
+     *
+     * [T-prefs-guard-never-crashes] 失败策略（三类一致）：
+     * [Prefs.strictKeyGuard] 为真（单测/CI 默认）→ 抛；否则记录并放行原始键，
+     * 行为与迁移前的 getSharedPreferences 一致。生成器漏键是我们的 bug，
+     * 不该由用户承受闪退或启动降级（#419/#420 已因此崩过六次）。
      */
     private fun check(key: String): String {
-        require(key.isNotBlank()) { "prefs key must not be blank" }
-        // 1. 静态登记、动态前缀、开放键空间 —— 一定放行
-        if (spec.accepts(key)) return key
-        // 2. 该文件没有任何登记清单（历史遗留，扫描器没抓到键常量）——
-        //    退回最弱约定：必须带 '前缀.名字' 形态，挡住裸键即可。
-        if (spec.keys.isEmpty() && spec.dynamicPrefixes.isEmpty()) {
-            require(key.contains('.')) {
-                "key '$key' must look like 'prefix.name'; ${spec.name} has no registered key list, so only the prefix convention applies"
-            }
-            return key
-        }
-        // 3. 有登记清单但不包含该键 —— 明确的错
-        val message = buildString {
+        if (key.isNotBlank() && spec.accepts(key)) return key
+        val message: String = when {
+            key.isBlank() -> "prefs key must not be blank (file=${spec.name})"
+            spec.keys.isEmpty() && spec.dynamicPrefixes.isEmpty() ->
+                "key '$key' must look like 'prefix.name'; ${spec.name} has no " +
+                "registered key list, so only the prefix convention applies"
+            else -> buildString {
                 append("key '$key' is not registered in PrefsRegistry for ${spec.name}")
                 if (spec.dynamicPrefixes.isNotEmpty()) {
                     append("; allowed dynamic prefixes in this file: ")
@@ -233,8 +228,9 @@ class PrefsHandle internal constructor(
                 append(key)
                 append("\"` in the source file, then re-run gen_prefs_registry.py")
             }
-        // [T-prefs-guard-never-crashes] strict builds (tests/CI) fail loudly; the
-        // shipped app logs a breadcrumb and keeps working like the old SP path.
+        }
+        // Strict builds (unit tests, CI) fail loudly so the gap is fixed at build
+        // time; the shipped app logs a breadcrumb and keeps working.
         if (Prefs.strictKeyGuard) throw IllegalArgumentException(message)
         Prefs.reportUnregisteredKey(spec.name, key, message)
         return key
@@ -246,6 +242,10 @@ class PrefsHandle internal constructor(
  * builds throw (a typo must fail CI); the shipped app degrades to an
  * open-key-space spec so the feature keeps working and logs a breadcrumb.
  */
+private const val MAX_REPORTED_KEYS = 64
+
+private val SECRETISH_NAME = Regex("secret|token|password|credential|apikey|api_key|private")
+
 private fun unregisteredFileSpec(name: String): PrefsFileSpec {
     if (Prefs.strictKeyGuard) {
         error(
@@ -254,10 +254,14 @@ private fun unregisteredFileSpec(name: String): PrefsFileSpec {
         )
     }
     Prefs.reportUnregisteredKey(name, "<file>", "prefs file '$name' is not registered in PrefsRegistry")
+    // [T-prefs-lenient-never-plaintext-secrets] A file we cannot classify must
+    // not be written to plaintext: if the name looks like a credential store,
+    // keep encryption on — a silent downgrade would leak tokens to an XML file.
+    val secretish = SECRETISH_NAME.containsMatchIn(name.lowercase())
     return PrefsFileSpec(
         name = name,
         module = "unregistered",
-        scope = PrefsScope.PLAIN,
+        scope = if (secretish) PrefsScope.ENCRYPTED else PrefsScope.PLAIN,
         openKeySpace = true,
     )
 }
@@ -290,8 +294,19 @@ object Prefs {
     )
 
     internal fun reportUnregisteredKey(file: String, key: String, message: String) {
+        if (unregisteredKeys.size >= MAX_REPORTED_KEYS) return
         if (!unregisteredKeys.add("$file/$key")) return
         com.openminis.app.logging.AppLogger.warning("PrefsRegistry", message)
+    }
+
+    /**
+     * [T-prefs-guard-never-crashes] Install and go lenient in ONE step.
+     * MinisApp must use this: keeping "install" and "strictKeyGuard = false" as two
+     * separate statements let the order drift (the flag has no test of its own).
+     */
+    fun installLenient(s: PrefsSource) {
+        install(s)
+        strictKeyGuard = false
     }
 
     fun install(s: PrefsSource) {
@@ -314,7 +329,7 @@ object Prefs {
             val registered = PrefsRegistry.files.firstOrNull { it.name == name }
             val spec = registered ?: unregisteredFileSpec(name)
             val s = source ?: error("Prefs is not installed: call Prefs.install(...) from MinisApp.onCreate")
-            val backend = if (registered != null) s.backend(spec.name) else s.backendForUnregistered(spec.name)
+            val backend = if (registered != null) s.backend(spec.name) else s.backendForUnregistered(spec)
             PrefsHandle(spec, backend)
         }
     }
