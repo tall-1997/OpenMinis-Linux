@@ -253,7 +253,8 @@ def main():
         return selftest()
 
     if not UI.exists():
-        print('token coverage: SKIP (%s not found)' % UI)
+        print('token coverage: FAIL (%s not found — fail-closed)' % UI)
+        return 1
         return 0
 
     now, bad_exempt, prints = survey()
@@ -272,8 +273,16 @@ def main():
         for f, c in now.items():
             prev = old.get(f)
             if prev is None:
-                merged[f] = c
-                continue
+                # [T-token-baseline-no-new-grant] A new file used to be handed its
+                # current literal count as budget, so `--update-baseline` could wash
+                # any new hardcoded dp/sp away. The architecture ratchet already has
+                # the right rule: budgets only tighten, and a new file needs an
+                # explicit allowlist entry (reason required), never a silent grant.
+                raise SystemExit(
+                f"token coverage: new file {f} is not in the baseline. "
+                "Do NOT run --update-baseline to absorb it. Add an explicit "
+                "allowlist entry with a reason, or name the tokens."
+                )
             merged[f] = {k: min(prev.get(k, c[k]), c[k]) for k in c}
             for k in c:
                 if c[k] > prev.get(k, 0):
@@ -299,7 +308,8 @@ def main():
         return 0
 
     if not BASELINE.exists():
-        print('token coverage: SKIP (无基线，先跑 --update-baseline)')
+        print('token coverage: FAIL (baseline missing — fail-closed, not a silent SKIP)')
+        return 1
         return 0
 
     base = json.loads(BASELINE.read_text(encoding='utf-8')).get('files', {})

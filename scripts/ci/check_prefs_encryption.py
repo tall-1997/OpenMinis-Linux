@@ -54,8 +54,8 @@ def parse_registry(src: str):
 def main() -> int:
     update = '--update-baseline' in sys.argv
     if not REGISTRY.exists():
-        print(f'prefs encryption: SKIP ({REGISTRY} not found)')
-        return 0
+        print(f'prefs encryption: FAIL ({REGISTRY} not found)')
+        return 1
     files = parse_registry(REGISTRY.read_text(encoding='utf-8'))
     if not files:
         print('prefs encryption: FAILED —— 注册表里一个 PrefsFileSpec 都没解析到，正则已失效')
@@ -83,6 +83,14 @@ def main() -> int:
             f'{name}: 曾被登记为 ENCRYPTED，现在是 PLAIN —— '
             f'迁移到 Prefs.file 时必须在该文件的清单条目里保留 "encrypted": true，'
             f'否则密钥改为明文落盘且无任何报错'
+        )
+
+    # [T-encryption-pin-complete] A file that IS encrypted but not pinned is
+    # just as broken as the reverse: its downgrade passes silently.
+    for name in sorted(encrypted - pinned):
+        fails.append(
+        f"{name}: ENCRYPTED but not pinned — a downgrade to PLAIN would pass silently. "
+        f"Run --update-baseline to pin it, or confirm it should not be encrypted."
         )
 
     if update:

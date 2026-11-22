@@ -38,6 +38,9 @@ class PrefsRegistryProductionKeysTest {
         ),
         "mcp_server" to listOf("shell_policy"),
         "ui_prefs" to listOf("fab_swapped"),
+        // [T-prefs-accessor-callsites] Read through getAppearancePrefs(context),
+        // which the generator cannot attribute — both crashed on device before.
+        "appearance_prefs" to listOf("chat.showTurnChangesCard", "chat.showFullThinking"),
     )
 
     @Test

@@ -165,7 +165,10 @@ class MinisApp : Application(), ImageLoaderFactory {
         // install point below, and any prefs read in that process used to throw
         // "Prefs is not installed". Installing is pure object wiring (no file is
         // opened), so paying it in every process costs nothing.
-        com.openminis.app.config.Prefs.install(
+        // [T-prefs-guard-never-crashes] One call: install + go lenient. The registry
+        // is GENERATED and its gaps are our bug, not the user's crash: unit tests
+        // keep strictKeyGuard = true so CI still catches every miss.
+        com.openminis.app.config.Prefs.installLenient(
             com.openminis.app.config.AndroidPrefsSource(this),
         )
         // T287-followup: ACRA's :acra reporter must not bind the socket / boot the DB (EADDRINUSE loop).

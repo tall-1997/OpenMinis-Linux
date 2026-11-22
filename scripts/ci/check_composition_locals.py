@@ -49,8 +49,8 @@ EXEMPT = {}
 
 def main() -> int:
     if not SRC.exists():
-        print("composition locals check: SKIP (src/ not found)")
-        return 0
+        print("composition locals check: FAIL (src/ not found)")
+        return 1
 
     decls = {}   # name -> 声明所在文件
     provides = {}  # name -> 提供点数量

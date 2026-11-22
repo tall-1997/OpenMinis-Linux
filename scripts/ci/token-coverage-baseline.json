@@ -149,7 +149,7 @@
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatTopBarSection.kt": {
       "color": 1,
       "sp": 0,
-      "dp": 16
+      "dp": 15
     },
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatUserMessageUI.kt": {
       "color": 1,
@@ -1160,10 +1160,10 @@
       "266": "300"
     },
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ToolGroupRow.kt": {
-      "80": "0",
-      "89": "5",
-      "138": "5.5",
-      "140": "1.6"
+      "90": "0",
+      "99": "5",
+      "168": "5.5",
+      "170": "1.6"
     },
     "src/android/app/src/main/java/com/openminis/app/ui/components/CodeEditorField.kt": {
       "163": "20"

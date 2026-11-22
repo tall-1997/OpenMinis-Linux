@@ -8,6 +8,7 @@
     "minis_network_secrets",
     "oauth_prefs",
     "plugin_online_keys",
+    "provider_extra_headers",
     "provider_secrets",
     "ssh_host_secrets"
   ]

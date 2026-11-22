@@ -21,11 +21,11 @@ GEN = Path(__file__).resolve().parents[1] / "prefs" / "gen_prefs_registry.py"
 
 def main() -> int:
     if not GEN.exists():
-        print(f"prefs registry check: SKIP (generator not found at {GEN})")
-        return 0
+        print(f"prefs registry check: FAIL (generator not found at {GEN})")
+        return 1
     if not SRC.exists():
-        print(f"prefs registry check: SKIP (source root not found: {SRC})")
-        return 0
+        print(f"prefs registry check: FAIL (source root not found: {SRC})")
+        return 1
 
     proc = subprocess.run(
         [sys.executable, str(GEN), "--src", str(SRC),

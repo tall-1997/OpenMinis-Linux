@@ -376,7 +376,8 @@ def check_lineheight_ladder(src: str) -> list:
 def main() -> int:
     path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT
     if not path.exists():
-        print(f"token semantics: SKIP ({path} not found)")
+        print(f"token semantics: FAIL ({path} not found)")
+        return 1
         return 0
 
     src = path.read_text(encoding='utf-8')

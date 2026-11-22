@@ -141,7 +141,7 @@ class ProviderRepository(
                     // _configLoaded true and takes precedence; we must not clobber
                     // it with the stale on-disk snapshot.
                     if (!_configLoaded.value) {
-                        _config.value = loaded
+                        _config.value = AutoModelGroups.publishCopy(loaded)
                         _configLoaded.value = true
                         android.util.Log.i(
                             "ProviderRepo",

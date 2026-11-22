@@ -55,6 +55,21 @@ RE_HANDLE_BIND = re.compile(
  r'\b([A-Za-z_][A-Za-z0-9_]*)\s*(?::[^=\n]+)?=\s*'
  r'(?:[A-Za-z_][A-Za-z0-9_]*\s*\.\s*)*Prefs\s*\.\s*file\('
  r'\s*(?:"([^"]+)"|([A-Za-z_][A-Za-z0-9_]*))\s*\)')
+# [T-prefs-accessor-callsites] A file may expose an accessor function instead of
+# a handle variable: `fun getAppearancePrefs(ctx): PrefsHandle = Prefs.file(...)`,
+# then `getAppearancePrefs(context).bool(KEY_X, ...)` anywhere else. That shape
+# shipped an unregistered key (chat.showTurnChangesCard) and crashed on device,
+# because the receiver was a call, not a variable.
+RE_FUN_NAME = re.compile(r'fun\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(')
+RE_ACCESSOR = re.compile(
+ r'fun\s+([A-Za-z_][A-Za-z0-9_]*)\s*\([^)]*\)\s*'
+ r'(?::\s*(?:com\.openminis\.app\.config\.)?PrefsHandle\s*)?=\s*'
+ r'(?:[A-Za-z_][A-Za-z0-9_.]*\s*\.\s*)?Prefs\s*\.\s*file\(\s*'
+ r'(?:"([^"]+)"|([A-Za-z_][A-Za-z0-9_]*))\s*\)')
+RE_ACCESSOR_CALL = re.compile(
+ r'\b([A-Za-z_][A-Za-z0-9_]*)\s*\([^()]*\)\s*\.\s*('
+ r'(?:' + '|'.join(HANDLE_METHODS) + r'))\s*\(\s*'
+ r'(?:"([^"]+)"|([A-Za-z_][A-Za-z0-9_]*))')
 
 
 def strip_comments(src: str) -> str:
@@ -222,6 +237,78 @@ def scan():
                 continue
             if not accepts(hspec, hkey):
                 fails.append((p, hfile, hkey, hmeth, 'handle调用用了未登记的键'))
+    # [T-prefs-accessor-callsites] Accessor-function receivers, resolved
+    # globally (the accessor and its caller are usually in different files).
+    accessors = {}
+    declared = {}
+    for p, s in texts.items():
+        local = dict(consts_by_file[p])
+        for n, ref in RE_CONST_REF.findall(s):
+            v = resolve(p, ref)
+            if v and n not in local:
+                local[n] = v
+        declared[p] = set(RE_FUN_NAME.findall(s))
+        for an, afile_lit, afile_ident in RE_ACCESSOR.findall(s):
+            afile = afile_lit or local.get(afile_ident) or resolve(p, afile_ident or '')
+            if afile:
+                # [T-prefs-accessor-unique] Accessor names are NOT globally unique
+                # (TranslationPrefs.prefs() and MCPOAuthStore.prefs() both exist).
+                # Keep every candidate and accept a call if ANY of them registers
+                # the key; a last-wins dict silently skipped whole call sites.
+                accessors.setdefault(an, set()).add((afile, p))
+    for p, s in texts.items():
+        local = dict(consts_by_file[p])
+        for n, ref in RE_CONST_REF.findall(s):
+            v = resolve(p, ref)
+            if v and n not in local:
+                local[n] = v
+        for m in RE_ACCESSOR_CALL.finditer(s):
+            aname, ameth, akey_lit, akey_ident = m.groups()
+            if aname not in accessors:
+                continue
+            pairs = sorted(accessors[aname])
+            akey = akey_lit or local.get(akey_ident) or resolve(p, akey_ident or '')
+            if not akey:
+                continue
+            checked +=1
+            # Prefer the accessor declared in THIS file (common shorthand like
+            # `prefs(...)` exists in several stores). If the name is still
+            # ambiguous and no candidate accepts the key, treat it as
+            # unverifiable instead of guessing — a wrong guess used to either
+            # miss a real key or flag valid code.
+            same_file = sorted({af for af, df in pairs if df == p})
+            # The call site declares this name itself (e.g. a block-bodied
+            # `private fun requirePrefs(ctx): PrefsHandle { ... }`): the global
+            # accessor list is a different function, so guessing its target file
+            # is wrong. Skip instead of flagging valid code.
+            if not same_file and aname in declared.get(p, set()):
+                continue
+            if same_file:
+                candidates = same_file
+            else:
+                distinct = sorted({af for af, _ in pairs})
+                # A block-bodied accessor elsewhere (fun x(): PrefsHandle {
+                # ... return prefs }) cannot be mapped to a file statically, so
+                # a globally ambiguous name is unverifiable — skip it instead
+                # of guessing another store's file (that guess produced false
+                # positives on PendingUpdateStore/requirePrefs).
+                if len(distinct) !=1:
+                    continue
+                candidates = distinct
+            accepted = False
+            for afile in candidates:
+                spec = specs.get(afile)
+                if spec is None:
+                    accepted = True
+                    break
+                if spec.get('keys') == {} and not spec.get('dyn_keys'):
+                    accepted = True
+                    break
+                if accepts(spec, akey):
+                    accepted = True
+                    break
+            if not accepted and len(candidates) ==1:
+                fails.append((p, candidates[0], akey, ameth, 'accessor 调用用了未登记的键'))
     return fails, checked
 
 
@@ -256,8 +343,8 @@ def main() -> int:
     if '--selftest' in sys.argv:
         return selftest()
     if not INV.exists():
-        print(f'prefs call sites: SKIP ({INV} not found；先跑 gen_prefs_registry.py)')
-        return 0
+        print(f'prefs call sites: FAIL ({INV} not found；fail-closed)')
+        return 1
     fails, checked = scan()
     if fails:
         print(f'prefs call sites: {len(fails)} 处调用读了未登记的键')
