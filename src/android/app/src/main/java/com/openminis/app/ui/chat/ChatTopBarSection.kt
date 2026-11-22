@@ -257,26 +257,52 @@ internal fun ChatTopBarTitle(
                                 // the thinking sheet and never bubbles to the column's
                                 // model-picker handler. model text is weight(1f, fill=false)
                                 // so it truncates before the badge gets clipped.
-                                // [T-topbar-three-tier] Layer 2: provider on its own
-                                // line — glued as "天翼云 · glm-5.3" a long provider ate
-                                // the width and truncated the model name.
-                                if (providerName.isNotEmpty()) {
-                                    Text(
-                                        text = providerName,
-                                        fontSize = 11.sp,
-                                        lineHeight = 13.sp,
-                                        color = ChatColors.tertiaryText,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        style = noFontPad,
-                                    )
-                                }
+                                // [T-topbar-provider-inline] Provider moved inline:
+                                // now rendered LEFT of the model on the same
+                                // line inside the Layer-3 Row (user direction:
+                                // "供应商名称跟模型显示在同一行").
                                 if (providerName.isNotEmpty() || modelName.isNotEmpty()) {
                                     val thinkingLevelBadgeState by viewModel.thinkingLevel.collectAsStateWithLifecycle()
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                                     ) {
+                                        // [T-topbar-provider-inline] Provider sits
+                                        // LEFT of the model on the same line
+                                        // ("供应商 · 模型"). Weighted fill=false so a
+                                        // long provider SHARES the space with the
+                                        // model instead of starving it — both
+                                        // ellipsize proportionally when tight.
+                                        if (providerName.isNotEmpty() && modelName.isNotEmpty()) {
+                                            Text(
+                                                text = providerName,
+                                                fontSize = 11.sp,
+                                                lineHeight = 13.sp,
+                                                color = ChatColors.tertiaryText,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                style = noFontPad,
+                                                modifier = Modifier.weight(1f, fill = false),
+                                            )
+                                            Text(
+                                                text = "·",
+                                                fontSize = 11.sp,
+                                                lineHeight = 13.sp,
+                                                color = ChatColors.tertiaryText,
+                                                style = noFontPad,
+                                            )
+                                        } else if (providerName.isNotEmpty() && modelName.isEmpty()) {
+                                            Text(
+                                                text = providerName,
+                                                fontSize = 11.sp,
+                                                lineHeight = 13.sp,
+                                                color = ChatColors.tertiaryText,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                style = noFontPad,
+                                                modifier = Modifier.weight(1f, fill = false),
+                                            )
+                                        }
                                         // [T-codex-fast-mode] ⚡ badge ahead of the
                                         // resolved model name — small orange circle
                                         // + white bolt, shown only while Fast Mode
@@ -305,7 +331,7 @@ internal fun ChatTopBarTitle(
                                 val brandSlug = remember(modelName) { ModelBrandResolver.resolve(modelName) }
                                         ModelBrandIcon(slug = brandSlug, sizeDp = 13.dp)
                                         Text(
-                                            text = modelName.ifEmpty { providerName },
+                                            text = modelName,
                                             fontSize = 11.sp,
                                             lineHeight = 13.sp,
                                             color = ChatColors.tertiaryText,

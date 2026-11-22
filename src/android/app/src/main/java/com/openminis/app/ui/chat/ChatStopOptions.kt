@@ -87,15 +87,15 @@ internal fun StopButtonWithOptions(
     var menuOpen by remember { mutableStateOf(false) }
     var confirmOpen by remember { mutableStateOf(false) }
     var confirmEnabled by remember { mutableStateOf(StopOptionsPrefs.enabled(context)) }
-    Box(modifier = modifier.size(46.dp), contentAlignment = Alignment.Center) {
+    Box(modifier = modifier.size(43.dp), contentAlignment = Alignment.Center) {
         CircularProgressIndicator(
-            modifier = Modifier.size(46.dp),
+            modifier = Modifier.size(43.dp),
             strokeWidth = 2.dp,
             color = ToolErrorColor,
         )
         Box(
             modifier = Modifier
-                .size(38.dp)
+                .size(35.dp)
                 .background(ToolErrorColor, CircleShape)
                 .clip(CircleShape)
                 .combinedClickable(

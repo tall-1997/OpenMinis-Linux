@@ -4899,7 +4899,7 @@ fun ChatScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
 
                         if (showExpandedEditor) {
                             LongTextEditorDialog(
@@ -4924,7 +4924,7 @@ fun ChatScreen(
                             )
                         }
 
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
 
                         // Left: "/" slash command button (iOS: italic /, bold)
                         InputCircleButton(onClick = {
@@ -5431,25 +5431,25 @@ fun ChatScreen(
                             // Streaming with content → Send-into-queue; Idle with content → Send.
                             // Idle without text or attachments → disabled.
                             val canActivate = hasContent
-                            // [T-composer-running-ring] Same constant 46dp
+                            // [T-composer-running-ring] Same constant 43dp
                             // container as the Stop branch so the composer row
                             // height is identical in every state; the ring only
                             // renders while a run is in flight (send-into-queue
-                            // mode), and the 38dp button stays fully tappable.
+                            // mode), and the 35dp button stays fully tappable.
                             Box(
-                                modifier = Modifier.size(46.dp),
+                                modifier = Modifier.size(43.dp),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 if (isStreaming) {
                                     androidx.compose.material3.CircularProgressIndicator(
-                                        modifier = Modifier.size(46.dp),
+                                        modifier = Modifier.size(43.dp),
                                         strokeWidth = 2.dp,
                                         color = ChatColors.sendButton,
                                     )
                                 }
                                 Box(
                                     modifier = Modifier
-                                        .size(38.dp)
+                                        .size(35.dp)
                                         .background(
                                             if (canActivate) ChatColors.sendButton
                                             else ChatColors.sendButtonDisabled,

@@ -192,6 +192,7 @@ internal fun ProcessSummaryBar(
             .background(thinkingBlue.copy(alpha = 0.06f), shape)
             .border(0.5.dp, thinkingBlue.copy(alpha = 0.15f), shape)
             .clip(shape)
+            .runningShimmerSweep(running)
             .clickable(onClick = onToggle)
             // [P-process-card] Animate the expand/collapse height change:
             // without this the row list appears in one frame and the whole

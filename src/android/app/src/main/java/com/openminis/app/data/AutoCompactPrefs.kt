@@ -32,7 +32,7 @@ object AutoCompactPrefs {
     private const val PREFS = "minis_auto_compact_prefs"
     private const val KEY_ENABLED = "autoCompactOnThreshold"
     private const val KEY_THRESHOLD = "autoCompactThresholdPercent"
-    const val DEFAULT_THRESHOLD_PERCENT = 75
+    const val DEFAULT_THRESHOLD_PERCENT = 90
 
     @Volatile
     private var appContext: Context? = null

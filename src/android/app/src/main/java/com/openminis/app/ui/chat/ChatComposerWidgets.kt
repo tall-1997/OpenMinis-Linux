@@ -180,7 +180,7 @@ internal fun InputCircleButton(
 ) {
     Box(
         modifier = Modifier
-            .size(38.dp)
+            .size(35.dp)
             .background(ChatColors.inputIconBg, CircleShape)
             .border(0.5.dp, ChatColors.inputIconBorder, CircleShape)
             .clip(CircleShape)
@@ -216,7 +216,7 @@ internal fun MicButton(
     val borderColor = if (isRecording) Color.Transparent else ChatColors.inputIconBorder
     Box(
         modifier = Modifier
-            .size(38.dp)
+            .size(35.dp)
             .background(bg, CircleShape)
             .border(0.5.dp, borderColor, CircleShape)
             .clip(CircleShape)
@@ -307,6 +307,8 @@ internal fun ToolActivityPill(
             )
             .background(ChatColors.inputBg, pillShape)
             .border(0.5.dp, ChatColors.toolBorder, pillShape)
+            .clip(pillShape)
+            .runningShimmerSweep(isRunning)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
