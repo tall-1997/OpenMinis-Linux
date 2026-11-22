@@ -34,6 +34,14 @@ internal data class MessageUsageStats(
     val cacheReadTokens: Int,
     val cacheCreationTokens: Int,
     val streamDurationMs: Long? = null,
+    /**
+     * [T-message-usage-footer-time] Wall-clock time of the message this stats
+     * belongs to (ms epoch), injected by [usageByUiMessageId] from
+     * [ChatMessage.createdAt] — NOT part of the persisted usage JSON
+     * ([fromJson] always yields null). Null when no DB row backs the bubble;
+     * the three-tier time tier in the usage footer formats it.
+     */
+    val createdAtMs: Long? = null,
 ) {
     val promptTotalTokens: Int get() = inputTokens + cacheReadTokens + cacheCreationTokens
 
@@ -148,7 +156,10 @@ internal fun usageByUiMessageId(
         if (message.role != "assistant" || message.isStreaming) continue
         if (message.sourceDbIds.isEmpty()) continue
         val merged = mergeMessageUsageStats(message.sourceDbIds.map { usageByDbId[it] }) ?: continue
-        if (merged.hasData) out[message.id] = merged
+        // [T-message-usage-footer-time] Stamp the bubble's wall-clock time for
+        // the footer's three-tier time tier — merged stats carry no time of
+        // their own (the persisted usage JSON has no timestamp).
+        if (merged.hasData) out[message.id] = merged.copy(createdAtMs = message.createdAt)
     }
     return out
 }

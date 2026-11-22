@@ -530,9 +530,10 @@ internal fun ChatFlatItemRow(
 
 /**
  * [T-android-message-usage-footer] The small secondary line under an
- * assistant reply: `↑ 1.2k ↓ 340 · cache 87% · 45 tok/s`. The cache segment
+ * assistant reply: `↑ 1.2k ↓ 340 · cache 87% · 45 tok/s · 01:13`. The cache segment
  * is omitted when the provider reported no cache counters; tok/s is omitted
- * when the turn's streamed-text window was too short to be meaningful.
+ * when the turn's streamed-text window was too short to be meaningful; the
+ * time tier is omitted on in-memory rows without a DB row ([T-message-usage-footer-time]).
  */
 @Composable
 private fun MessageUsageFooterLine(stats: MessageUsageStats) {
@@ -544,8 +545,15 @@ private fun MessageUsageFooterLine(stats: MessageUsageStats) {
     val cachePart = if (stats.hasCacheData) {
         stringResource(R.string.chat_usage_footer_cache, (stats.cacheHitRatio * 100).toInt())
     } else null
-    val speedPart = stats.outputTokensPerSecond?.let { "$it tok/s" }
-    val parts = listOfNotNull(tokensPart, cachePart, speedPart)
+    val speedPart = stats.outputTokensPerSecond?.let {
+        stringResource(R.string.chat_usage_footer_speed, it)
+    }
+    // [T-message-usage-footer-time] Three-tier display time — today `HH:mm`,
+    // this year `M/d HH:mm`, older `yyyy/M/d HH:mm`; absent without a DB row.
+    val timePart = stats.createdAtMs?.let {
+        com.openminis.app.util.IsoTime.formatMessageDisplayTime(it)
+    }
+    val parts = listOfNotNull(tokensPart, cachePart, speedPart, timePart)
     Text(
         text = parts.joinToString(" · "),
         fontSize = MinisTypography.cap,

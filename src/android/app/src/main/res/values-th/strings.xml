@@ -615,6 +615,7 @@
     <string name="appearance_context_glow_subtitle">ขอบช่องพิมพ์ข้อความเรืองแสงหมุนรอบเมื่อบริบทใกล้ถึงขีดจำกัด</string>
     <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
     <string name="chat_usage_footer_cache">แคช %1$d%%</string>
+    <string name="chat_usage_footer_speed">%1$d tok/s</string>
     <string name="appearance_section_grouping">การจัดกลุ่ม</string>
     <string name="appearance_auto_grouping">จัดกลุ่มอัตโนมัติ</string>
     <string name="appearance_auto_grouping_subtitle">จัดแชทใหม่เข้ากลุ่มที่ตรงกัน</string>

@@ -665,6 +665,7 @@
     <string name="appearance_context_glow_subtitle">上下文接近上限時輸入框邊緣跑馬燈式發光</string>
     <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
     <string name="chat_usage_footer_cache">快取 %1$d%%</string>
+    <string name="chat_usage_footer_speed">%1$d tok/s</string>
     <string name="appearance_section_grouping">分組</string>
     <string name="appearance_auto_grouping">自動分組</string>
     <string name="appearance_auto_grouping_subtitle">把新對話歸入相符的群組</string>

@@ -615,6 +615,7 @@
     <string name="appearance_context_glow_subtitle">Umiikot na glow sa gilid ng input box kapag lumalapit sa limit ang context</string>
     <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
     <string name="chat_usage_footer_cache">cache %1$d%%</string>
+    <string name="chat_usage_footer_speed">%1$d tok/s</string>
     <string name="appearance_section_grouping">Pag-grupo</string>
     <string name="appearance_auto_grouping">Awtomatikong Pag-grupo</string>
     <string name="appearance_auto_grouping_subtitle">Ilagay ang bagong chat sa tugmang group</string>

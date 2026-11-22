@@ -615,6 +615,7 @@
     <string name="appearance_context_glow_subtitle">컨텍스트가 한도에 가까워지면 입력창 가장자리가 회전하며 빛납니다</string>
     <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
     <string name="chat_usage_footer_cache">캐시 %1$d%%</string>
+    <string name="chat_usage_footer_speed">%1$d tok/s</string>
     <string name="appearance_section_grouping">그룹 분류</string>
     <string name="appearance_auto_grouping">자동 그룹 분류</string>
     <string name="appearance_auto_grouping_subtitle">새 채팅을 어울리는 그룹에 넣습니다</string>

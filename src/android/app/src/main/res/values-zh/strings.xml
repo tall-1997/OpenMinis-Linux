@@ -848,6 +848,7 @@
     <string name="appearance_context_glow_subtitle">上下文接近上限时输入框边缘跑马灯式发光</string>
     <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
     <string name="chat_usage_footer_cache">缓存 %1$d%%</string>
+    <string name="chat_usage_footer_speed">%1$d tok/s</string>
     <string name="appearance_section_grouping">分组</string>
     <string name="appearance_auto_grouping">自动归类</string>
     <string name="appearance_auto_grouping_subtitle">新会话自动归入匹配的分组</string>

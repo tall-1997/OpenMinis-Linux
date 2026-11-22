@@ -615,6 +615,7 @@
     <string name="appearance_context_glow_subtitle">A borda da caixa de entrada brilha em rotação quando o contexto se aproxima do limite</string>
     <string name="chat_usage_footer_tokens">↑ %1$s ↓ %2$s</string>
     <string name="chat_usage_footer_cache">cache %1$d%%</string>
+    <string name="chat_usage_footer_speed">%1$d tok/s</string>
     <string name="appearance_section_grouping">Agrupamento</string>
     <string name="appearance_auto_grouping">Agrupamento automático</string>
     <string name="appearance_auto_grouping_subtitle">Coloca novas conversas em um grupo compatível</string>

@@ -298,6 +298,11 @@ interface ChatDao : MessageHeadDao, ChatTruncationDao, SessionBindingDao, UsageS
     @Query("SELECT sort_order FROM messages WHERE id = :id")
     suspend fun sortOrderOf(id: String): Int?
 
+    /** [T-message-usage-footer-time] The persisted wall-clock time of one row —
+     *  the UI bubble's createdAt backfill in [notePersistedUiRow]. */
+    @Query("SELECT created_at FROM messages WHERE id = :id")
+    suspend fun createdAtOf(id: String): Long?
+
     /**
      * [T-task-anchor] The earliest user row's raw `parts_json` — the task
      * description lives at the conversation head, outside every UI window.

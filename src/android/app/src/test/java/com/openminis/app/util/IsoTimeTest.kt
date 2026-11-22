@@ -1,7 +1,10 @@
 package com.openminis.app.util
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.time.ZoneId
+import java.time.ZonedDateTime
 
 class IsoTimeTest {
 
@@ -57,5 +60,44 @@ class IsoTimeTest {
         assertTrue(IsoTime.formatPathDate(ms), Regex("""\d{4}/\d{2}/\d{2}""").matches(IsoTime.formatPathDate(ms)))
         val http = IsoTime.formatHttpDate(ms)
         assertTrue(http, http.contains("GMT"))
+    }
+
+    // -- [T-message-usage-footer-time] three-tier display time ---------------
+
+    @Test
+    fun messageDisplayTimeTodayUses24hClock() {
+        val now = ZonedDateTime.of(2026, 11, 22, 10, 0, 0, 0, ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val msg = ZonedDateTime.of(2026, 11, 22, 1, 13, 0, 0, ZoneId.systemDefault()).toInstant().toEpochMilli()
+        assertEquals("01:13", IsoTime.formatMessageDisplayTime(msg, now))
+    }
+
+    @Test
+    fun messageDisplayTimeThisYearUsesMonthDayTime() {
+        val now = ZonedDateTime.of(2026, 11, 22, 10, 0, 0, 0, ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val msg = ZonedDateTime.of(2026, 3, 8, 1, 13, 0, 0, ZoneId.systemDefault()).toInstant().toEpochMilli()
+        assertEquals("3/8 01:13", IsoTime.formatMessageDisplayTime(msg, now))
+    }
+
+    @Test
+    fun messageDisplayTimeOlderYearUsesYearMonthDayTime() {
+        val now = ZonedDateTime.of(2026, 11, 22, 10, 0, 0, 0, ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val msg = ZonedDateTime.of(2025, 11, 22, 1, 13, 0, 0, ZoneId.systemDefault()).toInstant().toEpochMilli()
+        assertEquals("2025/11/22 01:13", IsoTime.formatMessageDisplayTime(msg, now))
+    }
+
+    @Test
+    fun messageDisplayTimeMidnightBoundaryFlipsTier() {
+        val now = ZonedDateTime.of(2026, 11, 22, 0, 5, 0, 0, ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val yesterday = ZonedDateTime.of(2026, 11, 21, 23, 59, 0, 0, ZoneId.systemDefault()).toInstant().toEpochMilli()
+        assertEquals("11/21 23:59", IsoTime.formatMessageDisplayTime(yesterday, now))
+        val today = ZonedDateTime.of(2026, 11, 22, 0, 1, 0, 0, ZoneId.systemDefault()).toInstant().toEpochMilli()
+        assertEquals("00:01", IsoTime.formatMessageDisplayTime(today, now))
+    }
+
+    @Test
+    fun messageDisplayTimeYearBoundaryFlipsTier() {
+        val now = ZonedDateTime.of(2026, 1, 1, 0, 5, 0, 0, ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val lastYear = ZonedDateTime.of(2025, 12, 31, 23, 59, 0, 0, ZoneId.systemDefault()).toInstant().toEpochMilli()
+        assertEquals("2025/12/31 23:59", IsoTime.formatMessageDisplayTime(lastYear, now))
     }
 }
