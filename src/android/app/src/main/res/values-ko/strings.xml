@@ -635,10 +635,9 @@
     <string name="env_var_privacy_footer">활성화하면 shell-execute 출력에 나타난 환경 변수 값이 모델로 전달되기 전에 마스킹됩니다(예: `sk-1********ajhks`). 8자 미만의 값은 모두 `*` 로 바뀝니다. 채팅에 표시되는 출력은 그대로 유지됩니다.</string>
     <string name="outbound_mask_toggle">발신 프라이버시 마스킹</string>
     <string name="outbound_mask_footer">옵트인 형태 마스킹: 키 형태 문자열(코드 포함), 이메일, 전화번호형 숫자를 자리표시자로 바꿉니다. 아래 embedding API 키는 앱 전용 prefs에 평문 저장. 기기 기록은 변경 없음.</string>
-    <string name="chat_menu_perm_yoyo">YOLO · 전체 자동</string>
-    <string name="chat_menu_perm_safe_auto">안전 자동 · 읽기 전용 도구는 자동 실행</string>
-    <string name="chat_menu_perm_ask">묻기 · 모든 호출 확인</string>
-    <string name="chat_menu_perm_off">끔 · 모든 도구 거부</string>
+    <string name="chat_menu_perm_yoyo">전체 접근</string>
+    <string name="chat_menu_perm_safe_auto">자율 모드</string>
+    <string name="chat_menu_perm_ask">변경 전 확인</string>
     <string name="gate_approval_allow_all">이 세션에서 항상 허용(현재 대상)</string>
     <string name="approval_action_allow_all_session">이 세션에서 항상 허용</string>
     <string name="env_var_section_header">변수</string>
@@ -3350,4 +3349,13 @@
     <string name="modeldetail_tail_budget_state_auto">자동(윈도에 맞춰 조정, 최대 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">이 모델 전용</string>
     <string name="tool_limits_tool_concurrency">병렬 읽기 도구 수</string>
+ <string name="perm_mode_desc_ask">파일을 바꾸기 전에 물어봅니다</string>
+ <string name="perm_mode_desc_auto">위험이 있을 때만 물어봅니다</string>
+ <string name="perm_mode_desc_full">확인 횟수를 줄입니다</string>
+ <string name="perm_full_access_title">전체 접근을 사용할까요?</string>
+ <string name="perm_full_access_body">에이전트가 매번 묻지 않고 파일을 읽고 만들고 삭제하며, 터미널 명령을 실행하고 네트워크나 연결된 앱을 사용합니다. 데이터 손실이나 유출이 생길 수 있으니 작업을 신뢰할 때만 켜세요. 언제든 되돌릴 수 있습니다.</string>
+ <string name="perm_full_access_ack">위험을 이해하며 내 데이터 안전에 책임을 집니다.</string>
+ <string name="perm_full_access_confirm">사용</string>
+ <string name="perm_guarded_risk_reason">위험한 명령 확인</string>
+ <string name="perm_guarded_risk_message">자율 모드가 이 명령을 위험하다고 판단했습니다. 한 번 확인하면 실행합니다.</string>
 </resources>

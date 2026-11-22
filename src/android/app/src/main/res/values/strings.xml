@@ -534,10 +534,9 @@
     <string name="settings_section_permissions">Permissions</string>
     <string name="settings_permissions_subtitle">System privileges and per-tool access: accessibility, Shizuku, host su, privacy level. Agent permission for each tool is set on this page.</string>
     <!-- [#31] Four-tier session tool gate (cycle order ASK → SAFE_AUTO → YOLO → OFF). -->
-    <string name="chat_menu_perm_yoyo">YOLO · full auto</string>
-    <string name="chat_menu_perm_safe_auto">Safe auto · read-only tools run free</string>
-    <string name="chat_menu_perm_ask">Ask · confirm every call</string>
-    <string name="chat_menu_perm_off">Off · deny all tools</string>
+    <string name="chat_menu_perm_yoyo">Full access</string>
+    <string name="chat_menu_perm_safe_auto">Autonomous</string>
+    <string name="chat_menu_perm_ask">Ask before changes</string>
 <string name="settings_section_logs">Logs</string>
     <string name="settings_logs_subtitle">View and export app logs</string>
     <string name="settings_section_about">About</string>
@@ -3117,4 +3116,13 @@
     <string name="modeldetail_tail_budget_state_auto">Automatic (scales with the window, up to 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Custom for this model</string>
     <string name="tool_limits_tool_concurrency">Parallel read tools</string>
+ <string name="perm_mode_desc_ask">Asks before files change</string>
+ <string name="perm_mode_desc_auto">Asks only when there is risk</string>
+ <string name="perm_mode_desc_full">Fewer confirmations</string>
+ <string name="perm_full_access_title">Enable full access?</string>
+ <string name="perm_full_access_body">The agent will read, create and delete files, run terminal commands, and use the network or connected apps without asking each time. These actions can cause data loss or leaks, so only enable this when you trust the task. You can switch back at any time.</string>
+ <string name="perm_full_access_ack">I understand the risk and take responsibility for my data.</string>
+ <string name="perm_full_access_confirm">Enable</string>
+ <string name="perm_guarded_risk_reason">Confirm this risky command</string>
+ <string name="perm_guarded_risk_message">Autonomous mode rated this command as risky. Approve once to let it run.</string>
 </resources>

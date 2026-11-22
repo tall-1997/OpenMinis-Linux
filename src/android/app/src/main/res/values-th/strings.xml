@@ -635,10 +635,9 @@
     <string name="env_var_privacy_footer">เมื่อเปิดใช้ ค่าของตัวแปรสภาพแวดล้อมใดๆ ที่ปรากฏในผลลัพธ์ของ shell-execute จะถูกแทนที่ด้วยรูปแบบปกปิด (เช่น `sk-1********ajhks`) ก่อนส่งถึงโมเดล ค่าที่สั้นกว่า 8 อักขระจะกลายเป็น `*` ทั้งหมด ส่วนผลลัพธ์ที่ผู้ใช้เห็นในแชทจะไม่เปลี่ยนแปลง</string>
     <string name="outbound_mask_toggle">การปกปิดความเป็นส่วนตัวขาออก</string>
     <string name="outbound_mask_footer">มาสกิงแบบเลือกเปิด: สตริงรูปแบบคีย์ (รวมในโค้ด) อีเมล และเลขคล้ายเบอร์โทรจะถูกแทนที่ คีย์ API embedding ด้านล่างเก็บเป็นข้อความล้วนใน prefs ส่วนตัวของแอป ประวัติในเครื่องไม่เปลี่ยน</string>
-    <string name="chat_menu_perm_yoyo">YOLO · อัตโนมัติทั้งหมด</string>
-    <string name="chat_menu_perm_safe_auto">อัตโนมัติปลอดภัย · เครื่องมืออ่านอย่างเดียวทำงานอิสระ</string>
-    <string name="chat_menu_perm_ask">ถาม · ยืนยันทุกการเรียก</string>
-    <string name="chat_menu_perm_off">ปิด · ปฏิเสธเครื่องมือทั้งหมด</string>
+    <string name="chat_menu_perm_yoyo">เข้าถึงเต็มรูปแบบ</string>
+    <string name="chat_menu_perm_safe_auto">โหมดอัตโนมัติ</string>
+    <string name="chat_menu_perm_ask">ถามก่อนเปลี่ยนแปลง</string>
     <string name="gate_approval_allow_all">อนุญาตเซสชันนี้ตลอด (เป้าหมายปัจจุบัน)</string>
     <string name="approval_action_allow_all_session">อนุญาตเสมอในเซสชันนี้</string>
     <string name="env_var_section_header">ตัวแปร</string>
@@ -3351,4 +3350,13 @@
     <string name="modeldetail_tail_budget_state_auto">อัตโนมัติ (ปรับตามหน้าต่าง สูงสุด 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">เฉพาะโมเดลนี้</string>
     <string name="tool_limits_tool_concurrency">เครื่องมืออ่านแบบขนาน</string>
+ <string name="perm_mode_desc_ask">ถามก่อนแก้ไขไฟล์</string>
+ <string name="perm_mode_desc_auto">ถามเมื่อมีความเสี่ยงเท่านั้น</string>
+ <string name="perm_mode_desc_full">ยืนยันน้อยลง</string>
+ <string name="perm_full_access_title">เปิดใช้การเข้าถึงเต็มรูปแบบหรือไม่</string>
+ <string name="perm_full_access_body">เอเจนต์จะอ่าน สร้าง และลบไฟล์ รันคำสั่งในเทอร์มินัล และใช้เครือข่ายหรือแอปที่เชื่อมต่อได้โดยไม่ถามทุกครั้ง การกระทำเหล่านี้อาจทำให้ข้อมูลสูญหายหรือรั่วไหล โปรดเปิดใช้เมื่อคุณไว้วางใจงานนี้เท่านั้น และกลับมาเปลี่ยนได้ทุกเมื่อ</string>
+ <string name="perm_full_access_ack">ฉันเข้าใจความเสี่ยงและรับผิดชอบต่อความปลอดภัยของข้อมูลตัวเอง</string>
+ <string name="perm_full_access_confirm">เปิดใช้</string>
+ <string name="perm_guarded_risk_reason">ยืนยันคำสั่งที่มีความเสี่ยง</string>
+ <string name="perm_guarded_risk_message">โหมดอัตโนมัติเห็นว่าคำสั่งนี้มีความเสี่ยง ยืนยันหนึ่งครั้งเพื่อรัน</string>
 </resources>

@@ -635,10 +635,9 @@
     <string name="env_var_privacy_footer">有効にすると、shell-execute の出力に含まれる環境変数の値はモデルに渡される前にマスクされます（例: `sk-1********ajhks`）。8 文字未満の値はすべて `*` に置き換えられます。チャットに表示される出力は変更されません。</string>
     <string name="outbound_mask_toggle">送信プライバシーマスキング</string>
     <string name="outbound_mask_footer">オプトインの形状マスキング：鍵型の文字列（コード内を含む）、メール、電話番号型の数字をプレースホルダーに置換。下の embedding API キーはアプリ非公開 prefs に平文保存。端末内履歴は変更なし。</string>
-    <string name="chat_menu_perm_yoyo">YOLO · 全自動</string>
-    <string name="chat_menu_perm_safe_auto">安全自動 · 読み取り系ツールは自動実行</string>
-    <string name="chat_menu_perm_ask">確認 · 毎回の呼び出しを確認</string>
-    <string name="chat_menu_perm_off">オフ · すべてのツールを拒否</string>
+    <string name="chat_menu_perm_yoyo">フルアクセス</string>
+    <string name="chat_menu_perm_safe_auto">自律モード</string>
+    <string name="chat_menu_perm_ask">変更前に確認</string>
     <string name="gate_approval_allow_all">このセッションで常に許可（現在の対象）</string>
     <string name="approval_action_allow_all_session">このセッションでは常に許可</string>
     <string name="env_var_section_header">変数</string>
@@ -3350,4 +3349,13 @@
     <string name="modeldetail_tail_budget_state_auto">自動（ウィンドウに合わせて調整、最大60k）</string>
     <string name="modeldetail_tail_budget_state_specific">このモデル専用</string>
     <string name="tool_limits_tool_concurrency">並列読み取りツール数</string>
+ <string name="perm_mode_desc_ask">ファイル変更の前に確認します</string>
+ <string name="perm_mode_desc_auto">リスクがあるときだけ確認します</string>
+ <string name="perm_mode_desc_full">確認の回数を減らします</string>
+ <string name="perm_full_access_title">フルアクセスを有効にしますか？</string>
+ <string name="perm_full_access_body">エージェントは毎回確認せずに、ファイルの読み取り・作成・削除、ターミナルコマンドの実行、ネットワークや接続アプリの利用を行います。データの消失や漏えいにつながる可能性があるため、タスクを信頼できる場合のみ有効にしてください。いつでも元に戻せます。</string>
+ <string name="perm_full_access_ack">リスクを理解し、自分のデータの安全に責任を持ちます。</string>
+ <string name="perm_full_access_confirm">有効にする</string>
+ <string name="perm_guarded_risk_reason">リスクのあるコマンドを確認</string>
+ <string name="perm_guarded_risk_message">自律モードがこのコマンドをリスクありと判定しました。一度確認すると実行します。</string>
 </resources>

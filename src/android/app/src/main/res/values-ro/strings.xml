@@ -636,10 +636,9 @@
     <string name="env_var_privacy_footer">Când este activat, orice valoare a unei variabile de mediu care apare în ieșirea shell-execute este înlocuită cu o formă mascată (ex. `sk-1********ajhks`) înainte de a ajunge la model. Valorile mai scurte de 8 caractere devin integral `*`. Ieșirea vizibilă utilizatorului în conversație rămâne neschimbată.</string>
     <string name="outbound_mask_toggle">Mascare confidențialitate la ieșire</string>
     <string name="outbound_mask_footer">Mascares opt-in după formă: șiruri tip cheie (inclusiv în cod), e-mailuri și numere de telefon devin substituenți. Cheia API de embedding de mai jos e stocată în clar în prefs private. Istoricul dispozitivului neschimbat.</string>
-    <string name="chat_menu_perm_yoyo">YOLO · complet automat</string>
-    <string name="chat_menu_perm_safe_auto">Auto sigur · uneltele de citire rulează liber</string>
-    <string name="chat_menu_perm_ask">Întreabă · confirmă fiecare apel</string>
-    <string name="chat_menu_perm_off">Dezactivat · refuză toate uneltele</string>
+    <string name="chat_menu_perm_yoyo">Acces complet</string>
+    <string name="chat_menu_perm_safe_auto">Autonom</string>
+    <string name="chat_menu_perm_ask">Întreabă înainte de modificări</string>
     <string name="gate_approval_allow_all">Permite întotdeauna în această sesiune (ținta curentă)</string>
     <string name="approval_action_allow_all_session">Permite întotdeauna în această sesiune</string>
     <string name="env_var_section_header">Variabile</string>
@@ -3355,4 +3354,13 @@
     <string name="modeldetail_tail_budget_state_auto">Automat (se adaptează ferestrei, până la 60k)</string>
     <string name="modeldetail_tail_budget_state_specific">Personalizat pentru acest model</string>
     <string name="tool_limits_tool_concurrency">Instrumente de citire în paralel</string>
+ <string name="perm_mode_desc_ask">Întreabă înainte de a modifica fișiere</string>
+ <string name="perm_mode_desc_auto">Întreabă doar când există risc</string>
+ <string name="perm_mode_desc_full">Mai puține confirmări</string>
+ <string name="perm_full_access_title">Activezi accesul complet?</string>
+ <string name="perm_full_access_body">Agentul va citi, crea șișterge fișiere, va rula comenzi de terminal și va folosi rețeaua sau aplicații conectate fără să întrebe de fiecare dată. Aceste acțiuni pot provoca pierderea sau scurgerea datelor, așa că activează doar dacă ai încredere în sarcină. Poți reveni oricând.</string>
+ <string name="perm_full_access_ack">Înțeleg riscul și îmi asum responsabilitatea pentru datele mele.</string>
+ <string name="perm_full_access_confirm">Activează</string>
+ <string name="perm_guarded_risk_reason">Confirmă comanda riscantă</string>
+ <string name="perm_guarded_risk_message">Modul autonom a considerat această comandă riscantă. Confirmă o dată pentru a o rula.</string>
 </resources>
