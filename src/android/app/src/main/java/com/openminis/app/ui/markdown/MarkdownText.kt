@@ -386,7 +386,7 @@ private fun BlockquoteView(
 ) {
     // (#8) Orange accent rule on the leading edge — now reads the palette
     // slot (ChatColors.kt blockquoteBar: iOS systemOrange @ 50% in light,
-    // systemOrange-dark variant in dark) instead of a raw 0xFFFF9500 literal,
+    // systemOrange-dark variant in dark) instead of a raw 0xFFF0A32B literal,
     // per the [T-android-color-contract]: chat-adjacent surfaces follow the
     // in-app palette so they track the theme override AND the dark palette.
     // The old literal was full-opacity; the palette slot's tuned alpha is the

@@ -133,7 +133,7 @@ private fun DownloadRow(
             BrowserTabPool.DownloadState.DOWNLOADING ->
                 m3Icon(Icons.Default.Download) to MaterialTheme.colorScheme.primary
             BrowserTabPool.DownloadState.COMPLETED ->
-                m3Icon(Icons.Default.CheckCircle) to androidx.compose.ui.graphics.Color(0xFF34C759)
+                m3Icon(Icons.Default.CheckCircle) to androidx.compose.ui.graphics.Color(0xFF4CAF50)
             BrowserTabPool.DownloadState.FAILED ->
                 Icons.Default.ErrorOutline to MaterialTheme.colorScheme.error
         }

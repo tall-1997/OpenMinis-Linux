@@ -51,40 +51,40 @@ internal fun formatStepTimestamp(epochMs: Long): String =
 // consistent: file tools cyan/blue, agent tools indigo, web tools blue,
 // image tools purple, memory/goal pink, interactive prompts blue.
 internal fun toolAccentColor(toolName: String): Color = when (toolName) {
-    "shell_execute", "shell_exec", "agent_terminal" -> Color(0xFF34C759)
-    "file_read" -> Color(0xFF32ADE6)
-    "file_write" -> Color(0xFF007AFF)
-    "file_edit", "multi_edit" -> Color(0xFFFF9500)
-    "file_checkpoint" -> Color(0xFF8E8E93)
-    "browser_use" -> Color(0xFF007AFF)
-    "read_image", "ocr_image" -> Color(0xFFAF52DE)
-    "memory_write", "memory_get" -> Color(0xFFFF2D55)
-    "web_search" -> Color(0xFF32ADE6)    // iOS: .cyan for search
-    "web_fetch" -> Color(0xFF007AFF)
-    "grep", "grep_source" -> Color(0xFF64D2FF)
-    "glob", "list_dir" -> Color(0xFF32ADE6)
-    "code_graph" -> Color(0xFF5856D6)
-    "search_sessions", "read_session" -> Color(0xFF64D2FF)
-    "spawn_agent", "run_subagent", "dispatch_agents", "wolfpack_run", "check_agent" -> Color(0xFF5856D6)
-    "agent_plan" -> Color(0xFF5856D6)
-    "agent_report" -> Color(0xFF30B0C7)
-    "update_goal" -> Color(0xFFFF2D55)
-    "evolution" -> Color(0xFFAF52DE)
-    "ask_user_question" -> Color(0xFF007AFF)
-    "ask_reasoning" -> Color(0xFFFF9500)
-    "execute_code" -> Color(0xFF5856D6)
-    "su_exec" -> Color(0xFFFF9500)
-    "ssh_exec", "env_exec" -> Color(0xFF32ADE6)
-    "ui_read", "ui_action" -> Color(0xFF64D2FF)
-    "invoke_skill", "ui_skill", "skill_manage" -> Color(0xFF007AFF)
-    "cronjob" -> Color(0xFFFF9500)
-    "background_job" -> Color(0xFF64D2FF)
-    "get_screen_time" -> Color(0xFF64D2FF)
+    "shell_execute", "shell_exec", "agent_terminal" -> Color(0xFF4CAF50)
+    "file_read" -> Color(0xFFFFB3D1)
+    "file_write" -> Color(0xFFFF7AD9)
+    "file_edit", "multi_edit" -> Color(0xFFF0A32B)
+    "file_checkpoint" -> Color(0xFFB9A3B0)
+    "browser_use" -> Color(0xFFFF7AD9)
+    "read_image", "ocr_image" -> Color(0xFFA81E77)
+    "memory_write", "memory_get" -> Color(0xFFE63C93)
+    "web_search" -> Color(0xFFFFB3D1)    // iOS: .cyan for search
+    "web_fetch" -> Color(0xFFFF7AD9)
+    "grep", "grep_source" -> Color(0xFFFFD9E8)
+    "glob", "list_dir" -> Color(0xFFFFB3D1)
+    "code_graph" -> Color(0xFFE63C93)
+    "search_sessions", "read_session" -> Color(0xFFFFD9E8)
+    "spawn_agent", "run_subagent", "dispatch_agents", "wolfpack_run", "check_agent" -> Color(0xFFE63C93)
+    "agent_plan" -> Color(0xFFE63C93)
+    "agent_report" -> Color(0xFFFF7AD9)
+    "update_goal" -> Color(0xFFE63C93)
+    "evolution" -> Color(0xFFA81E77)
+    "ask_user_question" -> Color(0xFFFF7AD9)
+    "ask_reasoning" -> Color(0xFFF0A32B)
+    "execute_code" -> Color(0xFFE63C93)
+    "su_exec" -> Color(0xFFF0A32B)
+    "ssh_exec", "env_exec" -> Color(0xFFFFB3D1)
+    "ui_read", "ui_action" -> Color(0xFFFFD9E8)
+    "invoke_skill", "ui_skill", "skill_manage" -> Color(0xFFFF7AD9)
+    "cronjob" -> Color(0xFFF0A32B)
+    "background_job" -> Color(0xFFFFD9E8)
+    "get_screen_time" -> Color(0xFFFFD9E8)
     "present_file", "deliverable" -> Color(0xFF30D158)     // deliverable green
     else -> when {
-        toolName.startsWith("mcp__") -> Color(0xFF5856D6)   // server-provided tools
-        toolName.startsWith("online_") -> Color(0xFF007AFF)
-        else -> Color(0xFF8E8E93)                            // unknown = neutral gray
+        toolName.startsWith("mcp__") -> Color(0xFFE63C93)   // server-provided tools
+        toolName.startsWith("online_") -> Color(0xFFFF7AD9)
+        else -> Color(0xFFB9A3B0)                            // unknown = neutral gray
     }
 }
 

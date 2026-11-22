@@ -172,7 +172,7 @@ internal fun InlineErrorBanner(error: String, onRetry: (() -> Unit)? = null) {
             .widthIn(min = 200.dp)
             .padding(top = 4.dp)
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFFFF3B30).copy(alpha = 0.12f))
+            .background(Color(0xFFFF6B6B).copy(alpha = 0.12f))
             .combinedClickable(
                 onClick = {},
                 onLongClick = {
@@ -185,13 +185,13 @@ internal fun InlineErrorBanner(error: String, onRetry: (() -> Unit)? = null) {
         Icon(
             imageVector = m3Icon(Icons.Default.Error),
             contentDescription = null,
-            tint = Color(0xFFFF3B30),
+            tint = Color(0xFFFF6B6B),
             modifier = Modifier.size(14.dp),
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
             text = error,
-            color = Color(0xFFFF3B30),
+            color = Color(0xFFFF6B6B),
             fontSize = 12.sp,
             lineHeight = 16.sp,
             maxLines = 3,
@@ -204,7 +204,7 @@ internal fun InlineErrorBanner(error: String, onRetry: (() -> Unit)? = null) {
                 modifier = Modifier
                     .minimumInteractiveComponentSize()
                     .clip(RoundedCornerShape(50))
-                    .background(Color(0xFFFF3B30).copy(alpha = 0.15f))
+                    .background(Color(0xFFFF6B6B).copy(alpha = 0.15f))
                     .clickable(onClick = onRetry)
                     .padding(horizontal = 10.dp, vertical = 3.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -212,11 +212,11 @@ internal fun InlineErrorBanner(error: String, onRetry: (() -> Unit)? = null) {
                 Icon(
                     imageVector = m3Icon(Icons.Default.Refresh),
                     contentDescription = null,
-                    tint = Color(0xFFFF3B30),
+                    tint = Color(0xFFFF6B6B),
                     modifier = Modifier.size(10.dp),
                 )
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(stringResource(R.string.chat_longpress_retry), color = Color(0xFFFF3B30), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.chat_longpress_retry), color = Color(0xFFFF6B6B), fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -542,7 +542,7 @@ internal fun ThinkingBlock(
         }
         wasStreaming = isStreaming
     }
-    val thinkingBlue = Color(0xFF007AFF)
+    val thinkingBlue = Color(0xFFFF7AD9)
     val charCount = block.content.length
     val charLabel = when {
         charCount >= 1000 -> "${charCount / 1000}K"

@@ -316,7 +316,7 @@ internal fun ChatTopBarTitle(
                                                 contentAlignment = Alignment.Center,
                                                 modifier = Modifier
                                                     .size(11.dp)
-                                                    .background(Color(0xFFFF9500), CircleShape),
+                                                    .background(Color(0xFFF0A32B), CircleShape),
                                             ) {
                                                 Icon(
                                                     Icons.Default.Bolt,

@@ -157,7 +157,7 @@ internal fun ProcessSummaryBar(
     // not a visual break: same blue, same 12dp radius, same 6%/15% tint and
     // 0.5dp hairline, same 12×8 padding as ThinkingBlock. The old 22dp
     // backgroundless capsule looked nothing like the blocks it replaced.
-    val thinkingBlue = Color(0xFF007AFF)
+    val thinkingBlue = Color(0xFFFF7AD9)
     val shape = RoundedCornerShape(12.dp)
     // [P-process-card] Failure tints ONLY the failed tool rows inside the
     // card (user direction): the header keeps its normal blue title — the
@@ -283,7 +283,7 @@ internal fun ProcessSummaryBar(
  */
 @Composable
 private fun ProcessStepRow(step: ProcessStepRef, onOpen: () -> Unit) {
-    val thinkingBlue = Color(0xFF007AFF)
+    val thinkingBlue = Color(0xFFFF7AD9)
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val isThinking = step.kind == "thinking"
     val isFailed = !isThinking && step.status == ToolBlockStatus.FAILED

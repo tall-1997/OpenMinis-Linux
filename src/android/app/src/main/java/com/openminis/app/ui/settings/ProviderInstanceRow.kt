@@ -132,7 +132,7 @@ internal fun ProviderInstanceRow(
                 contentDescription = stringResource(
                     if (pinned) R.string.provider_unset_favorite else R.string.provider_set_favorite,
                 ),
-                tint = if (pinned) Color(0xFFFFCC00)
+                tint = if (pinned) Color(0xFFFFD070)
                 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
             )
         }

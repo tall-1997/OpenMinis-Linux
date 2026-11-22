@@ -302,7 +302,7 @@ internal fun ModelPickerSheet(
                             PickerSelectionMark(
                                 selected = isSelected,
                                 size = 22.dp,
-                                selectedTint = Color(0xFF34C759),
+                                selectedTint = Color(0xFF4CAF50),
                             )
                             Spacer(Modifier.width(10.dp))
                             // [T-android-model-picker-polish] Group
@@ -316,7 +316,7 @@ internal fun ModelPickerSheet(
                             Icon(
                                 Icons.Default.Layers,
                                 contentDescription = null,
-                                tint = Color(0xFF007AFF),
+                                tint = Color(0xFFFF7AD9),
                                 modifier = Modifier.size(18.dp),
                             )
                             Spacer(Modifier.width(10.dp))
@@ -396,10 +396,10 @@ internal fun ModelPickerSheet(
                                     fontSize = 9.sp,
                                     lineHeight = 11.sp,
                                     fontWeight = FontWeight.Medium,
-                                    color = Color(0xFF007AFF),
+                                    color = Color(0xFFFF7AD9),
                                     modifier = Modifier
                                         .background(
-                                            Color(0xFF007AFF).copy(alpha = 0.1f),
+                                            Color(0xFFFF7AD9).copy(alpha = 0.1f),
                                             RoundedCornerShape(50),
                                         )
                                         .padding(horizontal = 5.dp, vertical = 1.dp),
@@ -476,7 +476,7 @@ internal fun ModelPickerSheet(
                                     Icon(
                                         if (isActive) m3Icon(Icons.Default.CheckCircle) else Icons.Default.RadioButtonUnchecked,
                                         contentDescription = null,
-                                        tint = if (isActive) Color(0xFF007AFF)
+                                        tint = if (isActive) Color(0xFFFF7AD9)
                                         else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f),
                                         modifier = Modifier.size(17.dp),
                                     )
@@ -682,7 +682,7 @@ internal fun ModelPickerSheet(
                                             m3Icon(Icons.Default.KeyboardArrowDown),
                                             contentDescription = null,
                                             modifier = Modifier.size(16.dp),
-                                            tint = Color(0xFF007AFF),
+                                            tint = Color(0xFFFF7AD9),
                                         )
                                         Spacer(Modifier.width(4.dp))
                                         Text(
@@ -692,7 +692,7 @@ internal fun ModelPickerSheet(
                                                 entries.size,
                                             ),
                                             style = MaterialTheme.typography.labelMedium,
-                                            color = Color(0xFF007AFF),
+                                            color = Color(0xFFFF7AD9),
                                         )
                                     }
                                 }
@@ -850,7 +850,7 @@ private fun QuickTestButton(onClick: () -> Unit) {
         Icon(
             Icons.Default.Bolt,
             contentDescription = stringResource(R.string.model_picker_quick_test),
-            tint = Color(0xFF007AFF),
+            tint = Color(0xFFFF7AD9),
             modifier = Modifier.size(17.dp),
         )
     }

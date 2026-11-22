@@ -279,7 +279,7 @@ private fun SubAgentDetailSheet(
                     Icon(
                         Icons.Filled.Stop,
                         contentDescription = stringResource(R.string.subagent_stop_desc, member.title),
-                        tint = Color(0xFFFF3B30),
+                        tint = Color(0xFFFF6B6B),
                     )
                 }
             }
@@ -518,10 +518,10 @@ private fun memberLabel(member: SubAgentActivityTracker.Member): String =
     }
 
 private fun phaseColor(phase: String): Color = when (phase) {
-    "调用工具" -> Color(0xFFFF9500)
-    "执行中" -> Color(0xFF34C759)
-    "回复中" -> Color(0xFF5856D6)
-    else -> Color(0xFF007AFF)
+    "调用工具" -> Color(0xFFF0A32B)
+    "执行中" -> Color(0xFF4CAF50)
+    "回复中" -> Color(0xFFE63C93)
+    else -> Color(0xFFFF7AD9)
 }
 
 internal fun subAgentToolTitle(name: String, args: String): String {

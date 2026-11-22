@@ -55,14 +55,14 @@ import androidx.compose.ui.graphics.Color
 // repeating a Color(0xFF...) literal) and from which the dynamic-accent table
 // below is built. Declare BEFORE monetAccentTiles so the table initializer
 // sees them.
-val IosBlue = Color(0xFF007AFF)
-val IosGreen = Color(0xFF34C759)
-val IosOrange = Color(0xFFFF9500)
-val IosIndigo = Color(0xFF5856D6)
-val IosPurple = Color(0xFFAF52DE)
-val IosTeal = Color(0xFF30B0C7)
-val IosRed = Color(0xFFFF3B30)
-val IosGray = Color(0xFF8E8E93)
+val IosBlue = Color(0xFFFF7AD9)
+val IosGreen = Color(0xFF4CAF50)
+val IosOrange = Color(0xFFF0A32B)
+val IosIndigo = Color(0xFFE63C93)
+val IosPurple = Color(0xFFA81E77)
+val IosTeal = Color(0xFFFF7AD9)
+val IosRed = Color(0xFFFF6B6B)
+val IosGray = Color(0xFFB9A3B0)
 
 // Accent hues that follow the wallpaper when dynamic color is on. The first
 // block is the iOS system palette the settings chrome was tuned against; the
@@ -78,18 +78,18 @@ internal val monetAccentTiles = setOf(
     IosPurple,         // iOS purple
     IosTeal,           // iOS teal / session research
     Color(0xFF5AC8FA), // iOS light teal
-    Color(0xFFF09A37), // session code + travel orange
-    Color(0xFF3478F6), // session writing + education blue
-    Color(0xFFFF2D55), // iOS systemPink / session creative + design
+    Color(0xFFF0A32B), // session code + travel orange
+    Color(0xFFFF7AD9), // session writing + education blue
+    Color(0xFFE63C93), // iOS systemPink / session creative + design
     Color(0xFF9B59B6), // session math purple
-    Color(0xFF00BCD4), // session translation cyan
+    Color(0xFFF0A32B), // session translation cyan
     Color(0xFF00C7BE), // session finance teal
-    Color(0xFFFFCC00), // iOS systemYellow / session productivity
+    Color(0xFFFFD070), // iOS systemYellow / session productivity
     Color(0xFF8B6914), // session support khaki
 )
 
-// Deliberately NOT in the table: 0xFFFF3B30 (iOS systemRed — session health,
-// destructive confirmations), 0xFF8E8E93 (iOS systemGray — session "other",
+// Deliberately NOT in the table: 0xFFFF6B6B (iOS systemRed — session health,
+// destructive confirmations), 0xFFB9A3B0 (iOS systemGray — session "other",
 // neutral chrome). They stay static in both modes.
 
 /** Resolved colors for one accent tile, as [resolveMonetTile] produces them. */

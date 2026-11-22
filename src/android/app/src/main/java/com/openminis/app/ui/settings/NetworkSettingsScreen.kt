@@ -187,7 +187,7 @@ fun NetworkSettingsScreen(
                 SettingsRow(
                     title = stringResource(R.string.network_paused_title),
                     icon = Icons.Outlined.Restore,
-                    iconColor = Color(0xFFFF9500),
+                    iconColor = Color(0xFFF0A32B),
                     trailing = {
                         MinisTextButton(onClick = { NetworkHub.resume() }) {
                             Text(stringResource(R.string.network_turn_back_on))
@@ -344,7 +344,7 @@ fun NetworkSettingsScreen(
                     trailing = if (keepsFailing) ({
                         Text(
                             stringResource(R.string.network_alert_keeps_failing),
-                            color = Color(0xFFFF9500),
+                            color = Color(0xFFF0A32B),
                             style = MaterialTheme.typography.labelSmall,
                         )
                     }) else null,
@@ -414,7 +414,7 @@ fun NetworkSettingsScreen(
             SettingsSection {
                 Text(
                     err,
-                    color = Color(0xFFFF9500),
+                    color = Color(0xFFF0A32B),
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(16.dp),
                 )
@@ -543,7 +543,7 @@ fun NetworkSettingsScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(
                                 Modifier.size(8.dp).background(
-                                    if (p.online) Color(0xFF34C759) else MaterialTheme.colorScheme.outline,
+                                    if (p.online) Color(0xFF4CAF50) else MaterialTheme.colorScheme.outline,
                                     CircleShape,
                                 ),
                             )

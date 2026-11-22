@@ -5450,10 +5450,23 @@ fun ChatScreen(
                                 Box(
                                     modifier = Modifier
                                         .size(35.dp)
-                                        .background(
-                                            if (canActivate) ChatColors.sendButton
-                                            else ChatColors.sendButtonDisabled,
-                                            CircleShape,
+                                        // [T-xhy-skin] 小黄鱼 primary-button gradient
+                                        // (btn_primary_bg: #FFB3D1 -> #FF7AD9) on the
+                                        // active send button; disabled stays flat.
+                                        .then(
+                                            if (canActivate) {
+                                                Modifier.background(
+                                                    Brush.linearGradient(
+                                                        listOf(Color(0xFFFFB3D1), Color(0xFFFF7AD9)),
+                                                    ),
+                                                    CircleShape,
+                                                )
+                                            } else {
+                                                Modifier.background(
+                                                    ChatColors.sendButtonDisabled,
+                                                    CircleShape,
+                                                )
+                                            },
                                         )
                                         .clip(CircleShape)
                                         .clickable(enabled = canActivate) {

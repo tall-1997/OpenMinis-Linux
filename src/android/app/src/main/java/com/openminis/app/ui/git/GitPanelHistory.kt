@@ -92,10 +92,10 @@ internal fun GitPanelHistory(state: GitPanelState, viewModel: GitPanelViewModel)
 
 /** ZCode graph colours, cycled per lane (Tan[4] in the desktop client). */
 private val laneColors = listOf(
-    Color(0xFF007AFF), // blue
-    Color(0xFFFF9500), // orange
-    Color(0xFF34C759), // green
-    Color(0xFFAF52DE), // purple
+    Color(0xFFFF7AD9), // blue
+    Color(0xFFF0A32B), // orange
+    Color(0xFF4CAF50), // green
+    Color(0xFFA81E77), // purple
 )
 
 internal fun laneColor(lane: Int): Color = laneColors[Math.floorMod(lane, laneColors.size)]
@@ -300,7 +300,7 @@ private fun LaneCanvas(row: CommitLaneRow, laneCount: Int) {
                     lineTo(nx - r, cy)
                     close()
                 }
-                drawPath(path, Color(0xFFFF9500))
+                drawPath(path, Color(0xFFF0A32B))
             }
             else -> drawCircle(
                 color = nodeColor,

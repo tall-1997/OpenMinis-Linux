@@ -38,44 +38,44 @@ import androidx.compose.ui.unit.sp
 //
 // Names keep the `Teal` prefix only to avoid churning 90+ call sites; the
 // value is the contract, not the name.
-// [T-apple-blue] Apple Blue primary, desaturated for Android readability.
-// Original #0066CC reads as glaring on 1000nit+ displays. #5A8AD2 keeps
-// the same hue/lightness with ~30% less saturation per WCAG best practices.
-private val TealPrimary = Color(0xFF5A8AD2)
-private val TealOnPrimary = Color(0xFFFFFFFF)
-private val TealPrimaryContainer = Color(0xFFD6E4FF)
-private val TealOnPrimaryContainer = Color(0xFF001A3B)
-private val TealSecondary = Color(0xFF545F70)
-private val TealOnSecondary = Color(0xFFFFFFFF)
-private val TealSecondaryContainer = Color(0xFFD8E3F8)
-private val TealOnSecondaryContainer = Color(0xFF111C2B)
-private val TealTertiary = Color(0xFF6D5677)
+// [T-xhy-skin] 小黄鱼 dark skin (charcoal-pink) applied globally: values lifted
+// verbatim from CiliDownloader values-night/colors.xml. Pink primary with
+// deep-ink on-colors; page bg #0A0609, card #1A1116, chip #2A1620.
+private val TealPrimary = Color(0xFFFFB3D1)
+private val TealOnPrimary = Color(0xFF2A0F1A)
+private val TealPrimaryContainer = Color(0xFF3A1F2B)
+private val TealOnPrimaryContainer = Color(0xFFFFEFF6)
+private val TealSecondary = Color(0xFFFF7AD9)
+private val TealOnSecondary = Color(0xFF2A0F1A)
+private val TealSecondaryContainer = Color(0xFF2A1620)
+private val TealOnSecondaryContainer = Color(0xFFFFEFF6)
+private val TealTertiary = Color(0xFFE63C93)
 private val TealOnTertiary = Color(0xFFFFFFFF)
-private val TealTertiaryContainer = Color(0xFFF6D8FF)
-private val TealOnTertiaryContainer = Color(0xFF271431)
-// Apple-style grouped surface: page = systemGray6 (#F2F2F7), card = white.
-private val TealBackground = Color(0xFFF2F2F7)
-private val TealOnBackground = Color(0xFF1C1C1E)
-private val TealSurface = Color(0xFFF2F2F7)
-private val TealOnSurface = Color(0xFF1C1C1E)
-private val TealSurfaceVariant = Color(0xFFE2E2E6)
-private val TealOnSurfaceVariant = Color(0xFF444446)
-private val TealOutline = Color(0xFF747477)
-private val TealDarkPrimary = Color(0xFFABC7FF)
-private val TealDarkOnPrimary = Color(0xFF002D5F)
-private val TealDarkPrimaryContainer = Color(0xFF004378)
-private val TealDarkOnPrimaryContainer = Color(0xFFD6E4FF)
-private val TealDarkSecondary = Color(0xFFBCC7DB)
-private val TealDarkOnSecondary = Color(0xFF263141)
-private val TealDarkSecondaryContainer = Color(0xFF3C4859)
-private val TealDarkOnSecondaryContainer = Color(0xFFD8E3F8)
-private val TealDarkBackground = Color(0xFF000000)
-private val TealDarkOnBackground = Color(0xFFE2E2E6)
-private val TealDarkSurface = Color(0xFF000000)
-private val TealDarkOnSurface = Color(0xFFE2E2E6)
-private val TealDarkSurfaceVariant = Color(0xFF444446)
-private val TealDarkOnSurfaceVariant = Color(0xFFC4C4C8)
-private val TealDarkOutline = Color(0xFF8E8E92)
+private val TealTertiaryContainer = Color(0xFF2A1620)
+private val TealOnTertiaryContainer = Color(0xFFFFD9E8)
+// 小黄鱼 grouped surface: page = bg_dark #0A0609, card = surface_dark #1A1116.
+private val TealBackground = Color(0xFF0A0609)
+private val TealOnBackground = Color(0xFFFFEFF6)
+private val TealSurface = Color(0xFF1A1116)
+private val TealOnSurface = Color(0xFFFFEFF6)
+private val TealSurfaceVariant = Color(0xFF2A1620)
+private val TealOnSurfaceVariant = Color(0xFFD3BDC9)
+private val TealOutline = Color(0xFFB9A3B0)
+private val TealDarkPrimary = Color(0xFFFFB3D1)
+private val TealDarkOnPrimary = Color(0xFF2A0F1A)
+private val TealDarkPrimaryContainer = Color(0xFF3A1F2B)
+private val TealDarkOnPrimaryContainer = Color(0xFFFFEFF6)
+private val TealDarkSecondary = Color(0xFFFF7AD9)
+private val TealDarkOnSecondary = Color(0xFF2A0F1A)
+private val TealDarkSecondaryContainer = Color(0xFF2A1620)
+private val TealDarkOnSecondaryContainer = Color(0xFFFFD9E8)
+private val TealDarkBackground = Color(0xFF0A0609)
+private val TealDarkOnBackground = Color(0xFFFFEFF6)
+private val TealDarkSurface = Color(0xFF1A1116)
+private val TealDarkOnSurface = Color(0xFFFFEFF6)
+private val TealDarkSurfaceVariant = Color(0xFF2A1620)
+private val TealDarkOnSurfaceVariant = Color(0xFFD3BDC9)
+private val TealDarkOutline = Color(0xFFB9A3B0)
 
 // Surface tokens are defined inline in LightColorScheme/DarkColorScheme above.
 
@@ -99,10 +99,10 @@ private val LightColorScheme = lightColorScheme(
     surfaceVariant = TealSurfaceVariant,
     onSurfaceVariant = TealOnSurfaceVariant,
     surfaceContainerLowest = TealBackground,
-    surfaceContainerLow = Color(0xFFFFFFFF),
-    surfaceContainer = Color(0xFFFFFFFF),
-    surfaceContainerHigh = Color(0xFFF7F7FA),
-    surfaceContainerHighest = Color(0xFFF7F7FA),
+    surfaceContainerLow = Color(0xFF120A0F),
+    surfaceContainer = Color(0xFF1A1116),
+    surfaceContainerHigh = Color(0xFF2A1620),
+    surfaceContainerHighest = Color(0xFF2A1620),
     outline = TealOutline,
     outlineVariant = TealOutline,
 )
@@ -123,10 +123,10 @@ private val DarkColorScheme = darkColorScheme(
     surfaceVariant = TealDarkSurfaceVariant,
     onSurfaceVariant = TealDarkOnSurfaceVariant,
     surfaceContainerLowest = TealDarkBackground,
-    surfaceContainerLow = Color(0xFF1C1C1E),
-    surfaceContainer = Color(0xFF1C1C1E),
-    surfaceContainerHigh = Color(0xFF2C2C2E),
-    surfaceContainerHighest = Color(0xFF2C2C2E),
+    surfaceContainerLow = Color(0xFF120A0F),
+    surfaceContainer = Color(0xFF120A0F),
+    surfaceContainerHigh = Color(0xFF1A1116),
+    surfaceContainerHighest = Color(0xFF1A1116),
     outline = TealDarkOutline,
     outlineVariant = TealDarkOutline,
 )

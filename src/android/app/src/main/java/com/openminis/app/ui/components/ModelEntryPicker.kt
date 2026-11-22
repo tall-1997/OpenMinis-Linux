@@ -539,7 +539,7 @@ fun LazyListScope.modelEntryPickerItems(
 
 // SelectionDot deleted (#9): PickerSelectionMark in PickerSheetShell.kt is
 // the single shared selection mark (was a byte-identical duplicate whose
-// selected tint 0xFF007AFF now lives behind the IosBlue AccentToken).
+// selected tint 0xFFFF7AD9 now lives behind the IosBlue AccentToken).
 
 /**
  * [T-android-provider-voice] Non-text modality chips for a model row —
@@ -597,7 +597,7 @@ fun providerDotColor(providerType: ProviderType?): Color = when (providerType) {
     ProviderType.anthropic -> Color(0xFFAB47BC)
     ProviderType.gemini -> Color(0xFF42A5F5)
     ProviderType.openAI -> Color(0xFF4CAF50)
-    ProviderType.openRouter -> Color(0xFF00BCD4)
+    ProviderType.openRouter -> Color(0xFFF0A32B)
     ProviderType.xAI -> Color(0xFFFF7043)
     ProviderType.kimiCode -> Color(0xFF5C6BC0) // indigo — Kimi accent
     // [T-android-provider-type-parity] Responses API instances are
@@ -605,6 +605,6 @@ fun providerDotColor(providerType: ProviderType?): Color = when (providerType) {
     // the neutral gray used for "no provider".
     ProviderType.openAIResponses -> Color(0xFF4CAF50)
     ProviderType.antigravity,
-    ProviderType.unsupported -> Color(0xFF8E8E93)
-    null -> Color(0xFF8E8E93)
+    ProviderType.unsupported -> Color(0xFFB9A3B0)
+    null -> Color(0xFFB9A3B0)
 }

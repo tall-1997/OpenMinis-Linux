@@ -37,7 +37,7 @@ import androidx.compose.ui.text.withLink
 fun linkifyUrls(
     text: String,
     onClick: (String) -> Unit,
-    linkColor: Color = Color(0xFF0A84FF),
+    linkColor: Color = Color(0xFFFF7AD9),
 ): AnnotatedString {
     if (text.isEmpty()) return AnnotatedString(text)
     val matcher = android.util.Patterns.WEB_URL.matcher(text)

@@ -141,7 +141,7 @@ internal fun GitPanelHeader(
                     Icon(
                         Icons.Filled.WarningAmber,
                         contentDescription = null,
-                        tint = Color(0xFFFF9500),
+                        tint = Color(0xFFF0A32B),
                         modifier = Modifier.size(14.dp),
                     )
                     Spacer(Modifier.width(6.dp))
@@ -150,7 +150,7 @@ internal fun GitPanelHeader(
                         // unreadable on dark-theme surfaces.
                         stringResource(R.string.git_panel_no_identity),
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFFFF9500),
+                        color = Color(0xFFF0A32B),
                     )
                 }
             }

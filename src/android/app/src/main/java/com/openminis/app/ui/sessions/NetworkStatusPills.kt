@@ -40,8 +40,8 @@ import com.openminis.app.network.NetworkAlertEvent
 import com.openminis.app.network.NetworkHub
 import com.openminis.app.network.NetworkStatusMonitor
 
-private val PillGreen = Color(0xFF34C759)
-private val PillAmber = Color(0xFFFF9500)
+private val PillGreen = Color(0xFF4CAF50)
+private val PillAmber = Color(0xFFF0A32B)
 
 /**
  * [FEAT-261021-07] The home title plus the network pills in one column:

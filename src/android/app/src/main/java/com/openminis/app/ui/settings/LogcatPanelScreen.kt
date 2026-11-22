@@ -289,9 +289,9 @@ fun LogcatPanelScreen(onBack: () -> Unit) {
 
 /** Apple-ish severity palette; readable on both light and dark surfaces. */
 private val LevelBlue = Color(0xFF3B82F6)
-private val LevelGreen = Color(0xFF34C759)
+private val LevelGreen = Color(0xFF4CAF50)
 private val LevelOrange = Color(0xFFFF9F0A)
-private val LevelRed = Color(0xFFFF3B30)
+private val LevelRed = Color(0xFFFF6B6B)
 
 @Composable
 private fun LogcatRow(line: LogcatLine) {

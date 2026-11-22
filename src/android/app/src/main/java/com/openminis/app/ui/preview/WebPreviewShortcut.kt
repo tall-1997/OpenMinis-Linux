@@ -185,13 +185,13 @@ object WebPreviewShortcut {
 
     private val MONOGRAM_PALETTE: IntArray = intArrayOf(
         0xFF1F8FFF.toInt(), // blue
-        0xFF34C759.toInt(), // green
+        0xFF4CAF50.toInt(), // green
         0xFFFF9F0A.toInt(), // amber
         0xFFFF453A.toInt(), // red
-        0xFFAF52DE.toInt(), // purple
-        0xFFFF2D55.toInt(), // pink
+        0xFFA81E77.toInt(), // purple
+        0xFFE63C93.toInt(), // pink
         0xFF5AC8FA.toInt(), // light blue
-        0xFFFFCC00.toInt(), // yellow
+        0xFFFFD070.toInt(), // yellow
         0xFF00B894.toInt(), // teal
         0xFFFF6B6B.toInt(), // coral
         0xFF6C5CE7.toInt(), // indigo

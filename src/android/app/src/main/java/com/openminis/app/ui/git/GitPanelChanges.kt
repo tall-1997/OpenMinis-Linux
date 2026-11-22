@@ -322,10 +322,10 @@ private fun FileEntryRow(
 
 /** Status-letter badge colour — shared by changes rows and diff headers. */
 internal fun statusColor(code: Char): Color = when (code.uppercaseChar()) {
-    'M', 'T' -> Color(0xFFFF9500) // modified — orange
+    'M', 'T' -> Color(0xFFF0A32B) // modified — orange
     'A' -> GitAddGreen // added — green
     'D' -> GitDelRed // deleted — red
     'R', 'C' -> GitHunkBlue // renamed/copied — blue
     '?' -> GitMetaGrey // untracked — gray
-    else -> Color(0xFFFF2D55) // conflicts & friends — pink
+    else -> Color(0xFFE63C93) // conflicts & friends — pink
 }

@@ -67,11 +67,11 @@ import kotlinx.coroutines.withTimeoutOrNull
 // iOS-matched palette
 private val TerminalBg = Color(0xFF000000)
 private val TerminalFg = Color(0xFFD4D4D4)
-private val TerminalGreen = Color(0xFF34C759)
+private val TerminalGreen = Color(0xFF4CAF50)
 private val AccessoryBg = Color(0xFF1F1F1F)
 private val AccButtonBg = Color(0xFF404040)
-private val AccButtonActive = Color(0xFF007AFF)
-private val TopButtonBg = Color(0xFF2C2C2E)
+private val AccButtonActive = Color(0xFFFF7AD9)
+private val TopButtonBg = Color(0xFF1A1116)
 
 /**
  * Full-screen terminal — now backed by [Termux TerminalView] instead of the

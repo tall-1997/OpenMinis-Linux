@@ -10,11 +10,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 // iOS ChatColors equivalent
-internal val ToolCheckColor = Color(0xFF34C759) // iOS .green
-internal val ToolErrorColor = Color(0xFFFF3B30) // iOS .red
-internal val ToolCancelColor = Color(0xFFFFCC00) // iOS .yellow
+internal val ToolCheckColor = Color(0xFF4CAF50) // iOS .green
+internal val ToolErrorColor = Color(0xFFFF6B6B) // iOS .red
+internal val ToolCancelColor = Color(0xFFFFD070) // iOS .yellow
 // Memory tool accent — matches iOS `.pink` on SF Symbols.
-internal val ToolMemoryAccent = Color(0xFFFF2D55)
+internal val ToolMemoryAccent = Color(0xFFE63C93)
 // Sparkle gradient colors (iOS uses linear gradient)
 internal val SparkleColor1 = Color(0xFFB8B096) // rgb(0.72, 0.69, 0.59)
 internal val SparkleColor2 = Color(0xFF99998C) // rgb(0.6, 0.6, 0.55)

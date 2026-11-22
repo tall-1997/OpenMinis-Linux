@@ -64,8 +64,8 @@ object QuotaTagStyle {
         val dark = LocalChatPalette.current.isDark
         return when (level) {
             QuotaLevel.normal -> MaterialTheme.colorScheme.onSurface.copy(alpha = if (dark) 0.12f else 0.08f)
-            QuotaLevel.low -> if (dark) Color(0xFFFFD60A) else Color(0xFFFFCC00)
-            QuotaLevel.depleted -> if (dark) Color(0xFFFF453A) else Color(0xFFFF3B30)
+            QuotaLevel.low -> if (dark) Color(0xFFFFD60A) else Color(0xFFFFD070)
+            QuotaLevel.depleted -> if (dark) Color(0xFFFF453A) else Color(0xFFFF6B6B)
         }
     }
 
@@ -250,9 +250,9 @@ fun rememberQuotaLow(isAuthed: Boolean, instanceId: String?, modelId: String?): 
 }
 
 fun quotaDotColor(isAuthed: Boolean, quotaLow: Boolean): Color = when {
-    !isAuthed -> Color(0xFFFF9500)
-    quotaLow -> Color(0xFFFFCC00)
-    else -> Color(0xFF34C759)
+    !isAuthed -> Color(0xFFF0A32B)
+    quotaLow -> Color(0xFFFFD070)
+    else -> Color(0xFF4CAF50)
 }
 
 /**
