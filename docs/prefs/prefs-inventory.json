@@ -150,10 +150,12 @@
         "data/repository/BackgroundSettingsRepository.kt"
       ],
       "keys": {
+        "KEY_BG_NOTIFICATIONS": "background_notifications_enabled",
         "KEY_BG_OVERLAY_ENABLED": "backgroundOverlayEnabled",
         "KEY_BG_OVERLAY_X": "backgroundOverlayX",
         "KEY_BG_OVERLAY_Y": "backgroundOverlayY",
         "KEY_DYNAMIC_ISLAND_ENABLED": "dynamicIslandEnabled",
+        "KEY_ENHANCED_BG": "enhanced_background_execution",
         "KEY_TASK_NOTIFICATIONS": "taskNotificationsEnabled",
         "PRESENCE_KEEP_ALIVE_KEY": "presenceKeepAliveEnabled"
       },
@@ -676,6 +678,7 @@
       "keys": {
         "KEY_ENABLED": "enabled",
         "KEY_PORT": "port",
+        "KEY_SHELL_POLICY": "shell_policy",
         "KEY_TOKEN": "token"
       },
       "dyn_keys": [],
@@ -1109,10 +1112,17 @@
         "data/ToolLimitPrefs.kt"
       ],
       "keys": {
+        "KEY_AUTO_CONCURRENCY": "autoConcurrency",
         "KEY_CHARS": "fileReadMaxChars",
+        "KEY_COMMAND_CONCURRENCY": "commandConcurrency",
+        "KEY_HEAVY_CONCURRENCY": "heavyConcurrency",
+        "KEY_IDLE_SHELL_COUNT": "idleShellCount",
+        "KEY_IDLE_SHELL_MINUTES": "idleShellMinutes",
         "KEY_LINES": "fileReadMaxLines",
         "KEY_MAIN_TURNS": "mainSessionMaxTurns",
+        "KEY_QUEUE_TIMEOUT_SEC": "queueTimeoutSec",
         "KEY_SHELL": "shellTimeoutSec",
+        "KEY_TOOL_CALL_CONCURRENCY": "toolCallConcurrency",
         "KEY_TURNS": "subagentMaxTurns",
         "LITERAL_autoConcurrency": "autoConcurrency",
         "LITERAL_toolCallConcurrency": "toolCallConcurrency"
@@ -1919,6 +1929,7 @@
         "KEY_ENABLED": "handsFree.enabled",
         "KEY_EXPANDED": "voice.panel.expanded",
         "KEY_MUTED": "readReplies.muted",
+        "KEY_READ_REPLIES": "readReplies",
         "KEY_SPEED": "readReplies.speed",
         "KEY_SYSTEM_VOICE": "readReplies.systemVoice",
         "KEY_SYSTEM_VOICE_LABEL": "readReplies.systemVoiceLabel",
@@ -5428,15 +5439,6 @@
       ]
     },
     {
-      "name": "KEY_ENABLED",
-      "a": "enabled",
-      "b": "readReplies",
-      "files": [
-        "sandbox/BootHookSettings.kt",
-        "speech/VoiceOutputState.kt"
-      ]
-    },
-    {
       "name": "TAG",
       "a": "VAD",
       "b": "CorrectionContext",
@@ -5510,10 +5512,10 @@
     },
     {
       "name": "KEY_ENABLED",
-      "a": "readReplies",
+      "a": "enabled",
       "b": "voiceCorrectionCollectionEnabled",
       "files": [
-        "speech/VoiceOutputState.kt",
+        "sandbox/BootHookSettings.kt",
         "speech/correction/VoiceCorrectionConsent.kt"
       ]
     },
@@ -6772,10 +6774,10 @@
   "totals": {
     "prefs_files": 105,
     "prefs_encrypted": 10,
-    "key_constants_attributed": 190,
+    "key_constants_attributed": 201,
     "orphan_keys": 34,
     "usage_sites": 183,
     "usage_files": 110,
-    "constant_conflicts": 524
+    "constant_conflicts": 523
   }
 }

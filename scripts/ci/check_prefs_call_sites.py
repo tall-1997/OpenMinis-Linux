@@ -40,6 +40,23 @@ RE_CONST_REF = re.compile(
     r'(?:[A-Za-z_][A-Za-z0-9_.]*\.)?([A-Z][A-Z0-9_]*)\s*$', re.M)
 
 
+# [T-prefs-handle-callsites] A PrefsHandle kept in a variable
+# (`private var prefs: PrefsHandle? = null` … `prefs = Prefs.file(PREFS)`) is how
+# most stores read and write. The original matcher only understood the inline
+# `Prefs.file(...).read(...)` chain, so every call through a handle was invisible —
+# including five unregistered keys that crashed the tool-limits page and the
+# sandbox command lock.
+HANDLE_METHODS = ('string', 'stringOrNull', 'bool', 'int', 'long', 'float', 'stringSet',
+ 'set', 'remove', 'contains', 'observe')
+RE_HANDLE_CALL = re.compile(
+ r'\b([A-Za-z_][A-Za-z0-9_]*)\s*(?:\?)?\.\s*('
+ r'(?:' + '|'.join(HANDLE_METHODS) + r'))\s*\(\s*(?:"([^"]+)"|([A-Za-z_][A-Za-z0-9_]*))')
+RE_HANDLE_BIND = re.compile(
+ r'\b([A-Za-z_][A-Za-z0-9_]*)\s*(?::[^=\n]+)?=\s*'
+ r'(?:[A-Za-z_][A-Za-z0-9_]*\s*\.\s*)*Prefs\s*\.\s*file\('
+ r'\s*(?:"([^"]+)"|([A-Za-z_][A-Za-z0-9_]*))\s*\)')
+
+
 def strip_comments(src: str) -> str:
     """去掉 // 与 /* */ 注释，避免把被注释掉的调用算成使用点。"""
     out, i, n = [], 0, len(src)
@@ -168,6 +185,43 @@ def scan():
                 continue
             if not accepts(spec, key):
                 fails.append((p, fname, key, method, '键未登记在该文件键表'))
+       # [T-prefs-handle-callsites] Second pass: calls made through a PrefsHandle
+    # variable rather than the inline `Prefs.file(...).read(...)` chain. This is
+    # how most stores read and write, and it used to be entirely invisible —
+    # five unregistered keys reached production that way (tool-limits page and
+    # sandbox command lock crashed at runtime).
+    for p, s in texts.items():
+        local = dict(consts_by_file[p])
+        for n, ref in RE_CONST_REF.findall(s):
+            if n in local:
+                continue
+            v = resolve(p, ref)
+            if v:
+                local[n] = v
+        handles = {}
+        for hn, hfile_lit, hfile_ident in RE_HANDLE_BIND.findall(s):
+            hfile = hfile_lit or local.get(hfile_ident) or resolve(p, hfile_ident or '')
+            if hfile:
+                handles[hn] = hfile
+        if not handles:
+            continue
+        for m in RE_HANDLE_CALL.finditer(s):
+            hname, hmeth, hkey_lit, hkey_ident = m.groups()
+            hfile = handles.get(hname)
+            if not hfile:
+                continue
+            hkey = hkey_lit or local.get(hkey_ident) or resolve(p, hkey_ident or '')
+            if not hkey:
+                continue
+            hspec = specs.get(hfile)
+            checked +=1
+            if hspec is None:
+                fails.append((p, hfile, hkey, hmeth, 'handle指向的文件名未在注册表中'))
+                continue
+            if hspec.get('encrypted') or (hspec.get('keys') == {} and not hspec.get('dyn_keys')):
+                continue
+            if not accepts(hspec, hkey):
+                fails.append((p, hfile, hkey, hmeth, 'handle调用用了未登记的键'))
     return fails, checked
 
 
