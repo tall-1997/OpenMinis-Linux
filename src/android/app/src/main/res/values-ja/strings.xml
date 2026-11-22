@@ -3088,6 +3088,7 @@
     <string name="quota_unsupported_no_api">このプロバイダには残高やクォータの照会機能がありません。</string>
     <string name="quota_unsupported_passive">このプロバイダは応答と一緒にクォータを報告するだけで、その表示にはまだ対応していません。</string>
     <string name="quota_unsupported_probe_failed">このエンドポイントは残高照会に応答しませんでした。Minis は明日また確認します。今すぐ確認するには更新をタップしてください。</string>
+    <string name="quota_unsupported_insecure">このエンドポイントは暗号化されていない http のため、残高確認は無効です。チャットは引き続き利用できます。</string>
     <string name="quota_unsupported_type">このプロバイダでは残高照会にまだ対応していません。</string>
     <string name="quota_unsupported_unknown_endpoint">このエンドポイントでは残高照会を利用できません。</string>
     <string name="quota_updated">更新済み</string>

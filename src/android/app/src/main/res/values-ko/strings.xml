@@ -3088,6 +3088,7 @@
     <string name="quota_unsupported_no_api">이 프로바이더는 잔액이나 쿼터 조회 기능이 없습니다.</string>
     <string name="quota_unsupported_passive">이 프로바이더는 응답과 함께 쿼터만 보고하며, 표시는 아직 지원되지 않습니다.</string>
     <string name="quota_unsupported_probe_failed">이 엔드포인트가 잔액 조회에 응답하지 않았습니다. Minis가 내일 다시 확인합니다. 지금 확인하려면 새로고침을 탭하세요.</string>
+    <string name="quota_unsupported_insecure">이 엔드포인트는 암호화되지 않은 http를 사용하므로 잔액 조회가 꺼져 있습니다. 채팅은 계속 작동합니다.</string>
     <string name="quota_unsupported_type">이 프로바이더는 아직 잔액 조회를 지원하지 않습니다.</string>
     <string name="quota_unsupported_unknown_endpoint">이 엔드포인트에서는 잔액 조회를 사용할 수 없습니다.</string>
     <string name="quota_updated">업데이트됨</string>

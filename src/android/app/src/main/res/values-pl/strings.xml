@@ -3096,6 +3096,7 @@
     <string name="quota_unsupported_no_api">Ten dostawca nie oferuje odczytu salda ani limitu.</string>
     <string name="quota_unsupported_passive">Ten dostawca zgłasza limit tylko przy odpowiedziach; pokazywanie go nie jest jeszcze obsługiwane.</string>
     <string name="quota_unsupported_probe_failed">Ten endpoint nie odpowiedział na zapytanie o saldo. Minis sprawdzi jutro, albo stuknij odśwież, aby sprawdzić teraz.</string>
+    <string name="quota_unsupported_insecure">Sprawdzanie salda jest wyłączone dla tego punktu końcowego, ponieważ używa nieszyfrowanego http. Czat nadal działa.</string>
     <string name="quota_unsupported_type">Sprawdzanie salda nie jest jeszcze obsługiwane dla tego dostawcy.</string>
     <string name="quota_unsupported_unknown_endpoint">Sprawdzanie salda jest niedostępne dla tego endpointu.</string>
     <string name="quota_updated">Zaktualizowano</string>

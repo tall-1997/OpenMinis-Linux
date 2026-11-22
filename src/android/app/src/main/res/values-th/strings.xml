@@ -3089,6 +3089,7 @@
     <string name="quota_unsupported_no_api">ผู้ให้บริการนี้ไม่มีการสอบถามยอดคงเหลือหรือโควตา</string>
     <string name="quota_unsupported_passive">ผู้ให้บริการนี้รายงานโควตาพร้อมคำตอบเท่านั้น ยังไม่รองรับการแสดงผล</string>
     <string name="quota_unsupported_probe_failed">endpoint นี้ไม่ตอบการสอบถามยอดคงเหลือ Minis จะตรวจพรุ่งนี้ หรือแตะรีเฟรชเพื่อตรวจเดี๋ยวนี้</string>
+    <string name="quota_unsupported_insecure">การตรวจสอบยอดคงเหลือปิดใช้งานสำหรับปลายทางนี้เพราะใช้ http ที่ไม่เข้ารหัส แชทยังใช้งานได้</string>
     <string name="quota_unsupported_type">ยังไม่รองรับการสอบถามยอดคงเหลือของผู้ให้บริการนี้</string>
     <string name="quota_unsupported_unknown_endpoint">การสอบถามยอดคงเหลือใช้ไม่ได้กับ endpoint นี้</string>
     <string name="quota_updated">อัปเดตแล้ว</string>

@@ -3089,6 +3089,7 @@
     <string name="quota_unsupported_no_api">Walang balance o quota lookup ang provider na ito.</string>
     <string name="quota_unsupported_passive">Nire-report lang ng provider na ito ang quota kasama ng mga reply; hindi pa suportado ang pagpapakita nito.</string>
     <string name="quota_unsupported_probe_failed">Hindi sumagot sa balance lookup ang endpoint na ito. Titingnan ulit ng Minis bukas, o pindutin ang refresh para tingnan ngayon.</string>
+    <string name="quota_unsupported_insecure">Naka-off ang pagtingin ng balanse para sa endpoint na ito dahil gumagamit ito ng plain http. Gumagana pa rin ang chat.</string>
     <string name="quota_unsupported_type">Hindi pa suportado ang balance lookup para sa provider na ito.</string>
     <string name="quota_unsupported_unknown_endpoint">Hindi available ang balance lookup para sa endpoint na ito.</string>
     <string name="quota_updated">Na-update</string>

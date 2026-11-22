@@ -3089,6 +3089,7 @@
     <string name="quota_unsupported_no_api">Pembekal ini tidak menawarkan semakan baki atau kuota.</string>
     <string name="quota_unsupported_passive">Pembekal ini hanya melaporkan kuota bersama balasan; paparannya belum disokong.</string>
     <string name="quota_unsupported_probe_failed">Hujung ini tidak menjawab semakan baki. Minis akan semak esok, atau ketuk segar semula untuk semak sekarang.</string>
+    <string name="quota_unsupported_insecure">Semakan baki dimatikan untuk titik akhir ini kerana menggunakan http tanpa penyulitan. Sembang masih berfungsi.</string>
     <string name="quota_unsupported_type">Semakan baki belum disokong untuk pembekal ini.</string>
     <string name="quota_unsupported_unknown_endpoint">Semakan baki tidak tersedia untuk hujung ini.</string>
     <string name="quota_updated">Dikemas kini</string>

@@ -3094,6 +3094,7 @@
     <string name="quota_unsupported_no_api">Penyedia ini tidak menyediakan pengecekan saldo atau kuota.</string>
     <string name="quota_unsupported_passive">Penyedia ini hanya melaporkan kuota bersama jawaban; menampilkannya belum didukung.</string>
     <string name="quota_unsupported_probe_failed">Endpoint ini tidak menjawab pengecekan saldo. Minis memeriksa lagi besok, atau ketuk segarkan untuk memeriksa sekarang.</string>
+    <string name="quota_unsupported_insecure">Pemeriksaan saldo dimatikan untuk endpoint ini karena memakai http tanpa enkripsi. Chat tetap berjalan.</string>
     <string name="quota_unsupported_type">Pengecekan saldo belum didukung untuk penyedia ini.</string>
     <string name="quota_unsupported_unknown_endpoint">Pengecekan saldo tidak tersedia untuk endpoint ini.</string>
     <string name="quota_updated">Diperbarui</string>
