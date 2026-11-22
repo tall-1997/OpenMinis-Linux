@@ -203,3 +203,22 @@ internal suspend fun ChatViewModel.awaitCompaction(): Boolean = suspendCancellab
     }
     if (job != null) cont.invokeOnCancellation { job.cancel() }
 }
+
+/** [T-compact-hysteresis] Soft auto-compaction cooldown window. The observed
+ *  failure mode fired three compactions in 22 seconds and seven within 16
+ *  minutes: right after a pass the envelope is LARGER (summary + excerpts),
+ *  so the same threshold re-triggers immediately. */
+internal const val AUTO_COMPACT_COOLDOWN_MS = 10 * 60 * 1000L
+
+/**
+ * [T-compact-hysteresis] True within [AUTO_COMPACT_COOLDOWN_MS] of the last
+ * successful compaction. `_cachedLatestMarker.createdAt` is the only state —
+ * no new persistence (the commit path refreshes the cache). A null/stale
+ * cache fail-opens (no cooldown), and only SOFT percent-threshold triggers
+ * consult it: manual compactAll, the overflow retry path and hard-exhaustion
+ * handling bypass it.
+ */
+internal fun ChatViewModel.autoCompactInCooldown(): Boolean {
+    val last = _cachedLatestMarker?.createdAt ?: return false
+    return System.currentTimeMillis() - last < AUTO_COMPACT_COOLDOWN_MS
+}

@@ -26,6 +26,11 @@ private val START_OF_SESSION = Int.MIN_VALUE.toLong()
 
 internal class CompactSourceChanged(message: String) : IllegalStateException(message)
 
+/** [T-compact-degenerate] Raised when a fold would mint a marker whose summary is byte-identical
+ *  to the latest marker's — either an echo over a different range (refused), or a same-anchor
+ *  journal replay (handled idempotently by the caller gate in commitCompactPrefix). */
+internal class CompactDegenerateSummary(message: String) : IllegalStateException(message)
+
 internal data class CompactDecodedRow(
     val message: LLMMessage,
     val realUser: Boolean = false,
@@ -343,6 +348,19 @@ internal suspend fun ChatRepository.commitCompactPrefix(
             throw CompactSourceChanged("The previous compact marker or its boundary changed. Retry compaction.")
         }
         val anchor = expected.last().row
+        // [T-compact-degenerate] Idempotency / degeneracy gate. A redacted summary
+        // byte-identical to the latest marker's is either a journal replay (same
+        // anchor — return the existing row instead of minting a duplicate marker
+        // with a fresh uuid/timestamp) or an echo over DIFFERENT rows (new anchor
+        // — those rows would be hidden under text that never represented them;
+        // DB-proven failure mode). Same-anchor replays are idempotent; anything
+        // else refuses to mint.
+        if (previous != null && previous.summary == redactedSummary) {
+            if (previous.lastCompactedMessageId == anchor.id) return@withTransaction previous
+            throw CompactDegenerateSummary(
+                "Compaction echoed the previous marker's summary over a different range",
+            )
+        }
         if ((usedRetirement && dao.compactTailOrder(source.sessionId) != source.tailOrder) ||
             dao.compactSourceRows(source.sessionId, source.start, anchor.sortOrder.toLong(), expected.size) !=
             expected.map { it.row }
