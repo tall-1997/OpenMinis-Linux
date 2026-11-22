@@ -41,7 +41,7 @@ import com.openminis.app.data.repository.ProviderRepository.VoiceOutputChoice
  */
 internal class ModelGrouping(
     private val repo: ProviderRepository,
-    private val prefs: SharedPreferences,
+    private val prefs: com.openminis.app.config.PrefsHandle,
 ) {
 
     /** Set the agent-loop-visible entry ID list (individual model entries). */
@@ -701,10 +701,10 @@ internal class ModelGrouping(
      * UserDefaults voiceShadowDisabled.<id>), not the synced config.
      */
     fun isVoiceShadowDisabled(instanceId: String): Boolean =
-        prefs.getBoolean("voiceShadowDisabled.$instanceId", false)
+        prefs.bool("voiceShadowDisabled.$instanceId", false)
 
     fun setVoiceShadowDisabled(instanceId: String, disabled: Boolean) {
-        prefs.edit().putBoolean("voiceShadowDisabled.$instanceId", disabled).apply()
+        prefs.set("voiceShadowDisabled.$instanceId", disabled)
         // Bump revision so Compose collectors re-read the shadow list.
         // The read must be INSIDE the lock: reading _config.value outside it
         // and re-publishing that snapshot afterwards would silently revert any

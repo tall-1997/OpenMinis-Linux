@@ -193,6 +193,7 @@ import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.ui.browser.BrowserSheet
 import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.tokens.MinisTypography
 
 // [T-android-split-chat] Shared color/limit constants, ScrollFollowKey and
 // HistoryEdgeVisible moved verbatim to ChatScreenSections.kt (architecture
@@ -446,7 +447,6 @@ fun ChatScreen(
         viewModel.onForegroundChanged(true)
         // Stamp read on enter AND dispose so streamed rows aren't "unseen" on leave.
         com.openminis.app.data.UnreadRegistry.markRead(
-            tHangDiagAppContext,
             viewModel.realSessionId.ifBlank { sessionId },
         )
         // Mount/dispose markers (PerfLongCtx, hangCount extra preserved).
@@ -461,7 +461,6 @@ fun ChatScreen(
             viewModel.onForegroundChanged(false)
             // Final read stamp.
             com.openminis.app.data.UnreadRegistry.markRead(
-                tHangDiagAppContext,
                 viewModel.realSessionId.ifBlank { sessionId },
             )
             // T-android-new-chat-empty-residue: drop sessions materialised by
@@ -1474,7 +1473,7 @@ fun ChatScreen(
     val appearancePrefsForFocus = remember { com.openminis.app.ui.settings.getAppearancePrefs(context) }
     var autoFocusAfterReply by remember {
         mutableStateOf(
-            appearancePrefsForFocus.getBoolean(
+            appearancePrefsForFocus.bool(
                 com.openminis.app.ui.settings.KEY_AUTO_FOCUS_AFTER_REPLY,
                 true,
             ),
@@ -1534,18 +1533,18 @@ fun ChatScreen(
     }
 
     val appearancePrefs = remember { com.openminis.app.ui.settings.getAppearancePrefs(context) }
-    var messageFontLevel by remember { mutableStateOf(appearancePrefs.getInt(com.openminis.app.ui.settings.KEY_FONT_MESSAGE, 0)) }
-    var chatInputLevel by remember { mutableStateOf(appearancePrefs.getInt(com.openminis.app.ui.settings.KEY_FONT_CHAT_INPUT, 0)) }
-    var showFloatingToolBar by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_FLOATING_TOOL_BAR, true)) }
-    var showCompletedToolCards by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_COMPLETED_TOOL_CARDS, false)) }
-    var foldAiProcess by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_FOLD_AI_PROCESS, com.openminis.app.ui.settings.DEFAULT_FOLD_AI_PROCESS)) }
+    var messageFontLevel by remember { mutableStateOf(appearancePrefs.int(com.openminis.app.ui.settings.KEY_FONT_MESSAGE, 0)) }
+    var chatInputLevel by remember { mutableStateOf(appearancePrefs.int(com.openminis.app.ui.settings.KEY_FONT_CHAT_INPUT, 0)) }
+    var showFloatingToolBar by remember { mutableStateOf(appearancePrefs.bool(com.openminis.app.ui.settings.KEY_SHOW_FLOATING_TOOL_BAR, true)) }
+    var showCompletedToolCards by remember { mutableStateOf(appearancePrefs.bool(com.openminis.app.ui.settings.KEY_SHOW_COMPLETED_TOOL_CARDS, false)) }
+    var foldAiProcess by remember { mutableStateOf(appearancePrefs.bool(com.openminis.app.ui.settings.KEY_FOLD_AI_PROCESS, com.openminis.app.ui.settings.DEFAULT_FOLD_AI_PROCESS)) }
     // [T-composer-mic-toggle] Composer mic visibility (default OFF).
-    var showMicButton by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_MIC_BUTTON, com.openminis.app.ui.settings.DEFAULT_SHOW_MIC_BUTTON)) }
-    var showSubAgentBar by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_SUBAGENT_BAR, true)) }
+    var showMicButton by remember { mutableStateOf(appearancePrefs.bool(com.openminis.app.ui.settings.KEY_SHOW_MIC_BUTTON, com.openminis.app.ui.settings.DEFAULT_SHOW_MIC_BUTTON)) }
+    var showSubAgentBar by remember { mutableStateOf(appearancePrefs.bool(com.openminis.app.ui.settings.KEY_SHOW_SUBAGENT_BAR, true)) }
     // [T-android-message-usage-footer] Per-reply token usage line (default ON).
-    var showMessageUsage by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_MESSAGE_TOKEN_USAGE, true)) }
+    var showMessageUsage by remember { mutableStateOf(appearancePrefs.bool(com.openminis.app.ui.settings.KEY_SHOW_MESSAGE_TOKEN_USAGE, true)) }
     // [T-android-composer-context-glow] Composer edge glow near the context cap (default ON).
-    var showComposerContextGlow by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_COMPOSER_CONTEXT_GLOW, true)) }
+    var showComposerContextGlow by remember { mutableStateOf(appearancePrefs.bool(com.openminis.app.ui.settings.KEY_COMPOSER_CONTEXT_GLOW, true)) }
     // Live roster of running sub-agents. The top bar renders these; the session
     // page hides a sub-agent transcript card only while its run is in this set,
     // so a finished run stays visible as a card instead of vanishing.
@@ -1555,7 +1554,7 @@ fun ChatScreen(
     }
     // T-chat-title-pill: live-toggled by Settings → Appearance and by
     // `minis-config set appearance.show_chat_title …`. Default ON.
-    var showChatTitlePill by remember { mutableStateOf(appearancePrefs.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_CHAT_TITLE, true)) }
+    var showChatTitlePill by remember { mutableStateOf(appearancePrefs.bool(com.openminis.app.ui.settings.KEY_SHOW_CHAT_TITLE, true)) }
     // T-chat-title-pill-edit: state for the in-chat edit-title sheet (the
     // exact same SessionEditSheet hosted by the session list home screen,
     // reused via `internal` visibility — no duplicate UI). Populated by an
@@ -1564,42 +1563,41 @@ fun ChatScreen(
     val appearanceLifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
     DisposableEffect(appearancePrefs, appearanceLifecycleOwner) {
         val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
-        fun applyAppearancePrefs(sp: android.content.SharedPreferences) {
-            messageFontLevel = sp.getInt(com.openminis.app.ui.settings.KEY_FONT_MESSAGE, 0)
-            chatInputLevel = sp.getInt(com.openminis.app.ui.settings.KEY_FONT_CHAT_INPUT, 0)
-            showFloatingToolBar = sp.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_FLOATING_TOOL_BAR, true)
-            showCompletedToolCards = sp.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_COMPLETED_TOOL_CARDS, false)
-            foldAiProcess = sp.getBoolean(com.openminis.app.ui.settings.KEY_FOLD_AI_PROCESS, com.openminis.app.ui.settings.DEFAULT_FOLD_AI_PROCESS)
+        fun applyAppearancePrefs(sp: com.openminis.app.config.PrefsHandle) {
+            messageFontLevel = sp.int(com.openminis.app.ui.settings.KEY_FONT_MESSAGE, 0)
+            chatInputLevel = sp.int(com.openminis.app.ui.settings.KEY_FONT_CHAT_INPUT, 0)
+            showFloatingToolBar = sp.bool(com.openminis.app.ui.settings.KEY_SHOW_FLOATING_TOOL_BAR, true)
+            showCompletedToolCards = sp.bool(com.openminis.app.ui.settings.KEY_SHOW_COMPLETED_TOOL_CARDS, false)
+            foldAiProcess = sp.bool(com.openminis.app.ui.settings.KEY_FOLD_AI_PROCESS, com.openminis.app.ui.settings.DEFAULT_FOLD_AI_PROCESS)
             // [T-composer-mic-toggle] The listener below handles this key, but
             // this function is the ON_RESUME safety net for notifications that
             // never arrive (a `minis-config set appearance.…` write landing on a
             // different SharedPreferences instance), so it must cover every key.
-            showMicButton = sp.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_MIC_BUTTON, com.openminis.app.ui.settings.DEFAULT_SHOW_MIC_BUTTON)
-            showSubAgentBar = sp.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_SUBAGENT_BAR, true)
-            autoFocusAfterReply = sp.getBoolean(com.openminis.app.ui.settings.KEY_AUTO_FOCUS_AFTER_REPLY, true)
-            showChatTitlePill = sp.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_CHAT_TITLE, true)
-            showMessageUsage = sp.getBoolean(com.openminis.app.ui.settings.KEY_SHOW_MESSAGE_TOKEN_USAGE, true)
-            showComposerContextGlow = sp.getBoolean(com.openminis.app.ui.settings.KEY_COMPOSER_CONTEXT_GLOW, true)
+            showMicButton = sp.bool(com.openminis.app.ui.settings.KEY_SHOW_MIC_BUTTON, com.openminis.app.ui.settings.DEFAULT_SHOW_MIC_BUTTON)
+            showSubAgentBar = sp.bool(com.openminis.app.ui.settings.KEY_SHOW_SUBAGENT_BAR, true)
+            autoFocusAfterReply = sp.bool(com.openminis.app.ui.settings.KEY_AUTO_FOCUS_AFTER_REPLY, true)
+            showChatTitlePill = sp.bool(com.openminis.app.ui.settings.KEY_SHOW_CHAT_TITLE, true)
+            showMessageUsage = sp.bool(com.openminis.app.ui.settings.KEY_SHOW_MESSAGE_TOKEN_USAGE, true)
+            showComposerContextGlow = sp.bool(com.openminis.app.ui.settings.KEY_COMPOSER_CONTEXT_GLOW, true)
         }
         fun onMain(block: () -> Unit) {
             if (android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) block()
             else mainHandler.post(block)
         }
-        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { sp, key ->
+        val listener: (String) -> Unit = { key ->
             onMain {
                 when (key) {
-                    com.openminis.app.ui.settings.KEY_FONT_MESSAGE -> messageFontLevel = sp.getInt(key, 0)
-                    com.openminis.app.ui.settings.KEY_FONT_CHAT_INPUT -> chatInputLevel = sp.getInt(key, 0)
-                    com.openminis.app.ui.settings.KEY_SHOW_FLOATING_TOOL_BAR -> showFloatingToolBar = sp.getBoolean(key, true)
-                    com.openminis.app.ui.settings.KEY_SHOW_COMPLETED_TOOL_CARDS -> showCompletedToolCards = sp.getBoolean(key, false)
-                    com.openminis.app.ui.settings.KEY_FOLD_AI_PROCESS -> foldAiProcess = sp.getBoolean(key, com.openminis.app.ui.settings.DEFAULT_FOLD_AI_PROCESS)
-                    com.openminis.app.ui.settings.KEY_SHOW_MIC_BUTTON -> showMicButton = sp.getBoolean(key, com.openminis.app.ui.settings.DEFAULT_SHOW_MIC_BUTTON)
-                    com.openminis.app.ui.settings.KEY_SHOW_SUBAGENT_BAR -> showSubAgentBar = sp.getBoolean(key, true)
-                    com.openminis.app.ui.settings.KEY_AUTO_FOCUS_AFTER_REPLY -> autoFocusAfterReply = sp.getBoolean(key, true)
-                    com.openminis.app.ui.settings.KEY_SHOW_CHAT_TITLE -> showChatTitlePill = sp.getBoolean(key, true)
-                    com.openminis.app.ui.settings.KEY_SHOW_MESSAGE_TOKEN_USAGE -> showMessageUsage = sp.getBoolean(key, true)
-                    com.openminis.app.ui.settings.KEY_COMPOSER_CONTEXT_GLOW -> showComposerContextGlow = sp.getBoolean(key, true)
-                    null -> applyAppearancePrefs(sp)
+                    com.openminis.app.ui.settings.KEY_FONT_MESSAGE -> messageFontLevel = appearancePrefs.int(key, 0)
+                    com.openminis.app.ui.settings.KEY_FONT_CHAT_INPUT -> chatInputLevel = appearancePrefs.int(key, 0)
+                    com.openminis.app.ui.settings.KEY_SHOW_FLOATING_TOOL_BAR -> showFloatingToolBar = appearancePrefs.bool(key, true)
+                    com.openminis.app.ui.settings.KEY_SHOW_COMPLETED_TOOL_CARDS -> showCompletedToolCards = appearancePrefs.bool(key, false)
+                    com.openminis.app.ui.settings.KEY_FOLD_AI_PROCESS -> foldAiProcess = appearancePrefs.bool(key, com.openminis.app.ui.settings.DEFAULT_FOLD_AI_PROCESS)
+                    com.openminis.app.ui.settings.KEY_SHOW_MIC_BUTTON -> showMicButton = appearancePrefs.bool(key, com.openminis.app.ui.settings.DEFAULT_SHOW_MIC_BUTTON)
+                    com.openminis.app.ui.settings.KEY_SHOW_SUBAGENT_BAR -> showSubAgentBar = appearancePrefs.bool(key, true)
+                    com.openminis.app.ui.settings.KEY_AUTO_FOCUS_AFTER_REPLY -> autoFocusAfterReply = appearancePrefs.bool(key, true)
+                    com.openminis.app.ui.settings.KEY_SHOW_CHAT_TITLE -> showChatTitlePill = appearancePrefs.bool(key, true)
+                    com.openminis.app.ui.settings.KEY_SHOW_MESSAGE_TOKEN_USAGE -> showMessageUsage = appearancePrefs.bool(key, true)
+                    com.openminis.app.ui.settings.KEY_COMPOSER_CONTEXT_GLOW -> showComposerContextGlow = appearancePrefs.bool(key, true)
                 }
             }
         }
@@ -1608,10 +1606,10 @@ fun ChatScreen(
                 applyAppearancePrefs(appearancePrefs)
             }
         }
-        appearancePrefs.registerOnSharedPreferenceChangeListener(listener)
+        val stopListening = appearancePrefs.observe(listener)
         appearanceLifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
-            appearancePrefs.unregisterOnSharedPreferenceChangeListener(listener)
+            stopListening()
             appearanceLifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
@@ -3869,7 +3867,6 @@ fun ChatScreen(
                     keyboardController = keyboardController,
                 )
 
-
                 // Input box: iOS-style floating card — no visible border, separated
                 // from the backdrop by a symmetric soft shadow painted by hand
                 // (Android's Modifier.shadow only casts downward).
@@ -4068,7 +4065,7 @@ fun ChatScreen(
                                     Spacer(Modifier.width(6.dp))
                                     Text(
                                         stringResource(R.string.chat_move_to_capsule),
-                                        fontSize = 11.sp,
+                                        fontSize = MinisTypography.cap,
                                         fontWeight = FontWeight.Medium,
                                         color = ChatColors.secondaryText,
                                     )
@@ -4310,7 +4307,7 @@ fun ChatScreen(
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
                                     text = partial,
-                                    fontSize = 14.sp,
+                                    fontSize = MinisTypography.bodyLg,
                                     color = ChatColors.secondaryText,
                                     maxLines = 2,
                                 )
@@ -4339,7 +4336,7 @@ fun ChatScreen(
                         // enabling the screen reader mid-session takes effect.
                         val screenReaderEnabled = rememberScreenReaderEnabled()
                         val mergedTextStyle = MaterialTheme.typography.bodyMedium.copy(
-                            fontSize = 16.5.sp * chatInputFontScale,
+                            fontSize = composerFontSize(chatInputFontScale).sp, lineHeight = composerLineHeight(chatInputFontScale).sp,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         // [T-android-enter-to-send-broken] Live read of the
@@ -4774,7 +4771,7 @@ fun ChatScreen(
                                             Text(
                                                 stringResource(R.string.chat_input_placeholder_group),
                                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
-                                                fontSize = 16.5.sp * chatInputFontScale,
+                                                fontSize = composerFontSize(chatInputFontScale).sp, lineHeight = composerLineHeight(chatInputFontScale).sp,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
                                             )
@@ -4793,7 +4790,7 @@ fun ChatScreen(
                                             Text(
                                                 composerPlaceholderText(idx, soulName.name, queued = isStreaming),
                                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
-                                                fontSize = 16.5.sp * chatInputFontScale,
+                                                fontSize = composerFontSize(chatInputFontScale).sp, lineHeight = composerLineHeight(chatInputFontScale).sp,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
                                             )
@@ -4936,7 +4933,7 @@ fun ChatScreen(
                         }) {
                             Text(
                                 "/",
-                                fontSize = 20.sp,
+                                fontSize = MinisTypography.display,
                                 fontWeight = FontWeight.Bold,
                                 fontStyle = FontStyle.Italic,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -4998,7 +4995,7 @@ fun ChatScreen(
                             ) {
                                 Text(
                                     text = sttLocale.language.uppercase().take(2),
-                                    fontSize = 12.sp,
+                                    fontSize = MinisTypography.foot,
                                     fontWeight = FontWeight.Bold,
                                     color = ChatColors.primaryText,
                                 )
@@ -5180,8 +5177,8 @@ fun ChatScreen(
                                     // predictable box and the 6dp padding reads
                                     // evenly above and below.
                                     style = LocalTextStyle.current.copy(
-                                        fontSize = 13.sp,
-                                        lineHeight = 16.25.sp,
+                                        fontSize = MinisTypography.body,
+                                        lineHeight = MinisTypography.lineComposer,
                                         platformStyle = PlatformTextStyle(includeFontPadding = false),
                                         lineHeightStyle = LineHeightStyle(
                                             alignment = LineHeightStyle.Alignment.Center,
@@ -5597,7 +5594,6 @@ fun ChatScreen(
     }
     } // CompositionLocalProvider
 }
-
 
 // [T-android-split-chat] Message rows, assistant blocks, tool detail, composer
 // widgets, model picker and misc views live in their own Chat*UI / ChatMiscViews

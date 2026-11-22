@@ -111,21 +111,20 @@ object AppLogger {
     fun init(context: Context) {
         primeContext(context)
         logDir = File(context.filesDir, LOG_DIR).also { it.mkdirs() }
-        enabled = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-            .getBoolean(KEY_ENABLED, false)
+        enabled = com.openminis.app.config.Prefs.file(PREF_NAME)
+            .bool(KEY_ENABLED, false)
         pruneOldLogs()
         if (enabled) startCapture()
     }
 
     fun isEnabled(context: Context): Boolean {
-        return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-            .getBoolean(KEY_ENABLED, false)
+        return com.openminis.app.config.Prefs.file(PREF_NAME)
+            .bool(KEY_ENABLED, false)
     }
 
     fun setEnabled(context: Context, value: Boolean) {
         enabled = value
-        context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-            .edit().putBoolean(KEY_ENABLED, value).apply()
+        com.openminis.app.config.Prefs.file(PREF_NAME).set(KEY_ENABLED, value)
         if (value) startCapture() else stopCapture()
     }
 

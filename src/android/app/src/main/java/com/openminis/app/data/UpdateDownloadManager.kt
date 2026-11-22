@@ -286,12 +286,10 @@ object UpdateDownloadManager {
      * guard (which asks); this one refuses outright.
      */
     fun isWifiOnlyPreferred(context: Context): Boolean =
-        context.getSharedPreferences(UPDATE_PREFS, Context.MODE_PRIVATE)
-            .getBoolean(KEY_WIFI_ONLY, false)
+        com.openminis.app.config.Prefs.file(UPDATE_PREFS).bool(KEY_WIFI_ONLY, false)
 
     fun setWifiOnlyPreferred(context: Context, value: Boolean) {
-        context.getSharedPreferences(UPDATE_PREFS, Context.MODE_PRIVATE)
-            .edit().putBoolean(KEY_WIFI_ONLY, value).apply()
+        com.openminis.app.config.Prefs.file(UPDATE_PREFS).set(KEY_WIFI_ONLY, value)
     }
 
     /**

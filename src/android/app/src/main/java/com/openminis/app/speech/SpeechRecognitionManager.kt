@@ -31,8 +31,8 @@ object SpeechRecognitionManager {
 
     private var appContextRef: Context? = null
     private val appContext: Context get() = checkNotNull(appContextRef) { "SpeechRecognitionManager.init must be called first" }
-    private var prefsRef: SharedPreferences? = null
-    private val prefs: SharedPreferences get() = checkNotNull(prefsRef) { "SpeechRecognitionManager.init must be called first" }
+    private var prefsRef: com.openminis.app.config.PrefsHandle? = null
+    private val prefs: com.openminis.app.config.PrefsHandle get() = checkNotNull(prefsRef) { "SpeechRecognitionManager.init must be called first" }
     private val engines = mutableListOf<SpeechRecognitionEngine>()
 
     private val _state = MutableStateFlow(RecognitionState.IDLE)
@@ -170,14 +170,14 @@ object SpeechRecognitionManager {
     fun init(context: Context) {
         if (appContextRef != null) return
         appContextRef = context.applicationContext
-        prefsRef = appContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        prefsRef = com.openminis.app.config.Prefs.file(PREFS)
 
         engines.clear()
         engines.add(SystemSpeechRecognitionEngine(appContext))
         engines.add(ProviderSpeechRecognitionEngine(appContext))
 
-        _selectedEngineId.value = prefs.getString(KEY_ENGINE_ID, null) ?: pickDefaultEngineId()
-        prefs.getString(KEY_LOCALE, null)?.let { tag ->
+        _selectedEngineId.value = prefs.stringOrNull(KEY_ENGINE_ID) ?: pickDefaultEngineId()
+        prefs.stringOrNull(KEY_LOCALE)?.let { tag ->
             runCatching { _locale.value = Locale.forLanguageTag(tag) }
         }
         refreshAvailability()
@@ -248,7 +248,7 @@ object SpeechRecognitionManager {
     fun selectEngine(id: String) {
         if (_selectedEngineId.value == id) return
         _selectedEngineId.value = id
-        prefs.edit().putString(KEY_ENGINE_ID, id).apply()
+        prefs.set(KEY_ENGINE_ID, id)
         // [T-android-voice-entry-always-available] Deliberately picking an
         // engine is an explicit "try this one" — clear its degraded flag so a
         // past transient failure (mic busy, permission not yet granted, a
@@ -274,7 +274,7 @@ object SpeechRecognitionManager {
     fun selectLocale(locale: Locale) {
         if (_locale.value.toLanguageTag() == locale.toLanguageTag()) return
         _locale.value = locale
-        prefs.edit().putString(KEY_LOCALE, locale.toLanguageTag()).apply()
+        prefs.set(KEY_LOCALE, locale.toLanguageTag())
         // If the user changed language mid-recording, iOS restarts the
         // session in the new language. Matching that behavior.
         if (_state.value == RecognitionState.RECORDING || _state.value == RecognitionState.STARTING) {

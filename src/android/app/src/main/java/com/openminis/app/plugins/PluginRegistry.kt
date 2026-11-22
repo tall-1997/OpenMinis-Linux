@@ -1,6 +1,5 @@
 package com.openminis.app.plugins
 
-import android.content.Context
 import com.openminis.app.tools.FetchUrlGuard
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -126,12 +125,12 @@ object PluginRegistry {
     }
 
     /** Fetch remote catalog; on failure return last-good cache. Second = live. */
-    fun fetch(context: Context): Pair<List<RemotePlugin>, Boolean> {
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    fun fetch(): Pair<List<RemotePlugin>, Boolean> {
+        val prefs = com.openminis.app.config.Prefs.file(PREFS)
         try {
             // User override first; the built-in XINCODE default only serves
             // when the override is unset or fails its own guard checks.
-            val effective = prefs.getString(OVERRIDE_KEY, null)?.trim()?.ifEmpty { null } ?: REGISTRY_URL
+            val effective = prefs.stringOrNull(OVERRIDE_KEY)?.trim()?.ifEmpty { null } ?: REGISTRY_URL
             FetchUrlGuard.blockedReason(effective)?.let { throw IllegalArgumentException(it) }
             var currentUrl = effective
             val origin = URI(effective)
@@ -168,10 +167,10 @@ object PluginRegistry {
             val catalogText = checkNotNull(text)
             val plugins = parse(catalogText)
             if (plugins.isEmpty()) throw IllegalStateException("empty registry")
-            prefs.edit().putString(CACHE_KEY, catalogText).apply()
+            prefs.set(CACHE_KEY, catalogText)
             return plugins to true
         } catch (_: Exception) {
-            val cached = prefs.getString(CACHE_KEY, null)
+            val cached = prefs.stringOrNull(CACHE_KEY)
             if (!cached.isNullOrBlank()) {
                 return parse(cached) to false
             }
@@ -186,9 +185,8 @@ object PluginRegistry {
         else -> -1
     }
 
-    fun cached(context: Context): List<RemotePlugin> {
-        val text = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(CACHE_KEY, null) ?: return emptyList()
+    fun cached(): List<RemotePlugin> {
+        val text = com.openminis.app.config.Prefs.file(PREFS).stringOrNull(CACHE_KEY) ?: return emptyList()
         return parse(text)
     }
 }

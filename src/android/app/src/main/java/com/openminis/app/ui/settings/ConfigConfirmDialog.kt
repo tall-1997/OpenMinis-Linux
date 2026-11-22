@@ -43,6 +43,7 @@ import com.openminis.app.config.confirm.PendingConfigChange
 import com.openminis.app.config.confirm.PendingConfigChangeItem
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * Root-level confirmation dialog for every minis-config write.
@@ -218,7 +219,7 @@ private fun VerbBadge(verb: String) {
         Text(
             text = verb.uppercase(),
             style = MaterialTheme.typography.bodySmall.copy(
-                fontSize = 10.sp,
+                fontSize = MinisTypography.chip,
                 fontFamily = FontFamily.Monospace,
             ),
             color = Color.White,

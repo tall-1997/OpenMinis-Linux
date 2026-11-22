@@ -2,6 +2,8 @@ package com.openminis.app.quick
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.openminis.app.config.AndroidPrefsSource
+import com.openminis.app.config.Prefs
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -29,6 +31,7 @@ class QuickPrefsTest {
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
+        Prefs.install(AndroidPrefsSource(context))
         context.getSharedPreferences(QuickPrefs.PREFS_NAME, Context.MODE_PRIVATE).edit().clear().commit()
         prefs = QuickPrefs(context)
     }

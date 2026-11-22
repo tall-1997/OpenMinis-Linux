@@ -14,10 +14,10 @@ import org.json.JSONArray
  */
 class ScheduledTaskStore(private val context: Context) {
 
-    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val prefs = com.openminis.app.config.Prefs.file(PREFS_NAME)
 
     fun all(): List<ScheduledTask> {
-        val raw = prefs.getString(KEY_TASKS, null) ?: return emptyList()
+        val raw = prefs.stringOrNull(KEY_TASKS) ?: return emptyList()
         return try {
             val arr = JSONArray(raw)
             buildList {
@@ -130,7 +130,7 @@ class ScheduledTaskStore(private val context: Context) {
     }.getOrNull()
 
     fun clear() {
-        prefs.edit().remove(KEY_TASKS).commit()
+        prefs.remove(KEY_TASKS)
     }
 
     private fun write(tasks: List<ScheduledTask>) {
@@ -138,7 +138,7 @@ class ScheduledTaskStore(private val context: Context) {
         for (t in tasks) arr.put(t.toJson())
         // apply() returns before the file is durable. A later delete then looked
         // successful while a stale flush restored the task under a new id.
-        prefs.edit().putString(KEY_TASKS, arr.toString()).commit()
+        prefs.set(KEY_TASKS, arr.toString())
     }
 
     /**
@@ -148,13 +148,12 @@ class ScheduledTaskStore(private val context: Context) {
      */
     fun observe(): Flow<List<ScheduledTask>> = callbackFlow {
         trySend(all())
-        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == KEY_TASKS || key == null) {
+        val stopListening = prefs.observe { key ->
+            if (key == KEY_TASKS) {
                 trySend(all())
             }
         }
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+        awaitClose { stopListening() }
     }
 
     companion object {

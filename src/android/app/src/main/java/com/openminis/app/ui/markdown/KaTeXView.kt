@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.tokens.MinisTypography
 
 private const val TAG = "KaTeXView"
 
@@ -205,7 +206,7 @@ fun KaTeXRenderView(
         // Fallback: show raw LaTeX in monospace
         Text(
             text = latex,
-            style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 14.sp),
+            style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = MinisTypography.code),
             color = MaterialTheme.colorScheme.onSurface,
             modifier = modifier,
         )

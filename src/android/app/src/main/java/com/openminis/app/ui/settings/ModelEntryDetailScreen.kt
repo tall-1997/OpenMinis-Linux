@@ -42,6 +42,7 @@ import com.openminis.app.ui.chat.localizedName
 import com.openminis.app.R
 import com.openminis.app.ui.components.MinisButton
 import com.openminis.app.ui.components.MinisTextButton
+import com.openminis.app.ui.tokens.RawSpace
 
 /**
  * Detail / edit screen for a single ModelEntry. T210: brought to iOS
@@ -395,7 +396,7 @@ fun ModelEntryDetailScreen(
                     text = stringResource(R.string.modeldetail_harness_save_failed),
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(bottom = 12.dp),
+                    modifier = Modifier.padding(bottom = RawSpace.lg.dp),
                 )
             }
         }

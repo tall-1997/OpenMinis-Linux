@@ -309,17 +309,17 @@ class SkillRepository(private val context: Context) {
     // First launch after upgrade copies is_enabled=0 into this set so those
     // older explicit disables are not treated as stale.
     private val seededFromDbKey = "seeded_from_db"
-    private val disabledPrefs by lazy {
-        context.getSharedPreferences("skill_user_disabled", Context.MODE_PRIVATE)
-    }
+    private val disabledPrefs by lazy { com.openminis.app.config.Prefs.file("skill_user_disabled") }
 
     private fun seedDisabledFromDbIfNeeded() {
-        if (disabledPrefs.getBoolean(seededFromDbKey, false)) return
+        if (disabledPrefs.bool(seededFromDbKey, false)) return
         val seeded = SkillEnableMigration.merge(userDisabledIds(), disabledIdsInDb())
-        disabledPrefs.edit()
-            .putStringSet("ids", seeded)
-            .putBoolean(seededFromDbKey, true)
-            .apply()
+        // 一次事务写两个键：先落 ids 再置 seeded_from_db 标记，分开写会出现
+        // 「标记已位但 ids 未写」的窗口，下次启动跳过迁移，禁用列表就丢了。
+        disabledPrefs.write {
+            putStringSet("ids", seeded)
+            putBoolean(seededFromDbKey, true)
+        }
         Log.i(TAG, "seeded ${seeded.size} user-disabled skill id(s) from the pre-prefs database")
     }
 
@@ -333,13 +333,13 @@ class SkillRepository(private val context: Context) {
     }
 
     private fun userDisabledIds(): MutableSet<String> =
-        (disabledPrefs.getStringSet("ids", emptySet()) ?: emptySet()).toMutableSet()
+        disabledPrefs.stringSet("ids").toMutableSet()
 
     private fun markUserDisabled(id: String, disabled: Boolean) {
         val set = userDisabledIds()
         val changed = if (disabled) set.add(id) else set.remove(id)
         if (changed) {
-            disabledPrefs.edit().putStringSet("ids", set).apply()
+            disabledPrefs.set("ids", set)
         }
     }
 

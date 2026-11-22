@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- [T-port-fold-tools] Fold consecutive tool calls. Translations copied from iOS Localizable.xcstrings. -->
+<resources>
+    <string name="tool_fold_setting_title">Restrânge apelurile consecutive de instrumente</string>
+    <string name="tool_fold_section">Apeluri de instrumente</string>
+    <string name="tool_fold_setting_footer">Apelurile de instrumente consecutive sunt afișate pe un singur rând. Atinge-l pentru a vedea fiecare apel.</string>
+    <string name="tool_fold_ran_n_tools">Instrumente rulate: %1$d</string>
+    <string name="tool_fold_n_failed">eșuate: %1$d</string>
+    <string name="tool_fold_n_cancelled">anulate: %1$d</string>
+    <string name="tool_fold_expand_hint">Afișează fiecare apel de instrument</string>
+    <string name="tool_fold_collapse_hint">Ascunde apelurile de instrumente</string>
+</resources>

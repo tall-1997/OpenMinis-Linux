@@ -39,6 +39,7 @@ import com.openminis.app.network.NetworkAlertCenter
 import com.openminis.app.network.NetworkAlertEvent
 import com.openminis.app.network.NetworkHub
 import com.openminis.app.network.NetworkStatusMonitor
+import com.openminis.app.ui.tokens.MinisTypography
 
 private val PillGreen = Color(0xFF34C759)
 private val PillAmber = Color(0xFFFF9500)
@@ -52,7 +53,7 @@ private val PillAmber = Color(0xFFFF9500)
 @Composable
 internal fun HomeTitleWithNetworkPills(title: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(title, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+        Text(title, fontWeight = FontWeight.Bold, fontSize = MinisTypography.display)
         NetworkStatusPills()
     }
 }
@@ -112,8 +113,8 @@ private fun StatusPill(color: Color, text: String, description: String) {
         Spacer(Modifier.width(4.dp))
         Text(
             text,
-            fontSize = 10.sp,
-            lineHeight = 12.sp,
+            fontSize = MinisTypography.chip,
+            lineHeight = MinisTypography.lineChip,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
         )

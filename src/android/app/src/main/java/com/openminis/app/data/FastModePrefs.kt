@@ -1,7 +1,6 @@
 package com.openminis.app.data
 
 import android.content.Context
-import android.content.SharedPreferences
 
 /**
  * [T-codex-fast-mode] App-level persisted Fast Mode toggle (mirrors iOS
@@ -26,13 +25,13 @@ object FastModePrefs {
     @Volatile
     private var cachedEnabled: Boolean = false
 
-    private fun prefs(context: Context): SharedPreferences =
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private fun prefs() =
+        com.openminis.app.config.Prefs.file(PREFS)
 
     /** Capture the app context and warm the cache. Called from MinisApp.onCreate. */
     fun prime(context: Context) {
         appContext = context.applicationContext
-        cachedEnabled = prefs(context).getBoolean(KEY_ENABLED, false)
+        cachedEnabled = prefs().bool(KEY_ENABLED, false)
     }
 
     /**
@@ -46,7 +45,7 @@ object FastModePrefs {
 
     fun setEnabled(context: Context, enabled: Boolean) {
         cachedEnabled = enabled
-        prefs(context).edit().putBoolean(KEY_ENABLED, enabled).apply()
+        prefs().set(KEY_ENABLED, enabled)
     }
 
     /**

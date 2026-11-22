@@ -179,4 +179,18 @@ object TranslationStore {
     fun dispose(blockKey: String) {
         controllers.remove(blockKey)?.dispose()
     }
+
+    /**
+     * [T-cot-translate-test] Drop every controller and cache entry.
+     *
+     * The store is process-global, so without this each test in a JVM run
+     * inherits the previous test's translations — a cache hit then masks
+     * whether the code under test actually requested anything. Tests call it
+     * from `@Before`.
+     */
+    fun clear() {
+        controllers.values.forEach { it.dispose() }
+        controllers.clear()
+        fragmentCache.clear()
+    }
 }

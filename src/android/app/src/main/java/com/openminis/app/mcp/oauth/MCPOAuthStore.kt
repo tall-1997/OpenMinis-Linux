@@ -1,9 +1,7 @@
 package com.openminis.app.mcp.oauth
 
 import android.content.Context
-import android.content.SharedPreferences
 import com.openminis.app.logging.AppLogger
-import com.openminis.app.util.EncryptedPrefsFactory
 import org.json.JSONObject
 
 /**
@@ -26,14 +24,8 @@ object MCPOAuthStore {
         val expiresAtMs: Long,
     )
 
-    @Volatile
-    private var prefsRef: SharedPreferences? = null
-
-    private fun prefs(context: Context): SharedPreferences =
-        prefsRef ?: synchronized(this) {
-            prefsRef ?: EncryptedPrefsFactory.safeCreate(context.applicationContext, FILE)
-                .also { prefsRef = it }
-        }
+    private fun prefs(context: Context): com.openminis.app.config.PrefsHandle =
+        com.openminis.app.config.Prefs.file(FILE)
 
     private fun secretKey(server: String) = "secret::$server"
     private fun tokensKey(server: String) = "tokens::$server"
@@ -43,14 +35,14 @@ object MCPOAuthStore {
     fun setClientSecret(context: Context, server: String, secret: String?) {
         val p = prefs(context)
         if (secret.isNullOrEmpty()) {
-            p.edit().remove(secretKey(server)).apply()
+            p.remove(secretKey(server))
         } else {
-            p.edit().putString(secretKey(server), secret).apply()
+            p.set(secretKey(server), secret)
         }
     }
 
     fun clientSecret(context: Context, server: String): String? =
-        prefs(context).getString(secretKey(server), null)?.takeIf { it.isNotEmpty() }
+        prefs(context).stringOrNull(secretKey(server))?.takeIf { it.isNotEmpty() }
 
     // -- tokens --
 
@@ -60,11 +52,11 @@ object MCPOAuthStore {
             tokens.refreshToken?.let { put("refresh_token", it) }
             put("expires_at_ms", tokens.expiresAtMs)
         }
-        prefs(context).edit().putString(tokensKey(server), json.toString()).apply()
+        prefs(context).set(tokensKey(server), json.toString())
     }
 
     fun tokens(context: Context, server: String): StoredTokens? {
-        val raw = prefs(context).getString(tokensKey(server), null) ?: return null
+        val raw = prefs(context).stringOrNull(tokensKey(server)) ?: return null
         return runCatching {
             val o = JSONObject(raw)
             StoredTokens(
@@ -81,13 +73,18 @@ object MCPOAuthStore {
 
     /** Forget issued tokens but keep the client secret (sign out, re-auth later). */
     fun signOut(context: Context, server: String) {
-        prefs(context).edit().remove(tokensKey(server)).apply()
+        prefs(context).remove(tokensKey(server))
         MCPTokenBridge.remove(context, server)
     }
 
     /** Forget everything for a server — tokens AND client secret (server deleted). */
     fun purge(context: Context, server: String) {
-        prefs(context).edit().remove(tokensKey(server)).remove(secretKey(server)).apply()
+        // 两个键一起删：tokens 和 secret 分开删会留下「能认证但没有密钥」的中间态，
+        // 用户看到的状态是「已授权但连不上」。
+        prefs(context).write {
+            remove(tokensKey(server))
+            remove(secretKey(server))
+        }
         MCPTokenBridge.remove(context, server)
     }
 }

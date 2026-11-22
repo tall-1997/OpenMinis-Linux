@@ -47,6 +47,7 @@ class ChatFlatItemsToolOnlyFoldTest {
 
     private fun kinds(items: List<FlatChatItem>): List<String> = items.map { item ->
         when (item) {
+                is FlatChatItem.AssistantToolGroup -> "toolgroup"
             is FlatChatItem.UserBubble -> "user"
             is FlatChatItem.AssistantHeader -> "header"
             is FlatChatItem.AssistantMarkdownBlock -> "md"

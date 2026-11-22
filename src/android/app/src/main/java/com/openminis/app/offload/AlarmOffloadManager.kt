@@ -57,15 +57,15 @@ class AlarmOffloadManager(private val context: Context) {
      * contends meaningfully.
      */
     private fun nextRequestCode(): Int = synchronized(requestCodeLock) {
-        val next = prefs.getInt(KEY_NEXT_REQUEST_CODE, 1)
-        prefs.edit().putInt(KEY_NEXT_REQUEST_CODE, if (next >= Int.MAX_VALUE) 1 else next + 1).apply()
+        val next = prefs.int(KEY_NEXT_REQUEST_CODE, 1)
+        prefs.set(KEY_NEXT_REQUEST_CODE, if (next >= Int.MAX_VALUE) 1 else next + 1)
         next
     }
 
     private val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
     private val notificationManager =
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val prefs = com.openminis.app.config.Prefs.file(PREFS_NAME)
 
     init {
         createNotificationChannel()
@@ -229,7 +229,7 @@ class AlarmOffloadManager(private val context: Context) {
             kept.put(a)
         }
         if (removed > 0) {
-            prefs.edit().putString(KEY_ALARMS, kept.toString()).apply()
+            prefs.set(KEY_ALARMS, kept.toString())
             AppLogger.info(TAG, "swept $removed expired ONCE alarm(s)/timer(s)")
         }
         return removed
@@ -257,7 +257,7 @@ class AlarmOffloadManager(private val context: Context) {
             val nonRepeating = a.optString("type") == "timer" || mode == "ONCE"
             if (nonRepeating) {
                 alarms.remove(i)
-                prefs.edit().putString(KEY_ALARMS, alarms.toString()).apply()
+                prefs.set(KEY_ALARMS, alarms.toString())
                 AppLogger.info(TAG, "alarm id=$alarmId mode=$mode fired — removed from prefs")
                 return
             }
@@ -268,7 +268,7 @@ class AlarmOffloadManager(private val context: Context) {
             val repeat = runCatching { RepeatMode.valueOf(mode) }.getOrNull()
             if (repeat == null || !a.has("hour") || !a.has("minute")) {
                 alarms.remove(i)
-                prefs.edit().putString(KEY_ALARMS, alarms.toString()).apply()
+                prefs.set(KEY_ALARMS, alarms.toString())
                 AppLogger.warning(TAG, "alarm id=$alarmId mode=$mode not re-armable — dropped from prefs")
                 return
             }
@@ -278,7 +278,7 @@ class AlarmOffloadManager(private val context: Context) {
             val firedAtMs = maxOf(System.currentTimeMillis(), a.optLong("triggerAtMs", 0L))
             val next = nextOccurrenceMs(a.getInt("hour"), a.getInt("minute"), repeat, firedAtMs)
             a.put("triggerAtMs", next)
-            prefs.edit().putString(KEY_ALARMS, alarms.toString()).apply()
+            prefs.set(KEY_ALARMS, alarms.toString())
             val registered = registerExact(
                 a.optString("id"),
                 a.optInt("requestCode"),
@@ -355,7 +355,7 @@ class AlarmOffloadManager(private val context: Context) {
 
         if (!found) return "Error: no alarm found with id=$alarmId"
 
-        prefs.edit().putString(KEY_ALARMS, alarms.toString()).apply()
+        prefs.set(KEY_ALARMS, alarms.toString())
         return "Alarm cancelled: id=$alarmId"
     }
 
@@ -378,7 +378,7 @@ class AlarmOffloadManager(private val context: Context) {
             alarmManager.cancel(pi)
             pi.cancel()
         }
-        prefs.edit().remove(KEY_ALARMS).apply()
+        prefs.remove(KEY_ALARMS)
         return n
     }
 
@@ -458,7 +458,7 @@ class AlarmOffloadManager(private val context: Context) {
     }
 
     private fun loadAlarms(): JSONArray {
-        val raw = prefs.getString(KEY_ALARMS, null) ?: return JSONArray()
+        val raw = prefs.stringOrNull(KEY_ALARMS) ?: return JSONArray()
         return try {
             JSONArray(raw)
         } catch (_: Exception) {
@@ -469,6 +469,6 @@ class AlarmOffloadManager(private val context: Context) {
     private fun persistAlarm(entry: JSONObject) {
         val alarms = loadAlarms()
         alarms.put(entry)
-        prefs.edit().putString(KEY_ALARMS, alarms.toString()).apply()
+        prefs.set(KEY_ALARMS, alarms.toString())
     }
 }

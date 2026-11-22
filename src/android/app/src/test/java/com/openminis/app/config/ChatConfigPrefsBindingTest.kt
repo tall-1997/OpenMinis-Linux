@@ -111,8 +111,16 @@ class ChatConfigPrefsBindingTest {
         // DIFFERENT store, so the handle NAME alone says nothing. Walk the file
         // in order and track which store the nearest preceding declaration
         // opened — that is the one a `prefs = prefs` reference resolves to.
+        // Handles are opened two ways since the PrefsHandle migration: the
+        // legacy raw `context.getSharedPreferences("x")` and the typed
+        // `Prefs.file("x")`. The second form is often fully qualified
+        // (`com.openminis.app.config.Prefs.file(...)`) and usually carries a
+        // trailing `.guardedBackend()`, so the prefix and suffix are both
+        // optional here. Without this branch every migrated registration
+        // resolves to an unknown store and is reported as an offender.
         val events = Regex(
-            """val (\w+) = context\.getSharedPreferences\(\s*(?:"([^"]+)"|([\w.]+))""" +
+            """val (\w+) = (?:(?:context\.)?getSharedPreferences\(\s*(?:"([^"]+)"|([\w.]+))""" +
+                """|[A-Za-z0-9_.]*Prefs\.file\("([^"]+)"\))""" +
                 """|prefs = (\w+),\s*\n\s*key = (?:"([^"]+)"|[\w.]+\.(KEY_\w+))""",
         ).findAll(builtins)
 
@@ -121,8 +129,9 @@ class ChatConfigPrefsBindingTest {
         for (m in events) {
             val declName = m.groupValues[1]
             if (declName.isNotEmpty()) {
-                // Literal store name, or a constant reference (PREF_APPEARANCE).
-                val literal = m.groupValues[2]
+                // Literal store name, constant reference (PREF_APPEARANCE), or
+                // the Prefs.file literal (group 4).
+                val literal = m.groupValues[2].ifEmpty { m.groupValues[4] }
                 val viaConst = m.groupValues[3]
                 storeOf[declName] =
                     if (literal.isNotEmpty()) literal
@@ -130,8 +139,8 @@ class ChatConfigPrefsBindingTest {
                     else viaConst
                 continue
             }
-            val handle = m.groupValues[4]
-            val literalKey = m.groupValues[5]
+            val handle = m.groupValues[5]
+            val literalKey = m.groupValues[6]
             // Only a hand-typed key can silently diverge; a shared KEY_*
             // constant is exactly the fix, so it is never an offender.
             if (literalKey.isEmpty()) continue

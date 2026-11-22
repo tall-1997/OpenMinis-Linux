@@ -2,6 +2,7 @@ import java.util.Properties
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import java.io.FileOutputStream
+import java.time.Duration
 
 // Local instrumentation escape hatch. The release build type is minified by
 // R8, and the minified androidTest APK shares the app's classloader; runner
@@ -130,7 +131,7 @@ android {
     // are available to compile against. targetSdk stays 35 to avoid pulling in
     // Android 16 behavior changes; the Live Updates path is runtime-gated on
     // Build.VERSION.SDK_INT >= 36 (see DynamicIslandSupport / AgentForegroundService).
-    compileSdk = 36
+    compileSdk = libs.versions.compileSdk.get().toInt()
     // Pin the same NDK CI installs (ANDROID_NDK=29.0.14206865). Unpinned AGP
     // on GitHub-hosted runners picked 27.0.12077973 and linked the host
     // libunwind.so. r29 still has no usable host libunwind.so; CMake links
@@ -139,8 +140,8 @@ android {
 
     defaultConfig {
         applicationId = "com.openminis.linux"
-        minSdk = 26
-        targetSdk = 35
+        minSdk = libs.versions.minSdk.get().toInt()
+        targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 297
         // [T-rolling-version] Rolling builds (push to main) carry the merge PR
         // number as a fourth component, e.g. 2.0.82.233, so a sideloaded APK can
@@ -326,6 +327,16 @@ android {
         // database). Pure-JVM tests are unaffected — they never touch
         // resources.
         unitTests.isIncludeAndroidResources = true
+        // [T-ci-test-hang] A hung test used to burn the whole 90-minute job
+        // budget: run 44907660989 sat in testReleaseUnitTest from 13:21 to
+        // 14:42 with zero output and was cancelled by timeout, so the PR got
+        // no verdict at all. The same 7331-test suite finishes in ~2m40s on
+        // this runner, so a single test still running after 15 minutes is a
+        // defect in the test, not a slow suite. Fail that test and keep the
+        // rest of the report, instead of losing the whole run.
+        unitTests.all {
+            it.timeout.set(Duration.ofMinutes(15))
+        }
     }
 
     // [T-androidtest-release] This project has no debug buildType, and AGP
@@ -409,10 +420,10 @@ dependencies {
     implementation(project(":core:model"))
     implementation(project(":provider:api"))
     // Compose BOM
-    val composeBom = platform("androidx.compose:compose-bom:2025.09.00")
+    val composeBom = platform(libs.compose.bom)
     implementation(composeBom)
-    implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-extended")
+    implementation(libs.compose.material3)
+    implementation(libs.compose.material.icons.extended)
 
     // [T-android-tablet-split] Adaptive list-detail layout for tablets/large
     // windows. Version pinned explicitly rather than left to the BOM: the
@@ -427,21 +438,21 @@ dependencies {
     //
     // The adaptive-navigation3 artifact is NOT used — still alpha, and would
     // require migrating off classic Navigation Compose.
-    implementation("androidx.compose.material3:material3-window-size-class")
-    implementation("androidx.compose.material3.adaptive:adaptive:1.2.0")
-    implementation("androidx.compose.material3.adaptive:adaptive-layout:1.2.0")
-    implementation("androidx.compose.material3.adaptive:adaptive-navigation:1.2.0")
-    implementation("androidx.compose.ui:ui")
+    implementation(libs.androidx.material3.windowsize)
+    implementation(libs.androidx.material3.adaptive)
+    implementation(libs.androidx.material3.adaptive.layout)
+    implementation(libs.androidx.material3.adaptive.navigation)
+    implementation(libs.compose.ui)
 
     // Core
-    implementation("androidx.core:core-ktx:1.15.0")
-    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
-    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
+    implementation(libs.androidx.core.ktx)
+    implementation(libs.mlkit.text.recognition.chinese)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     // ProcessLifecycleOwner — used by XAIOAuthManager to detect Custom
     // Tab dismissal (T-xai-oauth-stop-resume port iOS d1dbdd5d).
-    implementation("androidx.lifecycle:lifecycle-process:2.8.7")
+    implementation(libs.androidx.lifecycle.process)
     // androidx.profileinstaller removed: no baseline profile exists to install —
     // `git ls-files` has no baseline-prof.txt / baselineProfiles source anywhere,
     // and :benchmark (settings.gradle.kts) is never assembled by CI or the docs,
@@ -453,16 +464,16 @@ dependencies {
     // app/src/main/baseline-prof.txt, and add a CI job — sideloaded installs (this
     // project ships APKs from GitHub Releases) rely on profileinstaller at first
     // launch on API 28 and below, so the two belong in the same change.
-    implementation("androidx.activity:activity-compose:1.9.3")
-    implementation("androidx.exifinterface:exifinterface:1.3.7")
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.exifinterface)
 
     // Navigation
-    implementation("androidx.navigation:navigation-compose:2.8.5")
+    implementation(libs.androidx.navigation.compose)
 
     // Room
-    implementation("androidx.room:room-runtime:2.6.1")
-    implementation("androidx.room:room-ktx:2.6.1")
-    ksp("androidx.room:room-compiler:2.6.1")
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
 
     // androidx.datastore:datastore-preferences removed — zero usage: `git grep
     // androidx.datastore` over src/android matched only this declaration, no
@@ -473,7 +484,7 @@ dependencies {
     // documents deliberately avoiding DataStore.
 
     // Security (EncryptedSharedPreferences)
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation(libs.androidx.security.crypto)
 
     // OkHttp
     // [T-android-vad] Silero v5 VAD (ONNX Runtime + WebRTC APM). The Android
@@ -481,7 +492,7 @@ dependencies {
     // both platforms share one model and one set of thresholds. Carries
     // native .so payloads for ONNX Runtime and the APM — see the abiFilters
     // note in `ndk`; we ship arm64-v8a only.
-    implementation("com.github.helloooideeeeea:RealTimeCutVADLibraryForAndroid:1.0.5@aar")
+    implementation(libs.silero.vad)
 
     // rclone gomobile AAR is gitignored (~15MB). First APK compiles without Go
     // via src/rcloneStub. Remote backup destinations need the real AAR:
@@ -497,8 +508,8 @@ dependencies {
         )
     }
 
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("org.mozilla:rhino:1.7.14")
+    implementation(libs.okhttp)
+    implementation(libs.rhino)
     // com.squareup.okhttp3:okhttp-sse removed — never imported: `git grep -E
     // "okhttp3\.sse|EventSources|EventSourceListener"` over src/android found
     // zero hits. Streaming is parsed off the raw response body on purpose
@@ -515,33 +526,33 @@ dependencies {
     // (rsa-sha2, ssh-ed25519, chacha20-poly1305), and a long Android track
     // record. Runs in the host app process, so guest paths must be resolved
     // to host paths before SFTP transfers.
-    implementation("com.github.mwiede:jsch:0.2.26")
+    implementation(libs.jsch)
 
     // Kotlinx Serialization
     implementation(libs.kotlinx.serialization.json)
 
     // Coil (image loading)
-    implementation("io.coil-kt:coil-compose:2.7.0")
-    implementation("io.coil-kt:coil-svg:2.7.0")
+    implementation(libs.coil.compose)
+    implementation(libs.coil.svg)
 
     // Markdown rendering
-    implementation("org.jetbrains:markdown:0.7.3")
+    implementation(libs.jetbrains.markdown)
 
     // Chrome Custom Tabs (in-app browser for OAuth)
-    implementation("androidx.browser:browser:1.8.0")
-    implementation("androidx.documentfile:documentfile:1.0.1")
+    implementation(libs.androidx.browser)
+    implementation(libs.androidx.documentfile)
 
     // T-pwa-1: WebViewAssetLoader serves pinned PWA HTML under
     // https://appassets.androidplatform.net/ inside PwaActivity, so
     // sibling CSS/JS resolve against the file's parent dir without
     // granting WebView raw file:// access.
-    implementation("androidx.webkit:webkit:1.12.1")
+    implementation(libs.androidx.webkit)
 
     // Drag-to-reorder for LazyColumn
-    implementation("sh.calvin.reorderable:reorderable:2.4.0")
+    implementation(libs.reorderable)
 
     // Termux VT emulator (replaces the hand-rolled ANSI parser for the PTY UI)
-    implementation("com.termux.termux-app:terminal-view:0.118.0")
+    implementation(libs.termux.terminal.view)
 
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
@@ -551,12 +562,12 @@ dependencies {
     // round-trip) — the panel shows history/branches instantly on entry.
     // Read-only operations here; commit/stage/push stay on the sandbox path
     // (credentials live in the sandbox git config).
-    implementation("org.eclipse.jgit:org.eclipse.jgit:7.8.1.202611041320-r")
+    implementation(libs.jgit)
 
     // T283: ACRA — local crash report capture. acra-core only (no http
     // sender, no network permission). CrashFileSender writes reports to
     // filesDir/logs/ where LogManagementScreen surfaces them.
-    implementation("ch.acra:acra-core:5.12.0")
+    implementation(libs.acra.core)
 
     // T322: Shizuku SDK — offloads privileged Android system APIs (PackageManager,
     // PermissionManager, ActivityManager, AppOps, IInputManager, …) through a
@@ -574,14 +585,14 @@ dependencies {
     // earlier Axeron-API SDK route was dropped — it duplicated the
     // `moe.shizuku.*` classes (AGP checkDuplicateClasses failure) and pulled an
     // incompatible androidx.core / minSdk for zero added capability.
-    implementation("dev.rikka.shizuku:api:13.1.5")
-    implementation("dev.rikka.shizuku:provider:13.1.5")
+    implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
 
     // Testing — JVM unit tests
-    testImplementation("junit:junit:4.13.2")
+    testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
-    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
-    testImplementation("org.json:json:20231013")
+    testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.org.json)
     // [T-restore-txn-integration] Robolectric runs the archive/restore Room
     // transactions against a real in-memory SQLite. RestoreOrderTest proves
     // the pure ordering function, but the two-pass scratch renumbering, the
@@ -589,21 +600,21 @@ dependencies {
     // retirement only exist against a real database. 4.14.1 covers SDK 35
     // (= targetSdk); pinned via @Config so a compileSdk bump never silently
     // changes which framework the tests run on.
-    testImplementation("org.robolectric:robolectric:4.14.1")
-    testImplementation("androidx.test:core:1.6.1")
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
 
     // Testing — Instrumented (on-device) tests
     // [T-android-downgrade-compat] MigrationTestHelper replays the committed
     // schema json to prove every migration — upgrade AND the no-op downgrade —
     // still lands on the schema the entities expect.
-    androidTestImplementation("androidx.room:room-testing:2.6.1")
-    androidTestImplementation("androidx.test:runner:1.6.2")
-    androidTestImplementation("androidx.test:rules:1.6.1")
-    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation(libs.androidx.room.testing)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.rules)
+    androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(composeBom)
-    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation(libs.compose.ui.test.junit4)
     androidTestImplementation(libs.kotlinx.coroutines.test)
-    androidTestImplementation("junit:junit:4.13.2")
+    androidTestImplementation(libs.junit)
 }
 
 // JVM unit tests: Gradle's condensed console prints only
@@ -615,6 +626,11 @@ tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
         exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
         showCauses = true
         showStackTraces = true
+        // [T-ci-test-hang] A hung test produces no output at all: the task
+        // sits for 15 minutes and dies on the timeout with no way to tell
+        // which test was running. Emitting "started" makes the last STARTED
+        // line in the log name the culprit. Costs one line per test (~7.3k).
+        events("started", "failed", "skipped")
     }
 }
 
@@ -632,13 +648,13 @@ tasks.withType<org.gradle.api.tasks.testing.Test>().configureEach {
 val vdHostR8 by configurations.creating
 val vdHostBoot by configurations.creating
 dependencies {
-    vdHostR8("com.android.tools:r8:8.3.37")
+    vdHostR8(libs.android.tools.r8)
     // The host lives on android.app.ActivityThread (hidden API) — the public
     // android.jar does not carry it. Robolectric's android-all jar is the
     // full framework + libcore compile target (the vdisplay-android build
     // chain uses exactly this version); the host only touches stable APIs
     // (systemMain, DisplayManager, ImageReader), so an API-35 jar is fine.
-    vdHostBoot("org.robolectric:android-all:14-robolectric-10818077")
+    vdHostBoot(libs.robolectric.android.all)
 }
 
 val vdHostSourceDir = layout.projectDirectory.dir("../vd-host/src/main/java")

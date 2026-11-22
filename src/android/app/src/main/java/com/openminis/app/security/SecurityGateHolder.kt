@@ -29,12 +29,12 @@ object SecurityGateHolder {
     private const val KEY_MODE = "permission_mode"
 
     fun load(context: Context) {
-        val p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val p = com.openminis.app.config.Prefs.file(PREFS)
         // Drop the retired five-mode global default. Tool gate is per-session
         // now; leftover ALLOW_ALL / READ_ONLY / PLAN / DENY_ALL must not
         // apply to upgraded chats before a session VM binds.
         if (p.contains(KEY_MODE)) {
-            p.edit().putString(KEY_MODE, PermissionMode.ASK.name).apply()
+            p.set(KEY_MODE, PermissionMode.ASK.name)
         }
         activeSessionModes.clear()
         legacyActiveSessionMode = SessionPermissionMode.SAFEST

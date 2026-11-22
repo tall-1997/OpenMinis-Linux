@@ -67,6 +67,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * [T-android-voice-panel] Inline voice input panel — Android port of iOS
@@ -115,8 +116,7 @@ object VoiceModePrefs {
         get() = expandedState
         set(value) {
             expandedState = value
-            appContext?.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
-                ?.edit()?.putBoolean(KEY_EXPANDED, value)?.apply()
+            appContext?.let { com.openminis.app.config.Prefs.file(PREFS).set(KEY_EXPANDED, value) }
         }
 
     /** One-shot: text→voice entry opens expanded that one time. */
@@ -130,8 +130,7 @@ object VoiceModePrefs {
         if (appContext != null) return
         val ctx = context.applicationContext
         appContext = ctx
-        expandedState = ctx.getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
-            .getBoolean(KEY_EXPANDED, true)
+        expandedState = com.openminis.app.config.Prefs.file(PREFS).bool(KEY_EXPANDED, true)
     }
 }
 
@@ -690,7 +689,7 @@ private fun ExpandedContent(
                     .background(Color(0xFFFF9500).copy(alpha = 0.12f))
                     .padding(horizontal = 12.dp, vertical = 5.dp),
             ) {
-                Text("⚠︎", fontSize = 10.sp, color = Color(0xFFFF9500))
+                Text("⚠︎", fontSize = MinisTypography.chip, color = Color(0xFFFF9500))
                 Spacer(Modifier.width(5.dp))
                 Text(
                     transcribeError,
@@ -855,7 +854,7 @@ private fun TranscriptArea(
             },
             textStyle = TextStyle(
                 color = MaterialTheme.colorScheme.onSurface,
-                fontSize = 16.sp,
+                fontSize = MinisTypography.titleLg,
                 textAlign = TextAlign.Center,
             ),
             cursorBrush = androidx.compose.ui.graphics.SolidColor(MaterialTheme.colorScheme.primary),
@@ -909,4 +908,3 @@ private fun TranscriptArea(
         }
     }
 }
-

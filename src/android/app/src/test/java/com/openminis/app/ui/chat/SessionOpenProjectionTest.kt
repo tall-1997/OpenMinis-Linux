@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModelStore
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.openminis.app.MinisApp
+import com.openminis.app.config.InMemorySource
+import com.openminis.app.config.Prefs
 import com.openminis.app.data.db.AppDatabase
 import com.openminis.app.data.db.ChatSessionEntity
 import com.openminis.app.data.model.LLMModel
@@ -63,6 +65,14 @@ class SessionOpenProjectionTest {
     @Before
     fun setUp() = runBlocking {
         Dispatchers.setMain(UnconfinedTestDispatcher())
+        Prefs.install(InMemorySource())
+        // [T-ci-test-hang] Robolectric ships no AndroidKeyStore provider, so a
+        // real EncryptedSharedPreferences.create blocks forever in Tink's
+        // keystore lookup instead of throwing (run 44929803764 hung this exact
+        // test for 13.5 min). The fixture below only needs the store to hold an
+        // API key for the duration of one test, so back it with the platform
+        // SharedPreferences that Robolectric does implement.
+        EncryptedPrefsFactory.installOpsForTest { ctx -> PlainPrefsOps(ctx) }
         app.appContainer.multiAgentSettingsRepository = MultiAgentSettingsRepository(app)
         ProviderHeaderStore.resetForTest()
         EncryptedPrefsFactory.resetCacheForTest()
@@ -144,5 +154,33 @@ class SessionOpenProjectionTest {
         } finally {
             viewModelStore.clear()
         }
+    }
+
+    /**
+     * [T-ci-test-hang] [EncryptedPrefsFactory.Ops] backed by the plain
+     * SharedPreferences Robolectric does implement. The real [EncryptedPrefsFactory.AndroidOps]
+     * needs a working AndroidKeyStore, which Robolectric does not provide, and
+     * the failure mode there is a hang, not an exception.
+     *
+     * The encryption itself is not under test here: the fixture asserts that an
+     * API-key Anthropic session publishes a real context estimate, and it only
+     * needs the key to survive the write→read round trip.
+     */
+    private class PlainPrefsOps(private val context: android.content.Context) :
+        EncryptedPrefsFactory.Ops {
+        override fun build(fileName: String): android.content.SharedPreferences =
+            context.getSharedPreferences("test-plain-$fileName", android.content.Context.MODE_PRIVATE)
+
+        override fun masterKeyWorks(): Boolean = true
+
+        override fun discardStore(fileName: String) {
+            context.deleteSharedPreferences("test-plain-$fileName")
+        }
+
+        override fun deleteMasterKey() = Unit
+
+        override fun inMemory(): android.content.SharedPreferences = build("in-memory")
+
+        override fun log(priority: Int, msg: String, t: Throwable?) = Unit
     }
 }

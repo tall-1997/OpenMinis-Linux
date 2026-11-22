@@ -47,6 +47,7 @@ import com.openminis.app.scheduled.ScheduledRunNow
 import com.openminis.app.scheduled.ScheduledTaskStore
 import com.openminis.app.ui.theme.ChatColors
 import kotlinx.coroutines.delay
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * [T-wave-e-countdown-pill] Countdown capsule under the chat's top bar.
@@ -143,7 +144,7 @@ internal fun ScheduledCountdownPill(currentSessionId: () -> String) {
             Box(contentAlignment = Alignment.CenterStart, modifier = Modifier.padding(start = 6.dp)) {
                 Text(
                     text = "00:00",
-                    fontSize = 14.sp,
+                    fontSize = MinisTypography.bodyLg,
                     fontWeight = FontWeight.SemiBold,
                     style = TextStyle(fontFeatureSettings = "tnum"),
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0f),
@@ -151,7 +152,7 @@ internal fun ScheduledCountdownPill(currentSessionId: () -> String) {
                 )
                 Text(
                     text = formatCountdown(remainingMs),
-                    fontSize = 14.sp,
+                    fontSize = MinisTypography.bodyLg,
                     fontWeight = FontWeight.SemiBold,
                     style = TextStyle(fontFeatureSettings = "tnum"),
                     color = ChatColors.sendButton,

@@ -108,44 +108,40 @@ object CrashFrequencyDetector {
         }
     }
 
-    private fun getDismissedAt(ctx: Context): Long =
+    private fun getDismissedAt(): Long =
         try {
-            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getLong(KEY_DISMISSED_AT, 0L)
+            com.openminis.app.config.Prefs.file(PREFS).long(KEY_DISMISSED_AT, 0L)
         } catch (t: Throwable) {
             android.util.Log.w(TAG, "getDismissedAt failed: ${t.message}")
             0L
         }
 
-    private fun setDismissedAt(ctx: Context, ts: Long) {
+    private fun setDismissedAt(ts: Long) {
         try {
-            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .edit().putLong(KEY_DISMISSED_AT, ts).apply()
+            com.openminis.app.config.Prefs.file(PREFS).set(KEY_DISMISSED_AT, ts)
         } catch (t: Throwable) {
             android.util.Log.w(TAG, "setDismissedAt failed: ${t.message}")
         }
     }
 
-    private fun setSuppressUntil(ctx: Context, ts: Long) {
+    private fun setSuppressUntil(ts: Long) {
         try {
-            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .edit().putLong(KEY_SUPPRESS_UNTIL, ts).apply()
+            com.openminis.app.config.Prefs.file(PREFS).set(KEY_SUPPRESS_UNTIL, ts)
         } catch (t: Throwable) {
             android.util.Log.w(TAG, "setSuppressUntil failed: ${t.message}")
         }
     }
 
-    private fun getSuppressUntil(ctx: Context): Long =
+    private fun getSuppressUntil(): Long =
         try {
-            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .getLong(KEY_SUPPRESS_UNTIL, 0L)
+            com.openminis.app.config.Prefs.file(PREFS).long(KEY_SUPPRESS_UNTIL, 0L)
         } catch (t: Throwable) {
             0L
         }
 
-    private fun setForceHomeUntil(ctx: Context, ts: Long) {
+    private fun setForceHomeUntil(ts: Long) {
         try {
-            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .edit().putLong(KEY_FORCE_HOME_UNTIL, ts).apply()
+            com.openminis.app.config.Prefs.file(PREFS).set(KEY_FORCE_HOME_UNTIL, ts)
         } catch (t: Throwable) {
             android.util.Log.w(TAG, "setForceHomeUntil failed: ${t.message}")
         }
@@ -166,8 +162,7 @@ object CrashFrequencyDetector {
     @JvmStatic
     fun shouldForceHomeOnLaunch(context: Context): Boolean {
         val until = try {
-            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                .getLong(KEY_FORCE_HOME_UNTIL, 0L)
+            com.openminis.app.config.Prefs.file(PREFS).long(KEY_FORCE_HOME_UNTIL, 0L)
         } catch (t: Throwable) {
             return false
         }
@@ -206,7 +201,7 @@ object CrashFrequencyDetector {
             // resume normal 1-hour rolling burst detection — fresh
             // crashes in the new live window can still trigger a prompt.
             val now0 = System.currentTimeMillis()
-            val suppressUntil = getSuppressUntil(app)
+            val suppressUntil = getSuppressUntil()
             if (suppressUntil > 0 && now0 < suppressUntil) {
                 pendingShareFiles = null
                 android.util.Log.i(
@@ -235,7 +230,7 @@ object CrashFrequencyDetector {
             // definition newer than what the user saw last time, and we
             // shouldn't miss a fresh burst just because an old Dismiss
             // marker is still on disk.
-            val rawDismissedAt = getDismissedAt(app)
+            val rawDismissedAt = getDismissedAt()
             val dismissedAt = if (rawDismissedAt > 0 && now - rawDismissedAt <= WINDOW_MS) {
                 rawDismissedAt
             } else {
@@ -266,7 +261,7 @@ object CrashFrequencyDetector {
             // bypasses the user's Launch Session preference — so even a
             // Dismiss doesn't drop the user back into the session that
             // may have been the crash trigger.
-            setForceHomeUntil(app, now + FORCE_HOME_GRACE_MS)
+            setForceHomeUntil(now + FORCE_HOME_GRACE_MS)
             android.util.Log.w(
                 TAG,
                 "Recent crashes: ${recent.size} in last hour — safe-mode ON, " +
@@ -322,7 +317,7 @@ object CrashFrequencyDetector {
             // triggered THIS dialog stayed in the 1-hour window and tripped
             // the next cold start again.
             val dismissAtCheckpoint = System.currentTimeMillis()
-            setDismissedAt(activity, dismissAtCheckpoint)
+            setDismissedAt(dismissAtCheckpoint)
 
             val pickable = buildPickableEntries(activity, triggerFiles)
             showFilePickerDialog(
@@ -596,7 +591,7 @@ object CrashFrequencyDetector {
     private fun finishClose(onClosed: (() -> Unit)?, dismissContext: Context? = null) {
         if (dismissContext != null) {
             val until = System.currentTimeMillis() + SUPPRESS_AFTER_DISMISS_MS
-            setSuppressUntil(dismissContext, until)
+            setSuppressUntil(until)
             android.util.Log.i(
                 TAG,
                 "user dismissed — suppress next 24h " +

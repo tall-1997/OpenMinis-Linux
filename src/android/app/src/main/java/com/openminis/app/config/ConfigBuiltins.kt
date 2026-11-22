@@ -65,7 +65,7 @@ internal object ConfigBuiltins {
     // list-topics since topics derive from field-path prefixes.
 
     private fun registerMemory(r: ConfigRegistry, context: Context) {
-        val prefs = context.getSharedPreferences("minis_memory_prefs", Context.MODE_PRIVATE)
+        val prefs = com.openminis.app.config.Prefs.file("minis_memory_prefs").guardedBackend()
         r.register(
             PrefsBoolField(
                 path = "memory.enabled",
@@ -295,7 +295,7 @@ internal object ConfigBuiltins {
     private fun registerAppearance(r: ConfigRegistry, context: Context) {
         // Source-of-truth lives in `appearance_prefs` (see
         // ui/settings/AppearanceScreen.kt PREF_APPEARANCE).
-        val prefs = context.getSharedPreferences("appearance_prefs", Context.MODE_PRIVATE)
+        val prefs = com.openminis.app.config.Prefs.file("appearance_prefs").guardedBackend()
         r.register(
             PrefsIntCodedEnumField(
                 path = "appearance.theme",
@@ -337,16 +337,15 @@ internal object ConfigBuiltins {
     // -- Chat / input --
 
     private fun registerChat(r: ConfigRegistry, context: Context) {
-        // Default app prefs — Android persists most chat preferences in
-        // the default SharedPreferences for the package.
-        val prefs = context.getSharedPreferences("minis_settings", Context.MODE_PRIVATE)
         // [T-android-config-prefs-mismatch] The chat prefs the SETTINGS UI owns
         // live here, not in `minis_settings`. Hoisted above the registrations
         // so every field can bind to the same store the UI reads.
-        val appearancePrefs = context.getSharedPreferences(
-            com.openminis.app.config.PREF_APPEARANCE,
-            Context.MODE_PRIVATE,
-        )
+        //
+        // `minis_settings` 已无读者 —— 原先这里有个 `val prefs = ...minis_settings...`，
+        // 但本段字段全绑 appearancePrefs，那个变量从未被引用，已删。
+        val appearancePrefs = com.openminis.app.config.Prefs
+            .file(com.openminis.app.config.PREF_APPEARANCE)
+            .guardedBackend()
         r.register(
             PrefsIntCodedEnumField(
                 path = "chat.returnKey",
@@ -446,7 +445,7 @@ internal object ConfigBuiltins {
         path: String,
         displayName: String,
         description: String,
-        prefs: android.content.SharedPreferences,
+        prefs: com.openminis.app.config.PrefsBackend,
         key: String,
     ): ConfigField {
         val cases = listOf("xSmall", "small", "default", "medium", "large", "extraLarge")
@@ -458,7 +457,7 @@ internal object ConfigBuiltins {
             risk = ConfigRisk.NORMAL,
             revertable = true,
             reader = {
-                val level = prefs.getInt(key, 0)
+                val level = prefs.readInt(key, 0)
                 val token = when (level) {
                     -2 -> "xSmall"
                     -1 -> "small"
@@ -482,7 +481,7 @@ internal object ConfigBuiltins {
                     "extraLarge" -> 3
                     else -> throw ConfigError.InvalidValue("Unknown font scale: $token")
                 }
-                prefs.edit().putInt(key, level).apply()
+                prefs.write { putInt(key, level) }
             },
         )
     }
@@ -490,7 +489,7 @@ internal object ConfigBuiltins {
     // -- Background --
 
     private fun registerBackground(r: ConfigRegistry, context: Context) {
-        val prefs = context.getSharedPreferences("background_settings", Context.MODE_PRIVATE)
+        val prefs = com.openminis.app.config.Prefs.file("background_settings").guardedBackend()
         r.register(
             PrefsBoolField(
                 path = "background.enhanced",

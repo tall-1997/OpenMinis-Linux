@@ -147,13 +147,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           # No submodule is fetched here, deliberately:
-          #  * deps/ish (OpenMinis/ish-arm64, branch master) is the iOS iSH fork.
-          #    It is built only by deps/build_ish.sh for the Xcode target described
-          #    in deps/ISH_INTEGRATION.md, which this repo does not compile at all
-          #    (BUILDING.md: "本仓库没有 iOS 工程"). `submodules: recursive` was
-          #    cloning it into every Android run. It stays registered in
-          #    .gitmodules for whoever still needs the iOS branch.
-          #  * deps/proot is not needed either: the PRoot binaries this job uses
+          #  * deps/proot is not needed in this job: the PRoot binaries it uses
           #    arrive from the native-deps.yml artifact (see "Install native
           #    dependencies"), where the submodule IS checked out.
           submodules: false

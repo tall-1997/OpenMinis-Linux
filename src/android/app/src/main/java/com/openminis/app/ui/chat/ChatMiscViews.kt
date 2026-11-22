@@ -92,6 +92,7 @@ import org.intellij.markdown.ast.getTextInNode
 import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.components.MinisTextButton
+import com.openminis.app.ui.tokens.MinisTypography
 // ─── Bordered Markdown Table (iOS style: bordered cells with grid lines) ─────
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
@@ -231,8 +232,8 @@ private fun BorderedMarkdownTable(
                             contentAlignment = Alignment.CenterStart,
                         ) {
                             Text(
-                                text = parseInlineMarkdown(cellText, cellStyle.copy(fontSize = 14.sp), inlineCodeText, inlineCodeBg, linkColor),
-                                style = cellStyle.copy(fontSize = 14.sp),
+                                text = parseInlineMarkdown(cellText, cellStyle.copy(fontSize = MinisTypography.bodyLg), inlineCodeText, inlineCodeBg, linkColor),
+                                style = cellStyle.copy(fontSize = MinisTypography.bodyLg),
                             )
                         }
                     }
@@ -397,7 +398,7 @@ internal fun FallbackInfoBlock(block: AssistantBlock, onRevert: (() -> Unit)? = 
                 )
                 Text(
                     text = block.content,
-                    fontSize = 10.sp,
+                    fontSize = MinisTypography.chip,
                     fontWeight = FontWeight.Medium,
                     color = fg,
                     maxLines = 1,
@@ -504,9 +505,9 @@ private fun CompactSummarySheet(
             ) {
                 Text(
                     text = summary,
-                    fontSize = 14.sp,
+                    fontSize = MinisTypography.bodyLg,
                     color = ChatColors.primaryText,
-                    lineHeight = 20.sp,
+                    lineHeight = MinisTypography.lineBodyLg,
                 )
             }
             if (onRevert != null) {
@@ -525,7 +526,7 @@ private fun CompactSummarySheet(
                     Text(
                         text = stringResource(R.string.chat_compact_revert_action),
                         color = MaterialTheme.colorScheme.error,
-                        fontSize = 15.sp,
+                        fontSize = MinisTypography.title,
                         fontWeight = FontWeight.Medium,
                     )
                 }
@@ -771,7 +772,7 @@ internal fun ResumeBanner(onResume: () -> Unit) {
                 } else {
                     stringResource(R.string.resume_banner_title)
                 },
-                fontSize = 11.sp,
+                fontSize = MinisTypography.cap,
                 color = if (showCrashWarning) MaterialTheme.colorScheme.error else ChatColors.secondaryText,
             )
         }
@@ -792,11 +793,10 @@ internal fun ResumeBanner(onResume: () -> Unit) {
             Spacer(modifier = Modifier.width(4.dp))
             Text(
                 text = stringResource(R.string.resume_action),
-                fontSize = 11.sp,
+                fontSize = MinisTypography.cap,
                 fontWeight = FontWeight.SemiBold,
                 color = Color.White,
             )
         }
     }
 }
-// Sun May 24 10:16:43 CST 2026

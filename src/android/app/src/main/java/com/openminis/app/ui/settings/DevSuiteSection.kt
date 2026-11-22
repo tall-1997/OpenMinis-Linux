@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
+import com.openminis.app.ui.components.MinisAlertDialog
 import com.openminis.app.plugins.DevBundle
 import com.openminis.app.plugins.DevComponent
 import com.openminis.app.plugins.DevSuiteCatalog
@@ -200,23 +201,15 @@ fun DevSuiteSection(
     }
 
     confirmRemove?.let { component ->
-        AlertDialog(
+        MinisAlertDialog(
             onDismissRequest = { confirmRemove = null },
-            title = { Text(component.name) },
-            text = { Text(stringResource(R.string.dev_suite_remove_confirm, component.name)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        confirmRemove = null
-                        DevSuiteInstaller.uninstallAsync(context, component)
-                    },
-                    enabled = !busy,
-                ) { Text(stringResource(R.string.common_remove)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmRemove = null }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
+            title = component.name,
+            text = stringResource(R.string.dev_suite_remove_confirm, component.name),
+            confirmText = stringResource(R.string.common_remove),
+            isDestructive = true,
+            onConfirm = {
+                confirmRemove = null
+                DevSuiteInstaller.uninstallAsync(context, component)
             },
         )
     }

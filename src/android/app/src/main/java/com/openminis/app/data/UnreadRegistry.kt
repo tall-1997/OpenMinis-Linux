@@ -1,6 +1,6 @@
 package com.openminis.app.data
 
-import android.content.Context
+import com.openminis.app.config.Prefs
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,6 +22,10 @@ import kotlinx.coroutines.flow.update
  *    whether the app was foreground or background.
  *
  * Pure derivation lives in [isUnread] so tests need no Android.
+ *
+ * [T-prefs-typed] Reads/writes go through [Prefs], so the file name and the
+ * dynamic key prefix are both declared in `PrefsRegistry` instead of being
+ * string literals that a typo would silently turn into a new empty file.
  */
 object UnreadRegistry {
 
@@ -35,31 +39,37 @@ object UnreadRegistry {
     private val _revision = MutableStateFlow(0)
     val revision: StateFlow<Int> = _revision.asStateFlow()
 
-    fun lastReadAtMs(context: Context, sessionId: String): Long = cache.getOrPut(sessionId) {
-        prefs(context).getLong(KEY_PREFIX + sessionId, 0L)
+    /**
+     * No [android.content.Context] parameter any more: [Prefs] is installed once
+     * in `MinisApp.onCreate`, so call sites cannot pass the wrong Context and the
+     * backend is shared process-wide. Signature change is source-compatible for
+     * `UnreadRegistry.lastReadAtMs(sessionId)` but NOT for the old two-arg form —
+     * every caller was updated in the same commit.
+     */
+    private val prefs get() = Prefs.file(PREFS)
+
+    fun lastReadAtMs(sessionId: String): Long = cache.getOrPut(sessionId) {
+        prefs.long(KEY_PREFIX + sessionId, 0L)
     }
 
     /** The user is looking at the chat (screen entered, or a new row streamed in while mounted). */
-    fun markRead(context: Context, sessionId: String) {
+    fun markRead(sessionId: String) {
         if (sessionId.isBlank()) return
         val now = System.currentTimeMillis()
         cache[sessionId] = now
-        prefs(context).edit().putLong(KEY_PREFIX + sessionId, now).apply()
+        prefs.set(KEY_PREFIX + sessionId, now)
         // [FIX-R2-11, review §三 异步与并发] Atomic bump: concurrent markRead /
         // forget must not lose a revision (read-modify-write between threads).
         _revision.update { it + 1 }
     }
 
-    fun forget(context: Context, sessionId: String) {
+    fun forget(sessionId: String) {
         cache.remove(sessionId)
-        prefs(context).edit().remove(KEY_PREFIX + sessionId).apply()
+        prefs.remove(KEY_PREFIX + sessionId)
         _revision.update { it + 1 }
     }
 
     /** [sessionUpdatedAt] newer than the read stamp = unseen reply. Pure. */
     fun isUnread(sessionUpdatedAt: Long, lastReadAtMs: Long): Boolean =
         sessionUpdatedAt > lastReadAtMs
-
-    private fun prefs(context: Context) =
-        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 }

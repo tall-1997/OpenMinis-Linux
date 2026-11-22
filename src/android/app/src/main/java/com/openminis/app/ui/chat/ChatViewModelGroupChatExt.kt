@@ -238,7 +238,7 @@ internal suspend fun ChatViewModel.runGroupChat(provider: LLMProvider, closing: 
         if (!summary.isNullOrBlank()) {
             _messages.value.lastOrNull { it.speakerName == hostName }?.let { closed ->
                 groupChatClosedAfterId = stableGroupMessageId(closed)
-                groupChatPrefs().edit().putString(closedKey(), groupChatClosedAfterId).apply()
+                groupChatPrefs().set(closedKey(), groupChatClosedAfterId)
             }
             withContext(Dispatchers.Main) {
                 _promptQueue.update { emptyList() }
@@ -378,14 +378,14 @@ private fun ChatViewModel.groupTools(provider: LLMProvider) = AgentTools.makeAge
 private fun ChatViewModel.openingKey() = "opening:$groupChatPrefsId"
 
 private fun ChatViewModel.savedHostOpening(): String? =
-    groupChatPrefs().getString(openingKey(), null)?.trim()?.takeIf { it.isNotEmpty() }
+    groupChatPrefs().stringOrNull(openingKey())?.trim()?.takeIf { it.isNotEmpty() }
 
 private fun ChatViewModel.rememberHostOpening(text: String) {
-    groupChatPrefs().edit().putString(openingKey(), text).apply()
+    groupChatPrefs().set(openingKey(), text)
 }
 
 internal fun ChatViewModel.clearHostOpening() {
-    groupChatPrefs().edit().remove(openingKey()).apply()
+    groupChatPrefs().remove(openingKey())
 }
 
 private suspend fun ChatViewModel.speakMembers(
@@ -721,7 +721,7 @@ internal fun ChatViewModel.anchorGroupRound(): Boolean {
         ?.takeIf { it.isNotBlank() }
         ?: return false
     groupChatRoundStartId = anchor
-    groupChatPrefs().edit().putString(roundStartKey(), anchor).apply()
+    groupChatPrefs().set(roundStartKey(), anchor)
     clearHostOpening()
     groupChatAnchorPending = false
     return true

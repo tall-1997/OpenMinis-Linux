@@ -28,8 +28,8 @@ object ProviderRefreshMarks {
     private const val PREFS = "provider_refresh_marks"
 
     fun load(context: Context): Map<String, ModelRefreshResult> {
-        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        return prefs.all.mapNotNull { (id, raw) ->
+        val prefs = com.openminis.app.config.Prefs.file(PREFS)
+        return prefs.snapshot().mapNotNull { (id, raw) ->
             val name = raw as? String ?: return@mapNotNull null
             val result = runCatching { ModelRefreshResult.valueOf(name) }.getOrNull() ?: return@mapNotNull null
             if (result == ModelRefreshResult.SUCCESS_API || result == ModelRefreshResult.SUCCESS_BUILTIN) null else id to result
@@ -39,16 +39,18 @@ object ProviderRefreshMarks {
     fun get(context: Context, instanceId: String): ModelRefreshResult? = load(context)[instanceId]
 
     fun record(context: Context, instanceId: String, result: ModelRefreshResult) {
-        val edit = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-        if (result == ModelRefreshResult.SUCCESS_API || result == ModelRefreshResult.SUCCESS_BUILTIN) edit.remove(instanceId) else edit.putString(instanceId, result.name)
-        edit.apply()
+        val prefs = com.openminis.app.config.Prefs.file(PREFS)
+        if (result == ModelRefreshResult.SUCCESS_API || result == ModelRefreshResult.SUCCESS_BUILTIN) prefs.remove(instanceId) else prefs.set(instanceId, result.name)
     }
 
     fun recordAll(context: Context, results: List<Pair<String, ModelRefreshResult>>) {
-        val edit = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-        for ((id, result) in results) {
-            if (result == ModelRefreshResult.SUCCESS_API || result == ModelRefreshResult.SUCCESS_BUILTIN) edit.remove(id) else edit.putString(id, result.name)
+        val prefs = com.openminis.app.config.Prefs.file(PREFS)
+        // 一次事务写完全部结果：刷新是批量完成的，中途失败会留下「一半新一半旧」的
+        // 状态，UI 上表现为部分 provider 显示刷新成功、部分还是旧值
+        prefs.write {
+            for ((id, result) in results) {
+                if (result == ModelRefreshResult.SUCCESS_API || result == ModelRefreshResult.SUCCESS_BUILTIN) remove(id) else putString(id, result.name)
+            }
         }
-        edit.apply()
     }
 }

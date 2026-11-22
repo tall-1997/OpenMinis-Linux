@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- [T-port-fold-tools] Fold consecutive tool calls. Translations copied from iOS Localizable.xcstrings. -->
+<resources>
+    <string name="tool_fold_setting_title">Aufeinanderfolgende Tool-Aufrufe zusammenfassen</string>
+    <string name="tool_fold_section">Tool-Aufrufe</string>
+    <string name="tool_fold_setting_footer">Aufeinanderfolgende Tool-Aufrufe werden als eine Zeile angezeigt. Tippe darauf, um jeden Aufruf zu sehen.</string>
+    <string name="tool_fold_ran_n_tools">%1$d Tools ausgeführt</string>
+    <string name="tool_fold_n_failed">%1$d fehlgeschlagen</string>
+    <string name="tool_fold_n_cancelled">%1$d abgebrochen</string>
+    <string name="tool_fold_expand_hint">Zeigt jeden Tool-Aufruf</string>
+    <string name="tool_fold_collapse_hint">Blendet die Tool-Aufrufe aus</string>
+</resources>

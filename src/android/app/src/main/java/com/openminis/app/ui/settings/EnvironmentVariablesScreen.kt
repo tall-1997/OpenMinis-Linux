@@ -56,6 +56,7 @@ import com.openminis.app.deeplink.DeepLinkCoordinator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.withContext
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * Environment Variables \u2014 adopts the SettingsScaffold/SettingsSection
@@ -568,7 +569,7 @@ private fun PlatformIntegrationCard(
                         stringResource(R.string.env_var_platform_var_configured)
                     else
                         stringResource(R.string.env_var_platform_var_missing, varKey),
-                    fontSize = 11.sp,
+                    fontSize = MinisTypography.cap,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
@@ -585,7 +586,7 @@ private fun TierBadge(tier: Int) {
     }
     Text(
         text = label,
-        fontSize = 11.sp,
+        fontSize = MinisTypography.cap,
         fontWeight = FontWeight.Medium,
         color = color,
         modifier = Modifier

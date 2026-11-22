@@ -187,7 +187,7 @@ import kotlinx.coroutines.withContext
 import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.TimeUnit
-
+import com.openminis.app.ui.tokens.MinisTypography
 
 internal data class CategoryStyle(val icon: ImageVector, val color: Color)
 
@@ -196,21 +196,21 @@ internal fun categoryStyle(category: String?): CategoryStyle {
     return when (category?.lowercase()) {
         "code"         -> CategoryStyle(Icons.Outlined.Code, Color(0xFFF09A37))
         "writing"      -> CategoryStyle(Icons.Outlined.Description, Color(0xFF3478F6))
-        "research"     -> CategoryStyle(Icons.Outlined.Language, Color(0xFF30B0C7))
-        "analysis"     -> CategoryStyle(Icons.Outlined.BarChart, Color(0xFF5856D6))
-        "creative"     -> CategoryStyle(Icons.Outlined.Brush, Color(0xFFFF2D55))
-        "chat"         -> CategoryStyle(Icons.Outlined.Forum, Color(0xFF34C759))
+        "research"     -> CategoryStyle(Icons.Outlined.Language, RawC.systemTealAlt.tc)
+        "analysis"     -> CategoryStyle(Icons.Outlined.BarChart, RawC.systemPurple.tc)
+        "creative"     -> CategoryStyle(Icons.Outlined.Brush, RawC.systemPink.tc)
+        "chat"         -> CategoryStyle(Icons.Outlined.Forum, RawC.systemGreen.tc)
         "math"         -> CategoryStyle(Icons.Outlined.Calculate, Color(0xFF9B59B6))
         "translation"  -> CategoryStyle(Icons.Outlined.Translate, Color(0xFF00BCD4))
-        "health"       -> CategoryStyle(Icons.Outlined.Favorite, Color(0xFFFF3B30))
+        "health"       -> CategoryStyle(Icons.Outlined.Favorite, RawC.systemRed.tc)
         "finance"      -> CategoryStyle(Icons.Outlined.Payments, Color(0xFF00C7BE))
         "travel"       -> CategoryStyle(Icons.Outlined.Map, Color(0xFFF09A37))
         "education"    -> CategoryStyle(Icons.Outlined.Book, Color(0xFF3478F6))
-        "design"       -> CategoryStyle(Icons.Outlined.Palette, Color(0xFFFF2D55))
-        "productivity" -> CategoryStyle(Icons.Outlined.CalendarMonth, Color(0xFFFFCC00))
+        "design"       -> CategoryStyle(Icons.Outlined.Palette, RawC.systemPink.tc)
+        "productivity" -> CategoryStyle(Icons.Outlined.CalendarMonth, RawC.systemYellow.tc)
         "support"      -> CategoryStyle(Icons.Outlined.Settings, Color(0xFF8B6914))
-        "other"        -> CategoryStyle(Icons.Outlined.GridView, Color(0xFF8E8E93))
-        else           -> CategoryStyle(Icons.Outlined.Forum, Color(0xFF8E8E93))
+        "other"        -> CategoryStyle(Icons.Outlined.GridView, RawC.systemGray.tc)
+        else           -> CategoryStyle(Icons.Outlined.Forum, RawC.systemGray.tc)
     }
 }
 
@@ -627,7 +627,7 @@ fun SessionListScreen(
             .filter {
                 com.openminis.app.data.UnreadRegistry.isUnread(
                     it.updatedAt,
-                    com.openminis.app.data.UnreadRegistry.lastReadAtMs(context, it.id),
+                    com.openminis.app.data.UnreadRegistry.lastReadAtMs(it.id),
                 )
             }
             .map { it.id }.toSet()
@@ -1120,7 +1120,7 @@ fun SessionListScreen(
                                 // Folder names are user data — verbatim.
                                 Text(
                                     bar.folder.name,
-                                    fontSize = 14.sp,
+                                    fontSize = MinisTypography.bodyLg,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurface,
                                     maxLines = 1,
@@ -1389,7 +1389,7 @@ private fun DualFabRow(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("ui_prefs", Context.MODE_PRIVATE) }
+    val prefs = remember { com.openminis.app.config.Prefs.file("ui_prefs") }
     // [T-android-sessionlist-prefs-io] The FIRST getBoolean on a cold
     // process synchronously loads the XML on the calling thread — and this
     // `remember` runs inside a composition frame. Same storage-stall
@@ -1398,7 +1398,7 @@ private fun DualFabRow(
     var isSwapped by remember { mutableStateOf(false) }
     LaunchedEffect(prefs) {
         isSwapped = withContext(Dispatchers.IO) {
-            prefs.getBoolean(PREF_FAB_SWAPPED, false)
+            prefs.bool(PREF_FAB_SWAPPED, false)
         }
     }
 
@@ -1443,7 +1443,7 @@ private fun DualFabRow(
                         onDragEnd = {
                             if (kotlin.math.abs(chatDragX) > swapThreshold) {
                                 isSwapped = !isSwapped
-                                prefs.edit().putBoolean(PREF_FAB_SWAPPED, isSwapped).apply()
+                                prefs.set(PREF_FAB_SWAPPED, isSwapped)
                             }
                             chatDragX = 0f
                         },
@@ -1532,7 +1532,7 @@ private fun DualFabRow(
                                 onDragEnd = {
                                     if (kotlin.math.abs(searchDragX) > swapThreshold) {
                                         isSwapped = !isSwapped
-                                        prefs.edit().putBoolean(PREF_FAB_SWAPPED, isSwapped).apply()
+                                        prefs.set(PREF_FAB_SWAPPED, isSwapped)
                                     }
                                     searchDragX = 0f
                                 },
@@ -1665,7 +1665,7 @@ private fun SectionHeader(title: String) {
         }
         Text(
             text = title,
-            fontSize = 14.sp,
+            fontSize = MinisTypography.bodyLg,
             fontWeight = FontWeight.SemiBold,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -1934,7 +1934,6 @@ private fun SessionItemContent(
             }
         }
     }
-
 
 }
 
@@ -2241,7 +2240,7 @@ private fun FolderCard(
                 // User data — rendered verbatim, never a string lookup.
                 Text(
                     block.folder.name,
-                    fontSize = 16.sp,
+                    fontSize = MinisTypography.titleLg,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -2259,7 +2258,7 @@ private fun FolderCard(
                             stringResource(R.string.group_n_chats, block.totalCount)
                         else -> stringResource(R.string.group_empty)
                     },
-                    fontSize = 14.sp,
+                    fontSize = MinisTypography.bodyLg,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -2272,7 +2271,7 @@ private fun FolderCard(
             ) {
                 Text(
                     dateText,
-                    fontSize = 13.sp,
+                    fontSize = MinisTypography.body,
                     color = MaterialTheme.colorScheme.outline,
                 )
                 Row(
@@ -2658,7 +2657,7 @@ private fun SessionRow(
             if (searchQuery.isNotBlank()) {
                 Text(
                     text = highlightedAnnotatedString(titleText, searchQuery),
-                    fontSize = 16.sp,
+                    fontSize = MinisTypography.titleLg,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -2667,7 +2666,7 @@ private fun SessionRow(
             } else {
                 Text(
                     text = titleText,
-                    fontSize = 16.sp,
+                    fontSize = MinisTypography.titleLg,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
@@ -2679,7 +2678,7 @@ private fun SessionRow(
             if (searchQuery.isNotBlank() && searchSnippet != null) {
                 Text(
                     text = highlightedAnnotatedString(searchSnippet, searchQuery),
-                    fontSize = 14.sp,
+                    fontSize = MinisTypography.bodyLg,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -2688,7 +2687,7 @@ private fun SessionRow(
                 Text(
                     text = lastMessageForDisplay(session.lastMessage)
                         ?: stringResource(R.string.sessionlist_no_messages),
-                    fontSize = 14.sp,
+                    fontSize = MinisTypography.bodyLg,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -2698,7 +2697,7 @@ private fun SessionRow(
 
         Text(
             text = timeText,
-            fontSize = 13.sp,
+            fontSize = MinisTypography.body,
             color = MaterialTheme.colorScheme.outline,
             modifier = Modifier.padding(top = 12.dp),
         )
@@ -2799,7 +2798,7 @@ private fun SessionBadgeOverlay(
                     .background(
                         // Solid system-orange. Picked over yellow so the
                         // alert reads as "attention" rather than "info".
-                        color = Color(0xFFFF9500),
+                        color = RawC.systemOrange.tc,
                         shape = CircleShape,
                     )
                     .border(
@@ -2949,7 +2948,7 @@ internal fun SessionEditSheet(
                             Spacer(Modifier.height(4.dp))
                             Text(
                                 cat,
-                                fontSize = 11.sp,
+                                fontSize = MinisTypography.cap,
                                 color = if (isSelected) monetIconTint(style.color)
                                 else MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
@@ -3027,8 +3026,7 @@ private fun exportSession(
         } catch (t: Throwable) {
             android.widget.Toast.makeText(
                 context,
-                context.getString(R.string.export_progress_failed),
-                android.widget.Toast.LENGTH_LONG,
+                context.getString(R.string.export_progress_failed), android.widget.Toast.LENGTH_LONG,
             ).show()
         }
     }
@@ -3043,8 +3041,7 @@ private fun shareZip(context: Context, uri: android.net.Uri, subject: String) {
     }
     val chooser = Intent.createChooser(
         intent,
-        context.getString(R.string.sessionlist_export),
-    ).apply { addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        context.getString(R.string.sessionlist_export),  ).apply { addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }
     context.startActivity(chooser)
 }
 

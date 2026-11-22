@@ -40,9 +40,8 @@ object LocaleWrap {
      */
     fun wrap(base: Context): Context {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) return base
-        val code = base
-            .getSharedPreferences(PREF_APPEARANCE, Context.MODE_PRIVATE)
-            .getString(KEY_LANGUAGE, "")
+        val code = com.openminis.app.config.Prefs.file(PREF_APPEARANCE)
+            .string(KEY_LANGUAGE, "")
             .orEmpty()
         if (code.isEmpty()) return base
         val locale = parseLocale(code) ?: return base

@@ -77,13 +77,11 @@ object WebViewEngine {
      * one-time notice instead of nagging every sheet open.
      */
     fun stalePromptSeen(context: Context): Boolean =
-        context.getSharedPreferences("browser_prefs", Context.MODE_PRIVATE)
-            .getBoolean("engine_stale_seen_$TARGET_MAJOR", false)
+        com.openminis.app.config.Prefs.file("browser_prefs").bool("engine_stale_seen_$TARGET_MAJOR", false)
 
     /** Mark the stale banner as acknowledged for the current target. */
     fun markStalePromptSeen(context: Context) {
-        context.getSharedPreferences("browser_prefs", Context.MODE_PRIVATE)
-            .edit().putBoolean("engine_stale_seen_$TARGET_MAJOR", true).apply()
+        com.openminis.app.config.Prefs.file("browser_prefs").set("engine_stale_seen_$TARGET_MAJOR", true)
     }
 
     fun snapshot(context: Context, seedUa: String? = null): Snapshot {

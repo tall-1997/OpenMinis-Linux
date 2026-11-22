@@ -1,5 +1,7 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.ui.tokens.RawColors
+import com.openminis.app.ui.tokens.asColor
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.NoteAdd
 import androidx.compose.material.icons.filled.AdminPanelSettings
@@ -51,40 +53,40 @@ internal fun formatStepTimestamp(epochMs: Long): String =
 // consistent: file tools cyan/blue, agent tools indigo, web tools blue,
 // image tools purple, memory/goal pink, interactive prompts blue.
 internal fun toolAccentColor(toolName: String): Color = when (toolName) {
-    "shell_execute", "shell_exec", "agent_terminal" -> Color(0xFF34C759)
-    "file_read" -> Color(0xFF32ADE6)
-    "file_write" -> Color(0xFF007AFF)
-    "file_edit", "multi_edit" -> Color(0xFFFF9500)
-    "file_checkpoint" -> Color(0xFF8E8E93)
-    "browser_use" -> Color(0xFF007AFF)
-    "read_image", "ocr_image" -> Color(0xFFAF52DE)
-    "memory_write", "memory_get" -> Color(0xFFFF2D55)
-    "web_search" -> Color(0xFF32ADE6)    // iOS: .cyan for search
-    "web_fetch" -> Color(0xFF007AFF)
-    "grep", "grep_source" -> Color(0xFF64D2FF)
-    "glob", "list_dir" -> Color(0xFF32ADE6)
-    "code_graph" -> Color(0xFF5856D6)
-    "search_sessions", "read_session" -> Color(0xFF64D2FF)
-    "spawn_agent", "run_subagent", "dispatch_agents", "wolfpack_run", "check_agent" -> Color(0xFF5856D6)
-    "agent_plan" -> Color(0xFF5856D6)
-    "agent_report" -> Color(0xFF30B0C7)
-    "update_goal" -> Color(0xFFFF2D55)
-    "evolution" -> Color(0xFFAF52DE)
-    "ask_user_question" -> Color(0xFF007AFF)
-    "ask_reasoning" -> Color(0xFFFF9500)
-    "execute_code" -> Color(0xFF5856D6)
-    "su_exec" -> Color(0xFFFF9500)
-    "ssh_exec", "env_exec" -> Color(0xFF32ADE6)
-    "ui_read", "ui_action" -> Color(0xFF64D2FF)
-    "invoke_skill", "ui_skill", "skill_manage" -> Color(0xFF007AFF)
-    "cronjob" -> Color(0xFFFF9500)
-    "background_job" -> Color(0xFF64D2FF)
-    "get_screen_time" -> Color(0xFF64D2FF)
-    "present_file", "deliverable" -> Color(0xFF30D158)     // deliverable green
+    "shell_execute", "shell_exec", "agent_terminal" -> RawColors.systemGreen.asColor
+    "file_read" -> RawColors.systemTeal.asColor
+    "file_write" -> RawColors.systemBlue.asColor
+    "file_edit", "multi_edit" -> RawColors.systemOrange.asColor
+    "file_checkpoint" -> RawColors.systemGray.asColor
+    "browser_use" -> RawColors.systemBlue.asColor
+    "read_image", "ocr_image" -> RawColors.systemPurpleAlt.asColor
+    "memory_write", "memory_get" -> RawColors.systemPink.asColor
+    "web_search" -> RawColors.systemTeal.asColor    // iOS: .cyan for search
+    "web_fetch" -> RawColors.systemBlue.asColor
+    "grep", "grep_source" -> RawColors.systemCyan.asColor
+    "glob", "list_dir" -> RawColors.systemTeal.asColor
+    "code_graph" -> RawColors.systemPurple.asColor
+    "search_sessions", "read_session" -> RawColors.systemCyan.asColor
+    "spawn_agent", "run_subagent", "dispatch_agents", "wolfpack_run", "check_agent" -> RawColors.systemPurple.asColor
+    "agent_plan" -> RawColors.systemPurple.asColor
+    "agent_report" -> RawColors.systemTealAlt.asColor
+    "update_goal" -> RawColors.systemPink.asColor
+    "evolution" -> RawColors.systemPurpleAlt.asColor
+    "ask_user_question" -> RawColors.systemBlue.asColor
+    "ask_reasoning" -> RawColors.systemOrange.asColor
+    "execute_code" -> RawColors.systemPurple.asColor
+    "su_exec" -> RawColors.systemOrange.asColor
+    "ssh_exec", "env_exec" -> RawColors.systemTeal.asColor
+    "ui_read", "ui_action" -> RawColors.systemCyan.asColor
+    "invoke_skill", "ui_skill", "skill_manage" -> RawColors.systemBlue.asColor
+    "cronjob" -> RawColors.systemOrange.asColor
+    "background_job" -> RawColors.systemCyan.asColor
+    "get_screen_time" -> RawColors.systemCyan.asColor
+    "present_file", "deliverable" -> RawColors.systemGreenAlt.asColor     // deliverable green
     else -> when {
-        toolName.startsWith("mcp__") -> Color(0xFF5856D6)   // server-provided tools
-        toolName.startsWith("online_") -> Color(0xFF007AFF)
-        else -> Color(0xFF8E8E93)                            // unknown = neutral gray
+        toolName.startsWith("mcp__") -> RawColors.systemPurple.asColor   // server-provided tools
+        toolName.startsWith("online_") -> RawColors.systemBlue.asColor
+        else -> RawColors.systemGray.asColor                            // unknown = neutral gray
     }
 }
 

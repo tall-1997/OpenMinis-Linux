@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import com.openminis.app.R
 import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * [T-android-thinking-badge-navbar] Compact thinking-level pill shown on the
@@ -92,8 +93,8 @@ internal fun ThinkingLevelBadge(
         )
         Text(
             text = level.localizedName(context),
-            fontSize = 9.sp,
-            lineHeight = 11.sp,
+            fontSize = MinisTypography.cap2,
+            lineHeight = MinisTypography.lineBadge,
             fontWeight = FontWeight.Medium,
             color = badgeColor,
             maxLines = 1,
@@ -126,7 +127,7 @@ internal fun ThinkingLevelSheet(
         Column(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
             Text(
                 text = stringResource(R.string.thinking_level_sheet_title),
-                fontSize = 16.sp,
+                fontSize = MinisTypography.titleLg,
                 fontWeight = FontWeight.SemiBold,
                 color = ChatColors.primaryText,
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
@@ -159,7 +160,7 @@ internal fun ThinkingLevelSheet(
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         text = level.localizedName(context),
-                        fontSize = 15.sp,
+                        fontSize = MinisTypography.title,
                         color = ChatColors.primaryText,
                         modifier = Modifier.weight(1f),
                     )

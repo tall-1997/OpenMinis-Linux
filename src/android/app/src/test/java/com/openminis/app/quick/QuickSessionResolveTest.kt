@@ -3,6 +3,8 @@ package com.openminis.app.quick
 import android.content.Context
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
+import com.openminis.app.config.AndroidPrefsSource
+import com.openminis.app.config.Prefs
 import com.openminis.app.data.db.AppDatabase
 import com.openminis.app.data.db.ChatSessionEntity
 import com.openminis.app.data.repository.ChatRepository
@@ -39,6 +41,7 @@ class QuickSessionResolveTest {
 
     @Before
     fun setUp() {
+        Prefs.install(AndroidPrefsSource(context))
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
             .allowMainThreadQueries()
             .build()
@@ -53,6 +56,7 @@ class QuickSessionResolveTest {
 
     @After
     fun tearDown() {
+        Prefs.uninstall()
         db.close()
     }
 

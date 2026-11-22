@@ -67,6 +67,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * Full-screen immersive image preview with pinch-to-zoom, pan, tap-to-toggle chrome,
@@ -313,7 +314,7 @@ internal fun ImageActionButton(
         Text(
             text = label,
             color = Color.White,
-            fontSize = 12.sp,
+            fontSize = MinisTypography.foot,
             fontWeight = FontWeight.Medium,
         )
     }

@@ -12,55 +12,56 @@ import java.util.Locale
 class EvolutionPrefs(context: Context) {
 
     private val prefs = context.applicationContext
-        .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        .let { com.openminis.app.config.Prefs.file(PREFS) }
 
     var isEnabled: Boolean
-        get() = prefs.getBoolean(KEY_ENABLED, false)
+        get() = prefs.bool(KEY_ENABLED, false)
         set(value) {
-            prefs.edit().putBoolean(KEY_ENABLED, value).apply()
+            prefs.set(KEY_ENABLED, value)
         }
 
-    fun dailyCap(): Int = prefs.getInt(KEY_DAILY_CAP, DEFAULT_DAILY_CAP)
+    fun dailyCap(): Int = prefs.int(KEY_DAILY_CAP, DEFAULT_DAILY_CAP)
 
     fun tryConsumeLlmCall(): Boolean {
         val today = dayStamp()
-        val storedDay = prefs.getString(KEY_LLM_DAY, "")
-        val count = if (storedDay == today) prefs.getInt(KEY_LLM_COUNT, 0) else 0
+        val storedDay = prefs.string(KEY_LLM_DAY, "")
+        val count = if (storedDay == today) prefs.int(KEY_LLM_COUNT, 0) else 0
         if (count >= dailyCap()) return false
-        prefs.edit()
-            .putString(KEY_LLM_DAY, today)
-            .putInt(KEY_LLM_COUNT, count + 1)
-            .apply()
+        // day + count 成对：只写 count 不写 day，跨天时计数不会归零
+        prefs.write {
+            putString(KEY_LLM_DAY, today)
+            putInt(KEY_LLM_COUNT, count + 1)
+        }
         return true
     }
 
     fun recordLlmFailure() {
-        val fails = prefs.getInt(KEY_LLM_FAILS, 0) + 1
-        prefs.edit().putInt(KEY_LLM_FAILS, fails).apply()
+        val fails = prefs.int(KEY_LLM_FAILS, 0) + 1
+        prefs.set(KEY_LLM_FAILS, fails)
     }
 
     fun recordLlmSuccess() {
-        prefs.edit().putInt(KEY_LLM_FAILS, 0).apply()
+        prefs.set(KEY_LLM_FAILS, 0)
     }
 
-    fun llmFused(): Boolean = prefs.getInt(KEY_LLM_FAILS, 0) >= 3
+    fun llmFused(): Boolean = prefs.int(KEY_LLM_FAILS, 0) >= 3
 
     fun harvestCooldownElapsed(now: Long = System.currentTimeMillis()): Boolean {
-        val last = prefs.getLong(KEY_LAST_HARVEST, 0L)
+        val last = prefs.long(KEY_LAST_HARVEST, 0L)
         return now - last >= HARVEST_COOLDOWN_MS
     }
 
     fun markHarvested(now: Long = System.currentTimeMillis()) {
-        prefs.edit().putLong(KEY_LAST_HARVEST, now).apply()
+        prefs.set(KEY_LAST_HARVEST, now)
     }
 
     fun reflectCooldownElapsed(now: Long = System.currentTimeMillis()): Boolean {
-        val last = prefs.getLong(KEY_LAST_REFLECT, 0L)
+        val last = prefs.long(KEY_LAST_REFLECT, 0L)
         return now - last >= REFLECT_COOLDOWN_MS
     }
 
     fun markReflected(now: Long = System.currentTimeMillis()) {
-        prefs.edit().putLong(KEY_LAST_REFLECT, now).apply()
+        prefs.set(KEY_LAST_REFLECT, now)
     }
 
     companion object {

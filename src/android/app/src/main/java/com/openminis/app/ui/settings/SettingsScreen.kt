@@ -85,6 +85,9 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onProvidersClick: () -> Unit,
     onModelGroupsClick: () -> Unit,
+    // [T-model-connection] 设置里「模型与连接」聚合页；默认回落到原有分工，
+    // 未接线时行为与旧版一致。
+    onModelConnectionClick: () -> Unit = onProvidersClick,
     onRootfsClick: () -> Unit = {},
     onBackupClick: () -> Unit = {},
     // [port-upstream-1.16] Settings > Network (Routing / Tailscale / Proxies).
@@ -154,16 +157,8 @@ fun SettingsScreen(
                 SettingsRow(
                     icon = Icons.Outlined.Lock,
                     iconColor = IosBlue,
-                    title = stringResource(R.string.settings_manage_providers),
-                    subtitle = stringResource(R.string.settings_manage_providers_subtitle),
-                    onClick = onProvidersClick,
-                )
-                SettingsRow(
-                    icon = Icons.Outlined.Settings,
-                    iconColor = IosBlue,
-                    title = stringResource(R.string.settings_model_groups),
-                    subtitle = stringResource(R.string.settings_model_groups_subtitle),
-                    onClick = onModelGroupsClick,
+                    title = stringResource(R.string.model_connection_title),
+                    onClick = onModelConnectionClick,
                 )
                 SettingsRow(
                     icon = Icons.Outlined.BarChart,

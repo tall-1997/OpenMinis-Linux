@@ -206,7 +206,7 @@ object SubAgentTypeStore {
     )
 
     fun load(context: Context): List<SubAgentType> {
-        val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString(KEY, "") ?: ""
+        val raw = com.openminis.app.config.Prefs.file(PREFS).string(KEY, "")
         if (raw.isBlank()) return builtins()
         return try {
             val arr = JSONArray(raw)
@@ -250,7 +250,7 @@ object SubAgentTypeStore {
                     .put("builtin", t.builtin),
             )
         }
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, arr.toString()).apply()
+        com.openminis.app.config.Prefs.file(PREFS).set(KEY, arr.toString())
     }
 
     fun find(context: Context, name: String): SubAgentType? {

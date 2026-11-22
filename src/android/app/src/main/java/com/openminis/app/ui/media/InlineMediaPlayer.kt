@@ -69,6 +69,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.io.File
 import kotlin.math.roundToInt
+import com.openminis.app.ui.tokens.MinisTypography
 
 /**
  * Inline audio player composable for embedding in chat messages.
@@ -160,7 +161,7 @@ fun InlineAudioPlayer(
                 "Audio error: $error",
                 modifier = Modifier.padding(12.dp),
                 color = MaterialTheme.colorScheme.error,
-                fontSize = 12.sp,
+                fontSize = MinisTypography.foot,
             )
         } else {
             Column(
@@ -210,8 +211,8 @@ fun InlineAudioPlayer(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
-                            Text(position, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text(duration, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(position, fontSize = MinisTypography.cap, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(duration, fontSize = MinisTypography.cap, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
 
@@ -242,7 +243,7 @@ fun InlineAudioPlayer(
                 val fileName = filePath.substringAfterLast("/")
                 Text(
                     fileName,
-                    fontSize = 11.sp,
+                    fontSize = MinisTypography.cap,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     modifier = Modifier.padding(top = 4.dp),
@@ -537,7 +538,7 @@ private fun FullscreenVideoContent(file: File, onDismiss: () -> Unit) {
                 Text(
                     text = file.name,
                     color = Color.White.copy(alpha = 0.9f),
-                    fontSize = 13.sp,
+                    fontSize = MinisTypography.body,
                     maxLines = 1,
                     modifier = Modifier.weight(1f),
                 )
@@ -590,7 +591,7 @@ private fun FullscreenVideoContent(file: File, onDismiss: () -> Unit) {
                 Text(
                     text = formatDuration(if (scrubbing) scrubTarget.roundToInt() else positionMs),
                     color = Color.White.copy(alpha = 0.85f),
-                    fontSize = 11.sp,
+                    fontSize = MinisTypography.cap,
                     modifier = Modifier.padding(end = 8.dp),
                 )
                 Slider(
@@ -619,7 +620,7 @@ private fun FullscreenVideoContent(file: File, onDismiss: () -> Unit) {
                 Text(
                     text = formatDuration(durationMs),
                     color = Color.White.copy(alpha = 0.85f),
-                    fontSize = 11.sp,
+                    fontSize = MinisTypography.cap,
                     modifier = Modifier.padding(start = 8.dp),
                 )
             }

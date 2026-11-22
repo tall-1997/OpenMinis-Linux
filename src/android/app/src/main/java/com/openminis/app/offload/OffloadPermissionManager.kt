@@ -123,9 +123,9 @@ object OffloadPermissionManager {
      *  upgrades naturally to BYPASS via [respondToRequest]. */
     const val OFFLOAD_GLOBAL_SESSION_ID = "offload-global"
 
-    private var prefsRef: SharedPreferences? = null
+    private var prefsRef: com.openminis.app.config.PrefsHandle? = null
     private var contextRef: Context? = null
-    private val prefs: SharedPreferences get() = checkNotNull(prefsRef) { "OffloadPermissionManager.init must be called first" }
+    private val prefs: com.openminis.app.config.PrefsHandle get() = checkNotNull(prefsRef) { "OffloadPermissionManager.init must be called first" }
 
     /** Session-scoped grants for ASK_ONCE tools. Populated by the
      *  "Allow in this session" dialog response. Cleared when the
@@ -342,24 +342,22 @@ object OffloadPermissionManager {
      * denied. We track (a) ourselves so the UI can distinguish them.
      */
     fun hasAskedForPermission(context: Context, permission: String): Boolean {
-        val p = context.getSharedPreferences("offload_permissions_asked", Context.MODE_PRIVATE)
-        return p.getBoolean(permission, false)
+        return com.openminis.app.config.Prefs.file("offload_permissions_asked").bool(permission, false)
     }
 
     fun markPermissionAsked(context: Context, permission: String) {
-        context.getSharedPreferences("offload_permissions_asked", Context.MODE_PRIVATE)
-            .edit().putBoolean(permission, true).apply()
+        com.openminis.app.config.Prefs.file("offload_permissions_asked").set(permission, true)
     }
 
     fun init(context: Context) {
         contextRef = context.applicationContext
-        prefsRef = context.getSharedPreferences("offload_permissions", Context.MODE_PRIVATE)
+        prefsRef = com.openminis.app.config.Prefs.file("offload_permissions")
     }
 
     internal fun configuredLevel(toolName: String): PermissionLevel {
         val info = toolRegistry.find { it.toolName == toolName }
             ?: return PermissionLevel.BYPASS
-        val stored = prefs.getString("level_$toolName", null)
+        val stored = prefs.stringOrNull("level_$toolName")
         return stored?.let { runCatching { PermissionLevel.valueOf(it) }.getOrNull() } ?: info.defaultLevel
     }
 
@@ -385,15 +383,13 @@ object OffloadPermissionManager {
     }
 
     fun setLevel(toolName: String, level: PermissionLevel) {
-        prefs.edit().putString("level_$toolName", level.name).apply()
+        prefs.set("level_$toolName", level.name)
     }
 
     fun resetAll() {
-        val editor = prefs.edit()
-        for (tool in toolRegistry) {
-            editor.remove("level_${tool.toolName}")
+        prefs.write {
+            for (tool in toolRegistry) remove("level_${tool.toolName}")
         }
-        editor.apply()
     }
 
     /**

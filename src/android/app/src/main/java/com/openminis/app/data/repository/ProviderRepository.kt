@@ -58,7 +58,7 @@ class ProviderRepository(
 
     internal val json get() = configStore.json
 
-    internal val prefs: SharedPreferences get() = configStore.prefs
+    internal val prefs: com.openminis.app.config.PrefsHandle get() = configStore.prefs
 
     internal val providerDao: ProviderConfigDao get() = configStore.providerDao
 
@@ -408,10 +408,10 @@ class ProviderRepository(
             runCatching {
                 com.openminis.app.auth.OAuthManager.forInstance(context, removedInstance)?.logout()
             }
-            prefs.edit().remove("voiceShadowDisabled.$instanceId").apply()
+            prefs.remove("voiceShadowDisabled.$instanceId")
         }
-        if (prefs.getString(KEY_LAST_USED_ENTRY, null) in removedEntryIds) {
-            prefs.edit().remove(KEY_LAST_USED_ENTRY).apply()
+        if (prefs.stringOrNull(KEY_LAST_USED_ENTRY) in removedEntryIds) {
+            prefs.remove(KEY_LAST_USED_ENTRY)
         }
         // [T-android-thinking-rules-phase2] The instance is gone — drop its custom
         // rules from Room and the resolver cache (they can never fire again).
@@ -805,8 +805,8 @@ class ProviderRepository(
         // ProviderConfig so older persisted JSON mirrors keep decoding.
         config.defaultPrimaryGroupId = clearSlot(config.defaultPrimaryGroupId)
         config.defaultSubGroupId = clearSlot(config.defaultSubGroupId)
-        val last = prefs.getString(KEY_LAST_USED_ENTRY, null)
-        if (last in removedIds) prefs.edit().remove(KEY_LAST_USED_ENTRY).apply()
+        val last = prefs.stringOrNull(KEY_LAST_USED_ENTRY)
+        if (last in removedIds) prefs.remove(KEY_LAST_USED_ENTRY)
     }
 
     /**
