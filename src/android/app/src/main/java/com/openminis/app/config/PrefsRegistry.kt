@@ -4,7 +4,7 @@ package com.openminis.app.config
  * 自动生成 —— 不要手改。
  * 生成器: scripts/prefs/gen_prefs_registry.py
  * 源目录: src/android/app/src/main/java/com/openminis/app
- * 规模:   105 个 prefs 文件（加密 10）/ 已归属键常量 204 / 183 处使用
+ * 规模:   105 个 prefs 文件（加密 10）/ 已归属键常量 205 / 183 处使用
  *
  * 目的: 把「SharedPreferences 文件名 + 键名」从 93 个文件里的裸字符串收敛为一处
  * 可枚举、可校验、可审计的数据表。
@@ -128,7 +128,7 @@ object PrefsRegistry {
         PrefsFileSpec(name = "plugin_online_flags", module = "plugins", scope = PrefsScope.PLAIN, openKeySpace = true, note = "3 usages across 1 file(s)"),
         PrefsFileSpec(name = "plugin_online_keys", module = "plugins", scope = PrefsScope.ENCRYPTED, openKeySpace = true, note = "3 usages across 1 file(s)"),
         PrefsFileSpec(name = "plugin_registry", module = "plugins", scope = PrefsScope.PLAIN, keys = mapOf("CACHE_KEY" to "plugin_registry_cache", "OVERRIDE_KEY" to "registry_url_override"), note = "3 usages across 2 file(s)"),
-        PrefsFileSpec(name = "provider_config", module = "data", scope = PrefsScope.PLAIN, keys = mapOf("LITERAL_config" to "config", "LITERAL_last_used" to "lastUsedModelEntryId", "LITERAL_voice_in" to "voice.input.overrideEntryId", "LITERAL_voice_out" to "voice.output.overrideEntryId"), dynamicPrefixes = listOf("keypool_", "modelsLastFetchAt_", "voiceShadowDisabled."), note = "8 usages across 1 file(s)"),
+        PrefsFileSpec(name = "provider_config", module = "data", scope = PrefsScope.PLAIN, keys = mapOf("KEY_LAST_MODELS_REFRESH_DATE" to "lastModelsRefreshDate", "LITERAL_config" to "config", "LITERAL_last_used" to "lastUsedModelEntryId", "LITERAL_voice_in" to "voice.input.overrideEntryId", "LITERAL_voice_out" to "voice.output.overrideEntryId"), dynamicPrefixes = listOf("keypool_", "modelsLastFetchAt_", "voiceShadowDisabled."), note = "8 usages across 1 file(s)"),
         PrefsFileSpec(name = "provider_extra_headers", module = "provider", scope = PrefsScope.ENCRYPTED, keys = mapOf("KEY" to "headers_json", "OPENCODE_SESSION_KEY" to "opencode_session_json"), note = "1 usages across 1 file(s)"),
         PrefsFileSpec(name = "provider_refresh_marks", module = "data", scope = PrefsScope.EPHEMERAL, openKeySpace = true, note = "3 usages across 1 file(s)"),
         PrefsFileSpec(name = "provider_secrets", module = "data", scope = PrefsScope.ENCRYPTED, note = "2 usages across 2 file(s)"),

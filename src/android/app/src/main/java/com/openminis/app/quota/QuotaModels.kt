@@ -146,6 +146,14 @@ data class QuotaSubject(
 
         /** Capability probe or a query answered 404 / an unreadable structure. */
         capabilityProbeFailed,
+
+        /**
+         * [T-quota-insecure-transport] The endpoint is plain http, so the probe
+         * refuses to send the credential in clear text. Distinct from
+         * [providerTypeUnsupported]: the provider TYPE is fine, only this URL is
+         * not probeable (and chat over it still works).
+         */
+        insecureTransport,
     }
 
     @Suppress("EnumEntryName")

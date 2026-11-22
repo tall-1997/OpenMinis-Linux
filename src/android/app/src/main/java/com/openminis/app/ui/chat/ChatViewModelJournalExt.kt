@@ -22,6 +22,7 @@ internal class ChatRunJournal(private val filesDir: File, val sessionId: String)
         projection.pairingRepair?.let {
             record(SessionJournal.PAIRING_REPAIRED, turn, mapOf(
                 "droppedResults" to it.droppedResults, "interruptedUses" to it.interruptedUses,
+                "droppedNames" to it.droppedNames.joinToString(","),
             ))
         }
         SessionJournal.recordRequest(

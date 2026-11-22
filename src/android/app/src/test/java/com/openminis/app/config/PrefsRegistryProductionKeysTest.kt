@@ -38,6 +38,10 @@ class PrefsRegistryProductionKeysTest {
         ),
         "mcp_server" to listOf("shell_policy"),
         "ui_prefs" to listOf("fab_swapped"),
+        // [T-daily-refresh-key] Read through a constructor-injected PrefsHandle
+        // (ModelCatalogCache), which the generator cannot attribute; unregistered
+        // it threw at every cold start and the daily model refresh never ran.
+        "provider_config" to listOf("lastModelsRefreshDate"),
         // [T-prefs-accessor-callsites] Read through getAppearancePrefs(context),
         // which the generator cannot attribute — both crashed on device before.
         "appearance_prefs" to listOf("chat.showTurnChangesCard", "chat.showFullThinking"),
@@ -45,6 +49,11 @@ class PrefsRegistryProductionKeysTest {
 
     @Test
     fun everyKeyProductionReadsThroughAHandleIsRegistered() {
+        // [T-prefs-guard-never-crashes] Pin strict mode: the guard only
+        // throws when strict, and this flag is a mutable global other tests
+        // flip to false. Without this pin an earlier lenient test turned
+        // every assertion below into a no-op.
+        Prefs.strictKeyGuard = true
         Prefs.install(InMemorySource())
         for ((file, keys) in keysByFile) {
             val handle = Prefs.file(file)

@@ -51,6 +51,47 @@ HANDLE_METHODS = ('string', 'stringOrNull', 'bool', 'int', 'long', 'float', 'str
 RE_HANDLE_CALL = re.compile(
  r'\b([A-Za-z_][A-Za-z0-9_]*)\s*(?:\?)?\.\s*('
  r'(?:' + '|'.join(HANDLE_METHODS) + r'))\s*\(\s*(?:"([^"]+)"|([A-Za-z_][A-Za-z0-9_]*))')
+# [T-prefs-local-key] `val key = "lastModelsRefreshDate"` … `prefs.long(key, 0L)`.
+# The literal never appears at the call site, so every earlier matcher missed
+# it: the key stayed unregistered, every cold start threw, and the daily model
+# refresh never ran (2026-11-22 field log). Resolve such locals to their literal.
+# Modifiers are captured (not look-behind: Python requires fixed-width
+# look-behind, so `const  val` with two spaces would slip through).
+RE_LOCAL_KEY_RAW = re.compile(
+ r'(?m)^[ \t]*((?:[a-z]+[ \t]+)*)(?:val|var)[ \t]+([A-Za-z_][A-Za-z0-9_]*)'
+ r'[ \t]*(?::[ \t]*String[ \t]*)?=[ \t]*"([^"]+)"[ \t]*$')
+
+
+def local_string_literals(src: str) -> dict:
+    """[T-prefs-local-key] `val x = "literal"` locals, EXCLUDING const val.
+
+    `const val` is the generator's job (it becomes a registry entry); a
+    non-const local is invisible to the generator and is exactly the shape
+    that shipped `lastModelsRefreshDate` unregistered.
+    """
+    out: dict[str, set[str]] = {}
+    for mods, name, value in RE_LOCAL_KEY_RAW.findall(src):
+        if 'const' in mods.split():
+            continue
+        # [T-prefs-local-key] Collect EVERY literal assigned to the name.
+        # Last-wins let a later `val key = "<registered>"` hide an earlier
+        # `val key = "<unregistered>"` in the same file.
+        out.setdefault(name, set()).add(value)
+    return out
+# [T-prefs-local-key] Identifiers declared as a prefs handle (field, param or
+# local). Name matching alone flagged `private val handle = SomeIndex()`.
+RE_HANDLE_DECL = re.compile(
+ r'\b([A-Za-z_][A-Za-z0-9_]*)\s*:(?:\s*com\.openminis\.app\.config\.)?\s*PrefsHandle\b')
+RE_FILE_CALL = re.compile(
+ r'Prefs\s*\.\s*file\(\s*(?:"([^"]+)"|([A-Za-z_][A-Za-z0-9_]*))\s*\)')
+# [T-prefs-orphan-key] Receiver-scoped key check. Only an identifier that
+# NAMES a prefs handle (prefs / handle / xxxPrefs / xxxHandle) counts, and the
+# key may be a literal OR a `val key = "literal"` local. Scoping matters: a
+# bare `.set("x")` would match every collection in the repo.
+PREF_RECEIVER = re.compile(r'(?i)^(?:prefs|handle|.*prefs|.*handle)$')
+RE_TYPED_ORPHAN = re.compile(
+ r'\b([A-Za-z_][A-Za-z0-9_]*)\s*(?:\?)?\.\s*('
+ r'(?:' + '|'.join(HANDLE_METHODS) + r'))\s*\(\s*(?:"([^"]+)"|([A-Za-z_][A-Za-z0-9_]*))')
 RE_HANDLE_BIND = re.compile(
  r'\b([A-Za-z_][A-Za-z0-9_]*)\s*(?::[^=\n]+)?=\s*'
  r'(?:[A-Za-z_][A-Za-z0-9_]*\s*\.\s*)*Prefs\s*\.\s*file\('
@@ -172,6 +213,11 @@ def scan():
     fails, checked = [], 0
     for p, s in texts.items():
         local = dict(consts_by_file[p])
+        # [T-prefs-local-key] Single-assignment locals whose value is a literal
+        # behave like consts for resolution purposes.
+        for ln, lvs in local_string_literals(s).items():
+            for lv in lvs:
+                local.setdefault(ln, lv)
         for n, ref in RE_CONST_REF.findall(s):
             if n in local:
                 continue
@@ -309,6 +355,70 @@ def scan():
                     break
             if not accepted and len(candidates) ==1:
                 fails.append((p, candidates[0], akey, ameth, 'accessor 调用用了未登记的键'))
+    # [T-prefs-local-key] THE shape that shipped `lastModelsRefreshDate`:
+    #
+    #     val key = "lastModelsRefreshDate"     <- literal lives here
+    #     prefs.long(key, 0L)                    <- call site shows only `key`
+    #
+    # Every literal-key matcher above sees nothing at the call site, and the
+    # handle is constructor-injected so no Prefs.file() exists in the file to
+    # bind it either.
+    #
+    # Two rules this pass follows, both learned the hard way in review:
+    #  1. A file whose handle IS resolvable is judged against THAT spec only
+    #     (`accepts`) — a key registered in some other file must still fail,
+    #     or cross-file misuse passes silently.
+    #  2. A name assigned twice in one file resolves to EVERY literal, and the
+    #     call fails if any of them is unregistered (last-wins hid real bugs).
+    open_specs = [n for n, sp in specs.items() if sp.get('open_key_space')]
+    all_keys = set()
+    dyn_prefixes = []
+    for sp in specs.values():
+        all_keys.update((sp.get('keys') or {}).values())
+        dyn_prefixes.extend(sp.get('dyn_keys') or [])
+    for p, s in texts.items():
+        local = local_string_literals(s)
+        if not local:
+            continue
+        declared_handles = set(RE_HANDLE_DECL.findall(s)) | set(
+            h for h, _lit, _ident in RE_HANDLE_BIND.findall(s))
+        file_spec_names = [
+            lit or resolve(p, ident or '')
+            for lit, ident in RE_FILE_CALL.findall(s)
+        ]
+        known_handle_files = {n for n in file_spec_names if n}
+        for m in RE_TYPED_ORPHAN.finditer(s):
+            recv, meth, key_lit, key_ident = m.groups()
+            if key_lit or not key_ident:
+                continue          # direct literal: not this bug's shape
+            if recv not in declared_handles:
+                continue          # not a prefs handle we can see
+            for key in local.get(key_ident, ()):
+                checked +=1
+                if key in all_keys:
+                    # Registered SOMEWHERE. When this file's handle target is
+                    # known we still demand that the right file owns it.
+                    ownable = [n for n in known_handle_files if n in specs]
+                    if ownable and not any(accepts(specs[n], key) for n in ownable):
+                        if any(specs[n].get('open_key_space') for n in ownable):
+                            continue
+                        fails.append((
+                            p, '/'.join(ownable), key, meth,
+                            '局部变量键 `' + key_ident + '` 登记在**别的**文件里，'
+                            '本文件读它会在运行期抛（键归属错了）',
+                        ))
+                    continue
+                if any(key.startswith(pref) for pref in dyn_prefixes):
+                    continue
+                # Unregistered everywhere: legitimate only inside a file that
+                # declares an open-key-space prefs, which accepts anything.
+                if known_handle_files and all(n in open_specs for n in known_handle_files):
+                    continue
+                fails.append((
+                    p, '<' + recv + '>', key, meth,
+                    '局部变量键 `' + key_ident + '` 在任何 PrefsFileSpec 里都没登记；'
+                    '生成器只认 const val，这种写法会绕过它（改成 const val 或补登记）',
+                ))
     return fails, checked
 
 

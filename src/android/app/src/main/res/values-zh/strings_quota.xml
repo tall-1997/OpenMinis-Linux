@@ -23,6 +23,7 @@
     <string name="quota_unsupported_type">暂不支持查询该服务商的余额。</string>
     <string name="quota_unsupported_passive">该服务商只在回复中附带额度信息，暂不支持显示。</string>
     <string name="quota_unsupported_probe_failed">此接口没有响应余额查询。Minis 明天会再检查，也可以点刷新立即检查。</string>
+    <string name="quota_unsupported_insecure">这个端点使用未加密的 http，因此已关闭余额查询。聊天功能不受影响。</string>
     <string name="quota_error_unauthorized">API Key 被拒绝，请更新 Key 后查看余额。</string>
     <string name="quota_error_forbidden">此 Key 没有查询余额的权限。</string>
     <string name="quota_error_not_found">此接口不提供余额查询。</string>

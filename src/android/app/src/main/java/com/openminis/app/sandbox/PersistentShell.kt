@@ -75,6 +75,8 @@ class PersistentShell(
      */
     @Volatile
     private var lastCommandTimedOut = false
+    /** [T-shell-exit-log-level] Set by [stop]; read by the reader thread. */
+    @Volatile private var stopRequested = false
 
     /**
      * [GH#358] Read-and-clear the internal timeout verdict of the command that
@@ -415,11 +417,17 @@ class PersistentShell(
         // unactionable — precisely the shape of the crDroid report.
         val exit = runCatching { p.waitFor() }.getOrNull()
         val tail = deathTail()
-        com.openminis.app.logging.AppLogger.error(
-            TAG,
-            "shell process exited code=$exit" +
-                (if (tail.isNotEmpty()) " capture=${tail.take(1200)}" else " capture=(no output)"),
-        )
+        val detail = "shell process exited code=$exit" +
+            (if (tail.isNotEmpty()) " capture=${tail.take(1200)}" else " capture=(no output)")
+        // [T-shell-exit-log-level] Grade by CAUSE: on 2026-11-22 all 8 "errors"
+        // were a clean exit(0) or a 137 we caused via destroyForcibly().
+        val selfInflicted = stopRequested || staleReader
+        stopRequested = false
+        when {
+            exit == 0 || selfInflicted -> com.openminis.app.logging.AppLogger.info(TAG, detail)
+            exit == null -> com.openminis.app.logging.AppLogger.warning(TAG, detail)
+            else -> com.openminis.app.logging.AppLogger.error(TAG, detail)
+        }
 
         // A timeout may already have spawned the replacement shell. Do not
         // clear that process just because this reader thread is exiting.
@@ -667,6 +675,10 @@ class PersistentShell(
         // touching the next command's state because the check is re-read at
         // dispatch time.
         channelGeneration.incrementAndGet()
+        // [T-shell-exit-log-level] stop() below kills the process, which the
+        // reader sees as 137; mark it so the log is not graded as a failure.
+        // by a fresh spawn on the same native-offload socket.
+        stopRequested = true
         pendingCallback = null
         runCatching { stdinWriter?.close() }
         stdinWriter = null

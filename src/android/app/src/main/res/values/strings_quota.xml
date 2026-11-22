@@ -23,6 +23,7 @@
     <string name="quota_unsupported_type">Balance lookup isn\'t supported for this provider yet.</string>
     <string name="quota_unsupported_passive">This provider only reports quota alongside replies; showing it isn\'t supported yet.</string>
     <string name="quota_unsupported_probe_failed">This endpoint didn\'t answer the balance lookup. Minis will check again tomorrow, or tap refresh to check now.</string>
+    <string name="quota_unsupported_insecure">Balance lookup is off for this endpoint because it uses plain http. Chat still works.</string>
     <string name="quota_error_unauthorized">The API key was rejected. Update the key to see the balance.</string>
     <string name="quota_error_forbidden">This key isn\'t allowed to read the balance.</string>
     <string name="quota_error_not_found">This endpoint doesn\'t offer a balance lookup.</string>

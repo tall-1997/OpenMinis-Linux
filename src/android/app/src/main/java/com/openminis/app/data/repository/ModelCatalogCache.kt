@@ -61,6 +61,17 @@ internal class ModelCatalogCache(
          */
         private const val MODEL_CACHE_TTL_MS = 24 * 60 * 60 * 1000L
 
+        /**
+         * [T-daily-refresh-key] Last "all models refreshed" day stamp.
+         * Was a LOCAL `val key = "lastModelsRefreshDate"` inside
+         * [refreshAllModelsIfNeeded]: the registry generator only reads
+         * `const val`, so the key was never registered and the first
+         * read threw `IllegalArgumentException` — which aborted the whole
+         * extended init block (degraded-mode banner) AND meant the daily
+         * model refresh never ran at all.
+         */
+        private const val KEY_LAST_MODELS_REFRESH_DATE = "lastModelsRefreshDate"
+
         /** Per-instance `lastFetchAt` pref key. */
         private fun lastFetchKey(instanceId: String) = "modelsLastFetchAt_$instanceId"
     }
@@ -538,11 +549,17 @@ internal class ModelCatalogCache(
      * Refreshes run in parallel; failures are logged but don't block other instances.
      */
     fun refreshAllModelsIfNeeded(scope: kotlinx.coroutines.CoroutineScope) {
-        val key = "lastModelsRefreshDate"
-        val lastMs = prefs.long(key, 0L)
+        val lastMs = prefs.long(KEY_LAST_MODELS_REFRESH_DATE, 0L)
         val now = System.currentTimeMillis()
         if (lastMs > 0L && isSameCalendarDay(lastMs, now)) {
-            android.util.Log.i("ProviderRepo", "[ModelList] refreshAllModelsIfNeeded SKIP — already refreshed today")
+            // [T-daily-refresh-log] AppLogger, not android.util.Log: the field
+            // logcat tailer drops INFO lines whose tag is not allowlisted
+            // ("ProviderRepo" is not), so the whole feature was invisible —
+            // nobody could tell a fixed build from a broken one.
+            com.openminis.app.logging.AppLogger.info(
+                "ProviderRepo",
+                "[ModelList] SKIP: already refreshed today",
+            )
             return
         }
 
@@ -556,12 +573,18 @@ internal class ModelCatalogCache(
             repo.awaitConfigLoaded()
             val enabled = repo._config.value.instances.filter { it.isEnabled }
             if (enabled.isEmpty()) {
-                android.util.Log.i("ProviderRepo", "[ModelList] refreshAllModelsIfNeeded SKIP — no enabled instances")
+                com.openminis.app.logging.AppLogger.info(
+                    "ProviderRepo",
+                    "[ModelList] SKIP: no enabled instances",
+                )
                 return@launch
             }
 
-            android.util.Log.i("ProviderRepo", "[ModelList] refreshAllModelsIfNeeded FIRE — ${enabled.size} instances")
-            prefs.set(key, now)
+            com.openminis.app.logging.AppLogger.info(
+                "ProviderRepo",
+                "[ModelList] FIRE: ${enabled.size} instances",
+            )
+            prefs.set(KEY_LAST_MODELS_REFRESH_DATE, now)
 
             for (instance in enabled) {
                 scope.launch { autoRefreshModels(instance) }
