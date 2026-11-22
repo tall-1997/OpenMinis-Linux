@@ -290,12 +290,10 @@ class MemoryRepository(
                             hashOf = { Digest.sha256Hex(it) },
                             existingContent = existing,
                         )?.let {
-                            // [F4] Refusals were previously invisible: the only logs on this
-                            // path were success (Log.i) and exception (Log.e), so an audit of
-                            // "why did my write not land" had nothing to read. One warning
-                            // per refusal, the full copy (longest is ~100 chars) — never
-                            // the entry body, and no truncation: a clipped tail once hid
-                            // the "omit revision" guidance from the audit trail.
+                            // [F4] Refusals were previously invisible (only success
+                            // Log.i and exception Log.e logged) — one warning per refusal
+                            // with the full copy (longest ~100 chars), never the entry
+                            // body; no truncation: a clipped tail once hid the guidance.
                             Log.w(TAG, "memory write rejected: $fileName — $it")
                             return@write WriteOutcome(it)
                         }
