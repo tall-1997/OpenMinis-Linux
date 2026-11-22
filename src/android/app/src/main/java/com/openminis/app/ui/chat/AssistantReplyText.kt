@@ -1,14 +1,9 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.data.AssistantTextPartJson
 import org.json.JSONArray
-import org.json.JSONObject
 
-/**
- * Fold-mode translation is one string for every visible assistant paragraph.
- * Writing that string back must not turn tool rows into a single text part,
- * and must not leave the earlier paragraphs in the database so a reload
- * shows the original text above the translation.
- */
+/** Reply-only copy and translation, including rows that also carry process text. */
 internal object AssistantReplyText {
     private val reminderRegex =
         Regex("\\s*<system-reminder>.*?</system-reminder>\\s*", RegexOption.DOT_MATCHES_ALL)
@@ -16,7 +11,7 @@ internal object AssistantReplyText {
     private const val ATTACHED_END = "</user-attached-files>"
 
     fun joined(blocks: List<AssistantBlock>): String =
-        blocks.filter { it.kind == "text" && it.content.isNotBlank() }
+        blocks.filter { it.isReplyText && it.content.isNotBlank() }
             .joinToString("\n\n") { it.content }
 
     /** Keep reminder and attachment markup; replace the visible paragraph. */
@@ -29,18 +24,15 @@ internal object AssistantReplyText {
         }
     }
 
-    /**
-     * Index of [blockId] among text blocks whose visible text equals [old].
-     * Trailing newlines are not a different paragraph. -1 when that block is
-     * not a text block, or when [old] has no visible text.
-     */
+    /** Index of [blockId] among reply blocks matching the visible [old] text, or -1. */
     fun textOccurrence(blocks: List<AssistantBlock>, blockId: String, old: String): Int {
         val needle = visible(old)
         if (needle.isEmpty()) return -1
         var seen = 0
         for (block in blocks) {
-            if (block.id == blockId && block.kind == "text") return seen
-            if (block.kind == "text" && visible(block.content) == needle) seen++
+            if (!block.isReplyText || visible(block.content) != needle) continue
+            if (block.id == blockId) return seen
+            seen++
         }
         return -1
     }
@@ -64,7 +56,7 @@ internal object AssistantReplyText {
             val parts = runCatching { JSONArray(raw) }.getOrNull() ?: continue
             for (i in 0 until parts.length()) {
                 val part = parts.optJSONObject(i) ?: continue
-                if (part.optString("type") != "text") continue
+                if (part.optString("type") != "text" || AssistantTextPartJson.isProcessText(part)) continue
                 if (visible(part.optString("value")) != needle) continue
                 if (seen == occurrence) {
                     part.put("value", replaceVisible(part.optString("value"), replacement))
@@ -95,9 +87,8 @@ internal object AssistantReplyText {
     }
 
     /**
-     * Last visible text part becomes [translated]. Earlier visible text parts
-     * keep only system-reminder / attachment markup. Tool and thinking parts
-     * are not rewritten. Returns the rows whose JSON changed.
+     * The last visible reply part becomes [translated]. Earlier reply parts
+     * retain only system-reminder / attachment markup. Returns changed rows.
      */
     fun rewriteStoredParts(rows: List<Pair<String, String>>, translated: String): List<Pair<String, String>> {
         val loaded = rows.map { (id, raw) -> id to JSONArray(raw) }
@@ -105,18 +96,12 @@ internal object AssistantReplyText {
         loaded.forEachIndexed { row, (_, parts) ->
             for (i in 0 until parts.length()) {
                 val part = parts.optJSONObject(i) ?: continue
-                if (part.optString("type") != "text") continue
+                if (part.optString("type") != "text" || AssistantTextPartJson.isProcessText(part)) continue
                 if (visible(part.optString("value")).isEmpty()) continue
                 hits.add(row to i)
             }
         }
-        if (hits.isEmpty()) {
-            if (loaded.isEmpty()) return emptyList()
-            val last = loaded.lastIndex
-            loaded[last].second.put(JSONObject().put("type", "text").put("value", translated))
-            return listOf(loaded[last].first to loaded[last].second.toString())
-        }
-        val lastHit = hits.last()
+        val lastHit = hits.lastOrNull() ?: return emptyList()
         val dirty = linkedSetOf<Int>()
         for (hit in hits) {
             val part = loaded[hit.first].second.getJSONObject(hit.second)

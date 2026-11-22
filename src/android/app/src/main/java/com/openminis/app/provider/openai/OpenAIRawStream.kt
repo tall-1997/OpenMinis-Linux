@@ -343,6 +343,8 @@ internal fun OpenAIProvider.rawStreamMessage(
         // OpenAIStreamSupport.kt (architecture-policy line ceiling).
         val toolCallAccumulators = mutableMapOf<Int, ToolCallAccumulator>()
         val responsesToolCalls = mutableMapOf<String, ResponsesToolCallAccumulator>()
+        // Responses text item identities and their phases are scoped to this stream.
+        val responsesTextItems = ResponsesTextItems()
         // One-shot info log the first time the Responses API streams a reasoning
         // delta — confirms the Thinking pipeline is wired up.
         var sawReasoningDelta = false
@@ -356,6 +358,14 @@ internal fun OpenAIProvider.rawStreamMessage(
         // models: no `<think>` prefix passes through verbatim (no vendor
         // allowlist; MiniMax M3 relied on the mid-stream contains fallback).
         val thinkParser = ThinkPrefixStreamParser()
+        suspend fun flushThinkPrefixTail() {
+            val tail = thinkParser.finishTurn()
+            if (tail.thinking.isNotEmpty()) {
+                reasoningAccum.append(tail.thinking)
+                send(LLMStreamChunk.ThinkingDelta(tail.thinking))
+            }
+            if (tail.visible.isNotEmpty()) send(LLMStreamChunk.Text(tail.visible))
+        }
 
         // [GH#113] Some local / compatibility gateways stream a serialized tool
         // call through `delta.content` instead of `delta.tool_calls`. The
@@ -420,13 +430,7 @@ internal fun OpenAIProvider.rawStreamMessage(
                     // still holds (a cross-chunk tag tail, or an unterminated
                     // <think>). Idempotent, so the finish_reason path may also
                     // call it. Withheld trailing whitespace is dropped by design.
-                    thinkParser.finishTurn().let { fin ->
-                        if (fin.thinking.isNotEmpty()) {
-                            reasoningAccum.append(fin.thinking)
-                            send(LLMStreamChunk.ThinkingDelta(fin.thinking))
-                        }
-                        if (fin.visible.isNotEmpty()) send(LLMStreamChunk.Text(fin.visible))
-                    }
+                    flushThinkPrefixTail()
                     // [GH#113] A sniffer buffer still open at [DONE] was not a
                     // tool call after all — release it as text before finishing.
                     emitSniffed(contentSniffer.finish())
@@ -534,13 +538,13 @@ internal fun OpenAIProvider.rawStreamMessage(
                             }
                         }
                         type == "response.output_text.delta" -> {
-                            val delta = event.optString("delta", "")
-                            if (delta.isNotEmpty()) send(LLMStreamChunk.Text(delta))
+                            responsesTextItems.onTextDelta(event) { send(it) }
                         }
-                        // function_call item announced — capture call_id + name, start accumulator.
                         type == "response.output_item.added" -> {
                             val item = event.optJSONObject("item") ?: continue
+                            responsesTextItems.onOutputItem(event, item) { send(it) }
                             val itemType = item.optString("type", "")
+                            // function_call item announced — capture call_id + name, start accumulator.
                             if (itemType == "function_call") {
                                 val itemId = item.optString("id", "")
                                 val callId = item.optString("call_id", "")
@@ -584,6 +588,7 @@ internal fun OpenAIProvider.rawStreamMessage(
                         // streamed buffer in case the API ever emits a corrected payload.
                         type == "response.output_item.done" -> {
                             val item = event.optJSONObject("item") ?: continue
+                            responsesTextItems.onOutputItem(event, item) { send(it) }
                             val itemType = item.optString("type", "")
                             if (itemType == "function_call") {
                                 val itemId = item.optString("id", "")
@@ -755,14 +760,8 @@ internal fun OpenAIProvider.rawStreamMessage(
                             // When the model emitted tool calls the API returns status=completed
                             // with no stop_reason; surface "tool_use" so the agent loop knows to
                             // dispatch the calls instead of treating the turn as final.
-                            val sawToolCalls = responsesToolCalls.isNotEmpty() ||
-                                (resp?.optJSONArray("output")?.let { out ->
-                                    var found = false
-                                    for (i in 0 until out.length()) {
-                                        if (out.optJSONObject(i)?.optString("type") == "function_call") { found = true; break }
-                                    }
-                                    found
-                                } ?: false)
+                            val outputHasTools = responsesTextItems.onResponseOutput(resp) { send(it) }
+                            val sawToolCalls = responsesToolCalls.isNotEmpty() || outputHasTools
                             finishReason = when {
                                 sawToolCalls -> "tool_use"
                                 status == "completed" -> "stop"
@@ -940,13 +939,7 @@ internal fun OpenAIProvider.rawStreamMessage(
             // [T-android-think-prefix-stream] Stream-end flush, for streams that
             // end without a `[DONE]` sentinel. finishTurn() is idempotent, so
             // running after the [DONE] path already flushed is a no-op.
-            thinkParser.finishTurn().let { fin ->
-                if (fin.thinking.isNotEmpty()) {
-                    reasoningAccum.append(fin.thinking)
-                    send(LLMStreamChunk.ThinkingDelta(fin.thinking))
-                }
-                if (fin.visible.isNotEmpty()) send(LLMStreamChunk.Text(fin.visible))
-            }
+            flushThinkPrefixTail()
             // [GH#113] No `[DONE]` sentinel: release any half-received call
             // envelope as text (idempotent after the [DONE] path).
             emitSniffed(contentSniffer.finish())
@@ -1024,13 +1017,7 @@ internal fun OpenAIProvider.rawStreamMessage(
                 // parser and reasoning blob before the terminal chunk, or a
                 // trailing <think> tail would be dropped and reasoning would
                 // vanish on reload.
-                thinkParser.finishTurn().let { fin ->
-                    if (fin.thinking.isNotEmpty()) {
-                        reasoningAccum.append(fin.thinking)
-                        send(LLMStreamChunk.ThinkingDelta(fin.thinking))
-                    }
-                    if (fin.visible.isNotEmpty()) send(LLMStreamChunk.Text(fin.visible))
-                }
+                flushThinkPrefixTail()
                 if (sawReasoningField || reasoningAccum.isNotEmpty()) {
                     send(LLMStreamChunk.ReasoningContent(reasoningAccum.toString()))
                 }

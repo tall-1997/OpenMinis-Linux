@@ -225,8 +225,11 @@ data class AssistantBlock(
      * Null for non-Gemini providers and thinking-off Gemini calls.
      */
     val thoughtSignature: String? = null,
+    /** Spoken progress or text the host has yet to settle as an answer. */
+    val isProcessText: Boolean = false,
 ) {
     val isText: Boolean get() = kind == "text"
+    val isReplyText: Boolean get() = isText && !isProcessText
 }
 
 /**

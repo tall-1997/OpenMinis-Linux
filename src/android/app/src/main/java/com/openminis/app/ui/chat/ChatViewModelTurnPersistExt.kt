@@ -1,16 +1,11 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.data.AssistantTextPartJson
 import com.openminis.app.data.ToolLimitPrefs
 import com.openminis.app.data.model.AgentContentPart
-import com.openminis.app.data.model.ContextUsageAnchor
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.LLMStreamChunk
-import com.openminis.app.data.model.LLMUsage
-import com.openminis.app.data.model.ModelAttributionSnapshot
 import com.openminis.app.data.model.ThinkingLevel
-import com.openminis.app.provider.selectableThinkingLevels
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -97,7 +92,7 @@ internal fun ChatViewModel.updateAssistantMessage(
     toolBlocks: List<AssistantBlock>,
     isAwaitingModelResponse: Boolean = false,
 ) {
-    streamSession.updateAssistantMessage(id, content, isStreaming, toolBlocks, isAwaitingModelResponse)
+    streamSession.updateAssistantMessage(id, replyContent(content, toolBlocks), isStreaming, toolBlocks, isAwaitingModelResponse)
 }
 
 internal fun ChatViewModel.flushStreamingDelta(id: String) = streamSession.flushStreamingDelta(id)
@@ -140,7 +135,7 @@ internal fun turnPartsFromBlocks(
         val block = allToolBlocks[i]
         when (block.kind) {
             "text" -> if (block.content.isNotEmpty()) {
-                out.add(AgentContentPart.Text(block.content))
+                out.add(AgentContentPart.Text(block.content, block.isProcessText))
             }
             "tool_use" -> {
                 val name = block.toolName
@@ -183,7 +178,7 @@ internal fun buildAssistantPartsJson(
 ): String = JSONArray().apply {
     for (part in parts) {
         when (part) {
-            is AgentContentPart.Text -> put(JSONObject().put("type", "text").put("value", part.text))
+            is AgentContentPart.Text -> put(AssistantTextPartJson.encode(part.text, part.isProcessText))
             is AgentContentPart.ToolUse -> {
                 if (part.name.isBlank()) continue
                 val meta = toolBlockMeta[part.id]
@@ -204,82 +199,6 @@ internal fun buildAssistantPartsJson(
         }
     }
 }.toString()
-
-internal suspend fun ChatViewModel.persistAssistantTurnForRun(
-    run: com.openminis.app.service.ActiveRun,
-    parts: List<AgentContentPart>,
-    usage: LLMUsage?,
-    reasoningContent: String? = null,
-    toolBlockMeta: Map<String, AssistantBlock> = emptyMap(),
-    assistantText: String? = null,
-    uiMessageId: String? = run.assistantMessageId,
-    // [T-thinking-dual-ledger] The tier the turn was REQUESTED under (the
-    // loop's run-scoped snapshot, not the live flow — mid-run adoption may
-    // have moved the latter). Null from callers that genuinely don't know;
-    // the agent loop always knows.
-    requestedLevel: ThinkingLevel? = null,
-    modelSnapshot: ModelAttributionSnapshot? = null,
-    contextUsageAnchor: ContextUsageAnchor? = null,
-): String? = run.withPersistencePermit {
-    kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
-        // [T-thinking-dual-ledger] Resolve the ledger HERE, where the turn's
-        // reasoning evidence (reasoningContent) and the model's declared tier
-        // set are both in scope — persistAssistantTurn stays a dumb writer.
-        // reasoningContent "" is DeepSeek V4's explicit non-thinking signal:
-        // empty = no evidence, not evidence of nothing.
-        val thinkingUsage = requestedLevel?.let {
-            resolveTurnThinkingUsage(
-                requestedLevel = it,
-                thinkingObserved = !reasoningContent.isNullOrEmpty(),
-                declaredSelectableLevels = currentModel?.selectableThinkingLevels ?: emptyList(),
-            )
-        }
-        persistAssistantTurn(
-            parts, usage, reasoningContent, toolBlockMeta,
-            streamDurationMs = run.streamRate.takeDurationMs(),
-            thinkingUsage = thinkingUsage,
-            modelSnapshot = modelSnapshot,
-            contextUsageAnchor = contextUsageAnchor,
-        ).also { id ->
-            if (id != null) {
-                withContext(Dispatchers.Main.immediate) { notePersistedUiRow(uiMessageId, id) }
-                if (assistantText != null) run.markAssistantTurnPersisted(assistantText)
-            }
-        }
-    }
-}
-
-// [T-atomic-tool-turn] The single-row tool-result writer was removed: the
-// agent loop persists the assistant(tool_use) row and the user(tool_result)
-// row through persistToolTurnPairForRun, which commits both in one Room
-// transaction. See ChatViewModelToolTurnPair.kt.
-
-internal suspend fun ChatViewModel.persistAssistantTurn(
-    parts: List<AgentContentPart>,
-    usage: LLMUsage?,
-    reasoningContent: String? = null,
-    toolBlockMeta: Map<String, AssistantBlock> = emptyMap(),
-    // [T-android-usage-tok-s] Streamed-text wall clock (first→last delta of
-    // this persisted window) for the footer's tok/s readout; null = no text.
-    streamDurationMs: Long? = null,
-    // [T-thinking-dual-ledger] Requested vs provider-evidenced thinking tier
-    // for THIS turn; null = caller could not know (no request was made).
-    thinkingUsage: TurnThinkingUsage? = null,
-    modelSnapshot: ModelAttributionSnapshot? = null,
-    contextUsageAnchor: ContextUsageAnchor? = null,
-): String? {
-    if (parts.isEmpty()) return null
-    val partsJson = buildAssistantPartsJson(parts, toolBlockMeta)
-    val anchor = turnContextUsageAnchor(usage, modelSnapshot, contextUsageAnchor)
-    val tokenJson = buildTurnTokenUsageJson(usage, streamDurationMs, thinkingUsage, anchor)
-    val entity = chatRepository.appendMessage(
-        realSessionId.ifEmpty { sessionId }, "assistant", partsJson, tokenJson,
-        reasoningContent = reasoningContent,
-        modelSnapshot = modelSnapshot ?: anchor?.modelSnapshot ?: currentModelSnapshot(),
-    )
-    return entity.id
-}
-
 
 /** Persist tool results as a user-role message (mirrors iOS behavior). */
 internal suspend fun ChatViewModel.persistToolResultMessage(

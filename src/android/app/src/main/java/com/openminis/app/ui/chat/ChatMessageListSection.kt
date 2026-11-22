@@ -1,7 +1,6 @@
 package com.openminis.app.ui.chat
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -14,7 +13,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openminis.app.ui.settings.showTurnChangesCardEnabled
@@ -31,6 +29,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import com.openminis.app.R
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.ui.tokens.Minis
 import com.openminis.app.ui.tokens.MinisTypography
 
 /**
@@ -272,10 +271,7 @@ internal fun ChatFlatItemRow(
                             }
                             } // close UserBubble SideEffect + UserMessageBubble block
                             is FlatChatItem.AssistantHeader -> AssistantHeader(item.speakerName, item.speakerVendor)
-                            // Assistant text renders ONLY here: the
-                            // FlatChatItem.AssistantText row class was deleted
-                            // (nothing ever built one), and its branch below is
-                            // the one every text block reaches.
+                            // Reply text registers copy/selection and exposes translation here.
                             // T-android-gc-storm-issue17: LargeContentGuard
                             // collapses oversized frozen assistant text before
                             // feeding the markdown parser — the GC-storm hotspot
@@ -330,6 +326,10 @@ internal fun ChatFlatItemRow(
                                     }
                                 }
                             }
+                            is FlatChatItem.AssistantProcessText -> ProcessTextRow(
+                                text = item.block.content,
+                                modifier = Modifier.padding(horizontal = Minis.dimens.spaceLg.dp),
+                            )
                             is FlatChatItem.AssistantProcessSummary -> ProcessSummaryBar(
                                 thinkingCount = item.thinkingCount,
                                 toolCount = item.toolCount,
@@ -343,6 +343,20 @@ internal fun ChatFlatItemRow(
                                 startedAtMs = item.startedAtMs,
                                 onOpenStep = { viewModel.openToolDetail(it) },
                                 onToggle = { onToggleProcessCard(item.messageId) },
+                                singleToolContent = if (item.usesToolPill) ({ step ->
+                                    ChatToolPill(
+                                        messageId = step.messageId,
+                                        block = step.block,
+                                        isLastCancelled = step.isLastCancelled,
+                                        isStreaming = isStreaming,
+                                        canResume = canResume,
+                                        viewModel = viewModel,
+                                        coroutineScope = coroutineScope,
+                                        tracedScrollToItem = tracedScrollToItem,
+                                        safeMutate = safeMutate,
+                                        onOpenTerminalWithCommand = onOpenTerminalWithCommand,
+                                    )
+                                }) else null,
                             )
                             is FlatChatItem.AssistantThinking -> {
                                 // [T-android-thinking-forced-visible] Render
@@ -381,49 +395,18 @@ internal fun ChatFlatItemRow(
                                     )
                                 }
                             }
-                            is FlatChatItem.AssistantToolUse -> ToolCallPill(
+                            is FlatChatItem.AssistantToolUse -> ChatToolPill(
+                                messageId = item.messageId,
                                 block = item.block,
                                 allToolBlocks = item.allToolBlocks,
-                                onRetry = if (item.isLastCancelled && !isStreaming && !canResume) ({ safeMutate { viewModel.retryLast() } }) else null,
-                                // T14: route per-card stop to the global
-                                // cancelStream(). The button only renders
-                                // when the block is RUNNING/STREAMING — see
-                                // ToolCallPill `isRunning && onStop != null`
-                                // — so passing it unconditionally is safe.
-                                onStop = { viewModel.cancelStream() },
+                                isLastCancelled = item.isLastCancelled,
+                                isStreaming = isStreaming,
+                                canResume = canResume,
+                                viewModel = viewModel,
+                                coroutineScope = coroutineScope,
+                                tracedScrollToItem = tracedScrollToItem,
+                                safeMutate = safeMutate,
                                 onOpenTerminalWithCommand = onOpenTerminalWithCommand,
-                                // T261: route detail open through ViewModel so
-                                // the sheet is hoisted out of LazyColumn item
-                                // scope (otherwise the sheet snaps shut when
-                                // the pill scrolls off-screen and Compose
-                                // disposes the item).
-                                onOpenDetail = { viewModel.openToolDetail(it) },
-                                // [T-android-rerun-from-tool-block-position]
-                                // Re-run cuts at THIS tool_use block: keep the
-                                // blocks before it in the same turn, drop it +
-                                // everything after, then regenerate. The block
-                                // id (== tool_use id for a tool_use block) is
-                                // the stable anchor. Gated off while streaming
-                                // (mutating an in-flight turn corrupts agent
-                                // state, same rule as Retry on the user bubble).
-                                // safeMutate tears down the selection toolbar
-                                // before the truncation reshuffles the list.
-                                onRerunFromHere = if (!isStreaming) ({
-                                    coroutineScope.launch {
-                                        tracedScrollToItem("RERUN-FROM-TOOL", 0, 0)
-                                    }
-                                    safeMutate { viewModel.rerunFromToolBlock(item.messageId, item.block.id) }
-                                }) else null,
-                                onCopyDetails = {
-                                    val text = formatToolDetailsForClipboard(item.block)
-                                    val cb = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                    cb.setPrimaryClip(android.content.ClipData.newPlainText("tool", text))
-                                    android.widget.Toast.makeText(
-                                        context,
-                                        context.getString(R.string.tool_longpress_copied_toast),
-                                        android.widget.Toast.LENGTH_SHORT,
-                                    ).show()
-                                },
                             )
                             is FlatChatItem.AssistantPresentCard ->
                                 // [T-android-present-tool] Deliverable card
@@ -526,6 +509,49 @@ internal fun ChatFlatItemRow(
                             MessageUsageFooterLine(stats = usageFooterStats)
                         }
                         } // Column (alpha wrapper)
+}
+
+/** Shared actions for inline tools and tools newly folded alongside progress. */
+@Composable
+private fun ChatToolPill(
+    messageId: String,
+    block: AssistantBlock,
+    isLastCancelled: Boolean,
+    isStreaming: Boolean,
+    canResume: Boolean,
+    viewModel: ChatViewModel,
+    coroutineScope: CoroutineScope,
+    tracedScrollToItem: suspend (String, Int, Int) -> Unit,
+    safeMutate: (() -> Unit) -> Unit,
+    onOpenTerminalWithCommand: (String) -> Unit,
+    allToolBlocks: List<AssistantBlock> = listOf(block),
+) {
+    val context = LocalContext.current
+    ToolCallPill(
+        block = block,
+        allToolBlocks = allToolBlocks,
+        onRetry = if (isLastCancelled && !isStreaming && !canResume) ({ safeMutate { viewModel.retryLast() } }) else null,
+        onStop = { viewModel.cancelStream() },
+        onOpenTerminalWithCommand = onOpenTerminalWithCommand,
+        // Keep the detail sheet hoisted out of the row's composition.
+        onOpenDetail = { viewModel.openToolDetail(it) },
+        // [T-android-rerun-from-tool-block-position] Use the actual message id
+        // and tool id. A process card's composite key is only a UI anchor.
+        onRerunFromHere = if (!isStreaming) ({
+            coroutineScope.launch { tracedScrollToItem("RERUN-FROM-TOOL", 0, 0) }
+            safeMutate { viewModel.rerunFromToolBlock(messageId, block.id) }
+        }) else null,
+        onCopyDetails = {
+            val text = formatToolDetailsForClipboard(block)
+            val cb = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cb.setPrimaryClip(android.content.ClipData.newPlainText("tool", text))
+            android.widget.Toast.makeText(
+                context,
+                context.getString(R.string.tool_longpress_copied_toast),
+                android.widget.Toast.LENGTH_SHORT,
+            ).show()
+        },
+    )
 }
 
 /**

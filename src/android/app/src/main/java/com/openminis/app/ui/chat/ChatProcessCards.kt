@@ -35,16 +35,19 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -52,6 +55,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.tokens.Minis
+import com.openminis.app.ui.tokens.MinisTypography
 import kotlinx.coroutines.delay
 
 /**
@@ -148,6 +153,7 @@ internal fun ProcessSummaryBar(
     startedAtMs: Long = 0L,
     onToggle: () -> Unit,
     onOpenStep: (String) -> Unit = {},
+    singleToolContent: (@Composable (ProcessStepRef) -> Unit)? = null,
 ) {
     // [P-process-card] Outlined capsule (collapsed) that grows into a card
     // listing every step (expanded). Replaces the centred hairline divider:
@@ -175,12 +181,13 @@ internal fun ProcessSummaryBar(
     } else {
         formatProcessDuration(totalMs)
     }
-    val header = processCardHeader(
+    val aiProcess = stringResource(R.string.process_card_ai_process)
+    val header = if (thinkingCount == 0 && toolCount == 0) aiProcess else processCardHeader(
         thinkingCount, toolCount, running, expanded, activity, activityTitle, duration,
         labels = ProcessCardHeaderLabels(
             thinking = stringResource(R.string.process_card_thinking),
             tools = stringResource(R.string.process_card_tools),
-            aiProcess = stringResource(R.string.process_card_ai_process),
+            aiProcess = aiProcess,
             thinkingNow = stringResource(R.string.process_card_thinking_now),
             callingTool = stringResource(R.string.subagent_status_calling_tool),
         ),
@@ -244,15 +251,9 @@ internal fun ProcessSummaryBar(
                 thickness = 0.5.dp,
                 color = thinkingBlue.copy(alpha = 0.15f),
             )
-            // [P-process-card] Compact step rows, NOT the unfolded blocks:
-            // the full ThinkingBlock / ToolCallPill each carry their own
-            // bubble background and 36dp pill height, so an expanded card
-            // was a stack of mismatched bubbles (user: "长短不一、背景颜色
-            // 不统一、卡片过大"). Inside the card every step is one tight
-            // row — icon (from the SAME toolIconFor/toolAccentColor mapping
-            // the unfolded pills use, never invented), title, duration,
-            // 查看 for tools, expand chevron for thinking — separated by
-            // hairlines, no per-row background. The card is the only bubble.
+            // Keep the compact rows for existing multi-step runs. When progress
+            // folds a formerly inline tool, reuse its pill so the same actions
+            // are available inside the expanded card.
             steps.forEachIndexed { idx, step ->
                 if (idx > 0) {
                     HorizontalDivider(
@@ -260,8 +261,67 @@ internal fun ProcessSummaryBar(
                         color = thinkingBlue.copy(alpha = 0.10f),
                     )
                 }
-                ProcessStepRow(step = step, onOpen = { onOpenStep(step.id) })
+                key(step.messageId, step.id) {
+                    when {
+                        step.block.isProcessText -> ProcessTextRow(text = step.block.content)
+                        step.kind == "tool_use" && singleToolContent != null -> singleToolContent(step)
+                        else -> ProcessStepRow(step = step, onOpen = { onOpenStep(step.id) })
+                    }
+                }
             }
+        }
+    }
+}
+
+/** The same disclosure row inside a card and in the unfolded transcript. */
+@Composable
+internal fun ProcessTextRow(text: String, modifier: Modifier = Modifier) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    val color = MaterialTheme.colorScheme.onSurfaceVariant
+    val spacing = Minis.dimens
+    val actionLabel = stringResource(
+        if (expanded) R.string.check_update_notes_collapse else R.string.check_update_notes_expand,
+    )
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = spacing.touchTargetMin.dp)
+                .clickable(role = Role.Button, onClickLabel = actionLabel) { expanded = !expanded },
+        ) {
+            Column(modifier = Modifier.weight(1f).padding(end = spacing.spaceSm.dp)) {
+                Text(
+                    text = stringResource(R.string.process_card_ai_process),
+                    fontSize = MinisTypography.foot,
+                    fontWeight = FontWeight.Medium,
+                    color = color,
+                )
+                if (!expanded) {
+                    Text(
+                        text = text,
+                        fontSize = MinisTypography.foot,
+                        color = color,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            Icon(
+                imageVector = m3Icon(if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown),
+                contentDescription = null,
+                tint = color,
+                modifier = Modifier.size(spacing.spaceXl.dp),
+            )
+        }
+        AnimatedVisibility(visible = expanded) {
+            Text(
+                text = text,
+                fontSize = MinisTypography.body,
+                lineHeight = MinisTypography.lineBody,
+                color = color,
+                modifier = Modifier.padding(bottom = spacing.spaceMd.dp),
+            )
         }
     }
 }

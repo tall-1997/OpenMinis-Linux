@@ -29,36 +29,49 @@ suspend fun ChatRepository.appendTurnRows(
     sessionId: String,
     rows: List<PendingTurnRow>,
     ownsWrite: () -> Boolean = { true },
+): List<MessageEntity> = appendTurnRows(sessionId, rows, null, ownsWrite)
+
+/** Presentation-only rewrite of an already durable continuation prefix. */
+internal data class AssistantDisplayUpdate(val id: String, val partsJson: String)
+
+internal suspend fun ChatRepository.appendTurnRows(
+    sessionId: String,
+    rows: List<PendingTurnRow>,
+    displayUpdate: AssistantDisplayUpdate?,
+    ownsWrite: () -> Boolean,
 ): List<MessageEntity> {
-    if (rows.isEmpty() || !ownsWrite()) return emptyList()
+    if ((rows.isEmpty() && displayUpdate == null) || !ownsWrite()) return emptyList()
     val store = bodyStore()
-    val stored = rows.map { row ->
-        val body = storeBody(row.partsJson, requireOffload = true)
-        // A cache hit in BodyStore.put can reuse a damaged file. A logical
-        // turn is not committed until each body can be recovered in full.
-        body.ref?.let { ref ->
-            check(store?.verifyExact(ref, body.bodyBytes.toInt()) == true) {
-                "Unable to verify oversized message body"
+    fun verifiedBody(partsJson: String): ChatRepository.StoredBody =
+        storeBody(partsJson, requireOffload = true).also { body ->
+            // A cached BodyStore entry can refer to a damaged file.
+            body.ref?.let { ref ->
+                check(store?.verifyExact(ref, body.bodyBytes.toInt()) == true) {
+                    "Unable to verify oversized message body"
+                }
             }
         }
-        row to body
-    }
+    val stored = rows.map { it to verifiedBody(it.partsJson) }
+    val updatedBody = displayUpdate?.let { verifiedBody(it.partsJson) }
     val now = System.currentTimeMillis()
-    val dbRef = db
-    if (dbRef == null) {
-        // Sequential fallback for repositories built without a database
-        // handle (JVM tests); production always passes one.
+    suspend fun insert(): List<MessageEntity> {
         if (!ownsWrite()) return emptyList()
+        if (displayUpdate != null && updatedBody != null) {
+            val row = dao.messageById(displayUpdate.id)
+            check(row?.sessionId == sessionId && row.role == "assistant") { "Continuation prefix no longer belongs to this turn" }
+            if (!ownsWrite()) return emptyList()
+            dao.updateMessageBody(displayUpdate.id, updatedBody.inline, updatedBody.bodyBytes,
+                updatedBody.ref, updatedBody.sha, updatedBody.preview, now)
+        }
         val inserted = stored.map { (row, body) -> insertTurnRow(sessionId, row, body, now) }
         updateSessionPreviewAfterTurn(sessionId, stored, now)
         return inserted
     }
-    return dbRef.withTransaction {
-        if (!ownsWrite()) return@withTransaction emptyList()
-        val inserted = stored.map { (row, body) -> insertTurnRow(sessionId, row, body, now) }
-        updateSessionPreviewAfterTurn(sessionId, stored, now)
-        inserted
-    }
+    val dbRef = db
+    if (dbRef != null) return dbRef.withTransaction { insert() }
+    // Production always has Room. Never split a display update from its final reply.
+    check(displayUpdate == null) { "Continuation settlement requires a database transaction" }
+    return insert()
 }
 
 private suspend fun ChatRepository.updateSessionPreviewAfterTurn(

@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicLong
 internal fun LLMStreamChunk.countsAsFirstTokenProgress(): Boolean = when (this) {
     is LLMStreamChunk.Started,
     is LLMStreamChunk.Usage,
+    is LLMStreamChunk.TextPhase,
     is LLMStreamChunk.Finished -> false
     else -> true
 }

@@ -1,5 +1,6 @@
 package com.openminis.app.provider
 
+import com.openminis.app.data.model.AssistantTextPhase
 import com.openminis.app.data.model.LLMStreamChunk
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -26,6 +27,9 @@ object StreamTrace {
         is LLMStreamChunk.ThinkingDelta -> JSONObject().put("kind", "thinking").put("text", chunk.text)
         is LLMStreamChunk.ReasoningContent -> JSONObject().put("kind", "reasoning").put("content", chunk.content)
         is LLMStreamChunk.Text -> JSONObject().put("kind", "text").put("text", chunk.text)
+            .put("phase", chunk.phase?.name).put("itemId", chunk.itemId)
+        is LLMStreamChunk.TextPhase -> JSONObject().put("kind", "text_phase")
+            .put("itemId", chunk.itemId).put("phase", chunk.phase.name)
         is LLMStreamChunk.ToolUseStart -> JSONObject().put("kind", "tool_use_start")
             .put("id", chunk.id).put("name", chunk.name)
         is LLMStreamChunk.ToolInputDelta -> JSONObject().put("kind", "tool_input_delta")
@@ -50,7 +54,12 @@ object StreamTrace {
                 "started" -> LLMStreamChunk.Started
                 "thinking" -> LLMStreamChunk.ThinkingDelta(obj.getString("text"))
                 "reasoning" -> LLMStreamChunk.ReasoningContent(obj.getString("content"))
-                "text" -> LLMStreamChunk.Text(obj.getString("text"))
+                "text" -> LLMStreamChunk.Text(obj.getString("text"), obj.textPhase(), obj.textItemId())
+                "text_phase" -> {
+                    val itemId = obj.textItemId() ?: continue
+                    val phase = obj.textPhase() ?: continue
+                    LLMStreamChunk.TextPhase(itemId, phase)
+                }
                 "tool_use_start" -> LLMStreamChunk.ToolUseStart(obj.getString("id"), obj.getString("name"))
                 "tool_input_delta" -> LLMStreamChunk.ToolInputDelta(obj.getString("id"), obj.getString("accumulated"))
                 "tool_call_complete" -> LLMStreamChunk.ToolCallComplete(
@@ -65,6 +74,13 @@ object StreamTrace {
         }
         return out
     }
+
+    private fun JSONObject.textPhase(): AssistantTextPhase? {
+        val name = opt("phase") as? String ?: return null
+        return AssistantTextPhase.entries.firstOrNull { it.name == name }
+    }
+
+    private fun JSONObject.textItemId(): String? = opt("itemId") as? String
 
     /** Replay a decoded sequence as a Flow for watchdog / parser tests. */
     fun replay(chunks: List<LLMStreamChunk>): Flow<LLMStreamChunk> = flowOf(*chunks.toTypedArray())

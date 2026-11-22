@@ -1,27 +1,8 @@
 package com.openminis.app.ui.chat
 
 import android.content.Context
-import com.openminis.app.data.model.AgentContentPart
-import com.openminis.app.data.model.ContextUsageAnchor
-import com.openminis.app.data.model.LLMMessage
-import com.openminis.app.data.model.LLMUsage
-import com.openminis.app.data.model.ModelAttributionSnapshot
-import com.openminis.app.data.model.ThinkingLevel
-import com.openminis.app.logging.AppLogger
-import com.openminis.app.service.ActiveRun
+import com.openminis.app.goal.GoalManager
 import com.openminis.app.tools.AgentPlanStore
-
-/** Outcome of one plan close-out check at natural turn end. */
-enum class PlanBoardCloseResult {
-    /** A nudge was persisted and history appended — continue the loop. */
-    NUDGED,
-
-    /** The run stopped mid-nudge; exit the loop normally. */
-    STOPPED,
-
-    /** Nothing to nudge — fall through to the next tail check. */
-    NONE,
-}
 
 /**
  * [T-plan-close-nudge] Host-side close-out check for the plan board, pinned
@@ -115,68 +96,13 @@ object PlanBoardClosePrompt {
     internal const val DEFAULT_MAX_NUDGES = 2
 }
 
-/**
- * Loop-tail plumbing for the plan close-out nudge: reads the board and the
- * Goal, decides, and — when a nudge is owed — persists the assistant turn and
- * appends the nudge as a user message exactly like the sub-agent collect
- * nudge does, so history never carries two consecutive user messages. The
- * caller advances its counter and continues/breaks on the returned outcome.
- * Receiver is [ChatViewModel] so repository-backed state (persistence, bounded
- * history, the Goal via GoalManager(chatRepository)) stays reachable without a
- * parameter parade.
- */
-internal suspend fun ChatViewModel.nudgePlanBoardCloseFor(
-    isFinalTurn: Boolean,
-    goalSessionId: String,
-    nudgesUsed: Int,
-    allToolBlocks: List<AssistantBlock>,
-    turnStartBlockIndex: Int,
-    allToolInputs: Map<String, String>,
-    lastUsage: LLMUsage?,
-    turnReasoningContent: String?,
-    turnThinkingLevel: ThinkingLevel,
-    accumulatedText: String,
-    activeRun: ActiveRun?,
-    modelSnapshot: ModelAttributionSnapshot? = null,
-    contextUsageAnchor: ContextUsageAnchor? = null,
-): PlanBoardCloseResult {
-    if (!isFinalTurn || nudgesUsed >= PlanBoardClosePrompt.DEFAULT_MAX_NUDGES || activeRun?.isStopped == true) {
-        return PlanBoardCloseResult.NONE
-    }
-    val boardPlans = PlanBoardClosePrompt.snapshot(goalSessionId, context)
-    val goalForClose = runCatching {
-        // goalManager is a loop-local, not a ChatViewModel member — build the
-        // manager from the repository here, matching ChatViewModelGoalExt.
-        com.openminis.app.goal.GoalManager(chatRepository).get(goalSessionId)
-    }.getOrNull()
-    val planNudge = PlanBoardClosePrompt.nudge(
-        plans = boardPlans,
-        goalActive = goalForClose?.let { PlanBoardClosePrompt.goalActive(it.status) } ?: false,
-        nudgesUsed = nudgesUsed,
-        maxNudges = PlanBoardClosePrompt.DEFAULT_MAX_NUDGES,
-    ) ?: return PlanBoardCloseResult.NONE
-
-    val turnParts = buildTurnParts(allToolBlocks, turnStartBlockIndex, allToolInputs)
-    val blockMeta = allToolBlocks.filter { it.kind == "tool_use" }.associateBy { it.id }
-    persistAssistantTurnForRunAndBackfill(
-        activeRun, turnParts, blockMeta, lastUsage, turnReasoningContent, accumulatedText, agentHistory,
-        requestedLevel = turnThinkingLevel,
-        modelSnapshot = modelSnapshot,
-        contextUsageAnchor = contextUsageAnchor,
+/** The loop owns the decision to continue and the presentation of the current turn. */
+internal suspend fun ChatViewModel.planBoardCloseNoteFor(sessionId: String, nudgesUsed: Int): String? {
+    if (nudgesUsed >= PlanBoardClosePrompt.DEFAULT_MAX_NUDGES) return null
+    val plans = PlanBoardClosePrompt.snapshot(sessionId, context)
+    if (plans.isEmpty()) return null
+    val goal = GoalManager(chatRepository).get(sessionId)
+    return PlanBoardClosePrompt.nudge(
+        plans, PlanBoardClosePrompt.goalActive(goal?.status), nudgesUsed, PlanBoardClosePrompt.DEFAULT_MAX_NUDGES,
     )
-    if (activeRun?.isStopped == true) return PlanBoardCloseResult.STOPPED
-    appendBoundedHistory(
-        LLMMessage(
-            role = LLMMessage.Role.USER,
-            content = planNudge,
-            contentParts = listOf(AgentContentPart.Text(planNudge)),
-        ),
-    )
-    val openCount = boardPlans.count { it.status != "done" }
-    AppLogger.info(
-        ChatViewModel.TAG_STREAM,
-        "plan close-out nudge ${nudgesUsed + 1}/${PlanBoardClosePrompt.DEFAULT_MAX_NUDGES} " +
-            "(session=$goalSessionId, open=$openCount)",
-    )
-    return PlanBoardCloseResult.NUDGED
 }

@@ -20,7 +20,7 @@ class ActiveRunPersistenceFenceTest {
                 entered.complete(Unit)
                 release.await()
                 writes.incrementAndGet()
-                run.markAssistantTurnPersisted("committed")
+                run.markAssistantTurnPersisted()
             }
         }
 
@@ -30,12 +30,12 @@ class ActiveRunPersistenceFenceTest {
 
         val drain = async {
             run.awaitPersistenceDrained()
-            run.unpersistedAssistantText()
+            run.unpersistedAssistantTextTail()
         }
         release.complete(Unit)
         writer.await()
         assertNull(denied.await())
-        assertEquals("", drain.await())
+        assertTrue(drain.await().isEmpty())
         assertEquals(1, writes.get())
         ActiveRunRegistry.finish(run)
     }

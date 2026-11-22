@@ -273,7 +273,7 @@ class CompactPrefixPersistenceTest {
     @Test
     fun userStopWithoutCommittedToolRoundReopensAndCompactsAsText() = runBlocking {
         row(0, parts = text("Read the test file"))
-        val saved = repo.persistUserStop(sid, "I started to respond.")
+        val saved = repo.persistUserStop(sid, listOf(AgentContentPart.Text("I started to respond.")))
         val reloadedRows = repo.loadRequestHistory(sid, 10).messages
         val reloaded = reloadedRows.map { mapStoredLLMMessage(it, mediaFile = { name -> File(tmp.root, name) }) }
         assertEquals(listOf("user", "assistant", "user"), reloadedRows.map { it.role })
@@ -301,7 +301,7 @@ class CompactPrefixPersistenceTest {
         row(0, parts = text("Existing user turn"))
         val originalSession = dao.getSession(sid)
         var ownerChecks = 0
-        val saved = repo.persistUserStop(sid, "Partial answer from a stale Stop", ownsWrite = { ++ownerChecks == 1 })
+        val saved = repo.persistUserStop(sid, listOf(AgentContentPart.Text("Partial answer from a stale Stop")), ownsWrite = { ++ownerChecks == 1 })
         assertEquals(emptyList<Any>(), saved)
         assertEquals(2, ownerChecks)
         assertEquals(listOf("m0"), repo.loadRequestHistory(sid, 10).messages.map { it.id })
@@ -315,7 +315,7 @@ class CompactPrefixPersistenceTest {
         row(1, "assistant", toolUse("already-read", "/root/already-read"))
         row(2, parts = toolResult("already-read"))
 
-        val saved = repo.persistUserStop(sid, "", capturedAssistantDbIds = listOf("m1", "m2"))
+        val saved = repo.persistUserStop(sid, emptyList(), capturedAssistantDbIds = listOf("m1", "m2"))
         assertEquals(USER_STOP_NOTE, saved.single().content)
         val reloaded = repo.loadRequestHistory(sid, 10).messages
         assertEquals(4, reloaded.size)

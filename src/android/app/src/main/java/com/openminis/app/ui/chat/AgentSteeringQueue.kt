@@ -414,7 +414,7 @@ internal fun repositionAfterSteeringCommit(
     return if (accumulatedText.isNotEmpty() || allToolBlocks.isNotEmpty()) {
         cleaned.map { m ->
             if (m.id == assistantId) m.copy(
-                content = accumulatedText,
+                content = replyContent(accumulatedText, allToolBlocks),
                 isStreaming = false,
                 isAwaitingModelResponse = false,
                 toolBlocks = allToolBlocks,

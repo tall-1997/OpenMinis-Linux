@@ -12,13 +12,15 @@ import com.openminis.app.provider.ProviderFactory
 import com.openminis.app.provider.anthropic.AnthropicProvider
 import kotlinx.coroutines.CancellationException
 
+internal fun isNaturalAgentStop(reason: String?): Boolean = when (reason?.lowercase()) {
+    "stop", "end_turn", "stop_sequence" -> true
+    else -> false
+}
+
 /** A closed transport is not proof of a complete answer or tool-call response. */
 internal fun eligibleContextReceipt(reason: String?, hasText: Boolean, hasTools: Boolean): Boolean =
-    when (reason?.lowercase()) {
-        "stop", "end_turn", "stop_sequence" -> hasText || hasTools
-        "tool_calls", "tool_use", "function_call" -> hasTools
-        else -> false
-    }
+    if (isNaturalAgentStop(reason)) hasText || hasTools
+    else hasTools && reason?.lowercase() in setOf("tool_calls", "tool_use", "function_call")
 
 internal suspend fun ChatViewModel.acceptRequestProjection(
     provider: LLMProvider,

@@ -144,6 +144,7 @@ internal object PreviewText {
                 val obj = array.getJSONObject(i)
                 val type = obj.optString("type")
                 if (type == "text") {
+                    if (com.openminis.app.data.AssistantTextPartJson.isProcessText(obj)) continue
                     val text = obj.optString("value", "")
                     if (text.isNotBlank()) {
                         // [T-android-preview-reminder-leak] A user turn

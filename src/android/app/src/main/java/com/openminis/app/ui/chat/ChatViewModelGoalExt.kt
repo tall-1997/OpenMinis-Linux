@@ -1,6 +1,8 @@
 package com.openminis.app.ui.chat
 
 import com.openminis.app.goal.GoalManager
+import com.openminis.app.logging.AppLogger
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -56,4 +58,19 @@ internal suspend fun ChatViewModel.executeGoalCommand(command: String) {
             sendMessage("", skipContextCheck = true, internalGoalRun = true)
         }
     }
+}
+
+/**
+ * [T-goal-loop-bookkeeping] Optional loop-tail goal reads and writes must
+ * never turn a successful answer into an error: a transient store hiccup
+ * degrades to "no goal" (or skips the nudge) instead of failing the turn.
+ * Cancellation propagates — only real bookkeeping failures are contained.
+ */
+internal suspend fun <T> ChatViewModel.goalBookkeeping(label: String, action: suspend () -> T): Result<T> = try {
+    Result.success(action())
+} catch (cancel: CancellationException) {
+    throw cancel
+} catch (bookkeepingError: Exception) {
+    AppLogger.warning(ChatViewModel.TAG_STREAM, "$label failed: ${bookkeepingError.javaClass.simpleName}")
+    Result.failure(bookkeepingError)
 }
