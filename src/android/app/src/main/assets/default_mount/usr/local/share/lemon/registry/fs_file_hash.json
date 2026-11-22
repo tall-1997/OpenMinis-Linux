@@ -1,0 +1,1 @@
+{"name":"fs_file_hash","desc":"计算文件MD5/SHA256","params":"path:string:文件路径","required":"path","timeoutMs":60000,"cmd":"echo -n 'MD5:    '; md5sum $path 2>&1; echo -n 'SHA256: '; sha256sum $path 2>&1"}

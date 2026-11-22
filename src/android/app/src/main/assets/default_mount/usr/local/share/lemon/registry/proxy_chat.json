@@ -1,0 +1,1 @@
+{"name":"proxy_chat","cat":"LLM代理","desc":"[LLM代理] 按自定义提示词转发用户输入到上游大模型，返回纯净回答","params":"text:string:用户输入内容","required":"text","timeoutMs":130000,"cmd":"sh /data/adb/lemon_kernel/lemon/proxy/llm_proxy.sh chat $text"}

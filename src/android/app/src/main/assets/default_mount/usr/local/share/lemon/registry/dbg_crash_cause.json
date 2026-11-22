@@ -1,0 +1,1 @@
+{"name":"dbg_crash_cause","desc":"崩溃原因记录","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/crash_cause 2>/dev/null | head -40"}

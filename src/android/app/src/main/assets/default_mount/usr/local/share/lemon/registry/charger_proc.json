@@ -1,0 +1,1 @@
+{"name":"charger_proc","desc":"充电器状态(/proc/charger)","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/charger 2>/dev/null | head -50; ls /proc/charger/ 2>/dev/null"}

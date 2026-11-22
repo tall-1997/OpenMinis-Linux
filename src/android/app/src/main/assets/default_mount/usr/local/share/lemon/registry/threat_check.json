@@ -1,0 +1,1 @@
+{"name": "threat_check", "cat": "安全防护", "desc": "[安全防护] 威胁情报哈希信誉:file/hash/url→SHA256查MalwareBazaar/URLhaus(abuse.ch需免费Auth-Key),判定malicious/clean_unknown/no_key", "params": "request:string:JSON请求如{\"action\":\"file\",\"path\":\"...\"}", "required": "request", "timeoutMs": 60000, "cmd": "sh /data/lemonbrain/nettools/threat_check.sh $request"}

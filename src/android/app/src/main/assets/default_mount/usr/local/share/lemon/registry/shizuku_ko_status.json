@@ -1,0 +1,1 @@
+{"name":"shizuku_ko_status","cat":"柠檬工具","desc":"[柠檬工具] LemonShizuku 内核态 binder 身份伪造：模块状态/白名单/统计（kernel-side Shizuku）","params":"","timeoutMs":30000,"cmd":"/system/bin/timeout 25 sh /data/adb/lemon_kernel/lemonlib/shizuku_ko.sh status"}

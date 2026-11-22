@@ -1,0 +1,1 @@
+{"name":"forum_read","cat":"MT论坛","desc":"[MT论坛] 读取帖子标题与正文","params":"tid:string:帖子ID","required":"tid","timeoutMs":45000,"cmd":"/data/data/com.termux/files/usr/bin/python3 /data/lemonbrain/nettools/forum_client.py read $tid"}

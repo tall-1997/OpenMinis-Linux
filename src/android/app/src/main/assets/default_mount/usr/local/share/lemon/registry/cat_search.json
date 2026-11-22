@@ -1,0 +1,1 @@
+{"name":"cat_search","desc":"九大类智能分流:按类别搜索MCP功能,cat=RE/PROC/FILE/NET/APP/SYS/KERNEL/MON/TOOL","params":"cat:string:类别可空列全部;kw:string:功能关键词可空列该类全部","required":"","timeoutMs":15000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh cat_search sh /data/adb/lemon_kernel/lemon/cats/cat_search.sh $cat $kw"}

@@ -1,0 +1,1 @@
+{"name":"pkg_unfreeze","desc":"解冻应用(pm unsuspend)","params":"pkg:string:包名","required":"pkg","timeoutMs":20000,"cmd":"pm unsuspend --user 0 $pkg 2>&1"}

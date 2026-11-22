@@ -1,0 +1,1 @@
+{"name":"xb_shot","cat":"X浏览器","desc":"对 X浏览器当前页面截图(JPEG)","params":"path:string:保存路径 可空","required":"","timeoutMs":60000,"cmd":"/data/data/com.termux/files/usr/bin/bash /data/local/tmp/xbcdp.sh shot $path"}

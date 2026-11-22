@@ -1,0 +1,1 @@
+{"name":"expose_ports","cat":"安全审计","desc":"[安全审计] 对外暴露端口审计：非回环监听端口 + 归属进程","params":"","timeoutMs":30000,"cmd":"/system/bin/timeout 28 sh /data/adb/lemon_kernel/lemonlib/lemon_audit.sh ports"}

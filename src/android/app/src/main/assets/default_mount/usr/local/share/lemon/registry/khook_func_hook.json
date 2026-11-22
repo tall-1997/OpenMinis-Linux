@@ -1,0 +1,1 @@
+{"name":"khook_func_hook","cat":"内核态","desc":"[内核态] 一键：挂载内核函数探针 → 采集N秒 → 自动卸载 → 返回命中","params":"func:string:内核函数名|sec:string:采集秒数(默认3)|args:string:参数表达式(可空)","timeoutMs":60000,"cmd":"sh /data/adb/lemon_kernel/khook/khook.sh func_hook $func $sec $args"}

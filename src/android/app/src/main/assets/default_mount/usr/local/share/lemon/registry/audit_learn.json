@@ -1,0 +1,1 @@
+{"name": "audit_learn", "cat": "自主神经", "desc": "[自主神经] 运营经验蒸馏：audit.jsonl每工具调用量/失败率/延迟+异常标记(高失败/慢)", "params": "", "required": "", "timeoutMs": 30000, "cmd": "/system/bin/timeout 28 /data/data/com.termux/files/usr/bin/python3 /data/lemonbrain/autonomic/audit_learn.py"}

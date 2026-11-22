@@ -266,7 +266,7 @@ fun UnifiedModelPickerSheet(
                             selected = groupSelected,
                             size = 22.dp,
                             // (#7) named AccentToken — same value as the old
-                            // 0xFF34C759 literal.
+                            // 0xFF4CAF50 literal.
                             selectedTint = IosGreen,
                         )
                         Spacer(Modifier.width(10.dp))
@@ -274,7 +274,7 @@ fun UnifiedModelPickerSheet(
                             Icons.Default.Layers,
                             contentDescription = null,
                             // (#7) named AccentToken — same value as the old
-                            // 0xFF007AFF literal.
+                            // 0xFFFF7AD9 literal.
                             tint = IosBlue,
                             modifier = Modifier.size(18.dp),
                         )

@@ -1,0 +1,1 @@
+{"name":"tx_cross","cat":"Termux","desc":"[Termux] 交叉编译为目标文件（.o，供内核模块/NDK用）","params":"src:string:源文件,out:string:输出.o默认~/a.o,api:string:Android API默认30,flags:string:额外参数","required":"src","timeoutMs":300000,"cmd":"TX_SRC=$src TX_OUT=$out TX_API=$api TX_FLAGS=$flags sh /data/adb/lemon_kernel/lemon/tx/tx.sh cross"}

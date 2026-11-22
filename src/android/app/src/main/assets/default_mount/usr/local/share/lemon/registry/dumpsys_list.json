@@ -1,0 +1,1 @@
+{"name":"dumpsys_list","desc":"列出全部可dumpsys的系统服务","params":"filter:string:过滤,可空","required":"","timeoutMs":20000,"cmd":"dumpsys -l 2>&1 | grep -i -- $filter | head -80"}

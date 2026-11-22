@@ -1,0 +1,1 @@
+{"name":"wifi_config","cat":"网络增强","desc":"[网络增强] WiFi 配置导出：已保存 SSID/密码(可读时) + 当前连接信息","params":"","timeoutMs":40000,"cmd":"/system/bin/timeout 35 sh /data/adb/lemon_kernel/lemonlib/lemon_netx.sh wifi"}

@@ -1,0 +1,1 @@
+{"name":"kernel_taint","desc":"内核污染标志(判断是否加载非官方模块)","params":"","required":"","timeoutMs":10000,"cmd":"cat /proc/sys/kernel/tainted 2>&1; echo '--- lockdep ---'; cat /proc/sys/kernel/lock_stat 2>/dev/null"}

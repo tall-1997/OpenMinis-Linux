@@ -1,0 +1,1 @@
+{"name":"am_broadcast","desc":"发送广播(am broadcast)","params":"action:string:action|extra:string:附加,可空","required":"action","timeoutMs":15000,"cmd":"am broadcast -a $action $extra 2>&1 | head -10"}

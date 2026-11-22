@@ -1,0 +1,1 @@
+{"name":"khook_event_list","cat":"内核态","desc":"[内核态] 列出可用 tracepoint 事件（共1933个，支持关键字过滤）","params":"kw:string:关键字(如 syscalls 或 binder)|lines:string:行数(默认40)","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/khook/khook.sh event_list $kw $lines"}

@@ -1,0 +1,1 @@
+{"name":"bpf_status","cat":"eBPF","desc":"[eBPF] 内核态执行层状态：已装载程序/内核能力(bpffs/BTF/JIT)","params":"","timeoutMs":20000,"cmd":"/data/adb/lemonbpf/lemonbpf status 2>&1"}

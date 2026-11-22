@@ -1,0 +1,1 @@
+{"name":"termex_ssh","desc":"[Termex] OpenSSH 9.7p1 客户端","params":"args:string:ssh参数,如 -V / user@host","required":"args","timeoutMs":120000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termex_ssh . /data/local/tmp/termex/env.sh; eval /data/local/tmp/termex/bin/ssh $args 2>&1"}

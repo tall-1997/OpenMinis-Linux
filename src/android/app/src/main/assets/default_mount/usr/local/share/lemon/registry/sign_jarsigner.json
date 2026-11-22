@@ -1,0 +1,1 @@
+{"name":"sign_jarsigner","desc":"[签名] jarsigner V1 签名(用MT密钥库 key0)","params":"args:string:APK路径,如 /path/app.apk","required":"args","timeoutMs":120000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh sign_jarsigner . /data/local/tmp/mt_sign.sh sign $args"}

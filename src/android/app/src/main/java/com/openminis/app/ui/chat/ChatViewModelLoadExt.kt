@@ -16,7 +16,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -614,6 +616,26 @@ internal fun ChatViewModel.loadSession() {
         // ensureSessionTailLoaded owns tail scheduling; two concurrent drains
         // on different threads raced the non-volatile tailAttachJob read.
         viewModelScope.launch(Dispatchers.IO) { refreshHistoryEdges(scheduleTail = false) }
+
+        // [T-title-live-sync] Keep the top-bar title glued to the DB row while
+        // this session stays loaded: the session LIST's rename writes only the
+        // DB, so without this stream the top bar showed the stale title until
+        // the next full load (user: 主页改/聊天窗改都要实时). A fast session
+        // switch cancels the previous stream; distinctUntilChanged keeps a
+        // chatty sessions list from re-writing the same value.
+        titleSyncJob?.cancel()
+        titleSyncJob = viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                chatRepository.observeSessions()
+                    .map { sessions -> sessions.firstOrNull { it.id == sessionId }?.title }
+                    .distinctUntilChanged()
+                    .collect { title ->
+                        if (title != null) {
+                            _sessionTitle.value = title.ifBlank { "New Chat" }
+                        }
+                    }
+            }
+        }
 
         // [T-p9-revert-recovery] A staged revert survives process death on
         // disk: re-register the record (the banner comes back) and re-apply

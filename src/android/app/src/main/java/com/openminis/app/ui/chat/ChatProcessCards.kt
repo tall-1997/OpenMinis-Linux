@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.sp
 import com.openminis.app.R
 import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.delay
+import com.openminis.app.ui.theme.cili
 
 /**
  * [T-provider-detail-ceiling-analogue] Process-card composables extracted from
@@ -157,7 +158,7 @@ internal fun ProcessSummaryBar(
     // not a visual break: same blue, same 12dp radius, same 6%/15% tint and
     // 0.5dp hairline, same 12×8 padding as ThinkingBlock. The old 22dp
     // backgroundless capsule looked nothing like the blocks it replaced.
-    val thinkingBlue = Color(0xFF007AFF)
+    val thinkingBlue = cili(0xFF007AFF)
     val shape = RoundedCornerShape(12.dp)
     // [P-process-card] Failure tints ONLY the failed tool rows inside the
     // card (user direction): the header keeps its normal blue title — the
@@ -192,6 +193,9 @@ internal fun ProcessSummaryBar(
             .background(thinkingBlue.copy(alpha = 0.06f), shape)
             .border(0.5.dp, thinkingBlue.copy(alpha = 0.15f), shape)
             .clip(shape)
+            // [T-shimmer-thinking-exempt] Thinking entries never sweep
+            // (user direction: 扫光对思考条目不生效); only in-flight tool
+            // pills keep the sweep via ChatComposerWidgets.
             .clickable(onClick = onToggle)
             // [P-process-card] Animate the expand/collapse height change:
             // without this the row list appears in one frame and the whole
@@ -282,7 +286,7 @@ internal fun ProcessSummaryBar(
  */
 @Composable
 private fun ProcessStepRow(step: ProcessStepRef, onOpen: () -> Unit) {
-    val thinkingBlue = Color(0xFF007AFF)
+    val thinkingBlue = cili(0xFF007AFF)
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val isThinking = step.kind == "thinking"
     val isFailed = !isThinking && step.status == ToolBlockStatus.FAILED

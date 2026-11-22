@@ -1,0 +1,1 @@
+{"name":"selinux_policy_inject","desc":"用magiskpolicy注入SELinux规则(专家用)","params":"rule:string:规则如 'allow untrusted_app system_file file read'","required":"rule","timeoutMs":30000,"cmd":"magiskpolicy --live $rule 2>&1 && echo INJECT_OK"}

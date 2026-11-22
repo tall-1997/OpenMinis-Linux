@@ -1,0 +1,1 @@
+{"name":"termex_ssh_keygen","desc":"[Termex] ssh-keygen 密钥生成","params":"args:string:ssh-keygen参数,如 -t ed25519 -f /tmp/k","required":"args","timeoutMs":60000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termex_ssh_keygen . /data/local/tmp/termex/env.sh; eval /data/local/tmp/termex/bin/ssh-keygen $args 2>&1"}

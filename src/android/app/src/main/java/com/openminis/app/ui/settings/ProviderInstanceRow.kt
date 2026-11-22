@@ -34,6 +34,7 @@ import com.openminis.app.data.repository.ModelRefreshResult
 import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.theme.IosGreen
 import com.openminis.app.ui.theme.IosRed
+import com.openminis.app.ui.theme.cili
 
 @Composable
 internal fun ProviderInstanceRow(
@@ -132,7 +133,7 @@ internal fun ProviderInstanceRow(
                 contentDescription = stringResource(
                     if (pinned) R.string.provider_unset_favorite else R.string.provider_set_favorite,
                 ),
-                tint = if (pinned) Color(0xFFFFCC00)
+                tint = if (pinned) cili(0xFFFFCC00)
                 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
             )
         }

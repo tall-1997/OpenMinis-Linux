@@ -1,0 +1,1 @@
+{"name":"call_log_list","desc":"[感知] 通话记录读取(calllog.db只读直查,JSON输出,按时间倒序)","params":"limit:integer:返回条数默认20最大200,offset:integer:偏移默认0","required":"","timeoutMs":30000,"cmd":"sh /data/lemonbrain/scripts/perception.sh call_log_list $limit $offset"}

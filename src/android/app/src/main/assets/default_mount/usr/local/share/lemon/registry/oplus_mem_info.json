@@ -1,0 +1,1 @@
+{"name":"oplus_mem_info","desc":"OPPO内存管理私有节点","params":"","required":"","timeoutMs":15000,"cmd":"ls /proc/oplus_mem/ 2>/dev/null; for f in /proc/oplus_mem/*; do [ -f \"$f\" ] && { echo -n \"$(basename $f)=\"; cat $f 2>/dev/null; }; done | head -40"}

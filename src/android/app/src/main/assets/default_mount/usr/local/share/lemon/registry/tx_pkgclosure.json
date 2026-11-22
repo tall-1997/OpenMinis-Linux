@@ -1,0 +1,1 @@
+{"name":"tx_pkgclosure","cat":"Termux","desc":"[Termux] 依赖闭包求解（只算不装，看体积）","params":"pkgs:string:包名空格分隔","required":"pkgs","timeoutMs":180000,"cmd":"TX_SUB=closure TX_ARG=$pkgs sh /data/adb/lemon_kernel/lemon/tx/tx.sh pkg"}

@@ -11,6 +11,7 @@ import java.io.File
 import java.io.IOException
 import com.openminis.app.util.Digest
 import com.openminis.app.util.IsoTime
+import com.openminis.app.util.SecretMasking
 
 /**
  * Manages the memory directory (`minis-global/memory/`).
@@ -23,6 +24,13 @@ import com.openminis.app.util.IsoTime
  */
 class MemoryRepository(
     private val memoryDir: File,
+    /** [T-memory-shared-promotion] App-wide mirror: host writes are copied here
+     *  so a NEW chat's prompt can see what earlier chats learned. Null keeps
+     *  the old per-session behaviour (used by tests and non-chat callers).
+     *  Position matters: it MUST sit before [clock] so the many
+     *  `MemoryRepository(dir) { time }` trailing-lambda call sites keep
+     *  binding the lambda to the clock. */
+    private val sharedDir: File? = null,
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
 
@@ -71,6 +79,13 @@ class MemoryRepository(
         private const val TAG = "MemoryRepository"
         internal const val GLOBAL_FILE = "GLOBAL.md"
         private const val HASH_CAP_BYTES = 256 * 1024
+
+        /** Cross-instance lock: every session has its own repository, but all
+         *  of them append to the same shared day file. */
+        val SHARED_LOCK = Any()
+
+        /** Per-day mirror ceiling (256 KB ≈ 2.5K typical entries). */
+        const val MAX_SHARED_DAILY_BYTES = 256 * 1024L
 
         /**
          * [T-global-md-seed] Default GLOBAL.md content for first-run seeding.
@@ -127,15 +142,15 @@ class MemoryRepository(
         }
         // [T-memory-prompt-budget] Tiered per-day verbatim caps for daily-log
         // injection: today gets MAX_INJECT_LINES, older days in the window
-        // get MAX_INJECT_LINES_OLDER. 50 + 6*15 lines is roughly 15-17K chars
+        // get MAX_INJECT_LINES_OLDER. 120 + 6*40 lines is roughly 36-40K chars
         // at the ~100 chars/line measured on real logs, sized so the whole
         // 7-day window fits inside MemoryPromptBudget.DEFAULT_BUDGET_CHARS
         // next to the standing fragments. The old single 200-line cap (an
         // iOS mirror) let three files alone ask for ~60K, so the budget
         // silently truncated the block — the real cause of "the model only
         // remembers two days".
-        internal const val MAX_INJECT_LINES = 50
-        internal const val MAX_INJECT_LINES_OLDER = 15
+        internal const val MAX_INJECT_LINES = 120
+        internal const val MAX_INJECT_LINES_OLDER = 40
         // memory_get full-dump (no keywords): cap at 500 lines — matches iOS
         // `maxTotalLines = 500` in AIChatViewModel+MemoryTools.swift.
         private const val MAX_DUMP_LINES = 500
@@ -144,7 +159,7 @@ class MemoryRepository(
         // is line-based with ±2 context windows, so we keep the same algorithm
         // and align on the 60 magnitude as the line budget.
         private const val MAX_SEARCH_LINES = 60
-        internal const val MAX_LOOKBACK_DAYS = 30
+        internal const val MAX_LOOKBACK_DAYS = 60
         // [P5] Verbatim daily window: 7 days (was 3). Days the budget cannot
         // admit drop to a MemoryIndex table-of-contents row instead of
         // vanishing — see MemoryAssembly for the two-pass guarantee.
@@ -183,7 +198,7 @@ class MemoryRepository(
         // 配额拒绝——若配额只站在工具路径上，改用 shell/file_edit 写同一个
         // bind 目录即可绕过，那恰好是本防护声称要拦的场景。
         private val MAX_ENTRY_BYTES = 8 * 1024      // 8 KB UTF-8
-        const val MAX_DAILY_ENTRIES = 30
+        const val MAX_DAILY_ENTRIES = 100
 
         /** writeMemory 的落盘格式：行首时间戳标记 + 正文 + 空行。行首锚定计数，
          *  正文里出现同形字符串不会被误计为一条记忆。 */
@@ -246,9 +261,36 @@ class MemoryRepository(
         pin: Boolean = false,
     ): String {
         if (ttlDays != null && (!autoArchive || ttlDays !in 1..MemoryLifecycle.MAX_TTL_DAYS)) return "Error: Invalid ttl_days"
-        return writeEntry(content, expectedRevision, origin, ttlDays, autoArchive, pin,
+        val result = writeEntry(content, expectedRevision, origin, ttlDays, autoArchive, pin,
             initialHeader = MemoryMetadataParser.frontmatterFor(type = "daily"),
         )
+        if (result.startsWith("Memory saved")) mirrorToShared(content)
+        return result
+    }
+
+    /** [T-memory-shared-promotion] Best-effort copy into minis-global/memory.
+     *  Never throws into the diary transaction: a failed mirror must not lose
+     *  the session copy that already landed. Dedup is byte-exact on the body.
+     *  Secrets are masked here too — the shared file is readable by every
+     *  chat's prompt, so it must never carry a credential the session copy
+     *  was allowed to keep. Growth is capped per day file: a runaway
+     *  memory_write loop must not fill the app's data partition. */
+    private fun mirrorToShared(content: String) {
+        val dir = sharedDir ?: return
+        val masked = SecretMasking.mask(content.trim())
+        if (masked.isEmpty()) return
+        runCatching {
+            synchronized(SHARED_LOCK) {
+                dir.mkdirs()
+                val now = clock()
+                val file = File(dir, "${IsoTime.formatLocalDate(now)}.md")
+                if (file.isFile && file.length() > MAX_SHARED_DAILY_BYTES) return@synchronized
+                val existing = if (file.isFile) file.readText() else ""
+                if (existing.contains(masked)) return@synchronized
+                val header = if (existing.isBlank()) "---\ntype: daily\n---\n" else ""
+                file.appendText(header + "<!-- ${IsoTime.formatLocalSeconds(now)} -->\n" + masked + "\n\n")
+            }
+        }
     }
 
     private fun writeEntry(

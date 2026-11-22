@@ -1,0 +1,1 @@
+{"name":"mt_dex_classes","cat":"MT底座","desc":"[MT底座] DEX 类清单（pkg 前缀过滤，如 bin/mt）","params":"path,pkg","required":"path","timeoutMs":60000,"cmd":"MT_ENG=dex MT_CMD=classes MT_PATH=$path MT_KW=$pkg sh /data/adb/lemon_kernel/lemon/mt/mt.sh"}

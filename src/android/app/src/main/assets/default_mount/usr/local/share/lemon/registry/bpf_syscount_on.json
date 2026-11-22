@@ -1,0 +1,1 @@
+{"name":"bpf_syscount_on","cat":"eBPF","desc":"[eBPF] 装载并挂载内核态系统调用计数器(raw tracepoint sys_enter)","params":"","timeoutMs":30000,"cmd":"/data/adb/lemonbpf/lemonbpf start syscount 2>&1"}

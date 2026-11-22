@@ -1,0 +1,1 @@
+{"name": "homeostasis", "cat": "自主神经", "desc": "[自主神经] 稳态监测：load/内存/磁盘/温度+阈值告警(ok/warn/critical)", "params": "", "required": "", "timeoutMs": 20000, "cmd": "/system/bin/timeout 18 /data/data/com.termux/files/usr/bin/python3 /data/lemonbrain/autonomic/homeostasis.py"}

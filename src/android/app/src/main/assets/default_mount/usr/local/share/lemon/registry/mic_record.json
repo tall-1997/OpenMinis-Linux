@@ -1,0 +1,1 @@
+{"name":"mic_record","desc":"[感知] 录音指定秒数存设备本地(Termux:API,默认5秒最长120秒,返回路径)","params":"seconds:integer:录音秒数默认5最长120,out:string:输出路径可选默认toolout目录","required":"","timeoutMs":180000,"cmd":"sh /data/lemonbrain/scripts/perception.sh mic_record $seconds $out"}

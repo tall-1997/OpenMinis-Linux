@@ -1,0 +1,1 @@
+{"name": "mem_curate", "cat": "自主神经", "desc": "[自主神经] 记忆策展：标题相似度查重复候选+分库统计；L2只提议不自动改记忆", "params": "thresh:string:相似度阈值,默认0.6", "required": "", "timeoutMs": 65000, "cmd": "th=0.6; [ x$thresh != x ] && th=$thresh; /system/bin/timeout 60 /data/data/com.termux/files/usr/bin/python3 /data/lemonbrain/autonomic/mem_curate.py $th"}

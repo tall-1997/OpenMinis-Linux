@@ -6,6 +6,7 @@ import com.openminis.app.data.model.AgentToolParam
 import com.openminis.app.goal.GoalCompletionVerifier
 import com.openminis.app.goal.GoalContinuation
 import com.openminis.app.goal.GoalManager
+import com.openminis.app.goal.TaskCheckpointStore
 import org.json.JSONObject
 
 object GoalTool {
@@ -32,7 +33,9 @@ object GoalTool {
             "op=clear DELETES the Goal (any status except paused) — use it when the task it described is " +
             "over or has been replaced and you are about to record a different objective; a Goal the human " +
             "paused is refused on purpose, report the conflict instead of forcing it. " +
-            "op=complete and op=blocked report outcome. op=complete is VERIFIED by the " +
+            "op=complete and op=blocked report outcome. op=rollback restores the newest checkpoint " +
+            "(written before each drift check) and is the right move when a drift check says drifting. " +
+            "op=complete is VERIFIED by the " +
             "host: while the plan board still has pending or failed steps the completion is " +
             "rejected and the Goal stays active — the tool result tells you what the board " +
             "still owes. After repeated rejections the host accepts the call and records its " +
@@ -46,7 +49,7 @@ object GoalTool {
             "op" to AgentToolParam(
                 "string",
                 "Operation",
-                enumValues = listOf("get", "create", "complete", "blocked", "clear"),
+                enumValues = listOf("get", "create", "contract", "complete", "blocked", "clear", "rollback"),
             ),
             "objective" to AgentToolParam(
                 "string",
@@ -57,9 +60,12 @@ object GoalTool {
             ),
             "token_budget" to AgentToolParam("integer", "Optional positive token budget for op=create."),
             "condition" to AgentToolParam("string", "Specific unmet condition when op=blocked; repeated identical reports are counted."),
+            "acceptance" to AgentToolParam("string", "op=contract: judgement-ready acceptance criteria, one sentence."),
+            "constraints" to AgentToolParam("string", "op=contract: hard constraints / forbidden moves for this task."),
+            "next_step" to AgentToolParam("string", "op=contract: the single next action the agent commits to."),
         ),
         required = listOf("op"),
-        propertyOrdering = listOf("tool_title", "op", "objective", "token_budget", "condition"),
+        propertyOrdering = listOf("tool_title", "op", "objective", "token_budget", "condition", "acceptance", "constraints", "next_step"),
     )
 
     /**
@@ -84,6 +90,15 @@ object GoalTool {
         return try {
             val args = JSONObject(argsJson)
             val op = args.optString("op")
+            if (op == "rollback") {
+                val restored = TaskCheckpointStore.restoreLatest(context, sessionId)
+                val title = args.optString("tool_title", "Goal")
+                return if (restored > 0) {
+                    ToolExecutionResult("Rolled back to the newest checkpoint ($restored plan items restored).", true, toolTitle = title)
+                } else {
+                    ToolExecutionResult("No checkpoint to roll back to yet.", false, toolTitle = title)
+                }
+            }
             if (op == "clear") {
                 // [T-goal-tool-clear] Deletion has no state to render afterwards,
                 // so it returns its own result instead of the shared render path.
@@ -99,6 +114,35 @@ object GoalTool {
                         toolTitle = title,
                     )
                 }
+            }
+            if (op == "contract") {
+                // Read-only pre-check for the error path only. The keep-old
+                // resolution happens INSIDE the manager's session lock
+                // (updateContract), so a concurrent contract write between
+                // this read and the update cannot be clobbered by a stale
+                // snapshot (the old pick(current) TOCTOU).
+                if (manager.get(sessionId) == null) {
+                    return ToolExecutionResult(
+                        "Goal error: no Goal exists for this session — create one before attaching a contract",
+                        false,
+                        toolTitle = args.optString("tool_title", "Goal"),
+                    )
+                }
+                // Only keys PRESENT in this call are forwarded; omitted keys
+                // arrive as null and the manager keeps the stored value.
+                fun provided(key: String): String? =
+                    if (args.has(key)) args.optString(key).trim().takeIf { it.isNotEmpty() } else null
+                val updated = manager.updateContract(
+                    sessionId,
+                    acceptance = provided("acceptance"),
+                    constraints = provided("constraints"),
+                    nextStep = provided("next_step"),
+                ) ?: manager.get(sessionId)
+                return ToolExecutionResult(
+                    manager.render(updated),
+                    true,
+                    toolTitle = args.optString("tool_title", "Goal"),
+                )
             }
             val goal = when (op) {
                 "get" -> manager.get(sessionId)

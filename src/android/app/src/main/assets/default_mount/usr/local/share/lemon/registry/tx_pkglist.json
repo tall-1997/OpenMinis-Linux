@@ -1,0 +1,1 @@
+{"name":"tx_pkglist","cat":"Termux","desc":"[Termux] 列出已安装包与版本","params":"","required":"","timeoutMs":120000,"cmd":"TX_SUB=installed TX_T=100 sh /data/adb/lemon_kernel/lemon/tx/tx.sh pkg"}

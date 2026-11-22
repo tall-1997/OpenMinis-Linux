@@ -1,0 +1,1 @@
+{"name":"pkg_freeze","desc":"冻结应用(pm suspend)","params":"pkg:string:包名","required":"pkg","timeoutMs":20000,"cmd":"pm suspend --user 0 $pkg 2>&1; pm list packages --suspended 2>/dev/null | grep -i -- $pkg"}

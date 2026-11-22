@@ -1,0 +1,1 @@
+{"name":"fs_file_info","desc":"查看文件详细信息(stat/ls -l)","params":"path:string:路径","required":"path","timeoutMs":15000,"cmd":"stat $path 2>&1; echo '--- ls ---'; ls -la $path 2>&1 | head -30"}

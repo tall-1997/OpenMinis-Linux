@@ -1,0 +1,1 @@
+{"name":"svc_wifi","desc":"控制WiFi(svc wifi enable/disable)","params":"action:string:enable|disable","required":"action","timeoutMs":15000,"cmd":"svc wifi $action 2>&1"}

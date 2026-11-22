@@ -1,0 +1,1 @@
+{"name":"clip_has","desc":"判断剪贴板是否有文本","params":"","required":"","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh clip_has CLASSPATH=/data/adb/lemon_kernel/lemon/clip/clip.dex /system/bin/app_process64 /system/bin clip.ClipAll has"}

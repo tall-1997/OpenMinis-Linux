@@ -1,0 +1,1 @@
+{"name":"xb_stop","desc":"[X浏览器] 强制停止","params":"","required":"","timeoutMs":15000,"cmd":"am force-stop com.mmbox.xbrowser 2>&1; echo stopped"}

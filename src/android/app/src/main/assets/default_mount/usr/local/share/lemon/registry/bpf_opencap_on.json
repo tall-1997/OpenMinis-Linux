@@ -1,0 +1,1 @@
+{"name":"bpf_opencap_on","cat":"eBPF","desc":"[eBPF] 装载内核态 openat 捕获程序(内核里读参数)","params":"","timeoutMs":30000,"cmd":"/data/adb/lemonbpf/lemonbpf start opencap 2>&1"}

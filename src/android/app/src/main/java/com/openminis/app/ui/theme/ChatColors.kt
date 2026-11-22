@@ -163,3 +163,46 @@ val ChatColors: ChatPalette
     @Composable
     @ReadOnlyComposable
     get() = LocalChatPalette.current
+
+
+// [T-cili-skin] 小黄鱼 charcoal-pink palette — the 2.1.12 reskin body, kept
+// verbatim as a THIRD palette. MinisTheme provides it as LocalChatPalette
+// only while dynamic color is OFF and dark mode is ON; dynamic and light
+// modes keep the original palettes above so wallpaper theming is never pink.
+val CiliChatPalette = ChatPalette(
+    isDark = true,
+    background = Color(0xFF0A0609),
+    secondaryBg = Color(0xFF1A1116),
+    inputBg = Color(0xFF1A1116),
+    inputIconBg = Color(0xFF120A0F),
+    inputIconBorder = Color(0x4DFFB3D1),
+    inputBorder = Color(0x26FFB3D1),
+    primaryText = Color(0xFFFFEFF6),
+    secondaryText = Color(0xFFD3BDC9),
+    tertiaryText = Color(0xFFB9A3B0),
+    disabledText = Color(0x59FFEFF6),
+    userBubble = Color(0xFF3A1F2B),
+    toolBg = Color(0xFF1A1116),
+    toolBorder = Color(0x59FFB3D1),
+    toolCapsuleBg = Color(0xFF120A0F),
+    separator = Color(0x14FFFFFF),
+    sendButton = Color(0xFFFFB3D1),
+    sendButtonDisabled = Color(0x26FFB3D1),
+    codeBlockBg = Color(0xFF160C13),
+    codeBlockText = Color(0xFFFFB3D1),
+    inlineCodeBg = Color(0xFF2A1620),
+    inlineCodeText = Color(0xFFFFD9E8),
+    link = Color(0xFFFF7AD9),
+    blockquoteBar = Color(0x80FF7AD9),
+    thinking = Color(0xFFFFB3D1),
+    warningBg = Color(0x1AFFF3C4),
+    warningText = Color(0xFFFFF3C4),
+    tableBorder = Color(0x33FFB3D1),
+    inputShadow = Color(0x80000000),
+    toastBg = Color(0x2EFFB3D1),
+    thumbnailBorder = Color(0x4DFFB3D1),
+    sheetHeaderBg = Color(0xFF1A1116),
+    sheetHeaderBorder = Color(0x33FFB3D1),
+    fabAccent = Color(0xFFFF7AD9),
+    fabOnAccent = Color(0xFF2A0F1A),
+)

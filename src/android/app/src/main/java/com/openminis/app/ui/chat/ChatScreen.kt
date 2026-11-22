@@ -194,6 +194,8 @@ import com.openminis.app.ui.browser.BrowserSheet
 import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.tokens.MinisTypography
+import com.openminis.app.ui.theme.CiliSkin
+
 
 // [T-android-split-chat] Shared color/limit constants, ScrollFollowKey and
 // HistoryEdgeVisible moved verbatim to ChatScreenSections.kt (architecture
@@ -1835,6 +1837,10 @@ fun ChatScreen(
         contentWindowInsets = WindowInsets(0),
         topBar = {
             MinisCenterTopBar(
+                // [T-topbar-full-bleed] The provider/model/thinking row owns
+                // the whole nav->actions gap (back-button right edge to the
+                // overflow menu's left edge) instead of a centered slot.
+                expandTitle = true,
                 title = {
                     ChatTopBarTitle(
                         viewModel = viewModel,
@@ -4896,7 +4902,7 @@ fun ChatScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
 
                         if (showExpandedEditor) {
                             LongTextEditorDialog(
@@ -4921,7 +4927,7 @@ fun ChatScreen(
                             )
                         }
 
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
 
                         // Left: "/" slash command button (iOS: italic /, bold)
                         InputCircleButton(onClick = {
@@ -5428,29 +5434,46 @@ fun ChatScreen(
                             // Streaming with content → Send-into-queue; Idle with content → Send.
                             // Idle without text or attachments → disabled.
                             val canActivate = hasContent
-                            // [T-composer-running-ring] Same constant 46dp
+                            // [T-composer-running-ring] Same constant 43dp
                             // container as the Stop branch so the composer row
                             // height is identical in every state; the ring only
                             // renders while a run is in flight (send-into-queue
-                            // mode), and the 38dp button stays fully tappable.
+                            // mode), and the 35dp button stays fully tappable.
                             Box(
-                                modifier = Modifier.size(46.dp),
+                                modifier = Modifier.size(43.dp),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 if (isStreaming) {
                                     androidx.compose.material3.CircularProgressIndicator(
-                                        modifier = Modifier.size(46.dp),
+                                        modifier = Modifier.size(43.dp),
                                         strokeWidth = 2.dp,
                                         color = ChatColors.sendButton,
                                     )
                                 }
                                 Box(
                                     modifier = Modifier
-                                        .size(38.dp)
-                                        .background(
-                                            if (canActivate) ChatColors.sendButton
-                                            else ChatColors.sendButtonDisabled,
-                                            CircleShape,
+                                        .size(35.dp)
+                                        // [T-cili-skin-gate] 小黄鱼 primary-button gradient
+                                        // (btn_primary_bg: #FFB3D1 -> #FF7AD9), left -> right,
+                                        // only while the skin gate is active; otherwise the
+                                        // original solid iOS sendButton color applies.
+                                        .then(
+                                            when {
+                                                canActivate && CiliSkin.isActive -> Modifier.background(
+                                                    Brush.horizontalGradient(
+                                                        listOf(Color(0xFFFFB3D1), Color(0xFFFF7AD9)),
+                                                    ),
+                                                    CircleShape,
+                                                )
+                                                canActivate -> Modifier.background(
+                                                    ChatColors.sendButton,
+                                                    CircleShape,
+                                                )
+                                                else -> Modifier.background(
+                                                    ChatColors.sendButtonDisabled,
+                                                    CircleShape,
+                                                )
+                                            },
                                         )
                                         .clip(CircleShape)
                                         .clickable(enabled = canActivate) {

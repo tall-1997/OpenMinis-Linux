@@ -1,0 +1,1 @@
+{"name":"dbg_last_boot_reason","desc":"上次启动原因","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/last_boot_reason 2>/dev/null; echo '--- bootloader ---'; cat /proc/bootloader_log 2>/dev/null | head -20"}

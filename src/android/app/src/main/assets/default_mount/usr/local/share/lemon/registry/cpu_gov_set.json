@@ -1,0 +1,1 @@
+{"name":"cpu_gov_set","desc":"设置全部CPU调频策略","params":"gov:string:如performance/powersave/schedutil","required":"gov","timeoutMs":20000,"cmd":"for c in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo $gov > $c 2>/dev/null; done; for c in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do echo -n $c; echo -n '='; cat $c; done"}

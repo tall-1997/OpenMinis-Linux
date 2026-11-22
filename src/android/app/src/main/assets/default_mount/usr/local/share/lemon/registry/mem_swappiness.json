@@ -1,0 +1,1 @@
+{"name":"mem_swappiness","desc":"查看/设置vm.swappiness","params":"val:string:新值0-200,留空则只读","required":"","timeoutMs":15000,"cmd":"[ -n $val ] && echo $val > /proc/sys/vm/swappiness 2>&1; echo -n 'swappiness='; cat /proc/sys/vm/swappiness"}

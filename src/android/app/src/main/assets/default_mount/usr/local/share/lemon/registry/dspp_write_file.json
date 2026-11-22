@@ -1,0 +1,1 @@
+{"name":"dspp_write_file","desc":"[DS++] 写入工作区文件(覆盖, 自动建父目录)","params":"path:string:文件路径|content:string:文件内容","required":"path","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/lemon/dspp/dspp_fs.sh write $path $content"}

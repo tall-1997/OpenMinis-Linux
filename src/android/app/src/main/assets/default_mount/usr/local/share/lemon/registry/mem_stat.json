@@ -1,0 +1,1 @@
+{"name":"mem_stat","cat":"记忆检索","desc":"[记忆检索] 记忆中心索引健康度：各库条数/编号空缺/重号","params":"","timeoutMs":30000,"cmd":"sh $LEMON_DATA/小柠檬记忆中心/_索引/mem.sh stat"}

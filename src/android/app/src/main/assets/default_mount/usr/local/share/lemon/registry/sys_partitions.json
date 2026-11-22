@@ -1,0 +1,1 @@
+{"name":"sys_partitions","desc":"分区表信息(/proc/partitions)","params":"","required":"","timeoutMs":10000,"cmd":"cat /proc/partitions 2>&1"}

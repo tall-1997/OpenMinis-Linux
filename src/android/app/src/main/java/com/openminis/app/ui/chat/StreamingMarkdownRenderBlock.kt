@@ -62,6 +62,8 @@ import com.openminis.app.ui.DisplayBitmapLimits.limitDisplaySize
 import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.tokens.MinisTypography
+import com.openminis.app.ui.theme.cili
+
 
 @Composable
 internal fun RenderBlock(block: MdBlock) {
@@ -176,13 +178,13 @@ internal fun RenderBlock(block: MdBlock) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(16.dp),
                                 strokeWidth = 2.dp,
-                                color = Color(0xFF34C759),
+                                color = cili(0xFF34C759),
                             )
                         } else {
                             Icon(
                                 imageVector = m3Icon(Icons.Default.PlayArrow),
                                 contentDescription = "运行 ${block.language.ifEmpty { "code" }} 代码",
-                                tint = Color(0xFF34C759),
+                                tint = cili(0xFF34C759),
                                 modifier = Modifier
                                     .size(16.dp)
                                     .clickable { codeRunner?.invoke(block.language, block.code) },
@@ -192,7 +194,7 @@ internal fun RenderBlock(block: MdBlock) {
                     Icon(
                         imageVector = if (copied) m3Icon(Icons.Default.Check) else m3Icon(Icons.Default.ContentCopy),
                         contentDescription = if (copied) "已复制" else "复制代码",
-                        tint = if (copied) Color(0xFF34C759) else Color.White.copy(alpha = 0.4f),
+                        tint = if (copied) cili(0xFF34C759) else Color.White.copy(alpha = 0.4f),
                         modifier = Modifier
                             .size(16.dp)
                             .clickable {
@@ -244,11 +246,20 @@ internal fun RenderBlock(block: MdBlock) {
                                         com.openminis.app.ui.markdown.HighlightPalette.Light
                                     }
                                 }
-                                remember(block.code, block.language, palette) {
+                                // [T-cili-gold-pink-highlight] 小黄鱼 skin:
+                                // highlighted code sweeps gold -> pink instead
+                                // of VS Code hues; stock palettes otherwise.
+                                val skinBrush = if (
+                                    com.openminis.app.ui.theme.CiliSkin.isActive
+                                ) {
+                                    com.openminis.app.ui.theme.CiliSkin.goldPinkHighlightBrush()
+                                } else null
+                                remember(block.code, block.language, palette, skinBrush) {
                                     com.openminis.app.ui.markdown.SyntaxHighlighter.highlight(
                                         block.code,
                                         block.language,
                                         palette,
+                                        skinBrush,
                                     )
                                 }
                             }
@@ -273,7 +284,7 @@ internal fun RenderBlock(block: MdBlock) {
             // refuses intrinsic measurement on those. Draw the orange rule
             // directly behind a single Column so layout never queries
             // intrinsics.
-            val barColor = Color(0xFFFF9500)
+            val barColor = cili(0xFFFF9500)
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -523,4 +534,3 @@ internal fun colorizeChatDiff(diff: String) = buildAnnotatedString {
         withStyle(style) { append(line) }
     }
 }
-

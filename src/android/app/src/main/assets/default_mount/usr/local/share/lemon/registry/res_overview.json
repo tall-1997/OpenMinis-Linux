@@ -1,0 +1,1 @@
+{"name":"res_overview","desc":"[资源] 五域总览(占用+顶层结构)","params":"","required":"","timeoutMs":60000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh res_overview sh /data/adb/lemon_kernel/lemon/res/res_all.sh overview"}

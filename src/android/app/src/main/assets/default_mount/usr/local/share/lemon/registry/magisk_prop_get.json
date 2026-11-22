@@ -1,0 +1,1 @@
+{"name":"magisk_prop_get","desc":"[面具] resetprop读属性,key空则列全部","params":"key:string:属性名,可空","required":"","timeoutMs":15000,"cmd":"/data/adb/magisk/magisk resetprop $key 2>&1 | head -80"}

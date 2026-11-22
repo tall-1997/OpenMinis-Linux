@@ -1,0 +1,1 @@
+{"name":"cat_list","desc":"列出九大类及各类工具数量","params":"","required":"","timeoutMs":10000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh cat_list sh /data/adb/lemon_kernel/lemon/cats/cat_search.sh '' ''"}

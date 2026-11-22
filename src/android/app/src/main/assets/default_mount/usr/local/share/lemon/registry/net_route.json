@@ -1,0 +1,1 @@
+{"name":"net_route","desc":"查看全部路由表(ip route table all)","params":"lines:integer:行数,默认80","required":"","timeoutMs":15000,"cmd":"ip route show table all 2>&1 | head -${lines:-80}"}

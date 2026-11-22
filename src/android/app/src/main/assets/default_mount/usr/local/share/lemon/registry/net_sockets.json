@@ -1,0 +1,1 @@
+{"name":"net_sockets","desc":"套接字统计(/proc/net/sockstat)","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/net/sockstat 2>&1; cat /proc/net/sockstat6 2>&1; echo '--- tcp ---'; cat /proc/net/snmp 2>/dev/null | head -10"}

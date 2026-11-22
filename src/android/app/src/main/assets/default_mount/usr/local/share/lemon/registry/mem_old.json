@@ -1,0 +1,1 @@
+{"name":"mem_old","cat":"记忆检索","desc":"[记忆检索] 旧编号 → 新编号映射（260929 编号重排前的编号反查）","params":"o:string:旧编号数字，如 229","timeoutMs":30000,"cmd":"sh $LEMON_DATA/小柠檬记忆中心/_索引/mem.sh old $o"}

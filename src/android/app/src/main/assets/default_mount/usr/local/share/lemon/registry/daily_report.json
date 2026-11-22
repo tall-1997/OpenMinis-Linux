@@ -1,0 +1,1 @@
+{"name": "daily_report", "cat": "自主神经", "desc": "[自主神经] 自主神经日报：聚合链路/稳态/工具异常/待复习；md=1输出markdown", "params": "md:string:1=输出markdown", "required": "", "timeoutMs": 45000, "cmd": "m=; [ x$md = x1 ] && m=--md; /system/bin/timeout 40 /data/data/com.termux/files/usr/bin/python3 /data/lemonbrain/autonomic/daily_report.py $m"}

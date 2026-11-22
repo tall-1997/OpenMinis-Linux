@@ -1,0 +1,1 @@
+{"name":"bpf_dump","cat":"eBPF","desc":"[eBPF] 读内核 BPF map：syscount=系统调用计数 / opencap=打开记录 / pidcount=按进程 / execmon=execve / killmon=kill","params":"which:string:syscount|opencap|n:string:条数","timeoutMs":30000,"cmd":"/data/adb/lemonbpf/lemonbpf dump $which $n 2>&1"}

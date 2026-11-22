@@ -1,0 +1,1 @@
+{"name":"algo_list_log_databases","cat":"算法助手","desc":"[算法助手] 列出算法助手日志数据库","params":"","required":"","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/lemon/algo_call.sh list_log_databases "}

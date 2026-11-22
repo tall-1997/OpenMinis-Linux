@@ -1,0 +1,1 @@
+{"name": "yzt_dialect", "cat": "宇宙桥", "desc": "[宇宙桥] 方言翻译(voicedic): lang=方言名(如闽南话) text=文本; 接口活着但language取值格式若报错需抓包宇宙工具箱确认", "params": "lang,text", "required": "lang", "timeoutMs": 40000, "cmd": "sh /data/lemonbrain/bin/yzt.sh dialect $lang $text"}

@@ -1,0 +1,1 @@
+{"name":"perm_audit","cat":"安全审计","desc":"[安全审计] 权限审计：列出持有敏感权限(定位/相机/麦克风/短信/通话等)的应用","params":"n:string:扫描应用数(默认40)","timeoutMs":120000,"cmd":"/system/bin/timeout 110 sh /data/adb/lemon_kernel/lemonlib/lemon_audit.sh perm $n"}

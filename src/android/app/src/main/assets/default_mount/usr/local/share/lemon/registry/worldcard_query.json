@@ -1,0 +1,1 @@
+{"name":"worldcard_query","cat":"世界卡","timeoutMs":20000,"desc":"[世界卡] 关键词查攻防词条(382条, keys匹配, 返回前5含正文截断)","params":"keywords:string:关键词(空格分隔多个)","cmd":"/data/data/com.termux/files/usr/bin/python3 /data/adb/lemon_kernel/lemon/worldcard/worldcard.py query $keywords","required":""}

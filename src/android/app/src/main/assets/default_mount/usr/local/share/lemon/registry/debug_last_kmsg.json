@@ -1,0 +1,1 @@
+{"name":"debug_last_kmsg","desc":"上次关机前内核日志(pstore/console-ramoops)","params":"lines:integer:行数,默认80","required":"","timeoutMs":20000,"cmd":"cat /sys/fs/pstore/console-ramoops-0 2>/dev/null | tail -${lines:-80} || cat /proc/last_kmsg 2>/dev/null | tail -${lines:-80} || echo 'no last_kmsg'"}

@@ -1,0 +1,1 @@
+{"name":"thermal_get","desc":"读取指定温控区类型/温度/策略","params":"zone:string:如thermal_zone0","required":"zone","timeoutMs":15000,"cmd":"echo -n 'type='; cat /sys/class/thermal/$zone/type 2>/dev/null; echo -n 'temp='; cat /sys/class/thermal/$zone/temp 2>/dev/null; echo -n 'policy='; cat /sys/class/thermal/$zone/policy 2>/dev/null"}

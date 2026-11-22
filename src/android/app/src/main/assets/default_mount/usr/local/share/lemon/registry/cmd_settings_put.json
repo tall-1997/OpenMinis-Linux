@@ -1,0 +1,1 @@
+{"name":"cmd_settings_put","desc":"写入系统设置(settings put)","params":"ns:string:命名空间如system/secure/global|key:string:键名|val:string:值","required":"ns,key,val","timeoutMs":15000,"cmd":"settings put $ns $key $val 2>&1; echo -n 'now='; settings get $ns $key 2>&1"}

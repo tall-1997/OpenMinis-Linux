@@ -1,0 +1,1 @@
+{"name":"tx_ninja","cat":"Termux","desc":"[Termux] ninja增量构建","params":"dir:string:构建目录,flags:string:ninja参数如 -v -j4","required":"dir","timeoutMs":600000,"cmd":"TX_DIR=$dir TX_FLAGS=$flags sh /data/adb/lemon_kernel/lemon/tx/tx.sh ninja"}

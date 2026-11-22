@@ -1,0 +1,1 @@
+{"name":"kmsg_dump","desc":"读取内核日志(/dev/kmsg)","params":"lines:integer:行数,默认80","required":"","timeoutMs":20000,"cmd":"cat /dev/kmsg 2>/dev/null | head -${lines:-80}"}

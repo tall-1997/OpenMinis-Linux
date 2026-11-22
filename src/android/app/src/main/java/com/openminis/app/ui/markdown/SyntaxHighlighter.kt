@@ -2,6 +2,7 @@ package com.openminis.app.ui.markdown
 
 import com.openminis.app.text.BoundedText
 
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -73,13 +74,34 @@ object SyntaxHighlighter {
     fun highlight(code: String, language: String): AnnotatedString =
         highlight(code, language, HighlightPalette.Dark)
 
+    /**
+     * [T-cili-gold-pink-highlight] 小黄鱼 skin path: every token paints with
+     * the SAME gold-pink gradient brush [skinBrush] (deep gold -> pink, coordinates
+     * relative to the whole Text layout so the sweep reads as one continuous
+     * gradient across the block). Syntax tiers survive as per-role ALPHA on
+     * the shared brush — comments fade to ~80%, strings to ~95%, everything
+     * else stays solid — instead of separate hues that would fight the skin.
+     * [T-cili-highlight-deeper] user: 对话内容高亮部分必须颜色加深 — all tier
+     * alphas raised (0.55→0.80 comments, 0.85→0.95 strings, 0.90/0.95→1.0
+     * numbers/body) AND the brush itself re-based to deeper stops, so every
+     * token reads clearly against dark code backgrounds.
+     * `skinBrush == null` keeps the stock palette untouched.
+     */
     fun highlight(
         code: String,
         language: String,
         palette: HighlightPalette,
+        skinBrush: Brush? = null,
     ): AnnotatedString = buildAnnotatedString {
+        val plain = { color: Color -> SpanStyle(color = color) }
+        val faded = { alpha: Float ->
+            if (skinBrush != null) {
+                SpanStyle(brush = skinBrush, alpha = alpha)
+            } else null
+        }
+        fun tier(color: Color, alpha: Float = 1f): SpanStyle = faded(alpha) ?: plain(color)
         if (language.isEmpty()) {
-            pushStyle(SpanStyle(color = palette.default))
+            pushStyle(tier(palette.default))
             append(code)
             pop()
             return@buildAnnotatedString
@@ -96,17 +118,17 @@ object SyntaxHighlighter {
 
             when {
                 comment != null -> {
-                    pushStyle(SpanStyle(color = palette.comment))
+                    pushStyle(tier(palette.comment, alpha = 0.80f))
                     append(comment)
                     pop()
                 }
                 string != null -> {
-                    pushStyle(SpanStyle(color = palette.string))
+                    pushStyle(tier(palette.string, alpha = 0.95f))
                     append(string)
                     pop()
                 }
                 number != null -> {
-                    pushStyle(SpanStyle(color = palette.number))
+                    pushStyle(tier(palette.number, alpha = 1f))
                     append(number)
                     pop()
                 }
@@ -117,19 +139,19 @@ object SyntaxHighlighter {
                         word.first().isUpperCase() -> palette.type
                         else -> palette.default
                     }
-                    pushStyle(SpanStyle(color = color))
+                    pushStyle(tier(color, alpha = 1f))
                     append(word)
                     pop()
                 }
                 other != null -> {
-                    pushStyle(SpanStyle(color = palette.default))
+                    pushStyle(tier(palette.default, alpha = 1f))
                     append(other)
                     pop()
                 }
             }
         }
         if (code.length > BoundedText.MAX_ICU_INPUT_CHARS) {
-            pushStyle(SpanStyle(color = palette.default))
+            pushStyle(tier(palette.default))
             append(code.substring(BoundedText.MAX_ICU_INPUT_CHARS))
             pop()
         }

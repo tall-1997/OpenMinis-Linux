@@ -1,0 +1,1 @@
+{"name":"magisk_prop_set","desc":"[面具] resetprop写属性(可选-n绕过service)","params":"key:string:属性名|value:string:值|flag:string:可空,-n则绕过","required":"key,value","timeoutMs":15000,"cmd":"M=/data/adb/magisk/magisk; $M resetprop $flag $key $value 2>&1; echo SET $key=$value; $M resetprop $key 2>&1"}

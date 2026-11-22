@@ -1,0 +1,1 @@
+{"name":"debug_proc_fd","desc":"列出进程打开的文件描述符","params":"pid:string:进程ID","required":"pid","timeoutMs":15000,"cmd":"ls -l /proc/$pid/fd 2>&1 | head -60"}

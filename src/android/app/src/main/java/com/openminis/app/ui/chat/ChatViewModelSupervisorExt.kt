@@ -391,7 +391,7 @@ private suspend fun ChatViewModel.runSupervisorSession(
     }
 
     supervisorNotice("Supervisor session started — objective: $objective")
-    val receiptNotice = pendingToolReceiptNotice(sessionId)
+    val receiptNotice = toolReceiptNotice(sessionId, receiptScope)
     if (receiptNotice != null) supervisorNotice(receiptNotice)
 
     // An interrupted round uses the same ordinal after recovery. Only the

@@ -1,0 +1,1 @@
+{"name":"termux_pkg","desc":"查询Termux已安装deb包","params":"filter:string:过滤关键字(可空)","required":"","timeoutMs":30000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termux_pkg export PREFIX=/data/data/com.termux/files/usr; export PATH=$PREFIX/bin:/system/bin; export LD_LIBRARY_PATH=$PREFIX/lib; f=$filter; if [ -z \"$f\" ]; then dpkg -l; else dpkg -l | grep -i \"$f\"; fi"}

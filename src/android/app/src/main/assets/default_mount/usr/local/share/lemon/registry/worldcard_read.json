@@ -1,0 +1,1 @@
+{"name":"worldcard_read","cat":"世界卡","timeoutMs":20000,"desc":"[世界卡] 按id读词条全文(超长自动#418分流落盘)","params":"id:integer:词条id","cmd":"/data/data/com.termux/files/usr/bin/python3 /data/adb/lemon_kernel/lemon/worldcard/worldcard.py read $id","required":""}

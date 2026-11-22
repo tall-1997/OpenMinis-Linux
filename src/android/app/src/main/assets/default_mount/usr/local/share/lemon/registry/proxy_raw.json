@@ -1,0 +1,1 @@
+{"name":"proxy_raw","cat":"LLM代理","desc":"[LLM代理] 转发到上游并返回原始 JSON 响应(排查用)","params":"text:string:用户输入内容","required":"text","timeoutMs":130000,"cmd":"sh /data/adb/lemon_kernel/lemon/proxy/llm_proxy.sh raw $text"}

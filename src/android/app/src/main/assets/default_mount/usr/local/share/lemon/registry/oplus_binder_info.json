@@ -1,0 +1,1 @@
+{"name":"oplus_binder_info","desc":"OPPO Binder私有统计","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/oplus_binder 2>/dev/null | head -40; ls /proc/oplus_binder/ 2>/dev/null"}

@@ -1,0 +1,1 @@
+{"name":"policy_status","cat":"柠檬工具","desc":"[柠檬工具] 统一策略中心：策略定义 vs 实际状态 一屏对照（fslock/eBPF/khook/guard）","params":"","timeoutMs":40000,"cmd":"sh /data/adb/lemon_kernel/lemonlib/policy.sh status"}

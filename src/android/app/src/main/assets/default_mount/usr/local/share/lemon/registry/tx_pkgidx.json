@@ -1,0 +1,1 @@
+{"name":"tx_pkgidx","cat":"Termux","desc":"[Termux] 刷新离线包索引（清华镜像）","params":"","required":"","timeoutMs":300000,"cmd":"TX_SUB=refresh TX_T=280 sh /data/adb/lemon_kernel/lemon/tx/tx.sh pkg"}

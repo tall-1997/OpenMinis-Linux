@@ -1,0 +1,1 @@
+{"name":"selinux_status","desc":"SELinux状态/策略版本/selinuxfs概览","params":"","required":"","timeoutMs":15000,"cmd":"echo -n 'Enforce: '; getenforce; echo -n 'policyvers: '; cat /sys/fs/selinux/policyvers 2>/dev/null; echo '--- selinuxfs ---'; ls /sys/fs/selinux/ 2>/dev/null | head -30"}

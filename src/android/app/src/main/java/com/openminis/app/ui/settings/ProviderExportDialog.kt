@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
+import com.openminis.app.ui.components.MinisGradientSwitch
 
 /**
  * [#24 provider-transfer] Confirmation dialog for the batch provider export.
@@ -63,7 +64,7 @@ internal fun ProviderExportDialog(
                         modifier = Modifier.weight(1f),
                     )
                     Spacer(Modifier.width(12.dp))
-                    Switch(checked = includeKeys, onCheckedChange = { includeKeys = it })
+                    MinisGradientSwitch(checked = includeKeys, onCheckedChange = { includeKeys = it })
                 }
                 if (includeKeys) {
                     Spacer(Modifier.height(8.dp))

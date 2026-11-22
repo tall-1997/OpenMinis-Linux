@@ -1,0 +1,1 @@
+{"name":"tx_pkginstall","cat":"Termux","desc":"[Termux] 下载并安装deb（自动依赖+归还属主）","params":"pkgs:string:包名空格分隔","required":"pkgs","timeoutMs":1800000,"cmd":"TX_SUB=install TX_ARG=$pkgs TX_T=1780 sh /data/adb/lemon_kernel/lemon/tx/tx.sh pkg"}

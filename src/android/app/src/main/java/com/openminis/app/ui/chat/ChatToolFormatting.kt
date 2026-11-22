@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.ui.graphics.Color
 import com.openminis.app.util.IsoTime
+import com.openminis.app.ui.theme.cili
 
 // [T-android-split-chat] Pure tool-label / duration / timestamp formatting
 // helpers extracted verbatim from ChatScreen.kt. `internal` so the rest of the
@@ -53,40 +54,40 @@ internal fun formatStepTimestamp(epochMs: Long): String =
 // consistent: file tools cyan/blue, agent tools indigo, web tools blue,
 // image tools purple, memory/goal pink, interactive prompts blue.
 internal fun toolAccentColor(toolName: String): Color = when (toolName) {
-    "shell_execute", "shell_exec", "agent_terminal" -> RawColors.systemGreen.asColor
-    "file_read" -> RawColors.systemTeal.asColor
-    "file_write" -> RawColors.systemBlue.asColor
-    "file_edit", "multi_edit" -> RawColors.systemOrange.asColor
-    "file_checkpoint" -> RawColors.systemGray.asColor
-    "browser_use" -> RawColors.systemBlue.asColor
-    "read_image", "ocr_image" -> RawColors.systemPurpleAlt.asColor
-    "memory_write", "memory_get" -> RawColors.systemPink.asColor
-    "web_search" -> RawColors.systemTeal.asColor    // iOS: .cyan for search
-    "web_fetch" -> RawColors.systemBlue.asColor
-    "grep", "grep_source" -> RawColors.systemCyan.asColor
-    "glob", "list_dir" -> RawColors.systemTeal.asColor
-    "code_graph" -> RawColors.systemPurple.asColor
-    "search_sessions", "read_session" -> RawColors.systemCyan.asColor
-    "spawn_agent", "run_subagent", "dispatch_agents", "wolfpack_run", "check_agent" -> RawColors.systemPurple.asColor
-    "agent_plan" -> RawColors.systemPurple.asColor
-    "agent_report" -> RawColors.systemTealAlt.asColor
-    "update_goal" -> RawColors.systemPink.asColor
-    "evolution" -> RawColors.systemPurpleAlt.asColor
-    "ask_user_question" -> RawColors.systemBlue.asColor
-    "ask_reasoning" -> RawColors.systemOrange.asColor
-    "execute_code" -> RawColors.systemPurple.asColor
-    "su_exec" -> RawColors.systemOrange.asColor
-    "ssh_exec", "env_exec" -> RawColors.systemTeal.asColor
-    "ui_read", "ui_action" -> RawColors.systemCyan.asColor
-    "invoke_skill", "ui_skill", "skill_manage" -> RawColors.systemBlue.asColor
-    "cronjob" -> RawColors.systemOrange.asColor
-    "background_job" -> RawColors.systemCyan.asColor
-    "get_screen_time" -> RawColors.systemCyan.asColor
-    "present_file", "deliverable" -> RawColors.systemGreenAlt.asColor     // deliverable green
+    "shell_execute", "shell_exec", "agent_terminal" -> cili(RawColors.systemGreen)
+    "file_read" -> cili(RawColors.systemTeal)
+    "file_write" -> cili(RawColors.systemBlue)
+    "file_edit", "multi_edit" -> cili(RawColors.systemOrange)
+    "file_checkpoint" -> cili(RawColors.systemGray)
+    "browser_use" -> cili(RawColors.systemBlue)
+    "read_image", "ocr_image" -> cili(RawColors.systemPurpleAlt)
+    "memory_write", "memory_get" -> cili(RawColors.systemPink)
+    "web_search" -> cili(RawColors.systemTeal)    // iOS: .cyan for search
+    "web_fetch" -> cili(RawColors.systemBlue)
+    "grep", "grep_source" -> cili(RawColors.systemCyan)
+    "glob", "list_dir" -> cili(RawColors.systemTeal)
+    "code_graph" -> cili(RawColors.systemPurple)
+    "search_sessions", "read_session" -> cili(RawColors.systemCyan)
+    "spawn_agent", "run_subagent", "dispatch_agents", "wolfpack_run", "check_agent" -> cili(RawColors.systemPurple)
+    "agent_plan" -> cili(RawColors.systemPurple)
+    "agent_report" -> cili(RawColors.systemTealAlt)
+    "update_goal" -> cili(RawColors.systemPink)
+    "evolution" -> cili(RawColors.systemPurpleAlt)
+    "ask_user_question" -> cili(RawColors.systemBlue)
+    "ask_reasoning" -> cili(RawColors.systemOrange)
+    "execute_code" -> cili(RawColors.systemPurple)
+    "su_exec" -> cili(RawColors.systemOrange)
+    "ssh_exec", "env_exec" -> cili(RawColors.systemTeal)
+    "ui_read", "ui_action" -> cili(RawColors.systemCyan)
+    "invoke_skill", "ui_skill", "skill_manage" -> cili(RawColors.systemBlue)
+    "cronjob" -> cili(RawColors.systemOrange)
+    "background_job" -> cili(RawColors.systemCyan)
+    "get_screen_time" -> cili(RawColors.systemCyan)
+    "present_file", "deliverable" -> cili(RawColors.systemGreenAlt)     // deliverable green
     else -> when {
-        toolName.startsWith("mcp__") -> RawColors.systemPurple.asColor   // server-provided tools
-        toolName.startsWith("online_") -> RawColors.systemBlue.asColor
-        else -> RawColors.systemGray.asColor                            // unknown = neutral gray
+        toolName.startsWith("mcp__") -> cili(RawColors.systemPurple)   // server-provided tools
+        toolName.startsWith("online_") -> cili(RawColors.systemBlue)
+        else -> cili(RawColors.systemGray)                            // unknown = neutral gray
     }
 }
 

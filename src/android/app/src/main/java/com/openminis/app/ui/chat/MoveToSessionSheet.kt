@@ -66,6 +66,8 @@ import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.TimeUnit
 import com.openminis.app.ui.tokens.MinisTypography
+import com.openminis.app.ui.theme.cili
+
 
 /**
  * Bottom sheet listing all chat sessions except the current one. Tapping
@@ -289,21 +291,21 @@ private fun categoryStyle(category: String?): CategoryStyle {
     return when (category?.lowercase()) {
         "code"         -> CategoryStyle(Icons.Outlined.Code, Color(0xFFF09A37))
         "writing"      -> CategoryStyle(Icons.Outlined.Description, Color(0xFF3478F6))
-        "research"     -> CategoryStyle(Icons.Outlined.Language, RawColors.systemTealAlt.asColor)
-        "analysis"     -> CategoryStyle(Icons.Outlined.BarChart, RawColors.systemPurple.asColor)
-        "creative"     -> CategoryStyle(Icons.Outlined.Brush, RawColors.systemPink.asColor)
-        "chat"         -> CategoryStyle(Icons.Outlined.Forum, RawColors.systemGreen.asColor)
+        "research"     -> CategoryStyle(Icons.Outlined.Language, cili(RawColors.systemTealAlt))
+        "analysis"     -> CategoryStyle(Icons.Outlined.BarChart, cili(RawColors.systemPurple))
+        "creative"     -> CategoryStyle(Icons.Outlined.Brush, cili(RawColors.systemPink))
+        "chat"         -> CategoryStyle(Icons.Outlined.Forum, cili(RawColors.systemGreen))
         "math"         -> CategoryStyle(Icons.Outlined.Calculate, Color(0xFF9B59B6))
         "translation"  -> CategoryStyle(Icons.Outlined.Translate, Color(0xFF00BCD4))
-        "health"       -> CategoryStyle(Icons.Outlined.Favorite, RawColors.systemRed.asColor)
+        "health"       -> CategoryStyle(Icons.Outlined.Favorite, cili(RawColors.systemRed))
         "finance"      -> CategoryStyle(Icons.Outlined.Payments, Color(0xFF00C7BE))
         "travel"       -> CategoryStyle(Icons.Outlined.Map, Color(0xFFF09A37))
         "education"    -> CategoryStyle(Icons.Outlined.Book, Color(0xFF3478F6))
-        "design"       -> CategoryStyle(Icons.Outlined.Palette, RawColors.systemPink.asColor)
-        "productivity" -> CategoryStyle(Icons.Outlined.CalendarMonth, RawColors.systemYellow.asColor)
+        "design"       -> CategoryStyle(Icons.Outlined.Palette, cili(RawColors.systemPink))
+        "productivity" -> CategoryStyle(Icons.Outlined.CalendarMonth, cili(RawColors.systemYellow))
         "support"      -> CategoryStyle(Icons.Outlined.Settings, Color(0xFF8B6914))
-        "other"        -> CategoryStyle(Icons.Outlined.GridView, RawColors.systemGray.asColor)
-        else           -> CategoryStyle(Icons.Outlined.Forum, RawColors.systemGray.asColor)
+        "other"        -> CategoryStyle(Icons.Outlined.GridView, cili(RawColors.systemGray))
+        else           -> CategoryStyle(Icons.Outlined.Forum, cili(RawColors.systemGray))
     }
 }
 

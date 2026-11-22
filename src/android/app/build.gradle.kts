@@ -100,7 +100,7 @@ val gitDirty: Boolean = gitOutput(listOf("status", "--porcelain")).isNotEmpty()
  * `minisBaseVersionName` is parsed by `.github/workflows/android-apk.yml`, so keep
  * the assignment on one line and spelled exactly like this.
  */
-val minisBaseVersionName = "2.0.97"
+val minisBaseVersionName = "2.1.16"
 val minisVersionName: String = System.getenv("MINIS_VERSION_SUFFIX")
     ?.trim()
     ?.takeIf { it.isNotEmpty() }
@@ -142,7 +142,7 @@ android {
         applicationId = "com.openminis.linux"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 297
+        versionCode = 316
         // [T-rolling-version] Rolling builds (push to main) carry the merge PR
         // number as a fourth component, e.g. 2.0.82.233, so a sideloaded APK can
         // be traced back to the change that produced it. Tag/release builds keep

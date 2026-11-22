@@ -1,0 +1,1 @@
+{"name":"fs_lsattr","desc":"查看文件扩展属性(lsattr/getfattr)","params":"path:string:路径","required":"path","timeoutMs":15000,"cmd":"lsattr -d $path 2>&1; echo '--- xattr ---'; getfattr -d $path 2>&1 | head -20"}

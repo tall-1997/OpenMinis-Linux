@@ -1,0 +1,1 @@
+{"name":"tx_size","cat":"Termux","desc":"[Termux] 二进制节区体积分析","params":"file:string:文件路径","required":"file","timeoutMs":120000,"cmd":"TX_FILE=$file sh /data/adb/lemon_kernel/lemon/tx/tx.sh size"}

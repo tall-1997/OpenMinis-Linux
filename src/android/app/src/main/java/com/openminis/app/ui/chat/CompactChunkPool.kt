@@ -113,18 +113,50 @@ internal fun fitSummaryChunks(json: String?, maxChars: Int = SUMMARY_CHUNK_POOL_
     return arr.toString()
 }
 
+/** [T-compact-pool-dedup] Whitespace-normalized form used for pool and excerpt
+ *  content comparisons. Pure function. */
+internal fun compactNormalized(s: String): String = s.replace(Regex("\\s+"), " ").trim()
+
+/**
+ * [T-compact-envelope-overlap] True when an excerpt adds nothing the main summary does not
+ * already carry: normalized containment in either direction, or char-bigram Jaccard
+ * >= [OVERLAP_JACCARD_THRESHOLD] over the normalized texts. The pool stores per-compaction
+ * snapshots while each new summary recursively merges earlier ones, so without this
+ * check the envelope repeated the same content 2-3x per request (DB-proven). Pure
+ * function, testable.
+ */
+internal fun compactExcerptOverlapsSummary(summary: String, excerpt: String): Boolean {
+    val a = compactNormalized(summary)
+    val b = compactNormalized(excerpt)
+    if (a.isEmpty() || b.isEmpty()) return false
+    if (a == b || a.contains(b) || b.contains(a)) return true
+    val gramsA = a.windowed(2).toHashSet()
+    val gramsB = b.windowed(2).toHashSet()
+    if (gramsA.isEmpty() || gramsB.isEmpty()) return false
+    val inter = gramsA.intersect(gramsB).size
+    val union = gramsA.size + gramsB.size - inter
+    return inter.toDouble() / union >= OVERLAP_JACCARD_THRESHOLD
+}
+
+private const val OVERLAP_JACCARD_THRESHOLD = 0.7
+
 /**
  * [T-compact-chunk-pool] Rolling pool update on a successful compact:
  * keep the newest [SUMMARY_CHUNK_POOL_MAX] chunks (each capped), each
  * stored as a per-compaction snapshot so earlier material can still be
- * retrieved by keyword later. Pure function, testable.
+ * retrieved by keyword later. A chunk whose normalized text already sits
+ * in the pool is skipped — degenerate or repeated passes stored the same
+ * text twice and retrieval then injected both copies. Pure function, testable.
  */
 internal fun appendSummaryChunk(existingJson: String?, newSummary: String): String {
     val capped = ChatViewModel.preserveSummaryEdges(newSummary, SUMMARY_CHUNK_MAX_CHARS)
+    val normalized = compactNormalized(capped)
     val kept = parseSummaryChunkRecords(existingJson)
         .filter { it.first.isNotBlank() }
         .toMutableList()
-    kept.add(capped to System.currentTimeMillis())
+    if (kept.none { compactNormalized(it.first) == normalized }) {
+        kept.add(capped to System.currentTimeMillis())
+    }
     val trimmed = if (kept.size > SUMMARY_CHUNK_POOL_MAX) {
         kept.subList(kept.size - SUMMARY_CHUNK_POOL_MAX, kept.size).toList()
     } else {
@@ -209,5 +241,5 @@ internal fun selectSummaryChunks(chunksJson: String?, query: String, topK: Int =
     } else {
         listOf(Triple(chunks.lastIndex, 0, chunks.last().first))
     }
-    return chosen.sortedBy { it.first }.map { it.third }
+    return chosen.sortedBy { it.first }.map { it.third }.distinctBy { compactNormalized(it) }
 }

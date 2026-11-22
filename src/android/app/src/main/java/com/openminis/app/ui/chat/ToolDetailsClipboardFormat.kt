@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
+import com.openminis.app.ui.theme.cili
 
 /**
  * Tool-pill + clipboard-format helpers extracted from
@@ -28,7 +29,7 @@ import com.openminis.app.R
  * an affordance-discoverability win. Resume banner (T13) makes the global
  * cancel UX recoverable.
  *
- * Visual: 14×14 red rounded square (Color 0xFFFF3B30 = iOS systemRed).
+ * Visual: 14×14 red rounded square (Color 0xFFFF6B6B = iOS systemRed).
  */
 @Composable
 internal fun ToolStopButton(
@@ -58,7 +59,7 @@ internal fun ToolStopButton(
                 modifier = Modifier
                     .size(10.dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(Color(0xFFFF3B30)),
+                    .background(cili(0xFFFF3B30)),
             )
         }
     }

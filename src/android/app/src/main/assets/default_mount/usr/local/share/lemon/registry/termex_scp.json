@@ -1,0 +1,1 @@
+{"name":"termex_scp","desc":"[Termex] scp 安全拷贝","params":"args:string:scp参数","required":"args","timeoutMs":120000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termex_scp . /data/local/tmp/termex/env.sh; eval /data/local/tmp/termex/bin/scp $args 2>&1"}

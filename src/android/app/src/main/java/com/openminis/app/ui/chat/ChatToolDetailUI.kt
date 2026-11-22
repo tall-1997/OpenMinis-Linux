@@ -92,6 +92,8 @@ import androidx.compose.ui.unit.sp
 import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.tokens.MinisTypography
+import com.openminis.app.ui.theme.cili
+
 /**
  * The page URL a `browser_use` block points at: [block]'s live `browserURL` →
  * its own `url` argument ([argsUrl]) → the nearest PRECEDING `browser_use`
@@ -451,7 +453,7 @@ internal fun ToolDetailSheet(
                                             text = linkified,
                                             fontSize = MinisTypography.code,
                                             fontFamily = FontFamily.Monospace,
-                                            color = RawC.systemGreen.tc,  // iOS .green
+                                            color = cili(RawC.systemGreen),  // iOS .green
                                             lineHeight = MinisTypography.lineCode,
                                         )
                                     }
@@ -475,14 +477,14 @@ internal fun ToolDetailSheet(
                                             fontSize = MinisTypography.codeSm,
                                             fontWeight = FontWeight.Medium,
                                             fontFamily = FontFamily.Monospace,
-                                            color = RawC.systemGreen.tc,  // iOS .green
+                                            color = cili(RawC.systemGreen),  // iOS .green
                                         )
                                         Text(
                                             text = sheetMonitor.formattedMem(),
                                             fontSize = MinisTypography.codeSm,
                                             fontWeight = FontWeight.Medium,
                                             fontFamily = FontFamily.Monospace,
-                                            color = RawC.systemGreen.tc,
+                                            color = cili(RawC.systemGreen),
                                         )
                                     }
                                 }
@@ -563,7 +565,7 @@ internal fun ToolDetailSheet(
                                     Icon(
                                         Icons.Default.EditNote,
                                         contentDescription = null,
-                                        tint = RawC.systemOrange.tc,
+                                        tint = cili(RawC.systemOrange),
                                         modifier = Modifier.size(12.dp),
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
@@ -573,8 +575,8 @@ internal fun ToolDetailSheet(
                                         fontWeight = FontWeight.Medium,
                                         fontFamily = FontFamily.Monospace,
                                         color = ChatColors.primaryText,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
+                                        maxLines = Int.MAX_VALUE,
+                                        overflow = TextOverflow.Clip,
                                         modifier = Modifier.weight(1f, fill = false),
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
@@ -655,8 +657,8 @@ internal fun ToolDetailSheet(
                                                     fontSize = MinisTypography.codeFoot,
                                                     fontFamily = FontFamily.Monospace,
                                                     color = ChatColors.secondaryText,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis,
+                                                    maxLines = Int.MAX_VALUE,
+                                                    overflow = TextOverflow.Clip,
                                                     modifier = Modifier.weight(1f),
                                                 )
                                             }
@@ -768,7 +770,7 @@ internal fun ToolDetailSheet(
                                             fontWeight = FontWeight.SemiBold,
                                             color = Color.White,
                                             modifier = Modifier
-                                                .background(RawC.systemBlue.tc, CircleShape)
+                                                .background(cili(RawC.systemBlue), CircleShape)
                                                 .padding(horizontal = 10.dp, vertical = 2.dp),
                                         )
                                     }
@@ -780,8 +782,8 @@ internal fun ToolDetailSheet(
                                             text = resolvedUrl,
                                             fontSize = MinisTypography.foot,
                                             color = MinisTokens.colors.urlCapsuleText.tc,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
+                                            maxLines = Int.MAX_VALUE,
+                                            overflow = TextOverflow.Clip,
                                             modifier = Modifier
                                                 .weight(1f)
                                                 .background(MinisTokens.colors.urlCapsuleBg.tc, CircleShape)
@@ -1127,7 +1129,7 @@ internal fun ToolDetailSheet(
                             Box(
                                 modifier = Modifier
                                     .size(7.dp)
-                                    .background(RawC.systemGreen.tc, CircleShape),
+                                    .background(cili(RawC.systemGreen), CircleShape),
                             )
                             Text(
                                 "Live",
@@ -1394,15 +1396,15 @@ private fun EditorCard(
                     fontSize = MinisTypography.code,
                     fontWeight = FontWeight.Medium,
                     color = titleColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    maxLines = Int.MAX_VALUE,
+                    overflow = TextOverflow.Clip,
                     modifier = Modifier.weight(1f),
                 )
                 if (sizeLabel != null) {
                     Text(
                         text = if (isStreaming) "($sizeLabel received)" else "($sizeLabel)",
                         fontSize = MinisTypography.cap,
-                        color = if (isStreaming) RawC.systemOrange.tc.copy(alpha = 0.8f) else sizeColor,
+                        color = if (isStreaming) cili(RawC.systemOrange).copy(alpha = 0.8f) else sizeColor,
                     )
                 }
             }

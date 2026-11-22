@@ -1,0 +1,1 @@
+{"name":"cmd_readelf","desc":"读取ELF文件头(readelf)","params":"path:string:ELF文件|args:string:参数如-h -S -d,默认-h","required":"path","timeoutMs":30000,"cmd":"readelf ${args:--h} $path 2>&1 | head -60"}

@@ -1,0 +1,1 @@
+{"name":"rfkill_toggle","desc":"开关无线设备(rfkill block/unblock)","params":"idx:string:rfkill编号或all|state:string:block或unblock","required":"idx,state","timeoutMs":15000,"cmd":"rfkill $state $idx 2>&1; echo '--- 当前 ---'; rfkill list 2>&1"}

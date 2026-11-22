@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
+import com.openminis.app.ui.theme.cili
 
 /**
  * History tab: local search, self-drawn commit graph (lanes from
@@ -92,10 +93,10 @@ internal fun GitPanelHistory(state: GitPanelState, viewModel: GitPanelViewModel)
 
 /** ZCode graph colours, cycled per lane (Tan[4] in the desktop client). */
 private val laneColors = listOf(
-    Color(0xFF007AFF), // blue
-    Color(0xFFFF9500), // orange
-    Color(0xFF34C759), // green
-    Color(0xFFAF52DE), // purple
+    cili(0xFF007AFF), // blue
+    cili(0xFFFF9500), // orange
+    cili(0xFF34C759), // green
+    cili(0xFFAF52DE), // purple
 )
 
 internal fun laneColor(lane: Int): Color = laneColors[Math.floorMod(lane, laneColors.size)]
@@ -300,7 +301,7 @@ private fun LaneCanvas(row: CommitLaneRow, laneCount: Int) {
                     lineTo(nx - r, cy)
                     close()
                 }
-                drawPath(path, Color(0xFFFF9500))
+                drawPath(path, cili(0xFFFF9500))
             }
             else -> drawCircle(
                 color = nodeColor,

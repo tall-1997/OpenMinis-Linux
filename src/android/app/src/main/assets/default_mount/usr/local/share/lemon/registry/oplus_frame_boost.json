@@ -1,0 +1,1 @@
+{"name":"oplus_frame_boost","desc":"OPPO帧率加速状态","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/oplus_frame_boost 2>/dev/null; ls /proc/oplus_frame_boost/ 2>/dev/null; for f in /proc/oplus_frame_boost/*; do [ -f \"$f\" ] && { echo -n \"$(basename $f)=\"; cat $f; }; done 2>/dev/null | head -30"}

@@ -1,0 +1,1 @@
+{"name":"algo_poll_new_logs","cat":"算法助手","desc":"[算法助手] 增量抓取新日志","params":"since_id:integer:起始ID|keyword:string:关键词|limit:integer:条数|db_path:string:库路径","required":"","timeoutMs":25000,"cmd":"sh /data/adb/lemon_kernel/lemon/algo_call.sh poll_new_logs since_id=$since_id keyword=$keyword limit=$limit db_path=$db_path"}

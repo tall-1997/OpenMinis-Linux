@@ -188,6 +188,8 @@ import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.TimeUnit
 import com.openminis.app.ui.tokens.MinisTypography
+import com.openminis.app.ui.theme.cili
+
 
 internal data class CategoryStyle(val icon: ImageVector, val color: Color)
 
@@ -196,21 +198,21 @@ internal fun categoryStyle(category: String?): CategoryStyle {
     return when (category?.lowercase()) {
         "code"         -> CategoryStyle(Icons.Outlined.Code, Color(0xFFF09A37))
         "writing"      -> CategoryStyle(Icons.Outlined.Description, Color(0xFF3478F6))
-        "research"     -> CategoryStyle(Icons.Outlined.Language, RawC.systemTealAlt.tc)
-        "analysis"     -> CategoryStyle(Icons.Outlined.BarChart, RawC.systemPurple.tc)
-        "creative"     -> CategoryStyle(Icons.Outlined.Brush, RawC.systemPink.tc)
-        "chat"         -> CategoryStyle(Icons.Outlined.Forum, RawC.systemGreen.tc)
+        "research"     -> CategoryStyle(Icons.Outlined.Language, cili(RawC.systemTealAlt))
+        "analysis"     -> CategoryStyle(Icons.Outlined.BarChart, cili(RawC.systemPurple))
+        "creative"     -> CategoryStyle(Icons.Outlined.Brush, cili(RawC.systemPink))
+        "chat"         -> CategoryStyle(Icons.Outlined.Forum, cili(RawC.systemGreen))
         "math"         -> CategoryStyle(Icons.Outlined.Calculate, Color(0xFF9B59B6))
         "translation"  -> CategoryStyle(Icons.Outlined.Translate, Color(0xFF00BCD4))
-        "health"       -> CategoryStyle(Icons.Outlined.Favorite, RawC.systemRed.tc)
+        "health"       -> CategoryStyle(Icons.Outlined.Favorite, cili(RawC.systemRed))
         "finance"      -> CategoryStyle(Icons.Outlined.Payments, Color(0xFF00C7BE))
         "travel"       -> CategoryStyle(Icons.Outlined.Map, Color(0xFFF09A37))
         "education"    -> CategoryStyle(Icons.Outlined.Book, Color(0xFF3478F6))
-        "design"       -> CategoryStyle(Icons.Outlined.Palette, RawC.systemPink.tc)
-        "productivity" -> CategoryStyle(Icons.Outlined.CalendarMonth, RawC.systemYellow.tc)
+        "design"       -> CategoryStyle(Icons.Outlined.Palette, cili(RawC.systemPink))
+        "productivity" -> CategoryStyle(Icons.Outlined.CalendarMonth, cili(RawC.systemYellow))
         "support"      -> CategoryStyle(Icons.Outlined.Settings, Color(0xFF8B6914))
-        "other"        -> CategoryStyle(Icons.Outlined.GridView, RawC.systemGray.tc)
-        else           -> CategoryStyle(Icons.Outlined.Forum, RawC.systemGray.tc)
+        "other"        -> CategoryStyle(Icons.Outlined.GridView, cili(RawC.systemGray))
+        else           -> CategoryStyle(Icons.Outlined.Forum, cili(RawC.systemGray))
     }
 }
 
@@ -2798,7 +2800,7 @@ private fun SessionBadgeOverlay(
                     .background(
                         // Solid system-orange. Picked over yellow so the
                         // alert reads as "attention" rather than "info".
-                        color = RawC.systemOrange.tc,
+                        color = cili(RawC.systemOrange),
                         shape = CircleShape,
                     )
                     .border(

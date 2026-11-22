@@ -1,0 +1,1 @@
+{"name":"dbg_shutdown_detect","desc":"关机检测","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/shutdown_detect 2>/dev/null | head -30"}

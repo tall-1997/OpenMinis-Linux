@@ -1,0 +1,1 @@
+{"name":"appmem_get","cat":"App记忆","desc":"[App记忆] 按 id 读取 App 记忆归档中的某一条全文","params":"id:string:条目id","required":"id","timeoutMs":30000,"cmd":"sh /data/adb/lemon_kernel/lemon/appmem.sh get $id"}

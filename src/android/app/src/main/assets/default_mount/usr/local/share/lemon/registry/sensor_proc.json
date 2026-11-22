@@ -1,0 +1,1 @@
+{"name":"sensor_proc","desc":"传感器proc节点","params":"lines:integer:行数,默认40","required":"","timeoutMs":15000,"cmd":"cat /proc/sensor 2>/dev/null | head -${lines:-40}"}

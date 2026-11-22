@@ -1,0 +1,1 @@
+{"name":"xb_net_start","cat":"X浏览器","desc":"开启网络抓包（注入 fetch/XHR/beacon/ws hook）","params":"","required":"","timeoutMs":40000,"cmd":"/data/data/com.termux/files/usr/bin/bash /data/local/tmp/xbcdp.sh net_start"}

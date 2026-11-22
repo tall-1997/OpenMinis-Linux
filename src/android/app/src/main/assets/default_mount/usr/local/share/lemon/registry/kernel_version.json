@@ -1,0 +1,1 @@
+{"name":"kernel_version","desc":"内核版本与编译信息(uname -a)","params":"","required":"","timeoutMs":15000,"cmd":"uname -a 2>&1; echo '--- version ---'; cat /proc/version 2>&1"}

@@ -1,0 +1,1 @@
+{"name":"tts_say","desc":"[感知] 文字转语音播报(Termux:API,设备扬声器发声)","params":"text:string:要播报的文本","required":"text","timeoutMs":60000,"cmd":"sh /data/lemonbrain/scripts/perception.sh tts_say $text"}

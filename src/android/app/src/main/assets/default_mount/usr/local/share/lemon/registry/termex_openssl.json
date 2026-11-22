@@ -1,0 +1,1 @@
+{"name":"termex_openssl","desc":"[Termex] OpenSSL 3.3.2 全套(证书/密钥/加解密/摘要)","params":"args:string:openssl参数,如 version / x509 -in a.pem -noout -subject","required":"args","timeoutMs":60000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termex_openssl . /data/local/tmp/termex/env.sh; eval /data/local/tmp/termex/bin/openssl $args 2>&1"}

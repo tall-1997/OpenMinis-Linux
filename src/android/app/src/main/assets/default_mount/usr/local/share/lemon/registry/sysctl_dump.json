@@ -1,0 +1,1 @@
+{"name":"sysctl_dump","desc":"导出内核参数(sysctl -a)","params":"filter:string:过滤关键字,可空|lines:integer:行数,默认200","required":"","timeoutMs":20000,"cmd":"sysctl -a 2>/dev/null | grep -i -- $filter | head -${lines:-200}"}

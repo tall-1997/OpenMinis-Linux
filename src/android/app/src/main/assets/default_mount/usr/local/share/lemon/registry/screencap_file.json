@@ -1,0 +1,1 @@
+{"name":"screencap_file","desc":"截图并保存到文件","params":"out:string:输出路径,默认/data/local/tmp/screen.png","required":"","timeoutMs":20000,"cmd":"screencap -p ${out:-/data/local/tmp/screen.png} 2>&1; ls -la ${out:-/data/local/tmp/screen.png} 2>&1"}

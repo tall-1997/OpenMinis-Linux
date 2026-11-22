@@ -1,0 +1,1 @@
+{"name":"pkg_enable","desc":"启用系统组件/应用(pm enable)","params":"comp:string:包名或包/组件","required":"comp","timeoutMs":20000,"cmd":"pm enable --user 0 $comp 2>&1"}

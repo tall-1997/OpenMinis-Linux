@@ -1,0 +1,1 @@
+{"name":"fs_rm","desc":"删除文件/目录(rm -rf, 高危)","params":"path:string:路径|confirm:string:必须填YES","required":"path,confirm","timeoutMs":30000,"cmd":"[ $confirm = \"YES\" ] && rm -rf $path 2>&1 && echo DELETED || echo 'REFUSED: need confirm=YES'"}

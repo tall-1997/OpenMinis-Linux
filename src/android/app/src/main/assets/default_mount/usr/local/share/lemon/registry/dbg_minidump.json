@@ -1,0 +1,1 @@
+{"name":"dbg_minidump","desc":"minidump崩溃信息","params":"","required":"","timeoutMs":15000,"cmd":"ls /proc/minidump_rus /proc/minidump_vcpu_stack 2>/dev/null; cat /proc/minidump_rus 2>/dev/null | head -20"}

@@ -1,0 +1,1 @@
+{"name":"debug_dropbox_list","desc":"列出dropbox崩溃报告","params":"lines:integer:行数,默认30","required":"","timeoutMs":15000,"cmd":"dumpsys dropbox --print 2>/dev/null | head -${lines:-30}; ls /data/system/dropbox/ 2>/dev/null | tail -20"}

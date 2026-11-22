@@ -1,0 +1,1 @@
+{"name":"pmicwd_config","desc":"PMIC看门狗配置","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/pmicwd_config 2>/dev/null | head -30"}

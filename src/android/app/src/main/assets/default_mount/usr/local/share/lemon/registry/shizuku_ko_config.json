@@ -1,0 +1,1 @@
+{"name":"shizuku_ko_config","cat":"柠檬工具","desc":"[柠檬工具] 配置 LemonShizuku：action=uids设白名单/dst设目标/enable开关(0|1)/stats统计/selftest自检","params":"action:string:操作(uids/dst/enable/stats/selftest)|value:string:值(白名单列表/uid/0或1)","timeoutMs":30000,"cmd":"/system/bin/timeout 25 sh /data/adb/lemon_kernel/lemonlib/shizuku_ko.sh $action $value"}

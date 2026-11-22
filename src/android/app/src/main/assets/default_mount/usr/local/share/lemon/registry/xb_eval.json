@@ -1,0 +1,1 @@
+{"name":"xb_eval","cat":"X浏览器","desc":"在 X浏览器当前页面执行 JavaScript（返回原始 CDP JSON）","params":"js:string:JavaScript表达式","required":"js","timeoutMs":40000,"cmd":"/data/data/com.termux/files/usr/bin/bash /data/local/tmp/xbcdp.sh eval $js"}

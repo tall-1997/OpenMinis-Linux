@@ -1,0 +1,1 @@
+{"name":"pm_reset_perm","desc":"重置应用权限(pm reset-permissions)","params":"pkg:string:包名","required":"pkg","timeoutMs":15000,"cmd":"pm reset-permissions $pkg 2>&1; echo DONE"}

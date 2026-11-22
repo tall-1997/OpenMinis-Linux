@@ -1,0 +1,1 @@
+{"name":"fs_mv","desc":"移动/重命名文件(mv)","params":"src:string:源|dst:string:目标","required":"src,dst","timeoutMs":60000,"cmd":"mv $src $dst 2>&1 && echo MOVED"}

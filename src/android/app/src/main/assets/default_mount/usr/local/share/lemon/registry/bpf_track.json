@@ -1,0 +1,1 @@
+{"name":"bpf_track","cat":"eBPF","desc":"[eBPF] 指定要按进程统计的 pid（all=全部进程，写入内核 hash map）","params":"pid:string:进程号或 all","timeoutMs":60000,"cmd":"/data/adb/lemonbpf/lemonbpf track $pid 2>&1"}

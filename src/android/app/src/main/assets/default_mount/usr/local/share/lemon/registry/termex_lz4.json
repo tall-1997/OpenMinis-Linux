@@ -1,0 +1,1 @@
+{"name":"termex_lz4","desc":"[Termex] lz4 1.10.0 极速压缩","params":"args:string:lz4参数","required":"args","timeoutMs":120000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termex_lz4 . /data/local/tmp/termex/env.sh; eval /data/local/tmp/termex/bin/lz4 $args 2>&1"}

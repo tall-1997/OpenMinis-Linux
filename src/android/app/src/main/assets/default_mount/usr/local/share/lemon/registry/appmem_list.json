@@ -1,0 +1,1 @@
+{"name":"appmem_list","cat":"App记忆","desc":"[App记忆] 列出 App 记忆归档清单（按需读取模式）","params":"","required":"","timeoutMs":30000,"cmd":"sh /data/adb/lemon_kernel/lemon/appmem.sh list"}

@@ -1,0 +1,1 @@
+{"name":"flutter_info","cat":"Flutter底座","desc":"[Flutter] 设备内 Flutter 应用清单；或侦察 APK 是否含 Dart AOT + Dart VM 版本 + libapp 指纹(sha256/snapshot)","params":"path:string:APK/XAPK 绝对路径(留空=列设备内全部 Flutter 应用)","required":"","timeoutMs":180000,"cmd":"FL_CMD=info FL_PATH=$path sh /data/adb/lemon_kernel/lemon/flutter/fscan.sh"}

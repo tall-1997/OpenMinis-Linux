@@ -22,6 +22,9 @@ internal interface GoalPersistence {
     suspend fun load(sessionId: String): SessionGoalEntity?
     suspend fun insert(goal: SessionGoalEntity)
     suspend fun save(goal: SessionGoalEntity)
+    suspend fun saveContract(sessionId: String, acceptance: String?, constraints: String?, nextStep: String?, updatedAt: Long) {
+        // Default no-op keeps lightweight test fakes source-compatible.
+    }
     suspend fun delete(sessionId: String)
 }
 
@@ -30,6 +33,8 @@ private class RepositoryGoalPersistence(private val repository: ChatRepository) 
     override suspend fun load(sessionId: String): SessionGoalEntity? = repository.goal(sessionId)
     override suspend fun insert(goal: SessionGoalEntity) = repository.createGoal(goal)
     override suspend fun save(goal: SessionGoalEntity) = repository.saveGoal(goal)
+    override suspend fun saveContract(sessionId: String, acceptance: String?, constraints: String?, nextStep: String?, updatedAt: Long) =
+        repository.saveGoalContract(sessionId, acceptance, constraints, nextStep, updatedAt)
     override suspend fun delete(sessionId: String) = repository.goalDao.delete(sessionId)
 }
 
@@ -38,6 +43,10 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
     constructor(repository: ChatRepository) : this(RepositoryGoalPersistence(repository))
 
     companion object {
+        /** Contract fields render verbatim into the per-request goal block,
+         *  so every writer clamps to this ceiling (the P0 plan's contract cap). */
+        internal const val CONTRACT_FIELD_MAX_CHARS = 800
+
         /**
          * Bumped on every successful write, from ANY [GoalManager] instance —
          * the manager is constructed ad-hoc by the slash UI, tool dispatcher
@@ -71,6 +80,42 @@ class GoalManager internal constructor(private val persistence: GoalPersistence)
         locks[(sessionId.hashCode() and Int.MAX_VALUE) % locks.size].withLock { block() }
 
     suspend fun get(sessionId: String): SessionGoalEntity? = persistence.load(sessionId)
+
+    /** [T-goal-contract] Write acceptance/constraints/next_step; no state change.
+     *  Fields are clamped here — the single choke point for ALL contract
+     *  writers — because these strings render into EVERY request prompt:
+     *  an unbounded write would inflate the prompt for the rest of the
+     *  session. Matches the P0 plan's 800-char contract ceiling.
+     *
+     *  [T-goal-contract-keep-old] A null field means "leave untouched", not
+     *  "erase": omitted fields are resolved from the stored row inside the
+     *  session lock, so any direct caller gets the same keep-old semantics
+     *  the GoalTool's pick() pre-resolution provides. An explicit blank
+     *  string still clears the field. */
+    suspend fun updateContract(
+        sessionId: String,
+        acceptance: String? = null,
+        constraints: String? = null,
+        nextStep: String? = null,
+    ): SessionGoalEntity? = locked(sessionId) {
+        val current = persistence.load(sessionId)
+        val resolvedAcceptance = (acceptance ?: current?.acceptance)?.clampContract()
+        val resolvedConstraints = (constraints ?: current?.constraints)?.clampContract()
+        val resolvedNextStep = (nextStep ?: current?.nextStep)?.clampContract()
+        persistence.saveContract(
+            sessionId,
+            resolvedAcceptance,
+            resolvedConstraints,
+            resolvedNextStep,
+            System.currentTimeMillis(),
+        )
+        persistence.load(sessionId)?.also { bump() }
+    }
+
+    private fun String.clampContract(): String = when {
+        length <= CONTRACT_FIELD_MAX_CHARS -> this
+        else -> take(CONTRACT_FIELD_MAX_CHARS) + "…[clamped]"
+    }
 
     suspend fun createByUser(sessionId: String, objective: String, tokenBudget: Long? = null): SessionGoalEntity =
         locked(sessionId) {

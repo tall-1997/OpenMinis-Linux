@@ -49,6 +49,11 @@ internal data class HarnessConfig(
     val digestMaxChars: Int = 3_000,
     /** Ledger entries before the oldest run folds into one sample line. */
     val ledgerMaxEntries: Int = 600,
+    /** Tool rounds between drift checks ([DriftGuard] cadence). */
+    val driftGuardEveryN: Int = 10,
+    /** [T-drift-signal] Long heartbeat: the unconditional drift check fires at
+     *  least this often; everything else is event-driven (loop detection). */
+    val driftGuardHeartbeatEveryN: Int = 40,
 ) {
 
     /**
@@ -83,6 +88,10 @@ internal data class HarnessConfig(
         require(digestMaxLines > 0) { "digestMaxLines must be positive" }
         require(digestMaxChars > 0) { "digestMaxChars must be positive" }
         require(ledgerMaxEntries > 1) { "ledgerMaxEntries must exceed 1" }
+        require(driftGuardEveryN > 0) { "driftGuardEveryN must be positive (was $driftGuardEveryN)" }
+        require(driftGuardHeartbeatEveryN >= driftGuardEveryN) {
+            "driftGuardHeartbeatEveryN ($driftGuardHeartbeatEveryN) must be >= driftGuardEveryN ($driftGuardEveryN)"
+        }
         return this
     }
 

@@ -1,0 +1,1 @@
+{"name":"svc_data","desc":"控制移动数据(svc data enable/disable)","params":"action:string:enable|disable","required":"action","timeoutMs":15000,"cmd":"svc data $action 2>&1"}

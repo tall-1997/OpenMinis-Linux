@@ -1,0 +1,1 @@
+{"name":"sys_ipc_info","desc":"System V IPC资源(shm/msg/sem)","params":"","required":"","timeoutMs":15000,"cmd":"echo '--- shm ---'; cat /proc/sysvipc/shm 2>/dev/null | head -20; echo '--- msg ---'; cat /proc/sysvipc/msg 2>/dev/null | head -20; echo '--- sem ---'; cat /proc/sysvipc/sem 2>/dev/null | head -20"}

@@ -1,0 +1,1 @@
+{"name":"mt_dex_xor","cat":"MT底座","desc":"[MT底座] MT 加密 dex 解密（单字节 XOR，key=data[4]^0x64；头 fb6162b8；输出为明文 .dex）","params":"path,out","required":"path,out","timeoutMs":60000,"cmd":"MT_ENG=dex MT_CMD=xor MT_PATH=$path MT_OUT=$out sh /data/adb/lemon_kernel/lemon/mt/mt.sh"}

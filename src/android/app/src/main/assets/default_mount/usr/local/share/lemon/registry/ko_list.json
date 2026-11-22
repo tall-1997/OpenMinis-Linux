@@ -1,0 +1,1 @@
+{"name":"ko_list","cat":"柠檬工具","desc":"[柠檬工具] 内核模块一览：自研模块/参数/引用数/污染/仓库ko","params":"","timeoutMs":25000,"cmd":"/system/bin/timeout 22 sh /data/adb/lemon_kernel/lemonlib/ko_list.sh"}

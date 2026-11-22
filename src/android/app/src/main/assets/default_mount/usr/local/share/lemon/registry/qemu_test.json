@@ -1,0 +1,1 @@
+{"name":"qemu_test","cat":"柠檬工具","desc":"[柠檬工具] 一键 QEMU 真内核测试(#274)：体检→initramfs→QEMU→判定。用法: qemu_test <ko路径> [模块参数] [超时秒] [init类型]","params":"ko:string:内核模块路径 args:string:模块参数(可空) timeout:string:超时秒(默认200) itype:string:init类型(generic/part/custom:路径)","timeoutMs":300000,"cmd":"sh /data/adb/lemon_kernel/lemonlib/qemu_test.sh $ko $args $timeout $itype"}

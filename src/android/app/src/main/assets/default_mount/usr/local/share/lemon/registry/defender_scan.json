@@ -1,0 +1,1 @@
+{"name":"defender_scan","cat":"安全防护","desc":"[安全防护] 柠檬防御者·恶意脚本扫描：特征评分(格机/恶意/可疑)，P0P1自动隔离删除；可指定目录","params":"path:string:扫描目录(可空=全部监控点)","timeoutMs":120000,"cmd":"/system/bin/timeout 110 sh /data/adb/lemon_kernel/lemonlib/lemon_defender.sh scan $path"}

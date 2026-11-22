@@ -1,0 +1,1 @@
+{"name":"oplus_health_info","desc":"OPPO健康信息(电池健康等)","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/oplus_healthinfo 2>/dev/null | head -40; ls /proc/oplus_healthinfo/ 2>/dev/null"}

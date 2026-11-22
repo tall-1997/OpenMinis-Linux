@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.theme.cili
 
 /**
  * [T-brand-accent-color] Brand accent used for the usage-page share bars.
@@ -30,26 +31,26 @@ import com.openminis.app.ui.theme.ChatColors
 internal object BrandAccent {
     /** Light-theme brand accents: the vendors' own primary hues. */
     private val LIGHT: Map<String, Color> = mapOf(
-        "zhipu" to RawColors.Brand.zhipu.asColor,
-        "deepseek" to RawColors.Brand.deepseek.asColor,
-        "claude" to RawColors.Brand.claude.asColor,
-        "gemini" to RawColors.Brand.gemini.asColor,
-        "wenxin" to RawColors.Brand.wenxin.asColor,
-        "minimax" to RawColors.Brand.minimax.asColor,
-        "hailuo" to RawColors.Brand.hailuo.asColor,
-        "kimi" to RawColors.Brand.kimi.asColor,
-        "openai" to RawColors.Brand.openai.asColor,
-        "grok" to RawColors.Brand.grok.asColor,
-        "qwen" to RawColors.Brand.qwen.asColor,
-        "moonshot" to RawColors.Brand.moonshot.asColor,
-        "meta" to RawColors.Brand.meta.asColor,
-        "mistral" to RawColors.Brand.mistral.asColor,
-        "cohere" to RawColors.Brand.cohere.asColor,
-        "perplexity" to RawColors.Brand.perplexity.asColor,
-        "openrouter" to RawColors.Brand.openrouter.asColor,
-        "groq" to RawColors.Brand.groq.asColor,
-        "baichuan" to RawColors.Brand.baichuan.asColor,
-        "hunyuan" to RawColors.Brand.hunyuan.asColor,
+        "zhipu" to cili(RawColors.Brand.zhipu),
+        "deepseek" to cili(RawColors.Brand.deepseek),
+        "claude" to cili(RawColors.Brand.claude),
+        "gemini" to cili(RawColors.Brand.gemini),
+        "wenxin" to cili(RawColors.Brand.wenxin),
+        "minimax" to cili(RawColors.Brand.minimax),
+        "hailuo" to cili(RawColors.Brand.hailuo),
+        "kimi" to cili(RawColors.Brand.kimi),
+        "openai" to cili(RawColors.Brand.openai),
+        "grok" to cili(RawColors.Brand.grok),
+        "qwen" to cili(RawColors.Brand.qwen),
+        "moonshot" to cili(RawColors.Brand.moonshot),
+        "meta" to cili(RawColors.Brand.meta),
+        "mistral" to cili(RawColors.Brand.mistral),
+        "cohere" to cili(RawColors.Brand.cohere),
+        "perplexity" to cili(RawColors.Brand.perplexity),
+        "openrouter" to cili(RawColors.Brand.openrouter),
+        "groq" to cili(RawColors.Brand.groq),
+        "baichuan" to cili(RawColors.Brand.baichuan),
+        "hunyuan" to cili(RawColors.Brand.hunyuan),
     )
 
     /**

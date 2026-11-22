@@ -1,0 +1,1 @@
+{"name":"tbatt_pwroff","desc":"电池关机温度阈值","params":"val:string:值,留空读取","required":"","timeoutMs":15000,"cmd":"[ -n $val ] && echo $val > /proc/tbatt_pwroff 2>&1; echo -n \"tbatt_pwroff=\"; cat /proc/tbatt_pwroff 2>/dev/null"}

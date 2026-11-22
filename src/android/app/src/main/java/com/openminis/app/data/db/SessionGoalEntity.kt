@@ -24,6 +24,12 @@ data class SessionGoalEntity(
      * sovereign, a model objective is only ever the CURRENT task's.
      */
     @ColumnInfo(name = "created_by") val createdBy: String = GoalOrigin.USER,
+    /** [T-goal-contract] Judgement-ready acceptance criteria for the objective. */
+    @ColumnInfo(name = "acceptance") val acceptance: String? = null,
+    /** [T-goal-contract] Hard constraints / forbidden moves for this task. */
+    @ColumnInfo(name = "constraints") val constraints: String? = null,
+    /** [T-goal-contract] The single next action the agent committed to. */
+    @ColumnInfo(name = "next_step") val nextStep: String? = null,
 )
 
 object GoalStatus {

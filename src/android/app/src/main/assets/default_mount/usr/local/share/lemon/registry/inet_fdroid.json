@@ -1,0 +1,1 @@
+{"name": "inet_fdroid", "cat": "免费网络工具", "desc": "[免费接入]IzzyOnDroid开源APK仓库检索(F-Droid生态,国内直连)", "params": "q:string:应用关键词|limit:int:条数,默认10|refresh:string:1=强制刷新索引,默认0", "required": "q", "timeoutMs": 180000, "cmd": "/data/data/com.termux/files/usr/bin/python3 /data/lemonbrain/nettools/inet_fdroid.py --q=$q --limit=$limit --refresh=$refresh"}

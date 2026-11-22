@@ -27,6 +27,8 @@ import com.openminis.app.ui.tokens.LocalMinisType
 import com.openminis.app.ui.tokens.MinisColors
 import com.openminis.app.ui.tokens.MinisDimens
 import com.openminis.app.ui.tokens.MinisType
+import com.openminis.app.ui.theme.CiliSkin
+
 
 // Accent: iOS blue, desaturated. [T-android-accent-blue-parity]
 //
@@ -138,6 +140,38 @@ private val DarkColorScheme = darkColorScheme(
     outlineVariant = TealDarkOutline,
 )
 
+
+// [T-cili-skin] 小黄鱼 charcoal-pink Material scheme — dark only. The skin
+// never applies to light mode or dynamic color (see MinisTheme's ciliActive
+// gate); values verbatim from CiliDownloader values-night/colors.xml.
+private val CiliColorScheme = darkColorScheme(
+    primary = Color(0xFFFFB3D1),
+    onPrimary = Color(0xFF2A0F1A),
+    primaryContainer = Color(0xFF3A1F2B),
+    onPrimaryContainer = Color(0xFFFFEFF6),
+    secondary = Color(0xFFFF7AD9),
+    onSecondary = Color(0xFF2A0F1A),
+    secondaryContainer = Color(0xFF2A1620),
+    onSecondaryContainer = Color(0xFFFFEFF6),
+    tertiary = Color(0xFFE63C93),
+    onTertiary = Color(0xFFFFFFFF),
+    tertiaryContainer = Color(0xFF2A1620),
+    onTertiaryContainer = Color(0xFFFFD9E8),
+    background = Color(0xFF0A0609),
+    onBackground = Color(0xFFFFEFF6),
+    surface = Color(0xFF1A1116),
+    onSurface = Color(0xFFFFEFF6),
+    surfaceVariant = Color(0xFF2A1620),
+    onSurfaceVariant = Color(0xFFD3BDC9),
+    surfaceContainerLowest = Color(0xFF0A0609),
+    surfaceContainerLow = Color(0xFF120A0F),
+    surfaceContainer = Color(0xFF120A0F),
+    surfaceContainerHigh = Color(0xFF1A1116),
+    surfaceContainerHighest = Color(0xFF1A1116),
+    outline = Color(0xFFB9A3B0),
+    outlineVariant = Color(0xFFB9A3B0),
+)
+
 // App-wide FAB accent color (warm beige, matching iOS New Chat button).
 // Reads from ChatPalette so it follows the in-app theme override (theme_mode pref),
 // not android.isSystemInDarkTheme(), which only tracks the system setting.
@@ -198,9 +232,13 @@ fun MinisTheme(
     // surface/onSurface pairs with contrast built in, so the hand-measured
     // WCAG notes on the static palettes do not apply to this branch.
     val dynamicActive = dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    // [T-cili-skin-gate] 小黄鱼 skin applies ONLY when dynamic color is OFF
+    // and dark mode is ON. Dynamic ON and light mode never see the skin.
+    val ciliActive = !dynamicActive && darkTheme
+    CiliSkin.active.value = ciliActive // same-value writes are no-ops
     val colorScheme = if (dynamicActive) {
         if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-    } else if (darkTheme) DarkColorScheme else LightColorScheme
+    } else if (ciliActive) CiliColorScheme else if (darkTheme) DarkColorScheme else LightColorScheme
     // 两套独立的视觉系统：
     //   非动态 → Apple 风格（圆角大、Roboto 字重偏轻、自有 ChatPalette）
     //   动态   → M3 Expressive（官方 Shape tokens、Material You 全套色板+文字）
@@ -210,7 +248,11 @@ fun MinisTheme(
     } else {
         scaledTypography(fontScale)
     }
-    val fallbackChatPalette = if (darkTheme) DarkChatPalette else LightChatPalette
+    val fallbackChatPalette = when {
+        ciliActive -> CiliChatPalette
+        darkTheme -> DarkChatPalette
+        else -> LightChatPalette
+    }
     val chatPalette =
         if (dynamicActive) {
             dynamicChatPalette(colorScheme, fallbackChatPalette)

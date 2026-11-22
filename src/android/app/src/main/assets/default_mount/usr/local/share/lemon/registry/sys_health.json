@@ -1,0 +1,1 @@
+{"name":"sys_health","cat":"柠檬工具","desc":"[柠檬工具] 全链一屏体检：8788/8790/eBPF/khook/lemon_guard/守护/Binder/service.d/污染/内存","params":"","timeoutMs":40000,"cmd":"sh /data/adb/lemon_kernel/lemonlib/sys_health.sh"}

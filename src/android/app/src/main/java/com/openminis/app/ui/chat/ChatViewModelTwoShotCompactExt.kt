@@ -27,6 +27,16 @@ internal suspend fun runCompactPasses(
         for (stage in 0 until stageCount) {
             try {
                 val text = generate(input, previousSummary, stage, input === reduced).trim()
+                // [T-compact-degenerate] A summary byte-identical to the previous
+                // one is an echo of the prior pass, not a new digest: committing
+                // it would hide the freshly folded rows under text that never
+                // represented them (DB-proven: two markers 18.5h apart, different
+                // folded ranges, byte-identical text). Treat as a failed stage so
+                // the remaining stages (fallback model) still get their chance.
+                if (!previousSummary.isNullOrBlank() && text == previousSummary) {
+                    lastError = IllegalStateException("Compact summary echoed the previous summary verbatim")
+                    continue
+                }
                 if (ChatViewModel.isCompactSummaryAcceptable(text, input)) {
                     return CompactOutcome(text, input.size)
                 }

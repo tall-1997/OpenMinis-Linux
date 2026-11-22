@@ -1,0 +1,1 @@
+{"name":"vm_dropcache","desc":"释放页缓存/slab(1-3)","params":"level:integer:1页缓存2 slab3全部,默认3","required":"","timeoutMs":20000,"cmd":"sync; echo ${level:-3} > /proc/sys/vm/drop_caches 2>&1; echo 'done level='${level:-3}"}

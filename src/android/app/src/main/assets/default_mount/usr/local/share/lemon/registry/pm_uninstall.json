@@ -1,0 +1,1 @@
+{"name":"pm_uninstall","desc":"卸载应用(pm uninstall, 保留数据加-k)","params":"pkg:string:包名|keep:string:1=保留数据","required":"pkg","timeoutMs":30000,"cmd":"pm uninstall ${keep:+-k} $pkg 2>&1"}

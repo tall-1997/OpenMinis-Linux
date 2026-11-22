@@ -1,0 +1,1 @@
+{"name": "inet_crtsh", "cat": "免费网络工具", "desc": "[免费接入]crt.sh证书透明度查询,枚举域名子域名(响应较慢属正常)", "params": "domain:string:目标域名|limit:int:返回条数,默认50", "required": "domain", "timeoutMs": 90000, "cmd": "/data/data/com.termux/files/usr/bin/python3 /data/lemonbrain/nettools/inet_crtsh.py --domain=$domain --limit=$limit"}

@@ -1,5 +1,6 @@
 package com.openminis.app.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,8 +16,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
+import com.openminis.app.ui.theme.CiliSkin
 
 // Material3 ButtonDefaults.MinHeight = 40dp; tuned to 48dp for touch
 // ergonomics on phones. IconButton family is unaffected (icon-sized).
@@ -44,12 +48,24 @@ fun MinisButton(
     interactionSource: MutableInteractionSource? = null,
     content: @Composable RowScope.() -> Unit,
 ) {
+    // [T-cili-skin-gate] 小黄鱼 primary gradient (left -> right) replaces the
+    // solid primary container only when the caller kept the default colors and
+    // the skin gate is active (dynamic color OFF + dark mode ON).
+    val skinGradient = CiliSkin.isActive && colors == ButtonDefaults.buttonColors()
     Button(
         onClick = onClick,
-        modifier = modifier.heightIn(min = MinisButtonHeight),
+        modifier = modifier
+            .heightIn(min = MinisButtonHeight)
+            .then(
+                if (skinGradient) {
+                    Modifier.background(Brush.horizontalGradient(CiliSkin.primaryButtonColors.map { Color(it) }), shape)
+                } else {
+                    Modifier
+                },
+            ),
         enabled = enabled,
         shape = shape,
-        colors = colors,
+        colors = if (skinGradient) colors.copy(containerColor = Color.Transparent) else colors,
         elevation = elevation,
         border = border,
         contentPadding = contentPadding,
@@ -128,14 +144,23 @@ fun MinisSmallButton(
     interactionSource: MutableInteractionSource? = null,
     content: @Composable RowScope.() -> Unit,
 ) {
+    // Same 小黄鱼 gradient treatment for the compact variant.
+    val skinGradientSmall = CiliSkin.isActive && colors == ButtonDefaults.buttonColors()
     Button(
         onClick = onClick,
         modifier = modifier
             .heightIn(min = MinisSmallButtonHeight)
-            .defaultMinSize(minHeight = MinisSmallButtonHeight),
+            .defaultMinSize(minHeight = MinisSmallButtonHeight)
+            .then(
+                if (skinGradientSmall) {
+                    Modifier.background(Brush.horizontalGradient(CiliSkin.primaryButtonColors.map { Color(it) }), shape)
+                } else {
+                    Modifier
+                },
+            ),
         enabled = enabled,
         shape = shape,
-        colors = colors,
+        colors = if (skinGradientSmall) colors.copy(containerColor = Color.Transparent) else colors,
         elevation = elevation,
         border = border,
         contentPadding = contentPadding,

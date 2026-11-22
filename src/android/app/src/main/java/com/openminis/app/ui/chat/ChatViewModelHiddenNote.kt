@@ -107,6 +107,46 @@ internal suspend fun ChatViewModel.commitSessionNoticesOnce(
             }
         }
     }
+    if (goalCanContinue) {
+        val ledger = WorkingMemoryStore.ledgerFor(sid, context.filesDir)
+        // [T-drift-signal] Event-driven v2: the check fires on a PROVEN host
+        // signal — loop (the last LOOP_WINDOW digests are byte-identical, the
+        // model is repeating the same call) — or on a long heartbeat. Nothing
+        // fires on a healthy cadence, so on-track sessions emit nothing and
+        // the user never sees a repeating self-check.
+        val cfg = com.openminis.app.agent.HarnessConfig.current()
+        val everyN = cfg.driftGuardEveryN
+        val heartbeatN = cfg.driftGuardHeartbeatEveryN
+        val turn = ledger.lastTurn()
+        val loop = com.openminis.app.goal.DriftGuard.detectLoop(
+            ledger.recentDigests(com.openminis.app.goal.DriftGuard.LOOP_WINDOW),
+        )
+        val heartbeatBucket = com.openminis.app.goal.DriftGuard.bucketFor(turn, heartbeatN)
+        if (loop || heartbeatBucket > 0) {
+            // Marker dedup doubles as the anti-flap gate: the bucket only
+            // advances every [everyN] rounds, so one signal cannot re-fire
+            // back-to-back inside the same window.
+            val bucket = if (heartbeatBucket > 0) heartbeatBucket
+                else com.openminis.app.goal.DriftGuard.bucketFor(turn, everyN)
+            val marker = com.openminis.app.goal.DriftGuard.markerFor(bucket)
+            if (agentHistory.none { it.content.contains(marker) }) {
+                // [T-task-checkpoint] Recovery point before every drift check:
+                // the plan board at the last known-good round.
+                com.openminis.app.goal.TaskCheckpointStore.save(context, sid, goalObjective, goalPrompt)
+                val reason = if (loop) {
+                    "loop: the last ${com.openminis.app.goal.DriftGuard.LOOP_WINDOW} tool calls repeated the same arguments"
+                } else {
+                    "heartbeat: $heartbeatN rounds without a check"
+                }
+                val note = com.openminis.app.goal.DriftGuard.buildNote(
+                    marker, goalPrompt ?: goalObjective, bucket, everyN, reason,
+                )
+                val committed = commitHiddenUserNote(note, sid)
+                if (!ownsNotices()) return
+                if (committed) ledgerDirty = true
+            }
+        }
+    }
     if (ledgerDirty) {
         val state = currentNoticeState()
         withContext(Dispatchers.IO) { NoticeLedgerStore.save(context.filesDir, sid, state) }

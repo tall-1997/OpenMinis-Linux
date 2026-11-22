@@ -1,0 +1,1 @@
+{"name":"bpf_selftest","cat":"eBPF","desc":"[eBPF] 自检：bpf()系统调用/校验器/bpffs/kprobe","params":"","timeoutMs":30000,"cmd":"/data/adb/lemonbpf/lemonbpf selftest 2>&1"}

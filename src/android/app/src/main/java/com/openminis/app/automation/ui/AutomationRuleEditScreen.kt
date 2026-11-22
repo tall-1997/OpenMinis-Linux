@@ -46,6 +46,7 @@ import com.openminis.app.automation.RuleSpec
 import com.openminis.app.automation.Trigger
 import com.openminis.app.ui.components.MinisCenterTopBar
 import com.openminis.app.ui.settings.SettingsSwitch
+import com.openminis.app.ui.components.MinisGradientSwitch
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlinx.coroutines.launch
@@ -329,7 +330,7 @@ fun AutomationRuleEditScreen(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(stringResource(R.string.automation_rule_field_charging), modifier = Modifier.weight(1f))
-                Switch(checked = useCharging, onCheckedChange = { useCharging = it })
+                MinisGradientSwitch(checked = useCharging, onCheckedChange = { useCharging = it })
             }
             if (useCharging) {
                 Row(
@@ -337,7 +338,7 @@ fun AutomationRuleEditScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(if (charging) "charging" else "not charging", modifier = Modifier.weight(1f))
-                    Switch(checked = charging, onCheckedChange = { charging = it })
+                    MinisGradientSwitch(checked = charging, onCheckedChange = { charging = it })
                 }
             }
 
@@ -515,7 +516,7 @@ private fun ConditionRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(label, modifier = Modifier.weight(1f))
-            Switch(checked = checked, onCheckedChange = onChecked)
+            MinisGradientSwitch(checked = checked, onCheckedChange = onChecked)
         }
         if (checked) content()
     }

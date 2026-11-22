@@ -1,0 +1,1 @@
+{"name":"dup_files","cat":"存储增强","desc":"[存储增强] 重复文件查找：按尺寸分组 + md5 找出内容相同的副本","params":"path:string:目录|minkb:string:最小KB(默认1024)|limit:string:扫描上限(默认4000)","timeoutMs":60000,"cmd":"/system/bin/timeout 55 sh /data/adb/lemon_kernel/lemonlib/lemon_store.sh dupfile $path $minkb $limit"}

@@ -1,0 +1,1 @@
+{"name": "web_search", "desc": "[联网] 网页搜索(小浣熊AI搜索为主+百度/搜狗/360/必应回退,返回标题+链接+摘要)", "params": "query:string:搜索关键词", "required": "query", "timeoutMs": 45000, "cmd": "sh /data/lemonbrain/nettools/web_search.sh $query"}

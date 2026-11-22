@@ -1,0 +1,1 @@
+{"name":"magisk_boot_backup","desc":"[面具/安全] 备份boot镜像到六号仓库(带md5)","params":"img:string:镜像路径","required":"img","timeoutMs":60000,"cmd":"test -e $img || { echo NO_SUCH_IMAGE $img; exit 1; }; BK=$LEMON_DATA/小柠檬仓库中心/六号备份仓库/boot备份_$(date +%Y%m%d_%H%M%S); mkdir -p $BK; cp -p $img $BK/; cd $BK; md5sum $(basename $img) > $(basename $img).md5; echo BACKED_UP; ls -la $BK"}

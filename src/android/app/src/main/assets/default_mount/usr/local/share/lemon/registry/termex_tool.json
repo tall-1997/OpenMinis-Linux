@@ -1,0 +1,1 @@
+{"name":"termex_tool","desc":"[Termex] 通用入口:执行工具箱内152个命令(PATH已含)","params":"args:string:完整命令,如 zstd -d a.zst / awk -F, 1 f.txt","required":"args","timeoutMs":60000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termex_tool . /data/local/tmp/termex/env.sh; eval $args 2>&1"}

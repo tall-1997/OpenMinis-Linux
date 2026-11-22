@@ -1,0 +1,1 @@
+{"name":"debug_anr_list","desc":"列出ANR日志(traces)","params":"lines:integer:行数,默认20","required":"","timeoutMs":15000,"cmd":"ls -lat /data/anr/ 2>/dev/null | head -${lines:-20}"}

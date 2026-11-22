@@ -61,8 +61,13 @@ internal fun ToolCardLabel(
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
             color = if (failed) ToolErrorColor else MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+            // [T-tool-card-full-text] user: 从左到右显示内容不能截断 —
+            // the semantic headline wraps to its full content instead of
+            // clipping mid-path at one line. The collapsed row grows by a
+            // line only when the headline genuinely needs it; the eyebrow
+            // stays single-line (it's a short category tag by contract).
+            maxLines = Int.MAX_VALUE,
+            overflow = TextOverflow.Clip,
         )
         if (showDetail && presentation.detail.isNotEmpty()) {
             Spacer(modifier = Modifier.height(2.dp))
@@ -70,8 +75,9 @@ internal fun ToolCardLabel(
                 text = presentation.detail,
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                // [T-tool-card-full-text] Same no-truncation contract.
+                maxLines = Int.MAX_VALUE,
+                overflow = TextOverflow.Clip,
             )
         }
     }

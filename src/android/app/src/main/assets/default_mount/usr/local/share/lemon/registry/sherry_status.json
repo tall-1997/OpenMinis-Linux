@@ -1,0 +1,1 @@
+{"name":"sherry_status","desc":"[雪莉] 文件管家状态:健康分/磁盘/删除计数/上次清理","params":"","required":"","timeoutMs":20000,"cmd":"sh /data/lemonbrain/sherry_keeper/sherry_agent.sh status"}

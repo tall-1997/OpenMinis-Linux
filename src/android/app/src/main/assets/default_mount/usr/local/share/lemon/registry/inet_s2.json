@@ -1,0 +1,1 @@
+{"name": "inet_s2", "cat": "免费网络工具", "desc": "[免费接入]Semantic Scholar学术检索(公共池偶发限流,自动重试)", "params": "q:string:检索词|limit:int:条数,默认5", "required": "q", "timeoutMs": 60000, "cmd": "/data/data/com.termux/files/usr/bin/python3 /data/lemonbrain/nettools/inet_s2.py --q=$q --limit=$limit"}

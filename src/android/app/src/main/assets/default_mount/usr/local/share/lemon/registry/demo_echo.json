@@ -1,0 +1,1 @@
+{"name":"demo_echo","cat":"Demo","desc":"热插拔演示:回显文本","params":"text:string:要回显的文本","required":"text","timeoutMs":10000,"cmd":"echo $text"}

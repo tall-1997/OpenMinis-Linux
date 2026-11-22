@@ -1,0 +1,1 @@
+{"name":"sign_keytool","desc":"[签名] 通用 keytool 入口(JDK17)","params":"args:string:完整keytool参数,如 -list -keystore /path.jks -storepass 123456","required":"args","timeoutMs":60000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh sign_keytool . /data/local/tmp/jdk_env.sh; eval keytool $args 2>&1"}

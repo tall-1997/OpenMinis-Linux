@@ -38,6 +38,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
+import com.openminis.app.ui.components.MinisGradientSwitch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import com.openminis.app.ui.components.MinisCenterTopBar
@@ -190,12 +191,13 @@ fun SettingsSwitch(
     CompositionLocalProvider(
         LocalMinimumInteractiveComponentSize provides Dp.Unspecified,
     ) {
-        Switch(
+        // [T-cili-skin-gate] 小黄鱼 gradient track while the skin gate is
+        // active; plain M3 switch otherwise (MinisGradientSwitch handles both).
+        MinisGradientSwitch(
             checked = checked,
             onCheckedChange = onCheckedChange,
             modifier = modifier,
             enabled = enabled,
-            colors = colors,
         )
     }
 }

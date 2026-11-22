@@ -1,0 +1,1 @@
+{"name":"tx_strip","cat":"Termux","desc":"[Termux] llvm-strip瘦身（去调试符号）","params":"src:string:输入文件,out:string:输出文件默认加.stripped","required":"src","timeoutMs":180000,"cmd":"TX_SRC=$src TX_OUT=$out sh /data/adb/lemon_kernel/lemon/tx/tx.sh strip"}

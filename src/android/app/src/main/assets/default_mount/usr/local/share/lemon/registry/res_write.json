@@ -1,0 +1,1 @@
+{"name":"res_write","desc":"[资源] 向指定域写文件(记忆/仓库/学习/MCP源码/内核源码)","params":"domain:string:域mem/repo/learn/mcp/kern|path:string:相对路径|content:string:文件内容","required":"domain,path,content","timeoutMs":30000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh res_write sh /data/adb/lemon_kernel/lemon/res/res.sh $domain write $path $content"}

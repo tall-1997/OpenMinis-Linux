@@ -1,0 +1,1 @@
+{"name":"typec_state","desc":"USB Type-C 端口状态与角色","params":"","required":"","timeoutMs":15000,"cmd":"for p in /sys/class/typec/port*; do echo \"== $p ==\"; cat $p/data_role 2>/dev/null; cat $p/power_role 2>/dev/null; cat $p/port_type 2>/dev/null; done 2>/dev/null; echo '--- usb_power_delivery ---'; ls /sys/class/usb_power_delivery/ 2>/dev/null"}

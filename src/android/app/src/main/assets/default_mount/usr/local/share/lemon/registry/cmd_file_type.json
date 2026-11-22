@@ -1,0 +1,1 @@
+{"name":"cmd_file_type","desc":"识别文件类型(file)","params":"path:string:路径","required":"path","timeoutMs":15000,"cmd":"file $path 2>&1"}

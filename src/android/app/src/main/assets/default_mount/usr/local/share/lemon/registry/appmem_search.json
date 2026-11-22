@@ -1,0 +1,1 @@
+{"name":"appmem_search","cat":"App记忆","desc":"[App记忆] 在 App 记忆归档中做关键词检索（带上下文）","params":"kw:string:关键词","required":"kw","timeoutMs":30000,"cmd":"sh /data/adb/lemon_kernel/lemon/appmem.sh search $kw"}

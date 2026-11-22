@@ -1,0 +1,1 @@
+{"name":"log_events","desc":"导出events日志缓冲","params":"lines:integer:行数,默认100","required":"","timeoutMs":30000,"cmd":"logcat -d -b events 2>/dev/null | tail -${lines:-100}"}

@@ -1,0 +1,1 @@
+{"name":"proc_ionice","desc":"设置进程IO优先级(ionice)","params":"pid:string:进程ID|class:string:0无1实时2尽力3空闲|level:string:0-7优先级","required":"pid,class","timeoutMs":15000,"cmd":"ionice -c $class ${level:+-n $level} -p $pid 2>&1; ionice -p $pid 2>&1"}

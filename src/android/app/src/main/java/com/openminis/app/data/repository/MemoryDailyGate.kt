@@ -225,7 +225,10 @@ internal object MemoryDailyGate {
         val spans = LinkedHashMap<MemoryEntryRef, MemoryDeliverySpan>()
         val text = buildString {
             appendLine("$label daily log (${day.date}.md):")
-            for ((i, line) in lines.take(lineCap).withIndex()) {
+            if (lines.size > lineCap) {
+                appendLine("... (${lines.size - lineCap} earlier lines omitted, use memory_get to search)")
+            }
+            for ((i, line) in lines.takeLast(lineCap).withIndex()) {
                 if (i > 0) appendLine()
                 val visible = MemoryAuthority.stripForgedTag(line.text)
                 val start = length
@@ -234,7 +237,6 @@ internal object MemoryDailyGate {
                     line.entry?.ref?.let { spans.putIfAbsent(it, MemoryDeliverySpan(it, start, length)) }
                 }
             }
-            if (lines.size > lineCap) append("\n... (${lines.size - lineCap} more lines, use memory_get to search)")
         }
         return MemoryAssembly.DailyFragment(day.date, text, spans.values.toList())
     }

@@ -1,0 +1,1 @@
+{"name":"xb_dump","desc":"[X浏览器] dump 当前界面 UI 树","params":"","required":"","timeoutMs":25000,"cmd":"uiautomator dump /sdcard/xb_dump.xml >/dev/null 2>&1; grep -o 'text=\"[^\"]*\"' /sdcard/xb_dump.xml 2>/dev/null | head -30"}

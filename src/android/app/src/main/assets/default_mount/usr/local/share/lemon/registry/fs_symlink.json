@@ -1,0 +1,1 @@
+{"name":"fs_symlink","desc":"创建符号链接(ln -s)","params":"target:string:目标|link:string:链接名","required":"target,link","timeoutMs":15000,"cmd":"ln -sf $target $link 2>&1; ls -l $link 2>&1"}

@@ -1,0 +1,1 @@
+{"name":"debug_proc_maps","desc":"查看进程内存映射(maps)","params":"pid:string:进程ID|filter:string:过滤,可空|lines:integer:行数,默认60","required":"pid","timeoutMs":15000,"cmd":"cat /proc/$pid/maps 2>/dev/null | grep -i -- $filter | head -${lines:-60}"}

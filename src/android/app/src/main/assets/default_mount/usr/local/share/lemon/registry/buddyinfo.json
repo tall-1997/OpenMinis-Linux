@@ -1,0 +1,1 @@
+{"name":"buddyinfo","desc":"内存伙伴系统碎片情况","params":"","required":"","timeoutMs":10000,"cmd":"cat /proc/buddyinfo 2>&1"}

@@ -1,0 +1,1 @@
+{"name":"dyn_down","cat":"动态插桩","desc":"[动态插桩] 停 rusda frida 服务并清理残留实例","params":"","timeoutMs":30000,"cmd":"sh /data/adb/lemon_kernel/lemonlib/dynhook.sh down"}

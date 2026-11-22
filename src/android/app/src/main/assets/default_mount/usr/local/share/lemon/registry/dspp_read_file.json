@@ -1,0 +1,1 @@
+{"name":"dspp_read_file","desc":"[DS++] 读取工作区文件(最大 256KB)","params":"path:string:文件路径","required":"path","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/lemon/dspp/dspp_fs.sh read $path"}

@@ -1,0 +1,1 @@
+{"name":"selinux_avc_summary","desc":"汇总SELinux拒绝(按scontext/tcontext去重计数)","params":"lines:integer:取样行数,默认2000","required":"","timeoutMs":40000,"cmd":"dmesg 2>/dev/null | grep 'avc:  denied' | tail -${lines:-2000} | sed -E 's/.*scontext=([^ ]+).*tcontext=([^ ]+).*tclass=([^ ]+).*/\\1 -> \\2 [\\3]/' | sort | uniq -c | sort -rn | head -30"}

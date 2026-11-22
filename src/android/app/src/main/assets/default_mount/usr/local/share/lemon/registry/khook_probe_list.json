@@ -1,0 +1,1 @@
+{"name":"khook_probe_list","cat":"内核态","desc":"[内核态] 列出已注册/已启用/已持久化的全部探针","params":"","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/khook/khook.sh probe_list"}

@@ -1,0 +1,1 @@
+{"name":"termux_proc","desc":"Termux相关进程列表","params":"","required":"","timeoutMs":30000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termux_proc ps -A -o PID,USER,NAME,ARGS 2>/dev/null | grep -i termux | grep -v grep"}

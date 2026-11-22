@@ -1,0 +1,1 @@
+{"name":"bpf_killmon_on","cat":"eBPF","desc":"[eBPF] 装载内核态 kill 调用监控程序（目标 pid+信号）","params":"","timeoutMs":30000,"cmd":"/data/adb/lemonbpf/lemonbpf start killmon 2>&1"}

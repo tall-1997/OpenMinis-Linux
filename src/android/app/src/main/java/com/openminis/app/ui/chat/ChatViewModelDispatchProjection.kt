@@ -80,7 +80,10 @@ internal suspend fun ChatViewModel.buildDispatchProjection(
     val window = requestContextWindow(provider, model)
     val policy = ContextPolicy.forContextWindow(window, effectiveCompactPercent())
     val harness = activeHarnessConfig(requestEntryId(model))
-    val receipt = pendingToolReceiptNotice(sessionId)
+    // [T-receipt-notice-generation] Scope the check to THIS user turn's
+    // generation: a session-wide aggregate resurrects stale orphans from
+    // earlier questions (the repeating "pending: N" nag) and mixes projects.
+    val receipt = pendingToolReceiptNotice(sessionId, history.lastOrNull(::receiptUserRow)?.dbMessageId)
     val compact = requestCompactStateFor(history, sessionId)
     if (activeSessionId != sessionId) return@withContext null
     val clock = requestClockNote(sessionId, history)

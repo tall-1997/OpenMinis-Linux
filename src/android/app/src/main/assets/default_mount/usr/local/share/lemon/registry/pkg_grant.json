@@ -1,0 +1,1 @@
+{"name":"pkg_grant","desc":"授予应用运行时权限(pm grant)","params":"pkg:string:包名|perm:string:权限名如android.permission.CAMERA","required":"pkg,perm","timeoutMs":20000,"cmd":"pm grant $pkg $perm 2>&1; echo OK"}

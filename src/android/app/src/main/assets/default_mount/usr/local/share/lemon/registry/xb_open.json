@@ -1,0 +1,1 @@
+{"name":"xb_open","desc":"[X浏览器] 打开网址","params":"url:string:网址(可省https)","required":"url","timeoutMs":20000,"cmd":"u='$url'; case $u in http*|file*) ;; *) u=https://$u ;; esac; am start -a android.intent.action.VIEW -d \"$u\" 2>&1 | head -5; echo opened: $u"}

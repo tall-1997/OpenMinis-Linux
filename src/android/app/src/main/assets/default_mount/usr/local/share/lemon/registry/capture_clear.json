@@ -1,0 +1,1 @@
+{"name":"capture_clear","desc":"清空抓包日志","params":"","required":"","timeoutMs":15000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh capture_clear : > /data/local/tmp/lemon_mitm/capture.log; echo CAPTURE_CLEARED; wc -l /data/local/tmp/lemon_mitm/capture.log"}

@@ -1,0 +1,1 @@
+{"name":"voocphy_loglevel","desc":"VOOC快充日志等级","params":"val:string:等级,留空读取","required":"","timeoutMs":15000,"cmd":"[ -n $val ] && echo $val > /proc/voocphy_loglevel 2>&1; echo -n \"loglevel=\"; cat /proc/voocphy_loglevel 2>/dev/null"}

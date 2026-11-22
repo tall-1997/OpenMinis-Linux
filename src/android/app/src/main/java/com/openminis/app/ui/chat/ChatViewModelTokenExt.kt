@@ -43,11 +43,22 @@ internal fun ChatViewModel.contextTokensForPolicy(): Int = when (
     PolicyMeasurement.REQUEST -> estimateAgentHistoryTokens()
 }
 
-/** Without the system/tools/projected history we cannot prove an anchor still matches. */
-fun ChatViewModel.refreshContextUsage() = refreshContextUsage(
-    ContextTokenEstimate(estimateAgentHistoryTokens()),
-    currentModelContextWindow ?: 0,
-)
+/**
+ * [T-ring-semantic-single-source] The ring reads the SAME number the compact
+ * gate acts on: the policy's UNBUDGETED reading — untrimmed history only
+ * (applyProgressiveTrim=false / applyTailBudget=false), NO request-shape
+ * overhead. History is the only part compaction can shrink, so after a
+ * compact this drops hard and the operator sees the compaction work.
+ * Refreshed on session load (projection), after compact, and before send —
+ * never from the settle path (provider-measured input includes the fixed
+ * overhead and would pin the ring near 100% after every compact).
+ */
+fun ChatViewModel.refreshContextUsage() {
+    val history = estimateMessagesTokens(
+        effectiveAgentHistoryUncounted(applyProgressiveTrim = false, applyTailBudget = false),
+    )
+    refreshContextUsage(ContextTokenEstimate(history), currentModelContextWindow ?: 0)
+}
 
 internal fun ChatViewModel.refreshContextUsage(estimate: ContextTokenEstimate, contextWindow: Int) {
     contextUsage.value = ContextUsage(

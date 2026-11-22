@@ -1,0 +1,1 @@
+{"name":"sherry_organize","desc":"[雪莉] 文件整理(按类型归类)","params":"","required":"","timeoutMs":120000,"cmd":"sh /data/lemonbrain/sherry_keeper/sherry_agent.sh organize"}

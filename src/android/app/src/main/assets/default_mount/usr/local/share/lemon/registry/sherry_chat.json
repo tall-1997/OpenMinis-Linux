@@ -1,0 +1,1 @@
+{"name":"sherry_chat","desc":"[雪莉] 雪莉口吻回话(带真实状态)","params":"text:string:问话内容","required":"text","timeoutMs":60000,"cmd":"sh /data/lemonbrain/sherry_keeper/sherry_agent.sh chat $text"}

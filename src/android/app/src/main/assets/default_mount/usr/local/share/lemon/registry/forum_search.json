@@ -1,0 +1,1 @@
+{"name":"forum_search","cat":"MT论坛","desc":"[MT论坛] 搜索论坛帖子(需登录态)","params":"keyword:string:搜索词","required":"keyword","timeoutMs":45000,"cmd":"/data/data/com.termux/files/usr/bin/python3 /data/lemonbrain/nettools/forum_client.py search $keyword"}

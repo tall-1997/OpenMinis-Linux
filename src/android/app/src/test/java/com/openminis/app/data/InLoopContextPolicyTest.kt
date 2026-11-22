@@ -93,12 +93,12 @@ class InLoopContextPolicyTest {
     }
 
     @Test
-    fun `default 75 percent leaves headroom on 200k and 100k windows`() {
-        // [GH#74] The default moved 90 → 75 so a long tool-heavy turn keeps
-        // room for the summary + re-appended recent turns before the hard
-        // provider ceiling. Explicit per-model overrides still win.
-        assertEquals(150_000, ContextPolicy.forContextWindow(200_000).compactThreshold)
-        assertEquals(75_000, ContextPolicy.forContextWindow(100_000).compactThreshold)
+    fun `default 90 percent leaves headroom on 200k and 100k windows`() {
+        // [T-compact-threshold-90] The default moved back to 90 (user
+        // direction): auto-compaction fires only near the top of the window.
+        // Explicit per-model overrides still win.
+        assertEquals(180_000, ContextPolicy.forContextWindow(200_000).compactThreshold)
+        assertEquals(90_000, ContextPolicy.forContextWindow(100_000).compactThreshold)
     }
 
     @Test
@@ -148,10 +148,10 @@ class InLoopContextPolicyTest {
 
     @Test
     fun `a null buffer keeps the default percentage threshold`() {
-        // [GH#74] Default is 75% now.
-        assertEquals(150_000, ContextPolicy.forContextWindow(200_000, bufferTokens = null).compactThreshold)
-        assertEquals(150_000, ContextPolicy.forContextWindow(200_000).compactThreshold)
-        assertEquals(75_000, ContextPolicy.forContextWindow(100_000).compactThreshold)
+        // [T-compact-threshold-90] Default is 90% now.
+        assertEquals(180_000, ContextPolicy.forContextWindow(200_000, bufferTokens = null).compactThreshold)
+        assertEquals(180_000, ContextPolicy.forContextWindow(200_000).compactThreshold)
+        assertEquals(90_000, ContextPolicy.forContextWindow(100_000).compactThreshold)
     }
 
     @Test

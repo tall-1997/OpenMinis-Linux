@@ -40,7 +40,17 @@ internal suspend fun ChatViewModel.acceptRequestProjection(
     if (actual != null && routeStillCurrent && projection.markerId == _cachedLatestMarker?.id) {
         _lastTurnContextTokens.value = actual
         _lastCacheHitRate.value = ((usage?.cacheReadInputTokens ?: 0).toDouble() / actual).coerceIn(0.0, 1.0)
-        refreshContextUsage(ContextTokenEstimate(actual, actual), projection.window)
+        // [T-ring-semantic-single-source] The ring no longer refreshes from the
+        // settle path. `actual` is the PROVIDER's measured input — system
+        // prompt + tool defs + history. Compaction only shrinks the history,
+        // so after a compact the measured input stayed near the window and
+        // the ring read 100% ("压缩后环形还是满的") — a number the operator
+        // cannot act on. The ring answers ONE question — "how much chat
+        // history is loaded" — from ONE source: the no-arg
+        // refreshContextUsage() (untrimmed history, same basis as the
+        // compact gate's UNBUDGETED reading), refreshed on load / after
+        // compact / before send. Billing-side truth stays in
+        // _lastTurnContextTokens for the token sheet.
     }
     try {
         recordSuccessfulMemoryDelivery(projection.prompt?.daily, request.systemPrompt, request.messages, projection.recall, realUserId)

@@ -1,0 +1,1 @@
+{"name":"termex_sftp","desc":"[Termex] sftp 安全文件传输","params":"args:string:sftp参数","required":"args","timeoutMs":120000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termex_sftp . /data/local/tmp/termex/env.sh; eval /data/local/tmp/termex/bin/sftp $args 2>&1"}

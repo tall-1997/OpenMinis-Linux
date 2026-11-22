@@ -1,0 +1,1 @@
+{"name":"cmd_tcpdump","desc":"tcpdump抓包(限时)","params":"iface:string:网卡如any|filter:string:过滤表达式,可空|sec:integer:秒数,默认5|lines:integer:行数,默认40","required":"iface","timeoutMs":30000,"cmd":"timeout ${sec:-5} tcpdump -i $iface -c ${lines:-40} $filter 2>&1 | tail -${lines:-40}"}

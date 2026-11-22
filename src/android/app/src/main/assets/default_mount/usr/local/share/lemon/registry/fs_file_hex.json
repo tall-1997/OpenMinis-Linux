@@ -1,0 +1,1 @@
+{"name":"fs_file_hex","desc":"以hex查看文件前N字节(xxd/od)","params":"path:string:文件路径|bytes:integer:字节数,默认256","required":"path","timeoutMs":15000,"cmd":"xxd -l ${bytes:-256} $path 2>&1 || od -A x -t x1z -v $path 2>&1 | head -20"}

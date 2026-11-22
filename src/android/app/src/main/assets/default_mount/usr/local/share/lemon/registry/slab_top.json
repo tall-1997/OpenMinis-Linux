@@ -1,0 +1,1 @@
+{"name":"slab_top","desc":"内核slab占用TOP(/proc/slabinfo)","params":"lines:integer:行数,默认30","required":"","timeoutMs":15000,"cmd":"head -2 /proc/slabinfo 2>/dev/null; tail -n +3 /proc/slabinfo 2>/dev/null | sort -k3 -rn | head -${lines:-30}"}

@@ -1,0 +1,1 @@
+{"name":"sysprop_list","desc":"列出系统属性(可按关键字过滤)","params":"filter:string:过滤,可空|lines:integer:行数,默认200","required":"","timeoutMs":15000,"cmd":"getprop 2>/dev/null | grep -i -- $filter | head -${lines:-200}"}

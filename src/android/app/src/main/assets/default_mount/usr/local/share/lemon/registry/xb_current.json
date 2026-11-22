@@ -1,0 +1,1 @@
+{"name":"xb_current","desc":"[X浏览器] 查看当前前台 Activity","params":"","required":"","timeoutMs":15000,"cmd":"dumpsys activity activities 2>/dev/null | grep -E 'topResumedActivity' | head -2"}

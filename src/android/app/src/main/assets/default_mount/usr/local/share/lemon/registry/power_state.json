@@ -1,0 +1,1 @@
+{"name":"power_state","desc":"查看电源状态(充电/电池/唤醒统计)","params":"","required":"","timeoutMs":15000,"cmd":"echo '--- battery ---'; dumpsys battery 2>/dev/null | head -30; echo '--- power ---'; dumpsys power 2>/dev/null | grep -iE 'mWakefulness|mScreen|mHolding' | head -20"}

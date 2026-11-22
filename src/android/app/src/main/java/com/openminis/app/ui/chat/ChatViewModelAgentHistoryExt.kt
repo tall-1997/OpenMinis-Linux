@@ -42,7 +42,14 @@ internal fun ChatViewModel.effectiveAgentHistoryUncounted(
 
     val chunkRetrieved = fitSummaryChunks(marker.summaryChunks)?.let { json ->
         val query = history.lastOrNull { it.role == LLMMessage.Role.USER }?.content.orEmpty()
-        selectSummaryChunks(json, query).takeIf { it.isNotEmpty() }?.joinToString("\n\n---\n\n")
+        // [T-compact-envelope-overlap] Drop excerpts the main summary already
+        // carries: the pool stores per-compaction snapshots and the current
+        // summary recursively merges earlier ones, so without this filter the
+        // envelope repeated the same content 2-3x per request (DB-proven).
+        selectSummaryChunks(json, query)
+            .filterNot { compactExcerptOverlapsSummary(summary, it) }
+            .takeIf { it.isNotEmpty() }
+            ?.joinToString("\n\n---\n\n")
     }
     val envelope = buildCompactSummaryEnvelope(summary, chunkRetrieved, marker.assetsJson)
 

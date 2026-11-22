@@ -1,0 +1,1 @@
+{"name":"flutter_scan","cat":"Flutter底座","desc":"[Flutter] 全流程解析 libapp.so：对象池/类布局/函数/汇编/Dart 伪代码/加密与网络端点线索；同 sha256 自动复用缓存","params":"path:string:APK 或 libapp.so 绝对路径|opt:string:附加 --fast(跳伪代码) --all(全函数) --graph(CFG) --force(重跑)","required":"path","timeoutMs":900000,"cmd":"FL_CMD=scan FL_PATH=$path FL_OPT=$opt sh /data/adb/lemon_kernel/lemon/flutter/fscan.sh"}

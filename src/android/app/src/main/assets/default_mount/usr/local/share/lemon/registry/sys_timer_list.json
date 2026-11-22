@@ -1,0 +1,1 @@
+{"name":"sys_timer_list","desc":"内核定时器列表(/proc/timer_list)","params":"lines:integer:行数,默认40","required":"","timeoutMs":15000,"cmd":"cat /proc/timer_list 2>/dev/null | head -${lines:-40}"}

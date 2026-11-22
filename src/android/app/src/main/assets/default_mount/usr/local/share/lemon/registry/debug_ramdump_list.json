@@ -1,0 +1,1 @@
+{"name":"debug_ramdump_list","desc":"列出ramdump崩溃转储","params":"","required":"","timeoutMs":15000,"cmd":"ls -la /sys/class/ramdump/ 2>/dev/null; ls -la /data/vendor/ramdump/ 2>/dev/null | head -20"}

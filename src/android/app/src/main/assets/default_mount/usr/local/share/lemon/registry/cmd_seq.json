@@ -1,0 +1,1 @@
+{"name":"cmd_seq","desc":"生成序列(seq)","params":"args:string:seq参数如 1 10 或 0 2 10","required":"args","timeoutMs":15000,"cmd":"seq $args 2>&1 | head -50"}

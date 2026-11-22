@@ -1,0 +1,1 @@
+{"name":"khook_event_on_all","cat":"内核态","desc":"[内核态] 按前缀批量启用事件（如 syscalls: 一次开全部系统调用）","params":"prefix:string:前缀(如 syscalls:)","timeoutMs":30000,"cmd":"sh /data/adb/lemon_kernel/khook/khook.sh event_on_all $prefix"}

@@ -1,0 +1,1 @@
+{"name":"sched_policy_set","desc":"设置进程调度策略(chrt: -r 实时/-o 普通/-b 批处理/-i 空闲)","params":"pid:string:进程ID|policy:string:r|o|b|i|f(实时)|d|默认优先级","required":"pid,policy","timeoutMs":15000,"cmd":"chrt -$policy -p $pid 2>&1; chrt -p $pid 2>&1"}

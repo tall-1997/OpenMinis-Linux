@@ -1,0 +1,1 @@
+{"name":"selinux_set","desc":"切换SELinux模式(0=permissive,1=enforcing)","params":"mode:string:0或1","required":"mode","timeoutMs":15000,"cmd":"setenforce $mode 2>&1; echo -n 'now='; getenforce"}

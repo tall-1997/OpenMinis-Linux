@@ -1,0 +1,1 @@
+{"name":"thermal_log","cat":"系统增强","desc":"[系统增强] 温度采样记录：start [分钟] [秒] 后台采样 / stop / show [n] / stat 统计","params":"action:string:start或stop或show或stat|a2:string:分钟数或条数|a3:string:采样间隔秒","timeoutMs":60000,"cmd":"/system/bin/timeout 55 sh /data/adb/lemon_kernel/lemonlib/lemon_sys.sh thermal $action $a2 $a3"}

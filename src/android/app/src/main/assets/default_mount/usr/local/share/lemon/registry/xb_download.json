@@ -1,0 +1,1 @@
+{"name":"xb_download","desc":"[X浏览器] 下载文件到本地","params":"url:string:下载地址|out:string:保存路径(可空)","required":"url","timeoutMs":120000,"cmd":"o='$out'; [ -z \"$o\" ] && o=/storage/emulated/0/Download/xbdl_$(date +%H%M%S); curl -sL -m 100 -o \"$o\" '$url' && ls -l \"$o\" || echo download-failed"}

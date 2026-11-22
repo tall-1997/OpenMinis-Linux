@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.data.model.ContextUsage
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.theme.CiliSkin
 
 /**
  * Context-usage ring — a 24 × 24 Canvas track + arc (`usage.ratio * 360`).
@@ -48,8 +49,22 @@ fun ContextRing(
         label = "ctxRing",
     )
     val fg = ringColor(if (usage.known) ratio else 0f)
+    // [T-cili-skin-gate] While the 小黄鱼 skin is active (dynamic OFF + dark)
+    // the occupied arc carries the left->right skin gradient (#FFB3D1 ->
+    // #FF7AD9) and the label matches the gradient's far end; outside the
+    // gate the health gradient (green→blue→yellow→red) stays untouched.
+    val skin = CiliSkin.isActive
+    val arcBrush = if (skin) {
+        androidx.compose.ui.graphics.Brush.sweepGradient(
+            0f to Color(0xFFFFB3D1),
+            0.75f to Color(0xFFFF7AD9),
+            1f to Color(0xFFFFB3D1),
+        )
+    } else null
     val trackColor = ChatColors.toolBorder
-    val displayText = if (!usage.known) "?" else "${(ratio * 100f).toInt()}%"
+    // [T-ring-plain-number] Bare percent value only — the "%" glyph eats the
+    // tiny monospace budget (3 digits + % overflowed the ring at 100%).
+    val displayText = if (!usage.known) "?" else "${(ratio * 100f).toInt()}"
 
     val clickMod = if (onClick != null) {
         Modifier.clickable(
@@ -78,20 +93,34 @@ fun ContextRing(
             )
             // Occupied arc.
             if (usage.known && animated > 0f) {
-                drawArc(
-                    color = fg,
-                    startAngle = -90f,
-                    sweepAngle = animated.coerceIn(0f, 1f) * 360f,
-                    useCenter = false,
-                    style = Stroke(width = stroke, cap = StrokeCap.Round),
-                )
+                if (arcBrush != null) {
+                    drawArc(
+                        brush = arcBrush,
+                        startAngle = -90f,
+                        sweepAngle = animated.coerceIn(0f, 1f) * 360f,
+                        useCenter = false,
+                        style = Stroke(width = stroke, cap = StrokeCap.Round),
+                    )
+                } else {
+                    drawArc(
+                        color = fg,
+                        startAngle = -90f,
+                        sweepAngle = animated.coerceIn(0f, 1f) * 360f,
+                        useCenter = false,
+                        style = Stroke(width = stroke, cap = StrokeCap.Round),
+                    )
+                }
             }
         }
         Text(
             text = displayText,
             fontSize = 8.sp,  // token-literal-ok: 低于最小档，环心极限尺寸
             fontFamily = FontFamily.Monospace,
-            color = if (usage.known) fg else ChatColors.secondaryText,
+            color = when {
+                !usage.known -> ChatColors.secondaryText
+                skin -> Color(0xFFFF7AD9) // gradient far end
+                else -> fg
+            },
         )
     }
 }

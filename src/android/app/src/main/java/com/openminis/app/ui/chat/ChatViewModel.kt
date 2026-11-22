@@ -65,6 +65,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -112,6 +113,7 @@ class ChatViewModel(
         if (cached != null && sessionMemoryRepoCacheSid == sid) return cached
         val repo = MemoryRepository(
             com.openminis.app.sandbox.SessionWorkspace.memoryDir(context.filesDir, sid),
+            sharedDir = com.openminis.app.data.repository.MemoryIndex.sharedDir(context.filesDir),
         )
         sessionMemoryRepoCache = repo
         sessionMemoryRepoCacheSid = sid
@@ -945,6 +947,17 @@ class ChatViewModel(
 
     internal val _sessionTitle = MutableStateFlow("New Chat")
     val sessionTitle: StateFlow<String> = _sessionTitle.asStateFlow()
+
+    /**
+     * [T-title-live-sync] Session-title DB observer, (re)armed by loadSession.
+     * The in-chat edit sheet writes straight to [_sessionTitle]; the session
+     * LIST's rename (and any other writer) only touches the DB — without this
+     * observer the top bar kept the stale title until a full reload (user:
+     * "无论从主页修改还是聊天窗口修改都要实时更新"). One collection per loaded
+     * session; a fast session switch cancels the previous session's stream so
+     * a late list emission can't write A's title into B.
+     */
+    internal var titleSyncJob: Job? = null
 
     /** T-chat-title-pill: category drives the icon shown in the sticky title
      *  pill (mirrors SessionRow's categoryStyle lookup). Null on draft sessions

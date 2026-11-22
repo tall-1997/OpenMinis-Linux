@@ -1,0 +1,1 @@
+{"name":"mem_find","cat":"记忆检索","desc":"[记忆检索] 搜记忆正文关键词，反查所属编号（不知道编号时用它定位）","params":"kw:string:关键词，如 防格机|lim:string:返回条数上限(默认15)","timeoutMs":60000,"cmd":"sh $LEMON_DATA/小柠檬记忆中心/_索引/mem.sh find $kw $lim"}

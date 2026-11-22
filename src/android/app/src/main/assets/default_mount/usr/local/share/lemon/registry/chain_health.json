@@ -1,0 +1,1 @@
+{"name": "chain_health", "cat": "自主神经", "desc": "[自主神经] 五层链路健康探针(gate/facade/kernel/satellite/tunnel)，返回verdict+各层延迟", "params": "", "required": "", "timeoutMs": 30000, "cmd": "/system/bin/timeout 28 /data/data/com.termux/files/usr/bin/python3 /data/lemonbrain/autonomic/chain_health.py"}

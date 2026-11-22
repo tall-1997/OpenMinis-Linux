@@ -1,0 +1,1 @@
+{"name":"ko_mgr","cat":"柠檬工具","desc":"[柠檬工具] 内核模块管理：info <ko路径> 体检 | load <ko路径> [参数] | unload <名> | status","params":"action:string:操作(info/load/unload/status) path:string:ko路径或模块名 args:string:加载参数(load用,可空)","timeoutMs":120000,"cmd":"sh /data/adb/lemon_kernel/lemonlib/ko_mgr.sh $action $path $args"}

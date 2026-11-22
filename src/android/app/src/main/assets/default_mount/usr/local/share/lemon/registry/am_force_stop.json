@@ -1,0 +1,1 @@
+{"name":"am_force_stop","desc":"强制停止应用(am force-stop)","params":"pkg:string:包名","required":"pkg","timeoutMs":15000,"cmd":"am force-stop $pkg 2>&1 && echo STOPPED $pkg"}

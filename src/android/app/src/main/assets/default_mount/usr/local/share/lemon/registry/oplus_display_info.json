@@ -1,0 +1,1 @@
+{"name":"oplus_display_info","desc":"OPPO显示私有节点(帧率/亮度)","params":"","required":"","timeoutMs":15000,"cmd":"ls /proc/oplus_display/ 2>/dev/null; for f in /proc/oplus_display/*; do [ -f \"$f\" ] && { echo -n \"$(basename $f)=\"; cat $f; }; done 2>/dev/null | head -40"}

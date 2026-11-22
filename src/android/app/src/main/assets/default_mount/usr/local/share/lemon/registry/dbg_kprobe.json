@@ -1,0 +1,1 @@
+{"name":"dbg_kprobe","desc":"Kprobe动态探针控制","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/kprobe_ctl 2>/dev/null | head -30; ls /sys/kernel/debug/kprobes/ 2>/dev/null | head -20"}

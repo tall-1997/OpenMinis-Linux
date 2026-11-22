@@ -1,0 +1,1 @@
+{"name":"termex_gawk","desc":"[Termex] GNU Awk 5.3.0","params":"args:string:awk脚本与文件","required":"args","timeoutMs":60000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termex_gawk . /data/local/tmp/termex/env.sh; eval /data/local/tmp/termex/bin/gawk $args 2>&1"}

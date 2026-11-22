@@ -1,0 +1,1 @@
+{"name":"echo_dump_list","desc":"列出 Echo 脱壳产物目录","params":"dir:string:目录,默认/sdcard/Epic脱壳","required":"","timeoutMs":15000,"cmd":"d=/sdcard/Epic脱壳; [ -n $dir ] && d=$dir; ls -lat \"$d\" 2>&1 | head -40"}

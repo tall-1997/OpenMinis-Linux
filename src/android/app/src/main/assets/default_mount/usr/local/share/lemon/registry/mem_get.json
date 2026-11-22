@@ -1,0 +1,1 @@
+{"name":"mem_get","cat":"记忆检索","desc":"[记忆检索] 按编号直达单条记忆全文（不必读整个库）。如 mem_get 233 取 #233 全文","params":"n:string:记忆编号数字，如 233","timeoutMs":30000,"cmd":"sh $LEMON_DATA/小柠檬记忆中心/_索引/mem.sh get $n"}

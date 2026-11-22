@@ -448,6 +448,14 @@ object ToolFailureMemory {
             )
         }
         file.parentFile?.mkdirs()
-        file.writeText(root.toString())
+        // Atomic tmp+rename: a crash mid-write would corrupt the ledger and
+        // readAll() would silently fall back to empty — every remembered
+        // failure forgotten, and the model walks straight back onto the rake.
+        val tmp = File(file.parentFile, "${file.name}.tmp")
+        tmp.writeText(root.toString())
+        if (!tmp.renameTo(file)) {
+            file.writeText(root.toString())
+            tmp.delete()
+        }
     }
 }

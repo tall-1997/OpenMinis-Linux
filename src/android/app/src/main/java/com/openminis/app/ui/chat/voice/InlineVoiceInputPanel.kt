@@ -68,6 +68,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.openminis.app.ui.tokens.MinisTypography
+import com.openminis.app.ui.theme.cili
+
 
 /**
  * [T-android-voice-panel] Inline voice input panel — Android port of iOS
@@ -686,10 +688,10 @@ private fun ExpandedContent(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
-                    .background(Color(0xFFFF9500).copy(alpha = 0.12f))
+                    .background(cili(0xFFFF9500).copy(alpha = 0.12f))
                     .padding(horizontal = 12.dp, vertical = 5.dp),
             ) {
-                Text("⚠︎", fontSize = MinisTypography.chip, color = Color(0xFFFF9500))
+                Text("⚠︎", fontSize = MinisTypography.chip, color = cili(0xFFFF9500))
                 Spacer(Modifier.width(5.dp))
                 Text(
                     transcribeError,

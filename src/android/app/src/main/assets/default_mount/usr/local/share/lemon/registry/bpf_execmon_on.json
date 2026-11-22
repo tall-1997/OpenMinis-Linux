@@ -1,0 +1,1 @@
+{"name":"bpf_execmon_on","cat":"eBPF","desc":"[eBPF] 装载内核态 execve/execveat 可执行文件名捕获程序","params":"","timeoutMs":30000,"cmd":"/data/adb/lemonbpf/lemonbpf start execmon 2>&1"}

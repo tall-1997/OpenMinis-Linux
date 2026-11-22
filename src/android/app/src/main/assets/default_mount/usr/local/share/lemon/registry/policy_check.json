@@ -1,0 +1,1 @@
+{"name":"policy_check","cat":"柠檬工具","desc":"[柠檬工具] 统一策略中心：只校验不改动（有漂移时返回非零，供体检/开机调用）","params":"","timeoutMs":40000,"cmd":"sh /data/adb/lemon_kernel/lemonlib/policy.sh check"}

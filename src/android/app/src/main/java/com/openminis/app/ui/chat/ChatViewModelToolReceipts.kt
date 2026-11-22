@@ -130,12 +130,24 @@ internal suspend fun ChatViewModel.pendingToolReceiptNotice(sessionId: String, u
 
 internal suspend fun ChatViewModel.toolReceiptNotice(sessionId: String, scope: ToolReceiptScope?): String? =
     withContext(Dispatchers.IO) {
-        val status = toolReceiptStore().pending(ToolReceiptScope.sessionDigest(sessionId), scope?.parentSha)
-            ?: return@withContext "$TOOL_RECEIPT_NOTICE Tool receipts could not be checked. Do not repeat earlier operations until verified."
-        if (!status.hasUnpaired) return@withContext null
-        "$TOOL_RECEIPT_NOTICE Delivery pending confirmation: ${status.unknown}. " +
-            "Accepted without verified completion: ${status.acceptedWithoutResult}. " +
-            "Verify before retrying; neither status establishes business success."
+        // [T-receipt-notice-generation] Without a stable generation anchor there
+        // is no notice: a session-wide aggregate mixes every question/project in
+        // the window into one number, so stale orphans from earlier turns keep
+        // re-announcing the same count each round (the repeating "pending: N"
+        // nag). Silent beats wrong.
+        val parentSha = scope?.parentSha ?: return@withContext null
+        val raw = toolReceiptStore().pending(ToolReceiptScope.sessionDigest(sessionId), parentSha)?.let { status ->
+            if (!status.hasUnpaired) null
+            else "$TOOL_RECEIPT_NOTICE Delivery pending confirmation: ${status.unknown}. " +
+                "Accepted without verified completion: ${status.acceptedWithoutResult}. " +
+                "Verify before retrying; neither status establishes business success."
+        } ?: "$TOOL_RECEIPT_NOTICE Tool receipts could not be checked. Do not repeat earlier operations until verified."
+        // [T-receipt-notice-gate] Announce a fingerprint once per generation:
+        // unchanged counts stay silent, a clean state clears the fingerprint so
+        // a later debt re-announces, and the "could not be checked" branch is
+        // gated by the same store (a persistent store failure nags once, not
+        // every round).
+        ReceiptNoticeGate.resolve(context.filesDir, sessionId, parentSha, raw)
     }
 
 private const val MAX_RECEIPT_PAGE_ROWS = 512

@@ -1,0 +1,1 @@
+{"name":"vdc_diskstats","desc":"vdc卷管理磁盘统计(vdc diskstats)","params":"","required":"","timeoutMs":15000,"cmd":"vdc diskstats 2>&1 | head -40; echo '--- volume list ---'; vdc volume list 2>&1 | head -20"}

@@ -1,0 +1,1 @@
+{"name":"cmd_strings","desc":"提取二进制可打印字符串(strings)","params":"path:string:文件|lines:integer:行数,默认60","required":"path","timeoutMs":30000,"cmd":"strings $path 2>&1 | head -${lines:-60}"}

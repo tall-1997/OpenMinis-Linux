@@ -1,0 +1,1 @@
+{"name":"algo_list_frida_scripts","cat":"算法助手","desc":"[算法助手] 列出Frida脚本","params":"package:string:包名","required":"","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/lemon/algo_call.sh list_frida_scripts package=$package"}

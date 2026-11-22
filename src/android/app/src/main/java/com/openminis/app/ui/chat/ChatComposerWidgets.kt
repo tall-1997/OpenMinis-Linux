@@ -68,6 +68,8 @@ import com.openminis.app.R
 import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.tokens.MinisTypography
+import com.openminis.app.ui.theme.cili
+
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -181,7 +183,7 @@ internal fun InputCircleButton(
 ) {
     Box(
         modifier = Modifier
-            .size(38.dp)
+            .size(35.dp)
             .background(ChatColors.inputIconBg, CircleShape)
             .border(0.5.dp, ChatColors.inputIconBorder, CircleShape)
             .clip(CircleShape)
@@ -217,7 +219,7 @@ internal fun MicButton(
     val borderColor = if (isRecording) Color.Transparent else ChatColors.inputIconBorder
     Box(
         modifier = Modifier
-            .size(38.dp)
+            .size(35.dp)
             .background(bg, CircleShape)
             .border(0.5.dp, borderColor, CircleShape)
             .clip(CircleShape)
@@ -308,6 +310,8 @@ internal fun ToolActivityPill(
             )
             .background(ChatColors.inputBg, pillShape)
             .border(0.5.dp, ChatColors.toolBorder, pillShape)
+            .clip(pillShape)
+            .runningShimmerSweep(isRunning)
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -358,7 +362,7 @@ internal fun ToolActivityPill(
             Icon(
                 Icons.Default.Stop,
                 contentDescription = stringResource(R.string.cd_stop),
-                tint = Color(0xFFFF3B30),
+                tint = cili(0xFFFF3B30),
                 modifier = Modifier
                     .size(24.dp)
                     .clip(CircleShape)
@@ -405,7 +409,7 @@ internal fun ThinkingLevelPicker(
     // up-arrow, signalling "your setting is higher, this model caps here".
     val maxAvailable = availableLevels.lastOrNull { it != ThinkingLevel.OFF }
     val isClamped = current.isEnabled && maxAvailable != null && current.rank > maxAvailable.rank
-    val clampOrange = Color(0xFFFF9500)
+    val clampOrange = cili(0xFFFF9500)
     Row(
         modifier = Modifier
             .background(

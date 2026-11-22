@@ -1,0 +1,1 @@
+{"name":"res_learn_find","desc":"[资源] 学习中心 按名查找","params":"kw:string:文件名关键词","required":"kw","timeoutMs":30000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh res_learn_find sh /data/adb/lemon_kernel/lemon/res/res.sh learn find $kw"}

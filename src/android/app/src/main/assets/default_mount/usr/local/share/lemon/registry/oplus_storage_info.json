@@ -1,0 +1,1 @@
+{"name":"oplus_storage_info","desc":"OPPO存储私有节点","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/oplus_storage 2>/dev/null | head -40; ls /proc/oplus_storage/ 2>/dev/null"}

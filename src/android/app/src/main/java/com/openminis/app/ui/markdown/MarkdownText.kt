@@ -272,8 +272,13 @@ private fun CodeBlockView(
     val highlightPalette = remember(bgColor) {
         if (bgColor.luminance() < 0.5f) HighlightPalette.Dark else HighlightPalette.Light
     }
-    val highlighted = remember(block.code, block.language, highlightPalette) {
-        SyntaxHighlighter.highlight(block.code, block.language, highlightPalette)
+    // [T-cili-gold-pink-highlight] 小黄鱼 skin: highlighted code sweeps
+    // gold -> pink instead of VS Code hues; stock palette otherwise.
+    val skinBrush = if (com.openminis.app.ui.theme.CiliSkin.isActive) {
+        com.openminis.app.ui.theme.CiliSkin.goldPinkHighlightBrush()
+    } else null
+    val highlighted = remember(block.code, block.language, highlightPalette, skinBrush) {
+        SyntaxHighlighter.highlight(block.code, block.language, highlightPalette, skinBrush)
     }
     // Button shows only when a handler exists AND the fence language is one
     // the router can actually execute. Empty / unknown fences (java, rust,
@@ -386,7 +391,7 @@ private fun BlockquoteView(
 ) {
     // (#8) Orange accent rule on the leading edge — now reads the palette
     // slot (ChatColors.kt blockquoteBar: iOS systemOrange @ 50% in light,
-    // systemOrange-dark variant in dark) instead of a raw 0xFFFF9500 literal,
+    // systemOrange-dark variant in dark) instead of a raw 0xFFF0A32B literal,
     // per the [T-android-color-contract]: chat-adjacent surfaces follow the
     // in-app palette so they track the theme override AND the dark palette.
     // The old literal was full-opacity; the palette slot's tuned alpha is the

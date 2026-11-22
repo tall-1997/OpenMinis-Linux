@@ -1,0 +1,1 @@
+{"name":"waf_acw_solver","cat":"网络增强","desc":"[取长补短] 阿里云盾WAF acw_sc__v2挑战求解：输入挑战页HTML或arg1(40位hex)→BOX置换+hexXor→cookie值(源自MT论坛Pro逆向)","params":"text:string:挑战页HTML或arg1(与file二选一)|file:string:挑战页HTML文件路径","required":"","timeoutMs":15000,"cmd":"printf %s $text | /data/data/com.termux/files/usr/bin/python3 /data/adb/lemon_kernel/lemon/sponge/waf_acw_solver.py --file $file"}

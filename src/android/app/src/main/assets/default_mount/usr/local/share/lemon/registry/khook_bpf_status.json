@@ -1,0 +1,1 @@
+{"name":"khook_bpf_status","cat":"内核态","desc":"[内核态] BPF 内核态可编程能力探测（syscall/JIT/LSM/BTF）","params":"","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/khook/khook.sh bpf_status"}

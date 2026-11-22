@@ -1,0 +1,1 @@
+{"name":"doc_fonts","cat":"文档","desc":"[文档] 云字体管理:list列出四套汉仪中文字体(宋/仿宋/楷/黑) | download下载指定类别(SongTi/FangSong/KaiTi/HeiTi)","params":"action:string:list或download|name:string:字体类别(download用)","required":"action","timeoutMs":300000,"cmd":"sh /data/adb/lemon_kernel/doc_assets/doc_fonts.sh $action $name"}

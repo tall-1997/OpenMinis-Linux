@@ -29,7 +29,7 @@ import java.io.File
 object MemoryIndex {
 
     /** Hard cap on index rows; the block stays O(1) as history grows. */
-    const val MAX_ROWS = 40
+    const val MAX_ROWS = 100
 
     /** App-wide memory directory, relative to `filesDir`. */
     const val SHARED_DIR = "minis-global/memory"

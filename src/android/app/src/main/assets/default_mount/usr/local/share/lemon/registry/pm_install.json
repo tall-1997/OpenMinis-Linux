@@ -1,0 +1,1 @@
+{"name":"pm_install","desc":"安装APK(pm install)","params":"path:string:APK路径|args:string:附加参数如-r -d,可空","required":"path","timeoutMs":120000,"cmd":"pm install $args $path 2>&1 | tail -10"}

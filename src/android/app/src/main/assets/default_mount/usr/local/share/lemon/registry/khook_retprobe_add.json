@@ -1,0 +1,1 @@
+{"name":"khook_retprobe_add","cat":"内核态","desc":"[内核态] 注入返回探针 r:，抓取函数返回值 $retval","params":"name:string:探针名|func:string:内核函数名","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/khook/khook.sh retprobe_add $name $func"}

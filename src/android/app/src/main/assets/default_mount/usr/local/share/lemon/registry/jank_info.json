@@ -1,0 +1,1 @@
+{"name":"jank_info","desc":"OPPO卡顿监控数据","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/jank_info 2>/dev/null | head -40; ls /proc/jank_info/ 2>/dev/null"}

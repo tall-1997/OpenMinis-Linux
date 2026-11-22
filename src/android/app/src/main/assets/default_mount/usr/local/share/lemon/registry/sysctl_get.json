@@ -1,0 +1,1 @@
+{"name":"sysctl_get","desc":"读取内核参数/proc/sys/<path>","params":"path:string:如vm/swappiness","required":"path","timeoutMs":15000,"cmd":"cat /proc/sys/$path 2>&1"}

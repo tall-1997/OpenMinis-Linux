@@ -1,0 +1,1 @@
+{"name":"xb_forms","cat":"X浏览器","desc":"列出 X浏览器页面所有表单控件","params":"","required":"","timeoutMs":35000,"cmd":"/data/data/com.termux/files/usr/bin/bash /data/local/tmp/xbcdp.sh forms"}

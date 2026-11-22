@@ -1,0 +1,1 @@
+{"name":"dbg_dynamic_debug","desc":"内核动态调试开关(dynamic_debug)","params":"filter:string:模块过滤,可空|lines:integer:行数,默认40","required":"","timeoutMs":15000,"cmd":"grep -i -- $filter /proc/dynamic_debug/control 2>/dev/null | head -${lines:-40} || head -${lines:-40} /proc/dynamic_debug/control 2>/dev/null"}

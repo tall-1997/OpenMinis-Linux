@@ -1,0 +1,1 @@
+{"name":"echo_dump_latest","desc":"列出最新脱壳 dex 文件（含大小/时间）","params":"dir:string:目录,默认/sdcard/Epic脱壳","required":"","timeoutMs":15000,"cmd":"d=/sdcard/Epic脱壳; [ -n $dir ] && d=$dir; ls -t \"$d\"/*.dex 2>/dev/null | head -5 | while read f; do echo \"$f  $(stat -c%s \"$f\" 2>/dev/null)  $(stat -c%y \"$f\" 2>/dev/null)\"; done"}

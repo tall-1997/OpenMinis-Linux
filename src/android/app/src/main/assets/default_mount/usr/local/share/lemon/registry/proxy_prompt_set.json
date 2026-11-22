@@ -1,0 +1,1 @@
+{"name":"proxy_prompt_set","cat":"LLM代理","desc":"[LLM代理] 写入/覆盖自定义提示词(整段system强制置顶)","params":"text:string:完整提示词文本","required":"text","timeoutMs":15000,"cmd":"sh /data/adb/lemon_kernel/lemon/proxy/llm_proxy.sh prompt_set $text"}

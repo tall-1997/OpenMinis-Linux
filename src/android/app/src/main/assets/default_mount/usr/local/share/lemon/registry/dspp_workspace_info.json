@@ -1,0 +1,1 @@
+{"name":"dspp_workspace_info","desc":"[DS++] 查看 DeepSeek++ 文件工作区信息(根目录/文件数/占用)","params":"","required":"","timeoutMs":15000,"cmd":"sh /data/adb/lemon_kernel/lemon/dspp/dspp_fs.sh info"}

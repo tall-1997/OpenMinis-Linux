@@ -59,7 +59,16 @@ internal suspend fun ChatViewModel.inLoopContextCheck(
     ContextPolicy.CheckResult.OK -> InLoopContextAction.PROCEED
     ContextPolicy.CheckResult.EXHAUSTED -> InLoopContextAction.STOP
     ContextPolicy.CheckResult.NEEDS_COMPACT -> {
-        if (compactionsSoFar >= MAX_IN_LOOP_COMPACTIONS) {
+        // [T-compact-hysteresis] Soft trigger cooldown: a successful compaction
+        // arms a 10-minute window (marker createdAt is the state) during which
+        // percent-threshold retriggers are ignored — the observed failure mode
+        // fired three compactions in 22 seconds. Hard exhaustion (STOP below)
+        // and the overflow retry path bypass this; a stale/absent cache
+        // fail-opens (no cooldown).
+        if (autoCompactInCooldown()) {
+            AppLogger.info(ChatViewModel.TAG, "[AutoCompact] soft trigger within cooldown — proceeding without compaction")
+            InLoopContextAction.PROCEED
+        } else if (compactionsSoFar >= MAX_IN_LOOP_COMPACTIONS) {
             AppLogger.warning(ChatViewModel.TAG, "[AutoCompact] context still needs compaction after $compactionsSoFar passes")
             InLoopContextAction.STOP
         } else {

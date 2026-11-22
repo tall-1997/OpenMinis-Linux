@@ -1,0 +1,1 @@
+{"name":"cam_info","desc":"相机内核帧缓冲与OIS","params":"","required":"","timeoutMs":15000,"cmd":"cat /proc/cam_kern_fb 2>/dev/null | head -30; cat /proc/OIS 2>/dev/null | head -20; ls /proc/sensor 2>/dev/null"}

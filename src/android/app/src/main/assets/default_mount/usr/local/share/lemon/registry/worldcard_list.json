@@ -1,0 +1,1 @@
+{"name":"worldcard_list","cat":"世界卡","timeoutMs":20000,"desc":"[世界卡] 列词条索引(id+标题+触发词, 每页40条共10页)","params":"page:integer:页码默认1","cmd":"/data/data/com.termux/files/usr/bin/python3 /data/adb/lemon_kernel/lemon/worldcard/worldcard.py list $page","required":""}

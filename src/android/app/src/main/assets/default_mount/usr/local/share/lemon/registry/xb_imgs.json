@@ -1,0 +1,1 @@
+{"name":"xb_imgs","cat":"X浏览器","desc":"列出 X浏览器页面所有图片（URL/尺寸/alt）","params":"","required":"","timeoutMs":35000,"cmd":"/data/data/com.termux/files/usr/bin/bash /data/local/tmp/xbcdp.sh imgs"}

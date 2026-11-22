@@ -1,0 +1,1 @@
+{"name": "inet_webhook", "cat": "免费网络工具", "desc": "[免费接入]webhook.site临时收件箱:create创建回调URL/list查看收到的请求", "params": "action:string:create或list,默认create|token:string:list时的收件箱uuid|limit:int:条数,默认5", "required": "", "timeoutMs": 60000, "cmd": "/data/data/com.termux/files/usr/bin/python3 /data/lemonbrain/nettools/inet_webhook.py --action=$action --token=$token --limit=$limit"}

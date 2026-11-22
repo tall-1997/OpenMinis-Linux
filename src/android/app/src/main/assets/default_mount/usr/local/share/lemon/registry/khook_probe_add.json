@@ -1,0 +1,1 @@
+{"name":"khook_probe_add","cat":"内核态","desc":"[内核态] 注入 kprobe 到内核函数并启用。参数表达式例：fn=+0(%x1):string flags=%x2","params":"name:string:探针名(唯一)|func:string:内核函数名|args:string:参数表达式(可空)","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/khook/khook.sh probe_add $name $func $args"}

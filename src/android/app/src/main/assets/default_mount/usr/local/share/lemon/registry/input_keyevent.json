@@ -1,0 +1,1 @@
+{"name":"input_keyevent","desc":"注入按键事件(input keyevent)","params":"code:string:键码如KEYCODE_HOME或数字","required":"code","timeoutMs":15000,"cmd":"input keyevent $code 2>&1 && echo SENT"}

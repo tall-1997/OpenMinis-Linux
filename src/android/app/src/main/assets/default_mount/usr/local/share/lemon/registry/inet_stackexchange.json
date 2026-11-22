@@ -1,0 +1,1 @@
+{"name": "inet_stackexchange", "cat": "免费网络工具", "desc": "[免费接入]StackOverflow等技术问答检索", "params": "q:string:问题关键词|site:string:站点,默认stackoverflow|limit:int:条数,默认5", "required": "q", "timeoutMs": 60000, "cmd": "/data/data/com.termux/files/usr/bin/python3 /data/lemonbrain/nettools/inet_stackexchange.py --q=$q --site=$site --limit=$limit"}

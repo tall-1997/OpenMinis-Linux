@@ -1,0 +1,1 @@
+{"name":"fs_file_grep","desc":"在文件中搜索文本(grep -rn)","params":"path:string:目录|text:string:搜索词|lines:integer:行数,默认40","required":"path,text","timeoutMs":60000,"cmd":"grep -rn -- $text $path 2>/dev/null | head -${lines:-40}"}

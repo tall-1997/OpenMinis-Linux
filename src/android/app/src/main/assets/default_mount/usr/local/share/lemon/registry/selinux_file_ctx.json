@@ -1,0 +1,1 @@
+{"name":"selinux_file_ctx","desc":"查看文件/目录SELinux上下文(ls -Z)","params":"path:string:路径","required":"path","timeoutMs":15000,"cmd":"ls -Zd $path 2>&1"}

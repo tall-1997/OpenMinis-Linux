@@ -1,0 +1,1 @@
+{"name":"coresight_list","desc":"CoreSight硬件追踪设备","params":"","required":"","timeoutMs":15000,"cmd":"ls /sys/bus/coresight/devices/ 2>/dev/null | head -30; ls /sys/class/coresight* 2>/dev/null"}

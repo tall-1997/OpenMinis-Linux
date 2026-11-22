@@ -1,0 +1,1 @@
+{"name":"vm_stat_full","desc":"完整虚拟内存统计(可过滤关键项)","params":"filter:string:过滤如pgmajfault,可空","required":"","timeoutMs":15000,"cmd":"cat /proc/vmstat 2>/dev/null | grep -i -- $filter"}

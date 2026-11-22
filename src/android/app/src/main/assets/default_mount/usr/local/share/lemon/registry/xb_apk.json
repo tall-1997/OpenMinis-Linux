@@ -1,0 +1,1 @@
+{"name":"xb_apk","desc":"[X浏览器] 下载 APK","params":"url:string:APK地址|name:string:文件名(可空)","required":"url","timeoutMs":120000,"cmd":"n='$name'; [ -z \"$n\" ] && n=xb_$(date +%H%M%S).apk; case $n in *.apk) ;; *) n=$n.apk ;; esac; o=/storage/emulated/0/Download/$n; curl -sL -m 100 -o \"$o\" '$url' && ls -l \"$o\" || echo apk-failed"}

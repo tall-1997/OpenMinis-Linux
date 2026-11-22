@@ -1,0 +1,1 @@
+{"name":"defender_start","cat":"安全防护","desc":"[安全防护] 启动持续监控守护（轮询扫描+命中即隔离删除）","params":"interval:string:轮询秒数(默认15，最小5)","timeoutMs":30000,"cmd":"/system/bin/timeout 28 sh /data/adb/lemon_kernel/lemonlib/lemon_defender.sh start $interval"}

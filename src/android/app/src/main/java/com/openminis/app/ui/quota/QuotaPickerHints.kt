@@ -41,6 +41,8 @@ import com.openminis.app.quota.QuotaTone
 import com.openminis.app.quota.QuotaToneRules
 import com.openminis.app.ui.theme.LocalChatPalette
 import com.openminis.app.ui.tokens.MinisTypography
+import com.openminis.app.ui.theme.cili
+
 
 // [T-provider-quota P2] Lightweight quota hints for the model picker, the
 // Model Group rows and the chat nav bar. Port of iOS QuotaPickerHints.swift.
@@ -65,8 +67,8 @@ object QuotaTagStyle {
         val dark = LocalChatPalette.current.isDark
         return when (level) {
             QuotaLevel.normal -> MaterialTheme.colorScheme.onSurface.copy(alpha = if (dark) 0.12f else 0.08f)
-            QuotaLevel.low -> if (dark) Color(0xFFFFD60A) else Color(0xFFFFCC00)
-            QuotaLevel.depleted -> if (dark) Color(0xFFFF453A) else Color(0xFFFF3B30)
+            QuotaLevel.low -> if (dark) Color(0xFFFFD60A) else cili(0xFFFFCC00)
+            QuotaLevel.depleted -> if (dark) Color(0xFFFF453A) else cili(0xFFFF3B30)
         }
     }
 
@@ -251,9 +253,9 @@ fun rememberQuotaLow(isAuthed: Boolean, instanceId: String?, modelId: String?): 
 }
 
 fun quotaDotColor(isAuthed: Boolean, quotaLow: Boolean): Color = when {
-    !isAuthed -> Color(0xFFFF9500)
-    quotaLow -> Color(0xFFFFCC00)
-    else -> Color(0xFF34C759)
+    !isAuthed -> cili(0xFFFF9500)
+    quotaLow -> cili(0xFFFFCC00)
+    else -> cili(0xFF34C759)
 }
 
 /**

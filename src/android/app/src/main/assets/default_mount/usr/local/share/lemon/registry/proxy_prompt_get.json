@@ -1,0 +1,1 @@
+{"name":"proxy_prompt_get","cat":"LLM代理","desc":"[LLM代理] 读取当前生效的自定义提示词","params":"","required":"","timeoutMs":15000,"cmd":"sh /data/adb/lemon_kernel/lemon/proxy/llm_proxy.sh prompt_get"}

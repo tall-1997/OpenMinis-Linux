@@ -1,0 +1,1 @@
+{"name":"cron_sched","cat":"计划任务","desc":"[计划任务] 计划任务管理：add 名 分钟 命令 / list / del / run / start / stop / status","params":"action:string:add或list或del或run或start或stop或status|name:string:任务名|interval:string:间隔分钟|cmd:string:要执行的命令","timeoutMs":60000,"cmd":"/system/bin/timeout 55 sh /data/adb/lemon_kernel/lemonlib/lemon_cron.sh $action $name $interval $cmd"}

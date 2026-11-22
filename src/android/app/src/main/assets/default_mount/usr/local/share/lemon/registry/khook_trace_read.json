@@ -1,0 +1,1 @@
+{"name":"khook_trace_read","cat":"内核态","desc":"[内核态] 读 trace 缓冲（默认筛 lemon_ 前缀探针）","params":"filter:string:过滤正则(默认lemon_)|lines:string:末N行(默认40)","timeoutMs":20000,"cmd":"sh /data/adb/lemon_kernel/khook/khook.sh trace_read $filter $lines"}

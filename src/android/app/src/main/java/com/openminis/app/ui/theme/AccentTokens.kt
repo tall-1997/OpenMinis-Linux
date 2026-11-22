@@ -4,6 +4,7 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import com.openminis.app.ui.theme.cili
 
 // ═══════════════════════════════════════════════════════════════════════════
 // [T-android-color-contract] THE APP HAS THREE COLOR SYSTEMS. READ EXACTLY ONE.
@@ -55,14 +56,17 @@ import androidx.compose.ui.graphics.Color
 // repeating a Color(0xFF...) literal) and from which the dynamic-accent table
 // below is built. Declare BEFORE monetAccentTiles so the table initializer
 // sees them.
-val IosBlue = Color(0xFF007AFF)
-val IosGreen = Color(0xFF34C759)
-val IosOrange = Color(0xFFFF9500)
-val IosIndigo = Color(0xFF5856D6)
-val IosPurple = Color(0xFFAF52DE)
-val IosTeal = Color(0xFF30B0C7)
-val IosRed = Color(0xFFFF3B30)
-val IosGray = Color(0xFF8E8E93)
+// [T-cili-skin-gate] Gate-aware getters: dynamic OFF + dark -> the 小黄鱼
+// variant (CiliSkin table); dynamic ON or light -> the iOS hue verbatim, so
+// wallpaper theming and light mode never see the skin.
+val IosBlue: Color get() = cili(0xFF007AFF)
+val IosGreen: Color get() = cili(0xFF34C759)
+val IosOrange: Color get() = cili(0xFFFF9500)
+val IosIndigo: Color get() = cili(0xFF5856D6)
+val IosPurple: Color get() = cili(0xFFAF52DE)
+val IosTeal: Color get() = cili(0xFF30B0C7)
+val IosRed: Color get() = cili(0xFFFF3B30)
+val IosGray: Color get() = cili(0xFF8E8E93)
 
 // Accent hues that follow the wallpaper when dynamic color is on. The first
 // block is the iOS system palette the settings chrome was tuned against; the

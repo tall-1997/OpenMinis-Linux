@@ -1,0 +1,1 @@
+{"name":"net_rule","desc":"查看IPv4/IPv6路由策略(ip rule)","params":"","required":"","timeoutMs":15000,"cmd":"ip rule show 2>&1; echo '--- v6 ---'; ip -6 rule show 2>&1 | head -40"}

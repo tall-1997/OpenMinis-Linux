@@ -1,0 +1,1 @@
+{"name":"algo_get_server_info","cat":"算法助手","desc":"[算法助手] 算法助手MCP服务器状态","params":"","required":"","timeoutMs":15000,"cmd":"sh /data/adb/lemon_kernel/lemon/algo_call.sh get_server_info "}

@@ -1,0 +1,1 @@
+{"name":"cmd_settings_get","desc":"读取系统设置(settings get)","params":"ns:string:命名空间如system/secure/global|key:string:键名","required":"ns,key","timeoutMs":15000,"cmd":"settings get $ns $key 2>&1"}

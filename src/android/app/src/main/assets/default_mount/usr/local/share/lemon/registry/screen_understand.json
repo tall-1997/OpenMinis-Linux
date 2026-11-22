@@ -1,0 +1,1 @@
+{"name":"screen_understand","cat":"屏幕感知","desc":"[屏幕感知] 截屏并用视觉模型理解屏幕内容(默认qwen3.8-27b,可传prompt/model)","params":"prompt,model","required":"","timeoutMs":60000,"cmd":"/data/data/com.termux/files/usr/bin/python3 /data/lemonbrain/autonomic/screen_eye.py understand $prompt $model"}

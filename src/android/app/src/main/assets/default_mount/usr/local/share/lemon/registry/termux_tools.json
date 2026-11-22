@@ -1,0 +1,1 @@
+{"name":"termux_tools","desc":"统计并列出Termux可执行工具","params":"","required":"","timeoutMs":30000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termux_tools P=/data/data/com.termux/files/usr; echo bin_total=$(ls $P/bin | wc -l); ls $P/bin"}

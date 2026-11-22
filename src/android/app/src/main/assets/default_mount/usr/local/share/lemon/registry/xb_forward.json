@@ -1,0 +1,1 @@
+{"name":"xb_forward","cat":"X浏览器","desc":"X浏览器页面前进","params":"","required":"","timeoutMs":30000,"cmd":"/data/data/com.termux/files/usr/bin/bash /data/local/tmp/xbcdp.sh forward"}

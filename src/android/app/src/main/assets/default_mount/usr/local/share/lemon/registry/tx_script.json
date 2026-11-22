@@ -1,0 +1,1 @@
+{"name":"tx_script","cat":"Termux","desc":"[Termux] 执行base64编码的shell脚本（最稳，复杂多行脚本用这个）","params":"code:string:base64编码的脚本内容(base64 -w0),timeout:string:超时秒默认120","required":"code","timeoutMs":900000,"cmd":"TX_B64=$code TX_T=$timeout sh /data/adb/lemon_kernel/lemon/tx/tx.sh runb"}

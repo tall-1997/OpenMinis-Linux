@@ -1,0 +1,1 @@
+{"name": "github_api", "desc": "[联网] GitHub直连(api.github.com):user/repos/create_repo/upload_dir/list_files/get_file，Git Data API提交绕开git通道；长上传建议task_submit异步", "params": "request:string:JSON请求如{\"action\":\"repos\"}", "required": "request", "timeoutMs": 120000, "cmd": "sh /data/lemonbrain/nettools/github_api.sh $request"}

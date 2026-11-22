@@ -1,0 +1,1 @@
+{"name":"termex_sed","desc":"[Termex] GNU sed 4.9","params":"args:string:sed参数,如 -i s/a/b/g file","required":"args","timeoutMs":60000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termex_sed . /data/local/tmp/termex/env.sh; eval /data/local/tmp/termex/bin/sed $args 2>&1"}

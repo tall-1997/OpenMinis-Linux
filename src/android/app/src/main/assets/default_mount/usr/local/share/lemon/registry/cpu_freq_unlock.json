@@ -1,0 +1,1 @@
+{"name":"cpu_freq_unlock","desc":"解除CPU频率锁定(恢复硬件上下限)","params":"","required":"","timeoutMs":25000,"cmd":"for c in /sys/devices/system/cpu/cpu[0-9]*/cpufreq; do [ -d $c ] || continue; cat $c/cpuinfo_max_freq > $c/scaling_max_freq 2>/dev/null; cat $c/cpuinfo_min_freq > $c/scaling_min_freq 2>/dev/null; done; echo UNLOCKED"}

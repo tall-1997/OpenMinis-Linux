@@ -1,0 +1,1 @@
+{"name":"fs_chattr","desc":"修改文件属性(chattr 如+i不可变/+a只追加)","params":"op:string:+或-|attr:string:属性如i/a/e|path:string:路径","required":"op,attr,path","timeoutMs":15000,"cmd":"chattr $op$attr $path 2>&1; lsattr -d $path 2>&1"}

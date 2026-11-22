@@ -1,0 +1,1 @@
+{"name":"xb_scroll","cat":"X浏览器","desc":"滚动 X浏览器页面到指定坐标","params":"x:integer:X偏移 可空|y:integer:Y偏移 可空","required":"","timeoutMs":35000,"cmd":"/data/data/com.termux/files/usr/bin/bash /data/local/tmp/xbcdp.sh scroll $x $y"}

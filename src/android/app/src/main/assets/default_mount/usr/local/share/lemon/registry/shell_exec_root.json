@@ -1,0 +1,1 @@
+{"name": "shell_exec_root", "desc": "以root执行任意shell命令(通用逃生口)", "params": "cmd:string:命令", "required": "cmd", "timeoutMs": 1800000, "cmd": "sh -c $cmd 2>&1 | head -100"}

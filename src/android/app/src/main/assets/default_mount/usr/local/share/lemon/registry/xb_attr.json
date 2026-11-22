@@ -1,0 +1,1 @@
+{"name":"xb_attr","cat":"X浏览器","desc":"取 X浏览器页面元素的属性值","params":"selector:string:CSS选择器|name:string:属性名","required":"selector,name","timeoutMs":35000,"cmd":"/data/data/com.termux/files/usr/bin/bash /data/local/tmp/xbcdp.sh attr $selector $name"}

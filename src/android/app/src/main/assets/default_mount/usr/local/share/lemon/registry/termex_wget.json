@@ -1,0 +1,1 @@
+{"name":"termex_wget","desc":"[Termex] GNU Wget 1.25.0 下载器","params":"args:string:wget参数,如 -O /tmp/a.bin http://x/y","required":"args","timeoutMs":120000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termex_wget . /data/local/tmp/termex/env.sh; eval /data/local/tmp/termex/bin/wget $args 2>&1"}

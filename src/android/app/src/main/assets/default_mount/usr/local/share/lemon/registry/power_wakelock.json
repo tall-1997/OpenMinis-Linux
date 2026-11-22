@@ -1,0 +1,1 @@
+{"name":"power_wakelock","desc":"查看内核唤醒锁与唤醒源","params":"lines:integer:行数,默认60","required":"","timeoutMs":15000,"cmd":"echo '--- wakeup_sources ---'; cat /sys/power/wakeup_sources 2>/dev/null | head -${lines:-60}; echo '--- wake_lock ---'; cat /proc/wakelocks 2>/dev/null | head -${lines:-60}"}

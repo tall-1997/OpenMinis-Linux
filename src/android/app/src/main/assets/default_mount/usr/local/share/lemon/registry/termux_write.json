@@ -1,0 +1,1 @@
+{"name":"termux_write","desc":"写入文件","params":"path:string:文件路径|content:string:写入内容","required":"path,content","timeoutMs":30000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termux_write printf %s $content > $path && echo WROTE $path && wc -c $path"}

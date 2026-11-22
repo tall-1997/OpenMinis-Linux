@@ -1,0 +1,1 @@
+{"name":"termux_disk","desc":"磁盘与存储空间","params":"","required":"","timeoutMs":30000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termux_disk df -h /data 2>&1; echo; du -sh /data/data/com.termux/files/usr 2>/dev/null; du -sh /data/data/com.termux/files/home 2>/dev/null"}

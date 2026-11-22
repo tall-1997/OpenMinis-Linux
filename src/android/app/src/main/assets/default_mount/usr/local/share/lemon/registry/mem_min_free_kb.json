@@ -1,0 +1,1 @@
+{"name":"mem_min_free_kb","desc":"查看/设置最小保留内存(vm.min_free_kbytes)","params":"val:string:新值KB,留空只读","required":"","timeoutMs":15000,"cmd":"[ -n $val ] && echo $val > /proc/sys/vm/min_free_kbytes 2>&1; echo -n 'min_free_kbytes='; cat /proc/sys/vm/min_free_kbytes"}

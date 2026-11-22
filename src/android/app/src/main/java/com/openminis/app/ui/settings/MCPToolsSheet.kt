@@ -44,6 +44,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.components.MinisGradientSwitch
 
 private data class McpToolRow(val name: String, val description: String)
 
@@ -127,7 +128,7 @@ fun MCPToolsSheet(
                                 )
                             }
                         }
-                        Switch(
+                        MinisGradientSwitch(
                             checked = on,
                             onCheckedChange = { enabled ->
                                 MCPToolPolicy.setEnabled(context, server.id, tool.name, enabled)
@@ -255,7 +256,7 @@ fun MCPToolsScreen(
                             )
                         }
                     }
-                    Switch(
+                    MinisGradientSwitch(
                         checked = on,
                         onCheckedChange = { enabled ->
                             MCPToolPolicy.setEnabled(context, serverId, tool.name, enabled)

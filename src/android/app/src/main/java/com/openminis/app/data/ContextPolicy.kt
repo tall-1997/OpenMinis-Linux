@@ -57,7 +57,7 @@ data class ContextPolicy(
          *     window, ahead of the offload line) so small-window models are not
          *     doomed to hit the ceiling; `[T-compact-small-window-auto]`.
          *   - `64K–128K` / `≥128K` → offload + compact at [compactPercent] of the window
-         *     (default 75 as of [GH#74]; previously 90 — see AutoCompactPrefs).
+         *     (default 90 — see AutoCompactPrefs; [GH#74] had moved it to 75, reverted to 90).
          *
          * [bufferTokens] is the explicit-headroom form of the same decision
          * (`[T-compact-buffer]`): the room to keep free below the model limit,
@@ -96,9 +96,18 @@ data class ContextPolicy(
                 // history of tool results is far more expensive than a
                 // summary plus a short verbatim tail, so refusing to compact
                 // here only guaranteed the window ceiling gets hit instead.
-                // Compaction now fires BEFORE the offload line so the heavy
-                // tool payloads get folded while there is still headroom.
-                compactThreshold = bufferedThreshold ?: (contextWindow - 15_000),
+                //
+                // [T-ring-policy-parity] The fixed `contextWindow - 15_000`
+                // bypassed the operator's compact percent entirely (user
+                // report: "还没到百分比就压缩了" — the ring showed 60% while
+                // this tier already compacted at ~77% of a 64K window). All
+                // compactable tiers now share ONE rule: the percent threshold
+                // the ring displays. The offload line (window - 10_000) stays
+                // ahead of it as the tool-payload safety net; if the operator
+                // raises the percent past the offload line, offload fires
+                // first, folds the heavy payloads, and compact still lands on
+                // the displayed percent.
+                compactThreshold = bufferedThreshold ?: percentThreshold,
                 exhaustedOnly = false,
                 manualCompactAllowed = true,
             )

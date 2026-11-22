@@ -1,0 +1,1 @@
+{"name":"termex_pcre2grep","desc":"[Termex] pcre2grep 10.44 支持PCRE2正则","params":"args:string:pcre2grep参数,如 -o pattern file","required":"args","timeoutMs":60000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termex_pcre2grep . /data/local/tmp/termex/env.sh; eval /data/local/tmp/termex/bin/pcre2grep $args 2>&1"}

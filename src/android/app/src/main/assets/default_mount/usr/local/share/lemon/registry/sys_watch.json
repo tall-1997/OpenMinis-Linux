@@ -1,0 +1,1 @@
+{"name":"sys_watch","cat":"系统增强","desc":"[系统增强] 系统状态变化监测：对比基线（最高温/可用内存/Swap/电量/运行时长）","params":"","timeoutMs":30000,"cmd":"/system/bin/timeout 28 sh /data/adb/lemon_kernel/lemonlib/lemon_sys.sh watch"}

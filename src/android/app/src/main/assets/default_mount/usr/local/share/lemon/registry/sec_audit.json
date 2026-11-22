@@ -1,0 +1,1 @@
+{"name":"sec_audit","cat":"安全审计","desc":"[安全审计] 安全体检：root/SELinux/ADB/锁屏/设备管理员/无障碍/内核模块/暴露端口","params":"","timeoutMs":60000,"cmd":"/system/bin/timeout 55 sh /data/adb/lemon_kernel/lemonlib/lemon_audit.sh sec"}

@@ -1,0 +1,1 @@
+{"name":"remoteproc_ctl","desc":"控制远程处理器(start/stop)","params":"dev:string:如remoteproc0|act:string:start或stop","required":"dev,act","timeoutMs":20000,"cmd":"echo $act > /sys/class/remoteproc/$dev/state 2>&1; echo -n 'now='; cat /sys/class/remoteproc/$dev/state 2>/dev/null"}

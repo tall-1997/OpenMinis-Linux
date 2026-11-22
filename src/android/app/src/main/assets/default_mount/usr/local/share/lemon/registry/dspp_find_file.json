@@ -1,0 +1,1 @@
+{"name":"dspp_find_file","desc":"[DS++] 在工作区内按文件名搜索(递归, 最多6层)","params":"keyword:string:文件名关键字,可空=全部","required":"","timeoutMs":25000,"cmd":"sh /data/adb/lemon_kernel/lemon/dspp/dspp_fs.sh find $keyword"}

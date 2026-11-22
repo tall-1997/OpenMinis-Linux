@@ -1,0 +1,1 @@
+{"name":"algo_set_switch","cat":"算法助手","desc":"[算法助手] 设置任意开关","params":"package:string:包名|key:string:键名|value:string:值","required":"","timeoutMs":15000,"cmd":"sh /data/adb/lemon_kernel/lemon/algo_call.sh set_switch package=$package key=$key value=$value"}

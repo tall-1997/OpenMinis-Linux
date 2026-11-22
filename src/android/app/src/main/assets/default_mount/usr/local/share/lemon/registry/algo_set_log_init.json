@@ -1,0 +1,1 @@
+{"name":"algo_set_log_init","cat":"算法助手","desc":"[算法助手] 开关日志捕获初始化","params":"package:string:包名|enabled:boolean:开关","required":"","timeoutMs":15000,"cmd":"sh /data/adb/lemon_kernel/lemon/algo_call.sh set_log_init package=$package enabled=$enabled"}

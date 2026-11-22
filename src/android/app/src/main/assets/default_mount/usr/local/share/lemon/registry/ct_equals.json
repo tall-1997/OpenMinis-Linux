@@ -1,0 +1,1 @@
+{"name":"ct_equals","cat":"安全防护","desc":"[取长补短] 恒时字符串比较(防时序攻击侧信道)：相等exit0输出true,不等exit1(源自MT论坛Pro McpServerManager)","params":"a:string:第一串|b:string:第二串","required":"a,b","timeoutMs":10000,"cmd":"/data/data/com.termux/files/usr/bin/python3 /data/adb/lemon_kernel/lemon/sponge/ct_equals.py $a $b"}

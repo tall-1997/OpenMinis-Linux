@@ -1,0 +1,1 @@
+{"name":"termex_bash","desc":"[Termex] GNU bash 5.2.37","params":"args:string:bash参数,如 -c 命令","required":"args","timeoutMs":120000,"cmd":"sh /data/adb/lemon_kernel/lemon/dedup/run.sh termex_bash . /data/local/tmp/termex/env.sh; eval /data/local/tmp/termex/bin/bash $args 2>&1"}

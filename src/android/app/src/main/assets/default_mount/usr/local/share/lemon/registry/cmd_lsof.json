@@ -1,0 +1,1 @@
+{"name":"cmd_lsof","desc":"列出进程打开文件(lsof风格)","params":"filter:string:过滤,可空|lines:integer:行数,默认60","required":"","timeoutMs":30000,"cmd":"for p in /proc/[0-9]*/fd/*; do t=$(readlink $p 2>/dev/null); case \"$t\" in *$filter*) echo \"${p%/fd/*} $t\";; esac; done 2>/dev/null | head -${lines:-60}"}

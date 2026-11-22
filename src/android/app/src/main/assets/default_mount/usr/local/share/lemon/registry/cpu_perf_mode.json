@@ -1,0 +1,1 @@
+{"name":"cpu_perf_mode","desc":"一键切换性能模式(performance/schedutil/powersave/conservative/walt)","params":"mode:string:governor名","required":"mode","timeoutMs":25000,"cmd":"for c in /sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_governor; do echo $mode > $c 2>/dev/null; done; for c in /sys/devices/system/cpu/cpu[0-9]*/cpufreq/scaling_governor; do echo -n \"$c=\"; cat $c; done"}

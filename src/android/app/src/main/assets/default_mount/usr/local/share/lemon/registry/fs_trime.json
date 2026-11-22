@@ -1,0 +1,1 @@
+{"name":"fs_trime","desc":"对挂载点执行TRIM(需设备支持)","params":"path:string:挂载点如/data","required":"path","timeoutMs":60000,"cmd":"fstrim -v $path 2>&1 || echo 'fstrim不可用'"}

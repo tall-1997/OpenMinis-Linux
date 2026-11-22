@@ -44,9 +44,14 @@ internal suspend fun ChatViewModel.checkContextBeforeSend(
     }
     return when (projected.capacity()) {
         ContextPolicy.CheckResult.OK -> PreSendContextAction.PROCEED
-        ContextPolicy.CheckResult.NEEDS_COMPACT -> if (effectiveAutoCompact()) {
-            PreSendContextAction.COMPACT_THEN_SEND
-        } else PreSendContextAction.ASK_USER
+        ContextPolicy.CheckResult.NEEDS_COMPACT -> when {
+            !effectiveAutoCompact() -> PreSendContextAction.ASK_USER
+            // [T-compact-hysteresis] Within the soft-trigger cooldown send as-is;
+            // the dispatch projection still rechecks hard limits, and manual
+            // compaction stays available.
+            autoCompactInCooldown() -> PreSendContextAction.PROCEED
+            else -> PreSendContextAction.COMPACT_THEN_SEND
+        }
         ContextPolicy.CheckResult.EXHAUSTED -> {
             appendSystemInfo(context.getString(R.string.vm_context_near_limit, projected.estimate.tokens, projected.window), "compact")
             PreSendContextAction.PROCEED // the exact dispatch projection rechecks hard limits
