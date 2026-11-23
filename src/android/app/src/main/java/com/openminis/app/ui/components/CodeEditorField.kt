@@ -193,7 +193,9 @@ private fun LineNumberGutter(
 ) {
     val count = CodeEditorLogic.lineCount(text)
     val activeColor = MaterialTheme.colorScheme.onSurface
-    val idleColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+    // [T-low-emphasis-text] 0.6 alpha measured 3.23:1 for the gutter digits;
+    // low-emphasis text is the full onSurfaceVariant role, not an alpha.
+    val idleColor = MaterialTheme.colorScheme.onSurfaceVariant
     val style = TextStyle(
         fontFamily = FontFamily.Monospace,
         fontSize = MinisTypography.code,

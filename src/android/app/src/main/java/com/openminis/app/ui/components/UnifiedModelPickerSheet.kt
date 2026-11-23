@@ -308,7 +308,7 @@ fun UnifiedModelPickerSheet(
                                         "FB",
                                         fontSize = MinisTypography.cap2,
                                         fontWeight = FontWeight.Medium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
                             }
@@ -322,7 +322,7 @@ fun UnifiedModelPickerSheet(
                                     },
                                 ),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         PickerCollapseChevron(

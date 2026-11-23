@@ -282,7 +282,7 @@ private fun ApprovalOperationRow(
                 text = "#$fingerprint",
                 style = MaterialTheme.typography.labelSmall,
                 fontFamily = FontFamily.Monospace,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         if (!executed && op.status == McpApprovalCore.OperationStatus.APPROVED && op.sourceFileHash != null) {

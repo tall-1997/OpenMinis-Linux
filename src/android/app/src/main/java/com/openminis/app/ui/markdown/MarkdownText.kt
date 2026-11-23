@@ -636,7 +636,7 @@ internal fun InlineContent(
     mathSlots: Map<String, InlineTextContent> = emptyMap(),
 ) {
     val inlineCodeBg = MaterialTheme.colorScheme.surfaceContainerHighest
-    val inlineCodeColor = MaterialTheme.colorScheme.primary
+    val inlineCodeColor = MaterialTheme.colorScheme.onSurfaceVariant
     val linkColor = MaterialTheme.colorScheme.primary
 
     // Strip any leftover math placeholders (U+FFFC MATH<n> U+FFFC). The

@@ -323,20 +323,11 @@ fun ChatScreen(
     val pastedTexts by viewModel.pastedTexts.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // [T-generation-run] 崩溃恢复提示：上次进程死亡时本会话有中断的生成。
-    LaunchedEffect(sessionId) {
-        val broken = com.openminis.app.agent.GenerationRunStore.recentlyAbandonedFor(context, sessionId)
-        if (broken.isNotEmpty()) {
-            val r = broken.last()
-            val whenStr = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
-                .format(java.util.Date(r.startedAtMs))
-            // [T-android-chat-strings-resource] LaunchedEffect body is not a
-            // composable scope — resolve the text via context.getString.
-            snackbarHostState.showSnackbar(
-                context.getString(R.string.crash_recovery_snackbar, r.modelId, whenStr),
-            )
-        }
-    }
+    // [T-no-interrupt-notice] Deliberately NOT showing a "last generation was
+    // interrupted" snackbar when a session opens: it fired on every re-entry
+    // after an app kill and told the user nothing they could act on (the
+    // partial content is already in the transcript). The generation-run store
+    // still records the run for recovery; only the notice is gone.
 
     // [T-android-voice-panel] Shared 3-stage RECORD_AUDIO permission flow
     // (system dialog → post-DENY poll → in-app settings gate). Extracted from
@@ -4769,7 +4760,7 @@ fun ChatScreen(
                                         if (groupChatOn) {
                                             Text(
                                                 stringResource(R.string.chat_input_placeholder_group),
-                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
+                                                color = ChatColors.placeholder,
                                                 fontSize = composerFontSize(chatInputFontScale).sp, lineHeight = composerLineHeight(chatInputFontScale).sp,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,
@@ -4788,7 +4779,7 @@ fun ChatScreen(
                                         ) { idx ->
                                             Text(
                                                 composerPlaceholderText(idx, soulName.name, queued = isStreaming),
-                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
+                                                color = ChatColors.placeholder,
                                                 fontSize = composerFontSize(chatInputFontScale).sp, lineHeight = composerLineHeight(chatInputFontScale).sp,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis,

@@ -285,7 +285,7 @@ fun SessionStorageDetailScreen(
                         stringResource(R.string.storage_clear_session_button),
                         style = MaterialTheme.typography.bodyLarge,
                         color = if (hasFiles) MaterialTheme.colorScheme.error
-                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.weight(1f),
                     )
                     if (hasFiles) {
@@ -366,7 +366,7 @@ private fun StorageOverviewRow(
                 Icon(
                     m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(20.dp),
                 )
             }

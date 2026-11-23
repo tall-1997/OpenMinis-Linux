@@ -127,7 +127,7 @@ fun BrowserHistorySheet(
                         Text(
                             stringResource(R.string.browser_history_empty_subtitle),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -159,7 +159,7 @@ fun BrowserHistorySheet(
                                     m3Icon(Icons.Default.Language),
                                     contentDescription = null,
                                     modifier = Modifier.size(18.dp),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
@@ -171,7 +171,7 @@ fun BrowserHistorySheet(
                                     Text(
                                         entry.url,
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
@@ -179,7 +179,7 @@ fun BrowserHistorySheet(
                                 Text(
                                     IsoTime.formatPattern(entry.timestamp, "HH:mm"),
                                     fontSize = MinisTypography.cap,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                             HorizontalDivider(modifier = Modifier.padding(start = 46.dp))

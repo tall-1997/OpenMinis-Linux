@@ -2573,7 +2573,6 @@
     <string name="config_affects_later">Ini bisa mempengaruhi pemanggilan alat berikutnya.</string>
     <string name="config_reversible">Bisa dibatalkan, tapi layak dilihat sekilas.</string>
     <!-- backfill: strings_chat.xml -->
-    <string name="crash_recovery_snackbar">Pembuatan terakhir terputus (model %1$s, mulai %2$s) — konten yang dibuat sebelum terputus tetap tersimpan dalam percakapan</string>
     <!-- backfill: strings.xml -->
     <string name="db_quarantine_body">Basis data lokal gagal pemeriksaan integritas saat mulai pada %1$s dan tidak bisa dibuka dengan aman. Obrolan dan pengaturan Anda TIDAK dihapus: berkas yang rusak dipindahkan, dan aplikasi memulai dengan basis data baru yang kosong.</string>
     <string name="db_quarantine_copy_at">Salinan yang rusak disimpan di:\n%1$s</string>

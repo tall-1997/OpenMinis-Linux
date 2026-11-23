@@ -64,6 +64,26 @@ import androidx.compose.ui.graphics.luminance
 // repeating a Color(0xFF...) literal) and from which the dynamic-accent table
 // below is built. Declare BEFORE monetAccentTiles so the table initializer
 // sees them.
+// [T-apple-accent-pair] The Apple theme's ONE accent, in two appearances.
+//
+// Before this the same "action blue" existed three times in the same theme:
+// ColorScheme.primary #2E6BC0 (Material components), ChatPalette.link/thinking
+// #0066CC (chat text), and AccentTokens.IosBlue #007AFF (chrome icons) — light
+// and dark therefore disagreed about what the accent even WAS, and the dark
+// scheme's primary (#ABC7FF, S 100 / L 84) was a different colour altogether
+// from the light one (#2E6BC0, S 61 / L 47).
+//
+// One hue (210°), one saturation (100%), only the lightness moves — exactly the
+// axis a light/dark pair may differ on, and only as far as contrast forces:
+//   light  #0066CC  5.57:1 on white, 4.99:1 on the #F2F2F7 page
+//                    (and 5.57:1 for white text ON it, i.e. filled buttons)
+//   dark   #0A84FF  5.76:1 on black, 4.66:1 on the #1C1C1E surface
+// Both clear the 4.5:1 text floor in accessibility.md, so the accent is usable
+// for text AND as a fill in either appearance. IosBlue stays the Android-chrome
+// icon constant it always was; text/action surfaces read these two.
+val ActionBlueLight = Color(0xFF0066CC)
+val ActionBlueDark = Color(0xFF0A84FF)
+
 val IosBlue = Color(0xFF007AFF)
 val IosGreen = Color(0xFF34C759)
 val IosOrange = Color(0xFFFF9500)

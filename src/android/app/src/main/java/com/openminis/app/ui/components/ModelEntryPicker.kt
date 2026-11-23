@@ -315,7 +315,7 @@ fun LazyListScope.modelEntryPickerItems(
                             entries.size,
                         ),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
@@ -394,7 +394,7 @@ fun LazyListScope.modelEntryPickerItems(
                                 Text(
                                     entry.model.id,
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 modalityBadges(entry.model).forEach { badge ->
                                     ModalityBadge(badge)
@@ -517,7 +517,7 @@ fun LazyListScope.modelEntryPickerItems(
                             Text(
                                 entry.model.id,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }

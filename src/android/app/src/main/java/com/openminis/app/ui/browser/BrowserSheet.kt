@@ -234,7 +234,7 @@ fun BrowserSheet(
                             fontSize = MinisTypography.chip,
                             fontWeight = FontWeight.Medium,
                             fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(start = 4.dp),
                         )
                     }

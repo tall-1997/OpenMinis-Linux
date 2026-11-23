@@ -51,6 +51,7 @@ import com.openminis.app.ui.tokens.MinisTypography
 import com.openminis.app.ui.tokens.RawSpace
 import kotlinx.coroutines.delay
 import com.openminis.app.ui.settings.rememberAppearanceBool
+import com.openminis.app.ui.theme.ChatColors
 
 /**
  * [T-thinking-block-extract] The collapsible "Deep Thinking" block, split
@@ -102,7 +103,9 @@ internal fun ThinkingBlock(
         }
         wasStreaming = isStreaming
     }
-    val thinkingBlue = RawC.systemBlue.tc
+    // [T-apple-accent-pair] Was RawC.systemBlue (#007AFF, static): a third
+    // accent that also ignored dark mode. The palette accent is 5.57 / 5.76:1.
+    val thinkingBlue = ChatColors.thinking
     val charCount = block.content.length
     val charLabel = when {
         charCount >= 1000 -> "${charCount / 1000}K"
@@ -214,7 +217,9 @@ internal fun ThinkingBlock(
                     fontSize = MinisTypography.cap,
                     fontWeight = FontWeight.Medium,
                     fontFamily = FontFamily.Monospace,
-                    color = thinkingBlue.copy(alpha = 0.6f),
+                    // [T-chat-text-contrast] thinking@0.6 on the 6% blue card
+                    // measured 2.54:1 (light) — same tier collapse as the body.
+                    color = ChatColors.tertiaryText,
                 )
                 Spacer(modifier = Modifier.width(RawSpace.xs.dp))
             }
@@ -224,7 +229,9 @@ internal fun ThinkingBlock(
                     fontSize = MinisTypography.cap,
                     fontWeight = FontWeight.Medium,
                     fontFamily = FontFamily.Monospace,
-                    color = thinkingBlue.copy(alpha = 0.6f),
+                    // [T-chat-text-contrast] thinking@0.6 on the 6% blue card
+                    // measured 2.54:1 (light) — same tier collapse as the body.
+                    color = ChatColors.tertiaryText,
                 )
                 Spacer(modifier = Modifier.width(RawSpace.xs.dp))
             }
@@ -287,7 +294,7 @@ internal fun ThinkingBlock(
                             charCount / 1000,
                         ),
                         fontSize = MinisTypography.cap,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                        color = ChatColors.tertiaryText,
                         modifier = Modifier.padding(horizontal = RawSpace.lg.dp, vertical = RawSpace.xs.dp),
                     )
                 }
@@ -301,7 +308,7 @@ internal fun ThinkingBlock(
                             Text(
                                 text = stringResource(R.string.cot_translate_failed),
                                 fontSize = MinisTypography.cap,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                                color = ChatColors.tertiaryText,
                             )
                             Spacer(modifier = Modifier.width(RawSpace.md.dp))
                             Text(
@@ -318,7 +325,7 @@ internal fun ThinkingBlock(
                             Text(
                                 text = ts.text,
                                 fontSize = MinisTypography.body,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                                color = ChatColors.secondaryText,
                                 lineHeight = MinisTypography.lineBody,
                             )
                         }
@@ -326,7 +333,7 @@ internal fun ThinkingBlock(
                         Text(
                             text = ts.text,
                             fontSize = MinisTypography.body,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                            color = ChatColors.secondaryText,
                             lineHeight = MinisTypography.lineBody,
                         )
                     }
@@ -334,7 +341,7 @@ internal fun ThinkingBlock(
                     Text(
                         text = displayContent,
                         fontSize = MinisTypography.body,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                        color = ChatColors.secondaryText,
                         lineHeight = MinisTypography.lineBody,
                     )
                 }

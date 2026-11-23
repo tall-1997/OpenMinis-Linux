@@ -2575,7 +2575,6 @@
     <string name="config_affects_later">To może wpłynąć na późniejsze wywołania narzędzi.</string>
     <string name="config_reversible">Da się odwrócić, ale warto rzucić okiem.</string>
     <!-- backfill: strings_chat.xml -->
-    <string name="crash_recovery_snackbar">Ostatnie generowanie zostało przerwane (model %1$s, start %2$s) — treść powstała przed przerwaniem jest zachowana w rozmowie</string>
     <!-- backfill: strings.xml -->
     <string name="db_quarantine_body">Lokalna baza danych %1$s nie przeszła kontroli spójności przy starcie i nie dało się jej bezpiecznie otworzyć. Twoje czaty i ustawienia NIE zostały usunięte: uszkodzone pliki zostały odłożone, a aplikacja wystartowała z nową, pustą bazą.</string>
     <string name="db_quarantine_copy_at">Uszkodzona kopia zachowana w:\n%1$s</string>

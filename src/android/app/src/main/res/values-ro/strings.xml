@@ -2572,7 +2572,6 @@
     <string name="config_affects_later">Poate afecta apelurile de instrumente ulterioare.</string>
     <string name="config_reversible">Reversibil, dar merită o privire rapidă.</string>
     <!-- backfill: strings_chat.xml -->
-    <string name="crash_recovery_snackbar">Ultima generare a fost întreruptă (model %1$s, pornită la %2$s) — conținutul produs înainte de întrerupere e păstrat în conversație</string>
     <!-- backfill: strings.xml -->
     <string name="db_quarantine_body">Baza de date locală a picat verificarea de integritate la pornire pe %1$s și n-a putut fi deschisă în siguranță. Chat-urile și setările tale NU au fost șterse: fișierele deteriorate au fost mutate la o parte, iar aplicația a pornit cu o bază de date nouă, goală.</string>
     <string name="db_quarantine_copy_at">Copia deteriorată e păstrată la:\n%1$s</string>

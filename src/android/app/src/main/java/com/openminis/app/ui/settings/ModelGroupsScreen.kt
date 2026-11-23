@@ -611,7 +611,7 @@ private fun AgentLoopRow(
             Icon(
                 imageVector = m3Icon(Icons.Default.DragHandle),
                 contentDescription = stringResource(R.string.model_group_detail_drag_to_reorder),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp),
             )
         }

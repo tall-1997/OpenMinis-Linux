@@ -2568,7 +2568,6 @@
     <string name="config_affects_later">สิ่งนี้อาจมีผลกับการเรียกเครื่องมือครั้งต่อ ๆ ไป</string>
     <string name="config_reversible">ย้อนกลับได้ แต่ควรแวะดูสักหน่อย</string>
     <!-- backfill: strings_chat.xml -->
-    <string name="crash_recovery_snackbar">การสร้างครั้งล่าสุดถูกขัดจังหวะ (โมเดล %1$s เริ่มเมื่อ %2$s) — เนื้อหาที่สร้างก่อนการขัดจังหวะถูกเก็บไว้ในบทสนทนา</string>
     <!-- backfill: strings.xml -->
     <string name="db_quarantine_body">ฐานข้อมูลในเครื่องตรวจความสมบูรณ์ตอนเริ่มระบบไม่ผ่านเมื่อ %1$s และเปิดอย่างปลอดภัยไม่ได้ แชทและการตั้งค่าของคุณไม่ได้ถูกลบ: ไฟล์ที่เสียหายถูกย้ายออกไป และแอปเริ่มทำงานด้วยฐานข้อมูลใหม่ว่าง ๆ</string>
     <string name="db_quarantine_copy_at">สำเนาที่เสียหายเก็บไว้ที่:\n%1$s</string>

@@ -279,7 +279,7 @@ private fun MemoryFileRow(
                         Text(
                             file.fileSize,
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             softWrap = false,
                         )
@@ -325,7 +325,7 @@ private fun MemoryFileRow(
         Icon(
             m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(20.dp),
         )
     }

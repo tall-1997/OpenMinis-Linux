@@ -398,7 +398,7 @@ internal fun ToolCallPill(
                     text = durationText,
                     fontSize = MinisTypography.cap,
                     fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     softWrap = false,
                     maxLines = 1,
                 )

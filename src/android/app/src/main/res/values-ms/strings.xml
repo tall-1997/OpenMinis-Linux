@@ -2568,7 +2568,6 @@
     <string name="config_affects_later">Ini mungkin mempengaruhi panggilan alat seterusnya.</string>
     <string name="config_reversible">Boleh dibatalkan, tetapi berbaloi dilihat sekilas.</string>
     <!-- backfill: strings_chat.xml -->
-    <string name="crash_recovery_snackbar">Penjanaan terakhir terputus (model %1$s, mula %2$s) — kandungan yang dihasilkan sebelum gangguan kekal dipelihara dalam perbualan</string>
     <!-- backfill: strings.xml -->
     <string name="db_quarantine_body">Pangkalan data setempat gagal semakan integriti semasa permulaan pada %1$s dan tidak dapat dibuka dengan selamat. Sembang dan tetapan anda TIDAK dipadamkan: fail yang rosak dialihkan, dan aplikasi dimulakan dengan pangkalan data baharu yang kosong.</string>
     <string name="db_quarantine_copy_at">Salinan rosak disimpan di:\n%1$s</string>

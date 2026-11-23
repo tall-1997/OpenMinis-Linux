@@ -450,7 +450,7 @@ private fun PlanBoardRow(plan: AgentPlanStore.Plan, onRetry: (() -> Unit)? = nul
                 else -> Icon(
                     imageVector = PlanBoardGlyphs.Ring,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.42f),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(13.dp),
                 )
             }
