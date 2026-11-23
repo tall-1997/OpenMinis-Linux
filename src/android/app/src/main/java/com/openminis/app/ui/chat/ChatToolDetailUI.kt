@@ -766,9 +766,10 @@ internal fun ToolDetailSheet(
                                             text = action,
                                             fontSize = MinisTypography.foot,
                                             fontWeight = FontWeight.SemiBold,
-                                            color = Color.White,
+                                            // [T-apple-accent-pair] Accent fill + paired on-accent label.
+                                            color = ChatColors.thinkingOn,
                                             modifier = Modifier
-                                                .background(RawC.systemBlue.tc, CircleShape)
+                                                .background(ChatColors.thinking, CircleShape)
                                                 .padding(horizontal = 10.dp, vertical = 2.dp),
                                         )
                                     }
@@ -1185,11 +1186,10 @@ internal fun ToolDetailSheet(
  */
 
 // ─── [T-android-tool-result-lazy-render] ────────────────────────────────────
-// Opening a tool-result detail (ToolDetailSheet) with a large payload — a big
-// memory_get / file read — janked: the body was a single Text laid out at once
-// inside a verticalScroll Column (which, like a ScrollView, does NOT virtualize),
-// so the whole 70KB+ string was composed + measured on open. Mirrors iOS
-// commit 9d81ba18 (ToolLiveSheet lazy-reveal).
+// Opening a tool-result detail with a big memory_get / file-read payload janked:
+// the body was one Text laid out at once inside a verticalScroll Column (which,
+// like a ScrollView, does NOT virtualize), so 70KB+ composed on open. Mirrors
+// iOS 9d81ba18 (ToolLiveSheet lazy-reveal).
 // We chunk the body into 40-line groups and reveal an initial window (~200
 // lines / 10KB, whichever is fewer), growing the window each time the user
 // reaches the bottom (auto-bump on the footer's onGloballyPositioned) or taps
@@ -1270,9 +1270,10 @@ private fun LazyRevealToolText(
         chunks.take(revealed.coerceIn(1, total.coerceAtLeast(1))).joinToString("\n")
     }
     val urlClick = LocalMarkdownUrlClickHandler.current
-    val displayed = remember(shownText, urlClick, linkify) {
+    val linkColor = ChatColors.link
+    val displayed = remember(shownText, urlClick, linkify, linkColor) {
         if (linkify && urlClick != null) {
-            com.openminis.app.ui.util.linkifyUrls(text = shownText, onClick = urlClick)
+            com.openminis.app.ui.util.linkifyUrls(shownText, urlClick, linkColor)
         } else androidx.compose.ui.text.AnnotatedString(shownText)
     }
 
@@ -1410,14 +1411,12 @@ private fun EditorCard(
 
             // Body
             if (bodyText.isNotEmpty()) {
-                // [P1-14] Plain body — no SelectionContainer. EditorCard renders only
+                // [P1-14] Plain body — no SelectionContainer: EditorCard only renders
                 // inside the ToolDetailSheet ModalBottomSheet (own window, hoisted out
                 // of the chat LazyColumn), so the T193 cross-tree findCommonAncestor
-                // rationale no longer applies and the sheet header's copy action
-                // covers copying.
+                // rationale no longer applies; the sheet header covers copying.
                 // [T-android-tool-result-lazy-render] Reveal large bodies
-                // incrementally instead of laying the whole string out on
-                // open (a 70KB memory_get janked the sheet for seconds).
+                // incrementally (a 70KB memory_get janked for seconds).
                 LazyRevealToolText(
                     bodyText = bodyText,
                     color = bodyColor,

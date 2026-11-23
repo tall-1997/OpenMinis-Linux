@@ -184,7 +184,7 @@ private fun VoiceModelRow(entry: ModelEntry, isInput: Boolean, onClick: () -> Un
             Text(
                 text = entry.baseModel.id,
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
             )
         }

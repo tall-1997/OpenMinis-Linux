@@ -383,12 +383,18 @@ CHAT_COLORS = (ROOT / "src/android/app/src/main/java/com/openminis/app/ui"
                "/theme/ChatColors.kt")
 THEME_KT = (ROOT / "src/android/app/src/main/java/com/openminis/app/ui"
             "/theme/Theme.kt")
+ACCENT_TOKENS = (ROOT / "src/android/app/src/main/java/com/openminis/app/ui"
+            "/theme/AccentTokens.kt")
 
 # ChatPalette 文字槽 → (最低对比度, 背景槽名或 'thinking'/'inlineCodeBg'/'fabAccent')
 CHAT_TEXT_SLOTS = {
     'primaryText': (4.5, 'background'),
     'secondaryText': (4.5, 'background'),
     'tertiaryText': (4.5, 'background'),
+    # [T-placeholder-role] The composer hint is its own semantic role (the HIG
+    # lists placeholderText separately from the label family). It used to be
+    # onSurface@25% = 1.61:1, i.e. a hint nobody could read.
+    'placeholder': (4.5, 'background'),
     'link': (4.5, 'background'),
     'thinking': (4.5, 'background'),
     # [T-text-threshold] `thinkingOn` is passed to `Text(color = ...)` on the
@@ -442,21 +448,55 @@ def _parse_palette_slots(src: str, marker: str):
     return out
 
 
-def _parse_scheme(src: str, fun: str):
+def _alias_table(*sources: str) -> dict:
+    """`val Name = Color(0xAARRGGBB)` declarations from any theme source.
+
+    Theme.kt and AccentTokens.kt both declare tokens, so alias resolution has to
+    see both: `primary = ActionBlueLight` lives in Theme.kt while
+    ActionBlueLight itself is declared in AccentTokens.kt.
+    """
+    literals, hops = {}, {}
+    for src in sources:
+        for m in re.finditer(
+                r'^(?:private |internal )?val ([A-Za-z][\w]*) = Color\((0x[0-9A-Fa-f]{8})\)',
+                src, re.M):
+            literals[m.group(1)] = int(m.group(2), 16)
+        for m in re.finditer(
+                r'^(?:private |internal )?val ([A-Za-z][\w]*) = ([A-Za-z][\w]*)\s*$',
+                src, re.M):
+            hops.setdefault(m.group(1), m.group(2))
+    # Follow the role -> palette -> literal chain until it stops moving, so a
+    # renamed intermediate (primary = TealPrimary = ActionBlueLight) resolves.
+    table = dict(literals)
+    for _ in range(8):
+        changed = False
+        for name, target in hops.items():
+            if name not in table and target in table:
+                table[name] = table[target]
+                changed = True
+        if not changed:
+            break
+    return table
+
+
+def _parse_scheme(src: str, fun: str, aliases: dict | None = None):
     i = src.find(f'{fun}(')
     if i < 0:
         return None
     j = src.find('\n)', i)
     body = src[i:j if j > 0 else len(src)]
+    aliases = aliases or {}
     out = {}
     for m in re.finditer(r'^\s*([a-zA-Z]+)\s*=\s*(?:Color\()?0x([0-9A-Fa-f]{8})',
                          body, re.M):
         out[m.group(1)] = int(m.group(2), 16)
-    # TealX 别名槽
-    for m in re.finditer(r'^\s*([a-zA-Z]+)\s*=\s*(Teal[A-Za-z]+)', body, re.M):
-        mm = re.search(rf'private val {m.group(2)} = Color\((0x[0-9A-Fa-f]{{8}})\)', src)
-        if mm:
-            out[m.group(1)] = int(mm.group(1), 16)
+    # Named-token slots: Teal*, ActionBlue*, and any other `val X = Color(0x…)`
+    # declared in the theme sources. Without this a token rename makes the gate
+    # report the role as unresolved — correct fail-closed behaviour, but the fix
+    # is to follow the alias, not to inline the literal back.
+    for m in re.finditer(r'^\s*([a-zA-Z]+)\s*=\s*([A-Za-z][\w]*)\s*,?\s*$', body, re.M):
+        if m.group(2) in aliases:
+            out[m.group(1)] = aliases[m.group(2)]
     return out
 
 
@@ -465,6 +505,10 @@ def check_live_palettes() -> list:
         return ['ChatColors.kt / Theme.kt 缺失，live palette 检查无法运行']
     src = CHAT_COLORS.read_text(encoding='utf-8')
     theme = THEME_KT.read_text(encoding='utf-8')
+    aliases = _alias_table(
+        theme,
+        ACCENT_TOKENS.read_text(encoding='utf-8') if ACCENT_TOKENS.exists() else '',
+    )
     fails = []
 
     for name, palette in (('LightChatPalette', 'light'), ('DarkChatPalette', 'dark')):
@@ -508,7 +552,7 @@ def check_live_palettes() -> list:
 
     # Theme.kt：两套 scheme 的配对 + surfaceContainer 阶梯不塌档
     for fun, label in (('lightColorScheme', 'Light'), ('darkColorScheme', 'Dark')):
-        sch = _parse_scheme(theme, fun)
+        sch = _parse_scheme(theme, fun, aliases)
         if not sch:
             fails.append(f'{label}ColorScheme 未解析到（Theme.kt 结构变了？）')
             continue
@@ -529,6 +573,27 @@ def check_live_palettes() -> list:
         elif len(set(vals)) < len(vals):
             fails.append(f'{label}ColorScheme surfaceContainer 有同值档'
                          f'（{[f"#{v:06X}" for v in vals]}）——层级不可编程')
+        else:
+            # [T-ramp-separation] Distinct-but-invisible used to pass: #F6F6F9 vs
+            # #F5F5F8 = 1.006:1, i.e. two names for one surface. Two rules:
+            #   1) neighbours must actually differ (>=1.015:1);
+            #   2) surfaceContainer — the CARD role ~20 call sites paint on the
+            #      page — must stand off the background (>=1.05:1). Collapsing it
+            #      into the page is what made cards vanish in light mode.
+            for a_name, b_name, a_v, b_v in zip(ramp, ramp[1:], vals, vals[1:]):
+                step = contrast(a_v, b_v)
+                if step < 1.015:
+                    fails.append(
+                        f'{label}ColorScheme {a_name}->{b_name} 只差 {step:.3f}:1'
+                        f'（<1.015）——两档看不出区别：#{a_v:06X} / #{b_v:06X}')
+            card = sch.get('surfaceContainer')
+            page = sch.get('background')
+            if card is not None and page is not None:
+                off = contrast(card, page)
+                if off < 1.05:
+                    fails.append(
+                        f'{label}ColorScheme surfaceContainer 对 background 只差 {off:.3f}:1'
+                        f'（<1.05）——卡片会糊在页面里：#{card:06X} / #{page:06X}')
     return fails
 
 

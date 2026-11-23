@@ -3,10 +3,10 @@ package com.openminis.app.ui.tokens
 /**
  * 自动生成 —— 不要手改。生成器: scripts/ui/gen_tokens.py
  *
- * 扫描事实：573 个 ui 下的 .kt 文件 -> Color(0x...): 333 处 / 162 个不同色值；
+ * 扫描事实：573 个 ui 下的 .kt 文件 -> Color(0x...): 323 处 / 160 个不同色值；
  * dp 字面量 3699 处 / 87 个不同值；sp 35 处。
  * （已排除注释、字符串，以及标了 token-literal-ok 的行。）
- * 本文件命名 25 个色值，当前覆盖 138/333 = 41% 的颜色使用点。
+ * 本文件命名 25 个色值，当前覆盖 126/323 = 39% 的颜色使用点。
  * 剩下的未命名字面量由 scripts/ci/check_token_coverage.py 的按文件预算
  * 逐步压制 —— 那个脚本才是棘轮，本文件只负责统计。
  *
@@ -18,7 +18,7 @@ package com.openminis.app.ui.tokens
 object RawColors {
     const val systemGreen: Long = 0xFF34C759L  // x 23
     const val systemOrange: Long = 0xFFFF9500L  // x 24
-    const val systemBlue: Long = 0xFF007AFFL  // x 17
+    const val systemBlue: Long = 0xFF007AFFL  // x 6
     const val systemRed: Long = 0xFFFF3B30L  // x 11
     const val systemPink: Long = 0xFFFF2D55L  // x 3
     const val systemPurple: Long = 0xFF5856D6L  // x 2
@@ -32,7 +32,7 @@ object RawColors {
     const val sparkleWarm: Long = 0xFFB8B096L  // x 1
     const val sparkleStone: Long = 0xFF99998CL  // x 1
     const val neutral0: Long = 0xFFFFFFFFL  // x 8
-    const val neutral50: Long = 0xFFF2F2F7L  // x 8
+    const val neutral50: Long = 0xFFF2F2F7L  // x 7
     const val neutral100: Long = 0xFFE2E2E6L  // x 4
     const val neutral200: Long = 0xFFC4C4C8L  // x 1
     const val neutral400: Long = 0xFF8E8E92L  // x 1

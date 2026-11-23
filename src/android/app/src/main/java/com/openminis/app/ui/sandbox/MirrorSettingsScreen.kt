@@ -595,7 +595,7 @@ private fun MirrorCategoryRow(category: MirrorCategory, onClick: () -> Unit) {
                 Icon(
                     m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         },
@@ -810,7 +810,7 @@ private fun MirrorRow(
             m3Icon(if (isSelected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked),
             contentDescription = null,
             tint = if (isSelected) MaterialTheme.colorScheme.primary
-                   else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                   else MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(22.dp),
         )
         Spacer(Modifier.width(10.dp))
@@ -836,7 +836,7 @@ private fun MirrorRow(
                 Text(
                     localizedMirrorRegion(mirror.region),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Text(

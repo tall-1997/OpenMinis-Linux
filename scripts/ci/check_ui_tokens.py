@@ -36,7 +36,7 @@ def main() -> int:
     try:
         proc = subprocess.run(
             [sys.executable, str(GEN), "--ui", str(UI), "--out", str(tmp)],
-            capture_output=True, text=True,
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
         )
         if proc.returncode != 0:
             print("ui tokens check: FAILED (generator error)")
@@ -56,7 +56,7 @@ def main() -> int:
                   f"--out {(UI / 'tokens').relative_to(ROOT)}")
             diff = subprocess.run(
                 ["diff", "-u", str(TOKENS), str(fresh)],
-                capture_output=True, text=True,
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
             )
             print(diff.stdout[:3000])
             return 1
@@ -65,7 +65,7 @@ def main() -> int:
 
     ref = subprocess.run(
         [sys.executable, str(REF), str(UI), str(TOKENS)],
-        capture_output=True, text=True,
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
     )
     out = (ref.stdout + ref.stderr).strip()
     if ref.returncode != 0:

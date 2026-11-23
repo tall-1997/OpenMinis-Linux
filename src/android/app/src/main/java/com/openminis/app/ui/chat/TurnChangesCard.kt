@@ -38,6 +38,7 @@ import com.openminis.app.R
 import com.openminis.app.ui.components.MinisAlertDialog
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.theme.ChatColors
 
 /**
  * [T-tool-undo-replay] ZCode-style per-turn change card. [T-turn-card-collapsed]
@@ -190,7 +191,7 @@ internal fun TurnChangesCard(
                                 text = path,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (reverted) {
-                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                                    ChatColors.tertiaryText
                                 } else {
                                     MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f)
                                 },
@@ -207,7 +208,7 @@ internal fun TurnChangesCard(
                                     ),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = if (reverted) {
-                                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                                        ChatColors.tertiaryText
                                     } else {
                                         MaterialTheme.colorScheme.onSurfaceVariant
                                     },
@@ -219,7 +220,7 @@ internal fun TurnChangesCard(
                                 Text(
                                     text = stringResource(R.string.turn_changes_reverted),
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f),
+                                    color = ChatColors.tertiaryText,
                                     modifier = Modifier.padding(start = 6.dp),
                                 )
                             } else {

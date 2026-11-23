@@ -100,8 +100,14 @@ object GenerationRunStore {
 
     /**
      * Runs for one session that were marked abandoned by the most recent
-     * launch scan — i.e. the previous process died mid-generation on this
-     * session. The UI offers a recovery hint from this list.
+     * launch scan — i.e. the previous process died mid-generation here.
+     *
+     * [T-no-interrupt-notice] DESPITE what its callers used to do with it, this
+     * is now a diagnostics/query API only: the chat screen no longer shows a
+     * "last generation was interrupted" snackbar on entry (the partial content
+     * is already in the transcript, and the notice fired on every re-entry).
+     * Kept because the run journal is still the record of what the previous
+     * process was doing; the tests pin the filter semantics.
      */
     fun recentlyAbandonedFor(context: Context, sessionId: String, windowMs: Long = 10 * 60_000): List<Run> {
         val dir = dir(context)

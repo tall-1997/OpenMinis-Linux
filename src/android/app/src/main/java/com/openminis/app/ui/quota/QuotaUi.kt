@@ -157,7 +157,7 @@ fun QuotaTone.color(): Color {
         QuotaTone.healthy -> if (dark) Color(0xFF30D158) else Color(0xFF34C759)
         QuotaTone.caution -> if (dark) Color(0xFFFF9F0A) else Color(0xFFFF9500)
         QuotaTone.critical -> if (dark) Color(0xFFFF453A) else Color(0xFFFF3B30)
-        QuotaTone.muted -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        QuotaTone.muted -> MaterialTheme.colorScheme.onSurfaceVariant
     }
 }
 
@@ -589,7 +589,7 @@ fun QuotaConsoleLinkRow(url: String, onOpen: () -> Unit, modifier: Modifier = Mo
         Icon(
             m3Icon(Icons.AutoMirrored.Filled.OpenInNew),
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(16.dp),
         )
     }

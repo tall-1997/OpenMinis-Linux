@@ -409,7 +409,7 @@ private fun SubAgentSteerRow(memberId: String) {
 private fun PhaseBanner(phase: SubAgentPhase?, label: String, tool: String) {
     // Null phase = the member already finished: the terminal banner keeps the
     // calm blue the old unknown-phase fallthrough used.
-    val color = phase?.let { phaseColor(it) } ?: Color(0xFF007AFF)
+    val color = phase?.let { phaseColor(it) } ?: ChatColors.thinking
     Row(
         modifier = Modifier
             .fillMaxWidth()

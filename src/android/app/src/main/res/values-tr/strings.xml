@@ -2568,7 +2568,6 @@
     <string name="config_affects_later">Bu, sonraki araç çağrılarını etkileyebilir.</string>
     <string name="config_reversible">Geri alınabilir ama hızlıca göz atmaya değer.</string>
     <!-- backfill: strings_chat.xml -->
-    <string name="crash_recovery_snackbar">Son üretim kesildi (model %1$s, başlangıç %2$s) — kesintiden önce üretilen içerik konuşmada korunuyor</string>
     <!-- backfill: strings.xml -->
     <string name="db_quarantine_body">Yerel veritabanı %1$s tarihindeki başlangıç bütünlük denetimini geçemedi ve güvenle açılamadı. Sohbetlerin ve ayarların SİLİNMEDİ: bozuk dosyalar kenara alındı ve uygulama yeni, boş bir veritabanıyla başladı.</string>
     <string name="db_quarantine_copy_at">Bozuk kopya burada tutuluyor:\n%1$s</string>

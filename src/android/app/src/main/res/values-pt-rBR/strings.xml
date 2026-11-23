@@ -2568,7 +2568,6 @@
     <string name="config_affects_later">Isso pode afetar chamadas de ferramentas posteriores.</string>
     <string name="config_reversible">É reversível, mas vale uma olhada rápida.</string>
     <!-- backfill: strings_chat.xml -->
-    <string name="crash_recovery_snackbar">A última geração foi interrompida (modelo %1$s, iniciada às %2$s) — o conteúdo produzido antes da interrupção está preservado na conversa</string>
     <!-- backfill: strings.xml -->
     <string name="db_quarantine_body">O banco de dados local falhou na verificação de integridade na inicialização em %1$s e não pôde ser aberto com segurança. Seus chats e configurações NÃO foram apagados: os arquivos danificados foram afastados e o app iniciou com um banco novo e vazio.</string>
     <string name="db_quarantine_copy_at">Cópia danificada guardada em:\n%1$s</string>

@@ -2567,7 +2567,6 @@
     <string name="config_affects_later">이 변경은 이후 도구 호출에 영향을 줄 수 있습니다.</string>
     <string name="config_reversible">되돌릴 수 있지만 한 번 살펴볼 가치가 있습니다.</string>
     <!-- backfill: strings_chat.xml -->
-    <string name="crash_recovery_snackbar">마지막 생성이 중단되었습니다(모델 %1$s, 시작 %2$s) — 중단 전에 생성된 내용은 대화에 보존되어 있습니다</string>
     <!-- backfill: strings.xml -->
     <string name="db_quarantine_body">로컬 데이터베이스가 %1$s 시작 무결성 검사에 실패해 안전하게 열 수 없었습니다. 채팅과 설정은 삭제되지 않았습니다. 손상된 파일은 옮겨졌고 앱은 새 빈 데이터베이스로 시작했습니다.</string>
     <string name="db_quarantine_copy_at">손상 복사본 위치:\n%1$s</string>

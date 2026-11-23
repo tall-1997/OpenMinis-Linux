@@ -384,7 +384,7 @@ internal fun PickerProviderCardHeader(
 internal fun PickerSelectionMark(
     selected: Boolean,
     size: Dp = 20.dp,
-    selectedTint: Color = IosBlue,
+    selectedTint: Color = MaterialTheme.colorScheme.primary,
 ) {
     Icon(
         if (selected) m3Icon(Icons.Default.CheckCircle) else m3Icon(Icons.Default.RadioButtonUnchecked),

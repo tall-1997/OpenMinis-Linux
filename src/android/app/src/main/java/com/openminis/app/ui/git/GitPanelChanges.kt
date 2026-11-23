@@ -63,7 +63,7 @@ internal fun GitPanelChanges(state: GitPanelState, viewModel: GitPanelViewModel)
                 Text(
                     stringResource(R.string.git_panel_no_stashes),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier
                         .align(Alignment.CenterHorizontally)
                         .padding(bottom = 14.dp),
@@ -215,7 +215,7 @@ private fun SectionHeader(title: String, count: Int) {
         Text(
             "($count)",
             style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

@@ -2568,7 +2568,6 @@
     <string name="config_affects_later">Cela peut affecter les appels d\'outils ultérieurs.</string>
     <string name="config_reversible">Réversible, mais mérite un coup d\'œil rapide.</string>
     <!-- backfill: strings_chat.xml -->
-    <string name="crash_recovery_snackbar">La dernière génération a été interrompue (modèle %1$s, démarrée à %2$s) — le contenu produit avant l\'interruption est conservé dans la conversation</string>
     <!-- backfill: strings.xml -->
     <string name="db_quarantine_body">La base de données locale a échoué à son contrôle d\'intégrité au démarrage le %1$s et n\'a pas pu être ouverte en toute sécurité. Vos chats et réglages n\'ont PAS été supprimés : les fichiers endommagés ont été mis de côté et l\'app a démarré avec une base de données neuve et vide.</string>
     <string name="db_quarantine_copy_at">Copie endommagée conservée à :\n%1$s</string>

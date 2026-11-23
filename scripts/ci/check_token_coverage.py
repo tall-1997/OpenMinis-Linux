@@ -278,6 +278,43 @@ def main():
 
     now, bad_exempt, prints = survey()
 
+    # [T-allowlist-has-teeth] The allowlist used to be documentation only: no
+    # code read it, so a file's colour budget could be hand-edited upward and
+    # `--update-baseline` (which can only lower) would silently drop the reasons.
+    # Now every entry needs a real reason and per-kind caps, and the live count
+    # may never exceed its cap — raising a budget requires touching both places
+    # on purpose, with an explanation.
+    allow = {}
+    if BASELINE.exists():
+        allow = json.loads(BASELINE.read_text(encoding='utf-8')).get('allowlist', {})
+    files_baseline = {}
+    if BASELINE.exists():
+        files_baseline = json.loads(BASELINE.read_text(encoding='utf-8')).get('files', {})
+    allow_fails = []
+    for f, meta in allow.items():
+        if f not in files_baseline:
+            allow_fails.append(f'{f}: allowlist 里的文件不在 files 预算表里（陈旧条目）')
+            continue
+        reason = (meta or {}).get('reason', '') if isinstance(meta, dict) else ''
+        if not isinstance(meta, dict) or len(str(reason).strip()) < 6:
+            allow_fails.append(f'{f}: allowlist 缺少说明（reason 必填且不少于 6 字）')
+            continue
+        caps = meta.get('caps')
+        if not isinstance(caps, dict) or not caps:
+            allow_fails.append(f'{f}: allowlist 缺少 caps（每种字面量的上限）')
+            continue
+        for kind, cap in caps.items():
+            actual = now.get(f, {}).get(kind, 0)
+            if actual > cap:
+                allow_fails.append(
+                    f'{f}: {kind} 实测 {actual} > allowlist 上限 {cap}'
+                    f' —— 手工上调预算必须同时更新 caps 并写明理由')
+    if allow_fails:
+        print('token coverage: allowlist 校验失败：')
+        for a in allow_fails:
+            print('  - %s' % a)
+        return 1
+
     if bad_exempt:
         print('token coverage: 豁免标记无效（理由必填且不少于 6 字）：')
         for b in bad_exempt:

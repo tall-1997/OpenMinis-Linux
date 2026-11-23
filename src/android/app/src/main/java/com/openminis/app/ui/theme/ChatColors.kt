@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 //   label                   -> primaryText
 //   secondaryLabel          -> secondaryText
 //   tertiaryLabel           -> tertiaryText
+//   placeholderText         -> placeholder (composer hint; its own role, see below)
 //   quaternaryLabel         -> sendButtonDisabled
 //   separator               -> border
 //   systemGray6             -> inlineCodeBg / toolCapsuleBg
@@ -32,6 +33,8 @@ data class ChatPalette(
     val primaryText: Color,
     val secondaryText: Color,
     val tertiaryText: Color,
+    /** Composer hint text. Its own role: never a disabled state, never body text. */
+    val placeholder: Color,
     val disabledText: Color,
     val userBubble: Color,
     val toolBg: Color,
@@ -72,16 +75,25 @@ val LightChatPalette = ChatPalette(
     inputBorder = Color(0x4D3C3C43),
     primaryText = Color(0xFF000000),
     // [T-chat-text-contrast] alpha-blended iOS label grays measured 3.44 / 1.74:1
-    // on white (2026-11-23 audit) — below WCAG AA 4.5 for text. Solid iOS-hue
-    // grays that pass while keeping the label hierarchy (secondary darker than
-    // tertiary; both well under primary black).
-    secondaryText = Color(0xFF636367),
-    tertiaryText = Color(0xFF76767A),
+    // on white — below WCAG AA 4.5. Solid iOS-hue grays instead, and the tiers
+    // must stay VISIBLY apart: 8.78:1 vs 5.05:1 is a 1.74x step, whereas the
+    // first solid pair (#636367 / #76767A) was 5.98 vs 4.52 = 1.32x, which read
+    // as a single flat grey — the reported "light mode looks washed out".
+    secondaryText = Color(0xFF4A4A52),
+    tertiaryText = Color(0xFF6E6E76),
+    // [T-placeholder-role] 4.53:1 on the #F2F2F7 page and 5.05:1 on white — a
+    // hint someone can actually read (it used to be onSurface@25% = 1.67:1).
+    placeholder = Color(0xFF6E6E76),
     disabledText = Color(0x2E3C3C43),
-    userBubble = Color(0x1E787880),
+    // [T-user-bubble-opaque] Was 0x1E787880 (12% translucent): its apparent
+    // colour changed with whatever sat behind it. Opaque with the same rendered
+    // value on white, so light and dark both ship a solid bubble.
+    userBubble = Color(0xFFEFEFF0),
     toolBg = Color(0xFFF2F2F7),
     toolBorder = Color(0x14000000),
-    toolCapsuleBg = Color(0xFFF2F2F7),
+    // [T-nested-fill-step] Sits INSIDE toolBg (#F2F2F7): as the same value it
+    // was invisible, so a tool row read as one grey block. One step down.
+    toolCapsuleBg = Color(0xFFE9E9EE),
     separator = Color(0x4D3C3C43),
     sendButton = Color(0xFF000000),
     sendButtonDisabled = Color(0x2E3C3C43),
@@ -132,9 +144,12 @@ val DarkChatPalette = ChatPalette(
     inputIconBorder = Color(0xFF595959),
     inputBorder = Color(0x40545458),
     primaryText = Color(0xFFFFFFFF),
-    secondaryText = Color(0x99EBEBF5),
+    secondaryText = Color(0xB8EBEBF5),
     // [T-chat-text-contrast-dark] 30% alpha measured 2.27:1 on #000; 55% = 5.42.
-    tertiaryText = Color(0x8DEBEBF5),
+    // Secondary moves to 72% (9.09) so the two tiers are 1.67x apart instead of
+    // the 1.16x near-tie that flattened the dark transcript too.
+    tertiaryText = Color(0x8CEBEBF5),
+    placeholder = Color(0x8CEBEBF5),
     disabledText = Color(0x2EEBEBF5),
     // [T-android-user-bubble-dark-contrast] The old 0x247676D7 was a 14%-alpha
     // translucent blue-grey that washed out to near-invisible on the #000 chat
@@ -163,7 +178,7 @@ val DarkChatPalette = ChatPalette(
     blockquoteBar = Color(0x80FF9F0A),
     thinking = Color(0xFF0A84FF),
     // [T-thinking-on] White on #0A84FF measures 3.65:1 (below AA for text).
-    // Ink on the same blue measures 5.76:1.
+    // Ink (#1C1C1E) on the same blue measures 4.665:1.
     thinkingOn = Color(0xFF1C1C1E),
     warningBg = Color(0x14FF9F0A),
     // [T-warning-text-dark] 45% alpha measured 4.43:1 — one point short of AA.

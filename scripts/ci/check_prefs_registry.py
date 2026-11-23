@@ -119,6 +119,8 @@ def main() -> int:
          "--check"],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
     )
     output = (proc.stdout + proc.stderr).strip()
 

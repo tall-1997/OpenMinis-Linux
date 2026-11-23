@@ -89,7 +89,7 @@ internal fun ProviderInstanceRow(
                 Text(stringResource(R.string.provider_list_api_key), style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("·", style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(
                     text = when {
                         isLoading -> stringResource(R.string.loading)
@@ -115,7 +115,7 @@ internal fun ProviderInstanceRow(
             if (modelCount > 0) {
                 Text(stringResource(R.string.provider_list_models_count, modelCount),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         if (!instance.isEnabled) {
@@ -133,11 +133,11 @@ internal fun ProviderInstanceRow(
                     if (pinned) R.string.provider_unset_favorite else R.string.provider_set_favorite,
                 ),
                 tint = if (pinned) Color(0xFFFFCC00)
-                else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                else MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Icon(m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight), contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(20.dp))
     }
 }

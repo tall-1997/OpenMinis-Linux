@@ -249,7 +249,7 @@ fun SkillsManagementScreen(
                         m3Icon(Icons.Outlined.Description),
                         contentDescription = null,
                         modifier = Modifier.size(36.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
                         stringResource(R.string.skill_empty_title),
@@ -721,7 +721,7 @@ fun SkillDetailScreen(
                             editName = skill.name
                             showEditNameDialog = true
                         },
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 DetailDivider(insetEnd = 14.dp, alpha = 0.5f)
@@ -868,7 +868,7 @@ fun SkillDetailScreen(
                         Icon(
                             m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.size(20.dp),
                         )
                     }

@@ -12,7 +12,6 @@
     <string name="approval_action_allow_all_session">Permitir siempre en esta sesión (objetivo actual)</string>
 
     <!-- Crash recovery (ChatScreen) -->
-    <string name="crash_recovery_snackbar">La última generación quedó interrumpida (modelo %1$s, iniciada a las %2$s); el contenido producido antes de la interrupción se conserva en la conversación</string>
 
     <!-- Attachment pick truncation (ChatScreen) -->
     <string name="attachment_pick_truncated_items">Solo se adjuntaron los primeros %1$d elementos.</string>

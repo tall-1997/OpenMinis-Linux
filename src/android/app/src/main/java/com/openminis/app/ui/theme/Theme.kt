@@ -49,7 +49,7 @@ import com.openminis.app.ui.tokens.MinisType
 // [T-accent-text-contrast] #5A8AD2 measured 3.50:1 as button text (white on
 // primary) and 3.14:1 as text on #F2F2F7 — both below WCAG AA 4.5. #2E6BC0
 // keeps the blue hue and passes everywhere (white-on-it 5.28, as-text 4.73).
-private val TealPrimary = Color(0xFF2E6BC0)
+private val TealPrimary = ActionBlueLight
 private val TealOnPrimary = Color(0xFFFFFFFF)
 private val TealPrimaryContainer = Color(0xFFD6E4FF)
 private val TealOnPrimaryContainer = Color(0xFF001A3B)
@@ -69,8 +69,11 @@ private val TealOnSurface = Color(0xFF1C1C1E)
 private val TealSurfaceVariant = Color(0xFFE2E2E6)
 private val TealOnSurfaceVariant = Color(0xFF444446)
 private val TealOutline = Color(0xFF747477)
-private val TealDarkPrimary = Color(0xFFABC7FF)
-private val TealDarkOnPrimary = Color(0xFF002D5F)
+private val TealDarkPrimary = ActionBlueDark
+// [T-apple-accent-pair] With the accent now the vivid #0A84FF, the old
+// onPrimary #002D5F drops to 3.74:1 (it was 8.01 against the pale tone-80
+// primary it was designed for). #001A3B measures 4.75:1 here.
+private val TealDarkOnPrimary = Color(0xFF001A3B)
 private val TealDarkPrimaryContainer = Color(0xFF004378)
 private val TealDarkOnPrimaryContainer = Color(0xFFD6E4FF)
 private val TealDarkSecondary = Color(0xFFBCC7DB)
@@ -90,7 +93,7 @@ private val TealDarkOutline = Color(0xFF8E8E92)
 private val LightColorScheme = lightColorScheme(
     primary = TealPrimary,
     surfaceTint = TealPrimary,
-    inversePrimary = TealDarkPrimary,
+    inversePrimary = ActionBlueDark,
     error = Color(0xFFD70015),
     onError = Color(0xFFFFFFFF),
     errorContainer = Color(0xFFFFDAD6),
@@ -119,10 +122,15 @@ private val LightColorScheme = lightColorScheme(
     surfaceContainerLowest = Color(0xFFFFFFFF),
     surfaceContainerLow = Color(0xFFFDFDFE),
     surfaceContainer = Color(0xFFFAFAFC),
-    // [T-surface-container-ramp] cLow/c and cHigh/cHighest were duplicate pairs
-    // (cHigh→cHighest 1.00:1 — invisible to its 24 consumers). Five distinct
-    // steps, keeping the Apple grouped direction (lowest = white cards on the
-    // gray page, M3 direction reversed by design).
+    // [T-surface-container-ramp] Five distinct steps, Lowest = white cards on the
+    // grouped #F2F2F7 page (Apple grouped direction; M3's tonal order is
+    // reversed by design, so "higher" is *darker* here only after Low).
+    //
+    // Do NOT "widen" these into a M3-baseline ramp: this app's surface is the
+    // iOS grouped page (#F2F2F7), not M3's near-white, and ~20 call sites use
+    // surfaceContainer as a CARD background. Spreading the ramp evenly drove
+    // surfaceContainer to 1.006:1 against that page and cards vanished — the
+    // flat look the ramp is supposed to prevent.
     surfaceContainerHigh = Color(0xFFF6F6F9),
     surfaceContainerHighest = Color(0xFFF1F1F5),
     outline = TealOutline,
@@ -135,7 +143,7 @@ private val LightColorScheme = lightColorScheme(
 private val DarkColorScheme = darkColorScheme(
     primary = TealDarkPrimary,
     surfaceTint = TealDarkPrimary,
-    inversePrimary = TealPrimary,
+    inversePrimary = ActionBlueLight,
     // [T-dark-tertiary-family] The dark scheme skipped tertiary entirely, so it
     // fell back to the library pink #EFB8C8 — a different hue from the light
     // scheme's #6D5677. Derived from the same iOS-purple family.
@@ -377,7 +385,12 @@ internal fun dynamicChatPalette(scheme: ColorScheme, fallback: ChatPalette): Cha
         // only parses the static palettes. Derive it from onSurfaceVariant
         // (tone 30 light / 80 dark: 9.1 / 10.9) with a reduction that keeps the
         // three-tier hierarchy below secondaryText.
+        // [T-dynamic-tertiary-text] Same tier spacing as the static palette:
+        // onSurfaceVariant is 9.1:1 / 10.9:1, 0.78 alpha lands at ~4.8-4.9 / 7.0,
+        // i.e. a real step below secondaryText instead of the near-tie the
+        // alpha-based static palette used to have.
         tertiaryText = scheme.onSurfaceVariant.copy(alpha = 0.78f),
+        placeholder = scheme.onSurfaceVariant.copy(alpha = 0.78f),
         disabledText = scheme.onSurface.copy(alpha = 0.18f),
         sendButtonDisabled = scheme.onSurface.copy(alpha = 0.18f),
         // Accents (see the FAB pairing note above; userBubble text is

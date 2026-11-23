@@ -88,7 +88,7 @@ internal fun GoalSheet(viewModel: ChatViewModel) {
         // (onSurfaceVariant at 40% alpha), exactly as its local copy did.
         dragHandle = {
             MinisSheetDragHandle(
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         },
     ) {

@@ -2568,7 +2568,6 @@
     <string name="config_affects_later">Maaaring makaapekto ito sa mga susunod na tool call.</string>
     <string name="config_reversible">Nababawi, pero sulit na tingnan agad.</string>
     <!-- backfill: strings_chat.xml -->
-    <string name="crash_recovery_snackbar">Nahinto ang huling generation (model %1$s, nagsimula %2$s) — ang nilalamang nabuo bago ang paghinto ay naka-save sa pag-uusap</string>
     <!-- backfill: strings.xml -->
     <string name="db_quarantine_body">Nabigo ang local database sa integrity check nito sa pag-start noong %1$s at hindi mabuksan nang ligtas. HINDI binura ang mga chat at setting mo: inilipat ang mga sirang file at nagsimula ang app gamit ang sariwa at walang lamang database.</string>
     <string name="db_quarantine_copy_at">Nakatago ang sirang kopya sa:\n%1$s</string>

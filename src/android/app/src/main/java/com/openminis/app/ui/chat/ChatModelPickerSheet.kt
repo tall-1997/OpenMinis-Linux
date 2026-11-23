@@ -316,7 +316,7 @@ internal fun ModelPickerSheet(
                             Icon(
                                 m3Icon(Icons.Default.Layers),
                                 contentDescription = null,
-                                tint = Color(0xFF007AFF),
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(18.dp),
                             )
                             Spacer(Modifier.width(10.dp))
@@ -351,7 +351,7 @@ internal fun ModelPickerSheet(
                                             strategyLabel,
                                             fontSize = MinisTypography.cap2,
                                             fontWeight = FontWeight.Medium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                     }
                                 }
@@ -360,19 +360,19 @@ internal fun ModelPickerSheet(
                                     Text(
                                         "→ ${resolvedEntry.model.displayName}",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 } else if (resolvedCount > 0) {
                                     Text(
                                         pluralStringResource(R.plurals.model_picker_models_count, resolvedCount, resolvedCount),
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 } else {
                                     Text(
                                         stringResource(R.string.model_picker_models_count_unlinked, group.memberEntryIds.size),
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
                             }
@@ -396,10 +396,10 @@ internal fun ModelPickerSheet(
                                     fontSize = MinisTypography.cap2,
                                     lineHeight = MinisTypography.lineBadge,
                                     fontWeight = FontWeight.Medium,
-                                    color = Color(0xFF007AFF),
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                                     modifier = Modifier
                                         .background(
-                                            Color(0xFF007AFF).copy(alpha = 0.1f),
+                                            MaterialTheme.colorScheme.primaryContainer,
                                             RoundedCornerShape(50),
                                         )
                                         .padding(horizontal = 5.dp, vertical = 1.dp),
@@ -439,7 +439,7 @@ internal fun ModelPickerSheet(
                                 Text(
                                     stringResource(R.string.model_picker_no_linked_models),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(start = 48.dp, top = 4.dp, bottom = 8.dp),
                                 )
                             }
@@ -476,7 +476,7 @@ internal fun ModelPickerSheet(
                                     Icon(
                                         if (isActive) m3Icon(Icons.Default.CheckCircle) else m3Icon(Icons.Default.RadioButtonUnchecked),
                                         contentDescription = null,
-                                        tint = if (isActive) Color(0xFF007AFF)
+                                        tint = if (isActive) MaterialTheme.colorScheme.primary
                                         else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f),
                                         modifier = Modifier.size(17.dp),
                                     )
@@ -503,18 +503,18 @@ internal fun ModelPickerSheet(
                                                     instance.label.ifEmpty { instance.providerType.displayName },
                                                     style = MaterialTheme.typography.labelSmall,
                                                     fontWeight = FontWeight.Medium,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 )
                                                 Text(
                                                     " · ",
                                                     style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 )
                                             }
                                             Text(
                                                 entry.model.id,
                                                 style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
                                         }
                                     }
@@ -543,7 +543,7 @@ internal fun ModelPickerSheet(
                     Text(
                         stringResource(R.string.model_picker_groups_footer),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         // T236: hint sits between Model Groups card and
                         // first Provider card — top 8 hugs the group
                         // card, bottom 12 separates from the next card.
@@ -682,7 +682,7 @@ internal fun ModelPickerSheet(
                                             m3Icon(Icons.Default.KeyboardArrowDown),
                                             contentDescription = null,
                                             modifier = Modifier.size(16.dp),
-                                            tint = Color(0xFF007AFF),
+                                            tint = MaterialTheme.colorScheme.primary,
                                         )
                                         Spacer(Modifier.width(4.dp))
                                         Text(
@@ -692,7 +692,7 @@ internal fun ModelPickerSheet(
                                                 entries.size,
                                             ),
                                             style = MaterialTheme.typography.labelMedium,
-                                            color = Color(0xFF007AFF),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                     }
                                 }
@@ -746,7 +746,7 @@ internal fun ModelPickerSheet(
                                             Text(
                                                 entry.model.id,
                                                 style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             )
                                             com.openminis.app.ui.components.modalityBadges(entry.model).forEach { badge ->
                                                 com.openminis.app.ui.components.ModalityBadge(badge)
@@ -786,7 +786,7 @@ internal fun ModelPickerSheet(
                         if (searchText.isNotEmpty()) m3Icon(Icons.Default.Search) else m3Icon(Icons.Default.Memory),
                         contentDescription = null,
                         modifier = Modifier.size(28.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
@@ -799,7 +799,7 @@ internal fun ModelPickerSheet(
                         Text(
                             stringResource(R.string.model_picker_configure_hint),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
                         )
                     } else {
@@ -807,7 +807,7 @@ internal fun ModelPickerSheet(
                         Text(
                             stringResource(R.string.model_picker_try_different_search),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -850,7 +850,7 @@ private fun QuickTestButton(onClick: () -> Unit) {
         Icon(
             m3Icon(Icons.Default.Bolt),
             contentDescription = stringResource(R.string.model_picker_quick_test),
-            tint = Color(0xFF007AFF),
+            tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(17.dp),
         )
     }

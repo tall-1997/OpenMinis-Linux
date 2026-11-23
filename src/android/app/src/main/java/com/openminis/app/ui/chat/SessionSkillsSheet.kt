@@ -217,7 +217,7 @@ private fun EmptySkillsCard() {
                 m3Icon(Icons.Outlined.Description),
                 contentDescription = null,
                 modifier = Modifier.size(36.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
                 stringResource(R.string.session_skills_empty_title),
@@ -227,7 +227,7 @@ private fun EmptySkillsCard() {
             Text(
                 stringResource(R.string.session_skills_empty_subtitle),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

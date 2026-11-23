@@ -132,12 +132,12 @@
       "dp": 5
     },
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatModelPickerSheet.kt": {
-      "color": 8,
+      "color": 1,
       "sp": 0,
       "dp": 79
     },
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatProcessCards.kt": {
-      "color": 2,
+      "color": 0,
       "sp": 8,
       "dp": 26
     },
@@ -162,7 +162,7 @@
       "dp": 7
     },
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatSubAgentBar.kt": {
-      "color": 2,
+      "color": 1,
       "sp": 1,
       "dp": 50
     },
@@ -362,7 +362,7 @@
       "dp": 18
     },
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ThinkingFullDialog.kt": {
-      "color": 1,
+      "color": 0,
       "sp": 0,
       "dp": 4
     },
@@ -1152,22 +1152,22 @@
       "dp": 17
     },
     "src/android/app/src/main/java/com/openminis/app/ui/theme/AccentTokens.kt": {
-      "color": 18,
+      "color": 20,
       "sp": 0,
       "dp": 0
     },
     "src/android/app/src/main/java/com/openminis/app/ui/theme/ChatColors.kt": {
-      "color": 62,
+      "color": 64,
       "sp": 0,
       "dp": 0
     },
     "src/android/app/src/main/java/com/openminis/app/ui/theme/Theme.kt": {
-      "color": 67,
+      "color": 65,
       "sp": 0,
       "dp": 10
     },
     "src/android/app/src/main/java/com/openminis/app/ui/util/UrlLinkifier.kt": {
-      "color": 1,
+      "color": 0,
       "sp": 0,
       "dp": 0
     },
@@ -1194,10 +1194,10 @@
       "185": "24"
     },
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ThinkingBlockUI.kt": {
-      "143": "0.5",
-      "168": "13",
-      "170": "1.5",
-      "279": "300"
+      "146": "0.5",
+      "171": "13",
+      "173": "1.5",
+      "286": "300"
     },
     "src/android/app/src/main/java/com/openminis/app/ui/components/CodeEditorField.kt": {
       "164": "20"
@@ -1211,24 +1211,111 @@
       "100": "22"
     },
     "src/android/app/src/main/java/com/openminis/app/ui/theme/Theme.kt": {
-      "404": "57 64",
-      "405": "45 52",
-      "406": "36 44",
-      "407": "32 40",
-      "408": "28 36",
-      "409": "24 32",
-      "410": "22 28",
-      "411": "16 24",
-      "412": "14 20",
-      "413": "16 24",
-      "414": "14 20",
-      "415": "12 16",
-      "416": "14 20",
-      "417": "12 16",
-      "418": "11"
+      "417": "57 64",
+      "418": "45 52",
+      "419": "36 44",
+      "420": "32 40",
+      "421": "28 36",
+      "422": "24 32",
+      "423": "22 28",
+      "424": "16 24",
+      "425": "14 20",
+      "426": "16 24",
+      "427": "14 20",
+      "428": "12 16",
+      "429": "14 20",
+      "430": "12 16",
+      "431": "11"
     }
   },
   "allowlist": {
-    "src/android/app/src/main/java/com/openminis/app/ui/theme/ChatColors.kt": "设计系统的定义文件：三色系统契约明文规定原始 Color 字面量只允许出现在 Theme.kt / ChatColors.kt / AccentTokens.kt。+1 是 warningText 从 α0.45 黑改成实色（实测 3.32→8.05:1）。"
+    "src/android/app/src/main/java/com/openminis/app/ui/theme/Theme.kt": {
+      "reason": "设计系统的定义文件：三色系统契约明文允许原始 Color 字面量只出现在 Theme.kt / ChatColors.kt / AccentTokens.kt。这里的上限记录 M3 角色补齐后的实测值（error/tertiary/inverse*/surfaceTint 等原先缺失的角色），只降不升。",
+      "caps": {
+        "color": 65,
+        "sp": 0,
+        "dp": 10
+      }
+    },
+    "src/android/app/src/main/java/com/openminis/app/ui/theme/ChatColors.kt": {
+      "reason": "同上：聊天色板的定义处。上限记录文字三层级/placeholder/胶囊底色改实色后的实测值。",
+      "caps": {
+        "color": 64,
+        "sp": 0,
+        "dp": 0
+      }
+    },
+    "src/android/app/src/main/java/com/openminis/app/ui/theme/AccentTokens.kt": {
+      "reason": "同上：accent 桥与统一强调色对的定义处。",
+      "caps": {
+        "color": 20,
+        "sp": 0,
+        "dp": 0
+      }
+    },
+    "src/android/app/src/main/java/com/openminis/app/automation/ui/AutomationRuleEditScreen.kt": {
+      "reason": "2026-11-23 G3 扩面纳入（cards/, automation/ui/, webapp/, quick/）：既有字面量，非新增债务；此为登记时的实测上限，只降不升。",
+      "caps": {
+        "color": 0,
+        "sp": 2,
+        "dp": 6
+      }
+    },
+    "src/android/app/src/main/java/com/openminis/app/automation/ui/AutomationRuleRunsScreen.kt": {
+      "reason": "2026-11-23 G3 扩面纳入（cards/, automation/ui/, webapp/, quick/）：既有字面量，非新增债务；此为登记时的实测上限，只降不升。",
+      "caps": {
+        "color": 0,
+        "sp": 4,
+        "dp": 5
+      }
+    },
+    "src/android/app/src/main/java/com/openminis/app/automation/ui/AutomationRulesTab.kt": {
+      "reason": "2026-11-23 G3 扩面纳入（cards/, automation/ui/, webapp/, quick/）：既有字面量，非新增债务；此为登记时的实测上限，只降不升。",
+      "caps": {
+        "color": 0,
+        "sp": 3,
+        "dp": 13
+      }
+    },
+    "src/android/app/src/main/java/com/openminis/app/cards/CardRenderers.kt": {
+      "reason": "2026-11-23 G3 扩面纳入（cards/, automation/ui/, webapp/, quick/）：既有字面量，非新增债务；此为登记时的实测上限，只降不升。",
+      "caps": {
+        "color": 0,
+        "sp": 21,
+        "dp": 41
+      }
+    },
+    "src/android/app/src/main/java/com/openminis/app/cards/CardTitleParts.kt": {
+      "reason": "2026-11-23 G3 扩面纳入（cards/, automation/ui/, webapp/, quick/）：既有字面量，非新增债务；此为登记时的实测上限，只降不升。",
+      "caps": {
+        "color": 0,
+        "sp": 2,
+        "dp": 1
+      }
+    },
+    "src/android/app/src/main/java/com/openminis/app/quick/QuickActivity.kt": {
+      "reason": "2026-11-23 G3 扩面纳入（cards/, automation/ui/, webapp/, quick/）：既有字面量，非新增债务；此为登记时的实测上限，只降不升。",
+      "caps": {
+        "color": 0,
+        "sp": 0,
+        "dp": 16
+      }
+    },
+    "src/android/app/src/main/java/com/openminis/app/webapp/AddToHomeSheet.kt": {
+      "reason": "2026-11-23 G3 扩面纳入（cards/, automation/ui/, webapp/, quick/）：既有字面量，非新增债务；此为登记时的实测上限，只降不升。",
+      "caps": {
+        "color": 0,
+        "sp": 0,
+        "dp": 17
+      }
+    },
+    "src/android/app/src/main/java/com/openminis/app/webapp/WebAppActivity.kt": {
+      "reason": "2026-11-23 G3 扩面纳入（cards/, automation/ui/, webapp/, quick/）：既有字面量，非新增债务；此为登记时的实测上限，只降不升。",
+      "caps": {
+        "color": 0,
+        "sp": 0,
+        "dp": 8
+      }
+    }
   }
 }

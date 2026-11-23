@@ -2630,7 +2630,6 @@
     <string name="config_affects_later">這項變更可能影響之後的工具呼叫。</string>
     <string name="config_reversible">可以還原，但值得先看一眼。</string>
     <!-- backfill: strings_chat.xml -->
-    <string name="crash_recovery_snackbar">上一次生成被中斷（模型 %1$s，開始於 %2$s）——中斷前產生的內容已保存在對話中</string>
     <!-- backfill: strings.xml -->
     <string name="delete_named">要刪除 %1$s 嗎？</string>
     <string name="display_regex_pattern">規則式</string>

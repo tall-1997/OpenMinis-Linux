@@ -211,7 +211,7 @@ private fun EmptyMcpsCard() {
                 m3Icon(Icons.Outlined.Extension),
                 contentDescription = null,
                 modifier = Modifier.size(36.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
                 stringResource(R.string.session_mcps_empty_title),
@@ -221,7 +221,7 @@ private fun EmptyMcpsCard() {
             Text(
                 stringResource(R.string.session_mcps_empty_subtitle),
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }

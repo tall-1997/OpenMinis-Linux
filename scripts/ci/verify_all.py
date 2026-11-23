@@ -299,7 +299,7 @@ def check_generated_tokens(cache: dict[Path, str]) -> list[str]:
         try:
             r = subprocess.run(
                 [sys.executable, str(gen), "--ui", str(ui), "--out", str(out)],
-                cwd=REPO, capture_output=True, text=True, timeout=300,
+                cwd=REPO, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300,
             )
         except subprocess.TimeoutExpired:
             return ["gen_tokens.py 超时 (>300s)"]
@@ -339,7 +339,7 @@ def run_one(gate: Gate, with_pr_gates: bool) -> Result:
     if gate.pre_selftest:
         r = subprocess.run(
             gate.argv + ["--selftest"], cwd=REPO,
-            capture_output=True, text=True, timeout=gate.timeout,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=gate.timeout,
         )
         if r.returncode != 0:
             return Result(
@@ -350,7 +350,7 @@ def run_one(gate: Gate, with_pr_gates: bool) -> Result:
     try:
         r = subprocess.run(
             gate.argv, cwd=REPO,
-            capture_output=True, text=True, timeout=gate.timeout,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=gate.timeout,
         )
     except subprocess.TimeoutExpired:
         return Result(gate.name, 124, time.time() - t0, f"超时 (>{gate.timeout}s)")

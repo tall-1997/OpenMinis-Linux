@@ -387,7 +387,7 @@ fun ProviderListScreen(
                     imageVector = m3Icon(Icons.Outlined.VpnKey),
                     contentDescription = null,
                     modifier = Modifier.size(36.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Text(
                     text = stringResource(R.string.provider_list_no_providers_configured),
@@ -397,7 +397,7 @@ fun ProviderListScreen(
                 Text(
                     text = stringResource(R.string.provider_list_add_a_provider_to_get_started),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         } else {

@@ -8,6 +8,7 @@ import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
+import com.openminis.app.ui.theme.ActionBlueDark
 
 /**
  * Convert a plain-text string into an [AnnotatedString] where any http(s) URL
@@ -32,12 +33,15 @@ import androidx.compose.ui.text.withLink
  * @param onClick  called with the matched URL string when the user taps a
  *                 link; typically delegates to the chat's `urlClickHandler`
  *                 (in-app `UrlPreviewSheet`).
- * @param linkColor accent color for the link span (default iOS systemBlue).
+ * @param linkColor accent color for the link span (defaults to the Apple theme accent).
  */
 fun linkifyUrls(
     text: String,
     onClick: (String) -> Unit,
-    linkColor: Color = Color(0xFF0A84FF),
+    // [T-apple-accent-pair] No default: a static default is only correct for ONE
+    // appearance (ActionBlueDark is 3.59:1 on a light sheet). Callers pass the
+    // palette's link role, which is appearance-correct by construction.
+    linkColor: Color,
 ): AnnotatedString {
     if (text.isEmpty()) return AnnotatedString(text)
     val matcher = android.util.Patterns.WEB_URL.matcher(text)
