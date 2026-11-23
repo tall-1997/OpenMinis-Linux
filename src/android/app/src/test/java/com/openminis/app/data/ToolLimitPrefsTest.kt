@@ -16,6 +16,9 @@ class ToolLimitPrefsTest {
         assertEquals(ToolLimitPrefs.MAX_FILE_READ_MAX_LINES, ToolLimitPrefs.clampLines(99_999))
         assertEquals(ToolLimitPrefs.MIN_SUBAGENT_MAX_TURNS, ToolLimitPrefs.clampTurns(1))
         assertEquals(ToolLimitPrefs.MAX_SUBAGENT_MAX_TURNS, ToolLimitPrefs.clampTurns(9_000))
+        // [T-subagent-unbounded-turns] The shipped default IS the runaway guard,
+        // so a sub-agent runs until it finishes or its token budget trips.
+        assertEquals(ToolLimitPrefs.MAX_SUBAGENT_MAX_TURNS, ToolLimitPrefs.DEFAULT_SUBAGENT_MAX_TURNS)
     }
 
     /**

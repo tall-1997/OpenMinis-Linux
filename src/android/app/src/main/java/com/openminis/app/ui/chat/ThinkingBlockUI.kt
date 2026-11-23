@@ -39,6 +39,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openminis.app.R
 import com.openminis.app.cottranslate.CotTranslationPrefs
 import com.openminis.app.cottranslate.OkHttpTranslationHttp
@@ -109,7 +110,12 @@ internal fun ThinkingBlock(
     // killed streaming translation mid-flight.
     val transScope = rememberCoroutineScope()
     val transContext = LocalContext.current
-    val transEnabled = remember { CotTranslationPrefs.enabled(transContext) }
+    // [T-cot-translate-live-gate] The old one-shot `remember` froze the gate at
+    // first composition of this block: enabling the feature in Settings never
+    // reached an already-rendered thinking block ("打开了也没反应"). Re-read
+    // when the settings revision bumps, like every other settings-driven UI.
+    val transRevision = CotTranslationPrefs.revision.collectAsStateWithLifecycle().value
+    val transEnabled = remember(transRevision) { CotTranslationPrefs.enabled(transContext) }
     var showTranslated by remember(block.id) { mutableStateOf(false) }
     var transState by remember(block.id) {
         mutableStateOf<ReasoningTranslationController.CotTranslationState?>(null)

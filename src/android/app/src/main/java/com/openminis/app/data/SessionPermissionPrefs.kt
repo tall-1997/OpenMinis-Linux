@@ -31,11 +31,19 @@ internal object SessionPermissionPrefs {
         prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     }
 
-    /** The mode a chat with no stored choice starts in. Unprimed reads fall back to the safest tier. */
+    /**
+     * [T-perm-default-autonomous] The mode a BRAND-NEW chat starts in. The
+     * user's standing choice wins when one exists; a fresh install starts in
+     * 自主模式 (ZCode `guarded`), which still stops for risky commands.
+     * A persisted session row is never consulted here — [fromStored] reads the
+     * row directly, so an explicit per-session choice is never overwritten.
+     */
     fun current(): SessionPermissionMode =
-        SessionPermissionMode.fromStored(prefs?.getString(KEY_MODE, null))
+        prefs?.getString(KEY_MODE, null)
+            ?.let { SessionPermissionMode.fromStored(it) }
+            ?: SessionPermissionMode.AUTONOMOUS
 
-    /** Remember the user's choice so the next new chat starts where they left off. */
+    /** Remember the user's choice so the next NEW chat starts where they left off. */
     fun remember(mode: SessionPermissionMode) {
         prefs?.edit()?.putString(KEY_MODE, mode.toStoredToken())?.apply()
     }

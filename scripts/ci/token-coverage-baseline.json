@@ -1154,16 +1154,16 @@
       "184": "24"
     },
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ThinkingBlockUI.kt": {
-      "130": "0.5",
-      "155": "13",
-      "157": "1.5",
-      "266": "300"
+      "136": "0.5",
+      "161": "13",
+      "163": "1.5",
+      "272": "300"
     },
     "src/android/app/src/main/java/com/openminis/app/ui/components/CodeEditorField.kt": {
       "163": "20"
     },
     "src/android/app/src/main/java/com/openminis/app/ui/settings/AppearanceScreen.kt": {
-      "767": "22 30"
+      "766": "22 30"
     },
     "src/android/app/src/main/java/com/openminis/app/ui/settings/SoulEmojiPickerSheet.kt": {
       "62": "17",

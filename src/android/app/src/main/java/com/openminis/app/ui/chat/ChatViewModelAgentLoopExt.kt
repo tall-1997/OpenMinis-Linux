@@ -19,6 +19,7 @@ import com.openminis.app.provider.LLMProvider
 import com.openminis.app.provider.OutboundPrivacyChanged
 import com.openminis.app.provider.streamStallWatchdog
 import com.openminis.app.tools.SubAgentKind
+import com.openminis.app.goal.recordCommittedTurnUsage
 import com.openminis.app.tools.ToolReceiptScope
 import com.openminis.app.tools.ToolExecutionResult
 import kotlinx.coroutines.CancellationException
@@ -116,13 +117,13 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     var goalContinuations = 0
     // [T-subagent-background] Bounded nudges for uncollected detached waves.
     var subAgentCollectNudges = 0
+    val announcedFinishedBatches = mutableSetOf<String>()  // [T-subagent-completion-timeliness]
     // [T-plan-close-nudge] Same bounded shape, for an unreconciled plan board.
     var planCloseNudges = 0
     var goalRunRequested = goalExecutionRun
     // [T-gemini-signalless-eof] One bounded continuation for a text stream without a terminal event.
     var usedStreamDropContinuation = false
-    // [T-receipt-notice-scope] One pending-delivery reminder per anchor (boundedReceiptNotice).
-    var receiptNoticeAnchorSha: String? = null
+    var receiptNoticeAnchorSha: String? = null  // [T-receipt-notice-scope] boundedReceiptNotice anchor
     var streamReplyPrefix: StreamReplyPrefix? = null
     // [T-retry-projection-reuse] See DispatchProjectionCache.
     val projectionCache = DispatchProjectionCache()
@@ -693,8 +694,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     val tools = agentTools
                     declareToolSetDeltaIfChanged(tools)
                     if (!ownsLoop()) return false
-                    val receiptAnchor = ToolReceiptScope.userTurn(loopSessionId, receiptUserTurnId)
-                        ?: ToolReceiptScope.internalRun(loopSessionId, generationRunId)
+                    val receiptAnchor = loopReceiptAnchor(loopSessionId, receiptUserTurnId, generationRunId)
                     val receiptNotice = boundedReceiptNotice(loopSessionId, receiptAnchor, receiptNoticeAnchorSha)
                     val projection = buildDispatchProjection(
                         projectionCache, loopSessionId, currentProvider, activeSystemPrompt, tools, stallResumeContext,
@@ -1477,15 +1477,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             if (ownsLoop()) updateAssistantMessage(assistantId, accumulatedText, true, allToolBlocks, isAwaitingModelResponse = true)
         }
         if (!ownsLoop()) return
-        val turnUsageTokens = (lastUsage?.inputTokens ?: 0).toLong() + (lastUsage?.outputTokens ?: 0).toLong()
-        val goalUsageResult = if (goalMountedForCurrentRequest) goalBookkeeping("Goal usage accounting") {
-            goalManager.recordUsage(
-                goalSessionId,
-                turnUsageTokens,
-                (System.currentTimeMillis() - turnStartedAtMs).coerceAtLeast(0),
-                context,
-            )
-        } else Result.success(null)
+        val goalUsageResult = goalManager.recordCommittedTurnUsage(goalMountedForCurrentRequest, goalSessionId, lastUsage, turnStartedAtMs, context)
         // Goal completion dismounts steering; only hard stops end this reply.
         if (com.openminis.app.goal.shouldExitForGoalState(goalUsageResult, goalMountedForCurrentRequest)) {
             withContext(Dispatchers.Main) {
@@ -1493,6 +1485,13 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             }
             loopExitedNormally = true
             break
+        }
+
+        // [T-subagent-completion-timeliness] After-batch drain of finished waves.
+        val waveNote = AgentLoopNudges.drainFinishedWaves(goalSessionId, context, announcedFinishedBatches)
+        if (waveNote != null && continueWith(waveNote)) {
+            subAgentCollectNudges++
+            continue
         }
 
         // [T-goal-drift-reconciler] Per-tool-turn stall accounting rides

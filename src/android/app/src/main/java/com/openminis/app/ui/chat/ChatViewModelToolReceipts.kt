@@ -137,6 +137,15 @@ internal suspend fun ChatViewModel.pendingToolReceiptNotice(sessionId: String, s
     return toolReceiptNotice(sessionId, scope)
 }
 
+/** [T-receipt-notice-scope] The anchor a request's own dispatches write under. */
+internal fun loopReceiptAnchor(
+    sessionId: String,
+    receiptUserTurnId: String?,
+    generationRunId: String,
+): ToolReceiptScope? =
+    ToolReceiptScope.userTurn(sessionId, receiptUserTurnId)
+        ?: ToolReceiptScope.internalRun(sessionId, generationRunId)
+
 /**
  * [T-receipt-notice-scope] One pending-delivery reminder per anchor. The anchor
  * mirror is the SAME scope the request's own dispatches write under, so old

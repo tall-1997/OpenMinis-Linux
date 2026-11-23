@@ -16,9 +16,13 @@ import com.openminis.app.cottranslate.TranslationProvider
 import com.openminis.app.ui.theme.IosGreen
 
 /**
- * [T-cot-translate] Reasoning-translation preferences, extracted from
- * AppearanceScreen when its architecture ceiling left no room. Master toggle +
- * provider + target language; the privacy notice is always visible.
+ * [T-cot-translate] Reasoning-translation preferences (master toggle +
+ * provider + target language; the privacy notice is always visible).
+ *
+ * [T-cot-translate-settings-move] Rendered by TranslationSettingsScreen, not
+ * AppearanceScreen: turning reasoning translation on/off is a translation
+ * choice. The toggle writes [CotTranslationPrefs.revision], so an already-open
+ * chat's thinking blocks pick the change up immediately.
  */
 @Composable
 internal fun CotTranslationSection() {
