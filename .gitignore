@@ -175,3 +175,5 @@ src/android/app/provider-customization.properties
 
 # 验证脚本的临时产物（scripts/ci/verify_all.py 生成，不应入库）
 .verify_tokens_tmp/
+# 生成流程的中间快照，永远不入库
+*.bak

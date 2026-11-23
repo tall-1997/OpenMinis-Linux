@@ -99,7 +99,10 @@ val LightChatPalette = ChatPalette(
     // [T-thinking-on] See the slot KDoc; static keeps White byte-identical.
     thinkingOn = Color.White,
     warningBg = Color(0x14FF9500),
-    warningText = Color(0x73000000),
+    // [T-warning-text-contrast] α0.45 over the warn-tinted card measured
+    // 3.32:1 — below AA. Solid neutral ink keeps the muted look and passes
+    // (measured 8.05:1 over warningBg composited on the page).
+    warningText = Color(0xFF3C3C43),
     tableBorder = Color(0x1F000000),
     inputShadow = Color.Transparent,
     thumbnailBorder = Color(0x33808080),
@@ -159,7 +162,9 @@ val DarkChatPalette = ChatPalette(
     link = Color(0xFF0A84FF),
     blockquoteBar = Color(0x80FF9F0A),
     thinking = Color(0xFF0A84FF),
-    thinkingOn = Color.White,
+    // [T-thinking-on] White on #0A84FF measures 3.65:1 (below AA for text).
+    // Ink on the same blue measures 5.76:1.
+    thinkingOn = Color(0xFF1C1C1E),
     warningBg = Color(0x14FF9F0A),
     // [T-warning-text-dark] 45% alpha measured 4.43:1 — one point short of AA.
     warningText = Color(0x76FFFFFF),

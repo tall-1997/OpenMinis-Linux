@@ -77,7 +77,10 @@ class DynamicColorPaletteTest {
         // …text pairs come with the scheme…
         assertEquals(scheme.onSurface, merged.primaryText)
         assertEquals(scheme.onSurfaceVariant, merged.secondaryText)
-        assertEquals(scheme.outline, merged.tertiaryText)
+        // [T-dynamic-tertiary-text] NOT scheme.outline (a border role: 4.27:1 on a
+        // real Material You light scheme). Derived from onSurfaceVariant so the
+        // text slot reaches AA while staying a tier below secondaryText.
+        assertEquals(scheme.onSurfaceVariant.copy(alpha = 0.78f), merged.tertiaryText)
         // …and the accents pair by construction.
         assertEquals(scheme.primaryContainer, merged.userBubble)
         assertEquals(scheme.primary, merged.sendButton)
@@ -146,7 +149,9 @@ class DynamicColorPaletteTest {
         assertEquals(Color(0xFFB7AF96), LightChatPalette.fabAccent)
         assertEquals(Color(0xFF504C42), DarkChatPalette.fabAccent)
         assertEquals(Color.White, LightChatPalette.thinkingOn)
-        assertEquals(Color.White, DarkChatPalette.thinkingOn)
+        // [T-thinking-on] Ink, not White: White on the dark accent #0A84FF
+        // measures 3.65:1 (below AA).
+        assertEquals(Color(0xFF1C1C1E), DarkChatPalette.thinkingOn)
         assertNotEquals(LightChatPalette.background, DarkChatPalette.background)
     }
 }

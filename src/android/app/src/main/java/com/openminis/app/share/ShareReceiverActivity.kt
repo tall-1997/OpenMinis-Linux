@@ -39,7 +39,14 @@ class ShareReceiverActivity : ComponentActivity() {
 
     // T-n01-andmenu-l10n: pre-Tiramisu locale override (see MainActivity).
     override fun attachBaseContext(newBase: android.content.Context) {
-        super.attachBaseContext(com.openminis.app.i18n.LocaleWrap.wrap(newBase))
+        // [T-xml-first-frame-theme] Same in-app theme override the main
+        // entry points use — this is also a cold-start entry (share sheet,
+        // PWA), so without it the first frame flashes the system colour.
+        super.attachBaseContext(
+            com.openminis.app.i18n.ThemeModeWrap.wrap(
+                com.openminis.app.i18n.LocaleWrap.wrap(newBase),
+            ),
+        )
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -282,7 +282,16 @@ internal fun decorPeriodPhase(periodMs: Int): Float {
     if (scale <= 0f) return 0f
     rememberDecorClockConsumer()
     val phase = LocalDecorPhase.current
-    // 时长缩放 >0 时按比例拉长周期（新一轮的 periodMs/scale），0 已提前返回。
-    val effective = (periodMs / scale).toInt().coerceAtLeast(1)
+    // [T-motion-scale-direction] ANIMATOR_DURATION_SCALE multiplies the DURATION
+    // (2 = twice as slow), so the period must be MULTIPLIED, not divided — the
+    // first version divided and made every animation run faster as the user
+    // slowed animations down.
+    val effective = (periodMs * scale).toInt().coerceAtLeast(1)
+    // Whole laps only. Fractional cycles would be smoother in the SPEED sense but
+    // they break at the clock wrap: measured phase jumps of 0.50 (2400ms) and
+    // 0.33 (900ms) when the shared phase goes 1 -> 0, i.e. the animation visibly
+    // snaps every period. Integer laps are continuous (jump 0.000) at the cost of
+    // quantising the requested period, which callers should pick to fit the
+    // 6 s clock (2400 -> 2000, 1500 -> 1500, 900 -> 857).
     return (phase * quantizedCycles(effective)) % 1f
 }

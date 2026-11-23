@@ -370,7 +370,14 @@ internal fun dynamicChatPalette(scheme: ColorScheme, fallback: ChatPalette): Cha
         // Text pairs come with the scheme — contrast already tuned.
         primaryText = scheme.onSurface,
         secondaryText = scheme.onSurfaceVariant,
-        tertiaryText = scheme.outline,
+        // [T-dynamic-tertiary-text] `tertiaryText` was mapped to `scheme.outline`,
+        // which M3 defines as the BORDERS/dividers role: on a real Material You
+        // light scheme (surface tone 98, outline tone 50) that measures 4.27:1 —
+        // below AA for text, and the live-palette gate cannot see it because it
+        // only parses the static palettes. Derive it from onSurfaceVariant
+        // (tone 30 light / 80 dark: 9.1 / 10.9) with a reduction that keeps the
+        // three-tier hierarchy below secondaryText.
+        tertiaryText = scheme.onSurfaceVariant.copy(alpha = 0.78f),
         disabledText = scheme.onSurface.copy(alpha = 0.18f),
         sendButtonDisabled = scheme.onSurface.copy(alpha = 0.18f),
         // Accents (see the FAB pairing note above; userBubble text is

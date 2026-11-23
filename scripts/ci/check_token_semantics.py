@@ -391,11 +391,15 @@ CHAT_TEXT_SLOTS = {
     'tertiaryText': (4.5, 'background'),
     'link': (4.5, 'background'),
     'thinking': (4.5, 'background'),
-    # 选中胶囊的前景压在 thinking 本身上：Apple 用白字压 systemBlue（≈3.6），
-    # 与 iOS 观感对齐，按非文本 3.0 守（想提高到 4.5 时改这里并同时改色值）。
-    'thinkingOn': (3.0, 'thinking'),
+    # [T-text-threshold] `thinkingOn` is passed to `Text(color = ...)` on the
+    # selected chip, so it is TEXT: 4.5, not the 3.0 non-text floor. At 3.0 the
+    # gate accepted Black on #0066CC (3.03:1) — a real readability failure.
+    'thinkingOn': (4.5, 'thinking'),
     'inlineCodeText': (4.5, 'inlineCodeBg'),
     'fabOnAccent': (3.0, 'fabAccent'),
+    # [T-warning-text-slot] warningText was missing from this table entirely, so
+    # the dark-mode regression that dropped it to 4.43:1 had no guard.
+    'warningText': (4.5, 'warningBg'),
 }
 
 # Theme.kt scheme 配对（两套主题各查）：前景 → (最低对比度, 背景槽)
@@ -487,15 +491,20 @@ def check_live_palettes() -> list:
             continue
         for fg_slot, (need, bg_slot) in CHAT_TEXT_SLOTS.items():
             fg = slots.get(fg_slot)
-            bgv = slots.get(bg_slot, bg) if bg_slot != 'thinking' else slots.get('thinking', bg)
+            bgv = slots.get(bg_slot, bg)
             if fg is None or bgv is None:
                 continue
-            eff = _composite(fg, bgv)
-            got = contrast(eff, bgv)
+            # [T-alpha-stack] warningBg / toastBg are TRANSLUCENT overlays: they
+            # are painted on top of `background`, so the effective backdrop is the
+            # composite, not the raw ARGB (reading the raw value invented a
+            # 1.38:1 "failure" that no user can see).
+            backdrop = _composite(bgv, bg) if (bgv >> 24) & 0xFF != 0xFF else bgv
+            eff = _composite(fg, backdrop)
+            got = contrast(eff, backdrop)
             if got < need:
                 fails.append(
                     f'{name}.{fg_slot} on {bg_slot} 对比度 {got:.2f}:1 < {need}:1'
-                    f'（#{eff:08X} on #{bgv:08X}）')
+                    f'（#{eff:08X} on #{backdrop:08X}）')
 
     # Theme.kt：两套 scheme 的配对 + surfaceContainer 阶梯不塌档
     for fun, label in (('lightColorScheme', 'Light'), ('darkColorScheme', 'Dark')):
