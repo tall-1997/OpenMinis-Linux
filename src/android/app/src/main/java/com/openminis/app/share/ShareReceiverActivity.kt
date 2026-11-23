@@ -39,7 +39,9 @@ class ShareReceiverActivity : ComponentActivity() {
 
     // T-n01-andmenu-l10n: pre-Tiramisu locale override (see MainActivity).
     override fun attachBaseContext(newBase: android.content.Context) {
-        super.attachBaseContext(com.openminis.app.i18n.LocaleWrap.wrap(newBase))
+        super.attachBaseContext(
+            com.openminis.app.i18n.ThemeModeWrap.wrap(com.openminis.app.i18n.LocaleWrap.wrap(newBase)),
+        )
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

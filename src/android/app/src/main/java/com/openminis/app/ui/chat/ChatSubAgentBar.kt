@@ -53,7 +53,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
+import androidx.annotation.StringRes
 import com.openminis.app.service.SubAgentActivityTracker
+import com.openminis.app.service.SubAgentPhase
 import com.openminis.app.tools.SubAgentRunner
 import com.openminis.app.ui.markdown.MarkdownText
 import com.openminis.app.ui.theme.ChatColors
@@ -136,7 +138,7 @@ private fun SubAgentChip(
     onClick: () -> Unit,
     onStop: () -> Unit,
 ) {
-    val phase = member.phase.ifBlank { "思考中" }
+    val phase = SubAgentPhase.fromKey(member.phase)
     val bg = phaseColor(phase)
     val title = member.title.ifBlank { stringResource(R.string.subagent_fallback_label) }
     Row(
@@ -166,7 +168,7 @@ private fun SubAgentChip(
         // One short status token: the in-flight tool label wins over the
         // phase word; full output and counts live in the sheet.
         val status = member.currentTool.takeIf { it.isNotBlank() }
-            ?.let { subAgentToolTitle(it, "") } ?: phase
+            ?.let { subAgentToolTitle(it, "") } ?: stringResource(phase.labelRes())
         Spacer(modifier = Modifier.width(4.dp))
         Text(
             text = status,
@@ -213,11 +215,11 @@ private fun SubAgentDetailSheet(
     onDismiss: () -> Unit,
     onStop: (String) -> Unit = {},
 ) {
-    val phase = if (isActive) member.phase.ifBlank { "思考中" }
-        else stringResource(R.string.scheduled_task_state_ended)
-    var expandedToolId by remember(member.id) { mutableStateOf<String?>(null) }
-    val listState = rememberLazyListState()
-    val tail = member.steps.lastOrNull()
+ // [T-subagent-phase-key] Enum drives colour/animation; the label is what the
+ // user reads. Inactive members have no phase (terminal banner instead).
+ val activePhase = SubAgentPhase.fromKey(member.phase).takeIf { isActive }
+ val phaseLabel = activePhase?.let { stringResource(it.labelRes()) }
+ ?: stringResource(R.string.scheduled_task_state_ended)
     val liveToolId = member.steps.lastOrNull {
         it.kind == "tool" && (it.status == "running" || it.status == "streaming" || it.status == "pending")
     }?.id
@@ -286,7 +288,7 @@ private fun SubAgentDetailSheet(
             }
             Column(modifier = Modifier.padding(horizontal = 16.dp)) {
                 Spacer(modifier = Modifier.height(6.dp))
-                PhaseBanner(phase = phase, tool = if (isActive) member.currentTool else "")
+                PhaseBanner(phase = activePhase, label = phaseLabel, tool = if (isActive) member.currentTool else "")
             }
             LazyColumn(
                 state = listState,
@@ -396,8 +398,8 @@ private fun SubAgentSteerRow(memberId: String) {
 }
 
 @Composable
-private fun PhaseBanner(phase: String, tool: String) {
-    val color = phaseColor(phase)
+private fun PhaseBanner(phase: SubAgentPhase?, label: String, tool: String) {
+    val color = phase?.let { phaseColor(it) } ?: Color(0xFF007AFF)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -411,9 +413,9 @@ private fun PhaseBanner(phase: String, tool: String) {
                 .background(color, RoundedCornerShape(999.dp))
                 .padding(horizontal = 8.dp, vertical = 2.dp),
         ) {
-            Text(text = phase, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(text = label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
-        if (phase == "思考中" || phase == "回复中" || phase == "执行中") {
+        if (phase == SubAgentPhase.THINKING || phase == SubAgentPhase.REPLYING || phase == SubAgentPhase.RUNNING) {
             Spacer(modifier = Modifier.padding(start = 4.dp))
             StreamingDotsText()
         }
@@ -457,10 +459,8 @@ private fun ToolStepBody(step: SubAgentActivityTracker.Step) {
             // Failed reads as error-red, matching the main timeline's tool
             // failure colour — orange was reserved for the in-flight phase.
             color = if (step.status == "failed") ToolErrorColor else phaseColor(
-                when (step.status) {
-                    "running", "success" -> "执行中"
-                    else -> "调用工具"
-                },
+ if (step.status == "running" || step.status == "success") SubAgentPhase.RUNNING
+ else SubAgentPhase.CALLING,
             ),
         )
         if (step.toolArgs.isNotBlank()) {
@@ -518,32 +518,51 @@ private fun memberLabel(member: SubAgentActivityTracker.Member): String =
         member.title.ifBlank { stringResource(R.string.subagent_fallback_label) }
     }
 
-private fun phaseColor(phase: String): Color = when (phase) {
-    "调用工具" -> Color(0xFFFF9500)
-    "执行中" -> Color(0xFF34C759)
-    "回复中" -> Color(0xFF5856D6)
-    else -> Color(0xFF007AFF)
+private fun phaseColor(phase: SubAgentPhase): Color = when (phase) {
+ SubAgentPhase.CALLING -> Color(0xFFFF9500)
+ SubAgentPhase.RUNNING -> Color(0xFF34C759)
+ SubAgentPhase.REPLYING -> Color(0xFF5856D6)
+ SubAgentPhase.THINKING -> Color(0xFF007AFF)
 }
 
+/** [T-subagent-phase-key] Localized label for a phase. */
+@StringRes
+private fun SubAgentPhase.labelRes(): Int = when (this) {
+ SubAgentPhase.THINKING -> R.string.subagent_phase_thinking
+ SubAgentPhase.CALLING -> R.string.subagent_phase_calling
+ SubAgentPhase.RUNNING -> R.string.subagent_phase_running
+ SubAgentPhase.REPLYING -> R.string.subagent_phase_replying
+}
+
+/**
+ * [T-android-chat-strings-resource] Tool label as a string resource. A result of 0 means the
+ * tool is unknown (the caller renders the raw name: it is model-emitted data,
+ * not a label this app owns). Composable-free so any layer can map names.
+ */
+@StringRes
+internal fun subAgentToolLabelRes(name: String): Int = when (name) {
+ "shell_execute", "shell_exec", "env_exec" -> R.string.subagent_tool_shell
+ "file_read" -> R.string.subagent_tool_read
+ "file_write" -> R.string.subagent_tool_write
+ "file_edit", "multi_edit" -> R.string.subagent_tool_edit
+ "grep_source", "grep" -> R.string.subagent_tool_grep
+ "web_search", "clientfn_web_search" -> R.string.subagent_tool_web_search
+ "web_fetch" -> R.string.subagent_tool_web_fetch
+ "browser_use" -> R.string.subagent_tool_browser
+ "memory_get", "memory_write" -> R.string.subagent_tool_memory
+ "spawn_agent", "dispatch_agents" -> R.string.subagent_tool_spawn
+ else -> 0
+}
+
+@Composable
 internal fun subAgentToolTitle(name: String, args: String): String {
-    val label = when (name) {
-        "shell_execute", "shell_exec", "env_exec" -> "执行命令"
-        "file_read" -> "读取文件"
-        "file_write" -> "写入文件"
-        "file_edit", "multi_edit" -> "编辑文件"
-        "grep_source", "grep" -> "搜索代码"
-        "web_search", "clientfn_web_search" -> "搜索网页"
-        "web_fetch" -> "抓取网页"
-        "browser_use" -> "浏览器"
-        "memory_get", "memory_write" -> "记忆"
-        "spawn_agent", "dispatch_agents" -> "子代理"
-        else -> name
-    }
-    val preview = if (args.isBlank()) "" else SubAgentRunner.previewToolArgs(args).take(42)
-    return if (preview.isBlank()) label else "$label · $preview"
+ val res = subAgentToolLabelRes(name)
+ val label = if (res == 0) name else stringResource(res)
+ val preview = if (args.isBlank()) "" else SubAgentRunner.previewToolArgs(args).take(42)
+ return if (preview.isBlank()) label else "$label · $preview"
 }
 
-private fun SubAgentActivityTracker.Step.toAssistantBlock(): AssistantBlock {
+@Composableprivate fun SubAgentActivityTracker.Step.toAssistantBlock(): AssistantBlock {
     val toolStatus = when (status) {
         "streaming" -> ToolBlockStatus.STREAMING
         "pending" -> ToolBlockStatus.PENDING

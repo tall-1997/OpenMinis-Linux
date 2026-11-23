@@ -527,8 +527,14 @@ internal fun ThinkingBlock(
     // fights the user). Read once at mount — mirrors iOS ThinkingBlockView,
     // where the same UserDefaults gate sits at the one-shot auto-expand site.
     val context = LocalContext.current
-    val autoExpandThinking = remember { autoExpandThinkingEnabled(context) }
-    val showFullThinking = remember { com.openminis.app.ui.settings.showFullThinkingEnabled(context) }
+    // [T-pref-reactive-read] Observe the keys instead of a keyless remember: a
+    // Settings toggle must reach an open transcript, not only a rebuilt list.
+    val autoExpandThinking = com.openminis.app.ui.settings.rememberAppearanceBool(
+        com.openminis.app.ui.settings.KEY_AUTO_EXPAND_THINKING, true,
+    )
+    val showFullThinking = com.openminis.app.ui.settings.rememberAppearanceBool(
+        com.openminis.app.ui.settings.KEY_SHOW_FULL_THINKING, false,
+    )
     var expanded by remember(block.id) {
         mutableStateOf(if (isStreaming) showFullThinking || (autoExpandThinking && isLast) else false)
     }

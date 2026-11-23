@@ -3369,4 +3369,19 @@
  <string name="perm_guarded_risk_message">Автономный режим счёл эту команду рискованной. Подтвердите один раз, чтобы выполнить её.</string>
     <string name="model_connection_title">Модель и подключение</string>
     <string name="quota_unsupported_insecure">Проверка баланса отключена для этой конечной точки, так как она использует незашифрованный http. Чат продолжает работать.</string>
+ <!-- Sub-agent phase & tool labels -->
+ <string name="subagent_phase_thinking">Думает…</string>
+ <string name="subagent_phase_calling">Вызов инструмента…</string>
+ <string name="subagent_phase_running">Выполняется…</string>
+ <string name="subagent_phase_replying">Отвечает…</string>
+ <string name="subagent_tool_shell">Выполнить команду</string>
+ <string name="subagent_tool_read">Читать файл</string>
+ <string name="subagent_tool_write">Записать файл</string>
+ <string name="subagent_tool_edit">Редактировать файл</string>
+ <string name="subagent_tool_grep">Поиск по коду</string>
+ <string name="subagent_tool_web_search">Поиск в интернете</string>
+ <string name="subagent_tool_web_fetch">Загрузить страницу</string>
+ <string name="subagent_tool_browser">Браузер</string>
+ <string name="subagent_tool_memory">Память</string>
+ <string name="subagent_tool_spawn">Субагент</string>
 </resources>

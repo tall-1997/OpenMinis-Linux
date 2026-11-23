@@ -3361,4 +3361,19 @@
  <string name="perm_guarded_risk_message">O modo autônomo considerou este comando arriscado. Confirme uma vez para executá-lo.</string>
     <string name="model_connection_title">Modelo e conexão</string>
     <string name="quota_unsupported_insecure">A consulta de saldo está desativada para este endpoint porque ele usa http sem criptografia. O chat continua funcionando.</string>
+ <!-- Sub-agent phase & tool labels -->
+ <string name="subagent_phase_thinking">Pensando…</string>
+ <string name="subagent_phase_calling">Chamando ferramenta…</string>
+ <string name="subagent_phase_running">Executando…</string>
+ <string name="subagent_phase_replying">Respondendo…</string>
+ <string name="subagent_tool_shell">Executar comando</string>
+ <string name="subagent_tool_read">Ler arquivo</string>
+ <string name="subagent_tool_write">Escrever arquivo</string>
+ <string name="subagent_tool_edit">Editar arquivo</string>
+ <string name="subagent_tool_grep">Pesquisar código</string>
+ <string name="subagent_tool_web_search">Pesquisa na web</string>
+ <string name="subagent_tool_web_fetch">Obter página</string>
+ <string name="subagent_tool_browser">Navegador</string>
+ <string name="subagent_tool_memory">Memória</string>
+ <string name="subagent_tool_spawn">Subagente</string>
 </resources>

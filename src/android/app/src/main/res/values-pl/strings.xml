@@ -3368,4 +3368,19 @@
  <string name="perm_guarded_risk_message">Tryb autonomiczny uznał to polecenie za ryzykowne. Potwierdź raz, aby je uruchomić.</string>
     <string name="model_connection_title">Model i połączenie</string>
     <string name="quota_unsupported_insecure">Sprawdzanie salda jest wyłączone dla tego punktu końcowego, ponieważ używa zwykłego http. Czat nadal działa.</string>
+ <!-- Sub-agent phase & tool labels -->
+ <string name="subagent_phase_thinking">Myślenie…</string>
+ <string name="subagent_phase_calling">Wywoływanie narzędzia…</string>
+ <string name="subagent_phase_running">Wykonywanie…</string>
+ <string name="subagent_phase_replying">Odpowiadanie…</string>
+ <string name="subagent_tool_shell">Uruchom polecenie</string>
+ <string name="subagent_tool_read">Odczytaj plik</string>
+ <string name="subagent_tool_write">Zapisz plik</string>
+ <string name="subagent_tool_edit">Edytuj plik</string>
+ <string name="subagent_tool_grep">Szukaj w kodzie</string>
+ <string name="subagent_tool_web_search">Wyszukiwanie w sieci</string>
+ <string name="subagent_tool_web_fetch">Pobierz stronę</string>
+ <string name="subagent_tool_browser">Przeglądarka</string>
+ <string name="subagent_tool_memory">Pamięć</string>
+ <string name="subagent_tool_spawn">Subagent</string>
 </resources>

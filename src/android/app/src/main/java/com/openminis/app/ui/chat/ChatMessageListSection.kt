@@ -460,9 +460,7 @@ internal fun ChatFlatItemRow(
                                 // card, default OFF): read the flag here so a
                                 // toggle takes effect on the next recomposition
                                 // without re-flatting the list.
-                                val showTurnCard = remember {
-                                    com.openminis.app.ui.settings.showTurnChangesCardEnabled(context)
-                                }
+                                val showTurnCard = com.openminis.app.ui.settings.rememberShowTurnChangesCardEnabled()
                                 if (showTurnCard) {
                                     val reverted by viewModel.toolUndo.revertedKeys.collectAsStateWithLifecycle()
                                     val diffStats by viewModel.toolUndo.diffStats.collectAsStateWithLifecycle()

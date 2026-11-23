@@ -128,7 +128,9 @@ class MainActivity : ComponentActivity() {
     // ("Cut" / "Copy" / "Paste"). Override the base Configuration so the
     // framework picks the right locale on those devices. No-op on 13+.
     override fun attachBaseContext(newBase: android.content.Context) {
-        super.attachBaseContext(com.openminis.app.i18n.LocaleWrap.wrap(newBase))
+        super.attachBaseContext(com.openminis.app.i18n.ThemeModeWrap.wrap(com.openminis.app.i18n.LocaleWrap.wrap(newBase)))
+
+
     }
 
     /**
@@ -223,16 +225,14 @@ class MainActivity : ComponentActivity() {
         // setOnViewTreeOwnersAvailable). That crash wrote another crash-*.log, which re-tripped the burst detector on the next launch — a self-sustaining loop the user could not escape.
         //
         // `subsystemsInitialized` only goes true after every repository is
-        // assigned, so it stays false for exactly as long as composing is
-        // genuinely unsafe.
+        // assigned, so it stays false for exactly as long as composing is genuinely unsafe.
         val minisApp = application as? MinisApp
 
         // [T-android-downgrade-compat] A database written by a NEWER build is
         // not a crash — it is a recoverable state with a specific remedy, and
         // the file has deliberately been left untouched. Handle it before the
         // generic crash-share path below, which would otherwise ask the user to
-        // send a bug report for something that is not a bug and offer no way
-        // out.
+        // send a bug report for something that is not a bug and offer no way out.
         if (minisApp != null &&
             minisApp.dbVersionDecision ==
             com.openminis.app.data.db.DatabaseVersionGuard.Decision.SHOW_NEWER_DB_GUIDANCE

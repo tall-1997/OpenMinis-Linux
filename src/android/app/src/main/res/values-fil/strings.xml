@@ -3361,4 +3361,19 @@
  <string name="perm_guarded_risk_message">Itinuring ng autonomous mode na delikado ang utos na ito. Kumpirmahin isang beses para patakbuhin.</string>
     <string name="model_connection_title">Model at Koneksyon</string>
     <string name="quota_unsupported_insecure">Nakapatay ang pagtingin ng balanse para sa endpoint na ito dahil gumagamit ito ng plain http. Gumagana pa rin ang chat.</string>
+ <!-- Sub-agent phase & tool labels -->
+ <string name="subagent_phase_thinking">Nag-iisip…</string>
+ <string name="subagent_phase_calling">Tumatawag sa tool…</string>
+ <string name="subagent_phase_running">Tumatakbo…</string>
+ <string name="subagent_phase_replying">Sumasagot…</string>
+ <string name="subagent_tool_shell">Patakbuhin ang command</string>
+ <string name="subagent_tool_read">Basahin ang file</string>
+ <string name="subagent_tool_write">Isulat ang file</string>
+ <string name="subagent_tool_edit">I-edit ang file</string>
+ <string name="subagent_tool_grep">Maghanap sa code</string>
+ <string name="subagent_tool_web_search">Paghahanap sa web</string>
+ <string name="subagent_tool_web_fetch">Kunin ang pahina</string>
+ <string name="subagent_tool_browser">Browser</string>
+ <string name="subagent_tool_memory">Memorya</string>
+ <string name="subagent_tool_spawn">Sub-agent</string>
 </resources>
