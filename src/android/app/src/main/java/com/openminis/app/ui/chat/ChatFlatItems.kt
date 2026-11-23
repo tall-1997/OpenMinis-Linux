@@ -286,37 +286,7 @@ internal sealed class FlatChatItem {
 }
 
 /** A user turn can span several assistant messages. Its first available anchor keeps card keys stable. */
-private class ChatRound(val key: String, val hasCards: Boolean)
-
-/** One stretch of process blocks. A deferred singleton stays inline. */
-private class ProcessSegment(
-    val lastMessageIdx: Int,
-    val firstStepKey: String,
-    val isCard: Boolean,
-    val thinkingCount: Int,
-    val toolCount: Int,
-    val hasFailure: Boolean,
-    val totalMs: Long,
-    val steps: List<ProcessStepRef>,
-    val running: Boolean,
-    /** "thinking" / "tool" / "" for the live header. Reply text settles the card. */
-    val activity: String,
-    val activityTitle: String,
-    val startedAtMs: Long,
-)
-
-/** One step of an expanded process card, in chronological order. */
-internal data class ProcessStepRef(
-    val id: String,
-    val kind: String,
-    val title: String,
-    val status: ToolBlockStatus?,
-    val durationMs: Long,
-    val running: Boolean,
-    val block: AssistantBlock,
-    val messageId: String,
-    val isLastCancelled: Boolean = false,
-)
+internal class ChatRound(val key: String, val hasCards: Boolean)
 
 /** Fold two or more visible steps. Progress contributes no thinking/tool count. */
 private const val SEGMENT_MIN_STEPS = 2
@@ -337,21 +307,6 @@ private fun effectiveBlocks(message: ChatMessage, activeSubAgentToolIds: Set<Str
     return message.toolBlocks.filterNot { block ->
         hiddenSubAgent(block) || (hideSpeakerTools && block.kind == "tool_use")
     }
-}
-
-private class MessageProcessRows {
-    val ownedBlocks = mutableSetOf<Int>()
-    val cardsAfterBlock = mutableMapOf<Int, ProcessSegment>()
-}
-
-private class RoundSplit(
-    private val rounds: List<ChatRound>,
-    private val startIndex: Int,
-    private val roundOfIdx: IntArray,
-    val rowsByMessage: Map<Int, MessageProcessRows>,
-    val boundarySegment: ProcessSegment?,
-) {
-    fun roundAt(idx: Int): ChatRound? = rounds.getOrNull(roundOfIdx.getOrElse(idx - startIndex) { -1 })
 }
 
 private fun lastCancelledToolId(blocks: List<AssistantBlock>): String? =
@@ -398,6 +353,8 @@ private fun splitRounds(
     var segFailure = false
     var segMs = 0L
     var segRunning = false
+    /** [T-prose-does-not-split-process] Reply prose seen: ends RUNNING, not the run. */
+    var segSettledByReply = false
     var segActivity = ""
     var segActivityTitle = ""
     var segStartedAt = 0L
@@ -425,7 +382,7 @@ private fun splitRounds(
                     hasFailure = segFailure,
                     totalMs = segMs,
                     steps = segSteps.toList(),
-                    running = !settled && (segRunning || running),
+                    running = !settled && !segSettledByReply && (segRunning || running),
                     activity = segActivity,
                     activityTitle = segActivityTitle,
                     startedAtMs = segStartedAt,
@@ -438,6 +395,7 @@ private fun splitRounds(
         segBlocks.clear(); segSteps.clear()
         segHasProgress = false; segThinking = 0; segTools = 0; segFailure = false; segMs = 0L
         segRunning = false; segActivity = ""; segActivityTitle = ""; segStartedAt = 0L
+        segSettledByReply = false
     }
 
     fun closeRound(endExclusive: Int) {
@@ -473,7 +431,9 @@ private fun splitRounds(
                 val isVisibleTool = isAlwaysVisibleProcessTool(block)
                 val isTool = block.kind == "tool_use" && !isVisibleTool
                 val isProgress = block.isText && block.isProcessText && block.content.isNotBlank()
-                if ((block.isReplyText && block.content.isNotBlank()) || (isVisibleTool && segHasProgress)) {
+                // [T-prose-does-not-split-process] Prose ends RUNNING, not the run.
+                if (block.isReplyText && block.content.isNotBlank()) segSettledByReply = true
+                if (isVisibleTool && segHasProgress) {
                     flushSegment(idx, settled = true)
                 }
                 if (!isThinking && !isTool && !isProgress) continue
