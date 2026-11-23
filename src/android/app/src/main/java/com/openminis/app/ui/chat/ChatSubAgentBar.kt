@@ -215,18 +215,21 @@ private fun SubAgentDetailSheet(
     onDismiss: () -> Unit,
     onStop: (String) -> Unit = {},
 ) {
- // [T-subagent-phase-key] Enum drives colour/animation; the label is what the
- // user reads. Inactive members have no phase (terminal banner instead).
- val activePhase = SubAgentPhase.fromKey(member.phase).takeIf { isActive }
- val phaseLabel = activePhase?.let { stringResource(it.labelRes()) }
- ?: stringResource(R.string.scheduled_task_state_ended)
+    // [T-subagent-phase-key] Enum drives colour/animation; the label is what the
+    // user reads. Inactive members have no phase (terminal banner instead).
+    val activePhase = SubAgentPhase.fromKey(member.phase).takeIf { isActive }
+    val phaseLabel = activePhase?.let { stringResource(it.labelRes()) }
+        ?: stringResource(R.string.scheduled_task_state_ended)
+    var expandedToolId by remember(member.id) { mutableStateOf<String?>(null) }
+    val listState = rememberLazyListState()
+    val tail = member.steps.lastOrNull()
     val liveToolId = member.steps.lastOrNull {
         it.kind == "tool" && (it.status == "running" || it.status == "streaming" || it.status == "pending")
     }?.id
     LaunchedEffect(liveToolId) {
         if (liveToolId != null) expandedToolId = liveToolId
     }
-    LaunchedEffect(member.steps.size, tail?.body?.length, tail?.status, phase) {
+    LaunchedEffect(member.steps.size, tail?.body?.length, tail?.status, phaseLabel) {
         val total = listState.layoutInfo.totalItemsCount
         if (total <= 0) return@LaunchedEffect
         val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
@@ -562,7 +565,8 @@ internal fun subAgentToolTitle(name: String, args: String): String {
  return if (preview.isBlank()) label else "$label · $preview"
 }
 
-@Composableprivate fun SubAgentActivityTracker.Step.toAssistantBlock(): AssistantBlock {
+@Composable
+private fun SubAgentActivityTracker.Step.toAssistantBlock(): AssistantBlock {
     val toolStatus = when (status) {
         "streaming" -> ToolBlockStatus.STREAMING
         "pending" -> ToolBlockStatus.PENDING

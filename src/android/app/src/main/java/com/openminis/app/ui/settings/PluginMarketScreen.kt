@@ -80,8 +80,8 @@ fun PluginMarketScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(
-                    start = SectionDesign.HeaderInset,
-                    end = SectionDesign.HeaderInset,
+                    start = SectionDesign.ScreenHorizontalPadding + SectionDesign.RowHorizontalPadding,
+                    end = SectionDesign.ScreenHorizontalPadding + SectionDesign.RowHorizontalPadding,
                     top = SectionDesign.HeaderToCardGap,
                     bottom = SectionDesign.CardToFooterGap,
                 ),

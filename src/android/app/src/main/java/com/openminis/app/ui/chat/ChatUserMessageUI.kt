@@ -624,7 +624,7 @@ private fun ImageGalleryDialog(
                     .padding(8.dp),
             ) {
                 Icon(
-                    androidx.compose.material.icons.m3Icon(Icons.Default.Close),
+                    com.openminis.app.ui.theme.m3Icon(androidx.compose.material.icons.Icons.Default.Close),
                     contentDescription = "Close",
                     tint = Color.White,
                 )

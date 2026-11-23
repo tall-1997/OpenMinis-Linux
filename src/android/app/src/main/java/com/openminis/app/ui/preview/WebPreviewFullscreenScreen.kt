@@ -268,7 +268,7 @@ private fun FloatingMenuButton(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = androidx.compose.material.icons.m3Icon(Icons.Outlined.MoreHoriz),
+                imageVector = com.openminis.app.ui.theme.m3Icon(androidx.compose.material.icons.Icons.Outlined.MoreHoriz),
                 contentDescription = stringResource(R.string.webpreview_more),
                 tint = Color.White,
                 modifier = Modifier.size(24.dp),
