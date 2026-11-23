@@ -43,7 +43,8 @@ object SubAgentActivityTracker {
         val turnCap: Int = 0,
         val currentTool: String = "",
         val transcript: String = "",
-        /** 思考中 / 回复中 / 调用工具 / 执行中. Empty until the runner reports one. */
+ /** [T-subagent-phase-key] ASCII [SubAgentPhase] key (thinking/calling/running/replying).
+ * Empty until the runner reports one; the UI localizes it via string resources.
         val phase: String = "",
         val steps: List<Step> = emptyList(),
     ) {
@@ -264,7 +265,7 @@ object SubAgentActivityTracker {
         mutate(id) { m ->
             val nextTool = when {
                 tool.isNotBlank() -> tool
-                phase == "思考中" || phase == "回复中" -> ""
+                phase == SubAgentPhase.THINKING.key || phase == SubAgentPhase.REPLYING.key -> ""
                 else -> m.currentTool
             }
             m.copy(
@@ -288,7 +289,7 @@ object SubAgentActivityTracker {
                 steps += Step(
                     id = stepId,
                     kind = kind,
-                    title = if (kind == "thinking") "思考" else "",
+                    title = "",
                     body = clip(delta, 8_000),
                     status = "streaming",
                     startedAt = System.currentTimeMillis(),
@@ -313,7 +314,7 @@ object SubAgentActivityTracker {
                     startedAt = System.currentTimeMillis(),
                 )
             }
-            m.copy(steps = steps, phase = "调用工具", currentTool = name, lastStep = "调用工具 · $name")
+            m.copy(steps = steps, phase = SubAgentPhase.CALLING.key, currentTool = name, lastStep = "${SubAgentPhase.CALLING.key} · $name")
         }
     }
 
@@ -342,7 +343,7 @@ object SubAgentActivityTracker {
                     startedAt = System.currentTimeMillis(),
                 )
             }
-            m.copy(steps = steps, phase = "调用工具", currentTool = name.ifBlank { m.currentTool })
+            m.copy(steps = steps, phase = SubAgentPhase.CALLING.key, currentTool = name.ifBlank { m.currentTool })
         }
     }
 
@@ -360,7 +361,7 @@ object SubAgentActivityTracker {
                     startedAt = cur.startedAt.takeIf { it > 0 } ?: System.currentTimeMillis(),
                 )
             }
-            m.copy(steps = steps, phase = "执行中", currentTool = name.ifBlank { m.currentTool }, lastStep = "执行中 · $name")
+            m.copy(steps = steps, phase = SubAgentPhase.RUNNING.key, currentTool = name.ifBlank { m.currentTool }, lastStep = "${SubAgentPhase.RUNNING.key} · $name")
         }
         memberById(id)?.let { m ->
             SubAgentEventBus.publish(
@@ -385,7 +386,7 @@ object SubAgentActivityTracker {
                     durationMs = if (cur.startedAt > 0) now - cur.startedAt else 0L,
                 )
             }
-            m.copy(steps = steps, phase = "思考中", currentTool = "", lastStep = "思考中")
+            m.copy(steps = steps, phase = SubAgentPhase.THINKING.key, currentTool = "", lastStep = SubAgentPhase.THINKING.key)
         }
         memberById(id)?.let { m ->
             val durationMs = if (startedAt > 0) System.currentTimeMillis() - startedAt else 0L

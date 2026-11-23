@@ -61,7 +61,7 @@
     "src/android/app/src/main/java/com/openminis/app/security/SecurityGateImpl.kt": 42,
     "src/android/app/src/main/java/com/openminis/app/security/SuPathPolicy.kt": 4,
     "src/android/app/src/main/java/com/openminis/app/service/SessionConcurrencyManager.kt": 1,
-    "src/android/app/src/main/java/com/openminis/app/service/SubAgentActivityTracker.kt": 11,
+    "src/android/app/src/main/java/com/openminis/app/service/SubAgentActivityTracker.kt": 1,
     "src/android/app/src/main/java/com/openminis/app/speech/ToolSpeech.kt": 8,
     "src/android/app/src/main/java/com/openminis/app/speech/VoiceAnnouncementPrefs.kt": 6,
     "src/android/app/src/main/java/com/openminis/app/speech/correction/CorrectionAdmission.kt": 1,
