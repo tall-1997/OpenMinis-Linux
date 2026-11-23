@@ -28,9 +28,12 @@ object ToolLimitPrefs {
     const val MAX_FILE_READ_MAX_LINES = 20_000
     const val FILE_LINES_STEP = 100
 
-    const val DEFAULT_SUBAGENT_MAX_TURNS = 200
-    const val MIN_SUBAGENT_MAX_TURNS = 10
-    const val MAX_SUBAGENT_MAX_TURNS = 200
+    // [T-subagent-unbounded-turns] Runaway guard threshold only (see
+    // SubAgentRunner.ABSOLUTE_MAX_TURNS): the default matches the guard, so a
+    // sub-agent is effectively unlimited unless the user lowers it.
+    const val DEFAULT_SUBAGENT_MAX_TURNS = 1000
+    const val MIN_SUBAGENT_MAX_TURNS = 50
+    const val MAX_SUBAGENT_MAX_TURNS = 1000
     const val TURNS_STEP = 10
 
     // [T-main-session-turn-cap] The main agent loop's runaway guard. It was a

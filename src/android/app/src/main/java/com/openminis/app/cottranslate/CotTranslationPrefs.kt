@@ -1,5 +1,9 @@
 package com.openminis.app.cottranslate
 
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
 /**
  * [T-cot-translate] User preferences for the reasoning translation feature.
  * Backed by the app's standard prefs file (NOT the vscreen/memory namespaces);
@@ -7,6 +11,14 @@ package com.openminis.app.cottranslate
  */
 object CotTranslationPrefs {
     private const val PREFS = "cot_translation"
+
+    /**
+     * [T-cot-translate-live-gate] Bumped on every write so already-composed
+     * thinking blocks re-read [enabled] — the old one-shot remember meant
+     * turning the feature on in Settings never reached an open chat.
+     */
+    private val _revision = MutableStateFlow(0)
+    val revision: StateFlow<Int> = _revision.asStateFlow()
     private const val KEY_ENABLED = "enabled"
     private const val KEY_PROVIDER = "provider"
     private const val KEY_LANGUAGE = "language"
@@ -17,6 +29,7 @@ object CotTranslationPrefs {
 
     fun setEnabled(context: android.content.Context, value: Boolean) {
         prefs(context).edit().putBoolean(KEY_ENABLED, value).apply()
+        _revision.value++
     }
 
     fun provider(context: android.content.Context): TranslationProvider =
@@ -29,6 +42,7 @@ object CotTranslationPrefs {
 
     fun setProvider(context: android.content.Context, value: TranslationProvider) {
         prefs(context).edit().putString(KEY_PROVIDER, value.name).apply()
+        _revision.value++
     }
 
     /** Target language tag, or "auto" (follows the app locale at request time). */
@@ -37,6 +51,7 @@ object CotTranslationPrefs {
 
     fun setTargetLanguage(context: android.content.Context, value: String) {
         prefs(context).edit().putString(KEY_LANGUAGE, value.ifBlank { "auto" }).apply()
+        _revision.value++
     }
 
     /** True once the user accepted the privacy notice (content leaves the device). */

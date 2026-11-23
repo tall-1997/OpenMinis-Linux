@@ -43,6 +43,42 @@ internal object AgentLoopNudges {
         append("\n</system-reminder>")
     }
 
+    /**
+     * [T-subagent-completion-timeliness] ZCode drains a finished background
+     * task's notification right after a tool batch (and as a model-only turn
+     * when idle), instead of waiting for the model to end its turn. The
+     * Android loop has no cross-coroutine wake, so the closest faithful port
+     * is: after every committed tool batch, hand the parent a bounded digest
+     * of waves that finished but were never collected. Only NEWLY finished
+     * batches are reported (batch id + finishedAt), so a wave that keeps
+     * running never re-interrupts the loop with the same words.
+     */
+    internal fun newlyFinishedSubAgentCollects(
+        sessionId: String,
+        context: Context?,
+        alreadyAnnounced: Set<String>,
+    ): List<SubAgentBatchRegistry.Batch> =
+        pendingSubAgentCollects(sessionId, context).filter { batch ->
+            batch.complete && batch.collectedAt == 0L &&
+                batch.finishedAt > 0L && batch.id !in alreadyAnnounced
+        }
+
+    /**
+     * [T-subagent-completion-timeliness] The after-batch drain: returns the
+     * nudge text for waves that finished since the last call (marking them
+     * announced), or null when there is nothing new. Budget is the caller's.
+     */
+    internal fun drainFinishedWaves(
+        sessionId: String,
+        context: Context?,
+        alreadyAnnounced: MutableSet<String>,
+    ): String? {
+        val finished = newlyFinishedSubAgentCollects(sessionId, context, alreadyAnnounced.toSet())
+        if (finished.isEmpty()) return null
+        alreadyAnnounced.addAll(finished.map { it.id })
+        return renderSubAgentCollectNudge(finished)
+    }
+
     /** Failure-bounded read of the detached sub-agent waves that still owe a result. */
     internal fun pendingSubAgentCollects(sessionId: String, context: Context?): List<SubAgentBatchRegistry.Batch> =
         runCatching { SubAgentBatchRegistry.unfinished(sessionId, context) }

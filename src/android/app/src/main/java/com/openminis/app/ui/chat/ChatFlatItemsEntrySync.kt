@@ -50,6 +50,7 @@ internal suspend fun buildEntryRows(
     expandedProcessIds: Set<String>,
     activeSubAgentToolIds: Set<String>,
     processCardBoundary: Int,
+    keepFragmentShapeIds: Set<String> = emptySet(),
 ): List<FlatChatItem> {
     // SNAPSHOT COPY, not msgs.subList(...): a subList is a live VIEW backed
     // by msgs and shares its modCount. Building off-main while msgs is
@@ -65,6 +66,7 @@ internal suspend fun buildEntryRows(
             expandedProcessIds = expandedProcessIds,
             activeSubAgentToolIds = activeSubAgentToolIds,
             processCardBoundary = processCardBoundary,
+            keepFragmentShapeIds = keepFragmentShapeIds,
         )
     }
     return if (sync) build() else withContext(Dispatchers.Default) { build() }

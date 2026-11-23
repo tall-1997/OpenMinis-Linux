@@ -124,6 +124,10 @@ fun ToolLimitsSettingsScreen(onBack: () -> Unit) {
                 onChange = { ToolLimitPrefs.setFileReadMaxLines(it) },
                 showDivider = true,
             )
+            // [T-subagent-unbounded-turns] Kept as the runaway-guard
+            // threshold, not a per-task deadline: the sub-agent loop is
+            // budget/completion driven and only stops here on a pathological
+            // never-finishing loop.
             LimitStepper(
                 title = stringResource(R.string.tool_limits_subagent),
                 valueLabel = turns.toString(),

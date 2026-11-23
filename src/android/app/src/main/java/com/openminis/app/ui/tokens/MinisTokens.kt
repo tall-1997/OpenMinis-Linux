@@ -3,7 +3,7 @@ package com.openminis.app.ui.tokens
 /**
  * 自动生成 —— 不要手改。生成器: scripts/ui/gen_tokens.py
  *
- * 扫描事实：572 个 ui 下的 .kt 文件 -> Color(0x...): 310 处 / 140 个不同色值；
+ * 扫描事实：573 个 ui 下的 .kt 文件 -> Color(0x...): 310 处 / 140 个不同色值；
  * dp 字面量 3700 处 / 87 个不同值；sp 35 处。
  * （已排除注释、字符串，以及标了 token-literal-ok 的行。）
  * 本文件命名 25 个色值，当前覆盖 138/310 = 45% 的颜色使用点。

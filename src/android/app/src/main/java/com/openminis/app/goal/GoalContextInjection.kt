@@ -97,3 +97,34 @@ internal fun shouldSkipGoalRunRequest(
     requestStarted: Boolean,
     mount: GoalMount,
 ): Boolean = goalRunRequested && !requestStarted && !mount.canContinue
+
+/**
+ * [T-goal-drift-reconciler] Token/time accounting for ONE committed tool turn.
+ * Only this call passes a Context, which is what lets the drift counter tick;
+ * tool-free turns record usage without the context. Failures are contained
+ * here (a bookkeeping hiccup must never fail the turn); an unmounted goal
+ * records nothing. Lives in the goal package because it hands back the Room
+ * entity the exit predicate consumes — ui/ must not touch Room directly.
+ */
+internal suspend fun GoalManager.recordCommittedTurnUsage(
+    goalMounted: Boolean,
+    sessionId: String,
+    lastUsage: com.openminis.app.data.model.LLMUsage?,
+    turnStartedAtMs: Long,
+    context: android.content.Context,
+): Result<SessionGoalEntity?> {
+    if (!goalMounted) return Result.success(null)
+    val tokens = (lastUsage?.inputTokens ?: 0).toLong() + (lastUsage?.outputTokens ?: 0).toLong()
+    return try {
+        Result.success(
+            recordUsage(sessionId, tokens, (System.currentTimeMillis() - turnStartedAtMs).coerceAtLeast(0), context),
+        )
+    } catch (cancel: kotlinx.coroutines.CancellationException) {
+        throw cancel
+    } catch (e: Exception) {
+        com.openminis.app.logging.AppLogger.warning(
+            "ChatVMStream", "Goal usage accounting failed: ${e.javaClass.simpleName}",
+        )
+        Result.failure(e)
+    }
+}

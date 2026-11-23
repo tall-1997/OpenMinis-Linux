@@ -57,6 +57,15 @@ internal fun SendFollowEffects(
         val lastMsg = lastMessage ?: return@LaunchedEffect
         if (lastMsg.role != "user") return@LaunchedEffect
         onUserAppend()
-        if (isPinned) snap("LE(messages.size)USER-SEND-SNAP")
+        // [T-reading-viewport-yank] A user row joins the transcript without a
+        // gesture when a resumed/queued turn answers, when another surface
+        // sends into this session, or when a retained ViewModel appends after
+        // screen re-entry. Nothing marks that as intent, so the old
+        // pinned-only snap was already correct for it — but the `seq != 0`
+        // bypass lets the settler of OUR OWN send keep its follow even if the
+        // tap landed while the reader was still mathematically "not pinned"
+        // (the row insert itself can move the viewport under a 1px anchor).
+        // A reader with no in-flight send never absorbs the append.
+        if (isPinned || seq != 0L) snap("LE(messages.size)USER-SEND-SNAP")
     }
 }

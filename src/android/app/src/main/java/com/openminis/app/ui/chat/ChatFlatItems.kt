@@ -554,6 +554,7 @@ internal fun buildFlatChatItems(
     activeSubAgentToolIds: Set<String> = emptySet(),
     // [P-process-card-dup] The frozen prefix hands its still-open run to the live suffix.
     processCardBoundary: Int = -1,
+    keepFragmentShapeIds: Set<String> = emptySet(), // [T-reading-viewport-yank] see keepFragmentsFor
 ): List<FlatChatItem> {
     if (fromIndex >= messages.size) return emptyList()
     val out = mutableListOf<FlatChatItem>()
@@ -766,8 +767,7 @@ internal fun buildFlatChatItems(
                         // boundary that warrants coalesce is "a NEWER
                         // message exists below this one". Until then the key
                         // set the user is scrolled into stays valid.
-                        val isLastAssistantTurn = idx >= lastAssistantIdx
-                        val fragments = if (isLastText && isLastAssistantTurn) rawFragments else coalesceMarkdownFragments(rawFragments)
+                        val fragments = if (isLastText && keepFragmentsFor(idx >= lastAssistantIdx, message.id, keepFragmentShapeIds)) rawFragments else coalesceMarkdownFragments(rawFragments)
                         if (fragments.isEmpty()) {
                             // Defensive: if the splitter returns nothing for
                             // a non-empty input (shouldn't happen), fall back

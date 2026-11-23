@@ -2219,6 +2219,7 @@ fun ChatScreen(
                     mutableStateOf<List<FlatChatItem>>(emptyList())
                 }
                 var flatItemsVersion by remember(sessionId) { mutableLongStateOf(0L) }
+                val keepFragmentShapeIds = rememberFragmentShapeSet(sessionId) // [T-reading-viewport-yank]
                 // [T-android-entry-pin-before-compose] Publish the composed
                 // tail size to the entry pin, which waits on it. Same value
                 // the list below actually renders, so the pin and the list
@@ -2229,12 +2230,9 @@ fun ChatScreen(
                 // initial snap + await-the-row + settle, and the
                 // enqueue-while-streaming user-send snap.
                 SendFollowEffects(
-                    seq = sendFollowSeq,
-                    messagesSize = messages.size,
-                    lastMessage = messages.lastOrNull(),
-                    isPinned = scrollPolicy.isPinned,
-                    flatItems = flatItems,
-                    snap = { source -> tracedScrollToItem(source, 0, 0) },
+                    seq = sendFollowSeq, messagesSize = messages.size,
+                    lastMessage = messages.lastOrNull(), isPinned = scrollPolicy.isPinned,
+                    flatItems = flatItems, snap = { source -> tracedScrollToItem(source, 0, 0) },
                     onConsumed = { sendFollowSeq = 0L },
                     onUserAppend = { lastUserAppendMs = System.currentTimeMillis() },
                 )
@@ -2742,7 +2740,7 @@ fun ChatScreen(
                                     foldAiProcess = foldAiProcess,
                                     expandedProcessIds = expandedIds,
                                     activeSubAgentToolIds = activeIds,
-                                    processCardBoundary = cardBoundary,
+                                    processCardBoundary = cardBoundary, keepFragmentShapeIds = keepFragmentShapeIds,
                                 )
                                 val buildMs = (System.nanoTime() - tBuildStart) / 1_000_000
                                 frozenRows = rows
@@ -2830,10 +2828,11 @@ fun ChatScreen(
                                         // [P-process-card-dup] The frozen prefix
                                         // suppressed this round's boundary card;
                                         // this build owns it, as its first row.
-                                        processCardBoundary = cardBoundary,
+                                        processCardBoundary = cardBoundary, keepFragmentShapeIds = keepFragmentShapeIds,
                                     )
                                 }
                             }
+                            recordPaintedFragmentShape(keepFragmentShapeIds, msgs)
                             flatItems = if (liveRows.isEmpty()) frozenRows else frozenRows + liveRows
                             flatItemsVersion++
                             com.openminis.app.diagnostics.StreamPerfMonitor.tick(
