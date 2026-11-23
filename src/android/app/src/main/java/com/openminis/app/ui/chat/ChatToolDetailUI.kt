@@ -184,7 +184,7 @@ internal fun ToolDetailSheet(
                 ) {
                     Icon(
                         m3Icon(Icons.Default.Close),
-                        contentDescription = "Close",
+                        contentDescription = stringResource(R.string.common_close),
                         tint = ChatColors.primaryText,
                         modifier = Modifier.size(16.dp),
                     )

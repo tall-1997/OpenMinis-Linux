@@ -139,7 +139,7 @@ internal fun SupervisorStatusBar(
                 IconButton(onClick = onHalt, modifier = Modifier.size(32.dp)) {
                     Icon(
                         imageVector = m3Icon(Icons.Filled.Stop),
-                        contentDescription = null,
+ contentDescription = stringResource(R.string.cd_stop),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp),
                     )

@@ -225,7 +225,7 @@ fun LogcatPanelScreen(onBack: () -> Unit) {
                 trailingIcon = {
                     if (query.isNotEmpty()) {
                         IconButton(onClick = { query = "" }) {
-                            Icon(m3Icon(Icons.Default.Close), contentDescription = null)
+                            Icon(m3Icon(Icons.Default.Close), contentDescription = stringResource(R.string.common_close))
                         }
                     }
                 },

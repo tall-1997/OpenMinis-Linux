@@ -230,7 +230,7 @@ fun InlineAudioPlayer(
                         ) {
                             Icon(
                                 m3Icon(Icons.Default.Stop),
-                                contentDescription = "Stop",
+                                contentDescription = stringResource(R.string.cd_stop),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(18.dp),
                             )
@@ -527,7 +527,7 @@ private fun FullscreenVideoContent(file: File, onDismiss: () -> Unit) {
             ) {
                 CircleControlButton(
                     icon = m3Icon(Icons.Default.Close),
-                    contentDescription = "Close",
+                    contentDescription = stringResource(R.string.common_close),
                     onClick = {
                         try { videoView?.pause() } catch (_: Throwable) {}
                         onDismiss()
@@ -543,7 +543,7 @@ private fun FullscreenVideoContent(file: File, onDismiss: () -> Unit) {
                 )
                 CircleControlButton(
                     icon = m3Icon(Icons.Default.Share),
-                    contentDescription = "Share",
+                    contentDescription = stringResource(R.string.common_share),
                     onClick = { shareMediaFile(context, file, "video/*") },
                 )
             }

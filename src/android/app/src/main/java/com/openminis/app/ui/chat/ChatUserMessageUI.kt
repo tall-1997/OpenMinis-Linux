@@ -285,7 +285,7 @@ internal fun UserMessageBubble(
                             ) {
                                 Icon(
                                     imageVector = m3Icon(Icons.Filled.Edit),
-                                    contentDescription = "Edit queued message",
+                                    contentDescription = stringResource(R.string.chat_queued_edit_title),
                                     tint = ChatColors.secondaryText,
                                     modifier = Modifier.size(24.dp),
                                 )
@@ -625,7 +625,7 @@ private fun ImageGalleryDialog(
             ) {
                 Icon(
                     com.openminis.app.ui.theme.m3Icon(androidx.compose.material.icons.Icons.Default.Close),
-                    contentDescription = "Close",
+                    contentDescription = stringResource(R.string.common_close),
                     tint = Color.White,
                 )
             }
