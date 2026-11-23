@@ -1,5 +1,6 @@
 package com.openminis.app.ui.chat
 
+import androidx.lifecycle.viewModelScope
 import com.openminis.app.agent.ContextSaverRuntime
 import com.openminis.app.agent.HarnessConfig
 import com.openminis.app.agent.ToolResultProjection
@@ -16,6 +17,9 @@ import com.openminis.app.data.model.AgentContentPart
 import com.openminis.app.data.model.AgentToolDefinition
 import com.openminis.app.data.model.LLMMessage
 import com.openminis.app.data.model.ModelAttributionSnapshot
+import com.openminis.app.data.repository.PairingWriteBackRow
+import com.openminis.app.data.repository.writeBackInterruptedResults
+import kotlinx.coroutines.launch
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.data.model.ToolIdNormalization
 import com.openminis.app.data.repository.CompactMarkerView
@@ -148,6 +152,35 @@ internal fun ChatViewModel.projectChatRequest(
     )
     // A legacy marker may have removed the matching call from this projection.
     val repair = repairToolPairing(neutralizeRemoteToolResults(projectLegacyOrphanedStops(assembled)))
+    // [T-pairing-writeback] Persist the neutral results this repair just
+    // synthesized: once the rows land, later projections find the call already
+    // matched and stop injecting a synthetic user turn on every request.
+    // Fire-and-forget — the repair above still renders a correct request even
+    // if the write fails, and the next projection retries.
+    if (repair.interruptedUseRefs.isNotEmpty()) {
+        viewModelScope.launch {
+            val rows = repair.interruptedUseRefs.mapNotNull { ref ->
+                val partsJson = buildToolResultPartsJson(
+                    listOf(
+                        AgentContentPart.ToolResult(
+                            id = ref.toolUseId,
+                            name = ref.toolName,
+                            content = "[Tool execution was interrupted before resume]",
+                            isError = false,
+                        ),
+                    ),
+                ) ?: return@mapNotNull null
+                PairingWriteBackRow(
+                    assistantRowId = ref.assistantRowId,
+                    toolUseId = ref.toolUseId,
+                    partsJson = partsJson,
+                )
+            }
+            if (rows.isNotEmpty()) {
+                chatRepository.writeBackInterruptedResults(requestSessionId, rows)
+            }
+        }
+    }
     val scrubbed = TextifiedImageGuard.scrub(repair.history).history
     val normalized = ToolIdNormalization.normalizeMessages(
         HistoryDigest.inject(scrubbed, historyDigest).map(::projectAssistantText),

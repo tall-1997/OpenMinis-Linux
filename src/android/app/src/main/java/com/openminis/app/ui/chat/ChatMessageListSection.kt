@@ -1,5 +1,6 @@
 package com.openminis.app.ui.chat
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
@@ -97,9 +98,15 @@ internal fun ChatFlatItemRow(
                         // Single-child Box → Column (layout-equivalent here) so
                         // the usage footer stacks BELOW the row content while
                         // sharing the search-focus background and alpha.
+                        // [T-fold-promote-animation] animateContentSize: when the
+                        // reply text is promoted from the process card to the
+                        // reply body at settle time, this row's height grows
+                        // smoothly instead of jumping (the process card shrinks
+                        // with its own animateContentSize in ChatProcessCards).
                         Column(
                             modifier = Modifier
                                 .padding(top = rhythmGap)
+                                .animateContentSize()
                                 .alpha(rowAlpha)
                                 .then(
                                     if (searchFocusAlpha > 0.01f) {
