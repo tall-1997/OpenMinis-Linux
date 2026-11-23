@@ -196,6 +196,9 @@ object MessageTransformerChain {
 
     internal fun hasTimeHint(text: String): Boolean = timeHintPattern.containsMatchIn(text)
 
+    /** True when [text] already declares a clock note — a second one is noise. */
+    internal fun carriesClockNote(text: String): Boolean = text.contains(CLOCK_HEAD)
+
     internal fun clockStamp(nowMs: Long): String = clockFormat.format(
         java.time.Instant.ofEpochMilli(nowMs).atZone(java.time.ZoneId.systemDefault()),
     )

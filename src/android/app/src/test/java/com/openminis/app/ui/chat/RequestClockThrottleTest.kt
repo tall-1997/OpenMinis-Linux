@@ -36,6 +36,10 @@ class RequestClockThrottleTest {
             role = LLMMessage.Role.USER,
             content = text,
             contentParts = listOf(AgentContentPart.Text(text)),
+            // [T-receipt-notice-removed] `requestClockNote` locates the latest
+            // user row through `receiptUserRow`, which requires a persisted id —
+            // a fixture without one exercised nothing and made two cases fail.
+            dbMessageId = "user-row-1",
         ),
     )
 

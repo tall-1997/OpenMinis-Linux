@@ -28,7 +28,12 @@ internal fun requestClockNote(
     // holds", and with the loose hint list nearly every turn qualified, so a
     // note landed on every request ("(since previous message: 0s)" noise) and
     // the model kept treating each note as a cue to re-verify.
-    val askedForTime = MessageTransformerChain.hasTimeHint(latestUser?.content.orEmpty())
+    val latestText = latestUser?.content.orEmpty()
+    // [T-time-context-no-nag] History that already carries a clock note is
+    // settled: whatever the question or the interval says, appending a second
+    // stamp re-teaches the model that notes arrive per request.
+    if (MessageTransformerChain.carriesClockNote(latestText)) return null
+    val askedForTime = MessageTransformerChain.hasTimeHint(latestText)
     if (!askedForTime && !TimeContextGate.shouldInject(sessionId, nowMs)) return null
     val stamp = MessageTransformerChain.clockStamp(nowMs)
     if (TimeContextGate.alreadyStamped(sessionId, stamp)) return null
