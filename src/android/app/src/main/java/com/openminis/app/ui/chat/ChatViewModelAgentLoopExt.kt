@@ -474,7 +474,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                         )
                     }
                     flushStallEcho()
-                    turnOutput.requireProcess()
+                    // [T-midturn-prose-is-reply] prose IS the reply here.
                     recordInterruptedText()
                     if (turnTextSb.length > lastFlushedLen) publishTurnText()
                     if (!currentProvider.streamTextIsMonolithic) turnOutput.closeSpan()
@@ -552,7 +552,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                 }
                 is LLMStreamChunk.ToolCallComplete -> {
                     flushStallEcho()
-                    turnOutput.requireProcess()
+                    // [T-midturn-prose-is-reply] As ToolUseStart.
                     recordInterruptedText()
                     if (turnTextSb.length > lastFlushedLen) publishTurnText()
                     // [T-android-duplicate-toolcall-replay] Record the RAW id sighting BEFORE
@@ -721,9 +721,8 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     turnRefusalExplanation = null
                     dispatched = projection
                     val request = projection.request
-                    turnOutput.deferReply = streamReplyPrefix != null || projection.outboundRequest.tools.isNotEmpty() || goalMount.canContinue ||
-                        PlanBoardClosePrompt.snapshot(goalSessionId, context).any { it.status != "done" } ||
-                        AgentLoopNudges.pendingSubAgentCollects(goalSessionId, context).isNotEmpty()
+                    // [T-midturn-prose-is-reply] Only a resume prefix defers.
+                    turnOutput.deferReply = streamReplyPrefix != null
                     usageAttempt = projection.usageAttempt
                     journal.recordRequestJournal(turn, projection)
                     if (!ownsLoop()) return false
@@ -1404,7 +1403,8 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             break
         }
         streamReplyPrefix = null
-        turnOutput.settle(asReply = false)
+        // [T-midturn-prose-is-reply] The prose this turn produced is a reply.
+        turnOutput.settle(asReply = true)
         recordInterruptedText()
         AppLogger.info(ChatViewModel.TAG_STREAM, "runAgentLoop turn=$turn dispatching ${toolCalls.size} tool call(s), continuing")
 

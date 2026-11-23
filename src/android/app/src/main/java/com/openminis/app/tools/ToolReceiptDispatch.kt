@@ -142,8 +142,12 @@ internal class ToolReceiptDispatch(private val store: ToolReceiptStore) {
                     return pendingResult(delivery.state, result, resultRecorded = delivery.localCompletionRecorded)
                 }
                 if (result.success) result.copy(receiptProof = claim.proof) else result.copy(
-                    output = "$TOOL_RECEIPT_NOTICE The tool accepted the call, but did not report success. " +
-                        "Do not repeat it automatically.\n${result.output}",
+                    // [T-receipt-fact-not-order] A statement of fact, not an order.
+                    // "Do not repeat it automatically" plus NO_REPEAT's "Verify
+                    // independently…" made the model stop and emit verification
+                    // prose ("验证✓") between tool calls.
+                    output = "$TOOL_RECEIPT_NOTICE The tool accepted the call but reported no success; " +
+                        "the result above may be incomplete.\n${result.output}",
                     recoveryHint = NO_REPEAT,
                     receiptProof = claim.proof,
                 )
@@ -228,16 +232,22 @@ internal class ToolReceiptDispatch(private val store: ToolReceiptStore) {
         duplicate: Boolean = false,
     ): ToolExecutionResult {
         val status = when (state) {
-            ToolReceiptState.UNKNOWN -> "Delivery is pending confirmation. It may already have occurred."
+            ToolReceiptState.UNKNOWN -> "Delivery is pending confirmation; it may already have occurred."
             ToolReceiptState.ACCEPTED -> if (resultRecorded) {
                 "This call was accepted and its completion was recorded."
             } else {
-                "This call was accepted, but a completed result could not be verified."
+                "This call was accepted; a completed result was not recorded."
             }
             ToolReceiptState.NOT_SENT -> return blocked("The adapter did not start this call.")
         }
         val attempt = if (duplicate) " This attempt was not sent." else ""
-        val output = "$TOOL_RECEIPT_NOTICE $status$attempt Do not repeat the operation automatically." +
+        // [T-receipt-fact-not-order] Facts only — the old tail ("Do not repeat
+        // the operation automatically") ordered the model to act on the
+        // receipt. The replacement states the SYSTEM's rule, which still
+        // discourages a blind retry without telling the model to stop and
+        // verify.
+        val output = "$TOOL_RECEIPT_NOTICE $status$attempt " +
+            "An identical retry in this turn is rejected by the delivery gate." +
             if (original?.output.isNullOrBlank()) "" else "\n${original?.output}"
         return (original ?: ToolExecutionResult(output, false)).copy(
             output = output, success = false, errorCode = ToolErrorCode.RECEIPT_UNCONFIRMED,
@@ -247,6 +257,7 @@ internal class ToolReceiptDispatch(private val store: ToolReceiptStore) {
     }
 
     private companion object {
-        const val NO_REPEAT = "Verify independently; do not repeat an operation whose delivery is uncertain or already accepted."
+        /** [T-receipt-fact-not-order] State, never a command — see pendingResult. */
+        const val NO_REPEAT = "This delivery is uncertain or already accepted; treat its result as unconfirmed."
     }
 }

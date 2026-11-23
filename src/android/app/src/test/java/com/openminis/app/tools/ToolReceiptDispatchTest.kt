@@ -543,7 +543,7 @@ class ToolReceiptDispatchTest {
         assertFalse(timedOut.success)
         assertTrue(timedOut.timedOut)
         assertNotNull(timedOut.receiptProof)
-        assertTrue(timedOut.output.contains("did not report success"))
+        assertTrue(timedOut.output.contains("reported no success"))
         val executedFailure = run(scope.call("memory_write", """{"content":"x"}""")!!, "memory-wire",
             ToolExecutionResult("MEMORY_CONFLICT", false, deliveryAccepted = true))
         assertNotNull(executedFailure.receiptProof)

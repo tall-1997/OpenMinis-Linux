@@ -54,7 +54,16 @@ class ToolReceiptNoticeContractTest {
     fun replayProtectionStaysAtTheToolBoundary() {
         val gate = stripComments(ProductionSources.read("tools/ToolReceiptDispatch.kt"))
         assertTrue("needsToolReceipt gate must remain", gate.contains("fun needsToolReceipt"))
-        assertTrue("advisory must ride the tool result itself", gate.contains("Do not repeat the operation automatically"))
+        // [T-receipt-fact-not-order] The advisory still rides the tool result,
+        // but as a STATEMENT of the delivery state. The old imperative
+        // ("Do not repeat the operation automatically" / "Verify
+        // independently") is what made the model break off into verification
+        // prose, so the contract now forbids the imperative — not the notice.
+        assertTrue("advisory must ride the tool result itself", gate.contains("TOOL_RECEIPT_NOTICE \$status"))
+        assertTrue(
+            "the advisory must not order the model to verify",
+            !gate.contains("Verify independently") && !gate.contains("Do not repeat the operation automatically"),
+        )
         val exec = stripComments(ProductionSources.read("ui/chat/ChatViewModelExecuteToolExt.kt"))
         assertTrue("execute path must still consult the gate", exec.contains("needsToolReceipt(canonical"))
     }
