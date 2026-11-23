@@ -100,6 +100,16 @@ release-notes/  各版本发布说明
 scripts/        rootfs 与开发脚本
 ```
 
+## 贡献者
+
+本项目以 GPL-3.0 发布，著作权署名是许可证义务；而 squash 合并会把作者写成合并者，贡献者的名字因此容易消失。完整清单见 [CONTRIBUTORS.md](CONTRIBUTORS.md)：
+
+- **tall-1997** —— 维护者：Linux/Android 移植、Agent Loop、工具层、上下文管线、CI 门禁
+- **Ethan** —— 仓库基础设施、1.13 Android 线、provider/thinking/storage
+- **doubao01** —— 设计系统统一：令牌层、类型化 prefs、11 项 CI 门禁（[#410](https://github.com/tall-1997/OpenMinis-Linux/pull/410)）
+
+漏了你的名字？提个 PR 加一行即可，提交历史就是凭证。
+
 ## 许可证
 
 本项目以 [GPL-3.0](LICENSE) 发布。仓库包含并修改 GPL-3 程序，衍生作品须以 GPL-3 相应开源。沙箱链接 [PRoot](https://github.com/proot-me/PRoot/)（GPL-2.0），合并作品按 GPL-3 分发。

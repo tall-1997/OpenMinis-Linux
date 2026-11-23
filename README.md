@@ -97,6 +97,16 @@ release-notes/  Per-version release notes
 scripts/        Rootfs and development scripts
 ```
 
+## Contributors
+
+Work here ships under GPL-3.0, which obliges us to keep authorship visible — and a squash merge writes the merger's name over the contributor's. The canonical list lives in [CONTRIBUTORS.md](CONTRIBUTORS.md):
+
+- **tall-1997** — maintainer: Linux/Android port, agent loop, tool surface, context pipeline, CI gates
+- **Ethan** — repository foundations, the 1.13 Android line, provider/thinking/storage work
+- **doubao01** — design-system unification: token layer, typed preferences, 11 CI gates ([#410](https://github.com/tall-1997/OpenMinis-Linux/pull/410))
+
+Missing your name? Open a PR adding your row — the commit history is proof enough.
+
 ## License
 
 This repository is published under the [GNU GPL v3.0](LICENSE). It contains and modifies GPL-3 programs, so derivative works must ship corresponding source under GPL-3. The sandbox links [PRoot](https://github.com/proot-me/PRoot/) (GPL-2.0); the combined work is distributed under GPL-3.
