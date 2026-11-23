@@ -46,7 +46,9 @@ internal suspend fun ChatViewModel.runGroupChat(provider: LLMProvider, closing: 
     val persistedUserId = agentHistorySnapshot().lastOrNull(::receiptUserRow)?.dbMessageId
         ?.takeIf { it == user?.sourceDbIds?.singleOrNull() }
     val receiptScope = ToolReceiptScope.userTurn(activeSessionId, persistedUserId)
-    val receiptNotice = if (!closing) pendingToolReceiptNotice(activeSessionId, receiptScope) else null
+    // [T-receipt-notice-removed] No request-level receipt nag (see
+    // ChatViewModelAgentLoopExt for the long form): duplicate-delivery
+    // protection lives at the tool gate and the per-result advisory.
     val closingNow = closing || GroupChat.isCloseRequest(userText)
     val prior = if (closingNow) closeRecord() else groupTranscript()
     if (closingNow && prior.isEmpty()) {
@@ -55,7 +57,6 @@ internal suspend fun ChatViewModel.runGroupChat(provider: LLMProvider, closing: 
         return
     }
     if (!closing && userText.isBlank()) return
-    if (receiptNotice != null && !closingNow) publishGroupNotice(receiptNotice)
 
     val config = providerRepository.config.value
     val mainEntry = _activeEntryId.value?.let { id -> config.modelEntries.find { it.id == id } }
@@ -139,7 +140,7 @@ internal suspend fun ChatViewModel.runGroupChat(provider: LLMProvider, closing: 
             )
             if (answer.isNotBlank()) spoken += GroupChat.Line(hostName, answer)
         } else if (member != null) {
-            spoken += speakMembers(listOf(member), analyzing, receiptScope, receiptNotice, receiptStage = 0) {
+            spoken += speakMembers(listOf(member), analyzing, receiptScope, receiptStage = 0) {
                 GroupChat.directPrompt(it.name, userText, GroupChat.transcript(spoken), contextText)
             }
         }
@@ -180,7 +181,7 @@ internal suspend fun ChatViewModel.runGroupChat(provider: LLMProvider, closing: 
         }
         for ((index, member) in speakers.withIndex()) {
             if (groupChatCloseRequested) break
-            spoken += speakMembers(listOf(member), analyzing, receiptScope, receiptNotice, receiptStage = 1, bubbleIds = queueIds) {
+            spoken += speakMembers(listOf(member), analyzing, receiptScope, receiptStage = 1, bubbleIds = queueIds) {
                 GroupChat.opinionPrompt(
                     it.name,
                     GroupChat.stance(index),
@@ -204,7 +205,7 @@ internal suspend fun ChatViewModel.runGroupChat(provider: LLMProvider, closing: 
             for (member in speakers) {
                 if (groupChatCloseRequested) break
                 spoken += speakMembers(
-                    listOf(member), analyzing, receiptScope, receiptNotice, receiptStage = 1 + debateRound,
+                    listOf(member), analyzing, receiptScope, receiptStage = 1 + debateRound,
                     allowPass = true, bubbleIds = debateIds,
                 ) { m ->
                     GroupChat.replyPrompt(m.name, userText, GroupChat.transcript(spoken).takeLast(8000))
@@ -392,7 +393,6 @@ private suspend fun ChatViewModel.speakMembers(
     members: List<GroupMember>,
     analyzing: String,
     receiptScope: ToolReceiptScope?,
-    receiptNotice: String?,
     receiptStage: Int,
     deferBubble: Boolean = false,
     allowPass: Boolean = false,
@@ -408,7 +408,7 @@ private suspend fun ChatViewModel.speakMembers(
                 speaker = member.name,
                 snapshot = member.snapshot,
                 provider = member.provider,
-                system = laneSystemWithRules(listOfNotNull(GroupChat.memberSystem(member.name), receiptNotice).joinToString("\n\n")),
+                system = laneSystemWithRules(GroupChat.memberSystem(member.name)),
                 receiptScope = member.entryId?.let { receiptScope?.lane("group-member", it)?.step("discussion", receiptStage) },
                 user = promptFor(member),
                 tools = groupTools(member.provider),

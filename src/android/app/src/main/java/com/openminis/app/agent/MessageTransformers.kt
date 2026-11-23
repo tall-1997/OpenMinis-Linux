@@ -181,12 +181,23 @@ object MessageTransformerChain {
 
     private const val CLOCK_HEAD = "<system-note>当前时间"
     private val clockFormat = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-    private val timeHints = listOf(
-        "现在", "now", "today", "今天", "几点", "时间", "weather", "天气",
-        "remind", "提醒", "schedule", "安排", "分钟", "小时", "minute", "hour",
+    /**
+     * [T-time-hint-precision] One pattern matching phrases that actually ASK
+     * for the clock. The old list mixed in everyday words ("时间", "提醒",
+     * "分钟", "小时", "今天", "安排"), so nearly any user turn counted as a
+     * time question and — under the projector's "hint bypasses the throttle"
+     * branch — re-opened the clock on every request.
+     */
+    private val timeHintPattern = Regex(
+        "现在几点|几点了|几点钟|当前时间|现在时间|什么时间|今天几号|今天日期|几月几号|星期几|" +
+            "what time|current time|today's date|what day|weather|天气",
+        RegexOption.IGNORE_CASE,
     )
 
-    internal fun hasTimeHint(text: String): Boolean = timeHints.any { text.contains(it, ignoreCase = true) }
+    internal fun hasTimeHint(text: String): Boolean = timeHintPattern.containsMatchIn(text)
+
+    /** True when [text] already declares a clock note — a second one is noise. */
+    internal fun carriesClockNote(text: String): Boolean = text.contains(CLOCK_HEAD)
 
     internal fun clockStamp(nowMs: Long): String = clockFormat.format(
         java.time.Instant.ofEpochMilli(nowMs).atZone(java.time.ZoneId.systemDefault()),

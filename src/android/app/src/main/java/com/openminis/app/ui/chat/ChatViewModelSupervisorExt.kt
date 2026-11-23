@@ -391,8 +391,10 @@ private suspend fun ChatViewModel.runSupervisorSession(
     }
 
     supervisorNotice("Supervisor session started — objective: $objective")
-    val receiptNotice = pendingToolReceiptNotice(sessionId, receiptScope)
-    if (receiptNotice != null) supervisorNotice(receiptNotice)
+    // [T-receipt-notice-removed] No request-level receipt nag — it re-fired on
+    // every request while one interrupted call stayed unresolved, and its
+    // "Verify before retrying" wording made the model emit verification prose
+    // instead of finishing. Protection lives at the tool gate.
 
     // An interrupted round uses the same ordinal after recovery. Only the
     // committed round report advances the recovered counter.
@@ -413,7 +415,7 @@ private suspend fun ChatViewModel.runSupervisorSession(
                 provider = supervisorProvider,
                 // [T-lanes-inherit-session-rules] The supervisor is a session
                 // lane: the session's standing rules ride its prompt.
-                system = laneSystemWithRules(listOfNotNull(system, receiptNotice).joinToString("\n\n")),
+                system = laneSystemWithRules(system),
                 user = user,
                 tools = SupervisorSeats.supervisorTools(supervisorBaseTools(supervisorEntry)),
                 toolGate = null,
@@ -457,7 +459,7 @@ private suspend fun ChatViewModel.runSupervisorSession(
                 sessionId = sessionId,
                 // [T-lanes-inherit-session-rules] Supervisor workers inherit the
                 // session rules too — same lane contract as spawn_agent.
-                sessionRules = listOfNotNull(sessionRulesForLanes(), receiptNotice).joinToString("\n\n"),
+                sessionRules = sessionRulesForLanes(),
                 historySanitizer = { neutralizeRemoteToolResults(it) },
                 skillsHint = null,
                 tools = SupervisorSeats.workerTools(supervisorBaseTools(workerEntry)),
