@@ -58,6 +58,7 @@ import com.openminis.app.data.model.SystemVoiceEntries
 import com.openminis.app.data.model.SystemVoiceIds
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.speech.VoiceOutputState
+import com.openminis.app.ui.theme.m3Icon
 /**
  * [T-android-unified-model-picker] Android counterpart of iOS
  * UnifiedModelPicker: ONE single-select model picker sheet, parameterized the
@@ -216,7 +217,7 @@ fun UnifiedModelPickerSheet(
                         .padding(horizontal = 24.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Default.MyLocation, contentDescription = null,
+                    Icon(m3Icon(Icons.Default.MyLocation), contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(
@@ -270,7 +271,7 @@ fun UnifiedModelPickerSheet(
                         )
                         Spacer(Modifier.width(10.dp))
                         Icon(
-                            Icons.Default.Layers,
+                            m3Icon(Icons.Default.Layers),
                             contentDescription = null,
                             // (#7) named AccentToken — same value as the old
                             // 0xFF007AFF literal.
@@ -296,7 +297,7 @@ fun UnifiedModelPickerSheet(
                                         .padding(horizontal = 5.dp, vertical = 1.dp),
                                 ) {
                                     Icon(
-                                        Icons.Default.ArrowCircleDown,
+                                        m3Icon(Icons.Default.ArrowCircleDown),
                                         contentDescription = null,
                                         modifier = Modifier.size(9.dp),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
@@ -569,7 +570,7 @@ fun UnifiedModelPickerSheet(
                                         onClick = { quickTestEntry = entry },
                                         modifier = Modifier.size(32.dp),
                                     ) {
-                                        Icon(Icons.Outlined.Bolt,
+                                        Icon(m3Icon(Icons.Outlined.Bolt),
                                             contentDescription = stringResource(R.string.quicktest_button),
                                             tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
                                     }

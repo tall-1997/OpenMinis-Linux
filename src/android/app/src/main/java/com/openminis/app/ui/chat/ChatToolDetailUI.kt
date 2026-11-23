@@ -294,7 +294,7 @@ internal fun ToolDetailSheet(
                         when {
                             copyDone -> m3Icon(Icons.Default.Check)
                             isShellTool -> m3Icon(Icons.Default.Terminal)
-                            isBrowserTool -> Icons.Outlined.Public
+                            isBrowserTool -> m3Icon(Icons.Outlined.Public)
                             else -> m3Icon(Icons.Default.ContentCopy)
                         },
                         contentDescription = when {
@@ -560,7 +560,7 @@ internal fun ToolDetailSheet(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Icon(
-                                        Icons.Default.EditNote,
+                                        m3Icon(Icons.Default.EditNote),
                                         contentDescription = null,
                                         tint = Color(0xFFFF9500),
                                         modifier = Modifier.size(12.dp),
@@ -1108,7 +1108,7 @@ internal fun ToolDetailSheet(
                         modifier = Modifier.size(32.dp),
                     ) {
                         Icon(
-                            Icons.Default.SkipPrevious,
+                            m3Icon(Icons.Default.SkipPrevious),
                             contentDescription = stringResource(R.string.tool_detail_prev_desc),
                             tint = if (currentIdx > 0) ChatColors.primaryText else ChatColors.disabledText,
                             modifier = Modifier.size(22.dp),
@@ -1154,7 +1154,7 @@ internal fun ToolDetailSheet(
                         modifier = Modifier.size(32.dp),
                     ) {
                         Icon(
-                            Icons.Default.SkipNext,
+                            m3Icon(Icons.Default.SkipNext),
                             contentDescription = stringResource(R.string.tool_detail_next_desc),
                             tint = if (currentIdx < toolBlocks.lastIndex) ChatColors.primaryText else ChatColors.disabledText,
                             modifier = Modifier.size(22.dp),

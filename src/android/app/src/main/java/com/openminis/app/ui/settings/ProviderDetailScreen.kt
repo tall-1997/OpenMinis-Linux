@@ -697,8 +697,8 @@ fun ProviderDetailScreen(
                             },
                             leadingIcon = {
                                 Icon(
-                                    if (entry.isHidden) Icons.Filled.Visibility
-                                    else Icons.Filled.VisibilityOff,
+                                    if (entry.isHidden) m3Icon(Icons.Filled.Visibility)
+                                    else m3Icon(Icons.Filled.VisibilityOff),
                                     contentDescription = null,
                                 )
                             },

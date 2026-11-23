@@ -63,6 +63,7 @@ import kotlinx.coroutines.withContext
 import java.util.Calendar
 import java.util.Date
 import java.util.concurrent.TimeUnit
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * Bottom sheet listing all chat sessions except the current one. Tapping
@@ -196,7 +197,7 @@ private fun NewChatRow(onClick: () -> Unit) {
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = Icons.Outlined.Add,
+                imageVector = m3Icon(Icons.Outlined.Add),
                 contentDescription = null,
                 tint = accent,
                 modifier = Modifier.size(20.dp),

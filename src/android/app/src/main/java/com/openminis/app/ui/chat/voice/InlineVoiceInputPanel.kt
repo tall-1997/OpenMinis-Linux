@@ -759,7 +759,7 @@ private fun ExpandedContent(
             )
             Spacer(Modifier.width(3.dp))
             Icon(
-                Icons.Default.UnfoldMore,
+                m3Icon(Icons.Default.UnfoldMore),
                 contentDescription = null,
                 modifier = Modifier.size(12.dp),
                 tint = ChatColors.secondaryText.copy(alpha = 0.6f),

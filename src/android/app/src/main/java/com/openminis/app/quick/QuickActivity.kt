@@ -54,6 +54,7 @@ import com.openminis.app.ui.settings.KEY_THEME_MODE
 import com.openminis.app.ui.settings.fontScaleForLevel
 import com.openminis.app.ui.settings.getAppearancePrefs
 import com.openminis.app.ui.theme.MinisTheme
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [E-batch-quick-invocation] The summon-anywhere half-screen panel.
@@ -254,7 +255,7 @@ class QuickActivity : ComponentActivity() {
                         )
                         IconButton(onClick = { finish() }) {
                             Icon(
-                                Icons.Outlined.Close,
+                                m3Icon(Icons.Outlined.Close),
                                 contentDescription = stringResource(R.string.common_close),
                                 tint = colors.onSurfaceVariant,
                             )
@@ -297,7 +298,7 @@ class QuickActivity : ComponentActivity() {
                                 .background(colors.primary.copy(alpha = 0.12f)),
                         ) {
                             Icon(
-                                Icons.AutoMirrored.Outlined.Send,
+                                m3Icon(Icons.AutoMirrored.Outlined.Send),
                                 contentDescription = stringResource(R.string.cd_send),
                                 tint = if (sending.value) colors.onSurfaceVariant else colors.primary,
                             )

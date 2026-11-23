@@ -78,6 +78,7 @@ import com.openminis.app.R
 import com.openminis.app.knowledge.AppNotes
 import com.openminis.app.knowledge.AppNotesStore
 import com.openminis.app.ui.components.openExternalUrl
+import com.openminis.app.ui.theme.m3Icon
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -436,7 +437,7 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_submit_github_issues),
                     leading = {
                         Icon(
-                            imageVector = Icons.Outlined.BugReport,
+                            imageVector = m3Icon(Icons.Outlined.BugReport),
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(22.dp),
@@ -453,7 +454,7 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_feedback_telegram),
                     leading = {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.Send,
+                            imageVector = m3Icon(Icons.AutoMirrored.Outlined.Send),
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(22.dp),
@@ -470,7 +471,7 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_feedback_email),
                     leading = {
                         Icon(
-                            imageVector = Icons.Outlined.Email,
+                            imageVector = m3Icon(Icons.Outlined.Email),
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(22.dp),

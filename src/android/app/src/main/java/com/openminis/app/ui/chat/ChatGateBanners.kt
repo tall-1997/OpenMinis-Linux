@@ -49,7 +49,7 @@ fun ChatGateBanners(
                 Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            Icons.Default.Shield,
+                            m3Icon(Icons.Default.Shield),
                             contentDescription = null,
                             modifier = Modifier.size(16.dp),
                             tint = MaterialTheme.colorScheme.onTertiaryContainer,
@@ -107,7 +107,7 @@ fun ChatGateBanners(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
-                        Icons.Default.Block,
+                        m3Icon(Icons.Default.Block),
                         contentDescription = null,
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.onErrorContainer,

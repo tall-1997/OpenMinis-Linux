@@ -142,7 +142,7 @@ fun LogcatPanelScreen(onBack: () -> Unit) {
                 actions = {
                     IconButton(onClick = { paused = !paused }) {
                         Icon(
-                            m3Icon(if (paused) Icons.Default.PlayArrow else Icons.Default.Pause),
+                            m3Icon(if (paused) m3Icon(Icons.Default.PlayArrow) else m3Icon(Icons.Default.Pause)),
                             contentDescription = stringResource(
                                 if (paused) R.string.logcat_panel_resume else R.string.logcat_panel_pause,
                             ),

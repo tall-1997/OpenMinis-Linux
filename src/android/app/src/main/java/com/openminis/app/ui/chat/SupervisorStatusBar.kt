@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import com.openminis.app.R
 import kotlinx.coroutines.delay
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * Live status bar for a supervisor-worker session (spec §3, PR#3).
@@ -137,7 +138,7 @@ internal fun SupervisorStatusBar(
             if (mine.isLive) {
                 IconButton(onClick = onHalt, modifier = Modifier.size(32.dp)) {
                     Icon(
-                        imageVector = Icons.Filled.Stop,
+                        imageVector = m3Icon(Icons.Filled.Stop),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp),

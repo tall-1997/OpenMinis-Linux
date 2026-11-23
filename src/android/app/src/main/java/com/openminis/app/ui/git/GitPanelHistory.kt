@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * History tab: local search, self-drawn commit graph (lanes from
@@ -114,7 +115,7 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit) {
             placeholder = { Text(stringResource(R.string.git_panel_search_history)) },
             leadingIcon = {
                 Icon(
-                    Icons.Filled.Search,
+                    m3Icon(Icons.Filled.Search),
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                 )

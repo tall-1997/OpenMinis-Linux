@@ -32,6 +32,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import com.openminis.app.ui.theme.m3Icon
 
 @Composable
 internal fun RenderMdAudio(block: MdBlock.Audio) {
@@ -92,7 +93,7 @@ internal fun RenderMdAudio(block: MdBlock.Audio) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = Icons.Filled.Audiotrack,
+            imageVector = m3Icon(Icons.Filled.Audiotrack),
             contentDescription = null,
             tint = colors.blockquote,
             modifier = Modifier.size(18.dp),
@@ -127,7 +128,7 @@ internal fun RenderMdAudio(block: MdBlock.Audio) {
             }
         }
         Icon(
-            imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+            imageVector = if (isPlaying) m3Icon(Icons.Filled.Pause) else m3Icon(Icons.Filled.PlayArrow),
             contentDescription = if (isPlaying) "Pause" else "Play",
             tint = tint,
             modifier = Modifier.size(28.dp),

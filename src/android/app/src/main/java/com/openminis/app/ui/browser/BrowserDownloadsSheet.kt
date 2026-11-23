@@ -213,7 +213,7 @@ private fun DownloadRow(
             BrowserTabPool.DownloadState.COMPLETED -> {
                 IconButton(onClick = onOpen) {
                     Icon(
-                        Icons.Default.OpenInNew,
+                        m3Icon(Icons.Default.OpenInNew),
                         contentDescription = stringResource(R.string.browser_downloads_open),
                         tint = MaterialTheme.colorScheme.primary,
                     )

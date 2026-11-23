@@ -665,7 +665,7 @@ fun MirrorCategoryDetailScreen(
                 title = { Text(category.displayName) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.mirror_back))
+                        Icon(com.openminis.app.ui.theme.m3Icon(Icons.AutoMirrored.Filled.ArrowBack), contentDescription = stringResource(R.string.mirror_back))
                     }
                 },
             )

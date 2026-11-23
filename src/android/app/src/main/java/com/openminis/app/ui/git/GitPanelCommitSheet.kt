@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
 import com.openminis.app.git.GitCli.CommitFileStat
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * Commit-detail bottom sheet: subject, author/committer/time, body, then the
@@ -149,7 +150,7 @@ private fun HashRow(hash: String) {
             modifier = Modifier.size(24.dp),
         ) {
             Icon(
-                Icons.Filled.ContentCopy,
+                m3Icon(Icons.Filled.ContentCopy),
                 contentDescription = stringResource(R.string.git_panel_copy_hash),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(13.dp),
@@ -212,7 +213,7 @@ private fun FileStatRow(file: CommitFileStat, onClick: () -> Unit) {
         }
         Spacer(Modifier.width(2.dp))
         Icon(
-            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
             modifier = Modifier.size(18.dp),

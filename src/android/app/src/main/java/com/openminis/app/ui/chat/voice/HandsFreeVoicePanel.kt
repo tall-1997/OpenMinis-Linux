@@ -49,6 +49,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-handsfree-loop] (#40) Hands-free continuous conversation: the existing
@@ -429,7 +430,7 @@ private fun HandsFreeBar(
                 .padding(horizontal = 10.dp, vertical = 6.dp),
         ) {
             Icon(
-                Icons.Default.GraphicEq,
+                m3Icon(Icons.Default.GraphicEq),
                 contentDescription = null,
                 modifier = Modifier.size(14.dp),
                 tint = if (enabled) MaterialTheme.colorScheme.primary else ChatColors.secondaryText,

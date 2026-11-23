@@ -62,6 +62,7 @@ import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.components.UrlPreviewSheet
 import com.openminis.app.ui.theme.LocalChatPalette
 import kotlinx.coroutines.launch
+import com.openminis.app.ui.theme.m3Icon
 
 // [T-provider-quota] "Quota" section of the provider detail page: the upstream
 // balance / quota of this instance's account, from the vendor itself - never
@@ -117,7 +118,7 @@ fun ProviderQuotaSection(instance: ProviderInstance) {
                         modifier = Modifier.size(28.dp),
                     ) {
                         Icon(
-                            Icons.Filled.Refresh,
+                            m3Icon(Icons.Filled.Refresh),
                             contentDescription = stringResource(R.string.quota_refresh),
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(18.dp),
@@ -183,7 +184,7 @@ private fun ColumnScope.SectionContent(st: QuotaState, display: QuotaInstanceDis
             modifier = rowPadding,
         )
         is QuotaInstanceDisplay.Failed -> Row(verticalAlignment = Alignment.CenterVertically, modifier = rowPadding) {
-            Icon(Icons.Outlined.WarningAmber, null, tint = quotaOrange(), modifier = Modifier.size(16.dp))
+            Icon(m3Icon(Icons.Outlined.WarningAmber), null, tint = quotaOrange(), modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(6.dp))
             Text(QuotaText.error(context, display.error), style = MaterialTheme.typography.bodySmall, color = quotaOrange())
         }
@@ -196,7 +197,7 @@ private fun ColumnScope.SectionContent(st: QuotaState, display: QuotaInstanceDis
                     modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 10.dp),
                 ) {
                     Icon(
-                        Icons.Filled.Group, null,
+                        m3Icon(Icons.Filled.Group), null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp),
                     )
                     Spacer(Modifier.width(5.dp))
@@ -374,7 +375,7 @@ fun QuotaDetailSheet(
                     } else {
                         IconButton(onClick = { refresh() }) {
                             Icon(
-                                Icons.Filled.Refresh,
+                                m3Icon(Icons.Filled.Refresh),
                                 contentDescription = stringResource(R.string.quota_refresh),
                                 tint = MaterialTheme.colorScheme.primary,
                             )

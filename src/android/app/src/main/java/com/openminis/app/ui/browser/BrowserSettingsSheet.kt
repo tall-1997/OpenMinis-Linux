@@ -723,7 +723,7 @@ private fun UaMismatchBanner(message: String) {
         verticalAlignment = Alignment.Top,
     ) {
         Icon(
-            Icons.Filled.Warning,
+            m3Icon(Icons.Filled.Warning),
             contentDescription = null,
             modifier = Modifier.size(18.dp),
             tint = MaterialTheme.colorScheme.tertiary,

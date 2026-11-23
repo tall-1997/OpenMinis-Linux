@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.data.model.ModelGroup
 import com.openminis.app.data.repository.ProviderRepository
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * Onboarding step 2: pick 1-3 models from configured providers
@@ -95,7 +96,7 @@ fun OnboardingModelSelectionScreen(
                 title = { Text(stringResource(R.string.onboarding_select_models_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
+                        Icon(m3Icon(Icons.AutoMirrored.Filled.ArrowBack), contentDescription = stringResource(R.string.common_back))
                     }
                 },
                 actions = {

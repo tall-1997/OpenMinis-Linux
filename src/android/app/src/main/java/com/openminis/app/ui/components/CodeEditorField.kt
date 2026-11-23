@@ -53,6 +53,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.foundation.verticalScroll
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * A compact code editor surface: line-number gutter, monospace text, syntax
@@ -335,19 +336,19 @@ fun CodeSearchBar(
         )
         IconButton(onClick = onPrev, enabled = matchCount > 0) {
             Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft),
                 contentDescription = stringResource(R.string.code_editor_prev_match),
             )
         }
         IconButton(onClick = onNext, enabled = matchCount > 0) {
             Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
                 contentDescription = stringResource(R.string.code_editor_next_match),
             )
         }
         IconButton(onClick = onClose) {
             Icon(
-                Icons.Filled.Close,
+                m3Icon(Icons.Filled.Close),
                 contentDescription = stringResource(R.string.code_editor_close_search),
             )
         }

@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openminis.app.MinisApp
 import com.openminis.app.R
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-startup-degraded-extended] Floating banner while the app runs with a
@@ -93,7 +94,7 @@ private fun DegradedStartupBanner(cause: String, onDismiss: () -> Unit) {
                 modifier = Modifier.weight(1f).padding(start = 14.dp, top = 10.dp, bottom = 10.dp),
             ) {
                 Icon(
-                    Icons.Filled.Warning,
+                    m3Icon(Icons.Filled.Warning),
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.size(18.dp),
@@ -125,7 +126,7 @@ private fun DegradedStartupBanner(cause: String, onDismiss: () -> Unit) {
             }
             IconButton(onClick = onDismiss) {
                 Icon(
-                    Icons.Filled.Close,
+                    m3Icon(Icons.Filled.Close),
                     contentDescription = stringResource(R.string.degraded_startup_dismiss),
                     tint = Color.White.copy(alpha = 0.9f),
                     modifier = Modifier.size(16.dp),

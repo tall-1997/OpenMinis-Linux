@@ -57,6 +57,7 @@ import com.openminis.app.service.SubAgentActivityTracker
 import com.openminis.app.tools.SubAgentRunner
 import com.openminis.app.ui.markdown.MarkdownText
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-wave-e-subagent-card] Live roster bar for concurrent spawn_agent
@@ -195,7 +196,7 @@ private fun SubAgentChip(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                Icons.Filled.Stop,
+                m3Icon(Icons.Filled.Stop),
                 contentDescription = stringResource(R.string.subagent_stop_desc, title),
                 tint = Color.White.copy(alpha = 0.9f),
                 modifier = Modifier.size(13.dp),
@@ -277,7 +278,7 @@ private fun SubAgentDetailSheet(
                 }
                 IconButton(enabled = isActive, onClick = { onStop(member.id) }) {
                     Icon(
-                        Icons.Filled.Stop,
+                        m3Icon(Icons.Filled.Stop),
                         contentDescription = stringResource(R.string.subagent_stop_desc, member.title),
                         tint = Color(0xFFFF3B30),
                     )

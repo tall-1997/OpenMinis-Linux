@@ -192,7 +192,7 @@ fun FilePreviewScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
+                        Icon(m3Icon(Icons.AutoMirrored.Filled.ArrowBack), contentDescription = stringResource(R.string.common_back))
                     }
                 },
                 actions = {
@@ -210,7 +210,7 @@ fun FilePreviewScreen(
                         item.isJsonFile || item.isCsvFile
                     ) {
                         IconButton(onClick = { printFile(context, item) }) {
-                            Icon(Icons.Default.Print, contentDescription = stringResource(R.string.action_print))
+                            Icon(m3Icon(Icons.Default.Print), contentDescription = stringResource(R.string.action_print))
                         }
                     }
                     if (item.isImageFile) {
@@ -300,7 +300,7 @@ private fun ImagePreview(item: FileItem) {
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
-                        Icons.AutoMirrored.Filled.InsertDriveFile,
+                        m3Icon(Icons.AutoMirrored.Filled.InsertDriveFile),
                         contentDescription = null,
                         modifier = Modifier.size(48.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -600,7 +600,7 @@ internal fun PdfOpenExternalFallback(item: FileItem, reason: String) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Icon(
-                Icons.AutoMirrored.Filled.InsertDriveFile,
+                m3Icon(Icons.AutoMirrored.Filled.InsertDriveFile),
                 contentDescription = null,
                 modifier = Modifier.size(64.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -881,7 +881,7 @@ private fun ApkPreview(item: FileItem) {
                 )
             } else {
                 Icon(
-                    Icons.Default.Android,
+                    m3Icon(Icons.Default.Android),
                     contentDescription = null,
                     modifier = Modifier.size(72.dp),
                     tint = MaterialTheme.colorScheme.primary,
@@ -1055,7 +1055,7 @@ private fun OfficeOpenExternal(item: FileItem) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Icon(
-                Icons.AutoMirrored.Filled.InsertDriveFile,
+                m3Icon(Icons.AutoMirrored.Filled.InsertDriveFile),
                 contentDescription = null,
                 modifier = Modifier.size(64.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1121,7 +1121,7 @@ private fun FileInfoView(item: FileItem) {
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(
-                    Icons.AutoMirrored.Filled.InsertDriveFile,
+                    m3Icon(Icons.AutoMirrored.Filled.InsertDriveFile),
                     contentDescription = null,
                     modifier = Modifier.size(48.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,

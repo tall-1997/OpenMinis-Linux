@@ -66,6 +66,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CoroutineScope
 import androidx.compose.runtime.rememberCoroutineScope
+import com.openminis.app.ui.theme.m3Icon
 
 private const val TAG = "QuickTest"
 
@@ -189,7 +190,7 @@ fun QuickTestSheet(
                     enabled = !isRunning,
                 ) {
                     Icon(
-                        Icons.Filled.Refresh,
+                        m3Icon(Icons.Filled.Refresh),
                         contentDescription = stringResource(R.string.quicktest_run_again),
                     )
                 }
@@ -212,7 +213,7 @@ fun QuickTestSheet(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        Icons.Outlined.Bolt,
+                        m3Icon(Icons.Outlined.Bolt),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp),
@@ -282,14 +283,14 @@ private fun StatusBadge(run: QuickTestRun) {
             strokeWidth = 2.dp,
         )
         is QuickTestState.Failure -> Icon(
-            Icons.Filled.Cancel,
+            m3Icon(Icons.Filled.Cancel),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.error,
             modifier = Modifier.size(18.dp),
         )
         else -> Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
-                Icons.Filled.CheckCircle,
+                m3Icon(Icons.Filled.CheckCircle),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(18.dp),
@@ -411,7 +412,7 @@ private fun AudioReplyContent(data: ByteArray) {
             enabled = file != null,
         ) {
             Icon(
-                if (isPlaying) Icons.Outlined.GraphicEq else Icons.Filled.PlayArrow,
+                if (isPlaying) m3Icon(Icons.Outlined.GraphicEq) else m3Icon(Icons.Filled.PlayArrow),
                 contentDescription = stringResource(
                     if (isPlaying) R.string.quicktest_audio_play else R.string.quicktest_audio_replay,
                 ),

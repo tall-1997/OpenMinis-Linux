@@ -45,10 +45,10 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
 import java.io.File
+import com.openminis.app.ui.theme.m3Icon
 
 // ─── MinisTextKit hook ────────────────────────────────────────────────────────
-// Each markdown fragment renders inside a [MarkdownBlock] / [RenderBlock]
-// scope that provides a [TextShardId] via [LocalShardId]. [MdText] reads it,
+// Each markdown fragment renders inside a [MarkdownBlock] / [RenderBlock] scope that provides a [TextShardId] via [LocalShardId]. [MdText] reads it,
 // registers a [TextShard] with the ambient [SelectionController] (if any),
 // and draws the selection highlight inside its existing drawBehind. The
 // indirection lets MdText stay markdown-agnostic — paragraph, heading,
@@ -929,7 +929,7 @@ internal fun BrokenImagePlaceholder(alt: String?) {
             modifier = Modifier.padding(12.dp),
         ) {
             Icon(
-                imageVector = Icons.Outlined.BrokenImage,
+                imageVector = m3Icon(Icons.Outlined.BrokenImage),
                 contentDescription = null,
                 modifier = Modifier.size(28.dp),
                 tint = palette.secondaryText,

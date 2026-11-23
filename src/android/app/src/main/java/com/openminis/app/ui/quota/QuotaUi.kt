@@ -72,6 +72,7 @@ import java.math.BigDecimal
 import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
+import com.openminis.app.ui.theme.m3Icon
 
 // [T-provider-quota] Shared quota visuals: the provider page section, the
 // detail sheet and (stage 2) the picker pills all draw pools through these, so
@@ -586,7 +587,7 @@ fun QuotaConsoleLinkRow(url: String, onOpen: () -> Unit, modifier: Modifier = Mo
             )
         }
         Icon(
-            Icons.AutoMirrored.Filled.OpenInNew,
+            m3Icon(Icons.AutoMirrored.Filled.OpenInNew),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
             modifier = Modifier.size(16.dp),

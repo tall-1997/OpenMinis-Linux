@@ -37,6 +37,7 @@ import com.openminis.app.R
 import com.openminis.app.automation.AutomationRunEntity
 import com.openminis.app.ui.components.MinisCenterTopBar
 import com.openminis.app.util.IsoTime
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-android-automation-rules] Per-rule run records, newest first — same
@@ -72,7 +73,7 @@ fun AutomationRuleRunsScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
+                            m3Icon(Icons.AutoMirrored.Filled.ArrowBack),
                             contentDescription = stringResource(R.string.back),
                         )
                     }

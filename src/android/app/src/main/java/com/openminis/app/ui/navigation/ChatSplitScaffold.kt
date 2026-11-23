@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.window.core.layout.WindowSizeClass
 import com.openminis.app.R
 import java.util.UUID
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-android-tablet-split-resizable] Default list-pane share of the window,
@@ -175,8 +176,7 @@ private const val KEY_LIST_COLLAPSED = "tablet_list_pane_collapsed"
 @Composable
 private fun shouldUseTwoPane(): Boolean {
     val windowSizeClass = currentWindowAdaptiveInfo().windowSizeClass
-    // Breakpoint predicates rather than the WindowWidthSizeClass/
-    // WindowHeightSizeClass enums: those are deprecated ("will not be developed
+    // Breakpoint predicates rather than the WindowWidthSizeClass/WindowHeightSizeClass enums: those are deprecated ("will not be developed
     // further"), and the predicate form states the rule directly — width is at
     // least EXPANDED (840dp), height is at least MEDIUM (480dp, i.e. NOT
     // compact) — instead of comparing against enum constants.
@@ -737,7 +737,7 @@ private fun NoConversationSelected(
                 Icon(
                     // Same square glyph as the chat's own toggle — see the note
                     // at ChatScreen's navigationIcon for why not `List`.
-                    Icons.Filled.Menu,
+                    m3Icon(Icons.Filled.Menu),
                     contentDescription = stringResource(
                         if (sidebarCollapsed) {
                             R.string.chat_show_sidebar

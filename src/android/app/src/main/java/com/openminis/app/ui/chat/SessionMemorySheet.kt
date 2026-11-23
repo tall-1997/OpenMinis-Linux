@@ -120,7 +120,7 @@ fun SessionMemorySheet(
                     }
                 }) {
                     Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        imageVector = m3Icon(Icons.AutoMirrored.Filled.ArrowBack),
                         contentDescription = stringResource(R.string.memory_action_back),
                     )
                 }
@@ -288,7 +288,7 @@ private fun DetailToolbar(
         if (showRevoke) {
             IconButton(onClick = onRevoke) {
                 Icon(
-                    Icons.AutoMirrored.Filled.Undo,
+                    m3Icon(Icons.AutoMirrored.Filled.Undo),
                     contentDescription = stringResource(R.string.memory_action_revoke),
                     tint = MaterialTheme.colorScheme.error,
                 )

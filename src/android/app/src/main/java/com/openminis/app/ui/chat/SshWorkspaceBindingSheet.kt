@@ -37,6 +37,7 @@ import com.openminis.app.ui.theme.ChatColors
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-ssh-workspace] (#32) Per-session "SSH workspace" binding sheet.
@@ -108,7 +109,7 @@ internal fun SshWorkspaceBindingSheet(
 
             // Local sandbox option — unbinds.
             BindingOptionRow(
-                icon = { Icon(Icons.Default.Laptop, contentDescription = null) },
+                icon = { Icon(m3Icon(Icons.Default.Laptop), contentDescription = null) },
                 title = stringResource(R.string.ssh_workspace_option_local),
                 subtitle = stringResource(R.string.ssh_workspace_option_local_subtitle),
                 selected = boundHostId == null,
@@ -120,7 +121,7 @@ internal fun SshWorkspaceBindingSheet(
             // One row per configured host.
             hosts.forEach { host ->
                 BindingOptionRow(
-                    icon = { Icon(Icons.Default.Dns, contentDescription = null) },
+                    icon = { Icon(m3Icon(Icons.Default.Dns), contentDescription = null) },
                     title = host.name,
                     subtitle = host.label,
                     selected = boundHostId == host.id,

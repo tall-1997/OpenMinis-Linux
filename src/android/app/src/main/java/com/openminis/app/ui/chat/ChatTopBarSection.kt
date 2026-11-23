@@ -296,7 +296,7 @@ internal fun ChatTopBarTitle(
                                                     .background(Color(0xFFFF9500), CircleShape),
                                             ) {
                                                 Icon(
-                                                    Icons.Default.Bolt,
+                                                    m3Icon(Icons.Default.Bolt),
                                                     contentDescription = null,
                                                     tint = Color.White,
                                                     modifier = Modifier.size(9.dp),
@@ -390,7 +390,7 @@ internal fun ChatTopBarActions(
                     // iOS: "..." circle button → dropdown menu
                     Box {
                         IconButton(onClick = { showChatMenu.value = true }) {
-                            Icon(Icons.Outlined.MoreHoriz, contentDescription = stringResource(R.string.cd_more))
+                            Icon(m3Icon(Icons.Outlined.MoreHoriz), contentDescription = stringResource(R.string.cd_more))
                         }
                         MinisMenu(
                             expanded = showChatMenu.value,
@@ -471,16 +471,16 @@ internal fun ChatTopBarActions(
                                 leadingIcon = {
                                     Icon(
                                         when (sessionPerm) {
-                                            SessionPermissionMode.ASK_BEFORE_CHANGES -> Icons.Filled.Shield
-                                            SessionPermissionMode.AUTONOMOUS -> Icons.Filled.Psychology
-                                            SessionPermissionMode.FULL_ACCESS -> Icons.Filled.Bolt
+                                            SessionPermissionMode.ASK_BEFORE_CHANGES -> m3Icon(Icons.Filled.Shield)
+                                            SessionPermissionMode.AUTONOMOUS -> m3Icon(Icons.Filled.Psychology)
+                                            SessionPermissionMode.FULL_ACCESS -> m3Icon(Icons.Filled.Bolt)
                                         },
                                         contentDescription = null,
                                     )
                                 },
                                 trailingIcon = {
                                     // Tap advances to the next tier, wrapping.
-                                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                                    Icon(m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight), contentDescription = null)
                                 },
                             )
                             if (fullAccessArmed) {
@@ -494,7 +494,7 @@ internal fun ChatTopBarActions(
                                         )
                                     },
                                     onClick = {},
-                                    leadingIcon = { Icon(Icons.Filled.Bolt, contentDescription = null) },
+                                    leadingIcon = { Icon(m3Icon(Icons.Filled.Bolt), contentDescription = null) },
                                 )
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.perm_full_access_confirm)) },
@@ -503,7 +503,7 @@ internal fun ChatTopBarActions(
                                         showChatMenu.value = false
                                         viewModel.setSessionPermissionMode(SessionPermissionMode.FULL_ACCESS)
                                     },
-                                    leadingIcon = { Icon(Icons.Filled.Check, contentDescription = null) },
+                                    leadingIcon = { Icon(m3Icon(Icons.Filled.Check), contentDescription = null) },
                                 )
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.common_cancel)) },
@@ -514,7 +514,7 @@ val groupChatOn by viewModel.groupChatEnabled.collectAsStateWithLifecycle()
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.chat_menu_group_chat)) },
                                 onClick = { viewModel.setGroupChatEnabled(!groupChatOn) },
-                                leadingIcon = { Icon(Icons.Default.Forum, contentDescription = null) },
+                                leadingIcon = { Icon(m3Icon(Icons.Default.Forum), contentDescription = null) },
                                 trailingIcon = {
                                     // The row already toggles. A live switch here
                                     // also consumes the tap and flips the flag
@@ -538,7 +538,7 @@ val groupChatOn by viewModel.groupChatEnabled.collectAsStateWithLifecycle()
                                         showChatMenu.value = false
                                         onShowRestoreDialog()
                                     },
-                                    leadingIcon = { Icon(Icons.Default.Restore, contentDescription = null) },
+                                    leadingIcon = { Icon(m3Icon(Icons.Default.Restore), contentDescription = null) },
                                 )
                             }
                             // [P0-6] 工具段：会话内的扩展面。
@@ -552,7 +552,7 @@ val groupChatOn by viewModel.groupChatEnabled.collectAsStateWithLifecycle()
                                     onOpenGitPanel()
                                 },
                                 leadingIcon = {
-                                    Icon(Icons.Default.MergeType, contentDescription = null)
+                                    Icon(m3Icon(Icons.Default.MergeType), contentDescription = null)
                                 },
                             )
                             // Session Skills (iOS parity)
@@ -577,7 +577,7 @@ val groupChatOn by viewModel.groupChatEnabled.collectAsStateWithLifecycle()
                                         onShowMcpsSheet()
                                     },
                                     leadingIcon = {
-                                        Icon(Icons.Default.Extension, contentDescription = null)
+                                        Icon(m3Icon(Icons.Default.Extension), contentDescription = null)
                                     },
                                 )
                             }
@@ -657,7 +657,7 @@ val groupChatOn by viewModel.groupChatEnabled.collectAsStateWithLifecycle()
                                         }
                                     },
                                     leadingIcon = {
-                                        Icon(Icons.Default.Bolt, contentDescription = null)
+                                        Icon(m3Icon(Icons.Default.Bolt), contentDescription = null)
                                     },
                                     trailingIcon = {
                                         SettingsSwitch(
@@ -693,7 +693,7 @@ val groupChatOn by viewModel.groupChatEnabled.collectAsStateWithLifecycle()
                                     text = { Text(stringResource(R.string.chat_menu_fast_mode)) },
                                     onClick = { viewModel.setFastModeEnabled(!fastModeOn) },
                                     leadingIcon = {
-                                        Icon(Icons.Default.Bolt, contentDescription = null)
+                                        Icon(m3Icon(Icons.Default.Bolt), contentDescription = null)
                                     },
                                     trailingIcon = {
                                         SettingsSwitch(
@@ -714,7 +714,7 @@ val groupChatOn by viewModel.groupChatEnabled.collectAsStateWithLifecycle()
                                 text = { Text(stringResource(R.string.chat_menu_auto_compact)) },
                                 onClick = { viewModel.setAutoCompactEnabled(!autoCompactOn) },
                                 leadingIcon = {
-                                    Icon(Icons.Default.Compress, contentDescription = null)
+                                    Icon(m3Icon(Icons.Default.Compress), contentDescription = null)
                                 },
                                 trailingIcon = {
                                     SettingsSwitch(
@@ -745,7 +745,7 @@ val groupChatOn by viewModel.groupChatEnabled.collectAsStateWithLifecycle()
                                     },
                                     leadingIcon = {
                                         Icon(
-                                            Icons.Default.BugReport,
+                                            m3Icon(Icons.Default.BugReport),
                                             contentDescription = null,
                                             tint = MaterialTheme.colorScheme.error,
                                         )

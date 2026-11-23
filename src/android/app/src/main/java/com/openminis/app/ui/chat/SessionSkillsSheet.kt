@@ -36,6 +36,7 @@ import com.openminis.app.ui.components.DialogTextField
 import com.openminis.app.ui.settings.SettingsSection
 import com.openminis.app.ui.settings.SkillRowItem
 import com.openminis.app.ui.components.MinisTextButton
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * Bottom sheet showing all skills with per-session enable/disable toggles.
@@ -211,7 +212,7 @@ private fun EmptySkillsCard() {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Icon(
-                Icons.Outlined.Description,
+                m3Icon(Icons.Outlined.Description),
                 contentDescription = null,
                 modifier = Modifier.size(36.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),

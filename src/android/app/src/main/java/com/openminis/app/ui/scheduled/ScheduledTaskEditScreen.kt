@@ -60,6 +60,7 @@ import com.openminis.app.scheduled.ScheduledTargetMode
 import com.openminis.app.scheduled.ScheduledTask
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-android-scheduled-tasks-design / T-android-scheduled-tasks-full]
@@ -253,7 +254,7 @@ fun ScheduledTaskEditScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
+                            m3Icon(Icons.AutoMirrored.Filled.ArrowBack),
                             contentDescription = stringResource(R.string.back),
                         )
                     }
@@ -633,7 +634,7 @@ private fun EditFormBody(
         HorizontalDivider()
 
         MinisOutlinedButton(onClick = onRunNow, enabled = canRunNow, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+            Icon(m3Icon(Icons.Filled.PlayArrow), contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Text(stringResource(R.string.scheduled_task_run_now))
         }

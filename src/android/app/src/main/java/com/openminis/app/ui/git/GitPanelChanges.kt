@@ -36,6 +36,7 @@ import com.openminis.app.R
 import com.openminis.app.git.GitCli.GitFileEntry
 import com.openminis.app.git.GitCli.GitStashEntry
 import com.openminis.app.git.GitCli.NumStat
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * Changes tab: stats bar, staged/working sections and per-file rows with
@@ -135,7 +136,7 @@ private fun StashRowView(stash: GitStashEntry) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            Icons.Filled.Bookmark,
+            m3Icon(Icons.Filled.Bookmark),
             contentDescription = null,
             tint = GitHunkBlue,
             modifier = Modifier.size(14.dp),

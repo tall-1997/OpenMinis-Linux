@@ -46,7 +46,6 @@ import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FormatSize
 import androidx.compose.material.icons.outlined.Mic
-import androidx.compose.material.icons.outlined.Translate
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Keyboard
@@ -86,6 +85,7 @@ import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
 import kotlin.math.roundToInt
+import com.openminis.app.ui.theme.m3Icon
 
 const val KEY_THEME_MODE = "theme_mode"            // 0=System, 1=Light, 2=Dark
 const val KEY_LAUNCH_SESSION = "launch_session"    // 0=Auto, 1=LastSession, 2=NewChat, 3=Home
@@ -364,7 +364,7 @@ fun AppearanceScreen(
                     },
                     leading = {
                         androidx.compose.material3.Icon(
-                            m3Icon(if (idx == 0) Icons.AutoMirrored.Outlined.KeyboardReturn else Icons.AutoMirrored.Outlined.Send),
+                            m3Icon(if (idx == 0) m3Icon(Icons.AutoMirrored.Outlined.KeyboardReturn) else m3Icon(Icons.AutoMirrored.Outlined.Send)),
                             contentDescription = null,
                             tint = monetIconTint(if (idx == 0) tilePurple else tileGreen), // [T-android-dynamic-accent-icons]
                         )

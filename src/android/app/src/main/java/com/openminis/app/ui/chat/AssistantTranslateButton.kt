@@ -33,6 +33,7 @@ import com.openminis.app.i18n.TranslationRunner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlin.math.ceil
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * Last-ink report for [TranslateCorner]. Only the highest token from the
@@ -229,7 +230,7 @@ fun AssistantTranslateButton(
                 modifier = Modifier.size(32.dp),
             ) {
                 Icon(
-                    Icons.Filled.Language,
+                    m3Icon(Icons.Filled.Language),
                     contentDescription = stringResource(R.string.translate_action),
                     modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,

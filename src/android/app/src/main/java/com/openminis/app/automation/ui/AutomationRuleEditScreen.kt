@@ -49,6 +49,7 @@ import com.openminis.app.ui.settings.SettingsSwitch
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlinx.coroutines.launch
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-android-automation-rules] Rule editor. Trigger-type selection with the
@@ -176,7 +177,7 @@ fun AutomationRuleEditScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
+                            m3Icon(Icons.AutoMirrored.Filled.ArrowBack),
                             contentDescription = stringResource(R.string.back),
                         )
                     }

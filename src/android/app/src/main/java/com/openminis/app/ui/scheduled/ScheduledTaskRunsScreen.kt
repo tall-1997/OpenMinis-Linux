@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import com.openminis.app.R
 import com.openminis.app.scheduled.ScheduledRun
 import com.openminis.app.util.IsoTime
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-android-scheduled-tasks-run-records] Execution log for one scheduled
@@ -87,7 +88,7 @@ fun ScheduledTaskRunsScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
+                            m3Icon(Icons.AutoMirrored.Filled.ArrowBack),
                             contentDescription = stringResource(R.string.back),
                         )
                     }
@@ -131,7 +132,7 @@ private fun RunRow(run: ScheduledRun, onOpenSession: (String) -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = if (run.ok) Icons.Filled.CheckCircle else Icons.Filled.Error,
+            imageVector = if (run.ok) m3Icon(Icons.Filled.CheckCircle) else m3Icon(Icons.Filled.Error),
             contentDescription = null,
             tint = if (run.ok) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
             modifier = Modifier.size(20.dp),
@@ -157,7 +158,7 @@ private fun RunRow(run: ScheduledRun, onOpenSession: (String) -> Unit) {
         if (tappable) {
             Spacer(Modifier.width(8.dp))
             Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
                 contentDescription = stringResource(R.string.scheduled_task_runs_open_session),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp),

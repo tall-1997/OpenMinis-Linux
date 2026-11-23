@@ -124,7 +124,7 @@ internal fun AttachmentChip(
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Icon(
-                        Icons.AutoMirrored.Filled.InsertDriveFile,
+                        m3Icon(Icons.AutoMirrored.Filled.InsertDriveFile),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp),
@@ -227,7 +227,7 @@ internal fun MicButton(
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            if (isVoiceActive) Icons.Default.Keyboard else Icons.Default.Mic,
+            if (isVoiceActive) m3Icon(Icons.Default.Keyboard) else m3Icon(Icons.Default.Mic),
             contentDescription = if (isVoiceActive) "Switch to keyboard"
             else if (isRecording) "Stop recording" else "Voice input",
             tint = tint,
@@ -355,7 +355,7 @@ internal fun ToolActivityPill(
         }
         if (isRunning && onStop != null) {
             Icon(
-                Icons.Default.Stop,
+                m3Icon(Icons.Default.Stop),
                 contentDescription = stringResource(R.string.cd_stop),
                 tint = Color(0xFFFF3B30),
                 modifier = Modifier

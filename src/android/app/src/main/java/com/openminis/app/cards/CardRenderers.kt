@@ -58,6 +58,7 @@ import com.openminis.app.util.Format
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [G-batch tool result cards] Compose renderers for the derived cards.
@@ -239,7 +240,7 @@ private fun FileCardBody(card: ToolCard.FileCard) {
     Spacer(Modifier.height(2.dp))
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
-            Icons.Default.InsertDriveFile,
+            m3Icon(Icons.Default.InsertDriveFile),
             contentDescription = null,
             tint = ChatColors.secondaryText,
             modifier = Modifier.size(14.dp),
@@ -279,7 +280,7 @@ private fun FileCardBody(card: ToolCard.FileCard) {
 private fun EventCardBody(card: ToolCard.EventCard) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
-            Icons.Default.Schedule,
+            m3Icon(Icons.Default.Schedule),
             contentDescription = null,
             tint = ChatColors.link,
             modifier = Modifier.size(14.dp),
@@ -503,7 +504,7 @@ private fun CardActionButton(
 private fun FileMetaRow(name: String, sub: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
-            Icons.Default.InsertDriveFile,
+            m3Icon(Icons.Default.InsertDriveFile),
             contentDescription = null,
             tint = ChatColors.secondaryText,
             modifier = Modifier.size(14.dp),
