@@ -69,6 +69,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.io.File
 import kotlin.math.roundToInt
+import androidx.compose.ui.res.stringResource
+import com.openminis.app.R
 
 /**
  * Inline audio player composable for embedding in chat messages.
