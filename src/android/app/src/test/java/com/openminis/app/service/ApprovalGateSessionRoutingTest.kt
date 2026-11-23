@@ -2,6 +2,7 @@ package com.openminis.app.service
 
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -39,8 +40,10 @@ class ApprovalGateSessionRoutingTest {
         assertEquals("session-1", ApprovalGate.detailOf(id)?.sessionId)
 
         val waiter = async { ApprovalGate.waitFor(id, "session-1") }
-        // The state flow keeps the resolved value, so approving before the
-        // waiter subscribes still wakes it — no sleep needed.
+        // Let the waiter reach its suspension point first: waitFor looks the
+        // pending channel up by id, and approve() removes that entry, so a
+        // pre-subscription approve would log "no pending channel" and hang.
+        yield()
         ApprovalGate.approve(id, "session-1")
         assertTrue("approve on the filed session must wake the waiter", waiter.await())
         assertNull(ApprovalGate.detailOf(id))
