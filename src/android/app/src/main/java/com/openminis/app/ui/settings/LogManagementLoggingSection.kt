@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.List
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import com.openminis.app.R
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-logcat-panel] The "Logging" card of the logs screen: the on/off recording
@@ -36,7 +37,7 @@ internal fun LoggingSection(
         SettingsRow(
             title = stringResource(R.string.logcat_panel_entry),
             subtitle = stringResource(R.string.logcat_panel_entry_sub),
-            icon = Icons.Default.List,
+            icon = m3Icon(Icons.Default.List),
             onClick = onOpenLogcat,
             showDivider = false,
         )

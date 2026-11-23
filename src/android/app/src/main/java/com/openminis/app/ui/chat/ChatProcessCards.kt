@@ -420,7 +420,7 @@ private fun ProcessStepRow(step: ProcessStepRef, onOpen: () -> Unit) {
                 imageVector = if (isThinking) {
                     if (stepExpanded) m3Icon(Icons.Default.KeyboardArrowUp) else m3Icon(Icons.Default.KeyboardArrowDown)
                 } else {
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight
+                    m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight)
                 },
                 contentDescription = null,
                 tint = if (isThinking) thinkingBlue.copy(alpha = 0.5f) else muted,

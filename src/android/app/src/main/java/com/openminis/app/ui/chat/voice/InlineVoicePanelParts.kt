@@ -155,7 +155,7 @@ internal fun MicCircleButton(
                 modifier = Modifier.size(22.dp),
             )
             else -> Icon(
-                Icons.Default.Mic,
+                m3Icon(Icons.Default.Mic),
                 contentDescription = stringResource(R.string.voice_panel_toggle_recording),
                 tint = Color.Black,
                 modifier = Modifier.size(26.dp),
@@ -277,7 +277,7 @@ internal fun VoiceDeleteButton(onDeleteOne: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            Icons.AutoMirrored.Filled.Backspace,
+            m3Icon(Icons.AutoMirrored.Filled.Backspace),
             contentDescription = stringResource(R.string.voice_panel_delete),
             tint = ChatColors.secondaryText,
             modifier = Modifier.size(21.dp),

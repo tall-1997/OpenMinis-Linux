@@ -34,6 +34,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 import com.openminis.app.service.SubAgentActivityTracker
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-wave-e-stop-options] Two-tier stop for the composer's stop button.
@@ -109,7 +110,7 @@ internal fun StopButtonWithOptions(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                Icons.Default.Stop,
+                m3Icon(Icons.Default.Stop),
                 contentDescription = stringResource(R.string.cd_stop),
                 tint = Color.White,
                 modifier = Modifier.size(20.dp),

@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import com.openminis.app.R
 import com.openminis.app.ui.theme.ChatColors
 import com.openminis.app.ui.theme.decorPulse
+import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.tokens.MinisTypography
 
 // [T-android-split-chat] Self-contained "thinking / streaming" dot indicators
@@ -104,7 +105,7 @@ internal fun CompactProgressIndicator(
                 .size(18.dp)
                 .scale(scale)
                 .alpha(alpha),
-            imageVector = Icons.Default.HourglassEmpty,
+            imageVector = m3Icon(Icons.Default.HourglassEmpty),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
         )

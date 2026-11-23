@@ -29,6 +29,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
+import com.openminis.app.ui.theme.m3Icon
 
 /** Full-screen diff overlay shared by working-tree and commit file diffs. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -41,7 +42,7 @@ internal fun DiffOverlay(diff: GitDiffView, onClose: () -> Unit) {
                 navigationIcon = {
                     IconButton(onClick = onClose) {
                         Icon(
-                            Icons.Filled.Close,
+                            m3Icon(Icons.Filled.Close),
                             contentDescription = stringResource(R.string.git_panel_close_diff),
                         )
                     }

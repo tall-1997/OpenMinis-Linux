@@ -3390,4 +3390,24 @@
  <string name="perm_full_access_confirm">Włącz</string>
  <string name="perm_guarded_risk_reason">Potwierdź ryzykowne polecenie</string>
  <string name="perm_guarded_risk_message">Tryb autonomiczny uznał to polecenie za ryzykowne. Potwierdź raz, aby je uruchomić.</string>
+ <!-- Sub-agent phase & tool labels -->
+ <string name="subagent_phase_thinking">Myślenie…</string>
+ <string name="subagent_phase_calling">Wywoływanie narzędzia…</string>
+ <string name="subagent_phase_running">Wykonywanie…</string>
+ <string name="subagent_phase_replying">Odpowiadanie…</string>
+ <string name="subagent_tool_shell">Uruchom polecenie</string>
+ <string name="subagent_tool_read">Odczytaj plik</string>
+ <string name="subagent_tool_write">Zapisz plik</string>
+ <string name="subagent_tool_edit">Edytuj plik</string>
+ <string name="subagent_tool_grep">Szukaj w kodzie</string>
+ <string name="subagent_tool_web_search">Wyszukiwanie w sieci</string>
+ <string name="subagent_tool_web_fetch">Pobierz stronę</string>
+ <string name="subagent_tool_browser">Przeglądarka</string>
+ <string name="subagent_tool_memory">Pamięć</string>
+ <string name="subagent_tool_spawn">Subagent</string>
+    <!-- Tool detail sheet labels -->
+    <string name="tool_detail_title">Minis Computer</string>
+    <string name="tool_detail_open_full_output">Otwórz pełne wyjście</string>
+    <string name="tool_detail_open_in_terminal">Otwórz w terminalu</string>
+    <string name="tool_detail_open_in_session_browser">Otwórz w przeglądarce sesji</string>
 </resources>

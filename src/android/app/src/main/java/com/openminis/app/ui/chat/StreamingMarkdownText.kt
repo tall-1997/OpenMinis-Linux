@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.sandbox.PRootKernel
+import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
@@ -221,8 +222,7 @@ internal val InlineCodeCornerRadius = 6.dp
 // more per parse pass, so amortize them by sampling less often. Crashes
 // observed on Pixel 6 traced to ICU `RegexPattern::matcher` allocations
 // piling up under Scudo (OOM at ~140s of streaming) — slowing parses on
-// large bodies cuts native allocation pressure dramatically.
-//
+// large bodies cuts native allocation pressure dramatically. 
 // [T-android-stream-flush-dualpath] Time-throttle tiers ported verbatim from
 // iOS AIChatViewModel+SSEStream (the `throttle` ladder): the time path is one
 // half of the dual-path flush — the other half is the newline fast-path below.
@@ -929,7 +929,7 @@ internal fun BrokenImagePlaceholder(alt: String?) {
             modifier = Modifier.padding(12.dp),
         ) {
             Icon(
-                imageVector = Icons.Outlined.BrokenImage,
+                imageVector = m3Icon(Icons.Outlined.BrokenImage),
                 contentDescription = null,
                 modifier = Modifier.size(28.dp),
                 tint = palette.secondaryText,

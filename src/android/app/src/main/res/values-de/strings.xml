@@ -3231,4 +3231,19 @@
  <string name="perm_full_access_confirm">Aktivieren</string>
  <string name="perm_guarded_risk_reason">Riskanten Befehl bestätigen</string>
  <string name="perm_guarded_risk_message">Der autonome Modus stuft diesen Befehl als riskant ein. Einmal bestätigen, um ihn auszuführen.</string>
+ <!-- Sub-agent phase & tool labels -->
+ <string name="subagent_phase_thinking">Denkt…</string>
+ <string name="subagent_phase_calling">Ruft Tool auf…</string>
+ <string name="subagent_phase_running">Läuft…</string>
+ <string name="subagent_phase_replying">Antwortet…</string>
+ <string name="subagent_tool_shell">Befehl ausführen</string>
+ <string name="subagent_tool_read">Datei lesen</string>
+ <string name="subagent_tool_write">Datei schreiben</string>
+ <string name="subagent_tool_edit">Datei bearbeiten</string>
+ <string name="subagent_tool_grep">Code durchsuchen</string>
+ <string name="subagent_tool_web_search">Websuche</string>
+ <string name="subagent_tool_web_fetch">Seite abrufen</string>
+ <string name="subagent_tool_browser">Browser</string>
+ <string name="subagent_tool_memory">Gedächtnis</string>
+ <string name="subagent_tool_spawn">Sub-Agent</string>
 </resources>

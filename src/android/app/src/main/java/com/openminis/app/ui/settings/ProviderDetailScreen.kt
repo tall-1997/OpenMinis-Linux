@@ -2,6 +2,7 @@ package com.openminis.app.ui.settings
 import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.theme.IosGreen
 import com.openminis.app.ui.theme.IosRed
+import com.openminis.app.ui.theme.monetIconTileColor
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import com.openminis.app.ui.chat.ModelBrandIcon
@@ -360,8 +361,7 @@ fun ProviderDetailScreen(
         ProviderHeaderSection(instance.id)
 
         // ─── OpenCode session header [GH#347] ───────────────────────
-        // 只有自定义 base 才有意义：官方端点按 host 自动带，无需开关；
-        // 默认关闭，用户显式信任该网关后才发稳定会话 ID。
+        // 只有自定义 base 才有意义：官方端点按 host 自动带，无需开关； 默认关闭，用户显式信任该网关后才发稳定会话 ID。
         OpenCodeSessionSection(instance.id, instance.customBaseURL)
 
         // ─── API Format (OpenAI API-key only) ───────────────────────
@@ -697,8 +697,8 @@ fun ProviderDetailScreen(
                             },
                             leadingIcon = {
                                 Icon(
-                                    if (entry.isHidden) Icons.Filled.Visibility
-                                    else Icons.Filled.VisibilityOff,
+                                    m3Icon(if (entry.isHidden) Icons.Filled.Visibility
+                                    else Icons.Filled.VisibilityOff),
                                     contentDescription = null,
                                 )
                             },
@@ -853,7 +853,7 @@ private fun ApiKeyCredentialBlock(
             trailingIcon = {
                 IconButton(onClick = onToggleVisibility) {
                     Icon(
-                        if (keyVisible) m3Icon(m3Icon(Icons.Default.VisibilityOff)) else m3Icon(m3Icon(Icons.Default.Visibility)),
+                        if (keyVisible) m3Icon(Icons.Default.VisibilityOff) else m3Icon(Icons.Default.Visibility),
                         contentDescription = if (keyVisible) stringResource(R.string.a11y_hide) else stringResource(R.string.a11y_show),
                     )
                 }
@@ -895,7 +895,7 @@ private fun ApiKeyCredentialBlock(
             )
             IconButton(onClick = onToggleVisibility) {
                 Icon(
-                    if (keyVisible) m3Icon(m3Icon(Icons.Default.VisibilityOff)) else m3Icon(m3Icon(Icons.Default.Visibility)),
+                    if (keyVisible) m3Icon(Icons.Default.VisibilityOff) else m3Icon(Icons.Default.Visibility),
                     contentDescription = if (keyVisible) stringResource(R.string.a11y_hide) else stringResource(R.string.a11y_show),
                 )
             }
@@ -987,7 +987,7 @@ private fun ManualBearerTokenSection(
                 modifier = Modifier
                     .padding(horizontal = 8.dp)
                     .size(8.dp)
-                    .background(IosGreen, CircleShape),
+                    .background(monetIconTileColor(IosGreen), CircleShape),
             )
         }
         Row(modifier = Modifier.padding(top = 8.dp)) {

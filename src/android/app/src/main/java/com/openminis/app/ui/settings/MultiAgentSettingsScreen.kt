@@ -38,6 +38,7 @@ import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.data.repository.MultiAgentSettings
 import com.openminis.app.provider.effectiveMaxThinkingLevel
 import com.openminis.app.ui.chat.localizedName
+import com.openminis.app.ui.theme.m3Icon
 
 @Composable
 fun MultiAgentSettingsScreen(
@@ -86,7 +87,7 @@ fun MultiAgentSettingsScreen(
                 subtitle = stringResource(R.string.settings_multi_agent_enable_subtitle),
                 checked = enabled,
                 onCheckedChange = { repo.setEnabled(it) },
-                icon = Icons.Outlined.Groups,
+                icon = m3Icon(Icons.Outlined.Groups),
             )
             Row(
                 modifier = Modifier

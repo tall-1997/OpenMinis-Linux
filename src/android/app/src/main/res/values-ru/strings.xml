@@ -3391,4 +3391,24 @@
  <string name="perm_full_access_confirm">Включить</string>
  <string name="perm_guarded_risk_reason">Подтвердить рискованную команду</string>
  <string name="perm_guarded_risk_message">Автономный режим счёл эту команду рискованной. Подтвердите один раз, чтобы выполнить её.</string>
+ <!-- Sub-agent phase & tool labels -->
+ <string name="subagent_phase_thinking">Думает…</string>
+ <string name="subagent_phase_calling">Вызов инструмента…</string>
+ <string name="subagent_phase_running">Выполняется…</string>
+ <string name="subagent_phase_replying">Отвечает…</string>
+ <string name="subagent_tool_shell">Выполнить команду</string>
+ <string name="subagent_tool_read">Читать файл</string>
+ <string name="subagent_tool_write">Записать файл</string>
+ <string name="subagent_tool_edit">Редактировать файл</string>
+ <string name="subagent_tool_grep">Поиск по коду</string>
+ <string name="subagent_tool_web_search">Поиск в интернете</string>
+ <string name="subagent_tool_web_fetch">Загрузить страницу</string>
+ <string name="subagent_tool_browser">Браузер</string>
+ <string name="subagent_tool_memory">Память</string>
+ <string name="subagent_tool_spawn">Субагент</string>
+    <!-- Tool detail sheet labels -->
+    <string name="tool_detail_title">Minis Computer</string>
+    <string name="tool_detail_open_full_output">Открыть весь вывод</string>
+    <string name="tool_detail_open_in_terminal">Открыть в терминале</string>
+    <string name="tool_detail_open_in_session_browser">Открыть в браузере сеанса</string>
 </resources>

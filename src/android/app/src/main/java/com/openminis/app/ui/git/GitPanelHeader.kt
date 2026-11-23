@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * Repository head card, pinned above the tab row: branch pill, ↑↓
@@ -97,7 +98,7 @@ internal fun GitPanelHeader(
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        Icons.Filled.Link,
+                        m3Icon(Icons.Filled.Link),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(13.dp),
@@ -139,7 +140,7 @@ internal fun GitPanelHeader(
                         .padding(horizontal = 10.dp, vertical = 6.dp),
                 ) {
                     Icon(
-                        Icons.Filled.WarningAmber,
+                        m3Icon(Icons.Filled.WarningAmber),
                         contentDescription = null,
                         tint = Color(0xFFFF9500),
                         modifier = Modifier.size(14.dp),
@@ -179,7 +180,7 @@ private fun BranchPill(branch: String, onClick: () -> Unit) {
         )
         Spacer(Modifier.width(4.dp))
         Icon(
-            Icons.Filled.CallMerge,
+            m3Icon(Icons.Filled.CallMerge),
             contentDescription = stringResource(R.string.git_panel_switch_branch),
             tint = Color.White.copy(alpha = 0.85f),
             modifier = Modifier.size(11.dp),
@@ -297,7 +298,7 @@ internal fun BranchMenu(
                         // remote-tracking refs.
                         when {
                             branch.isCurrent -> Icon(
-                                Icons.Filled.CallMerge,
+                                m3Icon(Icons.Filled.CallMerge),
                                 contentDescription = null,
                                 tint = GitAddGreen,
                                 modifier = Modifier.size(14.dp),
@@ -311,7 +312,7 @@ internal fun BranchMenu(
                                 fontSize = 13.sp,
                             )
                             else -> Icon(
-                                Icons.Filled.CallSplit,
+                                m3Icon(Icons.Filled.CallSplit),
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(14.dp),
@@ -373,7 +374,7 @@ internal fun BranchMenu(
                     .padding(horizontal = 16.dp, vertical = 12.dp),
             ) {
                 Icon(
-                    Icons.Filled.Add,
+                    m3Icon(Icons.Filled.Add),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(16.dp),
@@ -434,7 +435,7 @@ private fun DivergenceBadge(up: Int, kind: String) {
             .padding(horizontal = 8.dp, vertical = 2.dp),
     ) {
         Icon(
-            if (kind == "up") Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
+            m3Icon(if (kind == "up") Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward),
             contentDescription = null,
             tint = if (kind == "up") GitAddGreen else GitDelRed,
             modifier = Modifier.size(12.dp),

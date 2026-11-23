@@ -234,7 +234,7 @@ fun StandardChatSheetHeader(
         if (onToggleExpand != null) {
             IconButton(onClick = onToggleExpand) {
                 Icon(
-                    imageVector = if (expanded) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen,
+                    imageVector = m3Icon(if (expanded) Icons.Outlined.FullscreenExit else Icons.Outlined.Fullscreen),
                     contentDescription = stringResource(
                         if (expanded) R.string.standard_sheet_collapse else R.string.standard_sheet_expand,
                     ),

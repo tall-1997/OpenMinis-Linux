@@ -41,6 +41,7 @@ import com.openminis.app.speech.SpeechRecognitionManager
 import com.openminis.app.speech.VoiceOutputState
 import com.openminis.app.ui.chat.ChatViewModel
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -429,7 +430,7 @@ private fun HandsFreeBar(
                 .padding(horizontal = 10.dp, vertical = 6.dp),
         ) {
             Icon(
-                Icons.Default.GraphicEq,
+                m3Icon(Icons.Default.GraphicEq),
                 contentDescription = null,
                 modifier = Modifier.size(14.dp),
                 tint = if (enabled) MaterialTheme.colorScheme.primary else ChatColors.secondaryText,

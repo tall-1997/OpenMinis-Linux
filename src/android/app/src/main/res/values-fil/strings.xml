@@ -3383,4 +3383,24 @@
  <string name="perm_full_access_confirm">I-enable</string>
  <string name="perm_guarded_risk_reason">Kumpirmahin ang delikadong utos</string>
  <string name="perm_guarded_risk_message">Itinuring ng autonomous mode na delikado ang utos na ito. Kumpirmahin isang beses para patakbuhin.</string>
+ <!-- Sub-agent phase & tool labels -->
+ <string name="subagent_phase_thinking">Nag-iisip…</string>
+ <string name="subagent_phase_calling">Tumatawag sa tool…</string>
+ <string name="subagent_phase_running">Tumatakbo…</string>
+ <string name="subagent_phase_replying">Sumasagot…</string>
+ <string name="subagent_tool_shell">Patakbuhin ang command</string>
+ <string name="subagent_tool_read">Basahin ang file</string>
+ <string name="subagent_tool_write">Isulat ang file</string>
+ <string name="subagent_tool_edit">I-edit ang file</string>
+ <string name="subagent_tool_grep">Maghanap sa code</string>
+ <string name="subagent_tool_web_search">Paghahanap sa web</string>
+ <string name="subagent_tool_web_fetch">Kunin ang pahina</string>
+ <string name="subagent_tool_browser">Browser</string>
+ <string name="subagent_tool_memory">Memorya</string>
+ <string name="subagent_tool_spawn">Sub-agent</string>
+    <!-- Tool detail sheet labels -->
+    <string name="tool_detail_title">Minis Computer</string>
+    <string name="tool_detail_open_full_output">Buksan ang buong output</string>
+    <string name="tool_detail_open_in_terminal">Buksan sa terminal</string>
+    <string name="tool_detail_open_in_session_browser">Buksan sa browser ng session</string>
 </resources>

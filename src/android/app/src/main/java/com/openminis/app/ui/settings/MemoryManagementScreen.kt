@@ -610,7 +610,7 @@ private fun AppNotesSection() {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
-                    imageVector = Icons.Outlined.Delete,
+                    imageVector = m3Icon(Icons.Outlined.Delete),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.size(20.dp),

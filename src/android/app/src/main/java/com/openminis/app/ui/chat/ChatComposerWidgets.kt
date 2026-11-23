@@ -125,7 +125,7 @@ internal fun AttachmentChip(
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Icon(
-                        Icons.AutoMirrored.Filled.InsertDriveFile,
+                        m3Icon(Icons.AutoMirrored.Filled.InsertDriveFile),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp),
@@ -228,7 +228,7 @@ internal fun MicButton(
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            if (isVoiceActive) Icons.Default.Keyboard else Icons.Default.Mic,
+            m3Icon(if (isVoiceActive) Icons.Default.Keyboard else Icons.Default.Mic),
             contentDescription = if (isVoiceActive) "Switch to keyboard"
             else if (isRecording) "Stop recording" else "Voice input",
             tint = tint,
@@ -356,7 +356,7 @@ internal fun ToolActivityPill(
         }
         if (isRunning && onStop != null) {
             Icon(
-                Icons.Default.Stop,
+                m3Icon(Icons.Default.Stop),
                 contentDescription = stringResource(R.string.cd_stop),
                 tint = Color(0xFFFF3B30),
                 modifier = Modifier
@@ -431,9 +431,11 @@ internal fun ThinkingLevelPicker(
                 isHighlighted -> ChatColors.thinking
                 else -> Color.Transparent
             }
-            // White text on both the blue and orange fills (readable in both
-            // themes); grey when unselected.
-            val fg = if (isHighlighted) Color.White else ChatColors.secondaryText
+            // [T-thinking-on] Selected-capsule text: White in both static
+            // themes, but the dynamic palette derives onPrimary — White on a
+            // dark-mode tone-80 primary measured 1.70:1 (2026-11-23 audit).
+            // Grey when unselected.
+            val fg = if (isHighlighted) ChatColors.thinkingOn else ChatColors.secondaryText
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier

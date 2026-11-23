@@ -4,6 +4,8 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 
 // ═══════════════════════════════════════════════════════════════════════════
 // [T-android-color-contract] THE APP HAS THREE COLOR SYSTEMS. READ EXACTLY ONE.
@@ -30,6 +32,13 @@ import androidx.compose.ui.graphics.Color
 // theme-following → 2, decorative accent → 3); if none fits, the default is
 // MaterialTheme.colorScheme. Raw literals survive ONLY inside the three
 // definition files themselves (Theme.kt, ChatColors.kt, AccentTokens.kt).
+//
+// [T-icon-family-contract] Icon fill families: `ui/chat` and card surfaces
+// render with Filled/Default; `ui/settings` rows render with Outlined; every
+// call site MUST go through `M3Icons.m3Icon(...)` so the dynamic-color style
+// switch (Filled <-> Outlined) applies uniformly — a bare `Icon(Icons.X, ...)`
+// opt-out leaves mixed families on one screen in dynamic mode. New decorative
+// tile hues must join [monetAccentTiles] (red/gray stay static by contract).
 // ═══════════════════════════════════════════════════════════════════════════
 
 // [T-android-dynamic-accent-icons] The single accent bridge between the
@@ -106,13 +115,18 @@ internal data class MonetTileColors(
  * Pure core of the accent bridge, so the mapping (table membership x gate x
  * scheme roles) is unit-testable without composition.
  *
- * Dynamic ON + a table hue -> the scheme's primary family: the glyph reads
- * `primary`, the tile `primaryContainer`, the glyph-on-tile
- * `onPrimaryContainer` — exactly the pairings Material You derives those slots
- * FOR, and the same chip contract the settings rows already used. Anything
- * else (gate off, or a hue outside [monetAccentTiles]) returns the static
- * input with the White glyph the tiles hardcoded before this slot existed;
- * the passed scheme is untouched on that path.
+ * Dynamic ON + a table hue -> **harmonize** toward the wallpaper primary
+ * family instead of collapsing onto it: every tile keeps 65% of its own hue
+ * and blends 35% toward the scheme (RGB lerp toward primary / primaryContainer
+ * respectively — "harmonize-lite"). The first implementation mapped ALL
+ * fifteen table hues to the same `primaryContainer` family, which deleted the
+ * color coding of the settings groups and the twelve session categories
+ * (identifiable = the requirement the m3e design guidance sets for semantic
+ * colors under dynamic color). The tile/content pairing is decided by the
+ * blended tile's own luminance so the contrast holds for any wallpaper.
+ * Anything else (gate off, or a hue outside [monetAccentTiles]) returns the
+ * static input with the White glyph the tiles hardcoded before this slot
+ * existed; the passed scheme is untouched on that path.
  */
 internal fun resolveMonetTile(
     static: Color,
@@ -120,11 +134,14 @@ internal fun resolveMonetTile(
     scheme: ColorScheme,
 ): MonetTileColors =
     if (dynamicActive && static in monetAccentTiles) {
-        MonetTileColors(
-            tint = scheme.primary,
-            tile = scheme.primaryContainer,
-            content = scheme.onPrimaryContainer,
-        )
+        // [T-monet-harmonize] keep each hue identifiable, only tint it toward
+        // the wallpaper. Full HCT harmonize would need material-color-utilities;
+        // a 35% RGB lerp preserves the hue split on screen and adds no
+        // dependency — revisit if the skill baseline ever requires true HCT.
+        val tint = lerp(static, scheme.primary, 0.35f)
+        val tile = lerp(static, scheme.primaryContainer, 0.35f)
+        val content = if (tile.luminance() > 0.5f) Color(0xFF1C1C1E) else Color.White
+        MonetTileColors(tint = tint, tile = tile, content = content)
     } else {
         MonetTileColors(tint = static, tile = static, content = Color.White)
     }

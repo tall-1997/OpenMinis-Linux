@@ -16,7 +16,7 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.openminis.app.ui.settings.showTurnChangesCardEnabled
+import com.openminis.app.ui.settings.rememberShowTurnChangesCardEnabled
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
@@ -454,12 +454,11 @@ internal fun ChatFlatItemRow(
                             is FlatChatItem.AssistantTurnChanges -> {
                                 // [T-turn-card-visibility-toggle] The card is
                                 // an opt-in surface (Appearance → Turn changes
-                                // card, default OFF): read the flag here so a
-                                // toggle takes effect on the next recomposition
-                                // without re-flatting the list.
-                                val showTurnCard = remember {
-                                    com.openminis.app.ui.settings.showTurnChangesCardEnabled(context)
-                                }
+                                // card, default OFF). Reactive read: the helper
+                                // observes the prefs key, so flipping the
+                                // setting recomposes the card on the next
+                                // frame — no list rebuild needed.
+                                val showTurnCard = rememberShowTurnChangesCardEnabled()
                                 if (showTurnCard) {
                                     val reverted by viewModel.toolUndo.revertedKeys.collectAsStateWithLifecycle()
                                     val diffStats by viewModel.toolUndo.diffStats.collectAsStateWithLifecycle()

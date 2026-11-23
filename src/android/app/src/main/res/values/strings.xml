@@ -3145,4 +3145,19 @@
  <string name="perm_full_access_confirm">Enable</string>
  <string name="perm_guarded_risk_reason">Confirm this risky command</string>
  <string name="perm_guarded_risk_message">Autonomous mode rated this command as risky. Approve once to let it run.</string>
+ <!-- Sub-agent phase & tool labels -->
+ <string name="subagent_phase_thinking">Thinking…</string>
+ <string name="subagent_phase_calling">Calling tool…</string>
+ <string name="subagent_phase_running">Running…</string>
+ <string name="subagent_phase_replying">Replying…</string>
+ <string name="subagent_tool_shell">Run command</string>
+ <string name="subagent_tool_read">Read file</string>
+ <string name="subagent_tool_write">Write file</string>
+ <string name="subagent_tool_edit">Edit file</string>
+ <string name="subagent_tool_grep">Search code</string>
+ <string name="subagent_tool_web_search">Web search</string>
+ <string name="subagent_tool_web_fetch">Fetch page</string>
+ <string name="subagent_tool_browser">Browser</string>
+ <string name="subagent_tool_memory">Memory</string>
+ <string name="subagent_tool_spawn">Sub-agent</string>
 </resources>

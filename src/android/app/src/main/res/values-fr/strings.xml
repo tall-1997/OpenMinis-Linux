@@ -3383,4 +3383,24 @@
  <string name="perm_full_access_confirm">Activer</string>
  <string name="perm_guarded_risk_reason">Confirmer cette commande risquée</string>
  <string name="perm_guarded_risk_message">Le mode autonome juge cette commande risquée. Confirmez une fois pour l’exécuter.</string>
+ <!-- Sub-agent phase & tool labels -->
+ <string name="subagent_phase_thinking">Réflexion…</string>
+ <string name="subagent_phase_calling">Appel de l\'outil…</string>
+ <string name="subagent_phase_running">Exécution…</string>
+ <string name="subagent_phase_replying">Réponse…</string>
+ <string name="subagent_tool_shell">Exécuter une commande</string>
+ <string name="subagent_tool_read">Lire le fichier</string>
+ <string name="subagent_tool_write">Écrire le fichier</string>
+ <string name="subagent_tool_edit">Modifier le fichier</string>
+ <string name="subagent_tool_grep">Rechercher dans le code</string>
+ <string name="subagent_tool_web_search">Recherche web</string>
+ <string name="subagent_tool_web_fetch">Récupérer la page</string>
+ <string name="subagent_tool_browser">Navigateur</string>
+ <string name="subagent_tool_memory">Mémoire</string>
+ <string name="subagent_tool_spawn">Sous-agent</string>
+    <!-- Tool detail sheet labels -->
+    <string name="tool_detail_title">Minis Computer</string>
+    <string name="tool_detail_open_full_output">Ouvrir la sortie complète</string>
+    <string name="tool_detail_open_in_terminal">Ouvrir dans le terminal</string>
+    <string name="tool_detail_open_in_session_browser">Ouvrir dans le navigateur de la session</string>
 </resources>

@@ -387,7 +387,7 @@ internal fun PickerSelectionMark(
     selectedTint: Color = IosBlue,
 ) {
     Icon(
-        if (selected) m3Icon(Icons.Default.CheckCircle) else Icons.Default.RadioButtonUnchecked,
+        if (selected) m3Icon(Icons.Default.CheckCircle) else m3Icon(Icons.Default.RadioButtonUnchecked),
         contentDescription = null,
         tint = if (selected) selectedTint
         else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),

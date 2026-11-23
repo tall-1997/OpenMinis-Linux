@@ -406,7 +406,9 @@ fun BrowserSettingsSheet(
                 )
             } else {
                 LazyColumn(modifier = Modifier.height((domains.size.coerceAtMost(6) * 44).dp)) {
-                    items(domains) { domain ->
+                    // [T-lazy-key] Domain names are unique; without a key the
+                    // rows drift identity when one is deleted mid-list.
+                    items(domains, key = { it }) { domain ->
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
@@ -719,7 +721,7 @@ private fun UaMismatchBanner(message: String) {
         verticalAlignment = Alignment.Top,
     ) {
         Icon(
-            Icons.Filled.Warning,
+            m3Icon(Icons.Filled.Warning),
             contentDescription = null,
             modifier = Modifier.size(18.dp),
             tint = MaterialTheme.colorScheme.tertiary,

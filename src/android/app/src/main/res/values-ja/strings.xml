@@ -3382,4 +3382,24 @@
  <string name="perm_full_access_confirm">有効にする</string>
  <string name="perm_guarded_risk_reason">リスクのあるコマンドを確認</string>
  <string name="perm_guarded_risk_message">自律モードがこのコマンドをリスクありと判定しました。一度確認すると実行します。</string>
+ <!-- Sub-agent phase & tool labels -->
+ <string name="subagent_phase_thinking">思考中…</string>
+ <string name="subagent_phase_calling">ツールを呼び出し中…</string>
+ <string name="subagent_phase_running">実行中…</string>
+ <string name="subagent_phase_replying">返信中…</string>
+ <string name="subagent_tool_shell">コマンドを実行</string>
+ <string name="subagent_tool_read">ファイルを読み取り</string>
+ <string name="subagent_tool_write">ファイルを書き込み</string>
+ <string name="subagent_tool_edit">ファイルを編集</string>
+ <string name="subagent_tool_grep">コードを検索</string>
+ <string name="subagent_tool_web_search">ウェブ検索</string>
+ <string name="subagent_tool_web_fetch">ページを取得</string>
+ <string name="subagent_tool_browser">ブラウザ</string>
+ <string name="subagent_tool_memory">メモリ</string>
+ <string name="subagent_tool_spawn">サブエージェント</string>
+    <!-- Tool detail sheet labels -->
+    <string name="tool_detail_title">Minis Computer</string>
+    <string name="tool_detail_open_full_output">出力全体を開く</string>
+    <string name="tool_detail_open_in_terminal">ターミナルで開く</string>
+    <string name="tool_detail_open_in_session_browser">セッションブラウザで開く</string>
 </resources>

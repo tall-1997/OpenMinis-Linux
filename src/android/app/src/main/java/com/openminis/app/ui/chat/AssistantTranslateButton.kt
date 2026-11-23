@@ -30,6 +30,7 @@ import com.openminis.app.R
 import com.openminis.app.i18n.TranslationOutcome
 import com.openminis.app.i18n.TranslationPrefs
 import com.openminis.app.i18n.TranslationRunner
+import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlin.math.ceil
@@ -229,7 +230,7 @@ fun AssistantTranslateButton(
                 modifier = Modifier.size(32.dp),
             ) {
                 Icon(
-                    Icons.Filled.Language,
+                    m3Icon(Icons.Filled.Language),
                     contentDescription = stringResource(R.string.translate_action),
                     modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,

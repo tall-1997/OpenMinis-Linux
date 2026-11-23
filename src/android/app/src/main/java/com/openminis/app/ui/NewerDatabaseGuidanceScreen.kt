@@ -36,7 +36,13 @@ import com.openminis.app.data.db.DatabaseVersionGuard
  */
 @Composable
 fun NewerDatabaseGuidanceScreen(onExit: () -> Unit) {
-    MaterialTheme {
+    // [T-fallback-screen-theme] These screens render outside MainActivity's
+    // MinisTheme (they exist precisely for the case where startup is broken),
+    // so a bare MaterialTheme pinned them to the light scheme and flashed
+    // white in dark mode. Resolve the in-app mode defensively: this path can
+    // run when prefs itself is unavailable, so any failure falls back to the
+    // system setting rather than throwing on a crash screen.
+    com.openminis.app.ui.theme.MinisTheme(darkTheme = fallbackScreenDarkTheme()) {
         Surface(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
@@ -76,5 +82,24 @@ fun NewerDatabaseGuidanceScreen(onExit: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+/**
+ * [T-fallback-screen-theme] Dark/light for the outage screens, read from the
+ * same theme_mode pref the app uses. Defensive by construction: a failure
+ * here must not turn a recoverable startup problem into a crash.
+ */
+@Composable
+private fun fallbackScreenDarkTheme(): Boolean {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val mode = runCatching {
+        com.openminis.app.config.Prefs.file(com.openminis.app.config.PREF_APPEARANCE)
+            .int(com.openminis.app.ui.settings.KEY_THEME_MODE, 0)
+    }.getOrDefault(0)
+    return when (mode) {
+        1 -> false
+        2 -> true
+        else -> androidx.compose.foundation.isSystemInDarkTheme()
     }
 }

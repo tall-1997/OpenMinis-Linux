@@ -130,7 +130,7 @@ private fun SheetSessionRow(entity: BranchNode, onClick: () -> Unit) {
             )
         }
         Icon(
-            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
             modifier = Modifier.size(18.dp),

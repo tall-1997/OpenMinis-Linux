@@ -292,7 +292,7 @@ internal fun ToolCallPill(
         if (block.toolName != "shell_execute") null
         else {
             val args = try { org.json.JSONObject(block.toolArgs) } catch (_: Exception) { org.json.JSONObject() }
-            extractShellCommand(args, block).takeIf { it.isNotBlank() && it != "Shell command" }
+            extractShellCommand(args, block).takeIf { it.isNotBlank() && it != SHELL_COMMAND_PLACEHOLDER }
         }
     }
     val hasToolMenuActions = onRerunFromHere != null || onCopyDetails != null ||

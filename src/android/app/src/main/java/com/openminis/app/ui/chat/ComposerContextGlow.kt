@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openminis.app.data.model.ContextUsage
+import com.openminis.app.ui.theme.decorPeriodPhase
 
 /**
  * [T-android-composer-context-glow] Marquee chase light on the composer's

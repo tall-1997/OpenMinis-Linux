@@ -335,7 +335,7 @@ internal fun ChatComposerSlashAndMentionPopups(
                                     }
                                     if (cmd.id == "memory") {
                                         Icon(
-                                            imageVector = if (memoryOnState) m3Icon(Icons.Default.CheckCircle) else Icons.Default.Block,
+                                            imageVector = if (memoryOnState) m3Icon(Icons.Default.CheckCircle) else m3Icon(Icons.Default.Block),
                                             contentDescription = null,
                                             tint = if (memoryOnState) ChatColors.sendButton else ChatColors.secondaryText,
                                             modifier = Modifier.size(18.dp),

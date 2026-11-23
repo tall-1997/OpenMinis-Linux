@@ -3383,4 +3383,24 @@
  <string name="perm_full_access_confirm">เปิดใช้</string>
  <string name="perm_guarded_risk_reason">ยืนยันคำสั่งที่มีความเสี่ยง</string>
  <string name="perm_guarded_risk_message">โหมดอัตโนมัติเห็นว่าคำสั่งนี้มีความเสี่ยง ยืนยันหนึ่งครั้งเพื่อรัน</string>
+ <!-- Sub-agent phase & tool labels -->
+ <string name="subagent_phase_thinking">กำลังคิด…</string>
+ <string name="subagent_phase_calling">กำลังเรียกใช้เครื่องมือ…</string>
+ <string name="subagent_phase_running">กำลังทำงาน…</string>
+ <string name="subagent_phase_replying">กำลังตอบ…</string>
+ <string name="subagent_tool_shell">รันคำสั่ง</string>
+ <string name="subagent_tool_read">อ่านไฟล์</string>
+ <string name="subagent_tool_write">เขียนไฟล์</string>
+ <string name="subagent_tool_edit">แก้ไขไฟล์</string>
+ <string name="subagent_tool_grep">ค้นหาโค้ด</string>
+ <string name="subagent_tool_web_search">ค้นหาเว็บ</string>
+ <string name="subagent_tool_web_fetch">ดึงหน้าเว็บ</string>
+ <string name="subagent_tool_browser">เบราว์เซอร์</string>
+ <string name="subagent_tool_memory">หน่วยความจำ</string>
+ <string name="subagent_tool_spawn">เอเจนต์ย่อย</string>
+    <!-- Tool detail sheet labels -->
+    <string name="tool_detail_title">Minis Computer</string>
+    <string name="tool_detail_open_full_output">เปิดผลลัพธ์ทั้งหมด</string>
+    <string name="tool_detail_open_in_terminal">เปิดในเทอร์มินัล</string>
+    <string name="tool_detail_open_in_session_browser">เปิดในเบราว์เซอร์ของเซสชัน</string>
 </resources>

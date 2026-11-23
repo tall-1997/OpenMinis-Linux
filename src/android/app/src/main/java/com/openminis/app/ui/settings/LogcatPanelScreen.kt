@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -189,7 +190,12 @@ fun LogcatPanelScreen(onBack: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
+                .padding(padding)
+                // [T-android-ime-padding] Edge-to-edge + API 30+ means
+                // adjustResize no longer resizes the window; consume the IME
+                // inset so the filter box stays visible above the keyboard
+                // (same as SettingsScaffold T183).
+                .imePadding(),
         ) {
             // ── Filters ────────────────────────────────────────────────
             SingleChoiceSegmentedButtonRow(

@@ -249,13 +249,13 @@ fun ImageGalleryViewer(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             ImageActionButton(
-                                icon = Icons.Outlined.ContentCopy,
+                                icon = m3Icon(Icons.Outlined.ContentCopy),
                                 label = stringResource(R.string.image_action_copy),
                                 onClick = { copyBitmapToClipboard(context, scope, currentItem.model) },
                             )
                             var sharing by remember { mutableStateOf(false) }
                             ImageActionButton(
-                                icon = Icons.Outlined.Share,
+                                icon = m3Icon(Icons.Outlined.Share),
                                 label = stringResource(R.string.image_action_share),
                                 onClick = onClick@{
                                     if (sharing) return@onClick
@@ -272,7 +272,7 @@ fun ImageGalleryViewer(
                             val savedToAlbumMsg = stringResource(R.string.image_saved_to_album_toast)
                             val saveFailedMsg = stringResource(R.string.image_save_failed_toast)
                             ImageActionButton(
-                                icon = Icons.Outlined.Download,
+                                icon = m3Icon(Icons.Outlined.Download),
                                 label = stringResource(R.string.image_action_save),
                                 onClick = {
                                     scope.launch {

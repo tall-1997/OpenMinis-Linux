@@ -57,6 +57,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
+import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -266,8 +267,7 @@ object MirrorSpeedTestViewModel {
     private fun persist(category: MirrorCategory) {
         val mirrorId = selectedMirrorId[category]
         val entry = mirrorId?.let { MirrorCatalog.findById(it) }
-        // One batch write; PrefsHandle commits both keys in a single transaction
-        // (same atomicity the old single Editor gave us).
+        // One batch write; both keys commit in one PrefsHandle transaction.
         prefs.write {
             if (entry != null) {
                 putString("mirror.selected.${category.key}", entry.baseURL)
@@ -541,7 +541,7 @@ fun MirrorsSectionView(onNavigate: (MirrorCategory) -> Unit) {
     ListItem(
         headlineContent = { Text(if (vm.isTesting) stringResource(R.string.mirror_test_speed_testing) else stringResource(R.string.mirror_detect_fast_label)) },
         leadingContent = {
-            CircleIconBadge(icon = Icons.Filled.Bolt, tint = Color(0xFFFF9500))
+            CircleIconBadge(icon = m3Icon(Icons.Filled.Bolt), tint = Color(0xFFFF9500))
         },
         modifier = Modifier
             .fillMaxWidth()
@@ -593,7 +593,7 @@ private fun MirrorCategoryRow(category: MirrorCategory, onClick: () -> Unit) {
                     Spacer(Modifier.width(4.dp))
                 }
                 Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                 )
@@ -664,7 +664,7 @@ fun MirrorCategoryDetailScreen(
                 title = { Text(category.displayName) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.mirror_back))
+                        Icon(m3Icon(Icons.AutoMirrored.Filled.ArrowBack), contentDescription = stringResource(R.string.mirror_back))
                     }
                 },
             )
@@ -769,7 +769,7 @@ fun MirrorCategoryDetailScreen(
             ListItem(
                 headlineContent = { Text(if (vm.isTesting) stringResource(R.string.mirror_test_speed_testing) else stringResource(R.string.mirror_test_speed_label)) },
                 leadingContent = {
-                    CircleIconBadge(icon = Icons.Filled.Bolt, tint = Color(0xFFFF9500))
+                    CircleIconBadge(icon = m3Icon(Icons.Filled.Bolt), tint = Color(0xFFFF9500))
                 },
                 modifier = Modifier
                     .fillMaxWidth()
@@ -807,7 +807,7 @@ private fun MirrorRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            if (isSelected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+            m3Icon(if (isSelected) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked),
             contentDescription = null,
             tint = if (isSelected) MaterialTheme.colorScheme.primary
                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),

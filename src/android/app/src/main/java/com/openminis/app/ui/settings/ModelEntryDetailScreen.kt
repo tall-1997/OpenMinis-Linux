@@ -42,6 +42,7 @@ import com.openminis.app.ui.chat.localizedName
 import com.openminis.app.R
 import com.openminis.app.ui.components.MinisButton
 import com.openminis.app.ui.components.MinisTextButton
+import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.tokens.RawSpace
 
 /**
@@ -530,7 +531,7 @@ fun ModelEntryDetailScreen(
         ) {
             SettingsRow(
                 title = stringResource(R.string.quicktest_button),
-                icon = Icons.Outlined.Bolt,
+                icon = m3Icon(Icons.Outlined.Bolt),
                 showChevron = false,
                 showDivider = false,
                 onClick = { showQuickTest = true },

@@ -47,6 +47,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.rememberCoroutineScope
+import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
@@ -316,8 +317,7 @@ fun ChatSplitScaffold(
     // frame (default width fraction / expanded list).
     val uiPrefs = remember { com.openminis.app.config.Prefs.file(UI_PREFS) }
     // The window's own width, so the default can be a proportion of it rather
-    // than a fixed dp that only looks right on one tablet size.
-    //
+    // than a fixed dp that only looks right on one tablet size. 
     // From windowAdaptiveInfo's bounds, NOT LocalConfiguration.screenWidthDp —
     // same reason shouldUseTwoPane avoids it: screenWidthDp measures the
     // display, so in split-screen or freeform the default would be a fraction
@@ -729,7 +729,7 @@ private fun NoConversationSelected(
                 Icon(
                     // Same square glyph as the chat's own toggle — see the note
                     // at ChatScreen's navigationIcon for why not `List`.
-                    Icons.Filled.Menu,
+                    m3Icon(Icons.Filled.Menu),
                     contentDescription = stringResource(
                         if (sidebarCollapsed) {
                             R.string.chat_show_sidebar

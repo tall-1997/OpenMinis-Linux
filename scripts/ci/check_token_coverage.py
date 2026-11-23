@@ -153,8 +153,27 @@ def count_line(line):
             'dp': len(RE_DP.findall(line))}
 
 
+# [T-coverage-scope] G3（2026-11-23）：令牌预算曾只扫 ui/ —— cards/、
+# automation/ui/、webapp/、quick/ 的字面量全在门外（实测门外还有 32 处 sp /
+# 107 处 dp 无任何预算）。纳入只影响记账（基线只降不升），不要求改既有值。
+EXTRA_ROOTS = [
+    ROOT / "src/android/app/src/main/java/com/openminis/app/cards",
+    ROOT / "src/android/app/src/main/java/com/openminis/app/automation/ui",
+    ROOT / "src/android/app/src/main/java/com/openminis/app/webapp",
+    ROOT / "src/android/app/src/main/java/com/openminis/app/quick",
+]
+
+
 def survey():
-    return survey_root(UI)
+    out, bad, exemps = survey_root(UI)
+    for r in EXTRA_ROOTS:
+        if not r.exists():
+            continue
+        o2, b2, e2 = survey_root(r)
+        out.update(o2)
+        bad.extend(b2)
+        exemps.update(e2)
+    return out, bad, exemps
 
 
 def survey_root(root):

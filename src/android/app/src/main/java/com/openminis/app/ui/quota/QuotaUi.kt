@@ -68,6 +68,7 @@ import com.openminis.app.quota.QuotaWindow
 import com.openminis.app.quota.computedUtilization
 import com.openminis.app.quota.utilization
 import com.openminis.app.ui.theme.LocalChatPalette
+import com.openminis.app.ui.theme.m3Icon
 import java.math.BigDecimal
 import java.text.DateFormat
 import java.util.Date
@@ -586,7 +587,7 @@ fun QuotaConsoleLinkRow(url: String, onOpen: () -> Unit, modifier: Modifier = Mo
             )
         }
         Icon(
-            Icons.AutoMirrored.Filled.OpenInNew,
+            m3Icon(Icons.AutoMirrored.Filled.OpenInNew),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
             modifier = Modifier.size(16.dp),

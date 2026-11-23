@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -58,6 +59,7 @@ import com.openminis.app.scheduled.ScheduledRepeatMode
 import com.openminis.app.scheduled.ScheduledRun
 import com.openminis.app.scheduled.ScheduledTargetMode
 import com.openminis.app.scheduled.ScheduledTask
+import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import com.openminis.app.ui.tokens.MinisTypography
@@ -254,7 +256,7 @@ fun ScheduledTaskEditScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
+                            m3Icon(Icons.AutoMirrored.Filled.ArrowBack),
                             contentDescription = stringResource(R.string.back),
                         )
                     }
@@ -424,6 +426,11 @@ private fun EditFormBody(
         modifier = Modifier
             .fillMaxSize()
             .padding(padding)
+            // [T-android-ime-padding] Edge-to-edge + API 30+ means
+            // adjustResize no longer resizes the window; consume the IME
+            // inset explicitly so prompt/label fields scroll above the
+            // keyboard (same as SettingsScaffold T183).
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp),
@@ -634,7 +641,7 @@ private fun EditFormBody(
         HorizontalDivider()
 
         MinisOutlinedButton(onClick = onRunNow, enabled = canRunNow, modifier = Modifier.fillMaxWidth()) {
-            Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+            Icon(m3Icon(Icons.Filled.PlayArrow), contentDescription = null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Text(stringResource(R.string.scheduled_task_run_now))
         }

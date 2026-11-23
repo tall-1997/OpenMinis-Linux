@@ -44,4 +44,9 @@
     <!-- ToolCallPill long-press menu -->
     <string name="tool_longpress_retry">Erneut versuchen</string>
     <string name="tool_longpress_open_in_terminal">Im Terminal öffnen</string>
+    <!-- Tool detail sheet labels -->
+    <string name="tool_detail_title">Minis Computer</string>
+    <string name="tool_detail_open_full_output">Vollständige Ausgabe öffnen</string>
+    <string name="tool_detail_open_in_terminal">Im Terminal öffnen</string>
+    <string name="tool_detail_open_in_session_browser">Im Sitzungsbrowser öffnen</string>
 </resources>

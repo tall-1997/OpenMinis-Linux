@@ -46,6 +46,7 @@ import com.openminis.app.scheduled.ScheduledRepeatMode
 import com.openminis.app.scheduled.ScheduledRun
 import com.openminis.app.scheduled.ScheduledTargetMode
 import com.openminis.app.scheduled.ScheduledTask
+import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.util.IsoTime
 import java.util.Calendar
 import com.openminis.app.ui.tokens.MinisTypography
@@ -82,7 +83,7 @@ internal fun PickerRow(
         trailingIcon = if (onClear != null) {
             {
                 IconButton(onClick = onClear) {
-                    Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(0.dp))
+                    Icon(m3Icon(Icons.Filled.PlayArrow), contentDescription = null, modifier = Modifier.size(0.dp))
                     Text("✕", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -240,7 +241,7 @@ private fun WorkspaceRow(name: String, selected: Boolean, onClick: () -> Unit) {
         )
         if (selected) {
             Spacer(Modifier.width(8.dp))
-            Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+            Icon(m3Icon(Icons.Filled.Check), contentDescription = null, modifier = Modifier.size(18.dp))
         }
     }
 }

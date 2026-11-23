@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.openminis.app.R
 import com.openminis.app.cottranslate.TranslationProvider
 import com.openminis.app.ui.theme.IosGreen
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-cot-translate] Reasoning-translation preferences (master toggle +
@@ -44,7 +45,7 @@ internal fun CotTranslationSection() {
         footer = footer,
     ) {
         SettingsSwitchRow(
-            icon = Icons.Outlined.Translate,
+            icon = m3Icon(Icons.Outlined.Translate),
             iconColor = IosGreen,
             title = stringResource(R.string.cot_translate_settings_enabled),
             checked = enabled,

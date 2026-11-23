@@ -128,7 +128,7 @@ internal fun ProviderInstanceRow(
         }
         IconButton(onClick = onTogglePinned) {
             Icon(
-                imageVector = if (pinned) Icons.Filled.Star else Icons.Filled.StarBorder,
+                imageVector = m3Icon(if (pinned) Icons.Filled.Star else Icons.Filled.StarBorder),
                 contentDescription = stringResource(
                     if (pinned) R.string.provider_unset_favorite else R.string.provider_set_favorite,
                 ),

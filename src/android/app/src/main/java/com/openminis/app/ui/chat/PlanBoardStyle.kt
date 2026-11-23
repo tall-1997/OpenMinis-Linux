@@ -53,6 +53,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 import com.openminis.app.tools.AgentPlanStore
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-plan-card-visual-redesign] The agent_plan board segment of
@@ -311,7 +312,7 @@ internal fun PlanBoardBody(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.Flag,
+                        imageVector = m3Icon(Icons.Filled.Flag),
                         contentDescription = stringResource(R.string.cd_goal_header),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                         modifier = Modifier.size(16.dp),
@@ -334,7 +335,7 @@ internal fun PlanBoardBody(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.Close,
+                        imageVector = m3Icon(Icons.Filled.Close),
                         contentDescription = dismissLabel,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                         modifier = Modifier.size(16.dp),
@@ -479,7 +480,7 @@ private fun PlanBoardRow(plan: AgentPlanStore.Plan, onRetry: (() -> Unit)? = nul
             // The affordance rides the END like the summary row's chevron; the
             // title took a weight(1f) so the glyph stays pinned to the edge.
             Icon(
-                imageVector = Icons.Filled.Refresh,
+                imageVector = m3Icon(Icons.Filled.Refresh),
                 contentDescription = retryLabel,
                 tint = MaterialTheme.colorScheme.error,
                 modifier = Modifier.size(14.dp),

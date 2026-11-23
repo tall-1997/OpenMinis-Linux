@@ -41,6 +41,8 @@ import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.theme.monetIconTint
+import com.openminis.app.ui.theme.monetIconTileColor
+import com.openminis.app.ui.theme.monetIconTileContentColor
 import com.openminis.app.ui.theme.IosBlue
 import com.openminis.app.ui.theme.IosGreen
 import com.openminis.app.ui.theme.IosOrange
@@ -135,13 +137,13 @@ private fun HeaderCard(folder: SharedFolderEntry) {
                 modifier = Modifier
                     .size(36.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(folder.iconColor),
+                    .background(monetIconTileColor(folder.iconColor)),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = folder.icon,
+                    imageVector = m3Icon(folder.icon),
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = monetIconTileContentColor(folder.iconColor),
                     modifier = Modifier.size(20.dp),
                 )
             }
@@ -174,9 +176,9 @@ private fun HeaderCard(folder: SharedFolderEntry) {
 @Composable
 private fun AccessBadge(writable: Boolean) {
     val (textRes, color) = if (writable) {
-        R.string.mount_badge_rw to IosGreen
+        R.string.mount_badge_rw to monetIconTint(IosGreen)
     } else {
-        R.string.mount_badge_readonly to IosOrange
+        R.string.mount_badge_readonly to monetIconTint(IosOrange)
     }
     Surface(
         shape = RoundedCornerShape(8.dp),

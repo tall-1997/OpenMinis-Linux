@@ -46,6 +46,7 @@ import com.openminis.app.logging.AppLogger
 import com.openminis.app.scheduled.ScheduledRunNow
 import com.openminis.app.scheduled.ScheduledTaskStore
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.delay
 import com.openminis.app.ui.tokens.MinisTypography
 
@@ -135,7 +136,7 @@ internal fun ScheduledCountdownPill(currentSessionId: () -> String) {
                 .padding(start = 10.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
         ) {
             Icon(
-                Icons.Default.Schedule,
+                m3Icon(Icons.Default.Schedule),
                 contentDescription = stringResource(R.string.sched_pill_task_label),
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(13.dp),
@@ -165,7 +166,7 @@ internal fun ScheduledCountdownPill(currentSessionId: () -> String) {
             val hideLabel = stringResource(R.string.sched_pill_hide)
             DropdownMenuItem(
                 text = { Text(runNowLabel) },
-                leadingIcon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
+                leadingIcon = { Icon(m3Icon(Icons.Filled.PlayArrow), contentDescription = null) },
                 onClick = {
                     menuOpen = false
                     val id = soonestTaskId
@@ -180,7 +181,7 @@ internal fun ScheduledCountdownPill(currentSessionId: () -> String) {
             )
             DropdownMenuItem(
                 text = { Text(hideLabel) },
-                leadingIcon = { Icon(Icons.Outlined.VisibilityOff, contentDescription = null) },
+                leadingIcon = { Icon(m3Icon(Icons.Outlined.VisibilityOff), contentDescription = null) },
                 onClick = {
                     menuOpen = false
                     soonestTaskId?.let { id ->

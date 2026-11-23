@@ -454,13 +454,13 @@ fun BrowserSheet(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 ToolbarIcon(
-                    icon = Icons.AutoMirrored.Filled.ArrowBack,
+                    icon = m3Icon(Icons.AutoMirrored.Filled.ArrowBack),
                     contentDesc = stringResource(R.string.browser_nav_back),
                     enabled = canGoBack && !isAgentBusy,
                     onClick = { selectedTab?.manager?.goBack() },
                 )
                 ToolbarIcon(
-                    icon = Icons.AutoMirrored.Filled.ArrowForward,
+                    icon = m3Icon(Icons.AutoMirrored.Filled.ArrowForward),
                     contentDesc = stringResource(R.string.browser_nav_forward),
                     enabled = canGoForward && !isAgentBusy,
                     onClick = { selectedTab?.manager?.goForward() },
@@ -511,7 +511,7 @@ fun BrowserSheet(
                     onClick = { showSettings = true },
                 )
                 ToolbarIcon(
-                    icon = Icons.Default.OpenInBrowser,
+                    icon = m3Icon(Icons.Default.OpenInBrowser),
                     contentDesc = stringResource(R.string.browser_open_external),
                     enabled = currentURL.startsWith("http://") || currentURL.startsWith("https://"),
                     onClick = {

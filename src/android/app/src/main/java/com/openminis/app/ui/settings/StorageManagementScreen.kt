@@ -52,6 +52,7 @@ import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.theme.IosBlue
 import com.openminis.app.ui.theme.IosGray
 import com.openminis.app.ui.theme.IosIndigo
+import com.openminis.app.ui.theme.monetIconTileColor
 
 private data class SessionStorageInfo(
     val id: String,
@@ -142,13 +143,13 @@ fun StorageManagementScreen(
                 showDivider = true,
             )
             StorageOverviewRow(
-                color = IosBlue,
+                color = monetIconTileColor(IosBlue),
                 label = stringResource(R.string.storage_overview_database),
                 value = Formatter.formatFileSize(context, dbSize),
                 showDivider = true,
             )
             StorageOverviewRow(
-                color = IosIndigo,
+                color = monetIconTileColor(IosIndigo),
                 label = stringResource(R.string.storage_overview_sessions),
                 value = Formatter.formatFileSize(context, totalSessionSize),
                 showDivider = false,

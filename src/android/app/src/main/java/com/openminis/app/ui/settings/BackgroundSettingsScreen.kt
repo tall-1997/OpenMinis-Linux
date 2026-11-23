@@ -65,6 +65,7 @@ import com.openminis.app.MinisApp
 import com.openminis.app.R
 import com.openminis.app.power.PowerOptimizationManager
 import com.openminis.app.i18n.uppercaseForDisplay
+import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.tokens.MinisTypography
 
 /**
@@ -194,7 +195,7 @@ fun BackgroundSettingsScreen(onBack: () -> Unit) {
             // BackgroundSettingsRepository.DEFAULT_TASK_NOTIFICATIONS).
             BgSectionTitle(stringResource(R.string.settings_section_notifications))
             BgToggleRow(
-                icon = Icons.Outlined.NotificationsActive,
+                icon = m3Icon(Icons.Outlined.NotificationsActive),
                 iconColor = IosBlue,
                 title = stringResource(R.string.settings_task_notifications),
                 checked = taskNotificationsEnabled,
@@ -237,7 +238,7 @@ fun BackgroundSettingsScreen(onBack: () -> Unit) {
             // immediately makes the UI reflect ready-to-use state.
             Spacer(Modifier.size(8.dp))
             BgToggleRow(
-                icon = Icons.Outlined.Layers,
+                icon = m3Icon(Icons.Outlined.Layers),
                 iconColor = IosIndigo,
                 title = stringResource(R.string.settings_bg_overlay),
                 // [T-android-overlay-toggle-reflects-intent] Reflect the user's
@@ -293,7 +294,7 @@ fun BackgroundSettingsScreen(onBack: () -> Unit) {
             // devices/versions that don't support it.
             Spacer(Modifier.size(8.dp))
             BgToggleRow(
-                icon = Icons.Outlined.Bolt,
+                icon = m3Icon(Icons.Outlined.Bolt),
                 iconColor = IosGreen,
                 title = stringResource(R.string.settings_dynamic_island),
                 checked = dynamicIslandEnabled && dynamicIslandCapable,
@@ -321,7 +322,7 @@ fun BackgroundSettingsScreen(onBack: () -> Unit) {
             Spacer(Modifier.size(16.dp))
             BgSectionTitle(stringResource(R.string.battery_opt_section_title))
             BgRow(
-                icon = Icons.Outlined.BatteryFull,
+                icon = m3Icon(Icons.Outlined.BatteryFull),
                 iconColor = if (ignoringOptimizations) IosGreen else IosOrange,
                 title = stringResource(R.string.battery_opt_row_title),
                 subtitle = if (ignoringOptimizations) {
@@ -341,7 +342,7 @@ fun BackgroundSettingsScreen(onBack: () -> Unit) {
                 Spacer(Modifier.size(16.dp))
                 BgSectionTitle(stringResource(R.string.rom_autostart_section_title))
                 BgRow(
-                    icon = Icons.Outlined.PhoneAndroid,
+                    icon = m3Icon(Icons.Outlined.PhoneAndroid),
                     iconColor = IosOrange,
                     title = stringResource(R.string.rom_autostart_row_title),
                     subtitle = stringResource(

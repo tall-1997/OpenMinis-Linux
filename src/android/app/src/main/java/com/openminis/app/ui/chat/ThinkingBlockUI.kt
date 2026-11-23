@@ -50,6 +50,7 @@ import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.tokens.MinisTypography
 import com.openminis.app.ui.tokens.RawSpace
 import kotlinx.coroutines.delay
+import com.openminis.app.ui.settings.rememberAppearanceBool
 
 /**
  * [T-thinking-block-extract] The collapsible "Deep Thinking" block, split
@@ -79,9 +80,15 @@ internal fun ThinkingBlock(
     // userTouched, so neither the stream-end auto-collapse nor anything else
     // fights the user). Read once at mount — mirrors iOS ThinkingBlockView,
     // where the same UserDefaults gate sits at the one-shot auto-expand site.
-    val context = LocalContext.current
-    val autoExpandThinking = remember { autoExpandThinkingEnabled(context) }
-    val showFullThinking = remember { com.openminis.app.ui.settings.showFullThinkingEnabled(context) }
+    // [T-pref-reactive-read] Reactive: these two are read via a keyless
+    // `remember` before, so toggling either setting in Appearance had no
+    // effect until the transcript was rebuilt.
+    val autoExpandThinking = rememberAppearanceBool(
+        com.openminis.app.ui.settings.KEY_AUTO_EXPAND_THINKING, true,
+    )
+    val showFullThinking = rememberAppearanceBool(
+        com.openminis.app.ui.settings.KEY_SHOW_FULL_THINKING, false,
+    )
     var expanded by remember(block.id) {
         mutableStateOf(if (isStreaming) showFullThinking || (autoExpandThinking && isLast) else false)
     }

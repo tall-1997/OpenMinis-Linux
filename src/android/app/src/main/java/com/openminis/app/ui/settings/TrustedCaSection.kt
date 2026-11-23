@@ -18,6 +18,7 @@ import androidx.compose.ui.res.stringResource
 import com.openminis.app.R
 import com.openminis.app.network.AppTrustStore
 import com.openminis.app.provider.ProviderFactory
+import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -91,7 +92,7 @@ fun TrustedCaSection() {
         )
         SettingsRow(
             title = stringResource(R.string.network_trusted_ca_import),
-            icon = Icons.Outlined.Add,
+            icon = m3Icon(Icons.Outlined.Add),
             onClick = {
                 status = null
                 importLauncher.launch(
@@ -110,7 +111,7 @@ fun TrustedCaSection() {
         if (certCount > 0) {
             SettingsRow(
                 title = stringResource(R.string.network_trusted_ca_remove_all),
-                icon = Icons.Outlined.Delete,
+                icon = m3Icon(Icons.Outlined.Delete),
                 iconColor = MaterialTheme.colorScheme.error,
                 titleColor = MaterialTheme.colorScheme.error,
                 onClick = {

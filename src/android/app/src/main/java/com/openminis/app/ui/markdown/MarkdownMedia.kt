@@ -179,7 +179,7 @@ private fun BrokenImagePlaceholder(alt: String?) {
             modifier = Modifier.padding(12.dp),
         ) {
             Icon(
-                imageVector = Icons.Outlined.BrokenImage,
+                imageVector = m3Icon(Icons.Outlined.BrokenImage),
                 contentDescription = null,
                 modifier = Modifier.size(28.dp),
                 tint = palette.secondaryText,
@@ -306,7 +306,7 @@ internal fun MinisVideoBlock(block: MarkdownParser.Block.Video) {
                 )
             }
             Icon(
-                imageVector = Icons.Filled.PlayCircleFilled,
+                imageVector = m3Icon(Icons.Filled.PlayCircleFilled),
                 contentDescription = "Play video",
                 tint = Color.White.copy(alpha = 0.9f),
                 modifier = Modifier.width(56.dp).height(56.dp),
@@ -319,7 +319,7 @@ internal fun MinisVideoBlock(block: MarkdownParser.Block.Video) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                imageVector = Icons.Filled.Videocam,
+                imageVector = m3Icon(Icons.Filled.Videocam),
                 contentDescription = null,
                 tint = captionColor,
                 modifier = Modifier.width(14.dp).height(14.dp),
@@ -435,7 +435,7 @@ internal fun MinisAudioBlock(block: MarkdownParser.Block.Audio) {
     ) {
         // Leading icon
         Icon(
-            imageVector = Icons.Filled.Audiotrack,
+            imageVector = m3Icon(Icons.Filled.Audiotrack),
             contentDescription = null,
             tint = subtle,
             modifier = Modifier.width(18.dp).height(18.dp),
@@ -471,7 +471,7 @@ internal fun MinisAudioBlock(block: MarkdownParser.Block.Audio) {
             }
         }
         Icon(
-            imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+            imageVector = m3Icon(if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow),
             contentDescription = if (isPlaying) "Pause" else "Play",
             tint = tint,
             modifier = Modifier.width(28.dp).height(28.dp),

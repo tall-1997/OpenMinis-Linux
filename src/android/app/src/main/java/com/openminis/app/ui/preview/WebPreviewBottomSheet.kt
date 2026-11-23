@@ -333,14 +333,14 @@ internal fun WebPreviewToolbar(
         }
         if (isLoading) {
             ToolbarIcon(
-                icon = Icons.Default.Stop,
+                icon = m3Icon(Icons.Default.Stop),
                 description = stringResource(R.string.webpreview_stop),
                 onClick = onStop,
             )
         }
         Box {
             ToolbarIcon(
-                icon = Icons.Default.MoreVert,
+                icon = m3Icon(Icons.Default.MoreVert),
                 description = stringResource(R.string.webpreview_more),
                 onClick = { menuOpen = true },
             )
@@ -351,7 +351,7 @@ internal fun WebPreviewToolbar(
                 androidx.compose.material3.DropdownMenuItem(
                     text = { Text(stringResource(R.string.webpreview_open_external)) },
                     leadingIcon = {
-                        Icon(Icons.Default.OpenInBrowser, contentDescription = null)
+                        Icon(m3Icon(Icons.Default.OpenInBrowser), contentDescription = null)
                     },
                     onClick = {
                         menuOpen = false
@@ -377,8 +377,8 @@ internal fun WebPreviewToolbar(
                     },
                     leadingIcon = {
                         Icon(
-                            if (desktopMode) Icons.Default.PhoneAndroid
-                            else Icons.Default.DesktopWindows,
+                            m3Icon(if (desktopMode) Icons.Default.PhoneAndroid
+                            else Icons.Default.DesktopWindows),
                             contentDescription = null,
                         )
                     },
@@ -391,7 +391,7 @@ internal fun WebPreviewToolbar(
                     androidx.compose.material3.DropdownMenuItem(
                         text = { Text(stringResource(R.string.webpreview_open_fullscreen)) },
                         leadingIcon = {
-                            Icon(Icons.Default.Fullscreen, contentDescription = null)
+                            Icon(m3Icon(Icons.Default.Fullscreen), contentDescription = null)
                         },
                         onClick = {
                             menuOpen = false
@@ -403,7 +403,7 @@ internal fun WebPreviewToolbar(
                     androidx.compose.material3.DropdownMenuItem(
                         text = { Text(stringResource(R.string.webpreview_pin_to_home)) },
                         leadingIcon = {
-                            Icon(Icons.Default.AddToHomeScreen, contentDescription = null)
+                            Icon(m3Icon(Icons.Default.AddToHomeScreen), contentDescription = null)
                         },
                         onClick = {
                             menuOpen = false

@@ -1,9 +1,11 @@
 package com.openminis.app.quick
 
 import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
@@ -36,6 +38,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,6 +57,7 @@ import com.openminis.app.ui.settings.KEY_THEME_MODE
 import com.openminis.app.ui.settings.fontScaleForLevel
 import com.openminis.app.ui.settings.getAppearancePrefs
 import com.openminis.app.ui.theme.MinisTheme
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [E-batch-quick-invocation] The summon-anywhere half-screen panel.
@@ -94,14 +98,18 @@ class QuickActivity : ComponentActivity() {
     private val sending = mutableStateOf(false)
 
     // T-n01-andmenu-l10n: pre-Tiramisu locale override (same as
-    // ShareReceiverActivity / MainActivity).
+    // ShareReceiverActivity / MainActivity). [T-xml-first-frame-theme]
+    // ThemeModeWrap (outermost) also carries the in-app theme_mode into the
+    // uiMode the XML theme resolves against, so the translucent panel's
+    // first frame matches the in-app theme.
     override fun attachBaseContext(newBase: android.content.Context) {
-        super.attachBaseContext(com.openminis.app.i18n.LocaleWrap.wrap(newBase))
+        super.attachBaseContext(
+            com.openminis.app.i18n.ThemeModeWrap.wrap(com.openminis.app.i18n.LocaleWrap.wrap(newBase)),
+        )
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
         if (savedInstanceState == null) {
             handleIntent(intent)
         }
@@ -116,6 +124,19 @@ class QuickActivity : ComponentActivity() {
                 1 -> false
                 2 -> true
                 else -> isSystemInDarkTheme()
+            }
+            // In-app theme is authoritative for system-bar icons: the default
+            // enableEdgeToEdge() picks light/dark from the SYSTEM uiMode, so
+            // in-app light + system dark painted white icons on a light
+            // surface. Same explicit light/dark styles as MainActivity, with
+            // TRANSPARENT scrims so the app's own surface paints edge-to-edge.
+            SideEffect {
+                val barStyle = if (darkTheme) {
+                    SystemBarStyle.dark(Color.TRANSPARENT)
+                } else {
+                    SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+                }
+                enableEdgeToEdge(statusBarStyle = barStyle, navigationBarStyle = barStyle)
             }
             MinisTheme(darkTheme = darkTheme, fontScale = fontScale, dynamicColor = dynamicColor) {
                 QuickPanel()
@@ -254,7 +275,7 @@ class QuickActivity : ComponentActivity() {
                         )
                         IconButton(onClick = { finish() }) {
                             Icon(
-                                Icons.Outlined.Close,
+                                m3Icon(Icons.Outlined.Close),
                                 contentDescription = stringResource(R.string.common_close),
                                 tint = colors.onSurfaceVariant,
                             )
@@ -297,7 +318,7 @@ class QuickActivity : ComponentActivity() {
                                 .background(colors.primary.copy(alpha = 0.12f)),
                         ) {
                             Icon(
-                                Icons.AutoMirrored.Outlined.Send,
+                                m3Icon(Icons.AutoMirrored.Outlined.Send),
                                 contentDescription = stringResource(R.string.cd_send),
                                 tint = if (sending.value) colors.onSurfaceVariant else colors.primary,
                             )

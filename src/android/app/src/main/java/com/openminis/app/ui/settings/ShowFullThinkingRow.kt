@@ -7,6 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import com.openminis.app.R
 import com.openminis.app.ui.theme.IosIndigo
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-wave-e-show-full-thinking] "Show full thinking" appearance toggle.
@@ -25,7 +26,7 @@ internal fun ShowFullThinkingRow(
     onCheckedChange: (Boolean) -> Unit,
 ) {
     SettingsSwitchRow(
-        icon = Icons.Outlined.ViewAgenda,
+        icon = m3Icon(Icons.Outlined.ViewAgenda),
         iconColor = IosIndigo,
         title = stringResource(R.string.appearance_show_full_thinking_title),
         subtitle = stringResource(R.string.appearance_show_full_thinking_footer),

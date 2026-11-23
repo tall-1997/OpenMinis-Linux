@@ -45,6 +45,7 @@ import com.openminis.app.ui.components.CodeEditorLogic
 import com.openminis.app.ui.components.CodeSearchBar
 import com.openminis.app.ui.components.MinisCenterTopBar
 import com.openminis.app.ui.components.UndoableEditorState
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * Full-screen composer editor with the desktop-class editing affordances:
@@ -133,7 +134,7 @@ fun LongTextEditorDialog(
                         navigationIcon = {
                             IconButton(onClick = onDismiss) {
                                 Icon(
-                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    m3Icon(Icons.AutoMirrored.Filled.ArrowBack),
                                     contentDescription = stringResource(R.string.common_back),
                                 )
                             }
@@ -149,7 +150,7 @@ fun LongTextEditorDialog(
                                 enabled = undoState.canUndo,
                             ) {
                                 Icon(
-                                    Icons.AutoMirrored.Filled.Undo,
+                                    m3Icon(Icons.AutoMirrored.Filled.Undo),
                                     contentDescription = stringResource(R.string.code_editor_undo),
                                 )
                             }
@@ -163,13 +164,13 @@ fun LongTextEditorDialog(
                                 enabled = undoState.canRedo,
                             ) {
                                 Icon(
-                                    Icons.AutoMirrored.Filled.Redo,
+                                    m3Icon(Icons.AutoMirrored.Filled.Redo),
                                     contentDescription = stringResource(R.string.code_editor_redo),
                                 )
                             }
                             IconButton(onClick = { softWrap = !softWrap }) {
                                 Icon(
-                                    Icons.Filled.WrapText,
+                                    m3Icon(Icons.Filled.WrapText),
                                     contentDescription = stringResource(R.string.code_editor_wrap),
                                     tint = if (softWrap) {
                                         MaterialTheme.colorScheme.primary
@@ -180,7 +181,7 @@ fun LongTextEditorDialog(
                             }
                             IconButton(onClick = { searchVisible = !searchVisible }) {
                                 Icon(
-                                    Icons.Filled.Search,
+                                    m3Icon(Icons.Filled.Search),
                                     contentDescription = stringResource(R.string.code_editor_search),
                                     tint = if (searchVisible) {
                                         MaterialTheme.colorScheme.primary
@@ -192,7 +193,7 @@ fun LongTextEditorDialog(
                             if (codeMode) {
                                 IconButton(onClick = { languageMenuOpen = true }) {
                                     Icon(
-                                        Icons.Filled.Code,
+                                        m3Icon(Icons.Filled.Code),
                                         contentDescription = stringResource(R.string.code_editor_language),
                                     )
                                     DropdownMenu(
@@ -209,7 +210,7 @@ fun LongTextEditorDialog(
                                                 trailingIcon = {
                                                     if (option == language) {
                                                         Icon(
-                                                            Icons.Filled.Code,
+                                                            m3Icon(Icons.Filled.Code),
                                                             contentDescription = null,
                                                             tint = MaterialTheme.colorScheme.primary,
                                                         )

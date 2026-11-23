@@ -3382,4 +3382,24 @@
  <string name="perm_full_access_confirm">사용</string>
  <string name="perm_guarded_risk_reason">위험한 명령 확인</string>
  <string name="perm_guarded_risk_message">자율 모드가 이 명령을 위험하다고 판단했습니다. 한 번 확인하면 실행합니다.</string>
+ <!-- Sub-agent phase & tool labels -->
+ <string name="subagent_phase_thinking">생각 중…</string>
+ <string name="subagent_phase_calling">도구 호출 중…</string>
+ <string name="subagent_phase_running">실행 중…</string>
+ <string name="subagent_phase_replying">응답 중…</string>
+ <string name="subagent_tool_shell">명령 실행</string>
+ <string name="subagent_tool_read">파일 읽기</string>
+ <string name="subagent_tool_write">파일 쓰기</string>
+ <string name="subagent_tool_edit">파일 편집</string>
+ <string name="subagent_tool_grep">코드 검색</string>
+ <string name="subagent_tool_web_search">웹 검색</string>
+ <string name="subagent_tool_web_fetch">페이지 가져오기</string>
+ <string name="subagent_tool_browser">브라우저</string>
+ <string name="subagent_tool_memory">메모리</string>
+ <string name="subagent_tool_spawn">서브에이전트</string>
+    <!-- Tool detail sheet labels -->
+    <string name="tool_detail_title">Minis Computer</string>
+    <string name="tool_detail_open_full_output">전체 출력 열기</string>
+    <string name="tool_detail_open_in_terminal">터미널에서 열기</string>
+    <string name="tool_detail_open_in_session_browser">세션 브라우저에서 열기</string>
 </resources>

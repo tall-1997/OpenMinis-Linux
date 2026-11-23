@@ -54,6 +54,7 @@ import com.openminis.app.R
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.ui.DisplayBitmapLimits
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.util.Format
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -239,7 +240,7 @@ private fun FileCardBody(card: ToolCard.FileCard) {
     Spacer(Modifier.height(2.dp))
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
-            Icons.Default.InsertDriveFile,
+            m3Icon(Icons.Default.InsertDriveFile),
             contentDescription = null,
             tint = ChatColors.secondaryText,
             modifier = Modifier.size(14.dp),
@@ -279,7 +280,7 @@ private fun FileCardBody(card: ToolCard.FileCard) {
 private fun EventCardBody(card: ToolCard.EventCard) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
-            Icons.Default.Schedule,
+            m3Icon(Icons.Default.Schedule),
             contentDescription = null,
             tint = ChatColors.link,
             modifier = Modifier.size(14.dp),
@@ -405,7 +406,7 @@ private fun CardActionRow(card: ToolCard, callId: String?) {
         if (canUndo) {
             CardActionButton(
                 label = if (undoInFlight) "…" else stringResource(R.string.card_action_undo),
-                icon = Icons.AutoMirrored.Filled.Undo,
+                icon = m3Icon(Icons.AutoMirrored.Filled.Undo),
                 tint = ChatColors.link,
             ) {
                 val c = card as ToolCard.Change
@@ -435,7 +436,7 @@ private fun CardActionRow(card: ToolCard, callId: String?) {
         if (openable) {
             CardActionButton(
                 label = stringResource(R.string.card_action_open),
-                icon = Icons.Default.Launch,
+                icon = m3Icon(Icons.Default.Launch),
                 tint = ChatColors.secondaryText,
             ) {
                 scope.launch {
@@ -446,7 +447,7 @@ private fun CardActionRow(card: ToolCard, callId: String?) {
         }
         CardActionButton(
             label = stringResource(R.string.card_action_copy),
-            icon = Icons.Default.ContentCopy,
+            icon = m3Icon(Icons.Default.ContentCopy),
             tint = ChatColors.secondaryText,
         ) {
             clipboard.setText(AnnotatedString(copyText))
@@ -454,7 +455,7 @@ private fun CardActionRow(card: ToolCard, callId: String?) {
         if (card is ToolCard.Link || card is ToolCard.Media || card is ToolCard.FileCard) {
             CardActionButton(
                 label = stringResource(R.string.card_action_share),
-                icon = Icons.Default.Share,
+                icon = m3Icon(Icons.Default.Share),
                 tint = ChatColors.secondaryText,
             ) {
                 scope.launch {
@@ -503,7 +504,7 @@ private fun CardActionButton(
 private fun FileMetaRow(name: String, sub: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
-            Icons.Default.InsertDriveFile,
+            m3Icon(Icons.Default.InsertDriveFile),
             contentDescription = null,
             tint = ChatColors.secondaryText,
             modifier = Modifier.size(14.dp),

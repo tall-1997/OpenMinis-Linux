@@ -75,6 +75,7 @@ import com.openminis.app.network.TailscaleStatus
 import com.openminis.app.network.WebViewNetworkProxy
 import com.openminis.app.ui.components.DialogTextField
 import com.openminis.app.ui.components.MinisTextButton
+import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -213,7 +214,7 @@ internal fun DiagnosticsSection() {
     SettingsSection(footer = stringResource(R.string.network_diagnostics_footer)) {
         SettingsRow(
             title = stringResource(if (running) R.string.network_diagnostics_running else R.string.network_diagnostics),
-            icon = Icons.Outlined.Troubleshoot,
+            icon = m3Icon(Icons.Outlined.Troubleshoot),
             onClick = if (running) null else ({
                 running = true
                 copied = false
@@ -248,7 +249,7 @@ internal fun DiagnosticsSection() {
             }
             SettingsRow(
                 title = stringResource(if (copied) R.string.network_copied else R.string.network_diagnostics_copy),
-                icon = Icons.Outlined.ContentCopy,
+                icon = m3Icon(Icons.Outlined.ContentCopy),
                 onClick = { clipboard.setText(AnnotatedString(r.toText())); copied = true },
                 showChevron = false,
                 showDivider = false,

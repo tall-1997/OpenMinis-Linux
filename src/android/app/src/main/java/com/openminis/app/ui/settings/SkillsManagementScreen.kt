@@ -2,6 +2,7 @@ package com.openminis.app.ui.settings
 import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.theme.IosBlue
 import com.openminis.app.ui.theme.IosGreen
+import com.openminis.app.ui.theme.monetIconTint
 
 import com.openminis.app.R
 import com.openminis.app.ui.components.MinisButton
@@ -749,8 +750,7 @@ fun SkillDetailScreen(
                 }
             }
 
-            // ── Update Actions Section ──
-            // T154: every row drives `updateStatus` (updateFromURL / update / rescanFromDisk).
+            // T154 Update Actions: every row drives updateStatus (URL/update/rescan).
             val isBusy = updateStatus is UpdateStatus.InProgress
             DetailSection {
                 if (skill.importSource == SkillRepository.ImportSource.URL) {
@@ -814,9 +814,9 @@ fun SkillDetailScreen(
                     is UpdateStatus.Done -> {
                         DetailDivider(insetEnd = 14.dp, alpha = 0.5f)
                         DetailRow {
-                            Icon(m3Icon(Icons.Default.CheckCircle), contentDescription = null, tint = IosGreen, modifier = Modifier.size(16.dp))
+                            Icon(m3Icon(Icons.Default.CheckCircle), contentDescription = null, tint = monetIconTint(IosGreen), modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(10.dp))
-                            Text(stringResource(R.string.skill_detail_updated), style = MaterialTheme.typography.bodySmall, color = IosGreen)
+                            Text(stringResource(R.string.skill_detail_updated), style = MaterialTheme.typography.bodySmall, color = monetIconTint(IosGreen))
                         }
                     }
                     is UpdateStatus.Failed -> {

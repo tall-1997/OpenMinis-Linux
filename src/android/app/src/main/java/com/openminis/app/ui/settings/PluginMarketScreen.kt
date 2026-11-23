@@ -32,6 +32,7 @@ import com.openminis.app.plugins.LocalToolPluginStore
 import com.openminis.app.plugins.OnlinePluginStore
 import com.openminis.app.plugins.PluginRegistry
 import com.openminis.app.ui.theme.IosBlue
+import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -201,7 +202,7 @@ fun PluginMarketScreen(
                 )
             }
             SettingsRow(
-                icon = Icons.Default.Add,
+                icon = m3Icon(Icons.Default.Add),
                 iconColor = IosBlue,
                 title = stringResource(R.string.plugin_market_local_add),
                 subtitle = stringResource(R.string.plugin_market_local_add_hint),

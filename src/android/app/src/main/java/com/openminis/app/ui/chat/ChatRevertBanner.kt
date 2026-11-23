@@ -22,6 +22,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.openminis.app.R
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-p9-revert] The staged-revert banner, rendered under the boundary
@@ -47,7 +48,7 @@ internal fun ChatRevertBanner(
         Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    Icons.Default.Restore,
+                    m3Icon(Icons.Default.Restore),
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,

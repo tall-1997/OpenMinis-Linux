@@ -46,4 +46,9 @@
     <!-- ToolCallPill long-press menu -->
     <string name="tool_longpress_retry">重试</string>
     <string name="tool_longpress_open_in_terminal">在终端打开</string>
+    <!-- Tool detail sheet labels -->
+    <string name="tool_detail_title">Minis Computer</string>
+    <string name="tool_detail_open_full_output">打开完整输出</string>
+    <string name="tool_detail_open_in_terminal">在终端中打开</string>
+    <string name="tool_detail_open_in_session_browser">在会话浏览器中打开</string>
 </resources>

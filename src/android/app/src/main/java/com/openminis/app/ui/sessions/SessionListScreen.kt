@@ -770,7 +770,7 @@ fun SessionListScreen(
                         // share the query / results / anchor machinery.
                         IconButton(onClick = { viewModel.isSearchActive.value = true }) {
                             Icon(
-                                Icons.Outlined.Search,
+                                m3Icon(Icons.Outlined.Search),
                                 contentDescription = stringResource(R.string.sessionlist_search_action),
                             )
                         }
@@ -783,7 +783,7 @@ fun SessionListScreen(
                                 },
                             ) {
                                 Icon(
-                                    Icons.Outlined.Schedule,
+                                    m3Icon(Icons.Outlined.Schedule),
                                     contentDescription = stringResource(R.string.sessionlist_scheduled_tasks),
                                     modifier = Modifier.size(24.dp),
                                 )
@@ -1476,7 +1476,7 @@ private fun DualFabRow(
                 // The icon was ALREADY CreateNewFolder while the action was
                 // "new chat". Making the action match the icon is the fix.
                 Icon(
-                    Icons.Outlined.CreateNewFolder,
+                    m3Icon(Icons.Outlined.CreateNewFolder),
                     contentDescription = stringResource(R.string.sessionlist_fab_new_folder),
                     tint = minisFabContentColor(),
                     modifier = Modifier.size(24.dp),
@@ -1489,7 +1489,7 @@ private fun DualFabRow(
                 topGroups.forEach { group ->
                     DropdownMenuItem(
                         text = { Text(group.name) },
-                        leadingIcon = { Icon(Icons.Outlined.Forum, contentDescription = null) },
+                        leadingIcon = { Icon(m3Icon(Icons.Outlined.Forum), contentDescription = null) },
                         onClick = {
                             showGroupMenu = false
                             onNewChatWithGroup(group.id)
@@ -1543,7 +1543,7 @@ private fun DualFabRow(
                         .shadow(6.dp, CircleShape, ambientColor = Color.Black.copy(alpha = 0.15f)),
                     elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp),
                 ) {
-                    Icon(Icons.Outlined.Search, contentDescription = stringResource(R.string.sessionlist_search_action), tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(24.dp))
+                    Icon(m3Icon(Icons.Outlined.Search), contentDescription = stringResource(R.string.sessionlist_search_action), tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(24.dp))
                 }
             }
         }
@@ -1575,7 +1575,7 @@ private fun DualFabRow(
                 singleLine = true,
                 placeholder = { Text(stringResource(R.string.search_chats_placeholder)) },
                 leadingIcon = {
-                    Icon(Icons.Outlined.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(m3Icon(Icons.Outlined.Search), contentDescription = null, modifier = Modifier.size(18.dp))
                 },
                 trailingIcon = {
                     // T46: while debounce is in flight, swap the close icon
@@ -1815,7 +1815,7 @@ private fun SessionItemContent(
                 text = {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text(stringResource(R.string.sessionlist_export))
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight), contentDescription = null, modifier = Modifier.size(16.dp))
                     }
                 },
                 onClick = { showExportSub = !showExportSub },
@@ -1909,7 +1909,7 @@ private fun SessionItemContent(
                 },
                 leadingIcon = {
                     Icon(
-                        if (isFiled) Icons.Default.DriveFileMove
+                        if (isFiled) m3Icon(Icons.Default.DriveFileMove)
                         else m3Icon(Icons.Default.Folder),
                         contentDescription = null,
                     )
@@ -2373,7 +2373,7 @@ private fun FolderCard(
                     onClick = { menuOpen = false; onDeleteWithSessions() },
                     leadingIcon = {
                         Icon(
-                            Icons.Outlined.Delete,
+                            m3Icon(Icons.Outlined.Delete),
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.error,
                             modifier = Modifier.size(20.dp),
@@ -2811,7 +2811,7 @@ private fun SessionBadgeOverlay(
                 // Pause glyph (⏸) — mirrors iOS's "pause.fill" badge so the
                 // cross-platform "this task was paused" affordance matches.
                 Icon(
-                    imageVector = Icons.Filled.Pause,
+                    imageVector = m3Icon(Icons.Filled.Pause),
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.size(9.dp),

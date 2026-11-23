@@ -53,4 +53,9 @@
          tool_longpress_copy_details live in the shared strings.xml) -->
     <string name="tool_longpress_retry">Retry</string>
     <string name="tool_longpress_open_in_terminal">Open in terminal</string>
+    <!-- Tool detail sheet labels -->
+    <string name="tool_detail_title">Minis Computer</string>
+    <string name="tool_detail_open_full_output">Open full output</string>
+    <string name="tool_detail_open_in_terminal">Open in terminal</string>
+    <string name="tool_detail_open_in_session_browser">Open in session browser</string>
 </resources>

@@ -3383,4 +3383,24 @@
  <string name="perm_full_access_confirm">Dayakan</string>
  <string name="perm_guarded_risk_reason">Sahkan arahan berisiko</string>
  <string name="perm_guarded_risk_message">Mod autonomi menilai arahan ini berisiko. Sahkan sekali untuk menjalankannya.</string>
+ <!-- Sub-agent phase & tool labels -->
+ <string name="subagent_phase_thinking">Sedang berfikir…</string>
+ <string name="subagent_phase_calling">Memanggil alat…</string>
+ <string name="subagent_phase_running">Sedang berjalan…</string>
+ <string name="subagent_phase_replying">Sedang membalas…</string>
+ <string name="subagent_tool_shell">Jalankan arahan</string>
+ <string name="subagent_tool_read">Baca fail</string>
+ <string name="subagent_tool_write">Tulis fail</string>
+ <string name="subagent_tool_edit">Sunting fail</string>
+ <string name="subagent_tool_grep">Cari kod</string>
+ <string name="subagent_tool_web_search">Carian web</string>
+ <string name="subagent_tool_web_fetch">Dapatkan halaman</string>
+ <string name="subagent_tool_browser">Pelayar</string>
+ <string name="subagent_tool_memory">Memori</string>
+ <string name="subagent_tool_spawn">Sub-agen</string>
+    <!-- Tool detail sheet labels -->
+    <string name="tool_detail_title">Minis Computer</string>
+    <string name="tool_detail_open_full_output">Buka output penuh</string>
+    <string name="tool_detail_open_in_terminal">Buka dalam terminal</string>
+    <string name="tool_detail_open_in_session_browser">Buka dalam pelayar sesi</string>
 </resources>

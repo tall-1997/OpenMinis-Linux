@@ -126,8 +126,13 @@ class MainActivity : ComponentActivity() {
     // strings — including the labels of the system text-selection ActionMode
     // ("Cut" / "Copy" / "Paste"). Override the base Configuration so the
     // framework picks the right locale on those devices. No-op on 13+.
+    // [T-xml-first-frame-theme] ThemeModeWrap (outermost) additionally
+    // carries the in-app theme_mode into the uiMode the XML theme resolves
+    // against, so the pre-Compose first frame matches the in-app theme too.
     override fun attachBaseContext(newBase: android.content.Context) {
-        super.attachBaseContext(com.openminis.app.i18n.LocaleWrap.wrap(newBase))
+        super.attachBaseContext(
+            com.openminis.app.i18n.ThemeModeWrap.wrap(com.openminis.app.i18n.LocaleWrap.wrap(newBase)),
+        )
     }
 
     /**
@@ -575,18 +580,13 @@ class MainActivity : ComponentActivity() {
                 val barStyle = if (darkTheme) {
                     SystemBarStyle.dark(Color.TRANSPARENT)
                 } else {
-                    // T205: SystemBarStyle.light(...) auto-applies a ~30% black
-                    // scrim behind the status bar on Android 13+ for icon
-                    // legibility, which leaks through as a grey strip even
-                    // when the activity paints its own surface color
-                    // edge-to-edge. SystemBarStyle.auto with both scrim args
-                    // TRANSPARENT lets the system pick light/dark icons by
-                    // luminance but suppresses the auto-scrim, so the screen's
-                    // own background color paints all the way to the top/bottom
-                    // edges. Per-screen `isAppearanceLightStatusBars` overrides
-                    // (e.g. FilePreviewScreen DisposableEffect) still control
-                    // icon contrast.
-                    SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT)
+                    // `auto` reads icon polarity from the SYSTEM uiMode, not the
+                    // in-app theme_mode pref (light app on a dark system = white
+                    // icons on a light bar), so name the style explicitly. The
+                    // double-TRANSPARENT scrims stay: light() would otherwise paint
+                    // a ~30% black strip behind the status bar on Android 13+, and
+                    // the screen paints its own background edge-to-edge.
+                    SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
                 }
                 enableEdgeToEdge(statusBarStyle = barStyle, navigationBarStyle = barStyle)
             }

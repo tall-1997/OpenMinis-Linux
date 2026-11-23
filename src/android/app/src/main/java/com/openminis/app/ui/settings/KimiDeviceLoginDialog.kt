@@ -99,7 +99,7 @@ fun KimiDeviceLoginDialog(
                         )
                         Spacer(Modifier.width(10.dp))
                         Icon(
-                            if (copied) m3Icon(m3Icon(Icons.Default.CheckCircle)) else m3Icon(m3Icon(Icons.Default.ContentCopy)),
+                            if (copied) m3Icon(Icons.Default.CheckCircle) else m3Icon(Icons.Default.ContentCopy),
                             contentDescription = stringResource(R.string.kimi_login_copy_code),
                             tint = if (copied) {
                                 IosGreen

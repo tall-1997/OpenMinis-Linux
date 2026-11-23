@@ -16,6 +16,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.openminis.app.R
 import com.openminis.app.ui.settings.SettingsScaffold
 import com.openminis.app.ui.settings.SettingsSection
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-android-restore-server-list] The servers you can RESTORE FROM.
@@ -88,7 +89,7 @@ fun RestoreServersScreen(
         ) {
             remotes.forEach { r ->
                 RestoreSourceRow(
-                    icon = Icons.Outlined.Cloud,
+                    icon = m3Icon(Icons.Outlined.Cloud),
                     iconColor = MaterialTheme.colorScheme.primary,
                     label = r.name,
                     subtitle = stringResource(
@@ -105,7 +106,7 @@ fun RestoreServersScreen(
             // only row, which is exactly the affordance the old empty dialog
             // withheld.
             RestoreSourceRow(
-                icon = Icons.Outlined.Add,
+                icon = m3Icon(Icons.Outlined.Add),
                 iconColor = MaterialTheme.colorScheme.primary,
                 label = stringResource(R.string.backup_dest_add_server),
                 enabled = true,

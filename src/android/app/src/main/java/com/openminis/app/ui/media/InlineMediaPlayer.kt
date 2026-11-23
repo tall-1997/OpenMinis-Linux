@@ -189,7 +189,7 @@ fun InlineAudioPlayer(
                             .background(MaterialTheme.colorScheme.primary),
                     ) {
                         Icon(
-                            if (isPlaying) Icons.Default.Pause else m3Icon(Icons.Default.PlayArrow),
+                            if (isPlaying) m3Icon(Icons.Default.Pause) else m3Icon(Icons.Default.PlayArrow),
                             contentDescription = if (isPlaying) "Pause" else "Play",
                             tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(20.dp),
@@ -230,7 +230,7 @@ fun InlineAudioPlayer(
                             modifier = Modifier.size(28.dp),
                         ) {
                             Icon(
-                                Icons.Default.Stop,
+                                m3Icon(Icons.Default.Stop),
                                 contentDescription = "Stop",
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(18.dp),
@@ -583,7 +583,7 @@ private fun FullscreenVideoContent(file: File, onDismiss: () -> Unit) {
                     modifier = Modifier.size(40.dp),
                 ) {
                     Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else m3Icon(Icons.Default.PlayArrow),
+                        imageVector = if (isPlaying) m3Icon(Icons.Default.Pause) else m3Icon(Icons.Default.PlayArrow),
                         contentDescription = if (isPlaying) "Pause" else "Play",
                         tint = Color.White,
                     )
