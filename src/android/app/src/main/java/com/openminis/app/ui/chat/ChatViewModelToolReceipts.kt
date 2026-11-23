@@ -162,11 +162,18 @@ internal suspend fun ChatViewModel.boundedReceiptNotice(
 internal suspend fun ChatViewModel.toolReceiptNotice(sessionId: String, scope: ToolReceiptScope?): String? =
     withContext(Dispatchers.IO) {
         val status = toolReceiptStore().pending(ToolReceiptScope.sessionDigest(sessionId), scope?.parentSha)
-            ?: return@withContext "$TOOL_RECEIPT_NOTICE Tool receipts could not be checked. Do not repeat earlier operations until verified."
+            ?: return@withContext "$TOOL_RECEIPT_NOTICE Tool receipts could not be checked for this run."
         if (!status.hasUnpaired) return@withContext null
-        "$TOOL_RECEIPT_NOTICE Delivery pending confirmation: ${status.unknown}. " +
-            "Accepted without verified completion: ${status.acceptedWithoutResult}. " +
-            "Verify before retrying; neither status establishes business success."
+        // [T-receipt-notice-no-directive] This line used to end with
+        // "Verify before retrying; neither status establishes business
+        // success." — an ACTION INSTRUCTION the model obeyed by writing
+        // verification prose ("✓ verified…") as ordinary reply text, which is
+        // exactly the fragmented-reply pattern users report. A host notice may
+        // state facts; the per-call tool-result advisory already carries the
+        // do-not-repeat rule at the moment of dispatch. Remaining factual only.
+        "$TOOL_RECEIPT_NOTICE ${status.unknown} earlier delivery record(s) in this turn " +
+            "have no confirmed completion result; ${status.acceptedWithoutResult} were accepted without " +
+            "a recorded result. Their tool results already carry the per-call guidance."
     }
 
 private const val MAX_RECEIPT_PAGE_ROWS = 512

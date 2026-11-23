@@ -273,57 +273,28 @@ internal fun ProcessSummaryBar(
     }
 }
 
-/** The same disclosure row inside a card and in the unfolded transcript. */
+/**
+ * [T-midturn-prose-inline] Mid-turn assistant prose renders as ordinary
+ * markdown text, in place — NOT as a collapsed "AI process" disclosure.
+ *
+ * The folding was the wrong fix for fragmentation: it hid the words instead of
+ * removing the reason the model produced them. Prose the model wrote while
+ * working is real content the user wants to read, so it is shown with the same
+ * body typography as a reply (the reply/process split still decides what Copy
+ * Markdown and the final answer contain, and the history still stores the
+ * original bytes). The same row renders inside a card and in the unfolded transcript.
+ */
 @Composable
 internal fun ProcessTextRow(text: String, modifier: Modifier = Modifier) {
-    var expanded by rememberSaveable { mutableStateOf(false) }
-    val color = MaterialTheme.colorScheme.onSurfaceVariant
-    val spacing = Minis.dimens
-    val actionLabel = stringResource(
-        if (expanded) R.string.check_update_notes_collapse else R.string.check_update_notes_expand,
+    Text(
+        text = text,
+        fontSize = MinisTypography.body,
+        lineHeight = MinisTypography.lineBody,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = Minis.dimens.spaceLg.dp, vertical = Minis.dimens.spaceXs.dp),
     )
-    Column(modifier = modifier.fillMaxWidth()) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = spacing.touchTargetMin.dp)
-                .clickable(role = Role.Button, onClickLabel = actionLabel) { expanded = !expanded },
-        ) {
-            Column(modifier = Modifier.weight(1f).padding(end = spacing.spaceSm.dp)) {
-                Text(
-                    text = stringResource(R.string.process_card_ai_process),
-                    fontSize = MinisTypography.foot,
-                    fontWeight = FontWeight.Medium,
-                    color = color,
-                )
-                if (!expanded) {
-                    Text(
-                        text = text,
-                        fontSize = MinisTypography.foot,
-                        color = color,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            Icon(
-                imageVector = m3Icon(if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown),
-                contentDescription = null,
-                tint = color,
-                modifier = Modifier.size(spacing.spaceXl.dp),
-            )
-        }
-        AnimatedVisibility(visible = expanded) {
-            Text(
-                text = text,
-                fontSize = MinisTypography.body,
-                lineHeight = MinisTypography.lineBody,
-                color = color,
-                modifier = Modifier.padding(bottom = spacing.spaceMd.dp),
-            )
-        }
-    }
 }
 
 /**
