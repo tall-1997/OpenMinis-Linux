@@ -3376,4 +3376,9 @@
  <string name="subagent_tool_browser">Tarayıcı</string>
  <string name="subagent_tool_memory">Bellek</string>
  <string name="subagent_tool_spawn">Alt ajan</string>
+ <!-- [T-tool-detail-i18n] -->
+ <string name="tool_detail_title">Minis Computer</string>
+ <string name="tool_detail_open_full_output">Tam çıktıyı aç</string>
+ <string name="tool_detail_open_in_terminal">Terminalde aç</string>
+ <string name="tool_detail_open_in_session_browser">Oturum tarayıcısında aç</string>
 </resources>

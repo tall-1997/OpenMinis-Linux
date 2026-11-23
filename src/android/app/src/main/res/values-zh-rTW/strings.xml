@@ -3373,4 +3373,9 @@
  <string name="subagent_tool_browser">瀏覽器</string>
  <string name="subagent_tool_memory">記憶</string>
  <string name="subagent_tool_spawn">子代理</string>
+ <!-- [T-tool-detail-i18n] -->
+ <string name="tool_detail_title">Minis Computer</string>
+ <string name="tool_detail_open_full_output">開啟完整輸出</string>
+ <string name="tool_detail_open_in_terminal">在終端機中開啟</string>
+ <string name="tool_detail_open_in_session_browser">在工作階段瀏覽器中開啟</string>
 </resources>

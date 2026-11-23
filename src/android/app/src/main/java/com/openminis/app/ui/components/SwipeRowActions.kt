@@ -34,9 +34,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -103,13 +105,19 @@ fun SwipeRowActions(
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     val revealPx = with(density) { (actionWidth * actions.size).toPx() }
+    // [T-rtl-swipe] In RTL the action column is mirrored to the start side by
+    // `Alignment.CenterStart`, but the drag anchors and the row offset are
+    // physical pixels: without the sign flip the row slides away from the
+    // buttons and reveals nothing. `dir` is +1 in LTR, -1 in RTL; every
+    // physical x in this component is multiplied by it.
+    val dir = if (LocalLayoutDirection.current == LayoutDirection.Rtl) -1f else 1f
 
     val state = remember(revealPx) {
         AnchoredDraggableState(
             initialValue = SwipeAnchor.Resting,
             anchors = DraggableAnchors {
                 SwipeAnchor.Resting at 0f
-                SwipeAnchor.Revealed at -revealPx
+                SwipeAnchor.Revealed at -revealPx * dir
             },
         )
     }
@@ -130,7 +138,9 @@ fun SwipeRowActions(
         // are sized to the row's measured height so they never dictate it.
         Row(
             modifier = Modifier
-                .align(Alignment.CenterEnd)
+                // [T-rtl-swipe] pinned to the trailing edge (start in RTL),
+                // matching the mirrored anchors above.
+                .align(if (dir > 0f) Alignment.CenterEnd else Alignment.CenterStart)
                 .then(if (rowHeightPx > 0) Modifier.height(rowHeight) else Modifier),
             horizontalArrangement = Arrangement.End,
         ) {
@@ -170,7 +180,7 @@ fun SwipeRowActions(
                 .onSizeChanged { rowHeightPx = it.height }
                 // offset{} reads the drag value in the LAYOUT phase, so a drag
                 // reposition never invalidates composition.
-                .offset { IntOffset(state.requireOffset().roundToInt(), 0) }
+                .offset { IntOffset((state.requireOffset() * dir).roundToInt(), 0) }
                 // The row must be OPAQUE: the action buttons are painted behind
                 // it, so a transparent row leaves them permanently visible
                 // instead of revealed-on-swipe. [rowColor] defaults to the card

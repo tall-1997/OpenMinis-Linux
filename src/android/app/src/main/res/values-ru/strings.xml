@@ -3384,4 +3384,9 @@
  <string name="subagent_tool_browser">Браузер</string>
  <string name="subagent_tool_memory">Память</string>
  <string name="subagent_tool_spawn">Субагент</string>
+ <!-- [T-tool-detail-i18n] -->
+ <string name="tool_detail_title">Minis Computer</string>
+ <string name="tool_detail_open_full_output">Открыть весь вывод</string>
+ <string name="tool_detail_open_in_terminal">Открыть в терминале</string>
+ <string name="tool_detail_open_in_session_browser">Открыть в браузере сеанса</string>
 </resources>

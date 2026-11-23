@@ -50,6 +50,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlinx.coroutines.launch
 import com.openminis.app.ui.theme.m3Icon
+import androidx.compose.foundation.layout.imePadding
 
 /**
  * [T-android-automation-rules] Rule editor. Trigger-type selection with the
@@ -189,6 +190,8 @@ fun AutomationRuleEditScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                // [T-android-ime-padding] edge-to-edge + API30+: adjustResize does not resize; consume the IME inset.
+                .imePadding()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 8.dp),

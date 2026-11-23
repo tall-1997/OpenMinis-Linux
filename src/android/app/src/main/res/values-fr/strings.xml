@@ -3376,4 +3376,9 @@
  <string name="subagent_tool_browser">Navigateur</string>
  <string name="subagent_tool_memory">Mémoire</string>
  <string name="subagent_tool_spawn">Sous-agent</string>
+ <!-- [T-tool-detail-i18n] -->
+ <string name="tool_detail_title">Minis Computer</string>
+ <string name="tool_detail_open_full_output">Ouvrir la sortie complète</string>
+ <string name="tool_detail_open_in_terminal">Ouvrir dans le terminal</string>
+ <string name="tool_detail_open_in_session_browser">Ouvrir dans le navigateur de la session</string>
 </resources>

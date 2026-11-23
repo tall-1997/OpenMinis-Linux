@@ -61,6 +61,7 @@ import com.openminis.app.ui.chat.MarkdownClipboard
 import com.openminis.app.ui.components.MinisCenterTopBar
 import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.layout.imePadding
 
 /**
  * Live log panel (T-logcat-panel) — the in-app view of this process's own
@@ -188,6 +189,8 @@ fun LogcatPanelScreen(onBack: () -> Unit) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                // [T-android-ime-padding] edge-to-edge + API30+: adjustResize does not resize; consume the IME inset.
+                .imePadding()
                 .padding(padding),
         ) {
             // ── Filters ────────────────────────────────────────────────

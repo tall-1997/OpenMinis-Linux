@@ -3381,4 +3381,9 @@
  <string name="subagent_tool_browser">Peramban</string>
  <string name="subagent_tool_memory">Memori</string>
  <string name="subagent_tool_spawn">Sub-agen</string>
+ <!-- [T-tool-detail-i18n] -->
+ <string name="tool_detail_title">Minis Computer</string>
+ <string name="tool_detail_open_full_output">Buka keluaran lengkap</string>
+ <string name="tool_detail_open_in_terminal">Buka di terminal</string>
+ <string name="tool_detail_open_in_session_browser">Buka di browser sesi</string>
 </resources>

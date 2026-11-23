@@ -61,6 +61,7 @@ import com.openminis.app.scheduled.ScheduledTask
 import kotlinx.coroutines.launch
 import java.util.Calendar
 import com.openminis.app.ui.theme.m3Icon
+import androidx.compose.foundation.layout.imePadding
 
 /**
  * [T-android-scheduled-tasks-design / T-android-scheduled-tasks-full]
@@ -423,6 +424,8 @@ private fun EditFormBody(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            // [T-android-ime-padding] edge-to-edge + API30+: adjustResize does not resize; consume the IME inset.
+            .imePadding()
             .padding(padding)
             .verticalScroll(rememberScrollState())
             .padding(16.dp),

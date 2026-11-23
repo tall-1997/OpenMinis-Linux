@@ -3375,4 +3375,9 @@
  <string name="subagent_tool_browser">브라우저</string>
  <string name="subagent_tool_memory">메모리</string>
  <string name="subagent_tool_spawn">서브에이전트</string>
+ <!-- [T-tool-detail-i18n] -->
+ <string name="tool_detail_title">Minis Computer</string>
+ <string name="tool_detail_open_full_output">전체 출력 열기</string>
+ <string name="tool_detail_open_in_terminal">터미널에서 열기</string>
+ <string name="tool_detail_open_in_session_browser">세션 브라우저에서 열기</string>
 </resources>

@@ -7,6 +7,10 @@ package com.openminis.app.ui.chat
 // truncated objects, so fall back to a streaming-safe substring scan).
 // Extracted from ChatToolDetailUI to keep that file under its line ceiling;
 // both helpers are detail-sheet render support used only within this package.
+/** [T-tool-detail-i18n] Placeholder command text, kept as ONE constant so the
+ * comparison site cannot drift from the producer (was a bare literal twice). */
+internal const val SHELL_COMMAND_PLACEHOLDER = "Shell command"
+
 internal fun extractShellCommand(args: org.json.JSONObject, block: AssistantBlock): String {
     // 1. Try toolArgs "command" field (works once JSON is complete)
     val fromArgs = args.optString("command", "")
@@ -21,7 +25,7 @@ internal fun extractShellCommand(args: org.json.JSONObject, block: AssistantBloc
         if (firstLine.length > 2) return firstLine.drop(2)
     }
     // 4. iOS fallback: generic "Shell command"
-    return "Shell command"
+    return SHELL_COMMAND_PLACEHOLDER
 }
 
 /**

@@ -3380,4 +3380,9 @@
  <string name="subagent_tool_browser">Browser</string>
  <string name="subagent_tool_memory">Memorie</string>
  <string name="subagent_tool_spawn">Sub-agent</string>
+ <!-- [T-tool-detail-i18n] -->
+ <string name="tool_detail_title">Minis Computer</string>
+ <string name="tool_detail_open_full_output">Deschide ieșirea completă</string>
+ <string name="tool_detail_open_in_terminal">Deschide în terminal</string>
+ <string name="tool_detail_open_in_session_browser">Deschide în browserul sesiunii</string>
 </resources>

@@ -623,7 +623,7 @@
         <service
             android:name=".quick.QuickTileService"
             android:exported="true"
-            android:icon="@android:drawable/ic_menu_send"
+            android:icon="@drawable/ic_qs_tile_send"
             android:label="@string/quick_settings_title"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>

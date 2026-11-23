@@ -3376,4 +3376,9 @@
  <string name="subagent_tool_browser">Browser</string>
  <string name="subagent_tool_memory">Memorya</string>
  <string name="subagent_tool_spawn">Sub-agent</string>
+ <!-- [T-tool-detail-i18n] -->
+ <string name="tool_detail_title">Minis Computer</string>
+ <string name="tool_detail_open_full_output">Buksan ang buong output</string>
+ <string name="tool_detail_open_in_terminal">Buksan sa terminal</string>
+ <string name="tool_detail_open_in_session_browser">Buksan sa browser ng session</string>
 </resources>

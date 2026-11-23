@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Quick-settings tile icon: Material "send" glyph replacing the deprecated
+  framework @android:drawable/ic_menu_send. A local vector pins the shape
+  (the framework asset is API-1 legacy and its rendering has drifted across
+  OEM builds); QS tints the tile icon itself, so the fill is a plain mask.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M2.01,21L23,12 2.01,3 2,10l15,2 -15,2z" />
+</vector>

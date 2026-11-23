@@ -196,7 +196,7 @@ internal fun ToolDetailSheet(
                 // the elapsed-duration text) so it sits next to where the
                 // user is already scanning timing info.
                 Text(
-                    text = "Minis Computer",
+                    text = stringResource(R.string.tool_detail_title),
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = ChatColors.primaryText,
@@ -249,7 +249,7 @@ internal fun ToolDetailSheet(
                     ) {
                         Icon(
                             m3Icon(Icons.Default.Description),
-                            contentDescription = "Open full output",
+                            contentDescription = stringResource(R.string.tool_detail_open_full_output),
                             tint = ChatColors.primaryText,
                             modifier = Modifier.size(16.dp),
                         )
@@ -265,7 +265,7 @@ internal fun ToolDetailSheet(
                         .clickable {
                             if (isShellTool) {
                                 val command = extractShellCommand(toolArgsForAction, block)
-                                if (command.isNotBlank() && command != "Shell command") {
+                                if (command.isNotBlank() && command != SHELL_COMMAND_PLACEHOLDER) {
                                     AppLogger.info(
                                         "ChatScreen",
                                         "opening terminal with prefill: ${command.take(120)}",
@@ -298,9 +298,9 @@ internal fun ToolDetailSheet(
                             else -> m3Icon(Icons.Default.ContentCopy)
                         },
                         contentDescription = when {
-                            isShellTool -> "Open in terminal"
-                            isBrowserTool -> "Open in session browser"
-                            else -> "Copy"
+                            isShellTool -> stringResource(R.string.tool_detail_open_in_terminal)
+                            isBrowserTool -> stringResource(R.string.tool_detail_open_in_session_browser)
+                            else -> stringResource(R.string.common_copy)
                         },
                         tint = ChatColors.primaryText,
                         modifier = Modifier.size(16.dp),

@@ -3375,4 +3375,9 @@
  <string name="subagent_tool_browser">ブラウザ</string>
  <string name="subagent_tool_memory">メモリ</string>
  <string name="subagent_tool_spawn">サブエージェント</string>
+ <!-- [T-tool-detail-i18n] -->
+ <string name="tool_detail_title">Minis Computer</string>
+ <string name="tool_detail_open_full_output">出力全体を開く</string>
+ <string name="tool_detail_open_in_terminal">ターミナルで開く</string>
+ <string name="tool_detail_open_in_session_browser">セッションブラウザで開く</string>
 </resources>
