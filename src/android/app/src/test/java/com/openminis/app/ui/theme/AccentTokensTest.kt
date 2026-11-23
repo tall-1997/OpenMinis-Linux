@@ -43,6 +43,13 @@ class AccentTokensTest {
     private fun resolve(static: Color, dynamicActive: Boolean) =
         resolveMonetTile(static, dynamicActive, amberWallpaper)
 
+    /** WCAG 2.x ratio, so the pairing contract can be asserted directly. */
+    private fun contrastRatioText(a: Color, b: Color): Float {
+        val la = a.luminance()
+        val lb = b.luminance()
+        return (maxOf(la, lb) + 0.05f) / (minOf(la, lb) + 0.05f)
+    }
+
     @Test
     fun `settings menu hues harmonize toward the wallpaper when dynamic color is on`() {
         val settingsHues = listOf(
@@ -59,9 +66,16 @@ class AccentTokensTest {
             // Harmonized toward the scheme…
             assertEquals(lerp(hue, amberWallpaper.primary, 0.35f), resolved.tint)
             assertEquals(lerp(hue, amberWallpaper.primaryContainer, 0.35f), resolved.tile)
-            // …while the glyph pairing tracks the tile's own luminance.
-            val expected = if (resolved.tile.luminance() > 0.5f) Color(0xFF1C1C1E) else Color.White
-            assertEquals(expected, resolved.content)
+            // [T-monet-tile-pairing] Assert the CONTRACT (the glyph reads at the
+            // WCAG 3:1 non-text floor), not a copy of the implementation. The
+            // previous version mirrored the old `luminance() > 0.5` branch, so it
+            // stayed green while nine of the fifteen hues shipped White at
+            // 1.93–3.17:1.
+            assertTrue(
+                "glyph on the harmonized tile must reach 3:1, got " +
+                    "${contrastRatioText(resolved.content, resolved.tile)} for $hue",
+                contrastRatioText(resolved.content, resolved.tile) >= 3.0f,
+            )
         }
     }
 

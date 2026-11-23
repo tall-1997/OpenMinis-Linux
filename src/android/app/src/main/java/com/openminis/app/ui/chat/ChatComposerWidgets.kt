@@ -431,11 +431,20 @@ internal fun ThinkingLevelPicker(
                 isHighlighted -> ChatColors.thinking
                 else -> Color.Transparent
             }
-            // [T-thinking-on] Selected-capsule text: White in both static
-            // themes, but the dynamic palette derives onPrimary — White on a
-            // dark-mode tone-80 primary measured 1.70:1 (2026-11-23 audit).
+            // [T-thinking-on] Selected-capsule text. Two different fills need two
+            // different foregrounds: `thinkingOn` is paired with the BLUE accent
+            // (dynamic = onPrimary), while the clamped-orange fill needs ink —
+            // White on orange@0.75 measures 1.82:1 in light mode, ink 9.35:1.
             // Grey when unselected.
-            val fg = if (isHighlighted) ChatColors.thinkingOn else ChatColors.secondaryText
+            val fg = when {
+                // RawColors.neutral800 is exactly this value; the token exists,
+                // so use it instead of a fresh literal.
+                isClampedHighlight -> com.openminis.app.ui.tokens.RawColors.neutral800.let {
+                    androidx.compose.ui.graphics.Color(it.toInt())
+                }
+                isHighlighted -> ChatColors.thinkingOn
+                else -> ChatColors.secondaryText
+            }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier

@@ -468,6 +468,19 @@ def check_live_palettes() -> list:
         if slots is None:
             fails.append(f'{name} 未解析到（ChatColors.kt 结构变了？）')
             continue
+        # [T-gate-fail-closed] A parser that silently yields {} on an expression
+        # value (e.g. `background = RawColors.neutral0.asColor`) would skip every
+        # assertion below and report PASS. Require the slots we intend to judge.
+        missing = [s for s in CHAT_TEXT_SLOTS if s not in slots]
+        for s in ('background',):
+            if s not in slots:
+                missing.append(s)
+        if missing:
+            fails.append(
+                f'{name} 解析不到 {len(missing)} 个关键槽：{", ".join(missing)}'
+                f' —— 色值若已改成表达式/常量，本检查会静默退化成假绿，'
+                f'需要扩展解析器而不是放着跳过')
+            continue
         bg = slots.get('background')
         if bg is None:
             fails.append(f'{name}.background 未解析到')

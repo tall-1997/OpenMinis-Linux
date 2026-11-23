@@ -140,11 +140,32 @@ internal fun resolveMonetTile(
         // dependency — revisit if the skill baseline ever requires true HCT.
         val tint = lerp(static, scheme.primary, 0.35f)
         val tile = lerp(static, scheme.primaryContainer, 0.35f)
-        val content = if (tile.luminance() > 0.5f) Color(0xFF1C1C1E) else Color.White
+        // [T-monet-tile-pairing] Pick the glyph by MEASURED contrast, not by a
+        // fixed luminance threshold: a mid-lightness tile (`luminance > 0.5`
+        // false) still fails White badly — measured 1.93–3.17:1 on nine of the
+        // fifteen table hues, below the 3:1 non-text bar. Take the better of the
+        // two candidates instead.
+        val content = if (contrastRatio(tile, Color.White) >= contrastRatio(tile, TILE_INK)) {
+            Color.White
+        } else {
+            TILE_INK
+        }
         MonetTileColors(tint = tint, tile = tile, content = content)
     } else {
         MonetTileColors(tint = static, tile = static, content = Color.White)
     }
+
+/** Ink glyph used when a tile is too light for White (WCAG 3:1 non-text floor). */
+private val TILE_INK = Color(0xFF1C1C1E)
+
+/** WCAG 2.x contrast ratio between two opaque colors, for tile pairing. */
+private fun contrastRatio(a: Color, b: Color): Float {
+    val la = a.luminance()
+    val lb = b.luminance()
+    val hi = maxOf(la, lb)
+    val lo = minOf(la, lb)
+    return (hi + 0.05f) / (lo + 0.05f)
+}
 
 /** Tint for plain (chip-less) icons: wallpaper accent in dynamic mode. */
 @Composable

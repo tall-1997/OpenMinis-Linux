@@ -74,8 +74,14 @@ internal fun ShowTurnChangesCardRow(
 @Composable
 internal fun rememberAppearanceBool(key: String, default: Boolean): Boolean {
     val context = LocalContext.current
-    var value by remember { mutableStateOf(getAppearancePrefs(context).bool(key, default)) }
-    DisposableEffect(key) {
+    // [T-pref-reactive-read] `remember(key)` not plain `remember`: when the
+    // CALLER swaps which key it watches, the initial value must be re-read for
+    // the new key. With a keyless remember the state kept the old key's value
+    // for one frame and only the DisposableEffect corrected it.
+    var value by remember(context, key, default) {
+        mutableStateOf(getAppearancePrefs(context).bool(key, default))
+    }
+    DisposableEffect(context, key, default) {
         val prefs = getAppearancePrefs(context)
         value = prefs.bool(key, default)
         val stop = prefs.observe { changed ->
