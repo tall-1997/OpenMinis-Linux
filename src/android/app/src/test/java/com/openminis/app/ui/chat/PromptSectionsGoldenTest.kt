@@ -7,6 +7,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
+ * [T-standing-rules-authority] Copy of the production constraint header.
+ * Duplicated here on purpose: the golden must fail if production wording drifts,
+ * so it pins the exact string instead of reading it back from PromptSections.
+ */
+private const val STANDING_HEADER =
+    "STANDING RULES — binding constraints, not background. " +
+        "Where a rule conflicts with tone, persona, or formatting guidance, the rule governs."
+
+/**
  * [T-prompt-sections] Behaviour-conservation goldens for the section-ized
  * system prompt (pi coding-agent src/core/system-prompt.ts:128-228 port).
  *
@@ -41,6 +50,11 @@ class PromptSectionsGoldenTest {
         }
         if (memory != null) {
             append("\n\n")
+            // [T-standing-rules-authority] The constraint header belongs to the
+            // memory section now, so the legacy oracle models it and this golden
+            // keeps proving join() is byte-exact.
+            append(STANDING_HEADER)
+            append("\n\n")
             append(memory)
         }
         append(tail)
@@ -50,7 +64,9 @@ class PromptSectionsGoldenTest {
         var len = base.length
         if (skill != null) len += 2 + skill.length
         if (mcp != null) len += 2 + mcp.length
-        if (memory != null) len += 2 + memory.length
+        // [T-standing-rules-authority] The memory section's stable prefix now
+        // carries the constraint header, so the boundary moves by its length too.
+        if (memory != null) len += 2 + STANDING_HEADER.length + 2 + memory.length
         return len
     }
 
@@ -141,6 +157,7 @@ class PromptSectionsGoldenTest {
                 "Tone and style:\n- Be concise.\n\n" +
                 "## Skills\n- deploy-check: verify release steps\n\n" +
                 "MCP servers (top 20 enabled):\n- github: code search\n\n" +
+                STANDING_HEADER + "\n\n" +
                 "Standing rules (GLOBAL.md):\n- Keep answers in the user's language" +
                 "\n\nRuntime context:\n" +
                 "- Current date: 2026-11-15 (Asia/Shanghai)\n" +
@@ -209,7 +226,17 @@ class PromptSectionsGoldenTest {
     @Test
     fun `added sections are reported as new content`() {
         val patches = PromptSections.diffSections(sections(memory = null), sections())
-        assertEquals(listOf(PromptSections.SectionPatch(PromptSections.MEMORY_STANDING, "\n\n$MEMORY")), patches)
+        // [T-standing-rules-authority] The memory section opens with the
+        // constraint header now, so the diff patch carries it too.
+        assertEquals(
+            listOf(
+                PromptSections.SectionPatch(
+                    PromptSections.MEMORY_STANDING,
+                    "\n\n" + STANDING_HEADER + "\n\n$MEMORY",
+                ),
+            ),
+            patches,
+        )
     }
 
     // ------------------------------------------------------------------

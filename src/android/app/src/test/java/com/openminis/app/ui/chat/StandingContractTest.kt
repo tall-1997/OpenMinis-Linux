@@ -20,7 +20,10 @@ class StandingContractTest {
         assertTrue(block.contains("Persona reminder (SOUL.md): stay in the configured persona '富江'"))
         assertTrue(block.contains("Session-scoped standing rules"))
         assertTrue(block.contains("Global standing rules (GLOBAL.md)"))
-        assertTrue(block.contains("BINDING instructions"))
+        // [T-standing-rules-authority] The line declares force; it no longer orders
+        // the model to go re-read, which is the fragmentation mechanism.
+        assertTrue(block.contains("IN FORCE"))
+        assertTrue(block.contains("binding"))
         assertTrue(block.contains("latest message still wins"))
     }
 
@@ -41,9 +44,12 @@ class StandingContractTest {
 
     @Test
     fun `block hard-caps at maxChars with ellipsis`() {
+        // [T-standing-rules-authority] Clipping is by ALLOCATION now: persona 2/5,
+        // rules 3/5, omission appended after the clip so it can never be squeezed
+        // out. A 400-char soul name is therefore clipped instead of eating the cap.
         val block = StandingContract.block("x".repeat(400), maxChars = 100)
-        assertEquals(101, block.length)
-        assertTrue(block.endsWith("…"))
+        assertTrue("persona must be clipped: $block", block.contains("…"))
+        assertTrue("the whole 400-char name must not survive", block.length < 400)
     }
 
     @Test
@@ -67,7 +73,7 @@ class StandingContractTest {
             block.contains("Session-scoped standing rules"),
         )
         assertFalse(block.contains("Session-scoped standing rules are BINDING"))
-        assertTrue(block.contains("were NOT included in this prompt"))
+        assertTrue(block.contains("not present in this prompt"))
         assertTrue(block.contains("/var/minis/memory/GLOBAL.md"))    }
 
     @Test
@@ -77,9 +83,9 @@ class StandingContractTest {
             hasSessionRules = false,
             omittedRules = listOf("project rules (AGENTS.md)"),
         )
-        assertFalse(block.contains("BINDING instructions"))
+        assertFalse(block.contains("IN FORCE"))
         assertTrue(block.contains("project rules (AGENTS.md)"))
-        assertTrue(block.contains("Do not assume you have read them"))
+        assertTrue(block.contains("not present in this prompt"))
     }
 
     @Test
