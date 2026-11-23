@@ -1146,7 +1146,8 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
         }
         val servedModel = dispatched?.model
         val requestedThinking = dispatched?.request?.thinkingLevel ?: turnThinkingLevel
-        suspend fun persistTextTurn(asReply: Boolean = false, recoveryNote: String? = null): String? {
+        // [T-midturn-prose-is-reply] default TRUE = prose is the reply.
+        suspend fun persistTextTurn(asReply: Boolean = true, recoveryNote: String? = null): String? {
             // Keep Stop's snapshot provisional until the durable write wins.
             val parts = turnOutput.parts(asReply)
             val acceptedPrefix = streamReplyPrefix.takeIf { asReply }
@@ -1494,10 +1495,8 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             continue
         }
 
-        // [T-goal-drift-reconciler] Per-tool-turn stall accounting rides
-        // recordUsage above (context passed there). Delivery at natural end below.
-
-        // [T-no-mid-task-speech] No stall nudge; repeats get a hint inside the tool result.
+        // [T-goal-drift-reconciler] Stall accounting rides recordUsage above.
+        // [T-no-mid-task-speech] No stall nudge; repeats get a hint in the tool result.
 
         if (turn == 0) generateSessionTitleIfNeeded()  // auto-title after first exchange
 
