@@ -145,6 +145,9 @@ object Routes {
     /** [T-mcp-integration-android] MCP Integrations management screen. */
     const val MCP = "mcp"
     const val MCP_TOOLS = "mcp_tools/{serverId}"
+    /** [T-lemon-integration] Bundled tool catalog panel (assets/lemon/panel.html). */
+    const val LEMON_PANEL = "lemon_panel?port={port}"
+    fun lemonPanel(port: Int) = "lemon_panel?port=$port"
     fun mcpTools(serverId: String) = "mcp_tools/${android.net.Uri.encode(serverId)}"
     const val PLUGIN_MARKET = "plugin_market"
     /** [T-soul-md] SOUL.md editor. */

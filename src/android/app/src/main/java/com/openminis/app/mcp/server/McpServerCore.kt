@@ -245,6 +245,12 @@ object McpServerCore {
             sb.append("Content-Length: ${bodyBytes.size}\r\n")
         }
         sb.append("Access-Control-Allow-Origin: *\r\n")
+        // [T-lemon-integration] The in-app panel is served from file:///android_asset,
+        // so every fetch is cross-origin with a JSON Content-Type and needs the
+        // preflight echoed back. Loopback-only binding keeps this safe.
+        sb.append("Access-Control-Allow-Headers: Content-Type, Authorization\r\n")
+        sb.append("Access-Control-Allow-Methods: POST, OPTIONS\r\n")
+        sb.append("Access-Control-Max-Age: 600\r\n")
         sb.append("Connection: close\r\n")
         sb.append("\r\n")
         if (response.body.isNotEmpty()) {
