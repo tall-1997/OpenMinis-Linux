@@ -11,15 +11,21 @@ import org.junit.Test
  * [P-process-card] Fold contracts under the process-card model.
  *
  * A round = one user message + the assistant/system messages after it up to
- * the next user message. Inside a round, reply text splits the process into
- * runs, and each run of ≥ 2 steps (thinking or tool, including a tool that
- * is still running) becomes one card. A single step stays inline.
+ * the next user message. Inside a round, consecutive steps (thinking or tool,
+ * including a tool that is still running) form ONE run of ≥ 2 steps → one
+ * card. A single step stays inline.
+ *
+ * [T-prose-does-not-split-process] Reply prose in the middle of a run is
+ * CONTENT, not a boundary: it renders outside the card and marks the run as no
+ * longer running, but it does not split the run. Only a round boundary (or a
+ * visible tool row that already had progress) closes it — splitting per
+ * sentence dropped runs below 2 steps and the card, with its thinking rows,
+ * disappeared.
  *
  * Cards own their steps: collapsed or expanded, the steps render inside the
  * card, never back in the list. The expansion key is the card's own key
  * (`<round key>--<first step id>`), not the message id, so opening one card
- * never opens another. A running card reports the live step; reply text ends
- * the card immediately.
+ * never opens another. Prose ends the card's RUNNING state immediately.
  */
 class ChatFlatItemsProcessFoldTest {
 
@@ -186,6 +192,38 @@ class ChatFlatItemsProcessFoldTest {
     }
 
     @Test
+    fun `reply prose between steps does not split the run`() {
+        // [T-prose-does-not-split-process] Regression from #434: once mid-turn
+        // prose became REPLY text (isProcessText = false), the flush branch ran
+        // on every sentence, cutting the run into one-step fragments below
+        // SEGMENT_MIN_STEPS. The card — and with it every thinking row — stopped
+        // rendering, while each sentence looked like its own reply. Prose is
+        // content, not a boundary: only a visible tool row may close a segment.
+        val items = buildFlatChatItems(
+            listOf(
+                assistant(
+                    blocks = listOf(
+                        thinking(id = "th1"),
+                        text(id = "tx1", content = "让我先看看这个文件。"),
+                        tool(id = "t1"),
+                        text(id = "tx2", content = "找到了，接下来修它。"),
+                        tool(id = "t2"),
+                    ),
+                ),
+            ),
+            showCompletedToolCards = false,
+            foldAiProcess = true,
+        )
+        val summary = items.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single()
+        assertEquals("both thinking steps must survive the prose", 1, summary.thinkingCount)
+        assertEquals("both tools must join one card", 2, summary.toolCount)
+        // The prose itself still renders as reply text, outside the card.
+        val replyTexts = items.filterIsInstance<FlatChatItem.AssistantMarkdownBlock>()
+            .map { it.rawText }
+        assertEquals(listOf("让我先看看这个文件。", "找到了，接下来修它。"), replyTexts)
+    }
+
+    @Test
     fun `a lone thinking after a carded run stays inline`() {
         // [P-process-card-single-step] Regression: the visibility gate used
         // to be ROUND-level (`!roundFolded || in keepVisibleIds`), so once
@@ -211,12 +249,15 @@ class ChatFlatItemsProcessFoldTest {
             foldAiProcess = true,
         )
         val k = kinds(items)
-        // The carded run (3 steps) is a summary and its steps are inside it.
+        // The run (thinking, 2 tools, thinking) is ONE card: prose between steps
+        // no longer splits it, so th2 joins the same card instead of becoming a
+        // below-threshold lone run.
         assertTrue(k.contains("summary"))
         assertFalse(k.contains("tool:bash"))
-        // The lone thinking after the reply text stays inline — it belongs
-        // to no card.
-        assertTrue(k.contains("thinking"))
+        assertFalse("thinking must not leak out beside the card", k.contains("thinking"))
+        val summary = items.filterIsInstance<FlatChatItem.AssistantProcessSummary>().single()
+        assertEquals(2, summary.thinkingCount)
+        assertEquals(2, summary.toolCount)
     }
 
     @Test
@@ -317,7 +358,7 @@ class ChatFlatItemsProcessFoldTest {
     }
 
     @Test
-    fun `reply text settles the card while the message keeps streaming`() {
+    fun `reply text ends the running state while the message keeps streaming`() {
         // The card model drops "输出中": the run's reply text IS its end, so
         // the card reports settled even mid-stream and its steps stay inside.
         val items = buildFlatChatItems(
@@ -502,9 +543,10 @@ class ChatFlatItemsProcessFoldTest {
     }
 
     @Test
-    fun `reply text splits a round into one card per process run`() {
-        // a1 ends with reply text, so its run closes there; a2's tools are a
-        // second run closed by its own reply. Two cards, not one.
+    fun `prose and message boundaries keep one card per round`() {
+        // [T-prose-does-not-split-process] Neither prose nor an assistant-message
+        // boundary closes a run — only the round (user message) does. Both
+        // messages belong to one round, so all four steps fold into ONE card.
         val items = buildFlatChatItems(
             listOf(
                 user(),
@@ -515,11 +557,28 @@ class ChatFlatItemsProcessFoldTest {
             foldAiProcess = true,
         )
         val summaries = items.filterIsInstance<FlatChatItem.AssistantProcessSummary>()
-        assertEquals(2, summaries.size)
-        // First run: a1's thinking + one tool, closed by "part".
+        assertEquals("one round → one card", 1, summaries.size)
+        assertEquals(1, summaries.single().thinkingCount)
+        assertEquals(3, summaries.single().toolCount)
+    }
+
+    @Test
+    fun `a new user message closes the previous card`() {
+        // The round boundary is what splits runs now.
+        val items = buildFlatChatItems(
+            listOf(
+                user(),
+                assistant(id = "a1", blocks = listOf(thinking(), tool(id = "a1t1"))),
+                user("u2"),
+                assistant(id = "a2", blocks = listOf(tool(id = "a2t1"), tool(id = "a2t2"))),
+            ),
+            showCompletedToolCards = false,
+            foldAiProcess = true,
+        )
+        val summaries = items.filterIsInstance<FlatChatItem.AssistantProcessSummary>()
+        assertEquals("two rounds → two cards", 2, summaries.size)
         assertEquals(1, summaries[0].thinkingCount)
         assertEquals(1, summaries[0].toolCount)
-        // Second run: a2's two tools, closed by "done".
         assertEquals(0, summaries[1].thinkingCount)
         assertEquals(2, summaries[1].toolCount)
     }
@@ -971,6 +1030,9 @@ class ChatFlatItemsProcessFoldTest {
                         text(id = "tx1", content = "part"),
                     ),
                 ),
+                // [T-prose-does-not-split-process] A round boundary, not prose,
+                // separates the two runs now.
+                user("u2"),
                 assistant(
                     id = "a2",
                     blocks = listOf(
@@ -990,7 +1052,7 @@ class ChatFlatItemsProcessFoldTest {
         assertEquals(2, keys.toSet().size)
         assertEquals(
             "first run escapes ':', the literal-hyphen run stays verbatim: $keys",
-            listOf("u1--grep%3A121", "u1--grep-121"),
+            listOf("u1--grep%3A121", "u2--grep-121"),
             keys,
         )
     }
