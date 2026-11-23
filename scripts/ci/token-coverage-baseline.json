@@ -1,6 +1,36 @@
 {
   "note": "未命名字面量预算，只许下调。由 --update-baseline 生成。 exempt 记录每个豁免行的数值指纹：值变了必须重新登记，否则按行放行的豁免就成了绕过棘轮的洞。",
   "files": {
+    "src/android/app/src/main/java/com/openminis/app/automation/ui/AutomationRuleEditScreen.kt": {
+      "color": 0,
+      "sp": 2,
+      "dp": 6
+    },
+    "src/android/app/src/main/java/com/openminis/app/automation/ui/AutomationRuleRunsScreen.kt": {
+      "color": 0,
+      "sp": 4,
+      "dp": 5
+    },
+    "src/android/app/src/main/java/com/openminis/app/automation/ui/AutomationRulesTab.kt": {
+      "color": 0,
+      "sp": 3,
+      "dp": 13
+    },
+    "src/android/app/src/main/java/com/openminis/app/cards/CardRenderers.kt": {
+      "color": 0,
+      "sp": 21,
+      "dp": 41
+    },
+    "src/android/app/src/main/java/com/openminis/app/cards/CardTitleParts.kt": {
+      "color": 0,
+      "sp": 2,
+      "dp": 1
+    },
+    "src/android/app/src/main/java/com/openminis/app/quick/QuickActivity.kt": {
+      "color": 0,
+      "sp": 0,
+      "dp": 16
+    },
     "src/android/app/src/main/java/com/openminis/app/ui/DatabaseQuarantineDialog.kt": {
       "color": 0,
       "sp": 0,
@@ -132,7 +162,7 @@
       "dp": 7
     },
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ChatSubAgentBar.kt": {
-      "color": 5,
+      "color": 2,
       "sp": 1,
       "dp": 50
     },
@@ -429,7 +459,7 @@
     "src/android/app/src/main/java/com/openminis/app/ui/components/MinisMenu.kt": {
       "color": 0,
       "sp": 0,
-      "dp": 17
+      "dp": 16
     },
     "src/android/app/src/main/java/com/openminis/app/ui/components/MinisSheetDragHandle.kt": {
       "color": 0,
@@ -1122,7 +1152,7 @@
       "dp": 17
     },
     "src/android/app/src/main/java/com/openminis/app/ui/theme/AccentTokens.kt": {
-      "color": 17,
+      "color": 18,
       "sp": 0,
       "dp": 0
     },
@@ -1132,7 +1162,7 @@
       "dp": 0
     },
     "src/android/app/src/main/java/com/openminis/app/ui/theme/Theme.kt": {
-      "color": 42,
+      "color": 67,
       "sp": 0,
       "dp": 10
     },
@@ -1140,6 +1170,16 @@
       "color": 1,
       "sp": 0,
       "dp": 0
+    },
+    "src/android/app/src/main/java/com/openminis/app/webapp/AddToHomeSheet.kt": {
+      "color": 0,
+      "sp": 0,
+      "dp": 17
+    },
+    "src/android/app/src/main/java/com/openminis/app/webapp/WebAppActivity.kt": {
+      "color": 0,
+      "sp": 0,
+      "dp": 8
     }
   },
   "exempt": {
@@ -1150,17 +1190,17 @@
       "92": "8"
     },
     "src/android/app/src/main/java/com/openminis/app/ui/chat/StreamingMarkdownText.kt": {
-      "183": "16",
-      "184": "24"
+      "184": "16",
+      "185": "24"
     },
     "src/android/app/src/main/java/com/openminis/app/ui/chat/ThinkingBlockUI.kt": {
-      "136": "0.5",
-      "161": "13",
-      "163": "1.5",
-      "272": "300"
+      "143": "0.5",
+      "168": "13",
+      "170": "1.5",
+      "279": "300"
     },
     "src/android/app/src/main/java/com/openminis/app/ui/components/CodeEditorField.kt": {
-      "163": "20"
+      "164": "20"
     },
     "src/android/app/src/main/java/com/openminis/app/ui/settings/AppearanceScreen.kt": {
       "766": "22 30"
@@ -1171,21 +1211,24 @@
       "100": "22"
     },
     "src/android/app/src/main/java/com/openminis/app/ui/theme/Theme.kt": {
-      "330": "57 64",
-      "331": "45 52",
-      "332": "36 44",
-      "333": "32 40",
-      "334": "28 36",
-      "335": "24 32",
-      "336": "22 28",
-      "337": "16 24",
-      "338": "14 20",
-      "339": "16 24",
-      "340": "14 20",
-      "341": "12 16",
-      "342": "14 20",
-      "343": "12 16",
-      "344": "11"
+      "404": "57 64",
+      "405": "45 52",
+      "406": "36 44",
+      "407": "32 40",
+      "408": "28 36",
+      "409": "24 32",
+      "410": "22 28",
+      "411": "16 24",
+      "412": "14 20",
+      "413": "16 24",
+      "414": "14 20",
+      "415": "12 16",
+      "416": "14 20",
+      "417": "12 16",
+      "418": "11"
     }
+  },
+  "allowlist": {
+    "src/android/app/src/main/java/com/openminis/app/ui/theme/ChatColors.kt": "设计系统的定义文件：三色系统契约明文规定原始 Color 字面量只允许出现在 Theme.kt / ChatColors.kt / AccentTokens.kt。+1 是 warningText 从 α0.45 黑改成实色（实测 3.32→8.05:1）。"
   }
 }

@@ -125,7 +125,7 @@ internal fun AttachmentChip(
                     verticalArrangement = Arrangement.Center,
                 ) {
                     Icon(
-                        Icons.AutoMirrored.Filled.InsertDriveFile,
+                        m3Icon(Icons.AutoMirrored.Filled.InsertDriveFile),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(20.dp),
@@ -228,7 +228,7 @@ internal fun MicButton(
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            if (isVoiceActive) Icons.Default.Keyboard else Icons.Default.Mic,
+            m3Icon(if (isVoiceActive) Icons.Default.Keyboard else Icons.Default.Mic),
             contentDescription = if (isVoiceActive) "Switch to keyboard"
             else if (isRecording) "Stop recording" else "Voice input",
             tint = tint,
@@ -356,7 +356,7 @@ internal fun ToolActivityPill(
         }
         if (isRunning && onStop != null) {
             Icon(
-                Icons.Default.Stop,
+                m3Icon(Icons.Default.Stop),
                 contentDescription = stringResource(R.string.cd_stop),
                 tint = Color(0xFFFF3B30),
                 modifier = Modifier
@@ -431,9 +431,20 @@ internal fun ThinkingLevelPicker(
                 isHighlighted -> ChatColors.thinking
                 else -> Color.Transparent
             }
-            // White text on both the blue and orange fills (readable in both
-            // themes); grey when unselected.
-            val fg = if (isHighlighted) Color.White else ChatColors.secondaryText
+            // [T-thinking-on] Selected-capsule text. Two different fills need two
+            // different foregrounds: `thinkingOn` is paired with the BLUE accent
+            // (dynamic = onPrimary), while the clamped-orange fill needs ink —
+            // White on orange@0.75 measures 1.82:1 in light mode, ink 9.35:1.
+            // Grey when unselected.
+            val fg = when {
+                // RawColors.neutral800 is exactly this value; the token exists,
+                // so use it instead of a fresh literal.
+                isClampedHighlight -> com.openminis.app.ui.tokens.RawColors.neutral800.let {
+                    androidx.compose.ui.graphics.Color(it.toInt())
+                }
+                isHighlighted -> ChatColors.thinkingOn
+                else -> ChatColors.secondaryText
+            }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier

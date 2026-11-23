@@ -43,6 +43,14 @@ class InAppThemeSourceGuardTest {
         // exists, so ChatColors.isDark is not reachable there — same shape as
         // MainActivity's "follow the system" branch.
         "QuickActivity.kt",
+        // [T-fallback-screen-theme] The two outage screens render when startup
+        // itself failed — which includes the case where the prefs backend is
+        // unavailable, so the in-app mode cannot be resolved. Their helper
+        // reads theme_mode defensively and falls back to the system value;
+        // reading ChatColors.isDark there would require a composition (and a
+        // working Prefs) that may not exist yet. Deliberate, reviewed act.
+        "StartupFailureScreen.kt",
+        "NewerDatabaseGuidanceScreen.kt",
     )
 
     @Test

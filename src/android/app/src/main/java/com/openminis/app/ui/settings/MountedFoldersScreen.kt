@@ -553,9 +553,9 @@ private fun MountRow(
 @Composable
 private fun AccessBadge(entry: MountedFoldersStore.Entry) {
     val (text, color) = when {
-        !entry.isWritable -> stringResource(R.string.mount_badge_readonly) to IosOrange
-        !entry.userAllowWrite -> stringResource(R.string.mount_badge_locked) to IosPurple
-        else -> stringResource(R.string.mount_badge_rw) to IosGreen
+        !entry.isWritable -> stringResource(R.string.mount_badge_readonly) to monetIconTint(IosOrange)
+        !entry.userAllowWrite -> stringResource(R.string.mount_badge_locked) to monetIconTint(IosPurple)
+        else -> stringResource(R.string.mount_badge_rw) to monetIconTint(IosGreen)
     }
     Surface(
         shape = RoundedCornerShape(8.dp),

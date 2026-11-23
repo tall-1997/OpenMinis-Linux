@@ -53,6 +53,8 @@ import kotlinx.coroutines.launch
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.theme.monetIconTint
+import com.openminis.app.ui.theme.monetIconTileColor
+import com.openminis.app.ui.theme.monetIconTileContentColor
 import com.openminis.app.ui.theme.IosBlue
 import com.openminis.app.ui.theme.IosOrange
 
@@ -192,7 +194,7 @@ fun MountDetailScreen(
 
             Spacer(Modifier.height(20.dp))
             ActionRow(
-                icon = Icons.Outlined.Folder,
+                icon = m3Icon(Icons.Outlined.Folder),
                 tint = monetIconTint(IosBlue), // [T-android-dynamic-accent-icons]
                 label = stringResource(R.string.mount_detail_browse_files),
                 onClick = onBrowseFiles,
@@ -200,7 +202,7 @@ fun MountDetailScreen(
 
             Spacer(Modifier.height(12.dp))
             ActionRow(
-                icon = Icons.Outlined.Folder,
+                icon = m3Icon(Icons.Outlined.Folder),
                 tint = MaterialTheme.colorScheme.error,
                 label = stringResource(R.string.mount_unmount_confirm),
                 destructive = true,
@@ -254,13 +256,13 @@ private fun HeaderCard(entry: MountedFoldersStore.Entry) {
                 modifier = Modifier
                     .size(36.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(IosOrange),
+                    .background(monetIconTileColor(IosOrange)),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
                     imageVector = m3Icon(Icons.Outlined.FolderShared),
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = monetIconTileContentColor(IosOrange),
                     modifier = Modifier.size(20.dp),
                 )
             }

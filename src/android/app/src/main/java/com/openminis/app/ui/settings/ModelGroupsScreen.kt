@@ -226,14 +226,14 @@ fun ModelGroupsScreen(
                                         actions = listOf(
                                             SwipeRowAction(
                                                 label = stringResource(R.string.common_edit),
-                                                icon = Icons.Filled.Edit,
+                                                icon = m3Icon(Icons.Filled.Edit),
                                                 containerColor = MaterialTheme.colorScheme.secondaryContainer,
                                                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                                                 onClick = { onGroupClick(group.id) },
                                             ),
                                             SwipeRowAction(
                                                 label = stringResource(R.string.common_delete),
-                                                icon = Icons.Filled.Delete,
+                                                icon = m3Icon(Icons.Filled.Delete),
                                                 containerColor = MaterialTheme.colorScheme.errorContainer,
                                                 contentColor = MaterialTheme.colorScheme.onErrorContainer,
                                                 onClick = { groupToDelete = group },

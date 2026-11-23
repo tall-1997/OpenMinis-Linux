@@ -409,7 +409,7 @@ fun LazyListScope.modelEntryPickerItems(
                                 modifier = Modifier.size(32.dp),
                             ) {
                                 Icon(
-                                    Icons.Outlined.Bolt,
+                                    m3Icon(Icons.Outlined.Bolt),
                                     contentDescription = stringResource(R.string.quicktest_button),
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(18.dp),

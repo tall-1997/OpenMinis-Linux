@@ -45,6 +45,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.openminis.app.R
+import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.tokens.MinisMotion
 import com.openminis.app.logging.AppLogger
 import com.openminis.app.ui.components.DialogWindowImmersiveEffect
@@ -270,7 +271,7 @@ private fun FloatingMenuButton(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = androidx.compose.material.icons.Icons.Outlined.MoreHoriz,
+                imageVector = m3Icon(androidx.compose.material.icons.Icons.Outlined.MoreHoriz),
                 contentDescription = stringResource(R.string.webpreview_more),
                 tint = Color.White,
                 modifier = Modifier.size(24.dp),
@@ -285,7 +286,7 @@ private fun FloatingMenuButton(
                 androidx.compose.material3.DropdownMenuItem(
                     text = { androidx.compose.material3.Text(stringResource(R.string.webapp_action_exit_fullscreen)) },
                     leadingIcon = {
-                        Icon(Icons.Outlined.FullscreenExit, contentDescription = null)
+                        Icon(m3Icon(Icons.Outlined.FullscreenExit), contentDescription = null)
                     },
                     onClick = {
                         menuOpen = false
@@ -297,7 +298,7 @@ private fun FloatingMenuButton(
                 androidx.compose.material3.DropdownMenuItem(
                     text = { androidx.compose.material3.Text(stringResource(R.string.webpreview_stop)) },
                     leadingIcon = {
-                        Icon(Icons.Outlined.Stop, contentDescription = null)
+                        Icon(m3Icon(Icons.Outlined.Stop), contentDescription = null)
                     },
                     onClick = {
                         menuOpen = false
@@ -308,7 +309,7 @@ private fun FloatingMenuButton(
                 androidx.compose.material3.DropdownMenuItem(
                     text = { androidx.compose.material3.Text(stringResource(R.string.webpreview_reload)) },
                     leadingIcon = {
-                        Icon(Icons.Outlined.Refresh, contentDescription = null)
+                        Icon(m3Icon(Icons.Outlined.Refresh), contentDescription = null)
                     },
                     onClick = {
                         menuOpen = false
@@ -319,7 +320,7 @@ private fun FloatingMenuButton(
             androidx.compose.material3.DropdownMenuItem(
                 text = { androidx.compose.material3.Text(stringResource(R.string.webpreview_open_external)) },
                 leadingIcon = {
-                    Icon(Icons.Outlined.OpenInBrowser, contentDescription = null)
+                    Icon(m3Icon(Icons.Outlined.OpenInBrowser), contentDescription = null)
                 },
                 onClick = {
                     menuOpen = false
@@ -336,7 +337,7 @@ private fun FloatingMenuButton(
                 },
                 leadingIcon = {
                     Icon(
-                        Icons.Outlined.Close,
+                        m3Icon(Icons.Outlined.Close),
                         contentDescription = null,
                         tint = androidx.compose.material3.MaterialTheme.colorScheme.error,
                     )

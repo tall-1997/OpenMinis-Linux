@@ -3388,4 +3388,24 @@
  <string name="perm_full_access_confirm">Aktifkan</string>
  <string name="perm_guarded_risk_reason">Konfirmasi perintah berisiko</string>
  <string name="perm_guarded_risk_message">Mode otonom menilai perintah ini berisiko. Konfirmasi sekali untuk menjalankannya.</string>
+ <!-- Sub-agent phase & tool labels -->
+ <string name="subagent_phase_thinking">Berpikir…</string>
+ <string name="subagent_phase_calling">Memanggil alat…</string>
+ <string name="subagent_phase_running">Berjalan…</string>
+ <string name="subagent_phase_replying">Membalas…</string>
+ <string name="subagent_tool_shell">Jalankan perintah</string>
+ <string name="subagent_tool_read">Baca file</string>
+ <string name="subagent_tool_write">Tulis file</string>
+ <string name="subagent_tool_edit">Sunting file</string>
+ <string name="subagent_tool_grep">Cari kode</string>
+ <string name="subagent_tool_web_search">Penelusuran web</string>
+ <string name="subagent_tool_web_fetch">Ambil halaman</string>
+ <string name="subagent_tool_browser">Peramban</string>
+ <string name="subagent_tool_memory">Memori</string>
+ <string name="subagent_tool_spawn">Sub-agen</string>
+    <!-- Tool detail sheet labels -->
+    <string name="tool_detail_title">Minis Computer</string>
+    <string name="tool_detail_open_full_output">Buka keluaran lengkap</string>
+    <string name="tool_detail_open_in_terminal">Buka di terminal</string>
+    <string name="tool_detail_open_in_session_browser">Buka di browser sesi</string>
 </resources>

@@ -83,6 +83,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.openminis.app.ui.DisplayBitmapLimits.limitDisplaySize
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.tokens.MinisTypography
 
 // ─── User Message (right-aligned, iOS: tertiarySystemFill bubble, 18dp radius) ─
@@ -271,7 +272,7 @@ internal fun UserMessageBubble(
                                 modifier = Modifier.size(44.dp),
                             ) {
                                 Icon(
-                                    imageVector = Icons.Filled.Cancel,
+                                    imageVector = m3Icon(Icons.Filled.Cancel),
                                     contentDescription = "Withdraw queued message",
                                     tint = Color(0xFFFF3B30),
                                     modifier = Modifier.size(24.dp),
@@ -289,7 +290,7 @@ internal fun UserMessageBubble(
                                 modifier = Modifier.size(44.dp),
                             ) {
                                 Icon(
-                                    imageVector = Icons.Filled.Edit,
+                                    imageVector = m3Icon(Icons.Filled.Edit),
                                     contentDescription = "Edit queued message",
                                     tint = ChatColors.secondaryText,
                                     modifier = Modifier.size(24.dp),
@@ -329,7 +330,7 @@ internal fun UserMessageBubble(
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.chat_longpress_copy)) },
                     onClick = { showMenu = false; onCopy() },
-                    leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                    leadingIcon = { Icon(m3Icon(Icons.Default.ContentCopy), contentDescription = null, modifier = Modifier.size(18.dp)) },
                 )
                 // T119: while the model is generating, hide every action that
                 // would mutate the in-flight turn. Retry truncates history and
@@ -339,7 +340,7 @@ internal fun UserMessageBubble(
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.chat_longpress_retry)) },
                         onClick = { showMenu = false; onRetry() },
-                        leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        leadingIcon = { Icon(m3Icon(Icons.Default.Refresh), contentDescription = null, modifier = Modifier.size(18.dp)) },
                     )
                 }
                 // T187: Edit replaces the original turn with edited text. Same
@@ -348,7 +349,7 @@ internal fun UserMessageBubble(
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.chat_longpress_edit)) },
                         onClick = { showMenu = false; onEdit() },
-                        leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        leadingIcon = { Icon(m3Icon(Icons.Default.Edit), contentDescription = null, modifier = Modifier.size(18.dp)) },
                     )
                 }
                 // [T-android-queued-message-edit #37] Queued bubbles can't use
@@ -361,7 +362,7 @@ internal fun UserMessageBubble(
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.chat_longpress_edit)) },
                         onClick = { showMenu = false; showEditDialog = true },
-                        leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        leadingIcon = { Icon(m3Icon(Icons.Default.Edit), contentDescription = null, modifier = Modifier.size(18.dp)) },
                     )
                 }
                 // [T-p9-revert] Roll files back to this point; the tail hides
@@ -372,7 +373,7 @@ internal fun UserMessageBubble(
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.chat_longpress_revert_to_here)) },
                         onClick = { showMenu = false; onRevertToHere() },
-                        leadingIcon = { Icon(Icons.Default.Restore, contentDescription = null, modifier = Modifier.size(18.dp)) },
+                        leadingIcon = { Icon(m3Icon(Icons.Default.Restore), contentDescription = null, modifier = Modifier.size(18.dp)) },
                     )
                 }
                 // [T-android-delete-from-here] Removes this message and every
@@ -392,7 +393,7 @@ internal fun UserMessageBubble(
                         onClick = { showMenu = false; onDeleteFromHere() },
                         leadingIcon = {
                             Icon(
-                                Icons.Default.Delete,
+                                m3Icon(Icons.Default.Delete),
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(18.dp),
@@ -629,7 +630,7 @@ private fun ImageGalleryDialog(
                     .padding(8.dp),
             ) {
                 Icon(
-                    androidx.compose.material.icons.Icons.Default.Close,
+                    m3Icon(androidx.compose.material.icons.Icons.Default.Close),
                     contentDescription = "Close",
                     tint = Color.White,
                 )

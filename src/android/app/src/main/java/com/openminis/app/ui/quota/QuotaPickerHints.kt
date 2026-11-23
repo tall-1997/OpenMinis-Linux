@@ -40,6 +40,7 @@ import com.openminis.app.quota.QuotaStore
 import com.openminis.app.quota.QuotaTone
 import com.openminis.app.quota.QuotaToneRules
 import com.openminis.app.ui.theme.LocalChatPalette
+import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.tokens.MinisTypography
 
 // [T-provider-quota P2] Lightweight quota hints for the model picker, the
@@ -123,7 +124,7 @@ fun QuotaSectionHeaderBadge(instanceId: String, onTap: (() -> Unit)?) {
             style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
         )
         if (onTap != null) {
-            Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = fg, modifier = Modifier.size(10.dp))
+            Icon(m3Icon(Icons.Filled.ChevronRight), contentDescription = null, tint = fg, modifier = Modifier.size(10.dp))
         }
     }
 }
@@ -170,7 +171,7 @@ fun ModelQuotaMemberPill(instanceId: String, modelId: String, onTap: () -> Unit)
             maxLines = 1,
             style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = "tnum"),
         )
-        Icon(Icons.Filled.ChevronRight, contentDescription = null, tint = fg, modifier = Modifier.size(8.dp))
+        Icon(m3Icon(Icons.Filled.ChevronRight), contentDescription = null, tint = fg, modifier = Modifier.size(8.dp))
     }
 }
 
@@ -208,7 +209,7 @@ fun ModelQuotaHintView(instanceId: String, modelId: String) {
         modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = spoken },
     ) {
         Icon(
-            if (hint.status == QuotaStatus.rateLimited) Icons.Filled.Timer else Icons.Filled.Error,
+            m3Icon(if (hint.status == QuotaStatus.rateLimited) Icons.Filled.Timer else Icons.Filled.Error),
             contentDescription = null,
             tint = color,
             modifier = Modifier.size(10.dp),

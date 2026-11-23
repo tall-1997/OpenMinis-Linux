@@ -46,6 +46,7 @@ import com.openminis.app.automation.RuleSpec
 import com.openminis.app.automation.summarize
 import com.openminis.app.ui.components.MinisMenu
 import com.openminis.app.ui.settings.SettingsSwitch
+import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.util.IsoTime
 
 /**
@@ -77,7 +78,7 @@ fun AutomationRulesTab(
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(
-                    Icons.Outlined.Bolt,
+                    m3Icon(Icons.Outlined.Bolt),
                     contentDescription = null,
                     modifier = Modifier.size(64.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -165,7 +166,7 @@ private fun RuleRow(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    Icons.Outlined.Bolt,
+                    m3Icon(Icons.Outlined.Bolt),
                     contentDescription = null,
                     tint = if (rule.enabled)
                         MaterialTheme.colorScheme.primary
@@ -215,12 +216,12 @@ private fun RuleRow(
         ) {
             androidx.compose.material3.DropdownMenuItem(
                 text = { Text(stringResource(R.string.automation_rule_menu_edit)) },
-                leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                leadingIcon = { Icon(m3Icon(Icons.Filled.Edit), contentDescription = null) },
                 onClick = { menuExpanded = false; onEdit() },
             )
             androidx.compose.material3.DropdownMenuItem(
                 text = { Text(stringResource(R.string.automation_rule_menu_runs)) },
-                leadingIcon = { Icon(Icons.Outlined.History, contentDescription = null) },
+                leadingIcon = { Icon(m3Icon(Icons.Outlined.History), contentDescription = null) },
                 onClick = { menuExpanded = false; onViewRuns() },
             )
             androidx.compose.material3.DropdownMenuItem(
@@ -231,7 +232,7 @@ private fun RuleRow(
                     )
                 },
                 leadingIcon = {
-                    Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                    Icon(m3Icon(Icons.Filled.Delete), contentDescription = null, tint = MaterialTheme.colorScheme.error)
                 },
                 onClick = { menuExpanded = false; onDelete() },
             )

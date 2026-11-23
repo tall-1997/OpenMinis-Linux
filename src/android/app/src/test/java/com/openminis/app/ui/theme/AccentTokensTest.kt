@@ -2,7 +2,11 @@ package com.openminis.app.ui.theme
 
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -14,6 +18,14 @@ import org.junit.Test
  * testable on the JVM without a composable host. The wallpaper fixture is
  * deliberately nothing like the iOS palette it must never leak (same trick
  * as [DynamicColorPaletteTest]).
+ *
+ * [T-monet-harmonize] Since 2026-11-23 the dynamic branch HARMONIZES each
+ * tile toward the wallpaper (35% RGB lerp) instead of collapsing all hues
+ * onto the single primary family: the first implementation turned all
+ * fifteen table hues into one color and deleted the settings-group and
+ * session-category color coding. The tests below pin the harmonize contract:
+ * every hue keeps a majority of itself, two different hues never collapse to
+ * the same tint, and the tile/content pairing is luminance-based.
  */
 class AccentTokensTest {
 
@@ -31,8 +43,15 @@ class AccentTokensTest {
     private fun resolve(static: Color, dynamicActive: Boolean) =
         resolveMonetTile(static, dynamicActive, amberWallpaper)
 
+    /** WCAG 2.x ratio, so the pairing contract can be asserted directly. */
+    private fun contrastRatioText(a: Color, b: Color): Float {
+        val la = a.luminance()
+        val lb = b.luminance()
+        return (maxOf(la, lb) + 0.05f) / (minOf(la, lb) + 0.05f)
+    }
+
     @Test
-    fun `settings menu hues resolve to the wallpaper roles when dynamic color is on`() {
+    fun `settings menu hues harmonize toward the wallpaper when dynamic color is on`() {
         val settingsHues = listOf(
             iosBlue,           // providers / model groups / usage / skills ...
             Color(0xFF34C759), // web search / terminal / backup
@@ -44,34 +63,49 @@ class AccentTokensTest {
         )
         for (hue in settingsHues) {
             val resolved = resolve(hue, dynamicActive = true)
-            assertEquals(amberWallpaper.primary, resolved.tint)
-            assertEquals(amberWallpaper.primaryContainer, resolved.tile)
-            assertEquals(amberWallpaper.onPrimaryContainer, resolved.content)
+            // Harmonized toward the scheme…
+            assertEquals(lerp(hue, amberWallpaper.primary, 0.35f), resolved.tint)
+            assertEquals(lerp(hue, amberWallpaper.primaryContainer, 0.35f), resolved.tile)
+            // [T-monet-tile-pairing] Assert the CONTRACT (the glyph reads at the
+            // WCAG 3:1 non-text floor), not a copy of the implementation. The
+            // previous version mirrored the old `luminance() > 0.5` branch, so it
+            // stayed green while nine of the fifteen hues shipped White at
+            // 1.93–3.17:1.
+            assertTrue(
+                "glyph on the harmonized tile must reach 3:1, got " +
+                    "${contrastRatioText(resolved.content, resolved.tile)} for $hue",
+                contrastRatioText(resolved.content, resolved.tile) >= 3.0f,
+            )
         }
     }
 
     @Test
-    fun `session category hues resolve through the same table when dynamic color is on`() {
-        // Mirrors SessionListScreen.categoryStyle minus the deliberate statics.
-        val sessionHues = listOf(
-            Color(0xFFF09A37), // code, travel
-            Color(0xFF3478F6), // writing, education
-            Color(0xFF30B0C7), // research
-            Color(0xFF5856D6), // analysis
-            Color(0xFFFF2D55), // creative, design
-            Color(0xFF34C759), // chat
-            Color(0xFF9B59B6), // math
-            Color(0xFF00BCD4), // translation
-            Color(0xFF00C7BE), // finance
-            Color(0xFFFFCC00), // productivity
-            Color(0xFF8B6914), // support
-        )
-        for (hue in sessionHues) {
-            val resolved = resolve(hue, dynamicActive = true)
-            assertEquals("tint for $hue", amberWallpaper.primary, resolved.tint)
-            assertEquals("tile for $hue", amberWallpaper.primaryContainer, resolved.tile)
-            assertEquals("content for $hue", amberWallpaper.onPrimaryContainer, resolved.content)
+    fun `distinct hues never collapse to one color under dynamic color`() {
+        // The regression this pins: the first bridge mapped every table hue to
+        // the SAME primaryContainer family, so the session list's category
+        // circles all became one indistinguishable color.
+        val a = resolve(iosBlue, dynamicActive = true)
+        val b = resolve(Color(0xFF34C759), dynamicActive = true)
+        val c = resolve(Color(0xFFFF9500), dynamicActive = true)
+        val d = resolve(Color(0xFF5856D6), dynamicActive = true)
+        val tints = listOf(a.tint, b.tint, c.tint, d.tint)
+        tints.forEach { tint ->
+            // Each keeps a majority of its own hue…
+            assertNotEquals(amberWallpaper.primary, tint)
         }
+        // …and they stay pairwise distinguishable.
+        assertEquals(4, tints.toSet().size)
+        assertEquals(4, listOf(a.tile, b.tile, c.tile, d.tile).toSet().size)
+    }
+
+    @Test
+    fun `harmonized tint stays recognizable as the original hue`() {
+        // 65% of the original survives the lerp: the green stays green, the
+        // orange stays orange (channel-wise, not a hue-domain claim).
+        val green = resolve(Color(0xFF34C759), dynamicActive = true).tint
+        assertTrue("green must keep a green channel lead, got $green", green.green > green.red)
+        val orange = resolve(Color(0xFFFF9500), dynamicActive = true).tint
+        assertTrue("orange must keep a red channel lead, got $orange", orange.red > orange.blue)
     }
 
     @Test

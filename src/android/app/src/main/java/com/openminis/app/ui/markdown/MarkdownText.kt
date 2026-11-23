@@ -330,7 +330,7 @@ private fun CodeBlockView(
                         modifier = Modifier.size(28.dp),
                     ) {
                         Icon(
-                            Icons.Filled.PlayArrow,
+                            m3Icon(Icons.Filled.PlayArrow),
                             contentDescription = "运行 ${block.language} 代码",
                             modifier = Modifier.size(18.dp),
                             tint = MaterialTheme.colorScheme.primary,
@@ -430,7 +430,7 @@ private fun BulletListView(
                 if (item.checked != null) {
                     // Task list item
                     Icon(
-                        imageVector = if (item.checked) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
+                        imageVector = m3Icon(if (item.checked) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank),
                         contentDescription = null,
                         tint = color.copy(alpha = 0.6f),
                         modifier = Modifier

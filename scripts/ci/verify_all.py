@@ -94,6 +94,9 @@ GATES: list[Gate] = [
     Gate("token-scope", _py("check_token_scope.py"), pre_selftest=True),
     Gate("token-semantics", _py("check_token_semantics.py")),
     Gate("token-coverage", _py("check_token_coverage.py"), pre_selftest=True),
+    # [T-ui-contracts] G2/G4（2026-11-23）：图标归一化 / remember-pref /
+    # 状态栏亮暗 / MinisColors 死槽 —— 行为类棘轮，基线只降不升。
+    Gate("ui-contracts", _py("check_ui_contracts.py"), pre_selftest=True),
 
     # ── 工具 / schema ────────────────────────────────────────────────────────
     Gate("schema-drift", _py("check_schema_drift.py")),

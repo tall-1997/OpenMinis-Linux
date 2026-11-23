@@ -257,3 +257,41 @@ internal fun decorPulse(
     val envelope = 0.5f - 0.5f * kotlin.math.cos(2f * Math.PI.toFloat() * t)
     return min + (max - min) * envelope
 }
+
+
+// ─── 动效缩放 + 通用周期相位 ─────────────────────────────────────────────────
+// [T-motion-scale] 全仓此前没有任何地方读 `LocalMotionDurationScale`：系统
+// 「移除动画」/「动画缩放 0」对装饰动画无效，这是无障碍缺口（m3e 与
+// apple-design 的 accessibility 章节都把「尊重减少动效」列为必须项）。
+// 这个 Local 由 MinisTheme 提供（值是系统 animator duration scale），装饰
+// 派生器全部乘以它静默静止。默认 1f，纯 JVM 单测里不需要宿主。
+val LocalMotionDurationScale = compositionLocalOf { 1f }
+
+/**
+ * [T-decor-shared-clock] 通用周期相位：等价
+ * `rememberInfiniteTransition().animateFloat(0→1, infiniteRepeatable(tween(periodMs, LinearEasing)))`
+ * 的 0→1 循环，但走共享时钟。周期量化成整数轮（见 [quantizedCycles]），
+ * 时钟回绕时波形连续。
+ *
+ * 动效缩放为 0（用户关掉了动画）时返回固定 0：静止在起始相位而不是停止
+ * tick —— 后者会让元素停在任意中间位置。
+ */
+@Composable
+internal fun decorPeriodPhase(periodMs: Int): Float {
+    val scale = LocalMotionDurationScale.current
+    if (scale <= 0f) return 0f
+    rememberDecorClockConsumer()
+    val phase = LocalDecorPhase.current
+    // [T-motion-scale-direction] ANIMATOR_DURATION_SCALE multiplies the DURATION
+    // (2 = twice as slow), so the period must be MULTIPLIED, not divided — the
+    // first version divided and made every animation run faster as the user
+    // slowed animations down.
+    val effective = (periodMs * scale).toInt().coerceAtLeast(1)
+    // Whole laps only. Fractional cycles would be smoother in the SPEED sense but
+    // they break at the clock wrap: measured phase jumps of 0.50 (2400ms) and
+    // 0.33 (900ms) when the shared phase goes 1 -> 0, i.e. the animation visibly
+    // snaps every period. Integer laps are continuous (jump 0.000) at the cost of
+    // quantising the requested period, which callers should pick to fit the
+    // 6 s clock (2400 -> 2000, 1500 -> 1500, 900 -> 857).
+    return (phase * quantizedCycles(effective)) % 1f
+}

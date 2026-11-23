@@ -74,6 +74,7 @@ import com.openminis.app.network.TailscaleStatus
 import com.openminis.app.network.WebViewNetworkProxy
 import com.openminis.app.ui.components.DialogTextField
 import com.openminis.app.ui.components.MinisTextButton
+import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -186,7 +187,7 @@ fun NetworkSettingsScreen(
             SettingsSection(footer = stringResource(R.string.network_paused_message)) {
                 SettingsRow(
                     title = stringResource(R.string.network_paused_title),
-                    icon = Icons.Outlined.Restore,
+                    icon = m3Icon(Icons.Outlined.Restore),
                     iconColor = Color(0xFFFF9500),
                     trailing = {
                         MinisTextButton(onClick = { NetworkHub.resume() }) {
@@ -246,7 +247,7 @@ fun NetworkSettingsScreen(
                             )
                             else -> null
                         },
-                        icon = Icons.Outlined.OpenInBrowser,
+                        icon = m3Icon(Icons.Outlined.OpenInBrowser),
                         onClick = { NetworkHub.browserLogin.begin() },
                         showChevron = !opening,
                         trailing = if (opening) ({ CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp) }) else null,
@@ -259,13 +260,13 @@ fun NetworkSettingsScreen(
                         val clipboard = LocalClipboardManager.current
                         SettingsRow(
                             title = stringResource(R.string.network_copy_login_link),
-                            icon = Icons.Outlined.ContentCopy,
+                            icon = m3Icon(Icons.Outlined.ContentCopy),
                             onClick = { clipboard.setText(AnnotatedString(url)) },
                         )
                     }
                     SettingsRow(
                         title = stringResource(R.string.network_login_auth_key),
-                        icon = Icons.Outlined.Key,
+                        icon = m3Icon(Icons.Outlined.Key),
                         onClick = { showAuthKey = true },
                     )
                 }
@@ -352,7 +353,7 @@ fun NetworkSettingsScreen(
             }
             SettingsRow(
                 title = stringResource(R.string.network_add_proxy),
-                icon = Icons.Outlined.Add,
+                icon = m3Icon(Icons.Outlined.Add),
                 onClick = { editingProxy = ProxyServer() },
                 showChevron = false,
                 showDivider = false,
@@ -403,7 +404,7 @@ fun NetworkSettingsScreen(
             }
             if (unrouted.isNotEmpty()) SettingsRow(
                 title = stringResource(R.string.network_add_providers),
-                icon = Icons.Outlined.Add,
+                icon = m3Icon(Icons.Outlined.Add),
                 onClick = { addingProviderRoutes = true },
                 showChevron = false,
                 showDivider = false,
@@ -426,7 +427,7 @@ fun NetworkSettingsScreen(
         if (page == NetworkPage.ROUTING) SettingsSection(footer = stringResource(R.string.network_restore_direct_footer) + "\n\n" + stringResource(R.string.network_entry_note)) {
             SettingsRow(
                 title = stringResource(R.string.network_restore_direct),
-                icon = Icons.Outlined.Restore,
+                icon = m3Icon(Icons.Outlined.Restore),
                 iconColor = MaterialTheme.colorScheme.error,
                 titleColor = MaterialTheme.colorScheme.error,
                 onClick = if (settings.forceDirect || settings.isUnconfigured) null else ({ NetworkHub.restoreDirect() }),

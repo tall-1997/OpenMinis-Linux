@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -46,6 +47,7 @@ import com.openminis.app.automation.RuleSpec
 import com.openminis.app.automation.Trigger
 import com.openminis.app.ui.components.MinisCenterTopBar
 import com.openminis.app.ui.settings.SettingsSwitch
+import com.openminis.app.ui.theme.m3Icon
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlinx.coroutines.launch
@@ -176,7 +178,7 @@ fun AutomationRuleEditScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
+                            m3Icon(Icons.AutoMirrored.Filled.ArrowBack),
                             contentDescription = stringResource(R.string.back),
                         )
                     }
@@ -189,6 +191,11 @@ fun AutomationRuleEditScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                // [T-android-ime-padding] Edge-to-edge + API 30+ means
+                // adjustResize no longer resizes the window; consume the IME
+                // inset explicitly so the 15-field form scrolls the focused
+                // field above the keyboard (same as SettingsScaffold T183).
+                .imePadding()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),

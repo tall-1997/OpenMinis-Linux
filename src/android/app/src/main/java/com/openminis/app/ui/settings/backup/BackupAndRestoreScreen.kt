@@ -8,6 +8,10 @@ import com.openminis.app.ui.theme.IosOrange
 import com.openminis.app.ui.theme.IosPurple
 import com.openminis.app.ui.theme.IosRed
 import com.openminis.app.ui.theme.IosTeal
+import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.theme.monetIconTileColor
+import com.openminis.app.ui.theme.monetIconTileContentColor
+import com.openminis.app.ui.theme.monetIconTint
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -246,16 +250,14 @@ private fun BackupTab(
         // yank it away the moment the user tapped into the run they were
         // reading about; by the time this fires again, the visit that produced
         // the result has ended, which is exactly when the card stops being
-        // useful. The same facts remain in Backup History.
-        //
+        // useful. The same facts remain in Backup History. 
         // Only a settled, fully-delivered run is dropped — a failure is the
         // one result worth coming back to.
         vm.clearSettledSuccess()
         // [T-android-backup-tab-double-refresh] The refreshes used to run here
         // too, duplicating the ON_RESUME observer below ON EVERY ENTRY
         // (ON_RESUME fires right after first composition). The observer alone
-        // covers first entry AND every return from Manage Destinations, so
-        // only it refreshes now.
+        // covers first entry AND every return from Manage Destinations, so only it refreshes now.
     }
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -276,8 +278,7 @@ private fun BackupTab(
     val passphraseValid = !encrypt || (passphrase.isNotEmpty() && passphrase == confirm)
     val hasFileTree = selected.any { it.carriesFileTree }
 
-    // -- Include --
-    // Footer changes with the Max Per-File Size selection, but only when a
+    // -- Include -- Footer changes with the Max Per-File Size selection, but only when a
     // file-carrying category is selected — otherwise the cap is meaningless
     // (mirrors iOS BackupSettingsView).
     val includeFooter = when {
@@ -343,7 +344,7 @@ private fun BackupTab(
 
         CategorySwitchRow(
             title = stringResource(R.string.backup_encrypt_backup),
-            icon = Icons.Outlined.Lock,
+            icon = m3Icon(Icons.Outlined.Lock),
             iconColor = IosGreen,
             checked = encrypt,
             onCheckedChange = { vm.setEncrypt(it) },
@@ -384,8 +385,7 @@ private fun BackupTab(
         }
     }
 
-    // -- Destinations --
-    // [T-android-backup-destination-gate] Inline list, mirroring iOS's
+    // -- Destinations -- [T-android-backup-destination-gate] Inline list, mirroring iOS's
     // `destinationSection`. Android previously offered only a "Manage
     // Destinations…" button, so the backup screen never showed WHETHER a
     // destination existed — which is how "back up with none configured"
@@ -447,7 +447,7 @@ private fun BackupTab(
             // on the red container rather than the same cloud-upload icon in a
             // different colour.
             PrimaryActionContent(
-                icon = if (running) Icons.Outlined.Stop else Icons.Outlined.CloudUpload,
+                icon = m3Icon(if (running) Icons.Outlined.Stop else Icons.Outlined.CloudUpload),
                 label = stringResource(
                     if (running) R.string.backup_stop else R.string.backup_start,
                 ),
@@ -571,7 +571,7 @@ private fun BackupHistorySection(
         }
         if (!expanded && records.size > shown.size) {
             RestoreSourceRow(
-                icon = Icons.Outlined.History,
+                icon = m3Icon(Icons.Outlined.History),
                 iconColor = IosGray,
                 label = stringResource(
                     R.string.backup_history_show_all,
@@ -748,7 +748,7 @@ private fun MaxFileSizeRow(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    Icons.Outlined.FolderZip, contentDescription = null,
+                    m3Icon(Icons.Outlined.FolderZip), contentDescription = null,
                     tint = Color.White, modifier = Modifier.size(17.dp),
                 )
             }
@@ -889,7 +889,7 @@ private fun RestoreTab(
                 } else {
                     phoneRestoreItems.forEachIndexed { i, item ->
                         RestoreSourceRow(
-                            icon = Icons.Outlined.Description,
+                            icon = m3Icon(Icons.Outlined.Description),
                             iconColor = IosBlue,
                             label = item.name,
                             enabled = !running,
@@ -915,7 +915,7 @@ private fun RestoreTab(
             ) {
                 phoneFolders.forEachIndexed { i, folder ->
                     RestoreSourceRow(
-                        icon = Icons.Outlined.Folder,
+                        icon = m3Icon(Icons.Outlined.Folder),
                         iconColor = IosBlue,
                         label = folder.name,
                         subtitle = stringResource(R.string.backup_dest_phone_subtitle),
@@ -926,7 +926,7 @@ private fun RestoreTab(
                 }
                 destinations.forEachIndexed { i, r ->
                     RestoreSourceRow(
-                        icon = Icons.Outlined.Cloud,
+                        icon = m3Icon(Icons.Outlined.Cloud),
                         iconColor = IosPurple,
                         label = r.name,
                         subtitle = stringResource(
@@ -953,7 +953,7 @@ private fun RestoreTab(
             // was pure redundancy on the restore screen. The underlying shared
             // folder support is untouched — only this duplicate entry is gone.
             RestoreSourceRow(
-                icon = Icons.Outlined.Description,
+                icon = m3Icon(Icons.Outlined.Description),
                 iconColor = IosBlue,
                 label = if (running) status ?: stringResource(R.string.backup_reading)
                 else stringResource(R.string.backup_choose_file),
@@ -962,7 +962,7 @@ private fun RestoreTab(
                 showDivider = true,
             )
             RestoreSourceRow(
-                icon = Icons.Outlined.Cloud,
+                icon = m3Icon(Icons.Outlined.Cloud),
                 iconColor = IosPurple,
                 label = stringResource(R.string.backup_choose_server),
                 enabled = !running,
@@ -1095,7 +1095,7 @@ private fun RestoreTab(
                 }
             }
             PrimaryActionContent(
-                icon = Icons.Outlined.CloudDownload,
+                icon = m3Icon(Icons.Outlined.CloudDownload),
                 label = liveLabel,
                 busy = running,
             )
@@ -1259,10 +1259,10 @@ private fun DestinationsSection(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(
-                        modifier = Modifier.size(30.dp).background(IosBlue, CircleShape),
+                        modifier = Modifier.size(30.dp).background(monetIconTileColor(IosBlue), CircleShape),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(com.openminis.app.ui.theme.m3Icon(Icons.Outlined.Folder), contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp))
+                        Icon(com.openminis.app.ui.theme.m3Icon(Icons.Outlined.Folder), contentDescription = null, tint = monetIconTileContentColor(IosBlue), modifier = Modifier.size(17.dp))
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
@@ -1295,7 +1295,7 @@ private fun DestinationsSection(
             )
         }
         RestoreSourceRow(
-            icon = Icons.Outlined.CreateNewFolder,
+            icon = m3Icon(Icons.Outlined.CreateNewFolder),
             iconColor = IosGreen,
             label = stringResource(R.string.backup_dest_add_folder),
             enabled = enabled,
@@ -1303,7 +1303,7 @@ private fun DestinationsSection(
             showDivider = true,
         )
         RestoreSourceRow(
-            icon = Icons.Outlined.Add,
+            icon = m3Icon(Icons.Outlined.Add),
             iconColor = IosGreen,
             label = stringResource(R.string.backup_manage_destinations),
             enabled = enabled,
@@ -1351,10 +1351,10 @@ private fun DestinationRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                modifier = Modifier.size(30.dp).background(IosBlue, CircleShape),
+                modifier = Modifier.size(30.dp).background(monetIconTileColor(IosBlue), CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp))
+                Icon(m3Icon(icon), contentDescription = null, tint = monetIconTileContentColor(IosBlue), modifier = Modifier.size(17.dp))
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -1427,7 +1427,7 @@ private fun ResultDestinationRow(
             Icon(
                 if (outcome.succeeded) com.openminis.app.ui.theme.m3Icon(Icons.Outlined.CheckCircle) else com.openminis.app.ui.theme.m3Icon(Icons.Outlined.Warning),
                 contentDescription = null,
-                tint = if (outcome.succeeded) IosGreen else IosOrange,
+                tint = if (outcome.succeeded) monetIconTint(IosGreen) else monetIconTint(IosOrange),
                 modifier = Modifier.size(20.dp),
             )
             Spacer(Modifier.width(10.dp))
@@ -1489,10 +1489,10 @@ internal fun RestoreSourceRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                modifier = Modifier.size(30.dp).background(iconColor, CircleShape),
+                modifier = Modifier.size(30.dp).background(monetIconTileColor(iconColor), CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp))
+                Icon(m3Icon(icon), contentDescription = null, tint = monetIconTileContentColor(iconColor), modifier = Modifier.size(17.dp))
             }
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
@@ -1620,13 +1620,13 @@ private fun CategorySwitchRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                modifier = Modifier.size(30.dp).background(iconColor, CircleShape),
+                modifier = Modifier.size(30.dp).background(monetIconTileColor(iconColor), CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = icon,
+                    imageVector = m3Icon(icon),
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = monetIconTileContentColor(iconColor),
                     modifier = Modifier.size(17.dp),
                 )
             }

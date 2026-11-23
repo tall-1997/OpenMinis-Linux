@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
 import com.openminis.app.ui.theme.ChatColors
+import com.openminis.app.ui.theme.m3Icon
 
 /// Floating "send arrow + Release to send capsule" hint shown while the
 /// user is dragging the input bar upward to send. Mirrors iOS
@@ -96,7 +97,7 @@ internal fun SwipeToSendHint(
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = Icons.Default.ArrowUpward,
+                imageVector = m3Icon(Icons.Default.ArrowUpward),
                 contentDescription = null,
                 tint = chipFg,
                 modifier = Modifier.size(18.dp),

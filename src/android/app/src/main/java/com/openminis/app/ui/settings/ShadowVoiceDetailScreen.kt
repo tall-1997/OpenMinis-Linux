@@ -30,6 +30,7 @@ import com.openminis.app.data.model.ModelEntry
 import com.openminis.app.data.model.hasAudioInput
 import com.openminis.app.data.model.hasAudioOutput
 import com.openminis.app.data.repository.ProviderRepository
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-android-provider-voice] Read-only detail of a shadow Voice Service —
@@ -168,7 +169,7 @@ private fun VoiceModelRow(entry: ModelEntry, isInput: Boolean, onClick: () -> Un
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = if (isInput) Icons.Outlined.Mic else Icons.AutoMirrored.Outlined.VolumeUp,
+            imageVector = m3Icon(if (isInput) Icons.Outlined.Mic else Icons.AutoMirrored.Outlined.VolumeUp),
             contentDescription = null,
             modifier = Modifier.size(18.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant,

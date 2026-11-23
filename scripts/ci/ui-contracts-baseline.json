@@ -1,0 +1,10 @@
+{
+  "icon_bypass": 8,
+  "remember_pref": 0,
+  "statusbar_auto": 0,
+  "dead_minis_colors_slots": 23,
+  "explained": {
+    "icon_bypass": "全部 8 处在 webapp/AddToHomeSheet.kt 与 webapp/WebAppActivity.kt：架构策略把 webapp/ 的 ui 依赖列为已登记的既有分层债务（见 architecture-policy.json 的 comment 与 forbiddenImportsBaseline），因此这些点无法 import ui.theme.m3Icon。若将来把它们抽到 cards/ 或 ui/ 子包，这个数字应降到 0。",
+    "dead_minis_colors_slots": "MinisColors 仍有 23 个槽位零消费者：它们是语义色板的一部分，但真实渲染走 ChatPalette / MaterialTheme.colorScheme。下一批把它们接到消费者或删除。"
+  }
+}

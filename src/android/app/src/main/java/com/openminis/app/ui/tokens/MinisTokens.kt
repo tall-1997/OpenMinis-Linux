@@ -3,10 +3,10 @@ package com.openminis.app.ui.tokens
 /**
  * 自动生成 —— 不要手改。生成器: scripts/ui/gen_tokens.py
  *
- * 扫描事实：573 个 ui 下的 .kt 文件 -> Color(0x...): 310 处 / 140 个不同色值；
- * dp 字面量 3700 处 / 87 个不同值；sp 35 处。
+ * 扫描事实：573 个 ui 下的 .kt 文件 -> Color(0x...): 333 处 / 162 个不同色值；
+ * dp 字面量 3699 处 / 87 个不同值；sp 35 处。
  * （已排除注释、字符串，以及标了 token-literal-ok 的行。）
- * 本文件命名 25 个色值，当前覆盖 138/310 = 45% 的颜色使用点。
+ * 本文件命名 25 个色值，当前覆盖 138/333 = 41% 的颜色使用点。
  * 剩下的未命名字面量由 scripts/ci/check_token_coverage.py 的按文件预算
  * 逐步压制 —— 那个脚本才是棘轮，本文件只负责统计。
  *
@@ -16,12 +16,12 @@ package com.openminis.app.ui.tokens
 
 /** 物理色。命名规则=来源，不改语义。语义槽在 [MinisColors]。 */
 object RawColors {
-    const val systemGreen: Long = 0xFF34C759L  // x 24
-    const val systemOrange: Long = 0xFFFF9500L  // x 26
-    const val systemBlue: Long = 0xFF007AFFL  // x 19
+    const val systemGreen: Long = 0xFF34C759L  // x 23
+    const val systemOrange: Long = 0xFFFF9500L  // x 24
+    const val systemBlue: Long = 0xFF007AFFL  // x 17
     const val systemRed: Long = 0xFFFF3B30L  // x 11
     const val systemPink: Long = 0xFFFF2D55L  // x 3
-    const val systemPurple: Long = 0xFF5856D6L  // x 3
+    const val systemPurple: Long = 0xFF5856D6L  // x 2
     const val systemGray: Long = 0xFF8E8E93L  // x 4
     const val systemTeal: Long = 0xFF32ADE6L
     const val systemCyan: Long = 0xFF64D2FFL
@@ -32,15 +32,15 @@ object RawColors {
     const val sparkleWarm: Long = 0xFFB8B096L  // x 1
     const val sparkleStone: Long = 0xFF99998CL  // x 1
     const val neutral0: Long = 0xFFFFFFFFL  // x 8
-    const val neutral50: Long = 0xFFF2F2F7L  // x 7
-    const val neutral100: Long = 0xFFE2E2E6L  // x 3
+    const val neutral50: Long = 0xFFF2F2F7L  // x 8
+    const val neutral100: Long = 0xFFE2E2E6L  // x 4
     const val neutral200: Long = 0xFFC4C4C8L  // x 1
     const val neutral400: Long = 0xFF8E8E92L  // x 1
     const val neutral500: Long = 0xFF747477L  // x 1
     const val neutral600: Long = 0xFF444446L  // x 2
-    const val neutral800: Long = 0xFF1C1C1EL  // x 5
+    const val neutral800: Long = 0xFF1C1C1EL  // x 8
     const val neutral900: Long = 0xFF16161AL
-    const val neutral1000: Long = 0xFF000000L  // x 8
+    const val neutral1000: Long = 0xFF000000L  // x 9
 
     // ─── 品牌色：厂商自身主色，不随动态取色变化 ─────────────────────────
     object Brand {
@@ -124,7 +124,7 @@ object RawSpace {
     const val huge2: Float = 40f  // x 17
     const val giant: Float = 48f  // x 25
     const val giant2: Float = 56f  // x 31
-    const val hairline: Float = 0.5f  // x 99
+    const val hairline: Float = 0.5f  // x 98
     const val thin: Float = 1f  // x 57
     const val thick: Float = 2f  // x 170
     const val touchTargetMin: Float = 48f  // 无障碍硬要求，不是审美

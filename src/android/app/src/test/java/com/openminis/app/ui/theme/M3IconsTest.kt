@@ -191,8 +191,11 @@ class M3IconsTest {
      * (Filled, Outlined) pair to iconPairs — not to change the call site.
      */
     @Test
-    fun `every m3Icon reference in ui sources is registered in the mapping table`() {
-        val root = java.io.File("src/main/java/com/openminis/app/ui")
+    fun `every m3Icon reference in app sources is registered in the mapping table`() {
+        // [T-icon-coverage-scope] Was `.../app/ui`: references in automation/ui,
+        // cards/, quick/ and webapp/ were invisible, and two existed. The mapping
+        // contract is about every call site in the app, not one directory.
+        val root = java.io.File("src/main/java/com/openminis/app")
         org.junit.Assert.assertTrue(
             "source root not found — this test locates sources relative to the " +
                 "module dir (cwd=${java.io.File(".").absolutePath})",

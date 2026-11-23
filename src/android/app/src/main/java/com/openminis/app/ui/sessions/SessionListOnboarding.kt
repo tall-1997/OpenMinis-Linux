@@ -62,7 +62,7 @@ internal fun OnboardingLanding(
         verticalArrangement = Arrangement.Center,
     ) {
         Icon(
-            imageVector = Icons.Default.AutoAwesome,
+            imageVector = m3Icon(Icons.Default.AutoAwesome),
             contentDescription = null,
             modifier = Modifier.size(56.dp),
             tint = MaterialTheme.colorScheme.primary,
@@ -199,7 +199,7 @@ private fun SetupStepCard(
 
         if (!isDone && isEnabled) {
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                imageVector = m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
             )

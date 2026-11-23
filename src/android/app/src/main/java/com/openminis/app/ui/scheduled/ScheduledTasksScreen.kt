@@ -54,6 +54,7 @@ import com.openminis.app.R
 import com.openminis.app.scheduled.ScheduledRepeatMode
 import com.openminis.app.scheduled.ScheduledTask
 import com.openminis.app.scheduled.viewState
+import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.util.IsoTime
 import com.openminis.app.ui.tokens.MinisTypography
 
@@ -101,7 +102,7 @@ fun ScheduledTasksScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
+                            m3Icon(Icons.AutoMirrored.Filled.ArrowBack),
                             contentDescription = stringResource(R.string.back),
                         )
                     }
@@ -111,12 +112,12 @@ fun ScheduledTasksScreen(
         floatingActionButton = {
             if (tab == 0) {
                 FloatingActionButton(onClick = { onEditTask(null) }, shape = CircleShape) {
-                    Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.scheduled_task_new))
+                    Icon(m3Icon(Icons.Filled.Add), contentDescription = stringResource(R.string.scheduled_task_new))
                 }
             } else {
                 // [T-android-automation-rules] Create a conditional rule.
                 FloatingActionButton(onClick = { onEditRule(null) }, shape = CircleShape) {
-                    Icon(Icons.Filled.Add, contentDescription = stringResource(R.string.automation_rule_new))
+                    Icon(m3Icon(Icons.Filled.Add), contentDescription = stringResource(R.string.automation_rule_new))
                 }
             }
         },
@@ -143,7 +144,7 @@ fun ScheduledTasksScreen(
             }
             if (tasks.isEmpty()) {
                 EmptyStateHint(
-                    icon = Icons.Outlined.Schedule,
+                    icon = m3Icon(Icons.Outlined.Schedule),
                     text = stringResource(R.string.scheduled_tasks_empty),
                 )
                 return@Column
@@ -223,7 +224,7 @@ private fun ScheduledTaskRow(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    Icons.Outlined.Schedule,
+                    m3Icon(Icons.Outlined.Schedule),
                     contentDescription = null,
                     tint = if (task.enabled)
                         MaterialTheme.colorScheme.primary
@@ -275,12 +276,12 @@ private fun ScheduledTaskRow(
         ) {
             androidx.compose.material3.DropdownMenuItem(
                 text = { Text(stringResource(R.string.scheduled_task_menu_edit)) },
-                leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                leadingIcon = { Icon(m3Icon(Icons.Filled.Edit), contentDescription = null) },
                 onClick = { menuExpanded = false; onEdit() },
             )
             androidx.compose.material3.DropdownMenuItem(
                 text = { Text(stringResource(R.string.scheduled_task_menu_runs)) },
-                leadingIcon = { Icon(Icons.Outlined.History, contentDescription = null) },
+                leadingIcon = { Icon(m3Icon(Icons.Outlined.History), contentDescription = null) },
                 onClick = { menuExpanded = false; onViewRuns() },
             )
             androidx.compose.material3.DropdownMenuItem(
@@ -291,7 +292,7 @@ private fun ScheduledTaskRow(
                     )
                 },
                 leadingIcon = {
-                    Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                    Icon(m3Icon(Icons.Filled.Delete), contentDescription = null, tint = MaterialTheme.colorScheme.error)
                 },
                 onClick = { menuExpanded = false; onDelete() },
             )

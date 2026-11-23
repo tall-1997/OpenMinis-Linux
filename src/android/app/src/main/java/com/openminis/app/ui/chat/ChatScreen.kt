@@ -1858,7 +1858,7 @@ fun ChatScreen(
                     // redundant (and could steal focus / reopen the IME).
                     if (!isTwoPane) {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.cd_back))
+                            Icon(m3Icon(Icons.AutoMirrored.Filled.ArrowBack), contentDescription = stringResource(R.string.cd_back))
                         }
                     } else if (onToggleSidebar != null) {
                         // [T-android-tablet-sidebar-collapse] The slot the back arrow
@@ -1905,7 +1905,7 @@ fun ChatScreen(
                             modifier = Modifier.offset(y = (-2).dp),
                         ) {
                             Icon(
-                                Icons.Filled.Menu,
+                                m3Icon(Icons.Filled.Menu),
                                 contentDescription = stringResource(
                                     if (sidebarCollapsed) {
                                         R.string.chat_show_sidebar
@@ -1999,7 +1999,7 @@ fun ChatScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(
-                            Icons.Default.Forum,
+                            m3Icon(Icons.Default.Forum),
                             contentDescription = null,
                             modifier = Modifier.size(16.dp),
                             tint = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -3712,7 +3712,7 @@ fun ChatScreen(
                             // an arrow pointing at a top line reads as "jump to a top
                             // anchor" for the turn-walk, and keeps this button visually
                             // distinct from the down button's plain chevron.
-                            imageVector = Icons.Default.VerticalAlignTop,
+                            imageVector = m3Icon(Icons.Default.VerticalAlignTop),
                             contentDescription = stringResource(R.string.cd_scroll_prev),
                             modifier = Modifier.size(20.dp),
                         )
@@ -4055,7 +4055,7 @@ fun ChatScreen(
                                         contentAlignment = Alignment.Center,
                                     ) {
                                         Icon(
-                                            Icons.AutoMirrored.Filled.ArrowForward,
+                                            m3Icon(Icons.AutoMirrored.Filled.ArrowForward),
                                             contentDescription = null,
                                             modifier = Modifier.size(10.dp),
                                             tint = ChatColors.secondaryText,
@@ -4237,7 +4237,7 @@ fun ChatScreen(
                                         DropdownMenuItem(
                                             text = { Text(stringResource(R.string.webapp_add_to_home)) },
                                             leadingIcon = {
-                                                Icon(Icons.Default.AppShortcut, contentDescription = null)
+                                                Icon(m3Icon(Icons.Default.AppShortcut), contentDescription = null)
                                             },
                                             onClick = {
                                                 webAppMenuExpanded = false
@@ -4855,7 +4855,7 @@ fun ChatScreen(
                                 // iOS parity: Take Photo / Choose Photos & Videos / Add File
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.chat_attach_take_photo)) },
-                                    leadingIcon = { Icon(Icons.Default.CameraAlt, contentDescription = null) },
+                                    leadingIcon = { Icon(m3Icon(Icons.Default.CameraAlt), contentDescription = null) },
                                     onClick = {
                                         showAttachMenu = false
                                         launchExternalPickerAfterMenuDismiss {
@@ -4872,7 +4872,7 @@ fun ChatScreen(
                                 )
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.chat_attach_choose_photos_videos)) },
-                                    leadingIcon = { Icon(Icons.Default.PhotoLibrary, contentDescription = null) },
+                                    leadingIcon = { Icon(m3Icon(Icons.Default.PhotoLibrary), contentDescription = null) },
                                     onClick = {
                                         showAttachMenu = false
                                         launchExternalPickerAfterMenuDismiss {
@@ -4913,7 +4913,7 @@ fun ChatScreen(
                         }
                         InputCircleButton(onClick = { showExpandedEditor = true }) {
                             Icon(
-                                Icons.Filled.OpenInFull,
+                                m3Icon(Icons.Filled.OpenInFull),
                                 contentDescription = stringResource(R.string.composer_expand_editor),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.size(18.dp),
@@ -5153,7 +5153,7 @@ fun ChatScreen(
                                     .padding(horizontal = 10.dp, vertical = 6.dp),
                             ) {
                                 Icon(
-                                    if (readReplies) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff,
+                                    m3Icon(if (readReplies) Icons.AutoMirrored.Filled.VolumeUp else Icons.AutoMirrored.Filled.VolumeOff),
                                     contentDescription = null,
                                     modifier = Modifier.size(14.dp),
                                     tint = if (ttsEnabled) MaterialTheme.colorScheme.primary else ChatColors.secondaryText,
@@ -5468,7 +5468,7 @@ fun ChatScreen(
                                     contentAlignment = Alignment.Center,
                                 ) {
                                     Icon(
-                                        Icons.Default.ArrowUpward,
+                                        m3Icon(Icons.Default.ArrowUpward),
                                         contentDescription = stringResource(R.string.cd_send),
                                         tint = if (canActivate) ChatColors.background
                                         else ChatColors.primaryText.copy(alpha = 0.5f),

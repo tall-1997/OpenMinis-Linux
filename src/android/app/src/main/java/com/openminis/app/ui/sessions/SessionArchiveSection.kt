@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [#35] Session archive — header of the "Archived" footer section.
@@ -49,7 +50,7 @@ internal fun ArchivedSectionHeader(
             .padding(top = 4.dp),
     ) {
         Icon(
-            imageVector = Icons.Default.Archive,
+            imageVector = m3Icon(Icons.Default.Archive),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(14.dp),
@@ -63,7 +64,7 @@ internal fun ArchivedSectionHeader(
         )
         Spacer(modifier = Modifier.weight(1f))
         Icon(
-            imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+            imageVector = m3Icon(if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown),
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(16.dp),

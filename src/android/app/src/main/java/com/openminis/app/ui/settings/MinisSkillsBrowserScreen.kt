@@ -64,6 +64,7 @@ import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.theme.IosBlue
 import com.openminis.app.ui.theme.IosGreen
 import com.openminis.app.ui.theme.IosRed
+import com.openminis.app.ui.theme.monetIconTint
 
 private enum class HudState {
     HIDDEN, IMPORTING, SUCCESS, ERROR, HINT
@@ -225,7 +226,7 @@ fun MinisSkillsBrowserScreen(
                             Text(stringResource(R.string.skills_browser_hud_importing), color = Color.White, style = MaterialTheme.typography.labelLarge)
                         }
                         HudState.SUCCESS -> {
-                            Icon(m3Icon(Icons.Filled.CheckCircle), contentDescription = null, tint = IosGreen, modifier = Modifier.size(16.dp))
+                            Icon(m3Icon(Icons.Filled.CheckCircle), contentDescription = null, tint = monetIconTint(IosGreen), modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(10.dp))
                             Text(hudMessage, color = Color.White, style = MaterialTheme.typography.labelLarge, maxLines = 1)
                         }
@@ -235,7 +236,7 @@ fun MinisSkillsBrowserScreen(
                             Text(hudMessage, color = Color.White, style = MaterialTheme.typography.labelLarge, maxLines = 2)
                         }
                         HudState.HINT -> {
-                            Icon(m3Icon(Icons.Filled.Info), contentDescription = null, tint = IosBlue, modifier = Modifier.size(16.dp))
+                            Icon(m3Icon(Icons.Filled.Info), contentDescription = null, tint = monetIconTint(IosBlue), modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(10.dp))
                             Text(hudMessage, color = Color.White, style = MaterialTheme.typography.labelLarge, maxLines = 2)
                         }

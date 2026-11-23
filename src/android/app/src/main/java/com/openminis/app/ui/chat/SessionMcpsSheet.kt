@@ -37,6 +37,7 @@ import com.openminis.app.R
 import com.openminis.app.data.repository.MCPRepository
 import com.openminis.app.ui.settings.SettingsRow
 import com.openminis.app.ui.settings.SettingsSection
+import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.tokens.MinisType
 import com.openminis.app.ui.tokens.MinisTypography
 
@@ -207,7 +208,7 @@ private fun EmptyMcpsCard() {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Icon(
-                Icons.Outlined.Extension,
+                m3Icon(Icons.Outlined.Extension),
                 contentDescription = null,
                 modifier = Modifier.size(36.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),

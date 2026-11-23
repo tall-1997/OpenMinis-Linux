@@ -353,7 +353,7 @@ private fun TerminalTopBar(
         )
         Spacer(modifier = Modifier.weight(1f))
         CircularIconButton(
-            icon = Icons.Default.Brush,
+            icon = m3Icon(Icons.Default.Brush),
             contentDescription = stringResource(R.string.terminal_clear),
             tint = TerminalGreen,
             onClick = onClear,
@@ -411,7 +411,7 @@ private fun KeyboardAccessoryBar(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             QuickCommandButton("Esc", iconText = "⎋") { onSendRaw(byteArrayOf(0x1B)) }
-            QuickCommandButton("Tab", icon = Icons.AutoMirrored.Filled.KeyboardTab) { onSendRaw(byteArrayOf(0x09)) }
+            QuickCommandButton("Tab", icon = m3Icon(Icons.AutoMirrored.Filled.KeyboardTab)) { onSendRaw(byteArrayOf(0x09)) }
             QuickCommandButton("⏎", iconText = "⏎") { onSendRaw(byteArrayOf(0x0D)) }
             // Ctrl and Alt are persistent toggles — tap to enable, tap again
             // to disable. When enabled, the next typed character is sent with
@@ -420,11 +420,11 @@ private fun KeyboardAccessoryBar(
             QuickCommandButton("Alt", iconText = "⌥", isActive = altDown, onClick = onAltToggle)
             QuickCommandButton("\u2191", icon = m3Icon(Icons.Default.KeyboardArrowUp)) { onSendRaw(byteArrayOf(0x1B, 0x5B, 0x41)) }
             QuickCommandButton("\u2193", icon = m3Icon(Icons.Default.KeyboardArrowDown)) { onSendRaw(byteArrayOf(0x1B, 0x5B, 0x42)) }
-            QuickCommandButton("\u2190", icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft) { onSendRaw(byteArrayOf(0x1B, 0x5B, 0x44)) }
-            QuickCommandButton("\u2192", icon = Icons.AutoMirrored.Filled.KeyboardArrowRight) { onSendRaw(byteArrayOf(0x1B, 0x5B, 0x43)) }
-            QuickCommandButton("C-c", icon = Icons.Outlined.Cancel) { onSendRaw(byteArrayOf(0x03)) }
-            QuickCommandButton("C-d", icon = Icons.Default.Eject) { onSendRaw(byteArrayOf(0x04)) }
-            QuickCommandButton("C-z", icon = Icons.Outlined.PauseCircle) { onSendRaw(byteArrayOf(0x1A)) }
+            QuickCommandButton("\u2190", icon = m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft)) { onSendRaw(byteArrayOf(0x1B, 0x5B, 0x44)) }
+            QuickCommandButton("\u2192", icon = m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight)) { onSendRaw(byteArrayOf(0x1B, 0x5B, 0x43)) }
+            QuickCommandButton("C-c", icon = m3Icon(Icons.Outlined.Cancel)) { onSendRaw(byteArrayOf(0x03)) }
+            QuickCommandButton("C-d", icon = m3Icon(Icons.Default.Eject)) { onSendRaw(byteArrayOf(0x04)) }
+            QuickCommandButton("C-z", icon = m3Icon(Icons.Outlined.PauseCircle)) { onSendRaw(byteArrayOf(0x1A)) }
         }
     }
 }

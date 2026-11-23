@@ -2,6 +2,12 @@ package com.openminis.app.ui.chat
 
 // AssistantBlock lives in this package (ChatModels.kt); no import needed.
 
+// [T-shell-command-sentinel] The generic fallback label is BOTH the value
+// returned when nothing parseable was found AND the guard two call sites use
+// to mean "no real command". Naming it once keeps the two roles in sync — a
+// bare literal in the comparison silently broke when the label changed.
+internal const val SHELL_COMMAND_PLACEHOLDER = "Shell command"
+
 // Helper: extract shell command from args or content (mirrors iOS toolDescription logic).
 // Also tolerant of *partial* streaming JSON (JSONObject.optString returns "" for
 // truncated objects, so fall back to a streaming-safe substring scan).
@@ -21,7 +27,7 @@ internal fun extractShellCommand(args: org.json.JSONObject, block: AssistantBloc
         if (firstLine.length > 2) return firstLine.drop(2)
     }
     // 4. iOS fallback: generic "Shell command"
-    return "Shell command"
+    return SHELL_COMMAND_PLACEHOLDER
 }
 
 /**

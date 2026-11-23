@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import com.openminis.app.R
+import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.delay
 
 /**
@@ -137,7 +138,7 @@ internal fun SupervisorStatusBar(
             if (mine.isLive) {
                 IconButton(onClick = onHalt, modifier = Modifier.size(32.dp)) {
                     Icon(
-                        imageVector = Icons.Filled.Stop,
+                        imageVector = m3Icon(Icons.Filled.Stop),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp),

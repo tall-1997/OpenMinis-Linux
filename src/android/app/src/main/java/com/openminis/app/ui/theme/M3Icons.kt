@@ -306,6 +306,116 @@ import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.material.icons.automirrored.filled.Backspace
+import androidx.compose.material.icons.automirrored.outlined.Backspace
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardTab
+import androidx.compose.material.icons.automirrored.outlined.KeyboardTab
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.automirrored.filled.Redo
+import androidx.compose.material.icons.automirrored.outlined.Redo
+import androidx.compose.material.icons.filled.AddToHomeScreen
+import androidx.compose.material.icons.outlined.AddToHomeScreen
+import androidx.compose.material.icons.filled.Android
+import androidx.compose.material.icons.outlined.Android
+import androidx.compose.material.icons.filled.AppShortcut
+import androidx.compose.material.icons.outlined.AppShortcut
+import androidx.compose.material.icons.filled.ArrowCircleDown
+import androidx.compose.material.icons.outlined.ArrowCircleDown
+import androidx.compose.material.icons.filled.Assignment
+import androidx.compose.material.icons.outlined.Assignment
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.filled.Brush
+import androidx.compose.material.icons.outlined.Brush
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.outlined.CameraAlt
+import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.outlined.CheckBox
+import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
+import androidx.compose.material.icons.outlined.CheckBoxOutlineBlank
+import androidx.compose.material.icons.filled.Compress
+import androidx.compose.material.icons.outlined.Compress
+import androidx.compose.material.icons.filled.DesktopWindows
+import androidx.compose.material.icons.outlined.DesktopWindows
+import androidx.compose.material.icons.filled.DriveFileMove
+import androidx.compose.material.icons.outlined.DriveFileMove
+import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.filled.Eject
+import androidx.compose.material.icons.outlined.Eject
+import androidx.compose.material.icons.filled.FolderOff
+import androidx.compose.material.icons.outlined.FolderOff
+import androidx.compose.material.icons.filled.HourglassEmpty
+import androidx.compose.material.icons.outlined.HourglassEmpty
+import androidx.compose.material.icons.filled.InsertDriveFile
+import androidx.compose.material.icons.outlined.InsertDriveFile
+import androidx.compose.material.icons.filled.Laptop
+import androidx.compose.material.icons.outlined.Laptop
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.outlined.List
+import androidx.compose.material.icons.filled.MergeType
+import androidx.compose.material.icons.outlined.MergeType
+import androidx.compose.material.icons.filled.MyLocation
+import androidx.compose.material.icons.outlined.MyLocation
+import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.outlined.OpenInNew
+import androidx.compose.material.icons.filled.PhotoLibrary
+import androidx.compose.material.icons.outlined.PhotoLibrary
+import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.outlined.Print
+import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.outlined.Restore
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.outlined.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.outlined.SkipPrevious
+import androidx.compose.material.icons.filled.VerticalAlignTop
+import androidx.compose.material.icons.outlined.VerticalAlignTop
+import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material.icons.outlined.Audiotrack
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.outlined.Bookmark
+import androidx.compose.material.icons.filled.CallMerge
+import androidx.compose.material.icons.outlined.CallMerge
+import androidx.compose.material.icons.filled.CallSplit
+import androidx.compose.material.icons.outlined.CallSplit
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.outlined.Flag
+import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.outlined.Group
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.outlined.Menu
+import androidx.compose.material.icons.filled.OpenInFull
+import androidx.compose.material.icons.outlined.OpenInFull
+import androidx.compose.material.icons.filled.PlayCircleFilled
+import androidx.compose.material.icons.outlined.PlayCircleFilled
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material.icons.filled.WrapText
+import androidx.compose.material.icons.outlined.WrapText
+import androidx.compose.material.icons.automirrored.filled.TextSnippet
+import androidx.compose.material.icons.automirrored.outlined.TextSnippet
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.outlined.VolumeOff
+import androidx.compose.material.icons.filled.BrokenImage
+import androidx.compose.material.icons.outlined.BrokenImage
+import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.outlined.FullscreenExit
+import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.outlined.MoreHoriz
+import androidx.compose.material.icons.filled.PauseCircle
+import androidx.compose.material.icons.outlined.PauseCircle
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.outlined.Public
+import androidx.compose.material.icons.filled.Troubleshoot
+import androidx.compose.material.icons.outlined.Troubleshoot
 
 /**
  * [T-two-styles] 双向图标变体归一化器：按当前视觉系统把 material-icons 的
@@ -324,6 +434,134 @@ import androidx.compose.ui.graphics.vector.ImageVector
  * 有对应条目（M3IconsTest 抽样把关）。
  */
 private val iconPairs: List<Pair<ImageVector, ImageVector>> = listOf(
+    Icons.AutoMirrored.Filled.Backspace to Icons.AutoMirrored.Outlined.Backspace,
+    Icons.AutoMirrored.Filled.KeyboardArrowLeft to Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
+    Icons.AutoMirrored.Filled.KeyboardTab to Icons.AutoMirrored.Outlined.KeyboardTab,
+    Icons.AutoMirrored.Filled.OpenInNew to Icons.AutoMirrored.Outlined.OpenInNew,
+    Icons.AutoMirrored.Filled.Redo to Icons.AutoMirrored.Outlined.Redo,
+    Icons.AutoMirrored.Filled.TextSnippet to Icons.AutoMirrored.Outlined.TextSnippet,
+    Icons.AutoMirrored.Filled.VolumeOff to Icons.AutoMirrored.Outlined.VolumeOff,
+    Icons.Filled.AccountTree to Icons.Outlined.AccountTree,
+    Icons.Filled.Add to Icons.Outlined.Add,
+    Icons.Filled.AddPhotoAlternate to Icons.Outlined.AddPhotoAlternate,
+    Icons.Filled.AddToHomeScreen to Icons.Outlined.AddToHomeScreen,
+    Icons.Filled.Android to Icons.Outlined.Android,
+    Icons.Filled.AppShortcut to Icons.Outlined.AppShortcut,
+    Icons.Filled.Archive to Icons.Outlined.Archive,
+    Icons.Filled.ArrowCircleDown to Icons.Outlined.ArrowCircleDown,
+    Icons.Filled.ArrowDropDown to Icons.Outlined.ArrowDropDown,
+    Icons.Filled.ArrowUpward to Icons.Outlined.ArrowUpward,
+    Icons.Filled.Assignment to Icons.Outlined.Assignment,
+    Icons.Filled.Audiotrack to Icons.Outlined.Audiotrack,
+    Icons.Filled.AutoAwesome to Icons.Outlined.AutoAwesome,
+    Icons.Filled.Block to Icons.Outlined.Block,
+    Icons.Filled.Bolt to Icons.Outlined.Bolt,
+    Icons.Filled.Bookmark to Icons.Outlined.Bookmark,
+    Icons.Filled.Brush to Icons.Outlined.Brush,
+    Icons.Filled.BugReport to Icons.Outlined.BugReport,
+    Icons.Filled.Build to Icons.Outlined.Build,
+    Icons.Filled.CallMerge to Icons.Outlined.CallMerge,
+    Icons.Filled.CallSplit to Icons.Outlined.CallSplit,
+    Icons.Filled.CameraAlt to Icons.Outlined.CameraAlt,
+    Icons.Filled.Cancel to Icons.Outlined.Cancel,
+    Icons.Filled.Check to Icons.Outlined.Check,
+    Icons.Filled.CheckBox to Icons.Outlined.CheckBox,
+    Icons.Filled.CheckBoxOutlineBlank to Icons.Outlined.CheckBoxOutlineBlank,
+    Icons.Filled.CheckCircle to Icons.Outlined.CheckCircle,
+    Icons.Filled.ChevronRight to Icons.Outlined.ChevronRight,
+    Icons.Filled.Close to Icons.Outlined.Close,
+    Icons.Filled.Code to Icons.Outlined.Code,
+    Icons.Filled.Compress to Icons.Outlined.Compress,
+    Icons.Filled.ContentCopy to Icons.Outlined.ContentCopy,
+    Icons.Filled.Delete to Icons.Outlined.Delete,
+    Icons.Filled.Description to Icons.Outlined.Description,
+    Icons.Filled.DesktopWindows to Icons.Outlined.DesktopWindows,
+    Icons.Filled.Dns to Icons.Outlined.Dns,
+    Icons.Filled.Download to Icons.Outlined.Download,
+    Icons.Filled.DragHandle to Icons.Outlined.DragHandle,
+    Icons.Filled.DriveFileMove to Icons.Outlined.DriveFileMove,
+    Icons.Filled.Edit to Icons.Outlined.Edit,
+    Icons.Filled.EditNote to Icons.Outlined.EditNote,
+    Icons.Filled.Eject to Icons.Outlined.Eject,
+    Icons.Filled.Error to Icons.Outlined.Error,
+    Icons.Filled.ExpandLess to Icons.Outlined.ExpandLess,
+    Icons.Filled.ExpandMore to Icons.Outlined.ExpandMore,
+    Icons.Filled.Extension to Icons.Outlined.Extension,
+    Icons.Filled.FileDownload to Icons.Outlined.FileDownload,
+    Icons.Filled.Flag to Icons.Outlined.Flag,
+    Icons.Filled.Folder to Icons.Outlined.Folder,
+    Icons.Filled.FolderOff to Icons.Outlined.FolderOff,
+    Icons.Filled.Forum to Icons.Outlined.Forum,
+    Icons.Filled.Fullscreen to Icons.Outlined.Fullscreen,
+    Icons.Filled.GraphicEq to Icons.Outlined.GraphicEq,
+    Icons.Filled.Group to Icons.Outlined.Group,
+    Icons.Filled.History to Icons.Outlined.History,
+    Icons.Filled.HourglassEmpty to Icons.Outlined.HourglassEmpty,
+    Icons.Filled.Image to Icons.Outlined.Image,
+    Icons.Filled.Info to Icons.Outlined.Info,
+    Icons.Filled.InsertDriveFile to Icons.Outlined.InsertDriveFile,
+    Icons.Filled.IosShare to Icons.Outlined.IosShare,
+    Icons.Filled.Key to Icons.Outlined.Key,
+    Icons.Filled.Keyboard to Icons.Outlined.Keyboard,
+    Icons.Filled.KeyboardArrowDown to Icons.Outlined.KeyboardArrowDown,
+    Icons.Filled.KeyboardArrowUp to Icons.Outlined.KeyboardArrowUp,
+    Icons.Filled.Language to Icons.Outlined.Language,
+    Icons.Filled.Laptop to Icons.Outlined.Laptop,
+    Icons.Filled.Launch to Icons.Outlined.Launch,
+    Icons.Filled.Layers to Icons.Outlined.Layers,
+    Icons.Filled.Lightbulb to Icons.Outlined.Lightbulb,
+    Icons.Filled.List to Icons.Outlined.List,
+    Icons.Filled.Lock to Icons.Outlined.Lock,
+    Icons.Filled.Memory to Icons.Outlined.Memory,
+    Icons.Filled.Menu to Icons.Outlined.Menu,
+    Icons.Filled.MergeType to Icons.Outlined.MergeType,
+    Icons.Filled.Mic to Icons.Outlined.Mic,
+    Icons.Filled.MoreVert to Icons.Outlined.MoreVert,
+    Icons.Filled.MovieCreation to Icons.Outlined.MovieCreation,
+    Icons.Filled.MyLocation to Icons.Outlined.MyLocation,
+    Icons.Filled.OpenInBrowser to Icons.Outlined.OpenInBrowser,
+    Icons.Filled.OpenInFull to Icons.Outlined.OpenInFull,
+    Icons.Filled.OpenInNew to Icons.Outlined.OpenInNew,
+    Icons.Filled.Pause to Icons.Outlined.Pause,
+    Icons.Filled.Person to Icons.Outlined.Person,
+    Icons.Filled.PhoneAndroid to Icons.Outlined.PhoneAndroid,
+    Icons.Filled.PhotoLibrary to Icons.Outlined.PhotoLibrary,
+    Icons.Filled.PlayArrow to Icons.Outlined.PlayArrow,
+    Icons.Filled.PlayCircleFilled to Icons.Outlined.PlayCircleFilled,
+    Icons.Filled.Print to Icons.Outlined.Print,
+    Icons.Filled.Psychology to Icons.Outlined.Psychology,
+    Icons.Filled.PushPin to Icons.Outlined.PushPin,
+    Icons.Filled.RadioButtonUnchecked to Icons.Outlined.RadioButtonUnchecked,
+    Icons.Filled.Refresh to Icons.Outlined.Refresh,
+    Icons.Filled.RemoveRedEye to Icons.Outlined.RemoveRedEye,
+    Icons.Filled.Replay to Icons.Outlined.Replay,
+    Icons.Filled.Restore to Icons.Outlined.Restore,
+    Icons.Filled.Schedule to Icons.Outlined.Schedule,
+    Icons.Filled.Search to Icons.Outlined.Search,
+    Icons.Filled.Settings to Icons.Outlined.Settings,
+    Icons.Filled.Share to Icons.Outlined.Share,
+    Icons.Filled.Shield to Icons.Outlined.Shield,
+    Icons.Filled.SkipNext to Icons.Outlined.SkipNext,
+    Icons.Filled.SkipPrevious to Icons.Outlined.SkipPrevious,
+    Icons.Filled.Stop to Icons.Outlined.Stop,
+    Icons.Filled.Terminal to Icons.Outlined.Terminal,
+    Icons.Filled.Timer to Icons.Outlined.Timer,
+    Icons.Filled.Unarchive to Icons.Outlined.Unarchive,
+    Icons.Filled.UnfoldMore to Icons.Outlined.UnfoldMore,
+    Icons.Filled.VerticalAlignTop to Icons.Outlined.VerticalAlignTop,
+    Icons.Filled.Videocam to Icons.Outlined.Videocam,
+    Icons.Filled.Visibility to Icons.Outlined.Visibility,
+    Icons.Filled.VisibilityOff to Icons.Outlined.VisibilityOff,
+    Icons.Filled.VolumeUp to Icons.Outlined.VolumeUp,
+    Icons.Filled.Warning to Icons.Outlined.Warning,
+    Icons.Filled.WarningAmber to Icons.Outlined.WarningAmber,
+    Icons.Filled.WrapText to Icons.Outlined.WrapText,
+    Icons.Filled.BrokenImage to Icons.Outlined.BrokenImage,
+    Icons.Filled.FullscreenExit to Icons.Outlined.FullscreenExit,
+    Icons.Filled.MoreHoriz to Icons.Outlined.MoreHoriz,
+    Icons.Filled.PauseCircle to Icons.Outlined.PauseCircle,
+    Icons.Filled.Public to Icons.Outlined.Public,
+    Icons.Filled.Troubleshoot to Icons.Outlined.Troubleshoot,
     Icons.AutoMirrored.Filled.ArrowBack to Icons.AutoMirrored.Outlined.ArrowBack,
     Icons.AutoMirrored.Filled.ArrowForward to Icons.AutoMirrored.Outlined.ArrowForward,
     Icons.AutoMirrored.Filled.Article to Icons.AutoMirrored.Outlined.Article,
@@ -335,145 +573,72 @@ private val iconPairs: List<Pair<ImageVector, ImageVector>> = listOf(
     Icons.AutoMirrored.Filled.Undo to Icons.AutoMirrored.Outlined.Undo,
     Icons.AutoMirrored.Filled.VolumeUp to Icons.AutoMirrored.Outlined.VolumeUp,
     Icons.Filled.Accessibility to Icons.Outlined.Accessibility,
-    Icons.Filled.Add to Icons.Outlined.Add,
-    Icons.Filled.AddPhotoAlternate to Icons.Outlined.AddPhotoAlternate,
     Icons.Filled.AdminPanelSettings to Icons.Outlined.AdminPanelSettings,
     Icons.Filled.AltRoute to Icons.Outlined.AltRoute,
     Icons.Filled.Apps to Icons.Outlined.Apps,
-    Icons.Filled.Archive to Icons.Outlined.Archive,
     Icons.Filled.ArrowDownward to Icons.Outlined.ArrowDownward,
-    Icons.Filled.ArrowDropDown to Icons.Outlined.ArrowDropDown,
-    Icons.Filled.ArrowUpward to Icons.Outlined.ArrowUpward,
-    Icons.Filled.AutoAwesome to Icons.Outlined.AutoAwesome,
     Icons.Filled.Backup to Icons.Outlined.Backup,
     Icons.Filled.BarChart to Icons.Outlined.BarChart,
     Icons.Filled.BatteryAlert to Icons.Outlined.BatteryAlert,
     Icons.Filled.BatteryFull to Icons.Outlined.BatteryFull,
-    Icons.Filled.Bolt to Icons.Outlined.Bolt,
     Icons.Filled.BrightnessAuto to Icons.Outlined.BrightnessAuto,
-    Icons.Filled.BugReport to Icons.Outlined.BugReport,
-    Icons.Filled.Build to Icons.Outlined.Build,
-    Icons.Filled.Cancel to Icons.Outlined.Cancel,
     Icons.Filled.ChatBubble to Icons.Outlined.ChatBubble,
     Icons.Filled.ChatBubbleOutline to Icons.Outlined.ChatBubbleOutline,
-    Icons.Filled.Check to Icons.Outlined.Check,
-    Icons.Filled.CheckCircle to Icons.Outlined.CheckCircle,
-    Icons.Filled.Close to Icons.Outlined.Close,
     Icons.Filled.Cloud to Icons.Outlined.Cloud,
     Icons.Filled.CloudDownload to Icons.Outlined.CloudDownload,
     Icons.Filled.CloudOff to Icons.Outlined.CloudOff,
     Icons.Filled.CloudUpload to Icons.Outlined.CloudUpload,
-    Icons.Filled.Code to Icons.Outlined.Code,
     Icons.Filled.Construction to Icons.Outlined.Construction,
-    Icons.Filled.AccountTree to Icons.Outlined.AccountTree,
-    Icons.Filled.ContentCopy to Icons.Outlined.ContentCopy,
     Icons.Filled.CreateNewFolder to Icons.Outlined.CreateNewFolder,
     Icons.Filled.DarkMode to Icons.Outlined.DarkMode,
     Icons.Filled.Dashboard to Icons.Outlined.Dashboard,
     Icons.Filled.DataUsage to Icons.Outlined.DataUsage,
-    Icons.Filled.Delete to Icons.Outlined.Delete,
     Icons.Filled.DeleteSweep to Icons.Outlined.DeleteSweep,
     Icons.Filled.FileUpload to Icons.Outlined.FileUpload,
-    Icons.Filled.Description to Icons.Outlined.Description,
     Icons.Filled.Diamond to Icons.Outlined.Diamond,
-    Icons.Filled.Dns to Icons.Outlined.Dns,
     Icons.Filled.DocumentScanner to Icons.Outlined.DocumentScanner,
-    Icons.Filled.Download to Icons.Outlined.Download,
-    Icons.Filled.DragHandle to Icons.Outlined.DragHandle,
-    Icons.Filled.Edit to Icons.Outlined.Edit,
     Icons.Filled.Email to Icons.Outlined.Email,
-    Icons.Filled.Error to Icons.Outlined.Error,
     Icons.Filled.ErrorOutline to Icons.Outlined.ErrorOutline,
-    Icons.Filled.ExpandLess to Icons.Outlined.ExpandLess,
-    Icons.Filled.ExpandMore to Icons.Outlined.ExpandMore,
-    Icons.Filled.Extension to Icons.Outlined.Extension,
     Icons.Filled.FactCheck to Icons.Outlined.FactCheck,
     Icons.Filled.Feedback to Icons.Outlined.Feedback,
     Icons.Filled.FiberManualRecord to Icons.Outlined.FiberManualRecord,
-    Icons.Filled.FileDownload to Icons.Outlined.FileDownload,
     Icons.Filled.FlashOn to Icons.Outlined.FlashOn,
-    Icons.Filled.Folder to Icons.Outlined.Folder,
     Icons.Filled.FolderOpen to Icons.Outlined.FolderOpen,
     Icons.Filled.FolderShared to Icons.Outlined.FolderShared,
     Icons.Filled.FolderZip to Icons.Outlined.FolderZip,
     Icons.Filled.FormatSize to Icons.Outlined.FormatSize,
-    Icons.Filled.Forum to Icons.Outlined.Forum,
     Icons.Filled.FrontHand to Icons.Outlined.FrontHand,
-    Icons.Filled.Fullscreen to Icons.Outlined.Fullscreen,
-    Icons.Filled.GraphicEq to Icons.Outlined.GraphicEq,
     Icons.Filled.Groups to Icons.Outlined.Groups,
     Icons.Filled.HelpOutline to Icons.Outlined.HelpOutline,
-    Icons.Filled.History to Icons.Outlined.History,
     Icons.Filled.Home to Icons.Outlined.Home,
     Icons.Filled.Hub to Icons.Outlined.Hub,
-    Icons.Filled.Image to Icons.Outlined.Image,
-    Icons.Filled.Info to Icons.Outlined.Info,
     Icons.Filled.Inventory2 to Icons.Outlined.Inventory2,
-    Icons.Filled.IosShare to Icons.Outlined.IosShare,
-    Icons.Filled.Key to Icons.Outlined.Key,
-    Icons.Filled.Keyboard to Icons.Outlined.Keyboard,
-    Icons.Filled.KeyboardArrowDown to Icons.Outlined.KeyboardArrowDown,
-    Icons.Filled.KeyboardArrowUp to Icons.Outlined.KeyboardArrowUp,
     Icons.Filled.Lan to Icons.Outlined.Lan,
-    Icons.Filled.Language to Icons.Outlined.Language,
-    Icons.Filled.Launch to Icons.Outlined.Launch,
-    Icons.Filled.Layers to Icons.Outlined.Layers,
     Icons.Filled.LightMode to Icons.Outlined.LightMode,
-    Icons.Filled.Lightbulb to Icons.Outlined.Lightbulb,
     Icons.Filled.Link to Icons.Outlined.Link,
-    Icons.Filled.Lock to Icons.Outlined.Lock,
     Icons.Filled.LockOpen to Icons.Outlined.LockOpen,
     Icons.Filled.ManageSearch to Icons.Outlined.ManageSearch,
-    Icons.Filled.Memory to Icons.Outlined.Memory,
-    Icons.Filled.Mic to Icons.Outlined.Mic,
-    Icons.Filled.MoreVert to Icons.Outlined.MoreVert,
-    Icons.Filled.MovieCreation to Icons.Outlined.MovieCreation,
     Icons.Filled.NorthWest to Icons.Outlined.NorthWest,
     Icons.Filled.Notifications to Icons.Outlined.Notifications,
     Icons.Filled.NotificationsActive to Icons.Outlined.NotificationsActive,
-    Icons.Filled.OpenInBrowser to Icons.Outlined.OpenInBrowser,
     Icons.Filled.Palette to Icons.Outlined.Palette,
-    Icons.Filled.Pause to Icons.Outlined.Pause,
-    Icons.Filled.Person to Icons.Outlined.Person,
-    Icons.Filled.PhoneAndroid to Icons.Outlined.PhoneAndroid,
-    Icons.Filled.PlayArrow to Icons.Outlined.PlayArrow,
-    Icons.Filled.Psychology to Icons.Outlined.Psychology,
-    Icons.Filled.PushPin to Icons.Outlined.PushPin,
-    Icons.Filled.RadioButtonUnchecked to Icons.Outlined.RadioButtonUnchecked,
     Icons.Filled.RecordVoiceOver to Icons.Outlined.RecordVoiceOver,
-    Icons.Filled.Refresh to Icons.Outlined.Refresh,
     Icons.Filled.Remove to Icons.Outlined.Remove,
-    Icons.Filled.RemoveRedEye to Icons.Outlined.RemoveRedEye,
-    Icons.Filled.Replay to Icons.Outlined.Replay,
     Icons.Filled.RestartAlt to Icons.Outlined.RestartAlt,
-    Icons.Filled.Schedule to Icons.Outlined.Schedule,
     Icons.Filled.ScreenLockPortrait to Icons.Outlined.ScreenLockPortrait,
-    Icons.Filled.Search to Icons.Outlined.Search,
     Icons.Filled.Security to Icons.Outlined.Security,
-    Icons.Filled.Settings to Icons.Outlined.Settings,
-    Icons.Filled.Share to Icons.Outlined.Share,
-    Icons.Filled.Shield to Icons.Outlined.Shield,
     Icons.Filled.Star to Icons.Outlined.Star,
     Icons.Filled.StarBorder to Icons.Outlined.StarBorder,
-    Icons.Filled.Stop to Icons.Outlined.Stop,
     Icons.Filled.Storage to Icons.Outlined.Storage,
     Icons.Filled.SwapVert to Icons.Outlined.SwapVert,
     Icons.Filled.Sync to Icons.Outlined.Sync,
     Icons.Filled.SystemUpdate to Icons.Outlined.SystemUpdate,
-    Icons.Filled.Terminal to Icons.Outlined.Terminal,
     Icons.Filled.TouchApp to Icons.Outlined.TouchApp,
     Icons.Filled.TrackChanges to Icons.Outlined.TrackChanges,
     Icons.Filled.Translate to Icons.Outlined.Translate,
     Icons.Filled.TravelExplore to Icons.Outlined.TravelExplore,
-    Icons.Filled.Unarchive to Icons.Outlined.Unarchive,
-    Icons.Filled.UnfoldMore to Icons.Outlined.UnfoldMore,
-    Icons.Filled.Videocam to Icons.Outlined.Videocam,
     Icons.Filled.ViewAgenda to Icons.Outlined.ViewAgenda,
-    Icons.Filled.Visibility to Icons.Outlined.Visibility,
-    Icons.Filled.VisibilityOff to Icons.Outlined.VisibilityOff,
-    Icons.Filled.VolumeUp to Icons.Outlined.VolumeUp,
     Icons.Filled.VpnKey to Icons.Outlined.VpnKey,
-    Icons.Filled.Warning to Icons.Outlined.Warning,
     Icons.Filled.Wifi to Icons.Outlined.Wifi,
 )
 

@@ -78,6 +78,7 @@ import com.openminis.app.R
 import com.openminis.app.knowledge.AppNotes
 import com.openminis.app.knowledge.AppNotesStore
 import com.openminis.app.ui.components.openExternalUrl
+import com.openminis.app.ui.theme.m3Icon
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -155,13 +156,13 @@ fun SettingsScreen(
                 footer = stringResource(R.string.settings_section_llm_providers_footer),
             ) {
                 SettingsRow(
-                    icon = Icons.Outlined.Lock,
+                    icon = m3Icon(Icons.Outlined.Lock),
                     iconColor = IosBlue,
                     title = stringResource(R.string.model_connection_title),
                     onClick = onModelConnectionClick,
                 )
                 SettingsRow(
-                    icon = Icons.Outlined.BarChart,
+                    icon = m3Icon(Icons.Outlined.BarChart),
                     iconColor = IosBlue,
                     title = stringResource(R.string.settings_token_usage),
                     subtitle = stringResource(R.string.settings_token_usage_subtitle),
@@ -173,7 +174,7 @@ fun SettingsScreen(
             // -- Appearance --
             SettingsSection(header = stringResource(R.string.settings_section_appearance)) {
                 SettingsRow(
-                    icon = Icons.Outlined.Palette,
+                    icon = m3Icon(Icons.Outlined.Palette),
                     iconColor = IosIndigo,
                     title = stringResource(R.string.settings_section_appearance),
                     subtitle = stringResource(R.string.settings_appearance_subtitle),
@@ -185,21 +186,21 @@ fun SettingsScreen(
             // -- Agent Runtime --
             SettingsSection(header = stringResource(R.string.settings_section_agent_runtime)) {
                 SettingsRow(
-                    icon = Icons.Outlined.Groups,
+                    icon = m3Icon(Icons.Outlined.Groups),
                     iconColor = IosIndigo,
                     title = stringResource(R.string.settings_multi_agent),
                     subtitle = stringResource(R.string.settings_multi_agent_subtitle),
                     onClick = onMultiAgentClick,
                 )
                 SettingsRow(
-                    icon = Icons.Outlined.Extension,
+                    icon = m3Icon(Icons.Outlined.Extension),
                     iconColor = IosBlue,
                     title = stringResource(R.string.settings_skills),
                     subtitle = stringResource(R.string.settings_skills_subtitle),
                     onClick = onSkillsClick,
                 )
                 SettingsRow(
-                    icon = Icons.Outlined.TravelExplore,
+                    icon = m3Icon(Icons.Outlined.TravelExplore),
                     iconColor = IosGreen,
                     title = stringResource(R.string.settings_web_search),
                     subtitle = stringResource(R.string.settings_web_search_subtitle),
@@ -207,14 +208,14 @@ fun SettingsScreen(
                 )
                 // [GH#131] Session lifecycle hooks (start / response / end).
                 SettingsRow(
-                    icon = Icons.Outlined.Build,
+                    icon = m3Icon(Icons.Outlined.Build),
                     iconColor = IosOrange,
                     title = stringResource(R.string.settings_lifecycle_hooks),
                     subtitle = stringResource(R.string.settings_lifecycle_hooks_subtitle),
                     onClick = onLifecycleHooksClick,
                 )
                 SettingsRow(
-                    icon = Icons.Outlined.Translate,
+                    icon = m3Icon(Icons.Outlined.Translate),
                     iconColor = IosBlue,
                     title = stringResource(R.string.settings_translate),
                     subtitle = stringResource(R.string.settings_translate_subtitle),
@@ -222,14 +223,14 @@ fun SettingsScreen(
                 )
                 // [T-soul-md] insertion between Skills and Memory per spec.
                 SettingsRow(
-                    icon = Icons.Outlined.AutoAwesome,
+                    icon = m3Icon(Icons.Outlined.AutoAwesome),
                     iconColor = IosOrange,
                     title = stringResource(R.string.settings_soul),
                     subtitle = stringResource(R.string.settings_soul_subtitle),
                     onClick = onSoulClick,
                 )
                 SettingsRow(
-                    icon = Icons.Outlined.Psychology,
+                    icon = m3Icon(Icons.Outlined.Psychology),
                     iconColor = IosIndigo,
                     title = stringResource(R.string.settings_memory),
                     subtitle = stringResource(R.string.settings_memory_subtitle),
@@ -241,21 +242,21 @@ fun SettingsScreen(
                 // Extension so MCP no longer shares the Skills row's puzzle-piece icon —
                 // the grid reads as "multiple composed blocks/servers". teal unchanged.
                 SettingsRow(
-                    icon = Icons.Outlined.Dashboard,
+                    icon = m3Icon(Icons.Outlined.Dashboard),
                     iconColor = IosTeal,
                     title = stringResource(R.string.settings_mcp),
                     subtitle = stringResource(R.string.settings_mcp_subtitle),
                     onClick = onMcpClick,
                 )
                 SettingsRow(
-                    icon = Icons.Outlined.Extension,
+                    icon = m3Icon(Icons.Outlined.Extension),
                     iconColor = IosOrange,
                     title = stringResource(R.string.plugin_market_title),
                     subtitle = stringResource(R.string.plugin_market_subtitle),
                     onClick = onPluginMarketClick,
                 )
                 SettingsRow(
-                    icon = Icons.Outlined.Terminal,
+                    icon = m3Icon(Icons.Outlined.Terminal),
                     iconColor = IosGreen,
                     title = stringResource(R.string.settings_env_vars),
                     subtitle = stringResource(R.string.settings_env_vars_subtitle),
@@ -266,7 +267,7 @@ fun SettingsScreen(
 
             SettingsSection(header = stringResource(R.string.settings_section_tools)) {
                 SettingsRow(
-                    icon = Icons.Outlined.Terminal,
+                    icon = m3Icon(Icons.Outlined.Terminal),
                     iconColor = IosIndigo,
                     title = stringResource(R.string.sessionlist_shell_terminal),
                     subtitle = stringResource(R.string.settings_section_tools),
@@ -277,7 +278,7 @@ fun SettingsScreen(
                 // architecture ceiling, so this destination does not get a
                 // nav route. Per-session binding lives in the chat menu.
                 SettingsRow(
-                    icon = Icons.Outlined.Dns,
+                    icon = m3Icon(Icons.Outlined.Dns),
                     iconColor = IosTeal,
                     title = stringResource(R.string.ssh_workspace_menu_title),
                     subtitle = stringResource(R.string.ssh_hosts_row_subtitle),
@@ -285,14 +286,14 @@ fun SettingsScreen(
                 )
                 // [T-tool-approval-removed] 审批门按 LO 裁决移除。
                 SettingsRow(
-                    icon = Icons.Outlined.Language,
+                    icon = m3Icon(Icons.Outlined.Language),
                     iconColor = IosGreen,
                     title = stringResource(R.string.sessionlist_open_browser),
                     subtitle = stringResource(R.string.sessionlist_browser_settings),
                     onClick = onOpenBrowser,
                 )
                 SettingsRow(
-                    icon = Icons.Outlined.Settings,
+                    icon = m3Icon(Icons.Outlined.Settings),
                     iconColor = IosGray,
                     title = stringResource(R.string.sessionlist_browser_settings),
                     subtitle = null,
@@ -304,28 +305,28 @@ fun SettingsScreen(
             // -- Storage --
             SettingsSection(header = stringResource(R.string.settings_section_storage)) {
                 SettingsRow(
-                    icon = Icons.Outlined.Inventory2,
+                    icon = m3Icon(Icons.Outlined.Inventory2),
                     iconColor = IosBlue,
                     title = stringResource(R.string.settings_section_storage),
                     subtitle = stringResource(R.string.settings_storage_subtitle),
                     onClick = onRootfsClick,
                 )
                 SettingsRow(
-                    icon = Icons.Outlined.Folder,
+                    icon = m3Icon(Icons.Outlined.Folder),
                     iconColor = IosGreen,
                     title = stringResource(R.string.settings_shared_folders),
                     subtitle = stringResource(R.string.settings_shared_folders_subtitle),
                     onClick = onSharedFoldersClick,
                 )
                 SettingsRow(
-                    icon = Icons.Outlined.FolderShared,
+                    icon = m3Icon(Icons.Outlined.FolderShared),
                     iconColor = IosOrange,
                     title = stringResource(R.string.settings_mount_external_folders),
                     subtitle = stringResource(R.string.settings_mount_external_folders_subtitle),
                     onClick = onMountedFoldersClick,
                 )
                 SettingsRow(
-                    icon = Icons.Outlined.Backup,
+                    icon = m3Icon(Icons.Outlined.Backup),
                     iconColor = IosGreen,
                     title = stringResource(R.string.settings_backup_restore),
                     subtitle = stringResource(R.string.settings_backup_restore_subtitle),
@@ -337,7 +338,7 @@ fun SettingsScreen(
             // -- Network [port-upstream-1.16] --
             SettingsSection(header = stringResource(R.string.settings_network_title)) {
                 SettingsRow(
-                    icon = Icons.Outlined.Wifi,
+                    icon = m3Icon(Icons.Outlined.Wifi),
                     iconColor = IosBlue,
                     title = stringResource(R.string.settings_network_title),
                     subtitle = stringResource(R.string.settings_network_subtitle),
@@ -349,7 +350,7 @@ fun SettingsScreen(
             // -- Permissions --
             SettingsSection(header = stringResource(R.string.settings_section_permissions)) {
                 SettingsRow(
-                    icon = Icons.Outlined.Shield,
+                    icon = m3Icon(Icons.Outlined.Shield),
                     iconColor = IosBlue,
                     title = stringResource(R.string.settings_section_permissions),
                     subtitle = stringResource(R.string.settings_permissions_subtitle),
@@ -368,7 +369,7 @@ fun SettingsScreen(
                 footer = stringResource(R.string.bg_section_footer),
             ) {
                 SettingsRow(
-                    icon = Icons.Outlined.BatteryFull,
+                    icon = m3Icon(Icons.Outlined.BatteryFull),
                     iconColor = IosOrange,
                     title = stringResource(R.string.bg_section_header),
                     subtitle = stringResource(R.string.bg_section_subtitle),
@@ -380,7 +381,7 @@ fun SettingsScreen(
             // -- Logs --
             SettingsSection(header = stringResource(R.string.settings_section_logs)) {
                 SettingsRow(
-                    icon = Icons.Outlined.Description,
+                    icon = m3Icon(Icons.Outlined.Description),
                     iconColor = IosBlue,
                     title = stringResource(R.string.settings_section_logs),
                     subtitle = stringResource(R.string.settings_logs_subtitle),
@@ -392,14 +393,14 @@ fun SettingsScreen(
             // -- About --
             SettingsSection(header = stringResource(R.string.settings_section_about)) {
                 SettingsRow(
-                    icon = Icons.Outlined.Info,
+                    icon = m3Icon(Icons.Outlined.Info),
                     iconColor = IosBlue,
                     title = stringResource(R.string.settings_about_minis),
                     subtitle = stringResource(R.string.settings_about_subtitle),
                     onClick = onAboutClick,
                 )
                 SettingsRow(
-                    icon = Icons.Outlined.FrontHand,
+                    icon = m3Icon(Icons.Outlined.FrontHand),
                     iconColor = IosBlue,
                     title = stringResource(R.string.settings_privacy_policy),
                     subtitle = null,
@@ -407,7 +408,7 @@ fun SettingsScreen(
                     onClick = { openExternalUrl(context, "https://openminis.github.io/privacy-policy.html") },
                 )
                 SettingsRow(
-                    icon = Icons.Outlined.Feedback,
+                    icon = m3Icon(Icons.Outlined.Feedback),
                     iconColor = IosBlue,
                     title = stringResource(R.string.settings_feedback),
                     subtitle = null,
@@ -436,7 +437,7 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_submit_github_issues),
                     leading = {
                         Icon(
-                            imageVector = Icons.Outlined.BugReport,
+                            imageVector = m3Icon(Icons.Outlined.BugReport),
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(22.dp),
@@ -453,7 +454,7 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_feedback_telegram),
                     leading = {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.Send,
+                            imageVector = m3Icon(Icons.AutoMirrored.Outlined.Send),
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(22.dp),
@@ -470,7 +471,7 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_feedback_email),
                     leading = {
                         Icon(
-                            imageVector = Icons.Outlined.Email,
+                            imageVector = m3Icon(Icons.Outlined.Email),
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(22.dp),

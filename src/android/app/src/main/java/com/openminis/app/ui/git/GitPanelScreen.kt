@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openminis.app.R
+import com.openminis.app.ui.theme.m3Icon
 
 // iOS system palette, matching the colours ChatToolDetailUI already uses for
 // tool status — the diff view should read like the rest of the app.
@@ -67,7 +68,7 @@ fun GitPanelScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
+                            m3Icon(Icons.AutoMirrored.Filled.ArrowBack),
                             contentDescription = stringResource(R.string.git_panel_back),
                         )
                     }
@@ -81,7 +82,7 @@ fun GitPanelScreen(
                         enabled = !state.busy,
                     ) {
                         Icon(
-                            Icons.Filled.Refresh,
+                            m3Icon(Icons.Filled.Refresh),
                             contentDescription = stringResource(R.string.git_panel_refresh),
                         )
                     }

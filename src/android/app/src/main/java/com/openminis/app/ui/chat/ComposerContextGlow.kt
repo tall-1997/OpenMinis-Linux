@@ -1,10 +1,5 @@
 package com.openminis.app.ui.chat
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -24,6 +19,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openminis.app.data.model.ContextUsage
+import com.openminis.app.ui.theme.decorPeriodPhase
 
 /**
  * [T-android-composer-context-glow] Marquee chase light on the composer's
@@ -61,7 +57,14 @@ internal const val COMPOSER_GLOW_ACTIVATE_RATIO = 0.85f
 internal const val COMPOSER_GLOW_FULL_RATIO = 0.98f
 
 /** Lap periods per intensity band: calm → urgent (near 100%). */
-internal const val COMPOSER_GLOW_PERIOD_CALM_MS = 2400
+// [T-decor-shared-clock] These three periods run on the shared 6 s decor clock,
+// which only emits whole laps: the phase can advance by an integer number of
+// cycles per clock period, so a requested period is honoured when 6000 is an
+// exact multiple of it. CALM was 2400 (6000/2400 = 2.5 laps -> the clock snaps
+// it to 2 laps = 2000 ms, a 16.7% speed error). 2000 keeps the design's relative
+// spacing (calm : fast : urgent = 2000 : 1500 : 900 vs 2400 : 1500 : 900 — the
+// calm tier is ~11% quicker than before) while being exact: 6000/2000 = 3 laps.
+internal const val COMPOSER_GLOW_PERIOD_CALM_MS = 2000
 internal const val COMPOSER_GLOW_PERIOD_FAST_MS = 1500
 internal const val COMPOSER_GLOW_PERIOD_URGENT_MS = 900
 
@@ -236,14 +239,11 @@ internal fun Modifier.composerContextGlow(
     val strokePx = with(LocalDensity.current) { 2.5.dp.toPx() }
     val radiusPx = with(LocalDensity.current) { 20.dp.toPx() }
     val headRadiusPx = with(LocalDensity.current) { COMPOSER_GLOW_HEAD_RADIUS_DP.dp.toPx() }
-    val phase by rememberInfiniteTransition(label = "composerContextGlow").animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = composerGlowPeriodMs(intensity), easing = LinearEasing),
-        ),
-        label = "composerContextGlowPhase",
-    )
+    // [T-decor-shared-clock] Derive the sweep from the SHARED 30fps decor clock
+    // instead of a private `rememberInfiniteTransition`: one phase source for the
+    // whole app, frame production gated by the consumer counter, and the
+    // system animator duration scale honoured (see decorPeriodPhase).
+    val phase = decorPeriodPhase(composerGlowPeriodMs(intensity))
     val glowAlpha = 0.35f + 0.65f * intensity
     return this.drawWithCache {
         // Rebuilt only when the size (or a captured param) changes — never

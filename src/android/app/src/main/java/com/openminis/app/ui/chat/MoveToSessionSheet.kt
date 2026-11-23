@@ -1,5 +1,6 @@
 package com.openminis.app.ui.chat
 
+import com.openminis.app.ui.theme.m3Icon
 import com.openminis.app.ui.tokens.RawColors
 import com.openminis.app.ui.tokens.asColor
 import androidx.compose.foundation.background
@@ -199,7 +200,7 @@ private fun NewChatRow(onClick: () -> Unit) {
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = Icons.Outlined.Add,
+                imageVector = m3Icon(Icons.Outlined.Add),
                 contentDescription = null,
                 tint = accent,
                 modifier = Modifier.size(20.dp),

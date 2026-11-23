@@ -197,7 +197,7 @@ internal fun ToolDetailSheet(
                 // the elapsed-duration text) so it sits next to where the
                 // user is already scanning timing info.
                 Text(
-                    text = "Minis Computer",
+                    text = stringResource(R.string.tool_detail_title),
                     fontSize = MinisTypography.title,
                     fontWeight = FontWeight.SemiBold,
                     color = ChatColors.primaryText,
@@ -213,8 +213,7 @@ internal fun ToolDetailSheet(
                 //  - browser_use → fires Intent.ACTION_VIEW for the
                 //    resolved page URL so the user can jump to the system
                 //    browser (or any chooser) and continue from there.
-                //  - everything else → still copies the tool output to
-                //    clipboard.
+                //  - everything else → still copies the tool output to clipboard.
                 val clipboardManager = LocalClipboardManager.current
                 val actionContext = LocalContext.current
                 var copyDone by remember { mutableStateOf(false) }
@@ -250,7 +249,7 @@ internal fun ToolDetailSheet(
                     ) {
                         Icon(
                             m3Icon(Icons.Default.Description),
-                            contentDescription = "Open full output",
+                            contentDescription = stringResource(R.string.tool_detail_open_full_output),
                             tint = ChatColors.primaryText,
                             modifier = Modifier.size(16.dp),
                         )
@@ -266,7 +265,7 @@ internal fun ToolDetailSheet(
                         .clickable {
                             if (isShellTool) {
                                 val command = extractShellCommand(toolArgsForAction, block)
-                                if (command.isNotBlank() && command != "Shell command") {
+                                if (command.isNotBlank() && command != SHELL_COMMAND_PLACEHOLDER) {
                                     AppLogger.info(
                                         "ChatScreen",
                                         "opening terminal with prefill: ${command.take(120)}",
@@ -295,13 +294,14 @@ internal fun ToolDetailSheet(
                         when {
                             copyDone -> m3Icon(Icons.Default.Check)
                             isShellTool -> m3Icon(Icons.Default.Terminal)
-                            isBrowserTool -> Icons.Outlined.Public
+                            isBrowserTool -> m3Icon(Icons.Outlined.Public)
                             else -> m3Icon(Icons.Default.ContentCopy)
                         },
+                        // [T-tool-detail-i18n] Were bare English literals in all 17 locales.
                         contentDescription = when {
-                            isShellTool -> "Open in terminal"
-                            isBrowserTool -> "Open in session browser"
-                            else -> "Copy"
+                            isShellTool -> stringResource(R.string.tool_detail_open_in_terminal)
+                            isBrowserTool -> stringResource(R.string.tool_detail_open_in_session_browser)
+                            else -> stringResource(R.string.common_copy)
                         },
                         tint = ChatColors.primaryText,
                         modifier = Modifier.size(16.dp),
@@ -561,7 +561,7 @@ internal fun ToolDetailSheet(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Icon(
-                                        Icons.Default.EditNote,
+                                        m3Icon(Icons.Default.EditNote),
                                         contentDescription = null,
                                         tint = RawC.systemOrange.tc,
                                         modifier = Modifier.size(12.dp),
@@ -1109,7 +1109,7 @@ internal fun ToolDetailSheet(
                         modifier = Modifier.size(32.dp),
                     ) {
                         Icon(
-                            Icons.Default.SkipPrevious,
+                            m3Icon(Icons.Default.SkipPrevious),
                             contentDescription = stringResource(R.string.tool_detail_prev_desc),
                             tint = if (currentIdx > 0) ChatColors.primaryText else ChatColors.disabledText,
                             modifier = Modifier.size(22.dp),
@@ -1155,7 +1155,7 @@ internal fun ToolDetailSheet(
                         modifier = Modifier.size(32.dp),
                     ) {
                         Icon(
-                            Icons.Default.SkipNext,
+                            m3Icon(Icons.Default.SkipNext),
                             contentDescription = stringResource(R.string.tool_detail_next_desc),
                             tint = if (currentIdx < toolBlocks.lastIndex) ChatColors.primaryText else ChatColors.disabledText,
                             modifier = Modifier.size(22.dp),

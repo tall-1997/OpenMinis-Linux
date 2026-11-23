@@ -3387,4 +3387,24 @@
  <string name="perm_full_access_confirm">Activează</string>
  <string name="perm_guarded_risk_reason">Confirmă comanda riscantă</string>
  <string name="perm_guarded_risk_message">Modul autonom a considerat această comandă riscantă. Confirmă o dată pentru a o rula.</string>
+ <!-- Sub-agent phase & tool labels -->
+ <string name="subagent_phase_thinking">Se gândește…</string>
+ <string name="subagent_phase_calling">Se apelează instrumentul…</string>
+ <string name="subagent_phase_running">Se execută…</string>
+ <string name="subagent_phase_replying">Răspunde…</string>
+ <string name="subagent_tool_shell">Rulează comanda</string>
+ <string name="subagent_tool_read">Citește fișierul</string>
+ <string name="subagent_tool_write">Scrie fișierul</string>
+ <string name="subagent_tool_edit">Editează fișierul</string>
+ <string name="subagent_tool_grep">Caută în cod</string>
+ <string name="subagent_tool_web_search">Căutare web</string>
+ <string name="subagent_tool_web_fetch">Obține pagina</string>
+ <string name="subagent_tool_browser">Browser</string>
+ <string name="subagent_tool_memory">Memorie</string>
+ <string name="subagent_tool_spawn">Sub-agent</string>
+    <!-- Tool detail sheet labels -->
+    <string name="tool_detail_title">Minis Computer</string>
+    <string name="tool_detail_open_full_output">Deschide ieșirea completă</string>
+    <string name="tool_detail_open_in_terminal">Deschide în terminal</string>
+    <string name="tool_detail_open_in_session_browser">Deschide în browserul sesiunii</string>
 </resources>

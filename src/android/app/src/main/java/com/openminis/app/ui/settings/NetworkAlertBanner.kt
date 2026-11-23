@@ -45,6 +45,7 @@ import com.openminis.app.network.NetworkAlertEvent
 import com.openminis.app.network.NetworkHub
 import com.openminis.app.navigation.Routes
 import com.openminis.app.ui.navigation.safeNavigate
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [FEAT-261021-05, iOS e720112cf] The floating banner at the top of the app
@@ -106,7 +107,7 @@ private fun NetworkAlertBanner(event: NetworkAlertEvent, onOpen: () -> Unit, onD
                 verticalAlignment = Alignment.Top,
                 modifier = Modifier.weight(1f).clickable(onClick = onOpen).padding(start = 14.dp, top = 10.dp, bottom = 10.dp),
             ) {
-                Icon(Icons.Filled.Warning, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                Icon(m3Icon(Icons.Filled.Warning), contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.size(10.dp))
                 Column {
                     Text(title, color = Color.White, fontWeight = FontWeight.SemiBold,
@@ -120,7 +121,7 @@ private fun NetworkAlertBanner(event: NetworkAlertEvent, onOpen: () -> Unit, onD
                 }
             }
             IconButton(onClick = onDismiss) {
-                Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.network_alert_dismiss),
+                Icon(m3Icon(Icons.Filled.Close), contentDescription = stringResource(R.string.network_alert_dismiss),
                     tint = Color.White.copy(alpha = 0.9f), modifier = Modifier.size(16.dp))
             }
         }
@@ -147,7 +148,7 @@ internal fun failureReason(failureClass: String): String = stringResource(
 internal fun NetworkFailureNote(event: NetworkAlertEvent, modifier: Modifier = Modifier) {
     Column(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.Warning, contentDescription = null, tint = Color(0xFFFF9500), modifier = Modifier.size(16.dp))
+            Icon(m3Icon(Icons.Filled.Warning), contentDescription = null, tint = Color(0xFFFF9500), modifier = Modifier.size(16.dp))
             Spacer(Modifier.size(6.dp))
             Text(
                 stringResource(R.string.network_alert_note, event.failures, failureReason(event.failureClass)),

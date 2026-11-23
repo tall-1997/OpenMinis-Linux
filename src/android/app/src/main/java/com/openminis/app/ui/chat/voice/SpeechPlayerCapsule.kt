@@ -477,7 +477,7 @@ private fun ExpandedCapsule(
             modifier = Modifier.widthIn(max = 130.dp).clickable(onClick = onModelTap),
         ) {
             Icon(
-                Icons.Default.GraphicEq,
+                m3Icon(Icons.Default.GraphicEq),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(13.dp),
@@ -496,7 +496,7 @@ private fun ExpandedCapsule(
             // that the chip is a switcher, not a label. UnfoldMore is the
             // Material equivalent (stacked up/down chevrons).
             Icon(
-                Icons.Default.UnfoldMore,
+                m3Icon(Icons.Default.UnfoldMore),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                 modifier = Modifier.size(12.dp),
@@ -581,7 +581,7 @@ private fun ExpandedCapsule(
 private fun SpeakerGlyph(muted: Boolean, synthesizing: Boolean, ring: androidx.compose.ui.unit.Dp) {
     Box(contentAlignment = Alignment.Center) {
         Icon(
-            if (muted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+            m3Icon(if (muted) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp),
             contentDescription = null,
             tint = if (muted) MaterialTheme.colorScheme.onSurfaceVariant
             else MaterialTheme.colorScheme.primary,

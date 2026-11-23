@@ -400,7 +400,7 @@ fun PastedTextChip(
                 // Text-file glyph: this IS a block of text, and on send it
                 // becomes a text/plain mediaRef — the same icon the message
                 // bubble will show for it afterwards.
-                Icons.AutoMirrored.Filled.TextSnippet,
+                m3Icon(Icons.AutoMirrored.Filled.TextSnippet),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(20.dp),

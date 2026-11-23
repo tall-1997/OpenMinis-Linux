@@ -567,7 +567,7 @@ internal fun FolderBrowser(vm: RcloneDestinationsViewModel, onSaved: (String) ->
             // is navigation of the same kind as going down.
             if (b.path.isNotEmpty()) {
                 FolderPickerRow(
-                    icon = Icons.Outlined.NorthWest,
+                    icon = m3Icon(Icons.Outlined.NorthWest),
                     label = stringResource(R.string.backup_dest_up),
                     tint = MaterialTheme.colorScheme.primary,
                     enabled = !busy,
@@ -578,7 +578,7 @@ internal fun FolderBrowser(vm: RcloneDestinationsViewModel, onSaved: (String) ->
 
             b.entries.forEachIndexed { i, entry ->
                 FolderPickerRow(
-                    icon = Icons.Outlined.Folder,
+                    icon = m3Icon(Icons.Outlined.Folder),
                     label = entry.name,
                     tint = MaterialTheme.colorScheme.primary,
                     enabled = !busy,

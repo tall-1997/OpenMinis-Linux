@@ -282,7 +282,7 @@ private fun ChooseProviderScreen(
                 SettingsRow(
                     title = template.name,
                     subtitle = stringResource(capabilityRes),
-                    icon = Icons.Outlined.GraphicEq,
+                    icon = m3Icon(Icons.Outlined.GraphicEq),
                     onClick = { onSelectVoiceTemplate(template) },
                     showDivider = index < templates.size - 1,
                 )

@@ -67,6 +67,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.openminis.app.ui.components.MinisTextButton
+import com.openminis.app.ui.theme.m3Icon
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -101,7 +102,7 @@ fun FileBrowserScreen(
                 title = { Text(stringResource(R.string.filebrowser_title)) },
                 navigationIcon = {
                     IconButton(onClick = handleBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
+                        Icon(m3Icon(Icons.AutoMirrored.Filled.ArrowBack), contentDescription = stringResource(R.string.common_back))
                     }
                 },
                 actions = {
@@ -153,7 +154,7 @@ fun FileBrowserScreen(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(
-                                Icons.Filled.Folder,
+                                m3Icon(Icons.Filled.Folder),
                                 contentDescription = null,
                                 modifier = Modifier.size(48.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -263,7 +264,7 @@ private fun BreadcrumbBar(
             )
             if (index < pathComponents.lastIndex) {
                 Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -363,7 +364,7 @@ private fun FileItemRow(
         if (!item.isDirectory) {
             IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
                 Icon(
-                    Icons.Filled.Delete,
+                    m3Icon(Icons.Filled.Delete),
                     contentDescription = stringResource(R.string.delete),
                     modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -374,7 +375,7 @@ private fun FileItemRow(
         // Chevron for directories
         if (item.isDirectory) {
             Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
                 contentDescription = null,
                 modifier = Modifier.size(20.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -397,7 +398,7 @@ private fun FileItemRow(
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.filebrowser_copy_abs_path)) },
                 leadingIcon = {
-                    Icon(Icons.Filled.ContentCopy, contentDescription = null)
+                    Icon(m3Icon(Icons.Filled.ContentCopy), contentDescription = null)
                 },
                 onClick = {
                     menuExpanded = false
@@ -419,7 +420,7 @@ private fun FileItemRow(
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.webapp_add_to_home)) },
                 leadingIcon = {
-                    Icon(Icons.Filled.AppShortcut, contentDescription = null)
+                    Icon(m3Icon(Icons.Filled.AppShortcut), contentDescription = null)
                 },
                 onClick = {
                     menuExpanded = false
@@ -461,7 +462,7 @@ private fun MoreMenu(
     var expanded by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { expanded = true }) {
-            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(R.string.filebrowser_more_action))
+            Icon(m3Icon(Icons.Filled.MoreVert), contentDescription = stringResource(R.string.filebrowser_more_action))
         }
         com.openminis.app.ui.components.MinisMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             // Display options — sort key choices first so the most
@@ -476,7 +477,7 @@ private fun MoreMenu(
                     })) },
                     leadingIcon = {
                         if (key == sortKey) {
-                            Icon(Icons.Filled.Check, contentDescription = null)
+                            Icon(m3Icon(Icons.Filled.Check), contentDescription = null)
                         } else {
                             Spacer(modifier = Modifier.size(24.dp))
                         }
@@ -492,7 +493,7 @@ private fun MoreMenu(
                 text = { Text(stringResource(if (ascending) R.string.filebrowser_sort_ascending else R.string.filebrowser_sort_descending)) },
                 leadingIcon = {
                     Icon(
-                        if (ascending) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward,
+                        m3Icon(if (ascending) Icons.Filled.ArrowUpward else Icons.Filled.ArrowDownward),
                         contentDescription = null,
                     )
                 },
@@ -505,7 +506,7 @@ private fun MoreMenu(
                 text = { Text(stringResource(R.string.filebrowser_sort_folders_first)) },
                 leadingIcon = {
                     if (foldersFirst) {
-                        Icon(Icons.Filled.Check, contentDescription = null)
+                        Icon(m3Icon(Icons.Filled.Check), contentDescription = null)
                     } else {
                         Spacer(modifier = Modifier.size(24.dp))
                     }
@@ -524,7 +525,7 @@ private fun MoreMenu(
                 },
                 leadingIcon = {
                     Icon(
-                        if (showHidden) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                        m3Icon(if (showHidden) Icons.Filled.VisibilityOff else Icons.Filled.Visibility),
                         contentDescription = null,
                     )
                 },

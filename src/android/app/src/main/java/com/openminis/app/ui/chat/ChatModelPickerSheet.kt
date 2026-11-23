@@ -314,7 +314,7 @@ internal fun ModelPickerSheet(
                             // different things (a group can fail over
                             // or load-balance; a model cannot).
                             Icon(
-                                Icons.Default.Layers,
+                                m3Icon(Icons.Default.Layers),
                                 contentDescription = null,
                                 tint = Color(0xFF007AFF),
                                 modifier = Modifier.size(18.dp),
@@ -339,9 +339,9 @@ internal fun ModelPickerSheet(
                                             .padding(horizontal = 5.dp, vertical = 1.dp),
                                     ) {
                                         Icon(
-                                            if (group.strategy == RoutingStrategy.fallback)
+                                            m3Icon(if (group.strategy == RoutingStrategy.fallback)
                                                 Icons.Default.ArrowCircleDown
-                                            else Icons.Default.AccountTree,
+                                            else Icons.Default.AccountTree),
                                             contentDescription = null,
                                             modifier = Modifier.size(9.dp),
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
@@ -474,7 +474,7 @@ internal fun ModelPickerSheet(
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Icon(
-                                        if (isActive) m3Icon(Icons.Default.CheckCircle) else Icons.Default.RadioButtonUnchecked,
+                                        if (isActive) m3Icon(Icons.Default.CheckCircle) else m3Icon(Icons.Default.RadioButtonUnchecked),
                                         contentDescription = null,
                                         tint = if (isActive) Color(0xFF007AFF)
                                         else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f),
@@ -783,7 +783,7 @@ internal fun ModelPickerSheet(
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Icon(
-                        if (searchText.isNotEmpty()) m3Icon(Icons.Default.Search) else Icons.Default.Memory,
+                        if (searchText.isNotEmpty()) m3Icon(Icons.Default.Search) else m3Icon(Icons.Default.Memory),
                         contentDescription = null,
                         modifier = Modifier.size(28.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
@@ -848,7 +848,7 @@ private fun QuickTestButton(onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            Icons.Default.Bolt,
+            m3Icon(Icons.Default.Bolt),
             contentDescription = stringResource(R.string.model_picker_quick_test),
             tint = Color(0xFF007AFF),
             modifier = Modifier.size(17.dp),

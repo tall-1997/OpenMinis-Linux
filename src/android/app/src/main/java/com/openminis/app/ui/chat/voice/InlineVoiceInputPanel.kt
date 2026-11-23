@@ -511,7 +511,7 @@ fun InlineVoiceInputPanel(
                         )
                     } else {
                         CircleIconButton(
-                            icon = Icons.Default.AutoAwesome,
+                            icon = m3Icon(Icons.Default.AutoAwesome),
                             contentDescription = stringResource(
                                 R.string.voice_correction_button_a11y,
                             ),
@@ -758,7 +758,7 @@ private fun ExpandedContent(
             )
             Spacer(Modifier.width(3.dp))
             Icon(
-                Icons.Default.UnfoldMore,
+                m3Icon(Icons.Default.UnfoldMore),
                 contentDescription = null,
                 modifier = Modifier.size(12.dp),
                 tint = ChatColors.secondaryText.copy(alpha = 0.6f),

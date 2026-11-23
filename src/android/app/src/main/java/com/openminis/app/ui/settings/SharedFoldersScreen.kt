@@ -4,6 +4,8 @@ import com.openminis.app.ui.theme.IosBlue
 import com.openminis.app.ui.theme.IosGreen
 import com.openminis.app.ui.theme.IosOrange
 import com.openminis.app.ui.theme.IosPurple
+import com.openminis.app.ui.theme.m3Icon
+import com.openminis.app.ui.theme.monetIconTint
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -118,9 +120,9 @@ private fun SharedFolderRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = folder.icon,
+            imageVector = m3Icon(folder.icon),
             contentDescription = null,
-            tint = folder.iconColor,
+            tint = monetIconTint(folder.iconColor),
             modifier = Modifier.size(28.dp),
         )
         Spacer(Modifier.width(12.dp))
@@ -152,9 +154,9 @@ private fun SharedFolderRow(
 @Composable
 private fun AccessBadge(writable: Boolean) {
     val (textRes, color) = if (writable) {
-        R.string.mount_badge_rw to IosGreen
+        R.string.mount_badge_rw to monetIconTint(IosGreen)
     } else {
-        R.string.mount_badge_readonly to IosOrange
+        R.string.mount_badge_readonly to monetIconTint(IosOrange)
     }
     Surface(
         shape = RoundedCornerShape(8.dp),

@@ -64,6 +64,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.launch
 import com.openminis.app.ui.components.MinisButton
 import com.openminis.app.ui.components.MinisTextButton
@@ -314,7 +315,7 @@ fun CheckUpdateSection() {
         footer = stringResource(R.string.check_update_current_version, BuildConfig.VERSION_NAME),
     ) {
         SettingsRow(
-            icon = Icons.Outlined.SystemUpdate,
+            icon = m3Icon(Icons.Outlined.SystemUpdate),
             iconColor = IosBlue,
             title = stringResource(
                 if (checking) R.string.check_update_checking
@@ -364,7 +365,7 @@ fun CheckUpdateSection() {
             showDivider = true,
         )
         SettingsRow(
-            icon = Icons.Outlined.Build,
+            icon = m3Icon(Icons.Outlined.Build),
             iconColor = IosIndigo,
             title = stringResource(R.string.check_update_self_build),
             subtitle = selfBuild.message ?: stringResource(R.string.check_update_self_build_sub),

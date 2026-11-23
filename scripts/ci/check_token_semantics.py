@@ -373,6 +373,165 @@ def check_lineheight_ladder(src: str) -> list:
     return fails
 
 
+# ─── G1: live palettes（真实渲染的色板对比度，2026-11-23 起） ──────────────
+# 上面 1-8 条守护的是 MinisColors（令牌层，消费者≈1 个文件）。而实际渲染
+# 用的是 ChatPalette（286 处引用）与 MaterialTheme.colorScheme（1411 处）：
+# 三级文字 1.74:1、FAB 图标 2.19:1、浅色 primary 3.50:1 全部发生在门禁外，
+# 这条就是堵那个洞的。
+
+CHAT_COLORS = (ROOT / "src/android/app/src/main/java/com/openminis/app/ui"
+               "/theme/ChatColors.kt")
+THEME_KT = (ROOT / "src/android/app/src/main/java/com/openminis/app/ui"
+            "/theme/Theme.kt")
+
+# ChatPalette 文字槽 → (最低对比度, 背景槽名或 'thinking'/'inlineCodeBg'/'fabAccent')
+CHAT_TEXT_SLOTS = {
+    'primaryText': (4.5, 'background'),
+    'secondaryText': (4.5, 'background'),
+    'tertiaryText': (4.5, 'background'),
+    'link': (4.5, 'background'),
+    'thinking': (4.5, 'background'),
+    # [T-text-threshold] `thinkingOn` is passed to `Text(color = ...)` on the
+    # selected chip, so it is TEXT: 4.5, not the 3.0 non-text floor. At 3.0 the
+    # gate accepted Black on #0066CC (3.03:1) — a real readability failure.
+    'thinkingOn': (4.5, 'thinking'),
+    'inlineCodeText': (4.5, 'inlineCodeBg'),
+    'fabOnAccent': (3.0, 'fabAccent'),
+    # [T-warning-text-slot] warningText was missing from this table entirely, so
+    # the dark-mode regression that dropped it to 4.43:1 had no guard.
+    'warningText': (4.5, 'warningBg'),
+}
+
+# Theme.kt scheme 配对（两套主题各查）：前景 → (最低对比度, 背景槽)
+SCHEME_PAIRS = {
+    'primary': (4.5, 'background'),        # primary 会被当链接/强调文字用
+    'onPrimary': (4.5, 'primary'),
+    'onSurfaceVariant': (4.5, 'background'),
+    'onSurface': (4.5, 'background'),
+}
+
+
+def _composite(argb: int, bg: int) -> int:
+    """带 alpha 的前景压到不透明背景上（WCAG 用的有效色）。"""
+    a = (argb >> 24) & 0xFF
+    if a == 0xFF:
+        return argb
+    af = a / 255.0
+    out = 0xFF
+    for shift in (16, 8, 0):
+        fg = (argb >> shift) & 0xFF
+        bb = (bg >> shift) & 0xFF
+        out = (out << 8) | round(af * fg + (1 - af) * bb)
+    return out
+
+
+def _parse_palette_slots(src: str, marker: str):
+    i = src.find(marker)
+    if i < 0:
+        return None
+    j = src.find('\n)', i)
+    body = src[i:j if j > 0 else len(src)]
+    named = {'Color.White': 0xFFFFFFFF, 'Color.Black': 0xFF000000}
+    out = {}
+    for m in re.finditer(r'^\s*([a-z][A-Za-z0-9_]*)\s*=\s*(Color\.\w+|Color\((0x[0-9A-Fa-f]{8})\))',
+                         body, re.M):
+        if m.group(3):
+            out[m.group(1)] = int(m.group(3), 16)
+        elif m.group(2) in named:
+            out[m.group(1)] = named[m.group(2)]
+    return out
+
+
+def _parse_scheme(src: str, fun: str):
+    i = src.find(f'{fun}(')
+    if i < 0:
+        return None
+    j = src.find('\n)', i)
+    body = src[i:j if j > 0 else len(src)]
+    out = {}
+    for m in re.finditer(r'^\s*([a-zA-Z]+)\s*=\s*(?:Color\()?0x([0-9A-Fa-f]{8})',
+                         body, re.M):
+        out[m.group(1)] = int(m.group(2), 16)
+    # TealX 别名槽
+    for m in re.finditer(r'^\s*([a-zA-Z]+)\s*=\s*(Teal[A-Za-z]+)', body, re.M):
+        mm = re.search(rf'private val {m.group(2)} = Color\((0x[0-9A-Fa-f]{{8}})\)', src)
+        if mm:
+            out[m.group(1)] = int(mm.group(1), 16)
+    return out
+
+
+def check_live_palettes() -> list:
+    if not CHAT_COLORS.exists() or not THEME_KT.exists():
+        return ['ChatColors.kt / Theme.kt 缺失，live palette 检查无法运行']
+    src = CHAT_COLORS.read_text(encoding='utf-8')
+    theme = THEME_KT.read_text(encoding='utf-8')
+    fails = []
+
+    for name, palette in (('LightChatPalette', 'light'), ('DarkChatPalette', 'dark')):
+        slots = _parse_palette_slots(src, f'val {name} = ChatPalette(')
+        if slots is None:
+            fails.append(f'{name} 未解析到（ChatColors.kt 结构变了？）')
+            continue
+        # [T-gate-fail-closed] A parser that silently yields {} on an expression
+        # value (e.g. `background = RawColors.neutral0.asColor`) would skip every
+        # assertion below and report PASS. Require the slots we intend to judge.
+        missing = [s for s in CHAT_TEXT_SLOTS if s not in slots]
+        for s in ('background',):
+            if s not in slots:
+                missing.append(s)
+        if missing:
+            fails.append(
+                f'{name} 解析不到 {len(missing)} 个关键槽：{", ".join(missing)}'
+                f' —— 色值若已改成表达式/常量，本检查会静默退化成假绿，'
+                f'需要扩展解析器而不是放着跳过')
+            continue
+        bg = slots.get('background')
+        if bg is None:
+            fails.append(f'{name}.background 未解析到')
+            continue
+        for fg_slot, (need, bg_slot) in CHAT_TEXT_SLOTS.items():
+            fg = slots.get(fg_slot)
+            bgv = slots.get(bg_slot, bg)
+            if fg is None or bgv is None:
+                continue
+            # [T-alpha-stack] warningBg / toastBg are TRANSLUCENT overlays: they
+            # are painted on top of `background`, so the effective backdrop is the
+            # composite, not the raw ARGB (reading the raw value invented a
+            # 1.38:1 "failure" that no user can see).
+            backdrop = _composite(bgv, bg) if (bgv >> 24) & 0xFF != 0xFF else bgv
+            eff = _composite(fg, backdrop)
+            got = contrast(eff, backdrop)
+            if got < need:
+                fails.append(
+                    f'{name}.{fg_slot} on {bg_slot} 对比度 {got:.2f}:1 < {need}:1'
+                    f'（#{eff:08X} on #{backdrop:08X}）')
+
+    # Theme.kt：两套 scheme 的配对 + surfaceContainer 阶梯不塌档
+    for fun, label in (('lightColorScheme', 'Light'), ('darkColorScheme', 'Dark')):
+        sch = _parse_scheme(theme, fun)
+        if not sch:
+            fails.append(f'{label}ColorScheme 未解析到（Theme.kt 结构变了？）')
+            continue
+        for fg_slot, (need, bg_slot) in SCHEME_PAIRS.items():
+            fg, bgv = sch.get(fg_slot), sch.get(bg_slot)
+            if fg is None or bgv is None:
+                fails.append(f'{label}.{fg_slot}/{bg_slot} 未解析到（缺角色或解析失效）')
+                continue
+            got = contrast(fg, bgv)
+            if got < need:
+                fails.append(
+                    f'{label}ColorScheme.{fg_slot} on {bg_slot} {got:.2f}:1 < {need}:1')
+        ramp = ['surfaceContainerLowest', 'surfaceContainerLow', 'surfaceContainer',
+                'surfaceContainerHigh', 'surfaceContainerHighest']
+        vals = [sch.get(k) for k in ramp]
+        if any(v is None for v in vals):
+            fails.append(f'{label}ColorScheme surfaceContainer 阶梯不完整')
+        elif len(set(vals)) < len(vals):
+            fails.append(f'{label}ColorScheme surfaceContainer 有同值档'
+                         f'（{[f"#{v:06X}" for v in vals]}）——层级不可编程')
+    return fails
+
+
 def main() -> int:
     path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT
     if not path.exists():
@@ -479,6 +638,9 @@ def main() -> int:
 
     # 8. 令牌死代码 —— 定义了却没人读
     fails.extend(check_token_dead_code(src))
+
+    # 9. live palettes —— ChatPalette / ColorScheme 的真实对比度
+    fails.extend(check_live_palettes())
 
     print(f"语义槽位：Light {len(light)} 个 / Dark {len(dark)} 个"
           f"（显式 {len(dark)}，继承 {len(inherited)}）；RawColors 常量 {len(consts)} 个")

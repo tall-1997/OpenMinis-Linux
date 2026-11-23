@@ -39,6 +39,7 @@ class DynamicColorPaletteTest {
                 surfaceContainerLow = Color(0xFF1F1D23),
                 surfaceContainer = Color(0xFF211F26),
                 surfaceContainerHigh = Color(0xFF2B2930),
+                surfaceContainerHighest = Color(0xFF363342),
             )
         } else {
             lightColorScheme(
@@ -63,7 +64,8 @@ class DynamicColorPaletteTest {
     fun `chat palette follows the wallpaper scheme end to end`() {
         val scheme = wallpaperScheme(dark = false)
         val merged = dynamicChatPalette(scheme, LightChatPalette)
-        // Surfaces…
+        // Surfaces… (light keeps the Apple grouped look: white input on the
+        // tinted page, low/medium chrome — see [T-dynamic-dark-layering].)
         assertEquals(scheme.background, merged.background)
         assertEquals(scheme.surfaceContainerLow, merged.secondaryBg)
         assertEquals(scheme.surfaceContainerLowest, merged.inputBg)
@@ -75,18 +77,46 @@ class DynamicColorPaletteTest {
         // …text pairs come with the scheme…
         assertEquals(scheme.onSurface, merged.primaryText)
         assertEquals(scheme.onSurfaceVariant, merged.secondaryText)
-        assertEquals(scheme.outline, merged.tertiaryText)
+        // [T-dynamic-tertiary-text] NOT scheme.outline (a border role: 4.27:1 on a
+        // real Material You light scheme). Derived from onSurfaceVariant so the
+        // text slot reaches AA while staying a tier below secondaryText.
+        assertEquals(scheme.onSurfaceVariant.copy(alpha = 0.78f), merged.tertiaryText)
         // …and the accents pair by construction.
         assertEquals(scheme.primaryContainer, merged.userBubble)
         assertEquals(scheme.primary, merged.sendButton)
         assertEquals(scheme.primary, merged.link)
         assertEquals(scheme.primary, merged.thinking)
-        assertEquals(scheme.primary.copy(alpha = 0.18f), merged.toastBg)
+        // [T-thinking-on] the selected-chip foreground pairs with primary,
+        // so White can never sit on a dark-mode tone-80 accent.
+        assertEquals(scheme.onPrimary, merged.thinkingOn)
         assertEquals(scheme.primaryContainer, merged.fabAccent)
         assertEquals(scheme.onPrimaryContainer, merged.fabOnAccent)
         // Chrome derives from the scheme's outline ramp.
         assertEquals(scheme.outlineVariant, merged.separator)
         assertEquals(scheme.outlineVariant.copy(alpha = 0.5f), merged.toolBorder)
+        // [T-inline-code-light-contrast] light mode derives a readable dark
+        // orange for the chip; the bright terminal orange is dark-mode only.
+        assertEquals(Color(0xFFB25000), merged.inlineCodeText)
+    }
+
+    @Test
+    fun `dark mode lifts each chat layer one step`() {
+        // [T-dynamic-dark-layering] The first mapping put the input at
+        // surfaceContainerLowest — tone 4, DARKER than the tone-6 background
+        // (1.04:1), reproducing exactly the "near-black wash" the static dark
+        // palette's T153 note warns about. Pinned here so it cannot come back.
+        val scheme = wallpaperScheme(dark = true)
+        val merged = dynamicChatPalette(scheme, DarkChatPalette)
+        assertEquals(scheme.background, merged.background)
+        assertEquals(scheme.surfaceContainerHighest, merged.inputBg)
+        assertEquals(scheme.surfaceContainer, merged.secondaryBg)
+        assertEquals(scheme.surfaceContainer, merged.toolCapsuleBg)
+        assertEquals(scheme.surfaceContainerHigh, merged.toolBg)
+        assertEquals(scheme.onPrimary, merged.thinkingOn)
+        // Layer separation survives on the fixture's own ramp.
+        assertNotEquals(merged.background, merged.inputBg)
+        assertNotEquals(merged.background, merged.secondaryBg)
+        assertNotEquals(merged.toolBg, merged.background)
     }
 
     @Test
@@ -112,10 +142,16 @@ class DynamicColorPaletteTest {
         // dynamicChatPalette and the wallpaper scheme only run behind the
         // Android 12 gate; when they do not run, the palettes are the statics.
         // Pinned so a future "always derive" shortcut has to argue with it.
-        assertEquals(Color.White, LightChatPalette.fabOnAccent)
+        // [T-fab-icon-contrast] the light glyph is INK, not White: White on
+        // the beige #B7AF96 measured 2.19:1 (below the 3.0 non-text bar).
+        assertEquals(Color(0xFF1C1C1E), LightChatPalette.fabOnAccent)
         assertEquals(Color.White, DarkChatPalette.fabOnAccent)
         assertEquals(Color(0xFFB7AF96), LightChatPalette.fabAccent)
         assertEquals(Color(0xFF504C42), DarkChatPalette.fabAccent)
+        assertEquals(Color.White, LightChatPalette.thinkingOn)
+        // [T-thinking-on] Ink, not White: White on the dark accent #0A84FF
+        // measures 3.65:1 (below AA).
+        assertEquals(Color(0xFF1C1C1E), DarkChatPalette.thinkingOn)
         assertNotEquals(LightChatPalette.background, DarkChatPalette.background)
     }
 }

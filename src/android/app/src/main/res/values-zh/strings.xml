@@ -3019,4 +3019,19 @@
  <string name="perm_full_access_confirm">确认启用</string>
  <string name="perm_guarded_risk_reason">确认这条风险命令</string>
  <string name="perm_guarded_risk_message">自主模式判定这条命令有风险，确认一次后才会执行。</string>
+ <!-- Sub-agent phase & tool labels -->
+ <string name="subagent_phase_thinking">思考中…</string>
+ <string name="subagent_phase_calling">调用工具中…</string>
+ <string name="subagent_phase_running">执行中…</string>
+ <string name="subagent_phase_replying">回复中…</string>
+ <string name="subagent_tool_shell">执行命令</string>
+ <string name="subagent_tool_read">读取文件</string>
+ <string name="subagent_tool_write">写入文件</string>
+ <string name="subagent_tool_edit">编辑文件</string>
+ <string name="subagent_tool_grep">搜索代码</string>
+ <string name="subagent_tool_web_search">搜索网页</string>
+ <string name="subagent_tool_web_fetch">抓取网页</string>
+ <string name="subagent_tool_browser">浏览器</string>
+ <string name="subagent_tool_memory">记忆</string>
+ <string name="subagent_tool_spawn">子代理</string>
 </resources>

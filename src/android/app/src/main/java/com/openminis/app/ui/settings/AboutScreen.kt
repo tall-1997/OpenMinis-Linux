@@ -41,6 +41,7 @@ import androidx.core.graphics.drawable.toBitmap
 import com.openminis.app.BuildConfig
 import com.openminis.app.R
 import com.openminis.app.ui.components.openExternalUrl
+import com.openminis.app.ui.theme.m3Icon
 
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
@@ -130,7 +131,7 @@ fun AboutScreen(onBack: () -> Unit) {
 
         SettingsSection(header = stringResource(R.string.about_links)) {
             SettingsRow(
-                icon = Icons.Outlined.Code,
+                icon = m3Icon(Icons.Outlined.Code),
                 iconColor = tileBlue,
                 title = stringResource(R.string.about_github_repository),
                 // Settings → ABOUT siblings (Privacy Policy / Submit GitHub

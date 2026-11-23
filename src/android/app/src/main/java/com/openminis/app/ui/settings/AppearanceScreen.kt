@@ -70,6 +70,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -296,7 +297,7 @@ fun AppearanceScreen(
             }
             // [T-android-monet-dynamic-color] Fourth theme option (after system/light/dark); last row so showDivider is false.
             SettingsSwitchRow(
-                icon = Icons.Outlined.Palette,
+                icon = m3Icon(Icons.Outlined.Palette),
                 iconColor = tileTeal,
                 title = stringResource(R.string.appearance_monet_title),
                 subtitle = stringResource(R.string.appearance_monet_subtitle),
@@ -310,8 +311,7 @@ fun AppearanceScreen(
             )
         }
 
-        // -- Launch Session --
-        // Bolt=Auto, History=Last Session, ChatBubble=New Chat, Home=Home.
+        // -- Launch Session -- Bolt=Auto, History=Last Session, ChatBubble=New Chat, Home=Home.
         SettingsSection(
             header = stringResource(R.string.appearance_section_launch),
             footer = stringResource(R.string.appearance_launch_footer),
@@ -379,7 +379,7 @@ fun AppearanceScreen(
             footer = stringResource(R.string.appearance_keep_awake_footer),
         ) {
             SettingsSwitchRow(
-                icon = Icons.Outlined.ScreenLockPortrait,
+                icon = m3Icon(Icons.Outlined.ScreenLockPortrait),
                 iconColor = tileGreen,
                 title = stringResource(R.string.appearance_keep_awake_title),
                 checked = keepScreenAwake,
@@ -396,7 +396,7 @@ fun AppearanceScreen(
             footer = stringResource(R.string.high_refresh_footer),
         ) {
             SettingsSwitchRow(
-                icon = Icons.Outlined.Bolt,
+                icon = m3Icon(Icons.Outlined.Bolt),
                 iconColor = tileGreen,
                 title = stringResource(R.string.high_refresh_title),
                 subtitle = stringResource(R.string.high_refresh_sub),
@@ -416,7 +416,7 @@ fun AppearanceScreen(
             footer = stringResource(R.string.appearance_chat_chrome_footer),
         ) {
             SettingsSwitchRow(
-                icon = Icons.Outlined.Visibility,
+                icon = m3Icon(Icons.Outlined.Visibility),
                 iconColor = tileTeal,
                 title = stringResource(R.string.appearance_show_floating_tool_bar),
                 checked = showFloatingToolBar,
@@ -427,7 +427,7 @@ fun AppearanceScreen(
             )
             // [P0-4] "Tool Preview Window" switch removed (ToolActivityPill has no preview); KEY_TOOL_PREVIEW stays for compat.
             SettingsSwitchRow(
-                icon = Icons.Outlined.ViewAgenda,
+                icon = m3Icon(Icons.Outlined.ViewAgenda),
                 iconColor = tileTeal,
                 title = stringResource(R.string.appearance_show_completed_tool_cards),
                 subtitle = stringResource(R.string.appearance_show_completed_tool_cards_subtitle),
@@ -438,7 +438,7 @@ fun AppearanceScreen(
                 },
             )
             SettingsSwitchRow(
-                icon = Icons.Outlined.Groups,
+                icon = m3Icon(Icons.Outlined.Groups),
                 iconColor = tileTeal,
                 title = stringResource(R.string.appearance_show_subagent_bar),
                 checked = showSubAgentBar,
@@ -448,7 +448,7 @@ fun AppearanceScreen(
                 },
             )
             SettingsSwitchRow(
-                icon = Icons.Outlined.Mic,
+                icon = m3Icon(Icons.Outlined.Mic),
                 iconColor = tileTeal,
                 title = stringResource(R.string.appearance_show_mic_button_title),
                 subtitle = stringResource(R.string.appearance_show_mic_button_subtitle),
@@ -461,7 +461,7 @@ fun AppearanceScreen(
             )
             // [T-android-message-usage-footer] Per-reply token usage line.
             SettingsSwitchRow(
-                icon = Icons.Outlined.Bolt,
+                icon = m3Icon(Icons.Outlined.Bolt),
                 iconColor = tileTeal,
                 title = stringResource(R.string.appearance_message_usage_title),
                 subtitle = stringResource(R.string.appearance_message_usage_subtitle),
@@ -473,7 +473,7 @@ fun AppearanceScreen(
             )
             // [T-android-composer-context-glow] Composer edge glow near the context cap.
             SettingsSwitchRow(
-                icon = Icons.Outlined.LightMode,
+                icon = m3Icon(Icons.Outlined.LightMode),
                 iconColor = tileTeal,
                 title = stringResource(R.string.appearance_context_glow_title),
                 subtitle = stringResource(R.string.appearance_context_glow_subtitle),
@@ -493,7 +493,7 @@ fun AppearanceScreen(
             footer = stringResource(R.string.appearance_auto_expand_thinking_footer),
         ) {
             SettingsSwitchRow(
-                icon = Icons.Outlined.Psychology,
+                icon = m3Icon(Icons.Outlined.Psychology),
                 iconColor = tilePurple,
                 title = stringResource(R.string.appearance_auto_expand_thinking_title),
                 checked = autoExpandThinking,
@@ -505,7 +505,7 @@ fun AppearanceScreen(
             )
             ShowFullThinkingRow(showFullThinking) { showFullThinking = it; prefs.value.set(KEY_SHOW_FULL_THINKING, it) }
             SettingsSwitchRow(
-                icon = Icons.Outlined.ViewAgenda, iconColor = tilePurple,
+                icon = m3Icon(Icons.Outlined.ViewAgenda), iconColor = tilePurple,
                 title = stringResource(R.string.appearance_fold_ai_process_title),
                 subtitle = stringResource(R.string.appearance_fold_ai_process_subtitle),
                 checked = foldAiProcess,
@@ -521,7 +521,7 @@ fun AppearanceScreen(
             footer = stringResource(R.string.appearance_auto_focus_after_reply_footer),
         ) {
             SettingsSwitchRow(
-                icon = Icons.Outlined.Keyboard,
+                icon = m3Icon(Icons.Outlined.Keyboard),
                 iconColor = tileBlue,
                 title = stringResource(R.string.appearance_auto_focus_after_reply_title),
                 checked = autoFocusAfterReply,
@@ -540,7 +540,7 @@ fun AppearanceScreen(
             footer = stringResource(R.string.appearance_show_chat_title_footer),
         ) {
             SettingsSwitchRow(
-                icon = Icons.Outlined.ChatBubbleOutline,
+                icon = m3Icon(Icons.Outlined.ChatBubbleOutline),
                 iconColor = tileBlue,
                 title = stringResource(R.string.appearance_show_chat_title),
                 subtitle = stringResource(R.string.appearance_show_chat_title_subtitle),
@@ -560,7 +560,7 @@ fun AppearanceScreen(
             footer = stringResource(R.string.appearance_auto_grouping_footer),
         ) {
             SettingsSwitchRow(
-                icon = Icons.Outlined.Folder,
+                icon = m3Icon(Icons.Outlined.Folder),
                 iconColor = tileBlue,
                 title = stringResource(R.string.appearance_auto_grouping),
                 subtitle = stringResource(R.string.appearance_auto_grouping_subtitle),
@@ -579,7 +579,7 @@ fun AppearanceScreen(
             footer = stringResource(R.string.appearance_font_size_footer),
         ) {
             SettingsRow(
-                icon = Icons.Outlined.FormatSize,
+                icon = m3Icon(Icons.Outlined.FormatSize),
                 iconColor = tileOrange,
                 title = stringResource(R.string.appearance_font_scale_title),
                 subtitle = stringResource(R.string.appearance_font_scale_subtitle),

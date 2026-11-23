@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.openminis.app.tools.AgentReportStore
+import com.openminis.app.ui.theme.m3Icon
 
 /**
  * [T-work-report-ui] Shows what the run is waiting for.
@@ -74,7 +75,7 @@ internal fun WorkStageBanner(sessionId: String, modifier: Modifier = Modifier) {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Icon(
-            imageVector = Icons.Default.Assignment,
+            imageVector = m3Icon(Icons.Default.Assignment),
             contentDescription = null,
             tint = content,
         )

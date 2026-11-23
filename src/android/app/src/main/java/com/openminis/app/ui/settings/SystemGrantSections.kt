@@ -34,6 +34,7 @@ import com.openminis.app.accessibility.AccessibilityRecoveryManager
 import com.openminis.app.accessibility.MinisAccessibilityService
 import com.openminis.app.power.PowerOptimizationManager
 import com.openminis.app.ui.components.MinisTextButton
+import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.launch
 
 /**
@@ -72,7 +73,7 @@ fun SystemGrantSections(
             ),
         ) {
             SettingsRow(
-                icon = Icons.Outlined.Build,
+                icon = m3Icon(Icons.Outlined.Build),
                 iconColor = IosRed,
                 title = stringResource(
                     if (shizukuReady) R.string.a11y_repair_row_shizuku
@@ -120,7 +121,7 @@ fun SystemGrantSections(
             footer = stringResource(R.string.system_permissions_a11y_oem_footer, vendor),
         ) {
             SettingsRow(
-                icon = Icons.Outlined.RestartAlt,
+                icon = m3Icon(Icons.Outlined.RestartAlt),
                 iconColor = IosOrange,
                 title = stringResource(R.string.system_permissions_a11y_oem_autostart),
                 subtitle = stringResource(R.string.system_permissions_a11y_oem_autostart_sub),
@@ -131,7 +132,7 @@ fun SystemGrantSections(
                 },
             )
             SettingsRow(
-                icon = Icons.Outlined.BatteryAlert,
+                icon = m3Icon(Icons.Outlined.BatteryAlert),
                 iconColor = IosOrange,
                 title = stringResource(R.string.system_permissions_a11y_oem_battery),
                 subtitle = stringResource(R.string.system_permissions_a11y_oem_battery_sub),
@@ -169,7 +170,7 @@ fun SystemGrantSections(
         footer = stringResource(R.string.a11y_app_policy_footer),
     ) {
         SettingsSwitchRow(
-            icon = Icons.Outlined.RecordVoiceOver,
+            icon = m3Icon(Icons.Outlined.RecordVoiceOver),
             title = stringResource(R.string.a11y_app_policy_enabled),
             subtitle = stringResource(R.string.a11y_app_policy_enabled_sub),
             checked = policyMode != com.openminis.app.accessibility.A11yAppPolicy.Mode.OFF,
@@ -287,7 +288,7 @@ fun SystemGrantSections(
         footer = stringResource(R.string.voice_correction_footer),
     ) {
         SettingsSwitchRow(
-            icon = Icons.Outlined.RecordVoiceOver,
+            icon = m3Icon(Icons.Outlined.RecordVoiceOver),
             title = stringResource(R.string.voice_correction_toggle),
             checked = correctionEnabled,
             onCheckedChange = { on ->
@@ -301,7 +302,7 @@ fun SystemGrantSections(
             },
         )
         SettingsRow(
-            icon = Icons.Outlined.DeleteSweep,
+            icon = m3Icon(Icons.Outlined.DeleteSweep),
             iconColor = MaterialTheme.colorScheme.error,
             title = stringResource(R.string.voice_correction_clear),
             titleColor = MaterialTheme.colorScheme.error,

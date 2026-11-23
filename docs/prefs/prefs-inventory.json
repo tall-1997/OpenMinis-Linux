@@ -99,11 +99,12 @@
         "ui"
       ],
       "encrypted": false,
-      "usage_count": 6,
+      "usage_count": 7,
       "usage_files": [
         "MainActivity.kt",
         "config/ConfigBuiltins.kt",
         "i18n/LocaleWrap.kt",
+        "i18n/ThemeModeWrap.kt",
         "ui/chat/ChatStopOptions.kt",
         "ui/settings/AppearanceScreen.kt"
       ],
@@ -132,7 +133,8 @@
         "KEY_SHOW_SUBAGENT_BAR": "chat.showSubAgentBar",
         "KEY_SHOW_TURN_CHANGES_CARD": "chat.showTurnChangesCard",
         "KEY_THEME_MODE": "theme_mode",
-        "KEY_TOOL_PREVIEW": "tool_preview"
+        "KEY_TOOL_PREVIEW": "tool_preview",
+        "THEME_MODE_KEY": "theme_mode"
       },
       "dyn_keys": [],
       "open_key_space": false,
@@ -6788,10 +6790,10 @@
   "totals": {
     "prefs_files": 105,
     "prefs_encrypted": 10,
-    "key_constants_attributed": 205,
+    "key_constants_attributed": 206,
     "orphan_keys": 35,
-    "usage_sites": 183,
-    "usage_files": 110,
+    "usage_sites": 184,
+    "usage_files": 111,
     "constant_conflicts": 524
   }
 }

@@ -8,6 +8,7 @@ import com.openminis.app.data.model.LLMStreamChunk
 import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.provider.LLMProvider
 import com.openminis.app.provider.streamStallWatchdog
+import com.openminis.app.service.SubAgentPhase
 import kotlinx.coroutines.CancellationException
 import org.json.JSONObject
 
@@ -30,6 +31,8 @@ object SubAgentRunner {
     /**
      * Live rows for the detail page. The parent card still uses [onStep];
      * this stream is what makes thinking, a tool call, and execution distinct.
+     * [Phase] payloads are ASCII [SubAgentPhase] keys, never display text —
+     * the display layer localizes them via string resources.
      */
     sealed class UiEvent {
         data class Phase(val label: String, val tool: String = "") : UiEvent()
@@ -173,7 +176,7 @@ object SubAgentRunner {
                 }
                 turn++
                 runCatching { onStep(turn, "") }
-                runCatching { onUi(UiEvent.Phase("思考中")) }
+                runCatching { onUi(UiEvent.Phase(SubAgentPhase.THINKING.key)) }
                 // [T-wave-e-subagent-steer] Drain guidance queued since the
                 // last boundary BEFORE the next model call, so the child
                 // reacts to it instead of reading it after the fact. The
@@ -249,19 +252,19 @@ object SubAgentRunner {
                             textSb.append(chunk.text)
                             if (!announcedSpeak) {
                                 announcedSpeak = true
-                                runCatching { onUi(UiEvent.Phase("回复中")) }
+                                runCatching { onUi(UiEvent.Phase(SubAgentPhase.REPLYING.key)) }
                             }
                             runCatching { onUi(UiEvent.Text("t$turn-text-$textSeg", chunk.text)) }
                         }
                         is LLMStreamChunk.ThinkingDelta -> {
-                            runCatching { onUi(UiEvent.Phase("思考中")) }
+                            runCatching { onUi(UiEvent.Phase(SubAgentPhase.THINKING.key)) }
                             runCatching { onUi(UiEvent.Thinking("t$turn-think-$thinkSeg", chunk.text)) }
                         }
                         is LLMStreamChunk.ToolUseStart -> {
                             textSeg++
                             thinkSeg++
                             announcedSpeak = false
-                            runCatching { onUi(UiEvent.Phase("调用工具", chunk.name)) }
+                            runCatching { onUi(UiEvent.Phase(SubAgentPhase.CALLING.key, chunk.name)) }
                             runCatching { onUi(UiEvent.ToolStart(chunk.id, chunk.name)) }
                         }
                         is LLMStreamChunk.ToolInputDelta -> {

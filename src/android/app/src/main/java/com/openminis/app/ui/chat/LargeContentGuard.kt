@@ -34,6 +34,7 @@ import androidx.core.content.FileProvider
 import com.openminis.app.R
 import com.openminis.app.ui.components.MinisTextButton
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -143,7 +144,7 @@ internal fun LargeContentBadge(
                 modifier = Modifier.padding(0.dp),
             ) {
                 Icon(
-                    imageVector = Icons.Filled.UnfoldMore,
+                    imageVector = m3Icon(Icons.Filled.UnfoldMore),
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
                 )
@@ -198,7 +199,7 @@ internal fun LargeContentBadge(
                 modifier = Modifier.padding(0.dp),
             ) {
                 Icon(
-                    imageVector = Icons.Filled.IosShare,
+                    imageVector = m3Icon(Icons.Filled.IosShare),
                     contentDescription = null,
                     modifier = Modifier.size(16.dp),
                 )

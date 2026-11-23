@@ -37,6 +37,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.openminis.app.ui.theme.m3Icon
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.openminis.app.ui.tokens.MinisTypography
@@ -110,7 +111,7 @@ internal fun RenderMdVideo(block: MdBlock.Video) {
                 )
             }
             Icon(
-                imageVector = Icons.Filled.PlayCircleFilled,
+                imageVector = m3Icon(Icons.Filled.PlayCircleFilled),
                 contentDescription = "Play video",
                 tint = Color.White.copy(alpha = 0.9f),
                 modifier = Modifier.size(56.dp),
@@ -123,7 +124,7 @@ internal fun RenderMdVideo(block: MdBlock.Video) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
-                imageVector = Icons.Filled.Videocam,
+                imageVector = m3Icon(Icons.Filled.Videocam),
                 contentDescription = null,
                 tint = colors.blockquote,
                 modifier = Modifier.size(14.dp),

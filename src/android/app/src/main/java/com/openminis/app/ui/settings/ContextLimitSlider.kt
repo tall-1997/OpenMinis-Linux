@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.openminis.app.R
 import com.openminis.app.data.model.ModelGroup
 import com.openminis.app.ui.theme.IosIndigo
+import com.openminis.app.ui.theme.m3Icon
 import kotlin.math.roundToInt
 
 /**
@@ -172,7 +173,7 @@ internal fun ContextLimitSection(
                 onPersist(null, stash ?: group.lastContextLimitTokens)
             }
         },
-        icon = Icons.Default.Memory,
+        icon = m3Icon(Icons.Default.Memory),
         iconColor = IosIndigo,
         showDivider = contextEnabled,
     )

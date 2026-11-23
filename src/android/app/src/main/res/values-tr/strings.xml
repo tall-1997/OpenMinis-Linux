@@ -3383,4 +3383,24 @@
  <string name="perm_full_access_confirm">Aç</string>
  <string name="perm_guarded_risk_reason">Riskli komutu onayla</string>
  <string name="perm_guarded_risk_message">Otonom mod bu komutu riskli buldu. Çalıştırmak için bir kez onayla.</string>
+ <!-- Sub-agent phase & tool labels -->
+ <string name="subagent_phase_thinking">Düşünüyor…</string>
+ <string name="subagent_phase_calling">Araç çağrılıyor…</string>
+ <string name="subagent_phase_running">Çalışıyor…</string>
+ <string name="subagent_phase_replying">Yanıtlanıyor…</string>
+ <string name="subagent_tool_shell">Komut çalıştır</string>
+ <string name="subagent_tool_read">Dosyayı oku</string>
+ <string name="subagent_tool_write">Dosyaya yaz</string>
+ <string name="subagent_tool_edit">Dosyayı düzenle</string>
+ <string name="subagent_tool_grep">Kodda ara</string>
+ <string name="subagent_tool_web_search">Web araması</string>
+ <string name="subagent_tool_web_fetch">Sayfayı al</string>
+ <string name="subagent_tool_browser">Tarayıcı</string>
+ <string name="subagent_tool_memory">Bellek</string>
+ <string name="subagent_tool_spawn">Alt ajan</string>
+    <!-- Tool detail sheet labels -->
+    <string name="tool_detail_title">Minis Computer</string>
+    <string name="tool_detail_open_full_output">Tam çıktıyı aç</string>
+    <string name="tool_detail_open_in_terminal">Terminalde aç</string>
+    <string name="tool_detail_open_in_session_browser">Oturum tarayıcısında aç</string>
 </resources>

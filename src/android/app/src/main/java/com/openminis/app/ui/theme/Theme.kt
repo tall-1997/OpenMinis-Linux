@@ -46,9 +46,10 @@ import com.openminis.app.ui.tokens.MinisType
 // Names keep the `Teal` prefix only to avoid churning 90+ call sites; the
 // value is the contract, not the name.
 // [T-apple-blue] Apple Blue primary, desaturated for Android readability.
-// Original #0066CC reads as glaring on 1000nit+ displays. #5A8AD2 keeps
-// the same hue/lightness with ~30% less saturation per WCAG best practices.
-private val TealPrimary = Color(0xFF5A8AD2)
+// [T-accent-text-contrast] #5A8AD2 measured 3.50:1 as button text (white on
+// primary) and 3.14:1 as text on #F2F2F7 — both below WCAG AA 4.5. #2E6BC0
+// keeps the blue hue and passes everywhere (white-on-it 5.28, as-text 4.73).
+private val TealPrimary = Color(0xFF2E6BC0)
 private val TealOnPrimary = Color(0xFFFFFFFF)
 private val TealPrimaryContainer = Color(0xFFD6E4FF)
 private val TealOnPrimaryContainer = Color(0xFF001A3B)
@@ -88,6 +89,16 @@ private val TealDarkOutline = Color(0xFF8E8E92)
 
 private val LightColorScheme = lightColorScheme(
     primary = TealPrimary,
+    surfaceTint = TealPrimary,
+    inversePrimary = TealDarkPrimary,
+    error = Color(0xFFD70015),
+    onError = Color(0xFFFFFFFF),
+    errorContainer = Color(0xFFFFDAD6),
+    onErrorContainer = Color(0xFF410002),
+    inverseSurface = Color(0xFF2B2B2E),
+    inverseOnSurface = Color(0xFFF2F2F7),
+    surfaceDim = Color(0xFFD9D9DE),
+    surfaceBright = Color(0xFFFDFDFE),
     onPrimary = TealOnPrimary,
     primaryContainer = TealPrimaryContainer,
     onPrimaryContainer = TealOnPrimaryContainer,
@@ -105,17 +116,41 @@ private val LightColorScheme = lightColorScheme(
     onSurface = TealOnSurface,
     surfaceVariant = TealSurfaceVariant,
     onSurfaceVariant = TealOnSurfaceVariant,
-    surfaceContainerLowest = TealBackground,
-    surfaceContainerLow = Color(0xFFFFFFFF),
-    surfaceContainer = Color(0xFFFFFFFF),
-    surfaceContainerHigh = Color(0xFFF7F7FA),
-    surfaceContainerHighest = Color(0xFFF7F7FA),
+    surfaceContainerLowest = Color(0xFFFFFFFF),
+    surfaceContainerLow = Color(0xFFFDFDFE),
+    surfaceContainer = Color(0xFFFAFAFC),
+    // [T-surface-container-ramp] cLow/c and cHigh/cHighest were duplicate pairs
+    // (cHigh→cHighest 1.00:1 — invisible to its 24 consumers). Five distinct
+    // steps, keeping the Apple grouped direction (lowest = white cards on the
+    // gray page, M3 direction reversed by design).
+    surfaceContainerHigh = Color(0xFFF6F6F9),
+    surfaceContainerHighest = Color(0xFFF1F1F5),
     outline = TealOutline,
-    outlineVariant = TealOutline,
+    // [T-outline-split] outlineVariant was aliased to outline: the decorative
+    // hairline tier and the structural border tier were one color, forcing 87
+    // call sites to fold their own alpha. Split per M3 (light variant ≈ tone 80).
+    outlineVariant = Color(0xFFC9C9CE),
 )
 
 private val DarkColorScheme = darkColorScheme(
     primary = TealDarkPrimary,
+    surfaceTint = TealDarkPrimary,
+    inversePrimary = TealPrimary,
+    // [T-dark-tertiary-family] The dark scheme skipped tertiary entirely, so it
+    // fell back to the library pink #EFB8C8 — a different hue from the light
+    // scheme's #6D5677. Derived from the same iOS-purple family.
+    tertiary = Color(0xFFD9BCE4),
+    onTertiary = Color(0xFF352A44),
+    tertiaryContainer = Color(0xFF523C60),
+    onTertiaryContainer = Color(0xFFF2E6FA),
+    error = Color(0xFFFFB4AB),
+    onError = Color(0xFF690005),
+    errorContainer = Color(0xFF93000A),
+    onErrorContainer = Color(0xFFFFDAD6),
+    inverseSurface = Color(0xFFE2E2E6),
+    inverseOnSurface = Color(0xFF1C1C1E),
+    surfaceDim = Color(0xFF000000),
+    surfaceBright = Color(0xFF3A3A3C),
     onPrimary = TealDarkOnPrimary,
     primaryContainer = TealDarkPrimaryContainer,
     onPrimaryContainer = TealDarkOnPrimaryContainer,
@@ -129,13 +164,13 @@ private val DarkColorScheme = darkColorScheme(
     onSurface = TealDarkOnSurface,
     surfaceVariant = TealDarkSurfaceVariant,
     onSurfaceVariant = TealDarkOnSurfaceVariant,
-    surfaceContainerLowest = TealDarkBackground,
-    surfaceContainerLow = Color(0xFF1C1C1E),
+    surfaceContainerLowest = Color(0xFF0A0A0C),
+    surfaceContainerLow = Color(0xFF161618),
     surfaceContainer = Color(0xFF1C1C1E),
-    surfaceContainerHigh = Color(0xFF2C2C2E),
-    surfaceContainerHighest = Color(0xFF2C2C2E),
+    surfaceContainerHigh = Color(0xFF262628),
+    surfaceContainerHighest = Color(0xFF323235),
     outline = TealDarkOutline,
-    outlineVariant = TealDarkOutline,
+    outlineVariant = Color(0xFF4A4A4F),
 )
 
 // App-wide FAB accent color (warm beige, matching iOS New Chat button).
@@ -150,8 +185,10 @@ fun minisFabColor(): Color = LocalChatPalette.current.fabAccent
 @Composable
 fun minisFabContentColor(): Color = LocalChatPalette.current.fabOnAccent
 
-// [T-two-styles] 动态取色模式下 Icon 走 Rounded 风格（M3 Material Symbols）。
-// 非动态模式继续用 Default/Filled（Apple SF Symbols 风格）。默认为 false。
+// [T-two-styles] 动态取色模式下 Icon 走 Outlined 风格（material-icons 的
+// Outlined 族，经 M3Icons.kt 的 m3Icon() 做 Filled↔Outlined 映射）。
+// 非动态模式用 Filled/Default。注意：这是 Material Icons 的填充风格切换，
+// 不是 Material Symbols 的 Rounded 字形族（后者从未被引入）。默认为 false。
 val LocalUseRoundedIcons = compositionLocalOf { false }
 
 // True only while the wallpaper scheme is actually in effect (dynamic color ON
@@ -163,7 +200,9 @@ val LocalMonetDynamic = compositionLocalOf { false }
 // monetIconTileColor/ContentColor) lives in AccentTokens.kt.
 
 // Apple-style shape system — rounded, friendly, iOS-like
-// M3 Expressive 在动态取色时替换（见 MinisShapesM3）
+// 动态取色时替换为 M3 baseline 5 档（M3ExpressiveShapes）。M3E 的 8 档
+// Shapes / MotionScheme / MaterialExpressiveTheme 需 material3 1.5.0
+// （AGP 9.1.2 + compileSdk 37），版本门控见 gradle/libs.versions.toml 头注。
 private val AppleShapes = Shapes(
     extraSmall = RoundedCornerShape(12.dp),
     small = RoundedCornerShape(12.dp),
@@ -202,8 +241,10 @@ fun MinisTheme(
         if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     } else if (darkTheme) DarkColorScheme else LightColorScheme
     // 两套独立的视觉系统：
-    //   非动态 → Apple 风格（圆角大、Roboto 字重偏轻、自有 ChatPalette）
-    //   动态   → M3 Expressive（官方 Shape tokens、Material You 全套色板+文字）
+    //   非动态 → Apple 风格（自有 ChatPalette）
+    //   动态   → M3 baseline（Material You 全套色板 + 官方 Shape/Type tokens）。
+    //   注：M3 baseline 而非 M3 Expressive —— material3 1.3.2 没有
+    //   MaterialExpressiveTheme / MotionScheme / 8 档 Shapes（1.5.0 才有）
     val shapes = if (dynamicActive) M3ExpressiveShapes else AppleShapes
     val typography = if (dynamicActive) {
         M3Typography  // M3 官方 Type Scale（Display/Headline/Title/Body/Label）
@@ -229,6 +270,17 @@ fun MinisTheme(
     // fontSize/lineHeight 配对反推。M3Typography 里 11sp 与 12sp 同用 16sp 行高
     // 是 M3 规范下限所致，令牌表里 12sp = 17sp。
     val minisType = MinisType()
+    // [T-motion-scale] System animator duration scale: 0 when the user turned
+    // animations off, 1 normally, >1 under a developer slowdown. Read once per
+    // theme composition (it changes only on a config change, which recomposes
+    // the theme anyway).
+    val motionScale = runCatching {
+        android.provider.Settings.Global.getFloat(
+            context.contentResolver,
+            android.provider.Settings.Global.ANIMATOR_DURATION_SCALE,
+            1f,
+        )
+    }.getOrDefault(1f)
 
     MaterialTheme(
         colorScheme = colorScheme,
@@ -242,6 +294,10 @@ fun MinisTheme(
             LocalMinisColors provides minisColors,
             LocalMinisDimens provides minisDimens,
             LocalMinisType provides minisType,
+            // [T-motion-scale] Feed the system animator duration scale into the
+            // decor derivations so "remove animations" (scale 0) actually stops
+            // them — previously nothing in the app read it at all.
+            LocalMotionDurationScale provides motionScale,
         ) {
             // [T-decor-shared-clock] 所有装饰动画共用一个 30fps 相位来源。
             // 消费者必须显式读 LocalDecorPhase / decor* 派生器才真正共享时钟
@@ -275,10 +331,14 @@ fun MinisTheme(
  *  - fabOnAccent = onPrimary: the FAB icon tint, paired by construction. The
  *    static palettes keep White, matching the icon's previous hardcoded tint,
  *    so the OFF path is byte-identical.
- *  - toastBg = primary at the same 0x2E alpha both static palettes use.
  *
  * Semantic slots (warning orange, syntax green, blockquote bar) and the
  * dark-mode elevation shadow stay on [fallback] — their hue IS the message.
+ * Thinking-chip foreground follows onPrimary (White on a dark-mode tone-80
+ * primary measured 1.70:1).
+ * Dark surfaces lift one step (input=containerHighest, tools=containerHigh)
+ * so the chat layers stay separated on ~500-nit screens — the T153 lesson
+ * from the static dark palette, which the first dynamic mapping reversed.
  *
  * Pure so the rule is unit-testable alongside the static palettes.
  */
@@ -286,24 +346,38 @@ internal fun dynamicChatPalette(scheme: ColorScheme, fallback: ChatPalette): Cha
     fallback.copy(
         // Surfaces — the chat tints with the wallpaper like everything else.
         background = scheme.background,
-        secondaryBg = scheme.surfaceContainerLow,
-        inputBg = scheme.surfaceContainerLowest,
+        // [T-dynamic-dark-layering] Dark mode lifts each chat layer one step
+        // (input=highest, tools=high, chrome=container): the literal tone ramp
+        // put the input at tone 4 — DARKER than the tone-6 background (1.04:1).
+        // Light keeps the Apple grouped look (white input on gray page).
+        secondaryBg = if (fallback.isDark) scheme.surfaceContainer else scheme.surfaceContainerLow,
+        inputBg = if (fallback.isDark) scheme.surfaceContainerHighest else scheme.surfaceContainerLowest,
         inputIconBg = scheme.surfaceContainerHigh,
         inputIconBorder = scheme.outlineVariant.copy(alpha = 0.4f),
         inputBorder = scheme.outlineVariant.copy(alpha = 0.6f),
-        toolBg = scheme.surfaceContainer,
+        toolBg = if (fallback.isDark) scheme.surfaceContainerHigh else scheme.surfaceContainer,
         toolBorder = scheme.outlineVariant.copy(alpha = 0.5f),
-        toolCapsuleBg = scheme.surfaceContainerLow,
+        toolCapsuleBg = if (fallback.isDark) scheme.surfaceContainer else scheme.surfaceContainerLow,
         separator = scheme.outlineVariant,
         tableBorder = scheme.outlineVariant.copy(alpha = 0.5f),
         thumbnailBorder = scheme.outlineVariant.copy(alpha = 0.4f),
         sheetHeaderBg = scheme.surfaceContainerLow,
         sheetHeaderBorder = scheme.outlineVariant.copy(alpha = 0.5f),
         inlineCodeBg = scheme.surfaceContainerLow,
+        // [T-inline-code-light-contrast] The orange fallback measured 1.97:1 on
+        // the light chip; dark keeps the bright terminal orange (6.02:1 there).
+        inlineCodeText = if (fallback.isDark) fallback.inlineCodeText else Color(0xFFB25000),
         // Text pairs come with the scheme — contrast already tuned.
         primaryText = scheme.onSurface,
         secondaryText = scheme.onSurfaceVariant,
-        tertiaryText = scheme.outline,
+        // [T-dynamic-tertiary-text] `tertiaryText` was mapped to `scheme.outline`,
+        // which M3 defines as the BORDERS/dividers role: on a real Material You
+        // light scheme (surface tone 98, outline tone 50) that measures 4.27:1 —
+        // below AA for text, and the live-palette gate cannot see it because it
+        // only parses the static palettes. Derive it from onSurfaceVariant
+        // (tone 30 light / 80 dark: 9.1 / 10.9) with a reduction that keeps the
+        // three-tier hierarchy below secondaryText.
+        tertiaryText = scheme.onSurfaceVariant.copy(alpha = 0.78f),
         disabledText = scheme.onSurface.copy(alpha = 0.18f),
         sendButtonDisabled = scheme.onSurface.copy(alpha = 0.18f),
         // Accents (see the FAB pairing note above; userBubble text is
@@ -312,11 +386,11 @@ internal fun dynamicChatPalette(scheme: ColorScheme, fallback: ChatPalette): Cha
         sendButton = scheme.primary,
         link = scheme.primary,
         thinking = scheme.primary,
-        toastBg = scheme.primary.copy(alpha = 0.18f),
+        thinkingOn = scheme.onPrimary,
         fabAccent = scheme.primaryContainer,
         fabOnAccent = scheme.onPrimaryContainer,
-        // Kept on the fallback on purpose: codeBlockBg/Text and inlineCodeText
-        // are terminal-green syntax identity, blockquoteBar/warning* are
+        // Kept on the fallback on purpose: codeBlockBg/Text is terminal-green
+        // syntax identity, blockquoteBar/warning* are
         // semantic hues, inputShadow is the dark-mode elevation shadow, and
         // isDark marks the mode for consumers that branch on it.
     )

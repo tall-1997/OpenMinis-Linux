@@ -193,7 +193,7 @@ fun GroupPickerSheet(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Icon(
-                        Icons.Default.AutoAwesome,
+                        m3Icon(Icons.Default.AutoAwesome),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp),
@@ -228,7 +228,7 @@ fun GroupPickerSheet(
                             )
                         } else {
                             Icon(
-                                Icons.Default.AutoAwesome,
+                                m3Icon(Icons.Default.AutoAwesome),
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(18.dp),
@@ -283,7 +283,7 @@ fun GroupPickerSheet(
                             GroupRow(
                                 title = label,
                                 subtitle = hint,
-                                icon = Icons.Default.FolderOff,
+                                icon = m3Icon(Icons.Default.FolderOff),
                                 onClick = { onChoose(GroupChoice.RemoveFromGroup) },
                                 // Merge the two lines for screen readers;
                                 // announced separately they read as unrelated
