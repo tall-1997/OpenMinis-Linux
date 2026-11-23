@@ -82,6 +82,8 @@ fun ModelGroupsScreen(
     providerRepository: ProviderRepository,
     onBack: () -> Unit,
     onGroupClick: (String) -> Unit,
+    /** [T-model-connection] true 时不画 Scaffold 顶栏，交给「模型与连接」聚合页承载分段控件。 */
+    embedded: Boolean = false,
     /** T185: navigate to the entries picker for the agent-loop set.
      *  Replaces T182's in-screen ModalBottomSheet so the picker shape
      *  matches AddModelsToGroupScreen (shared composable). */
@@ -149,18 +151,13 @@ fun ModelGroupsScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            MinisCenterTopBar(
-                title = { Text(stringResource(R.string.model_groups_model_groups)) },
-                actions = {
-                    IconButton(onClick = { showNewGroupDialog = true }) {
-                        Icon(m3Icon(Icons.Default.Add), contentDescription = stringResource(R.string.model_groups_new_group))
-                    }
-                },
-            )
-        },
-    ) { padding ->
+    val newGroupAction: @Composable () -> Unit = {
+        IconButton(onClick = { showNewGroupDialog = true }) {
+            Icon(m3Icon(Icons.Default.Add), contentDescription = stringResource(R.string.model_groups_new_group))
+        }
+    }
+
+    val listContent: @Composable (PaddingValues) -> Unit = { padding ->
         // T313: page background uses SectionDesign.screenBackgroundColor()
         // (= surfaceContainerLow), so the section cards painted in `surface`
         // visibly stand out as iOS-style inset-grouped panels.
@@ -254,67 +251,23 @@ fun ModelGroupsScreen(
 
                 // T313 — Section 2 (Defaults). Two dropdown rows in one card
                 // with SectionDivider between them, footer caption outside.
-                item("defaults_section_spacer") {
-                    Spacer(modifier = Modifier.height(SectionDesign.SectionTopGap))
-                }
-                item("defaults_section_header") {
-                    SectionHeader(text = stringResource(R.string.model_groups_defaults))
-                }
-                item("defaults_section_card") {
-                    SectionCard {
-                        // Default Sub is not shown. Sub-agents use MultiAgentSettings;
-                        // defaultSubGroupId remains stored for title-generation fallback.
-                        SlotPickerField(
-                            label = stringResource(R.string.model_groups_default_primary),
+                // [T-model-connection] 槽位段与聚合页第三段共用 DefaultSlotsContent，
+                // 以 embedded 方式渲染时由聚合页承载，这里不再重复一份。
+                if (!embedded) {
+                    item("defaults_section_spacer") {
+                        Spacer(modifier = Modifier.height(SectionDesign.SectionTopGap))
+                    }
+                    item("defaults_section") {
+                        DefaultSlotsContent(
+                            config = config,
                             groups = groups,
-                            entries = config.modelEntries,
-                            instances = config.instances,
-                            selectedId = config.defaultPrimaryGroupId,
-                            onSelect = { providerRepository.defaultPrimaryGroupId = it },
-                        )
-                        SectionDivider()
-                        SlotPickerField(
-                            label = stringResource(R.string.model_groups_voice_input),
-                            groups = groups,
-                            entries = config.modelEntries,
-                            instances = config.instances,
-                            selectedId = config.voiceInputGroupId,
-                            onSelect = { providerRepository.voiceInputGroupId = it },
-                        )
-                        SectionDivider()
-                        SlotPickerField(
-                            label = stringResource(R.string.model_groups_voice_output),
-                            groups = groups,
-                            entries = config.modelEntries,
-                            instances = config.instances,
-                            selectedId = config.voiceOutputGroupId,
-                            onSelect = { providerRepository.voiceOutputGroupId = it },
-                        )
-                        SectionDivider()
-                        SlotPickerField(
-                            label = stringResource(R.string.model_groups_vision),
-                            groups = groups,
-                            entries = config.modelEntries,
-                            instances = config.instances,
-                            selectedId = config.visionGroupId,
-                            onSelect = { providerRepository.visionGroupId = it },
-                        )
-                        SectionDivider()
-                        SlotPickerField(
-                            label = stringResource(R.string.model_groups_compact_fallback),
-                            groups = groups,
-                            entries = config.modelEntries,
-                            instances = config.instances,
-                            selectedId = config.compactFallbackGroupId,
-                            onSelect = { providerRepository.compactFallbackGroupId = it },
+                            onPrimaryChange = { providerRepository.defaultPrimaryGroupId = it },
+                            onVoiceInputChange = { providerRepository.voiceInputGroupId = it },
+                            onVoiceOutputChange = { providerRepository.voiceOutputGroupId = it },
+                            onVisionChange = { providerRepository.visionGroupId = it },
+                            onCompactFallbackChange = { providerRepository.compactFallbackGroupId = it },
                         )
                     }
-                }
-                item("defaults_section_footer") {
-                    SectionFooter(
-                        text = stringResource(R.string.model_groups_primary_is_used_for_main_agent_tasks_sub) +
-                            "\n" + stringResource(R.string.model_groups_compact_fallback_footer),
-                    )
                 }
             }
 
@@ -330,6 +283,23 @@ fun ModelGroupsScreen(
                 onAddModelsTap = onAddAgentLoopModels,
                 onAddGroupsTap = onAddAgentLoopGroups,
             )
+        }
+    }
+
+    if (embedded) {
+        EmbeddedSectionScaffold(actions = newGroupAction, scroll = false) {
+            listContent(PaddingValues(0.dp))
+        }
+    } else {
+        Scaffold(
+            topBar = {
+                MinisCenterTopBar(
+                    title = { Text(stringResource(R.string.model_groups_model_groups)) },
+                    actions = { newGroupAction() },
+                )
+            },
+        ) { padding ->
+            listContent(padding)
         }
     }
 

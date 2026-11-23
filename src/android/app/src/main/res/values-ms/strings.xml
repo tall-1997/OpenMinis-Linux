@@ -3359,4 +3359,5 @@
  <string name="perm_full_access_confirm">Dayakan</string>
  <string name="perm_guarded_risk_reason">Sahkan arahan berisiko</string>
  <string name="perm_guarded_risk_message">Mod autonomi menilai arahan ini berisiko. Sahkan sekali untuk menjalankannya.</string>
+    <string name="model_connection_title">Model &amp; Sambungan</string>
 </resources>

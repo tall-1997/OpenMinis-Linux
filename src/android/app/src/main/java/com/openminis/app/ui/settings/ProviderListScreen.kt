@@ -19,13 +19,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.FileUpload
-import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.VpnKey
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -89,6 +87,8 @@ fun ProviderListScreen(
     onAddProvider: () -> Unit,
     onProviderClick: (String) -> Unit,
     onVoiceServiceClick: (String) -> Unit,
+    /** [T-model-connection] true 时不画 Scaffold 顶栏，交给「模型与连接」聚合页承载分段控件。 */
+    embedded: Boolean = false,
 ) {
     val config by providerRepository.config.collectAsStateWithLifecycle()
     val credentialRevision by providerRepository.credentialRevision.collectAsStateWithLifecycle()
@@ -287,10 +287,7 @@ fun ProviderListScreen(
         }
     }
 
-    SettingsScaffold(
-        title = stringResource(R.string.provider_list_providers),
-        onBack = null,
-        actions = {
+    val listActions: @Composable () -> Unit = {
             IconButton(
                 onClick = {
                     if (isSyncing) return@IconButton
@@ -336,8 +333,9 @@ fun ProviderListScreen(
             IconButton(onClick = { showMenu = true }) {
                 Icon(m3Icon(Icons.Default.Add), contentDescription = stringResource(R.string.provider_list_add_provider))
             }
-        },
-    ) {
+    }
+
+    val listBody: @Composable () -> Unit = {
         // [FIX-R2-16] Persistent state banner (not dismissible — it tracks a
         // condition, not an event) shown while the provider configuration is
         // unreadable. Every config-protected mutation no-ops until a load
@@ -637,6 +635,18 @@ fun ProviderListScreen(
         }
     }
 
+    if (embedded) {
+        EmbeddedSectionScaffold(actions = listActions, scroll = true) {
+            listBody()
+        }
+    } else {
+        SettingsScaffold(
+            title = stringResource(R.string.provider_list_providers),
+            onBack = null,
+            actions = listActions,
+        ) { listBody() }
+    }
+
     // [#24] Export confirmation: keys default OFF, plaintext risk shown on flip.
     if (showExportDialog) {
         ProviderExportDialog(
@@ -730,61 +740,6 @@ private fun ProviderSwipeableRow(
             },
             onClick = { onProviderClick(instance.id) },
             syncResult = syncResult,
-        )
-    }
-}
-
-/** One shadow Voice Service row: name + ASR/TTS model counts. */
-@Composable
-private fun ShadowVoiceRow(
-    shadow: ProviderRepository.ShadowVoiceProvider,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = m3Icon(Icons.Outlined.GraphicEq),
-            contentDescription = null,
-            modifier = Modifier.size(20.dp),
-            tint = MaterialTheme.colorScheme.primary,
-        )
-        Spacer(Modifier.width(12.dp))
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Text(
-                text = shadow.displayName,
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            val parts = buildList {
-                if (shadow.inputModels.isNotEmpty()) {
-                    add(stringResource(R.string.voice_services_stt_count, shadow.inputModels.size))
-                }
-                if (shadow.outputModels.isNotEmpty()) {
-                    add(stringResource(R.string.voice_services_tts_count, shadow.outputModels.size))
-                }
-            }
-            if (parts.isNotEmpty()) {
-                Text(
-                    text = parts.joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        Icon(
-            imageVector = m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-            modifier = Modifier.size(20.dp),
         )
     }
 }

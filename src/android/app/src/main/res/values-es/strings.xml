@@ -3210,4 +3210,5 @@
  <string name="perm_full_access_confirm">Activar</string>
  <string name="perm_guarded_risk_reason">Confirmar comando de riesgo</string>
  <string name="perm_guarded_risk_message">El modo autónomo considera este comando riesgoso. Confirma una vez para ejecutarlo.</string>
+    <string name="model_connection_title">Modelo y conexión</string>
 </resources>

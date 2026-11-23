@@ -3359,4 +3359,5 @@
  <string name="perm_full_access_confirm">Activer</string>
  <string name="perm_guarded_risk_reason">Confirmer cette commande risquée</string>
  <string name="perm_guarded_risk_message">Le mode autonome juge cette commande risquée. Confirmez une fois pour l’exécuter.</string>
+    <string name="model_connection_title">Modèle et connexion</string>
 </resources>

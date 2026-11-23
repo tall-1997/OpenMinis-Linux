@@ -3364,4 +3364,5 @@
  <string name="perm_full_access_confirm">Aktifkan</string>
  <string name="perm_guarded_risk_reason">Konfirmasi perintah berisiko</string>
  <string name="perm_guarded_risk_message">Mode otonom menilai perintah ini berisiko. Konfirmasi sekali untuk menjalankannya.</string>
+    <string name="model_connection_title">Model &amp; Koneksi</string>
 </resources>

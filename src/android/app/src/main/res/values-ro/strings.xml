@@ -3363,4 +3363,5 @@
  <string name="perm_full_access_confirm">Activează</string>
  <string name="perm_guarded_risk_reason">Confirmă comanda riscantă</string>
  <string name="perm_guarded_risk_message">Modul autonom a considerat această comandă riscantă. Confirmă o dată pentru a o rula.</string>
+    <string name="model_connection_title">Model și conexiune</string>
 </resources>

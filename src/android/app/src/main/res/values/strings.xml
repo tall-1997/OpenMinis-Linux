@@ -3125,4 +3125,5 @@
  <string name="perm_full_access_confirm">Enable</string>
  <string name="perm_guarded_risk_reason">Confirm this risky command</string>
  <string name="perm_guarded_risk_message">Autonomous mode rated this command as risky. Approve once to let it run.</string>
+    <string name="model_connection_title">Model &amp; Connection</string>
 </resources>

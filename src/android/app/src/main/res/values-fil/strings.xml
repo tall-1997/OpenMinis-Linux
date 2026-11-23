@@ -3359,4 +3359,5 @@
  <string name="perm_full_access_confirm">I-enable</string>
  <string name="perm_guarded_risk_reason">Kumpirmahin ang delikadong utos</string>
  <string name="perm_guarded_risk_message">Itinuring ng autonomous mode na delikado ang utos na ito. Kumpirmahin isang beses para patakbuhin.</string>
+    <string name="model_connection_title">Model at Koneksyon</string>
 </resources>

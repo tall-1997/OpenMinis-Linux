@@ -3367,4 +3367,5 @@
  <string name="perm_full_access_confirm">Включить</string>
  <string name="perm_guarded_risk_reason">Подтвердить рискованную команду</string>
  <string name="perm_guarded_risk_message">Автономный режим счёл эту команду рискованной. Подтвердите один раз, чтобы выполнить её.</string>
+    <string name="model_connection_title">Модель и подключение</string>
 </resources>

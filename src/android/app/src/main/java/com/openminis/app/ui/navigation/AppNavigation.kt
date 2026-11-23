@@ -461,6 +461,7 @@ fun AppNavigation(
                 onBack = { navController.safePopBackStack() },
                 onProvidersClick = { navController.safeNavigate(Routes.PROVIDER_LIST) },
                 onModelGroupsClick = { navController.safeNavigate(Routes.MODEL_GROUPS) },
+                onModelConnectionClick = { navController.safeNavigate(Routes.MODEL_CONNECTION) },
                 onRootfsClick = { navController.safeNavigate(Routes.STORAGE) },
                 onBackupClick = { navController.safeNavigate(Routes.BACKUP) },
                 onNetworkClick = { navController.safeNavigate(Routes.NETWORK) },
@@ -482,7 +483,6 @@ fun AppNavigation(
                 onTranslateClick = { navController.safeNavigate(Routes.TRANSLATE) },
                 onOpenBrowser = { navController.safeNavigate(Routes.HOME_BROWSER) },
                 onBrowserSettings = { navController.safeNavigate(Routes.HOME_BROWSER_SETTINGS) },
-
                 onLogsClick = { navController.safeNavigate(Routes.LOGS) },
                 onAboutClick = { navController.safeNavigate(Routes.ABOUT) },
                 onMountedFoldersClick = { navController.safeNavigate(Routes.MOUNTED_FOLDERS) },

@@ -2994,4 +2994,5 @@
  <string name="perm_full_access_confirm">确认启用</string>
  <string name="perm_guarded_risk_reason">确认这条风险命令</string>
  <string name="perm_guarded_risk_message">自主模式判定这条命令有风险，确认一次后才会执行。</string>
+    <string name="model_connection_title">模型与连接</string>
 </resources>

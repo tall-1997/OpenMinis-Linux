@@ -3358,4 +3358,5 @@
  <string name="perm_full_access_confirm">有効にする</string>
  <string name="perm_guarded_risk_reason">リスクのあるコマンドを確認</string>
  <string name="perm_guarded_risk_message">自律モードがこのコマンドをリスクありと判定しました。一度確認すると実行します。</string>
+    <string name="model_connection_title">モデルと接続</string>
 </resources>
