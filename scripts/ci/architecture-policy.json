@@ -108,7 +108,7 @@
     "src/android/app/src/main/java"
   ],
   "baseline": {
-    "src/android/app/src/main/java/com/openminis/app/MainActivity.kt": 849,
+    "src/android/app/src/main/java/com/openminis/app/MainActivity.kt": 845,
     "src/android/app/src/main/java/com/openminis/app/agent/PersonaPromptLibrary.kt": 834,
     "src/android/app/src/main/java/com/openminis/app/backup/BackupImporter.kt": 1126,
     "src/android/app/src/main/java/com/openminis/app/browser/BrowserTabPool.kt": 1388,

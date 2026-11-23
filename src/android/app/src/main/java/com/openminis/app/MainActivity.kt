@@ -577,18 +577,14 @@ class MainActivity : ComponentActivity() {
                 val barStyle = if (darkTheme) {
                     SystemBarStyle.dark(Color.TRANSPARENT)
                 } else {
-                    // T205: SystemBarStyle.light(...) auto-applies a ~30% black
-                    // scrim behind the status bar on Android 13+ for icon
-                    // legibility, which leaks through as a grey strip even
-                    // when the activity paints its own surface color
-                    // edge-to-edge. SystemBarStyle.auto with both scrim args
-                    // TRANSPARENT lets the system pick light/dark icons by
-                    // luminance but suppresses the auto-scrim, so the screen's
-                    // own background color paints all the way to the top/bottom
-                    // edges. Per-screen `isAppearanceLightStatusBars` overrides
-                    // (e.g. FilePreviewScreen DisposableEffect) still control
-                    // icon contrast.
-                    SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT)
+                    // `auto` reads icon polarity from the SYSTEM uiMode, not the
+                    // in-app theme_mode pref (in-app light on a dark system painted
+                    // WHITE icons on a light bar — reproduced on the TB365FC with
+                    // `cmd uimode night yes` + app浅色). Name the style explicitly.
+                    // The double-TRANSPARENT scrims stay: light() would otherwise
+                    // paint a ~30% black strip behind the status bar on Android13+,
+                    // and the screen paints its own background edge-to-edge.
+                    SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
                 }
                 enableEdgeToEdge(statusBarStyle = barStyle, navigationBarStyle = barStyle)
             }
