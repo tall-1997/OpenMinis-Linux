@@ -5,6 +5,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.openminis.app.navigation.Routes
 
 /**
  * [T-lemon-integration] MCP-related nav destinations, extracted from
