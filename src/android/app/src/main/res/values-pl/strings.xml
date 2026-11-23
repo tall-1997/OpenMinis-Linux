@@ -3367,4 +3367,5 @@
  <string name="perm_guarded_risk_reason">Potwierdź ryzykowne polecenie</string>
  <string name="perm_guarded_risk_message">Tryb autonomiczny uznał to polecenie za ryzykowne. Potwierdź raz, aby je uruchomić.</string>
     <string name="model_connection_title">Model i połączenie</string>
+    <string name="quota_unsupported_insecure">Sprawdzanie salda jest wyłączone dla tego punktu końcowego, ponieważ używa zwykłego http. Czat nadal działa.</string>
 </resources>

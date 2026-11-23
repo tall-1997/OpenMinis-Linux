@@ -3360,4 +3360,5 @@
  <string name="perm_guarded_risk_reason">ยืนยันคำสั่งที่มีความเสี่ยง</string>
  <string name="perm_guarded_risk_message">โหมดอัตโนมัติเห็นว่าคำสั่งนี้มีความเสี่ยง ยืนยันหนึ่งครั้งเพื่อรัน</string>
     <string name="model_connection_title">โมเดลและการเชื่อมต่อ</string>
+    <string name="quota_unsupported_insecure">การตรวจสอบยอดคงเหลือปิดใช้งานสำหรับปลายทางนี้เพราะใช้ http ที่ไม่เข้ารหัส แชทยังใช้งานได้</string>
 </resources>

@@ -542,7 +542,14 @@ internal class ModelCatalogCache(
         val lastMs = prefs.getLong(key, 0L)
         val now = System.currentTimeMillis()
         if (lastMs > 0L && isSameCalendarDay(lastMs, now)) {
-            android.util.Log.i("ProviderRepo", "[ModelList] refreshAllModelsIfNeeded SKIP — already refreshed today")
+            // [T-daily-refresh-log] AppLogger, not android.util.Log: the field
+            // logcat tailer drops INFO lines whose tag is not allowlisted
+            // ("ProviderRepo" is not), so the feature was invisible on device —
+            // nobody could tell a fixed build from a broken one.
+            com.openminis.app.logging.AppLogger.info(
+                "ProviderRepo",
+                "[ModelList] SKIP: already refreshed today",
+            )
             return
         }
 
@@ -556,11 +563,17 @@ internal class ModelCatalogCache(
             repo.awaitConfigLoaded()
             val enabled = repo._config.value.instances.filter { it.isEnabled }
             if (enabled.isEmpty()) {
-                android.util.Log.i("ProviderRepo", "[ModelList] refreshAllModelsIfNeeded SKIP — no enabled instances")
+                com.openminis.app.logging.AppLogger.info(
+                    "ProviderRepo",
+                    "[ModelList] SKIP: no enabled instances",
+                )
                 return@launch
             }
 
-            android.util.Log.i("ProviderRepo", "[ModelList] refreshAllModelsIfNeeded FIRE — ${enabled.size} instances")
+            com.openminis.app.logging.AppLogger.info(
+                "ProviderRepo",
+                "[ModelList] FIRE: ${enabled.size} instances",
+            )
             prefs.edit().putLong(key, now).apply()
 
             for (instance in enabled) {

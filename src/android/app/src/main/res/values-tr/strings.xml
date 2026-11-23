@@ -3360,4 +3360,5 @@
  <string name="perm_guarded_risk_reason">Riskli komutu onayla</string>
  <string name="perm_guarded_risk_message">Otonom mod bu komutu riskli buldu. Çalıştırmak için bir kez onayla.</string>
     <string name="model_connection_title">Model ve bağlantı</string>
+    <string name="quota_unsupported_insecure">Bu uç nokta şifrelenmemiş http kullandığı için bakiye sorgulama kapalı. Sohbet çalışmaya devam eder.</string>
 </resources>

@@ -3368,4 +3368,5 @@
  <string name="perm_guarded_risk_reason">Подтвердить рискованную команду</string>
  <string name="perm_guarded_risk_message">Автономный режим счёл эту команду рискованной. Подтвердите один раз, чтобы выполнить её.</string>
     <string name="model_connection_title">Модель и подключение</string>
+    <string name="quota_unsupported_insecure">Проверка баланса отключена для этой конечной точки, так как она использует незашифрованный http. Чат продолжает работать.</string>
 </resources>

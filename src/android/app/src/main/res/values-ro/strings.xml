@@ -3364,4 +3364,5 @@
  <string name="perm_guarded_risk_reason">Confirmă comanda riscantă</string>
  <string name="perm_guarded_risk_message">Modul autonom a considerat această comandă riscantă. Confirmă o dată pentru a o rula.</string>
     <string name="model_connection_title">Model și conexiune</string>
+    <string name="quota_unsupported_insecure">Interogarea soldului este dezactivată pentru acest endpoint deoarece folosește http necriptat. Chatul funcționează în continuare.</string>
 </resources>

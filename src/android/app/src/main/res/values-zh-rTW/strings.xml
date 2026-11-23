@@ -3357,4 +3357,5 @@
  <string name="perm_guarded_risk_reason">確認這條風險指令</string>
  <string name="perm_guarded_risk_message">自主模式判定這條指令有風險，確認一次後才會執行。</string>
     <string name="model_connection_title">模型與連線</string>
+    <string name="quota_unsupported_insecure">這個端點使用未加密的 http，因此已關閉餘額查詢。聊天功能不受影響。</string>
 </resources>

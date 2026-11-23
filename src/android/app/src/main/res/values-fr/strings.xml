@@ -3360,4 +3360,5 @@
  <string name="perm_guarded_risk_reason">Confirmer cette commande risquée</string>
  <string name="perm_guarded_risk_message">Le mode autonome juge cette commande risquée. Confirmez une fois pour l’exécuter.</string>
     <string name="model_connection_title">Modèle et connexion</string>
+    <string name="quota_unsupported_insecure">La consultation du solde est désactivée pour ce point de terminaison car il utilise http en clair. Le chat fonctionne toujours.</string>
 </resources>

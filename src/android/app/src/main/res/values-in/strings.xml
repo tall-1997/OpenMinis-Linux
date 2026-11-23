@@ -3365,4 +3365,5 @@
  <string name="perm_guarded_risk_reason">Konfirmasi perintah berisiko</string>
  <string name="perm_guarded_risk_message">Mode otonom menilai perintah ini berisiko. Konfirmasi sekali untuk menjalankannya.</string>
     <string name="model_connection_title">Model &amp; Koneksi</string>
+    <string name="quota_unsupported_insecure">Pengecekan saldo dimatikan untuk endpoint ini karena memakai http tanpa enkripsi. Chat tetap berfungsi.</string>
 </resources>

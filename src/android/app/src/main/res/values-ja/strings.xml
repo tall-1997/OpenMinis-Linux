@@ -3359,4 +3359,5 @@
  <string name="perm_guarded_risk_reason">リスクのあるコマンドを確認</string>
  <string name="perm_guarded_risk_message">自律モードがこのコマンドをリスクありと判定しました。一度確認すると実行します。</string>
     <string name="model_connection_title">モデルと接続</string>
+    <string name="quota_unsupported_insecure">このエンドポイントは暗号化されていない http を使用しているため、残高照会を無効にしています。チャットは引き続き利用できます。</string>
 </resources>

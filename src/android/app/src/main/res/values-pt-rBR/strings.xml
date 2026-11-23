@@ -3360,4 +3360,5 @@
  <string name="perm_guarded_risk_reason">Confirmar comando de risco</string>
  <string name="perm_guarded_risk_message">O modo autônomo considerou este comando arriscado. Confirme uma vez para executá-lo.</string>
     <string name="model_connection_title">Modelo e conexão</string>
+    <string name="quota_unsupported_insecure">A consulta de saldo está desativada para este endpoint porque ele usa http sem criptografia. O chat continua funcionando.</string>
 </resources>

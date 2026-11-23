@@ -3360,4 +3360,5 @@
  <string name="perm_guarded_risk_reason">Sahkan arahan berisiko</string>
  <string name="perm_guarded_risk_message">Mod autonomi menilai arahan ini berisiko. Sahkan sekali untuk menjalankannya.</string>
     <string name="model_connection_title">Model &amp; Sambungan</string>
+    <string name="quota_unsupported_insecure">Semakan baki dimatikan untuk titik akhir ini kerana ia menggunakan http biasa. Sembang masih berfungsi.</string>
 </resources>

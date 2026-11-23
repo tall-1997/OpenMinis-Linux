@@ -36,11 +36,44 @@ object RelayQuotaAdapter : ProviderQuotaAdapter {
     override val vendor = QuotaVendor.customRelay
     private val UNLIMITED_SENTINEL_USD = BigDecimal(100_000_000)
 
+    /** [T-relay-probe-once] host|reason pairs already logged. */
+    private val reportedHosts = java.util.Collections.synchronizedSet(
+        java.util.LinkedHashSet<String>(),
+    )
+
     override fun capability(d: QuotaInstanceDescriptor): QuotaCapability {
-        if (d.customHost == null || root(d) == null) {
-            return QuotaCapability.unsupported(QuotaSubject.UnsupportedReason.unknownVendor)
+        // [T-relay-probe-once] Decide ONCE whether this relay is probeable.
+        // `root()` also enforces https, so a plain-http relay used to be
+        // re-attempted and re-warned on every didBecomeActive tick (115
+        // "skipped" lines in one day of the 2026-11-22 field log).
+        val probeable = root(d) != null
+        if (d.customHost == null || !probeable) {
+            val reason = probeUnsupportedReason(d)
+            // [T-relay-probe-once] One breadcrumb per host+reason, ever:
+            // capability() runs on every 60s tick and used to log the same
+            // line 115 times a day. The UI shows this reason already.
+            if (reportedHosts.add(d.customHost.orEmpty() + "|" + reason.name)) {
+                com.openminis.app.logging.AppLogger.info(
+                    "QuotaAdapterRelay",
+                    "relay probe disabled for " + d.customHost + ": " + reason.name,
+                )
+            }
+            return QuotaCapability.unsupported(reason)
         }
         return QuotaCapability.activeQuery(QuotaSource.relayAccountLedger, QuotaConfidence.thirdParty)
+    }
+
+    /**
+     * [T-relay-probe-once] Why this instance cannot be probed, decided once.
+     * A plain-http endpoint is [insecureTransport] (the probe refuses to send
+     * a credential in clear text, while chat over it still works); anything
+     * else is an unusable base URL.
+     */
+    private fun probeUnsupportedReason(d: QuotaInstanceDescriptor): QuotaSubject.UnsupportedReason {
+        val raw = d.customBaseURL?.trim()
+        val scheme = raw?.let { runCatching { URI(it).scheme?.lowercase() }.getOrNull() }
+        return if (scheme == "http") QuotaSubject.UnsupportedReason.insecureTransport
+            else QuotaSubject.UnsupportedReason.unknownVendor
     }
 
     /** Base URL without trailing "/" and "/v1" (case kept for the path), as scheme://authority/path. */
@@ -54,10 +87,8 @@ object RelayQuotaAdapter : ProviderQuotaAdapter {
             // use the user's chosen http URL (their call), but the PROBE opt in
             // to https only.
             if (scheme != "https" || uri.host.isNullOrEmpty()) {
-                com.openminis.app.logging.AppLogger.warning(
-                    "QuotaAdapterRelay",
-                    "quota probe skipped: relay base URL is not https",
-                )
+            // [T-relay-probe-once] Reported once by capability(); this runs
+            // on every refresh attempt and the reason never changes.
                 return null
             }
         var path = uri.rawPath.orEmpty().trimEnd('/')
