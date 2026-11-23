@@ -13,10 +13,9 @@
 
 用法（在仓库根目录）：
     python3 scripts/lemon/gen_catalog.py \
-        --plugins /path/to/lemon-kernel-opensource/06-plugins \
-        --groups  /path/to/lemon-panel/groups.json \
-        --risk    /path/to/lemon-panel/risk.json \
-        --out     src/android/app/src/main/assets/lemon/catalog.json
+        --plugins /path/to/lemon-kernel-opensource/06-plugins
+
+    # groups.json / risk.json / 输出路径都有仓库内默认值
 """
 from __future__ import annotations
 
@@ -33,10 +32,14 @@ def _load(path: str) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--plugins", required=True, help="06-plugins 目录")
-    ap.add_argument("--groups", required=True, help="groups.json")
-    ap.add_argument("--risk", required=True, help="risk.json")
-    ap.add_argument("--out", required=True)
+    here = os.path.dirname(os.path.abspath(__file__))
+    ap.add_argument("--plugins", required=True,
+                    help="upstream 06-plugins dir (lemon-kernel-opensource)")
+    ap.add_argument("--groups", default=os.path.join(here, "groups.json"))
+    ap.add_argument("--risk", default=os.path.join(here, "risk.json"))
+    ap.add_argument("--out", default=os.path.join(
+        here, "..", "..",
+        "src/android/app/src/main/assets/lemon/catalog.json"))
     a = ap.parse_args()
 
     sys.path.insert(0, os.path.dirname(os.path.abspath(a.groups)))
