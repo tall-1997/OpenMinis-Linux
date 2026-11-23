@@ -1,4 +1,6 @@
 {
+ "tool_detail_title": "product name (Minis Computer), identical in every locale",
+
  "add_provider_bearer_token": "OAuth/API auth term",
  "add_provider_vendor_preset_ark": "vendor brand (Volcano Ark)",
  "add_provider_vendor_preset_kimi": "vendor brand (Kimi/Moonshot)",
