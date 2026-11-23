@@ -48,6 +48,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun chatDao(): ChatDao
+    abstract fun pairingDao(): ChatPairingDao
     abstract fun chatSearchDao(): ChatSearchDao
     abstract fun webAppShortcutDao(): WebAppShortcutDao
     abstract fun codeIndexDao(): CodeIndexDao

@@ -15,6 +15,18 @@ import com.openminis.app.provider.ToolPairing
  * ride back to the caller, which writes them to the session journal, so "this
  * request was served from a mutated history" survives the process.
  */
+/**
+ * [T-pairing-writeback] One interrupted tool call whose neutral result can be
+ * persisted: the DB row id of the assistant message owning the use, plus the
+ * use identity. Written back once, so the projection's per-turn neutral
+ * injection disappears from every later turn.
+ */
+internal data class InterruptedUseRef(
+    val assistantRowId: String,
+    val toolUseId: String,
+    val toolName: String,
+)
+
 internal data class PairingRepair(
     val history: List<LLMMessage>,
     val droppedResults: Int,
@@ -27,6 +39,9 @@ internal data class PairingRepair(
      * which.
      */
     val droppedNames: List<String> = emptyList(),
+    /** [T-pairing-writeback] The interrupted calls this repair patched with a
+     *  neutral result — the write-back's material. Empty unless interruptedUses > 0. */
+    val interruptedUseRefs: List<InterruptedUseRef> = emptyList(),
 ) {
     val changed: Boolean get() = droppedResults > 0 || interruptedUses > 0
 }
@@ -170,10 +185,19 @@ internal fun repairToolPairing(history: List<LLMMessage>): PairingRepair {
     // stays silent for the MODEL (an error made it re-issue the call) but must
     // not be silent for the operator, or "this request was served from a
     // mutated history" becomes undiagnosable after the fact.
+    // [T-pairing-writeback] The DB row id rides along so the caller can
+    // persist the neutral result next to the use — after that this repair
+    // never fires again for the same rows.
+    val interruptedUseRefs = repairedUses.mapNotNull { use ->
+        history.getOrNull(use.messageIndex)?.dbMessageId?.let { rowId ->
+            InterruptedUseRef(assistantRowId = rowId, toolUseId = use.id, toolName = use.name)
+        }
+    }
     return PairingRepair(
         history = cleaned,
         droppedResults = droppedResults.size,
         interruptedUses = repairedUses.size,
         droppedNames = droppedNames,
+        interruptedUseRefs = interruptedUseRefs,
     )
 }
