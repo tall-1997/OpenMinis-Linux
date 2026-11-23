@@ -43,8 +43,8 @@ object SubAgentActivityTracker {
         val turnCap: Int = 0,
         val currentTool: String = "",
         val transcript: String = "",
- /** [T-subagent-phase-key] ASCII [SubAgentPhase] key (thinking/calling/running/replying).
- * Empty until the runner reports one; the UI localizes it via string resources.
+        /** [T-subagent-phase-key] ASCII [SubAgentPhase] key (thinking/calling/running/replying);
+         * empty until the runner reports one. The UI localizes it via string resources. */
         val phase: String = "",
         val steps: List<Step> = emptyList(),
     ) {
