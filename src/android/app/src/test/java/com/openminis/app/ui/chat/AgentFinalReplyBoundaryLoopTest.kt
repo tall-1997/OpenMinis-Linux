@@ -246,17 +246,16 @@ class AgentFinalReplyBoundaryLoopTest {
                     .filterIsInstance<AgentContentPart.Text>().any { "Open items: $planTitle." in it.text }
             })
             // [T-midturn-prose-is-reply] `continueWith` commits the previous
-            // attempt with `persistTextTurn`, so the prose is already durable and
-            // the fresh bubble starts empty. What must hold is that the prose is
-            // PERSISTED as reply text (not process text) and reaches the model on
-            // the continuation — both asserted above — not that it lingers in the
-            // new bubble.
+            // attempt, so the prose is already durable AND still visible: with
+            // `persistTextTurn` now defaulting to asReply=true, the turn's prose
+            // is reply text in both places. The assertion used to expect an empty
+            // bubble — that was the old asReply=false behaviour folding it away.
             assertEquals(
-                "A continuation starts a fresh bubble; the earlier prose is durable",
-                AssistantBody(emptyList(), emptyList()),
+                "The committed prose stays visible as the reply",
+                AssistantBody(listOf(progress), listOf(progress)),
                 beforeContinuation,
             )
-            val expectedReply = listOf(FINAL_REPLY)
+            val expectedReply = listOf(progress, FINAL_REPLY)
             assertEquals(AssistantBody(expectedReply, expectedReply), viewModel.visibleAssistantBody())
         } finally {
             AgentPlanStore.clear(SESSION_ID, null)

@@ -324,7 +324,7 @@ object SshTool {
                 body,
                 false,
                 errorCode = ToolErrorCode.TIMEOUT,
-                recoveryHint = "The remote command may still be running. Verify remotely before repeating it.",
+                recoveryHint = "The remote command may still be running; its result is unconfirmed.",
                 toolTitle = title,
                 timedOut = true,
             )

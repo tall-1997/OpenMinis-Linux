@@ -380,7 +380,7 @@ object ToolFailureMemory {
             output = refusalText(entry, argsExcerpt(argsJson)),
             success = false,
             errorCode = ToolErrorCode.EXECUTION_FAILED,
-            recoveryHint = "Do not repeat this call. Diagnose why it failed, then change the arguments.",
+            recoveryHint = "This call already failed with these arguments; the same call would fail again.",
             toolTitle = tool,
         )
     }.getOrNull()
