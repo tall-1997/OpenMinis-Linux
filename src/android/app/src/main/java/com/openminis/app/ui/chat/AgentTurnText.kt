@@ -87,12 +87,17 @@ internal class AgentTurnText(private val blocks: MutableList<AssistantBlock>, pr
         pending = StringBuilder()
     }
 
+    /**
+     * [T-midturn-prose-is-reply] No production caller: mid-turn prose is the
+     * reply now, so nothing force-demotes it into process text. Kept as a
+     * documented seam for callers that need to hide a whole turn's prose (the
+     * stop path uses `settle(asReply = false)` directly).
+     */
     fun requireProcess() {
         if (deferReply) return
         deferReply = true
         settle(asReply = false)
     }
-
     fun hasReplyCandidate(): Boolean {
         materialize()
         // A retry that only echoed the saved prefix did not deliver a new response.
@@ -121,6 +126,12 @@ internal class AgentTurnText(private val blocks: MutableList<AssistantBlock>, pr
     fun settle(asReply: Boolean) {
         materialize()
         for (span in spans) {
+            // [T-midturn-prose-is-reply] Never re-classify a RESTORED span: it was
+            // carried over from an interrupted attempt (the resume prefix), and
+            // flipping it into the reply would show that text twice — once from
+            // the persisted prefix row, once from this live row. `hasReplyCandidate`
+            // already excludes restored spans; this keeps both readers on one rule.
+            if (span.restored) continue
             val block = blocks[span.index]
             val process = !asReply || span.phase == AssistantTextPhase.COMMENTARY
             if (block.isProcessText != process) blocks[span.index] = block.copy(isProcessText = process)

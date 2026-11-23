@@ -189,12 +189,32 @@ object MessageTransformerChain {
      * branch — re-opened the clock on every request.
      */
     private val timeHintPattern = Regex(
-        "现在几点|几点了|几点钟|当前时间|现在时间|什么时间|今天几号|今天日期|几月几号|星期几|" +
+        "现在几点|几点了|几点钟|当前时间|现在时间|什么时间|几号|日期|几月几号|星期几|周几|" +
             "what time|current time|today's date|what day|weather|天气",
         RegexOption.IGNORE_CASE,
     )
 
-    internal fun hasTimeHint(text: String): Boolean = timeHintPattern.containsMatchIn(text)
+    /**
+     * [T-time-hint-precision] Whether the user is ASKING for the clock right now.
+     *
+     * The clock head is stripped first: `<system-note>当前时间: …` is a note WE
+     * appended to an earlier message, and it contains "当前时间" — the very
+     * phrase this pattern looks for. Without the strip, once a note was
+     * appended the message kept looking like a time question forever, so
+     * `requestClockNote` re-opened on every later request and the model read a
+     * fresh "(since previous message: …)" cue each turn.
+     */
+    internal fun hasTimeHint(text: String): Boolean {
+        // [T-time-hint-precision] Cut out each `<system-note>…</system-note>`
+        // span (there can be several: appendUserText stacks them) instead of
+        // taking the substring AFTER the head. The note carries "当前时间", a
+        // phrase this pattern looks for, so leaving any note in the text made
+        // the message look like a permanent time question.
+        val bare = NOTE_SPAN.replace(text, " ")
+        return timeHintPattern.containsMatchIn(bare)
+    }
+
+    private val NOTE_SPAN = Regex("<system-note>[\\s\\S]*?</system-note>")
 
     /** True when [text] already declares a clock note — a second one is noise. */
     internal fun carriesClockNote(text: String): Boolean = text.contains(CLOCK_HEAD)

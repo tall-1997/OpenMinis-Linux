@@ -122,7 +122,7 @@ class AgentFinalReplyBoundaryLoopTest {
     }
 
     @Test
-    fun toolRoundProseStaysInModelHistoryAndOnlyFinalReplyIsVisible() = runBlocking {
+    fun toolRoundProseIsVisibleAsReply() = runBlocking {
         val viewModel = openViewModel("live")
         val workspace = SessionWorkspace.hostDir(app.filesDir, SESSION_ID, "workspace")
         workspace.mkdirs()
@@ -173,16 +173,29 @@ class AgentFinalReplyBoundaryLoopTest {
         val storedHistory = storedRows.map { viewModel.toLLMMessage(it) }
         rounds.forEach { assertToolRoundInRequest(storedHistory, it) }
 
-        val noReply = AssistantBody(folded = emptyList(), unfolded = emptyList())
-        rounds.forEach { round ->
-            assertEquals("Progress prose before ${round.name} dispatch", noReply, beforeExecution[round.id])
+        // [T-midturn-prose-is-reply] Prose is reply text: visible and CUMULATIVE
+        // across tool rounds in the same assistant bubble — round 2 opens with
+        // round 1's prose already there. This used to assert the opposite,
+        // which is what produced "正文怎么还在卡片里".
+        val proseSoFar = mutableListOf<String>()
+        for (round in rounds) {
+            proseSoFar += round.progress
+            assertEquals(
+                "Prose before ${round.name} dispatch must be visible",
+                AssistantBody(proseSoFar.toList(), proseSoFar.toList()),
+                beforeExecution[round.id],
+            )
         }
-        assertEquals("Progress prose while waiting for the second model response", noReply, duringSecondRequest)
+        assertEquals(
+            "Prose while waiting for the second response must be visible",
+            AssistantBody(listOf(rounds[0].progress), listOf(rounds[0].progress)),
+            duringSecondRequest,
+        )
 
         val liveBody = viewModel.visibleAssistantBody()
-        val expectedReply = listOf(FINAL_REPLY)
+        val expectedReply = rounds.map { it.progress } + FINAL_REPLY
         assertEquals(
-            "Only the final reply is visible. Live=${viewModel.messages.value} streaming=${viewModel.streamingById.value} " +
+            "All prose plus the final reply is visible. Live=${viewModel.messages.value} streaming=${viewModel.streamingById.value} " +
                 "stored=${storedRows.map { it.partsJson }}",
             AssistantBody(expectedReply, expectedReply), liveBody,
         )
@@ -232,7 +245,17 @@ class AgentFinalReplyBoundaryLoopTest {
                 message.role == LLMMessage.Role.USER && message.contentParts
                     .filterIsInstance<AgentContentPart.Text>().any { "Open items: $planTitle." in it.text }
             })
-            assertEquals("Prose from the continued stop is not a reply", AssistantBody(emptyList(), emptyList()), beforeContinuation)
+            // [T-midturn-prose-is-reply] `continueWith` commits the previous
+            // attempt with `persistTextTurn`, so the prose is already durable and
+            // the fresh bubble starts empty. What must hold is that the prose is
+            // PERSISTED as reply text (not process text) and reaches the model on
+            // the continuation — both asserted above — not that it lingers in the
+            // new bubble.
+            assertEquals(
+                "A continuation starts a fresh bubble; the earlier prose is durable",
+                AssistantBody(emptyList(), emptyList()),
+                beforeContinuation,
+            )
             val expectedReply = listOf(FINAL_REPLY)
             assertEquals(AssistantBody(expectedReply, expectedReply), viewModel.visibleAssistantBody())
         } finally {
