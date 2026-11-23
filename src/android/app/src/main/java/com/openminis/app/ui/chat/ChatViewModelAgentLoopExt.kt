@@ -123,7 +123,6 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     var goalRunRequested = goalExecutionRun
     // [T-gemini-signalless-eof] One bounded continuation for a text stream without a terminal event.
     var usedStreamDropContinuation = false
-    var receiptNoticeAnchorSha: String? = null  // [T-receipt-notice-scope] boundedReceiptNotice anchor
     var streamReplyPrefix: StreamReplyPrefix? = null
     // [T-retry-projection-reuse] See DispatchProjectionCache.
     val projectionCache = DispatchProjectionCache()
@@ -694,11 +693,13 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     val tools = agentTools
                     declareToolSetDeltaIfChanged(tools)
                     if (!ownsLoop()) return false
-                    val receiptAnchor = loopReceiptAnchor(loopSessionId, receiptUserTurnId, generationRunId)
-                    val receiptNotice = boundedReceiptNotice(loopSessionId, receiptAnchor, receiptNoticeAnchorSha)
+                    // [T-receipt-notice-removed] No request-level receipt nag: its
+                    // "Verify before retrying" wording made the model emit "验证 ✓"
+                    // prose between tools, and an unresolved receipt re-fired it on
+                    // every request. Duplicate protection lives at the tool gate
+                    // (needsToolReceipt) and the per-result advisory.
                     val projection = buildDispatchProjection(
                         projectionCache, loopSessionId, currentProvider, activeSystemPrompt, tools, stallResumeContext,
-                        receiptNotice,
                     ) ?: return false
                     when (inLoopContextCheck(projection, inLoopCompactions, mayBypassInitialCompaction)) {
                         ChatViewModel.InLoopContextAction.PROCEED -> Unit
@@ -719,7 +720,6 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
                     turnRefusalCategory = null
                     turnRefusalExplanation = null
                     dispatched = projection
-                    if (receiptNotice != null) receiptNoticeAnchorSha = receiptAnchor?.parentSha
                     val request = projection.request
                     turnOutput.deferReply = streamReplyPrefix != null || projection.outboundRequest.tools.isNotEmpty() || goalMount.canContinue ||
                         PlanBoardClosePrompt.snapshot(goalSessionId, context).any { it.status != "done" } ||

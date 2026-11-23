@@ -8,7 +8,6 @@ import com.openminis.app.data.repository.receiptHistoryContext
 import com.openminis.app.data.repository.receiptPartsJson
 import com.openminis.app.service.ActiveRunContext
 import com.openminis.app.tools.SubAgentLane
-import com.openminis.app.tools.TOOL_RECEIPT_NOTICE
 import com.openminis.app.tools.ToolErrorCode
 import com.openminis.app.tools.ToolExecutionResult
 import com.openminis.app.tools.ToolReceiptDispatch
@@ -123,51 +122,7 @@ internal suspend fun ChatViewModel.logLegacyToolReceiptDiagnostics(sessionId: St
     }
 }
 
-/**
- * [T-receipt-notice-scope] The pending-delivery reminder describes ONE anchor's
- * ledger — the user turn or run the request itself dispatches under. The old
- * session-wide fallback counted every unresolved receipt ever recorded in the
- * session, so a handful of interrupted calls pinned the "Delivery pending
- * confirmation" reminder onto EVERY later request and the model kept steering
- * toward verifying old deliveries instead of finishing the answer.
- * No anchor (or a foreign session) means silence, never the session-wide nag.
- */
-internal suspend fun ChatViewModel.pendingToolReceiptNotice(sessionId: String, scope: ToolReceiptScope?): String? {
-    if (sessionId.isBlank() || scope == null || scope.sessionSha != ToolReceiptScope.sessionDigest(sessionId)) return null
-    return toolReceiptNotice(sessionId, scope)
-}
 
-/** [T-receipt-notice-scope] The anchor a request's own dispatches write under. */
-internal fun loopReceiptAnchor(
-    sessionId: String,
-    receiptUserTurnId: String?,
-    generationRunId: String,
-): ToolReceiptScope? =
-    ToolReceiptScope.userTurn(sessionId, receiptUserTurnId)
-        ?: ToolReceiptScope.internalRun(sessionId, generationRunId)
-
-/**
- * [T-receipt-notice-scope] One pending-delivery reminder per anchor. The anchor
- * mirror is the SAME scope the request's own dispatches write under, so old
- * turns' pins never re-nag; a genuine in-flight receipt is already described by
- * its own result advisory, and re-warning every retry would steer the model
- * toward verifying old deliveries instead of finishing the answer.
- */
-internal suspend fun ChatViewModel.boundedReceiptNotice(
-    sessionId: String,
-    anchor: ToolReceiptScope?,
-    alreadyDeliveredSha: String?,
-): String? = if (anchor?.parentSha == alreadyDeliveredSha) null else pendingToolReceiptNotice(sessionId, anchor)
-
-internal suspend fun ChatViewModel.toolReceiptNotice(sessionId: String, scope: ToolReceiptScope?): String? =
-    withContext(Dispatchers.IO) {
-        val status = toolReceiptStore().pending(ToolReceiptScope.sessionDigest(sessionId), scope?.parentSha)
-            ?: return@withContext "$TOOL_RECEIPT_NOTICE Tool receipts could not be checked. Do not repeat earlier operations until verified."
-        if (!status.hasUnpaired) return@withContext null
-        "$TOOL_RECEIPT_NOTICE Delivery pending confirmation: ${status.unknown}. " +
-            "Accepted without verified completion: ${status.acceptedWithoutResult}. " +
-            "Verify before retrying; neither status establishes business success."
-    }
 
 private const val MAX_RECEIPT_PAGE_ROWS = 512
 private const val MAX_RECEIPT_LOOKBACK = 64

@@ -109,7 +109,6 @@ internal fun ChatViewModel.projectChatRequest(
     tools: List<AgentToolDefinition>,
     thinking: ThinkingLevel,
     stallNote: String? = null,
-    receiptNotice: String? = null,
     uncoveredBeforeResident: Boolean = false,
     persistImageSpillover: Boolean = false,
     requestSessionId: String = activeSessionId,
@@ -186,7 +185,7 @@ internal fun ChatViewModel.projectChatRequest(
         HistoryDigest.inject(scrubbed, historyDigest).map(::projectAssistantText),
     )
     val placedClock = clockNote?.takeIf { it.sessionId == requestSessionId && normalized.any { m -> m.role == LLMMessage.Role.USER } }
-    fun addReminders(messages: List<LLMMessage>): List<LLMMessage> = appendRequestReminders(messages, recall, receiptNotice, placedClock, stallNote)
+    fun addReminders(messages: List<LLMMessage>): List<LLMMessage> = appendRequestReminders(messages, recall, placedClock, stallNote)
     val keepRecent = if (saverMode == ContextSaverPrefs.Mode.OFF) ToolResultProjection.DEFAULT_KEEP_RECENT else saverMode.keepRecent
     val pressure = calibratedContextTokens(attribution, ContextTokenMeter.rawRequestTokens(addReminders(normalized), prompt?.prompt, tools))
     val microTriggerTokens = (policy.compactThreshold * MICRO_TRIGGER_FRACTION_OF_COMPACT).toInt()
@@ -257,12 +256,10 @@ internal fun ChatViewModel.projectChatRequest(
 internal fun appendRequestReminders(
     messages: List<LLMMessage>,
     recall: RecallReminder?,
-    receiptNotice: String?,
     clockNote: RequestClockNote?,
     stallNote: String?,
 ): List<LLMMessage> {
     val reminded = messages.withMemoryRecallReminder(recall)
-        .withRequestReminder(receiptNotice?.takeIf { it.isNotBlank() }?.let { "<system-reminder>\n$it\n</system-reminder>" })
         .withRequestReminder(clockNote?.text)
     if (stallNote.isNullOrBlank()) return reminded
     if (reminded.lastOrNull()?.role == LLMMessage.Role.USER) return reminded.withRequestReminder(stallNote)
