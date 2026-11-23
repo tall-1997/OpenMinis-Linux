@@ -35,5 +35,6 @@
  "usage_summary_cache_hit": "technical term",
  "web_search_engine_brave": "brand (Brave Search)",
  "web_search_engine_jina": "brand (Jina Search)",
- "webapp_activity_label": "product name"
+ "webapp_activity_label": "product name",
+ "tool_detail_title": "product name (Minis Computer, same as app_name)"
 }
