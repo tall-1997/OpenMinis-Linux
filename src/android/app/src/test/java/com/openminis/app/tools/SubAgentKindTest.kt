@@ -39,12 +39,16 @@ class SubAgentKindTest {
     fun clampAndInferTurns() {
         assertEquals(10, SubAgentKind.inferTurns(SubAgentKind.EXPLORE, "look at Foo.kt"))
         assertEquals(40, SubAgentKind.inferTurns(SubAgentKind.WORKER, "implement the login flow"))
-        assertEquals(10, SubAgentKind.clampTurns(SubAgentKind.EXPLORE, null, 60, "look at Foo.kt"))
+        assertEquals(10, SubAgentKind.clampTurns(SubAgentKind.EXPLORE, null, 1000, "look at Foo.kt"))
+        // [T-subagent-unbounded-turns] An explicit request is honored up to the
+        // runaway guard, not clipped to a 60-turn schedule.
         assertEquals(99, SubAgentKind.clampTurns(SubAgentKind.EXPLORE, 99))
-        assertEquals(30, SubAgentKind.clampTurns(SubAgentKind.WORKER, null, 60, "do the slice"))
+        assertEquals(99, SubAgentKind.clampTurns(SubAgentKind.EXPLORE, 99, 1000))
+        assertEquals(30, SubAgentKind.clampTurns(SubAgentKind.WORKER, null, 1000, "do the slice"))
+        assertEquals(1000, SubAgentKind.clampTurns(SubAgentKind.WORKER, 5000))
         assertEquals(30, SubAgentKind.clampTurns(SubAgentKind.WORKER, 99, 30))
         assertEquals(8, SubAgentKind.clampTurns(SubAgentKind.PLAN, 8, 30))
-        assertEquals(10, SubAgentKind.clampTurns(SubAgentKind.WORKER, 0, 60, "find the crash"))
+        assertEquals(10, SubAgentKind.clampTurns(SubAgentKind.WORKER, 0, 1000, "find the crash"))
     }
 
     /**

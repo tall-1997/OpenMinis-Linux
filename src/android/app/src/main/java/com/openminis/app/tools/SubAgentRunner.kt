@@ -17,8 +17,15 @@ import org.json.JSONObject
  */
 object SubAgentRunner {
 
-    /** Absolute safety ceiling so a runaway loop cannot burn tokens forever. */
-    const val ABSOLUTE_MAX_TURNS = 200
+    /**
+     * [T-subagent-unbounded-turns] Runaway guard, NOT a work budget. Sub-agents
+     * have no per-task turn limit any more (ZCode child runtimes run until the
+     * task is done or the shared token/lane budget stops them): this ceiling
+     * only stops a pathological loop that keeps issuing tool calls forever
+     * without either finishing or exhausting its token budget. It is a safety
+     * valve, not a schedule.
+     */
+    const val ABSOLUTE_MAX_TURNS = 1000
 
     /**
      * Live rows for the detail page. The parent card still uses [onStep];
@@ -462,9 +469,10 @@ object SubAgentRunner {
                     ),
                 )
 
-                // Turn-budget advisory so the agent wraps up instead of silently
-                // hitting the cap. 80%: warning; 95%: order to stop tool calls
-                // and hand in the partial result.
+                // [T-subagent-unbounded-turns] The run is budget-driven (token
+                // pool) or completion-driven (the model stops calling tools);
+                // turns only produce an advisory near the runaway guard so a
+                // legitimate long task is never clipped mid-work.
                 val frac = turn.toDouble() / turns
                 when {
                     frac >= FORCE_FRACTION && !forced -> {

@@ -896,4 +896,45 @@ class ChatFlatItemsProcessFoldTest {
             summary.messageId.endsWith("--run%23sub-3"),
         )
     }
+
+    /**
+     * [T-reading-viewport-yank] A finished reply that already painted its
+     * fragment rows keeps them once a newer turn starts. Coalescing the old
+     * reply would swap N mdblock keys for one, dropping the LazyColumn anchor
+     * under a reader and jumping the viewport.
+     */
+    @Test
+    fun finishedReplyKeepsFragmentRowsWhenANewerTurnStarts() {
+        val long = "para one\n\npara two\n\npara three"
+        val older = assistant(id = "m-old", blocks = listOf(text(id = "tx-old", content = long)))
+        val newer = assistant(id = "m-new", blocks = listOf(text(id = "tx-new", content = "next")))
+
+        val before = buildFlatChatItems(listOf(user("u1"), older))
+        val afterPlain = buildFlatChatItems(listOf(user("u1"), older, user("u2"), newer))
+        val afterKept = buildFlatChatItems(
+            listOf(user("u1"), older, user("u2"), newer),
+            keepFragmentShapeIds = setOf("m-old"),
+        )
+
+        fun oldKeys(items: List<FlatChatItem>) = items.filterIsInstance<FlatChatItem.AssistantMarkdownBlock>()
+            .filter { it.messageId == "m-old" }.map { it.key }
+
+        assertEquals("baseline paints fragments", 3, oldKeys(before).size)
+        assertEquals("without the fix the old reply collapses to one row", 1, oldKeys(afterPlain).size)
+        assertEquals(
+            "keep-set preserves every key the reader was looking at",
+            oldKeys(before).toSet(),
+            oldKeys(afterKept).toSet(),
+        )
+    }
+
+    @Test
+    fun keepSetIsCaseInsensitiveToWhetherTheTurnIsStillStreaming() {
+        val body = "a\n\nb\n\nc"
+        val turn = assistant(streaming = false, id = "m-x", blocks = listOf(text(id = "tx-x", content = body)))
+        val keys = buildFlatChatItems(listOf(user("u"), turn), keepFragmentShapeIds = setOf("m-x"))
+            .filterIsInstance<FlatChatItem.AssistantMarkdownBlock>().map { it.key }
+        assertEquals(3, keys.size)
+    }
+
 }

@@ -374,7 +374,6 @@ fun AppearanceScreen(
             }
         }
 
-        CotTranslationSection()
         SettingsSection(
             header = stringResource(R.string.appearance_section_keep_awake),
             footer = stringResource(R.string.appearance_keep_awake_footer),

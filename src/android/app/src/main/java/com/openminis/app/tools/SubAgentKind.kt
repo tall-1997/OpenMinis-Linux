@@ -578,8 +578,12 @@ object SubAgentKind {
     }
 
     /**
-     * Simple recon ≈ 10 turns; medium ≈ 30; complex implement/refactor ≈ 40–60.
-     * Callers still clamp to the user-facing settings cap.
+     * [T-subagent-unbounded-turns] Prompt-derived SCALE HINT only. The loop no
+     * longer stops at a turn count: it runs until the model stops calling
+     * tools, the shared token budget trips, or the runaway guard hits. This
+     * hint sizes the advisory window (when to tell the worker to wrap up) and
+     * gives a coordinator that omits `max_turns` a sane value; it must never
+     * be read as a task deadline. Simple recon ≈ 10; medium ≈ 30; complex ≈ 60.
      */
     fun inferTurns(kind: String, prompt: String): Int {
         val k = normalize(kind)
@@ -599,10 +603,10 @@ object SubAgentKind {
     }
 
     /**
-     * The coordinator's assigned budget wins outright — no global settings
-     * clamp. Only SubAgentRunner.ABSOLUTE_MAX_TURNS bounds a runaway. When the
-     * coordinator omits max_turns, auto-size from the prompt (unbounded by the
-     * old 60-turn cap, so a complex task can actually get the turns it needs).
+     * [T-subagent-unbounded-turns] Resolve the advisory turn window. An
+     * explicit `max_turns` still wins (the model asked for it) and is bounded
+     * by [SubAgentRunner.ABSOLUTE_MAX_TURNS]; an omitted value is inferred
+     * from the prompt. Neither is a hard deadline — see [inferTurns].
      */
     fun clampTurns(
         kind: String,

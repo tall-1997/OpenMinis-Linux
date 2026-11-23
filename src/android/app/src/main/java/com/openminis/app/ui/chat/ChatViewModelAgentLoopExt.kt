@@ -17,6 +17,7 @@ import com.openminis.app.data.model.ThinkingLevel
 import com.openminis.app.data.model.ContextUsageAnchor
 import com.openminis.app.data.model.ModelAttributionSnapshot
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.goal.recordCommittedTurnUsage
 import com.openminis.app.provider.LLMProvider
 import com.openminis.app.provider.OutboundPrivacyChanged
 import com.openminis.app.provider.countsAsFirstTokenProgress
@@ -121,6 +122,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
     var goalContinuations = 0
     // [T-subagent-background] Bounded nudges for uncollected detached waves.
     var subAgentCollectNudges = 0
+    val announcedFinishedBatches = mutableSetOf<String>()  // [T-subagent-completion-timeliness]
     // [T-plan-close-nudge] Same bounded shape, for an unreconciled plan board.
     var planCloseNudges = 0
     var goalRunRequested = goalExecutionRun
@@ -1380,12 +1382,9 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             PlanBoardCloseResult.NONE -> {}
         }
 
-        // [T-subagent-background] Ending the turn while a detached wave still owes
-        // a result (lanes in flight, or finished reports nobody collected) is how
-        // background work gets abandoned — the user reads a confident final answer
-        // while the lanes keep burning tokens and their output dies in the registry.
-        // Nudge (bounded by MAX_SUBAGENT_COLLECT_NUDGES) so the model either
-        // collects, or says plainly what is still running and how to pick it up.
+        // [T-subagent-background] Ending the turn while a detached wave owes a
+        // result abandons background work; nudge (bounded) so the model collects
+        // or says plainly what is still running.
         if (toolCalls.isEmpty() &&
             subAgentCollectNudges < ChatViewModel.MAX_SUBAGENT_COLLECT_NUDGES &&
             activeRun?.isStopped != true
@@ -1393,9 +1392,6 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             val pending = AgentLoopNudges.pendingSubAgentCollects(goalSessionId, context)
             if (pending.isNotEmpty()) {
                 val nudge = AgentLoopNudges.renderSubAgentCollectNudge(pending)
-                // Same shape as the Goal continuation above: persist this turn's
-                // assistant output first, otherwise history would carry two
-                // consecutive user messages and providers reject the sequence.
                 persistTurn()
                 if (activeRun?.isStopped == true) { loopExitedNormally = true; break }
                 appendBoundedHistory(
@@ -1418,9 +1414,7 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             }
         }
 
-        // [T-goal-drift-reconciler] Drift nudge delivery: the stall counter ticks per
-        // tool turn inside GoalManager.recordUsage; the voice only speaks here, once
-        // per distinct stalled board state, never alongside the other two nudges.
+        // [T-goal-drift-reconciler] Drift nudge delivery: once per distinct stalled board state.
         val driftNudge = runCatching { goalManager.driftNudgeIfOwed(goalSessionId, context) }.getOrNull()
         if (driftNudge != null && activeRun?.isStopped != true) {
             persistTurn()
@@ -1698,16 +1692,10 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             if (ownsLoop()) updateAssistantMessage(assistantId, accumulatedText, true, allToolBlocks, isAwaitingModelResponse = true)
         }
         if (!ownsLoop()) return
-        val turnUsageTokens = (lastUsage?.inputTokens ?: 0).toLong() + (lastUsage?.outputTokens ?: 0).toLong()
-        val goalUsageResult = if (goalMountedForCurrentRequest) runCatching {
-            goalManager.recordUsage(
-                goalSessionId,
-                turnUsageTokens,
-                (System.currentTimeMillis() - turnStartedAtMs).coerceAtLeast(0),
-                context,
-            )
-        }.onFailure { AppLogger.warning(ChatViewModel.TAG_STREAM, "Goal usage accounting failed: ${it.message}") }
-        else Result.success(null)
+        // [T-goal-drift-reconciler] One committed tool turn of usage + drift tick; failures contained.
+        val goalUsageResult = goalManager.recordCommittedTurnUsage(
+            goalMountedForCurrentRequest, goalSessionId, lastUsage, turnStartedAtMs, context,
+        )
         // Goal completion dismounts steering; only hard stops end this reply.
         if (com.openminis.app.goal.shouldExitForGoalState(goalUsageResult, goalMountedForCurrentRequest)) {
             withContext(Dispatchers.Main) {
@@ -1715,6 +1703,18 @@ internal suspend fun ChatViewModel.runAgentLoopBody(
             }
             loopExitedNormally = true
             break
+        }
+
+        // [T-subagent-completion-timeliness] Finished-but-uncollected waves reach
+        // the model at this batch boundary, not only when the turn wraps up.
+        val waveNote = AgentLoopNudges.drainFinishedWaves(goalSessionId, context, announcedFinishedBatches)
+        if (waveNote != null) {
+            persistTurn()  // no two consecutive user messages (same shape as the collect nudge)
+            if (activeRun?.isStopped == true) { loopExitedNormally = true; break }
+            appendBoundedHistory(LLMMessage(role = LLMMessage.Role.USER, content = waveNote, contentParts = listOf(AgentContentPart.Text(waveNote))))
+            subAgentCollectNudges++
+            if (turn >= maxTurns - 1) { loopExitedNormally = true; break }
+            continue
         }
 
         // [T-goal-drift-reconciler] Per-tool-turn stall accounting rides

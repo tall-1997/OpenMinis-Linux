@@ -55,6 +55,10 @@ fun TranslationSettingsScreen(
         title = stringResource(R.string.settings_translate),
         onBack = null,
     ) {
+        // [T-cot-translate-settings-move] Reasoning (思考过程) translation is a
+        // translation feature, not an appearance one — it lives here with the
+        // rest of the translation preferences.
+        CotTranslationSection()
         SettingsSection(header = stringResource(R.string.translate_settings_section)) {
             Row(
                 modifier = Modifier

@@ -691,6 +691,7 @@ internal fun buildFlatChatItems(
     // leak the steps inline beside the live card), and the live build emits
     // it as the first of its rows. See [ProcessSegment.deferredCard].
     processCardBoundary: Int = -1,
+    keepFragmentShapeIds: Set<String> = emptySet(), // [T-reading-viewport-yank] painted turns keep fragment rows
 ): List<FlatChatItem> {
     val out = mutableListOf<FlatChatItem>()
     val usedKeys = if (seedKeys.isEmpty()) mutableSetOf() else seedKeys.toMutableSet()
@@ -912,9 +913,7 @@ internal fun buildFlatChatItems(
                         // messages.subList().all{} — subList shares the
                         // parent's modCount and threw CME when the backing
                         // list changed under it.
-                        val isLastAssistantTurn = idx == messages.lastIndex ||
-                            (idx + 1 until messages.size).all { messages[it].role != "assistant" }
-                        val fragments = if (isLastText && isLastAssistantTurn) rawFragments else coalesceMarkdownFragments(rawFragments)
+                        val fragments = if (isLastText && keepFragmentsFor(idx, messages, message.id, keepFragmentShapeIds)) rawFragments else coalesceMarkdownFragments(rawFragments)
                         if (fragments.isEmpty()) {
                             // Defensive: if the splitter returns nothing for
                             // a non-empty input (shouldn't happen), fall back
