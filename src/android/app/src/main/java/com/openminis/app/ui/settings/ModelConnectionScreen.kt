@@ -26,6 +26,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openminis.app.R
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.ui.components.SectionDesign
+import androidx.compose.runtime.saveable.rememberSaveable
 
 /**
  * [T-model-connection] 「模型与连接」聚合页：设置里原本并列的「供应商管理」和
@@ -46,7 +47,7 @@ fun ModelConnectionScreen(
     onAddAgentLoopModels: () -> Unit,
     onAddAgentLoopGroups: () -> Unit,
 ) {
-    var tab by remember { mutableStateOf(0) }
+    var tab by rememberSaveable { mutableStateOf(0) }
     // 槽位段的数据与回调都由本页持有：组件内部不再读仓库，保证单一写入路径。
     val config by providerRepository.config.collectAsStateWithLifecycle()
     val groups = config.modelGroups

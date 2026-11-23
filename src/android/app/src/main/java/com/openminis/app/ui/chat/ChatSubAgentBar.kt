@@ -285,7 +285,7 @@ private fun SubAgentDetailSheet(
                     Icon(
                         m3Icon(Icons.Filled.Stop),
                         contentDescription = stringResource(R.string.subagent_stop_desc, member.title),
-                        tint = Color(0xFFFF3B30),
+                        tint = com.openminis.app.ui.theme.IosRed,
                     )
                 }
             }
@@ -402,7 +402,7 @@ private fun SubAgentSteerRow(memberId: String) {
 
 @Composable
 private fun PhaseBanner(phase: SubAgentPhase?, label: String, tool: String) {
-    val color = phase?.let { phaseColor(it) } ?: Color(0xFF007AFF)
+    val color = phase?.let { phaseColor(it) } ?: com.openminis.app.ui.theme.IosBlue
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -522,10 +522,10 @@ private fun memberLabel(member: SubAgentActivityTracker.Member): String =
     }
 
 private fun phaseColor(phase: SubAgentPhase): Color = when (phase) {
- SubAgentPhase.CALLING -> Color(0xFFFF9500)
- SubAgentPhase.RUNNING -> Color(0xFF34C759)
- SubAgentPhase.REPLYING -> Color(0xFF5856D6)
- SubAgentPhase.THINKING -> Color(0xFF007AFF)
+ SubAgentPhase.CALLING -> com.openminis.app.ui.theme.IosOrange
+ SubAgentPhase.RUNNING -> com.openminis.app.ui.theme.IosGreen
+ SubAgentPhase.REPLYING -> com.openminis.app.ui.theme.IosIndigo
+ SubAgentPhase.THINKING -> com.openminis.app.ui.theme.IosBlue
 }
 
 /** [T-subagent-phase-key] Localized label for a phase. */
