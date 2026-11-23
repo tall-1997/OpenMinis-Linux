@@ -69,9 +69,11 @@ class McpToolDispatcherTest {
     // ─── listTools ────────────────────────────────────────────────────────
 
     @Test
-    fun `listTools exposes exactly the fourteen tools with schemas`() {
+    fun `listTools exposes exactly the sixteen tools with schemas`() {
         val tools = dispatcher(FakeGate()).listTools()
-        assertEquals(14, tools.length())
+        // [T-lemon-integration] +2: lemon_list / lemon_call front the bundled
+        // 358-tool catalog without putting 358 entries in tools/list.
+        assertEquals(16, tools.length())
         val names = (0 until tools.length()).map { tools.getJSONObject(it).getString("name") }
         assertEquals(
             listOf(
@@ -80,6 +82,7 @@ class McpToolDispatcherTest {
                 "schedule_task_create", "schedule_task_list",
                 "schedule_task_update", "schedule_task_delete",
                 "alarm_reminder_create", "context_apps_query",
+                "lemon_list", "lemon_call",
             ),
             names,
         )

@@ -6,7 +6,7 @@ import com.openminis.app.R
 import com.openminis.app.ui.settings.SettingsRow
 import com.openminis.app.ui.theme.m3Icon
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Widgets
+import androidx.compose.material.icons.outlined.Apps
 
 /**
  * [T-lemon-integration] The single settings row that launches the bundled tool
@@ -28,7 +28,9 @@ internal fun LemonPanelLauncherRow(
     SettingsRow(
         title = stringResource(R.string.mcp_lemon_panel),
         subtitle = stringResource(R.string.mcp_lemon_panel_sub, port),
-        icon = m3Icon(Icons.Outlined.Widgets),
+        // Apps is already in the M3Icons table (M3IconsTest maps every m3Icon
+        // call site); Widgets would need a new (Filled, Outlined) pair.
+        icon = m3Icon(Icons.Outlined.Apps),
         showDivider = false,
         onClick = {
             // Starting on demand is the least surprising behaviour here:
