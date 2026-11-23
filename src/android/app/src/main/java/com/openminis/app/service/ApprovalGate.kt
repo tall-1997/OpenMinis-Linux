@@ -147,9 +147,34 @@ object ApprovalGate {
 
     suspend fun waitFor(id: String, sessionId: String? = null): Boolean {
         if (id.isEmpty()) return true
-        val detail = approvalDetails[id] ?: return false
-        if (sessionId != null && detail.sessionId != sessionId) return false
-        val flow = pending[id] ?: return false
+        // [T-approval-session-mismatch-log] Every early return below used to be silent.
+        // the base. A session mismatch is a ROUTING bug (the resolver used a
+        // different session id than the request was filed under), yet the caller
+        // cannot tell it apart from "the user pressed deny" and reports a user
+        // refusal to the model. Log both ids so a field repro names the drifting
+        // session instead of looking like a deliberate refusal.
+        val detail = approvalDetails[id] ?: run {
+            com.openminis.app.logging.AppLogger.warning(
+                "ApprovalGate",
+                "waitFor($id) has no filed request (already resolved or never filed)",
+            )
+            return false
+        }
+        if (sessionId != null && detail.sessionId != sessionId) {
+            com.openminis.app.logging.AppLogger.warning(
+                "ApprovalGate",
+                "waitFor($id) session mismatch: tool=${detail.toolName} " +
+                    "filedSession=${detail.sessionId} callerSession=$sessionId",
+            )
+            return false
+        }
+        val flow = pending[id] ?: run {
+            com.openminis.app.logging.AppLogger.warning(
+                "ApprovalGate",
+                "waitFor($id) has a detail but no pending channel (tool=${detail.toolName})",
+            )
+            return false
+        }
         // [T-approval-gate-ce-rethrow] Catch order matters:
         // TimeoutCancellationException IS a CancellationException, so the
         // timeout branch must come first (deny + false). A plain
@@ -194,8 +219,21 @@ object ApprovalGate {
     }
 
     private fun resolve(id: String, value: Boolean, sessionId: String? = null) {
-        val detail = approvalDetails[id] ?: return
-        if (sessionId != null && detail.sessionId != sessionId) return
+        val detail = approvalDetails[id] ?: run {
+            com.openminis.app.logging.AppLogger.warning(
+                "ApprovalGate",
+                "resolve dropped: no filed request for id=$id (approve=$value)",
+            )
+            return
+        }
+        if (sessionId != null && detail.sessionId != sessionId) {
+            com.openminis.app.logging.AppLogger.warning(
+                "ApprovalGate",
+                "resolve dropped: id=$id tool=${detail.toolName} approve=$value " +
+                    "filedSession=${detail.sessionId} callerSession=$sessionId",
+            )
+            return
+        }
         approvalDetails.remove(id)
         pending.remove(id)?.value = value
         // Per-session flow entries are UI caches; once no requests remain for a
