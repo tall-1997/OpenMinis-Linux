@@ -135,6 +135,7 @@ internal class OpenAIRequestBodies(
         if (!host.isMistral) {
             injectThinkingParams(body, thinkingLevel, maxTokens)
         }
+        com.openminis.app.provider.StreamTraceRecorder.recordRequest(body) // [T-thinking-request-trace]
 
         // [OpenMinis#191] Opt this request into Anthropic prompt caching.
         // OpenRouter passes the field through to Anthropic but never injects it
@@ -721,9 +722,8 @@ internal class OpenAIRequestBodies(
             offEffort = host.explicitOffEffort(),
         )
         val trace = ThinkingRuleResolver.apply(body, ctx)
-        // [T-thinking-rules-observability] Design §8 / GH OpenMinis#100: which rule
-        // actually won must be inspectable, or a rule layer just replaces one hidden
-        // variable with a more complicated one. minis-config exposure is Phase 2.
+        // [T-thinking-rules-observability] Design §8 / GH OpenMinis#100: which rule won
+        // must be inspectable, or a rule layer just swaps one hidden variable for another.
         com.openminis.app.logging.AppLogger.info(
             "Thinking",
             "[resolve] model=${host.model.id} level=${level.name} ${trace.logLine}",

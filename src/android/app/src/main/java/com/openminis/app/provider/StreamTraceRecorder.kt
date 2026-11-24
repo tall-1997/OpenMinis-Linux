@@ -64,15 +64,49 @@ object StreamTraceRecorder {
     fun record(chunk: LLMStreamChunk) {
         if (!enabled) return
         runCatching {
-            val f = file.get() ?: synchronized(this) {
-                file.get() ?: baseDir.let { dir ->
-                    dir?.mkdirs()
-                    File(dir, "trace_${dateFormat.get().format(Date())}.jsonl")
-                }.also { file.set(it) }
-            }
-            f.appendText(StreamTrace.encodeChunk(chunk).toString() + "\n")
+            currentFile().appendText(StreamTrace.encodeChunk(chunk).toString() + "\n")
         }.onFailure {
             AppLogger.error(TAG, "stream trace write failed: ${it.message}")
+        }
+    }
+
+    /**
+     * [T-thinking-request-trace] Record the OUTGOING request body once per
+     * request, as one `{"kind":"request", …}` line in the same session file.
+     *
+     * Why this exists: the chunk trace can prove what the model streamed but
+     * not what we ASKED for. "Thinking never shows up" has two very different
+     * causes — the request never carried a reasoning parameter, or it carried
+     * one the endpoint ignored — and without the outgoing body those are
+     * indistinguishable from the outside. Only the thinking-relevant keys are
+     * recorded (`thinking` / `reasoning` / `reasoning_effort` /
+     * `enable_thinking` / `include_reasoning`), so the trace stays small and
+     * never contains conversation content.
+     */
+    fun recordRequest(body: org.json.JSONObject) {
+        if (!enabled) return
+        val relevant = listOf("thinking", "reasoning", "reasoning_effort", "enable_thinking", "include_reasoning")
+        val captured = org.json.JSONObject()
+        relevant.forEach { key -> if (body.has(key)) captured.put(key, body.get(key)) }
+        runCatching {
+            val f = currentFile()
+            val line = org.json.JSONObject()
+                .put("kind", "request")
+                .put("keys", org.json.JSONArray(body.keys().asSequence().toList()))
+                .put("thinkingParams", captured)
+            f.appendText(line.toString() + "\n")
+        }.onFailure {
+            AppLogger.error(TAG, "stream trace request write failed: ${it.message}")
+        }
+    }
+
+    private fun currentFile(): File {
+        file.get()?.let { return it }
+        synchronized(this) {
+            file.get()?.let { return it }
+            val dir = baseDir ?: throw IllegalStateException("trace dir not resolved")
+            dir.mkdirs()
+            return File(dir, "trace_${dateFormat.get().format(Date())}.jsonl").also { file.set(it) }
         }
     }
 
