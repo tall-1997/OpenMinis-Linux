@@ -404,11 +404,10 @@ object ThinkingRuleResolver {
                     // `offEffort` is already snapped by clampOffEffort (null when
                     // no legal off tier) and NOT re-clamped — clampEffort walks
                     // UP, which would invert an OFF intent.
-                    // [T-thinking-vendor-shape-scope] A null offEffort IS the
-                    // safe default and comes first on purpose: with no legal
-                    // "off" tier there is no value to send, relay or not. The
-                    // host exemption below therefore only decides what to do
-                    // once a value exists — it must not invent one.
+                    // [T-thinking-vendor-shape-scope] A null offEffort IS the safe default:
+                    // with no legal "off" tier there is no value to send, relay or not.
+                    // (No relay exemption here: a relay never documents an off tier,
+                    // so the value is already null before the host could matter.)
                     if (offEffort == null) return null to null
                     when {
                         isOpenAINative -> {
@@ -416,21 +415,13 @@ object ThinkingRuleResolver {
                             return offEffort to offEffort
                         }
                         isSelfReasoningFamily(lid) -> {
-                         if (ctx.usesUnifiedReasoningEffort ||
-                         ThinkingEffort.declaresTier(ctx.declaredEffortValues, offEffort)
-                         ) {
-                         body.put("reasoning_effort", offEffort)
-                         return offEffort to offEffort
-                         }
-                         // [T-thinking-vendor-shape-scope] The family skip is a statement
-                         // about the VENDOR's own host; a relay has no such handler, so
-                         // skipping here would emit nothing at all — worse than a field
-                         // the endpoint merely ignores.
-                         if (ctx.vendorShapeRuledOut) {
-                         body.put("reasoning_effort", offEffort)
-                         return offEffort to offEffort
-                         }
-                         return null to null
+                            if (ctx.usesUnifiedReasoningEffort ||
+                                ThinkingEffort.declaresTier(ctx.declaredEffortValues, offEffort)
+                            ) {
+                                body.put("reasoning_effort", offEffort)
+                                return offEffort to offEffort
+                            }
+                            return null to null
                         }
                         ctx.supportsReasoning != false -> {
                             if (!ThinkingEffort.declaresTier(ctx.declaredEffortValues, offEffort, absent = true)) {
@@ -460,9 +451,9 @@ object ThinkingRuleResolver {
                 // reasoning", and a relay has no such handler. Skipping there would
                 // send NOTHING — strictly worse than a portable field it may ignore.
                 if (!ctx.usesUnifiedReasoningEffort && !declaresEffort &&
-                 isSelfReasoningFamily(lid) && !ctx.vendorShapeRuledOut
+                    isSelfReasoningFamily(lid) && !ctx.vendorShapeRuledOut
                 ) {
-                 return null to null
+                    return null to null
                 }
                 // [OpenMinis#163] xAI-scoped skip: grok-build-0.1 400s on
                 // reasoning_effort; the catalog describes that state as

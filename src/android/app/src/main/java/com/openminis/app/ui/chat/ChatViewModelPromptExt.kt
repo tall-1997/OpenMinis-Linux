@@ -282,18 +282,18 @@ Android-only tools (android-* CLIs):
 CLI tools at /usr/local/bin with the `android-` prefix expose Android framework
 capabilities; `minis-` prefixed ones drive Minis itself. Every tool prints JSON
 and supports `--help` — read it before guessing flags.
-- android-alarm — system Clock app alarms/timers. Manage them from the Clock app.
-- android-calendar — read/write the device calendar.
+- android-alarm — `schedule <HH:MM> --label <L> [--repeat ONCE|DAILY|WEEKDAYS]`, `timer <seconds> --label <L>`, `open`. Alarms land in the Clock app; there is no list/cancel API — send the user to the Clock app.
+- android-calendar — `list --start YYYY-MM-DD [--end --max]`, `create --title <T> --start <ISO> [--end --description --location --all-day]`.
 - android-clipboard — `get | set <text> | clear`.
-- android-contacts — list/search/get/delete. Needs READ_CONTACTS (delete: WRITE_CONTACTS).
-- android-device — model, OS version, battery, storage as JSON.
-- android-location — current location with reverse-geocoded address; geocode/forward.
-- android-notification — send/clear/list. `send` prompts for POST_NOTIFICATIONS on 13+; `list` needs Notification Access.
+- android-contacts — `list|search <q>|get <id>|delete <id>` (READ_CONTACTS; delete also WRITE_CONTACTS).
+- android-device — `[all|info|battery|storage]` as JSON.
+- android-location — `current`; `geocode <lat> <lon>`; `forward --address "<addr>"`.
+- android-notification — `send --title <T> [--body <B>] | clear | list`. `send` prompts for POST_NOTIFICATIONS on 13+; `list` needs Notification Access.
 - android-open <url> — open via the system handler (http/https/tel/mailto/geo/market/intent).
-- android-photos — query the photo library via MediaStore (list/stats/near).
-- android-player — audio playback sessions (play/pause/resume/seek/stop/status/list).
-- android-speak — device TTS (--stop / --status).
-- android-speech — microphone transcription. Needs RECORD_AUDIO.
+- android-photos — `list [--max] | stats | near <lat> <lon> [--radius KM]` via MediaStore.
+- android-player — `play <session> <path>`, `pause|resume|seek|stop|status <session>`, `list`.
+- android-speak — `<text> [--rate --pitch --volume]`, `--stop`, `--status`.
+- android-speech — `listen [--language BCP47] [--max --timeout]`, `status`. Needs RECORD_AUDIO.
 - android-weather <lat> <lon> — Open-Meteo forecast, no API key.
 - android-shizuku-cli — privileged system APIs via Shizuku; `exec <cmd>` runs any shell command with its privilege.
 - android-su / su — privileged host command. Uses Magisk/KernelSU `su` first; falls back to Shizuku when denied.
@@ -303,9 +303,9 @@ and supports `--help` — read it before guessing flags.
 - minis-setup-<component> — one-shot idempotent installers (component = flutter, jadx, rust, pnpm, qemu, llama-cpp).
 - minis-mirror — switch/test Ubuntu apt mirrors (`auto` picks a reachable one).
 - minis-sessions-cli — manage chat sessions (list/search/messages/send/retry/status/open).
-- minis-model-use — invoke other configured LLM models (list shows modalities; run with --input <json>).
-- minis-config — read/change Minis settings (`get`/`set`; `topic-help <topic>` explains an area); every write needs in-app confirmation.
-- minis-scheduled — scheduled tasks that run a prompt at a time (create/list/delete/enable/disable/run; `--days mon,tue` for custom repeats).
+- minis-model-use — call other configured models. `list` shows modalities; `run --model <id|name>` with the OpenAI Chat shape as PRIMARY input (auto-converted per provider), via `--input <json>` or stdin. Provider extras the schema cannot express: `extra_body` (merged verbatim), custom `endpoint`, or top-level `passthrough` (fully verbatim body + raw response). Do NOT hand-write provider-native bodies as the primary input — that is what errors. Read `warnings` and `applied_extras` in the result and self-correct. Image output: `n`/`size`/`quality`/`prompt`, or `generation_config.{aspect_ratio,image_size,number_of_images,person_generation}`.
+- minis-config — read/change Minis settings (`get`/`set`; `topic-help <topic>` explains an area). Array fields take `--filter <keywords>`, `--page <N> --page-size <N>`. `get` NEVER echoes API keys/OAuth tokens/env values (permission_denied by design); an apiKey may be a literal or a `${'$'}${'$'}ENV_VAR` reference copied at write time. Every write shows an in-app confirmation and is logged to a revertable audit; on `permission_denied` relay the message and do not retry.
+- minis-scheduled — `create --time HH:MM --prompt "<p>" [--label L] [--repeat once|daily|weekdays|custom --days mon,tue,…] [--target new|follow-up|rerun --session <id> --message <id>] [--model <id>] [--start --end]`; `list`, `delete --id`, `enable|disable --id`, `run --id`.
 Interactive terminal: minis://open_terminal opens a terminal for tasks that require interactive stdin (passwords, ssh, TUI apps like htop/vi). Write it as a Markdown link in your response — the app opens it when tapped. The optional init_command parameter pre-fills (NOT executes) a command; it MUST be fully percent-encoded (spaces → %20, & → %26, | → %7C, etc.). Only use this for genuinely interactive sessions — for everything else, use shell_execute. Examples: [Open Terminal](minis://open_terminal), [Login to SSH](minis://open_terminal?init_command=ssh%20user%40host).
 
 Environment variables:
