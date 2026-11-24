@@ -1,0 +1,185 @@
+name: Native dependencies
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # Must match ndkVersion and minis-android-sdk-setup NDK_REV.
+  ANDROID_NDK: "29.0.14206865"
+  # Pinned out of the literals below so the toolchain cache keys can read
+  # them: bump one and every cache entry misses instead of restoring an old
+  # NDK / CMake / cmdline-tools.
+  ANDROID_CMAKE: "3.22.1"
+  ANDROID_CMDLINE_TOOLS: "11076708"
+  GO_VERSION: "1.26.8"
+  GO_SHA256: "d0f743b33e8d8945e6b1f432edd15785c70507121d6e2a723b21285eddf8b57b"
+  GOMOBILE_VERSION: "v0.0.0-20260908204917-8b95e45f8d3e"
+
+jobs:
+  build-native-deps:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # deps/proot IS the submodule here, so it is fetched explicitly below.
+          submodules: false
+
+      - name: Checkout deps/proot (the only submodule the Android build compiles)
+        run: git submodule update --init --depth 1 deps/proot
+
+      - name: Resolve source revisions used in cache keys
+        id: revs
+        run: |
+          set -u
+          # gitlink SHA of the proot fork. scripts/build_libunwind_aarch64.sh and
+          # deps/build_proot.sh both REUSE what is already on disk, so a loose key
+          # would let a new submodule commit restore a libtalloc/proot tree built
+          # from the previous one.
+          echo "proot=$(git rev-parse HEAD:deps/proot 2>/dev/null || echo unknown)" >> "$GITHUB_OUTPUT"
+          # release/18.x tip. Without this the LLVM checkout cache would silently
+          # pin the first run's revision forever. On ls-remote failure the key
+          # degrades to "unknown" => cold miss => fresh clone, never a wrong hit.
+          echo "llvm=$(git ls-remote https://github.com/llvm/llvm-project.git release/18.x 2>/dev/null | cut -c1-40 || echo unknown)" >> "$GITHUB_OUTPUT"
+
+      # Caching policy for this job: warm the INPUTS only. Every build step still
+      # runs unconditionally, because "Stage native artifacts" copies products out
+      # of the build tree (deps/build/rclone/rclone.aar, deps/proot/src objects)
+      # and build_proot.sh aborts in install_asset() when it did not itself produce
+      # the binary. Skipping a step on a cache hit would change what gets staged.
+      - name: Restore Android SDK cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            /usr/local/lib/android/sdk/cmdline-tools
+            /usr/local/lib/android/sdk/ndk
+            /usr/local/lib/android/sdk/cmake
+            /usr/local/lib/android/sdk/licenses
+          key: android-sdk-${{ runner.os }}-ndk-${{ env.ANDROID_NDK }}-cmake-${{ env.ANDROID_CMAKE }}-cmdline-${{ env.ANDROID_CMDLINE_TOOLS }}
+          restore-keys: |
+            android-sdk-${{ runner.os }}-ndk-${{ env.ANDROID_NDK }}-cmake-${{ env.ANDROID_CMAKE }}-
+            android-sdk-${{ runner.os }}-ndk-${{ env.ANDROID_NDK }}-
+
+      # [T-rolling-apk-blocked] apt 镜像 DNS 故障曾把 #861 挡死在这步：
+      # 预装检测优先（零 apt 依赖），真缺才走带重试的 apt 兜底。
+      - name: Install build tools and Android NDK
+        run: |
+          bash scripts/ci/ensure-build-tools.sh curl unzip make gawk sed file python3 cmake ninja g++ git
+          mkdir -p /usr/local/lib/android/sdk/cmdline-tools
+          if [ ! -x /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager ]; then
+            curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors -o /tmp/cmdline-tools.zip https://dl.google.com/android/repository/commandlinetools-linux-${{ env.ANDROID_CMDLINE_TOOLS }}_latest.zip
+            unzip -q /tmp/cmdline-tools.zip -d /tmp/sdk
+            mv /tmp/sdk/cmdline-tools /usr/local/lib/android/sdk/cmdline-tools/latest
+          fi
+          yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null || true
+          # Idempotent: when the cache restored the packages, sdkmanager reads
+          # package.xml and no-ops instead of re-downloading ~2.4 GB of NDK.
+          /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager "ndk;${ANDROID_NDK}" "cmake;${ANDROID_CMAKE}"
+
+      - name: Restore PRoot build tree
+        uses: actions/cache@v4
+        with:
+          # deps/build/proot-android holds libtalloc.a; build_proot.sh skips
+          # recompiling talloc when it is present. Exact key, no restore-keys:
+          # "already built, skipping" is only sound when every input matches.
+          path: deps/build/proot-android
+          key: proot-android-${{ runner.os }}-ndk-${{ env.ANDROID_NDK }}-${{ steps.revs.outputs.proot }}-${{ hashFiles('deps/build_proot.sh', 'deps/talloc/**') }}
+      - name: Build PRoot
+        env:
+          ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/${{ env.ANDROID_NDK }}
+        run: bash deps/build_proot.sh
+
+      - name: Cache Go module and build caches
+        uses: actions/cache@v4
+        with:
+          # Restored BEFORE the rclone step: rclone's module graph is ~1000
+          # packages and refetching it was most of that step's wall time; the
+          # compiled gomobile binary rides in ~/go/bin. Keys pin the toolchain
+          # and the module inputs, so a go.mod/go.sum or GOMOBILE_VERSION change
+          # starts a clean cache.
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+            ~/go/bin
+          key: go-${{ runner.os }}-${{ env.GO_VERSION }}-gomobile-${{ env.GOMOBILE_VERSION }}-${{ hashFiles('deps/rclone-mobile/go.mod', 'deps/rclone-mobile/go.sum', 'deps/rclone-mobile/**/*.go') }}
+          restore-keys: |
+            go-${{ runner.os }}-${{ env.GO_VERSION }}-gomobile-${{ env.GOMOBILE_VERSION }}-
+            go-${{ runner.os }}-${{ env.GO_VERSION }}-
+
+      - name: Build rclone AAR
+        env:
+          ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/${{ env.ANDROID_NDK }}
+          # deps/rclone-mobile/go.mod requires go 1.26.0. Installing 1.25 and
+          # then gomobile@latest made the toolchain jump to 1.26 mid-step.
+          GOTOOLCHAIN: local
+          GOPROXY: "https://proxy.golang.org,direct"
+          # aac4d26 native-deps died on sum.golang.org HTTP/2 INTERNAL_ERROR
+          # while verifying azblob. Force HTTP/1.1 and retry the module steps.
+          GODEBUG: "http2client=0"
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 5 --retry-delay 2 --retry-all-errors \
+            -o /tmp/go.tar.gz "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz"
+          echo "${GO_SHA256}  /tmp/go.tar.gz" | sha256sum -c -
+          sudo rm -rf /usr/local/go
+          sudo tar -C /usr/local -xzf /tmp/go.tar.gz
+          echo "/usr/local/go/bin" >> "$GITHUB_PATH"
+          export PATH="/usr/local/go/bin:${PATH}"
+          go version | grep -F "go${GO_VERSION}"
+          retry() {
+            local attempt=1
+            local max=5
+            local delay=5
+            while true; do
+              if "$@"; then
+                return 0
+              fi
+              if [ "$attempt" -ge "$max" ]; then
+                echo "failed after ${max} attempts: $*" >&2
+                return 1
+              fi
+              echo "attempt ${attempt} failed, retrying in ${delay}s: $*" >&2
+              sleep "$delay"
+              delay=$((delay * 2))
+            done
+          }
+          retry go install "golang.org/x/mobile/cmd/gomobile@${GOMOBILE_VERSION}"
+          gopath_bin="$(go env GOPATH)/bin"
+          echo "$gopath_bin" >> "$GITHUB_PATH"
+          export PATH="${PATH}:${gopath_bin}"
+          retry gomobile init
+          retry bash deps/build_rclone_android.sh
+
+      - name: Restore LLVM libunwind sources
+        uses: actions/cache@v4
+        with:
+          # scripts/build_libunwind_aarch64.sh prints "复用已有源码" and returns
+          # when libunwind/CMakeLists.txt already exists, so restoring the sparse
+          # checkout is what avoids re-cloning llvm-project every run. Keyed on the
+          # resolved branch tip so the checkout can never pin an old revision.
+          path: ${{ github.workspace }}/.llvm-libunwind
+          key: llvm-libunwind-src-${{ runner.os }}-${{ steps.revs.outputs.llvm }}
+      - name: Build libunwind
+        env:
+          ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/${{ env.ANDROID_NDK }}
+          LLVM_SRC: ${{ github.workspace }}/.llvm-libunwind
+          LIBUNWIND_BUILD: ${{ runner.temp }}/libunwind-build
+        run: bash scripts/build_libunwind_aarch64.sh "$ANDROID_NDK_HOME"
+      - name: Stage native artifacts
+        run: |
+          mkdir -p native-artifacts/assets native-artifacts/jniLibs/arm64-v8a native-artifacts/libs
+          cp src/android/app/src/main/assets/proot-aarch64 native-artifacts/assets/
+          cp src/android/app/src/main/jniLibs/arm64-v8a/libproot.so native-artifacts/jniLibs/arm64-v8a/
+          cp deps/build/rclone/rclone.aar native-artifacts/libs/
+          find /usr/local/lib/android/sdk/ndk/${ANDROID_NDK}/toolchains/llvm/prebuilt -path '*sysroot/usr/lib/aarch64-linux-android/libunwind.a' -print -quit | xargs -I{} cp {} native-artifacts/libunwind.a
+          test -s native-artifacts/libunwind.a
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-deps-${{ github.sha }}
+          path: native-artifacts
+          if-no-files-found: error
+          retention-days: 7

@@ -1,0 +1,123 @@
+name: Sandbox assets
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-sandbox-assets:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    permissions:
+      # [T-sandbox-asset-eviction] write for the release-asset store below.
+      # The only caller (android-apk.yml) grants contents: write at workflow
+      # level, and a reusable workflow cannot exceed the caller's grant.
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # [T-apk-size] Only ubuntu-base still ships in the APK. The Android SDK
+      # host tools (android-sdk-tools-aarch64.zip / android-cmdline-tools.zip)
+      # are no longer bundled — minis-android-sdk-setup downloads them on
+      # demand with its mirror ladder (dev-suite android-core component).
+      - name: Restore sandbox asset cache
+        id: cache-sandbox
+        uses: actions/cache@v4
+        with:
+          path: |
+            src/android/app/src/main/assets/ubuntu-base.tar.gz
+          key: sandbox-assets-${{ runner.os }}-${{ hashFiles('scripts/prepare_android_sandbox.sh') }}
+
+      # [T-sandbox-asset-eviction] The 10 GB Actions cache quota is under
+      # constant pressure (SDK + gradle + go caches measured at 9.3 GB on
+      # 2026-10-22), and this ~54 MB entry is the smallest and least
+      # recently used — every merge marathon LRU-evicts it, so the next
+      # rolling build pays a 30-45 min qemu-emulated apt rebuild of the
+      # rootfs. Release assets have no such quota: keep the last-built
+      # tarball on the `sandbox-assets` release, named by the prepare
+      # script's hash so a script change can never serve a stale rootfs.
+      # A cache miss now costs one ~54 MB download instead of a rebuild;
+      # only a changed script (or the very first build) still rebuilds.
+      - name: Fetch prebuilt rootfs from the asset store
+        id: asset-store
+        if: steps.cache-sandbox.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ASSET_NAME: ubuntu-base-${{ hashFiles('scripts/prepare_android_sandbox.sh') }}.tar.gz
+          # [T-sandbox-asset-name] Uploads made before the hashed-name fix stored
+          # the tarball under its local basename, so every fetch missed and every
+          # cache eviction paid a full qemu rebuild. Accepting the legacy name
+          # once keeps such an asset usable; the publish step below prunes it, so
+          # this fallback cannot serve a stale rootfs indefinitely.
+          LEGACY_NAME: ubuntu-base.tar.gz
+        run: |
+          set -euo pipefail
+          mkdir -p src/android/app/src/main/assets
+          DEST=src/android/app/src/main/assets/ubuntu-base.tar.gz
+          if gh release download sandbox-assets --repo "$GITHUB_REPOSITORY" \
+              --pattern "$ASSET_NAME" --output "$DEST" 2>/dev/null \
+              && gzip -t "$DEST"; then
+            echo "asset store hit: $ASSET_NAME"
+            echo "restored=true" >> "$GITHUB_OUTPUT"
+          elif gh release download sandbox-assets --repo "$GITHUB_REPOSITORY" \
+              --pattern "$LEGACY_NAME" --output "$DEST" 2>/dev/null \
+              && gzip -t "$DEST"; then
+            echo "asset store hit (legacy name): $LEGACY_NAME"
+            echo "restored=true" >> "$GITHUB_OUTPUT"
+          else
+            rm -f "$DEST"
+            echo "asset store miss: $ASSET_NAME"
+            echo "restored=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Prepare embedded sandbox assets
+        if: >
+          steps.cache-sandbox.outputs.cache-hit != 'true' &&
+          steps.asset-store.outputs.restored != 'true'
+        run: |
+          chmod +x scripts/prepare_android_sandbox.sh
+          bash scripts/prepare_android_sandbox.sh
+          test -s "src/android/app/src/main/assets/ubuntu-base.tar.gz"
+
+      # Publish the freshly built tarball to the asset store (no quota) and
+      # prune other script-version assets so exactly one survives. Skipped
+      # on cache/asset-store hits — the store already holds this exact file.
+      - name: Publish rootfs to the asset store
+        if: >
+          steps.cache-sandbox.outputs.cache-hit != 'true' &&
+          steps.asset-store.outputs.restored != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ASSET_NAME: ubuntu-base-${{ hashFiles('scripts/prepare_android_sandbox.sh') }}.tar.gz
+        run: |
+          set -euo pipefail
+          test -s src/android/app/src/main/assets/ubuntu-base.tar.gz
+          gzip -t src/android/app/src/main/assets/ubuntu-base.tar.gz
+          gh release view sandbox-assets >/dev/null 2>&1 || \
+            gh release create sandbox-assets --title "Sandbox asset store" \
+              --notes "CI asset store for the prebuilt rootfs. Replaces Actions-cache entries evicted by the 10 GB repo quota; named by prepare_android_sandbox.sh hash."
+          # [T-sandbox-asset-name] `gh release upload path#name` renames only on
+          # newer clients; runners shipped an older one, so assets landed under
+          # the local basename, the hashed-name fetch never matched, and every
+          # cache eviction cost a 30-45 min qemu rebuild. Copy to the final name
+          # and upload that — no rename syntax involved, works on every version.
+          cp src/android/app/src/main/assets/ubuntu-base.tar.gz "/tmp/$ASSET_NAME"
+          gh release upload sandbox-assets "/tmp/$ASSET_NAME" --clobber
+          # Prune every other ubuntu-base asset, including the legacy plain name
+          # (grep '^ubuntu-base' rather than '^ubuntu-base-', which the plain name
+          # does not match).
+          for f in $(gh release view sandbox-assets --json assets --jq '.assets[].name' \
+              | grep '^ubuntu-base' | grep -v "^${ASSET_NAME}$" || true); do
+            echo "pruning stale asset: $f"
+            gh release delete-asset sandbox-assets "$f" --yes || true
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sandbox-assets-${{ github.sha }}
+          path: |
+            src/android/app/src/main/assets/ubuntu-base.tar.gz
+          if-no-files-found: error
+          retention-days: 7
