@@ -41,6 +41,11 @@ class PromptSectionsGoldenTest {
         }
         if (memory != null) {
             append("\n\n")
+            // [T-standing-rules-authority] The production assembly prepends the
+            // standing-rules header to the memory fragment; the oracle tracks it
+            // so this stays a single-source byte-equality check.
+            append(STANDING_RULES_HEADER)
+            append("\n\n")
             append(memory)
         }
         append(tail)
@@ -50,7 +55,7 @@ class PromptSectionsGoldenTest {
         var len = base.length
         if (skill != null) len += 2 + skill.length
         if (mcp != null) len += 2 + mcp.length
-        if (memory != null) len += 2 + memory.length
+        if (memory != null) len += 2 + STANDING_RULES_HEADER.length + 2 + memory.length
         return len
     }
 
@@ -58,6 +63,14 @@ class PromptSectionsGoldenTest {
     // Fragment fixtures exercising the separator shapes
     // ------------------------------------------------------------------
 
+    /**
+     * [T-standing-rules-authority] Header the production assembly puts in front of
+     * the standing-rules body. Declared here so the oracle and the assertion read
+     * the same string.
+     */
+    private val STANDING_RULES_HEADER =
+        "STANDING RULES — binding constraints, not background. " +
+            "Where a rule conflicts with tone, persona, or formatting guidance, the rule governs."
     private val BASE =
         "IDENTITY-SENTENCE\n" +
             "Available tools:\n- shell_execute: run commands\n- file_read: read files\n\n" +
@@ -141,7 +154,8 @@ class PromptSectionsGoldenTest {
                 "Tone and style:\n- Be concise.\n\n" +
                 "## Skills\n- deploy-check: verify release steps\n\n" +
                 "MCP servers (top 20 enabled):\n- github: code search\n\n" +
-                "Standing rules (GLOBAL.md):\n- Keep answers in the user's language" +
+                STANDING_RULES_HEADER +
+                "\n\nStanding rules (GLOBAL.md):\n- Keep answers in the user's language" +
                 "\n\nRuntime context:\n" +
                 "- Current date: 2026-11-15 (Asia/Shanghai)\n" +
                 "- Device language: zh-CN\n" +

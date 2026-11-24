@@ -20,7 +20,7 @@ class StandingContractTest {
         assertTrue(block.contains("Persona reminder (SOUL.md): stay in the configured persona '富江'"))
         assertTrue(block.contains("Session-scoped standing rules"))
         assertTrue(block.contains("Global standing rules (GLOBAL.md)"))
-        assertTrue(block.contains("BINDING instructions"))
+        assertTrue(block.contains("binding constraints"))
         assertTrue(block.contains("latest message still wins"))
     }
 
@@ -41,8 +41,11 @@ class StandingContractTest {
 
     @Test
     fun `block hard-caps at maxChars with ellipsis`() {
+        // [T-standing-rules-authority] Persona and rules get separate quotas out
+        // of maxChars; only the persona is present here, so the block is the
+        // clipped persona (cap + the ellipsis) and never exceeds the budget.
         val block = StandingContract.block("x".repeat(400), maxChars = 100)
-        assertEquals(101, block.length)
+        assertTrue("persona clip must stay inside the budget: ${block.length}", block.length <= 100)
         assertTrue(block.endsWith("…"))
     }
 
@@ -66,8 +69,8 @@ class StandingContractTest {
             "a dropped block must not be listed as present",
             block.contains("Session-scoped standing rules"),
         )
-        assertFalse(block.contains("Session-scoped standing rules are BINDING"))
-        assertTrue(block.contains("were NOT included in this prompt"))
+        assertFalse(block.contains("Session-scoped standing rules"))
+        assertTrue(block.contains("are not present in this prompt"))
         assertTrue(block.contains("/var/minis/memory/GLOBAL.md"))    }
 
     @Test
@@ -77,9 +80,9 @@ class StandingContractTest {
             hasSessionRules = false,
             omittedRules = listOf("project rules (AGENTS.md)"),
         )
-        assertFalse(block.contains("BINDING instructions"))
+        assertFalse(block.contains("STANDING RULES IN FORCE"))
         assertTrue(block.contains("project rules (AGENTS.md)"))
-        assertTrue(block.contains("Do not assume you have read them"))
+        assertTrue(block.contains("could rest on their content"))
     }
 
     @Test
