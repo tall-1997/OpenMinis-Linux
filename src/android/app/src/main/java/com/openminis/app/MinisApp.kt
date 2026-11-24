@@ -1173,6 +1173,10 @@ class MinisApp : Application(), ImageLoaderFactory {
                 // minis://attachments/foo.jpg invalidate Coil's cached bitmap.
                 add(MinisImageFetcher.MtimeKeyer())
                 add(MinisImageFetcher.StringMtimeKeyer())
+                // [vendor-icons] The 358 brand marks are raw SVG resources;
+                // without SvgDecoder they fail to decode and ModelBrandIcon
+                // silently falls back to its letter avatar.
+                add(coil.decode.SvgDecoder.Factory())
             }
             .build()
 

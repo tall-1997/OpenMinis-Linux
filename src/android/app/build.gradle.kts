@@ -442,6 +442,8 @@ dependencies {
 
     // Coil (image loading)
     implementation("io.coil-kt:coil-compose:2.7.0")
+    // [vendor-icons] SVG decoding for the raw brand marks in res/raw.
+    implementation("io.coil-kt:coil-svg:2.7.0")
 
     // Markdown rendering (mikepenz multiplatform-markdown-renderer)
     implementation("com.mikepenz:multiplatform-markdown-renderer-android:0.33.0")
