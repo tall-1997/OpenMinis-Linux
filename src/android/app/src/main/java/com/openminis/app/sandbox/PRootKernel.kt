@@ -10,6 +10,7 @@ import android.provider.DocumentsContract
 import android.util.Log
 import kotlinx.coroutines.sync.withLock
 import com.openminis.app.data.FileMentionIndex
+import com.openminis.app.data.MountedFoldersStore
 import java.io.File
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentNavigableMap
@@ -18,7 +19,6 @@ import kotlin.math.abs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
@@ -39,17 +39,6 @@ object PRootKernel {
     var isBooted: Boolean = false
         private set
 
-    /**
-     * Serializes the boot body. Two concurrent first-boot entries exist —
-     * ExecutionCoordinator's auto-boot inside its session mutex, and
-     * TerminalSession.start() — both can hit boot() before either finished.
-     * A Mutex (not `synchronized`) because the guarded region contains
-     * suspension points: a monitor held across a suspend leaks the lock when
-     * the coroutine resumes on another thread. Mirrors the double-checked
-     * pattern of RootfsManager.getInstance.
-     */
-    private val bootMutex = Mutex()
-
     /** Path to native library directory (for LD_LIBRARY_PATH). */
     var nativeLibDir: String = ""
         private set
@@ -62,8 +51,7 @@ object PRootKernel {
     var prootLoader32Path: String = ""
         private set
 
-    private var rootfsManagerRef: RootfsManager? = null
-    private val rootfsManager: RootfsManager get() = checkNotNull(rootfsManagerRef) { "PRootKernel.boot must be called first" }
+    private lateinit var rootfsManager: RootfsManager
 
     /**
      * [T-android-env-first-turn] Guards [boot]. See the comment there: the
@@ -72,6 +60,11 @@ object PRootKernel {
      */
     private val bootMutex = kotlinx.coroutines.sync.Mutex()
 
+    /** [T219-5] Live mounted-folders store, handed over by MinisApp at
+     *  startup; read by applyMountedFoldersSnapshot and the path resolvers. */
+    @Volatile
+    var mountedFoldersStore: MountedFoldersStore? = null
+
     /** Custom environment variables injected into every proot command. */
     val customEnvironment: MutableMap<String, String> = mutableMapOf()
 
@@ -79,7 +72,7 @@ object PRootKernel {
      * Bind mounts: Linux path -> host filesystem path.
      *
      * ConcurrentSkipListMap, not LinkedHashMap: writers (addBindMount /
-     * applyMountedFoldersSnapshot / syncSharedStorageBindMounts, from boot and
+     * applyMountedFoldersSnapshot, from boot and
      * mounted-folder CRUD) raced readers (buildProotCommand, resolveHostPath,
      * TerminalSession.buildTermuxArgs) with no lock — a resize during iteration
      * could throw CME or observe torn state. Iteration order changes from
@@ -156,7 +149,7 @@ object PRootKernel {
             return
         }
         withContext(Dispatchers.IO) {
-        rootfsManagerRef = RootfsManager.getInstance(context)
+        rootfsManager = RootfsManager.getInstance(context)
         rootfsManager.installIfNeeded()
         rootfsManager.installProotIfNeeded()
 
@@ -179,8 +172,7 @@ object PRootKernel {
         // source cannot burn dpkg/pip retry strikes, then retry failed
         // restores, then snapshot. One IO job so these never interleave
         // (they also serialize on RootfsManager.aptMutex).
-        (context.applicationContext as? com.openminis.app.MinisApp)
-            ?.appCoroutineScopes?.io?.launch {
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
             runCatching { rootfsManager.runMinisMirrorAuto() }
                 .onFailure { Log.e(TAG, "[boot] mirror auto failed", it) }
             runCatching { rootfsManager.seedNetworkTools() }
@@ -343,7 +335,7 @@ object PRootKernel {
         // /bin/sh's PATH search succeeds and triggers an execve the extension
         // can intercept. The stub's content is irrelevant — proot rewrites
         // the execve before it runs.
-        installOffloadHandlerStubs(rootfsManager.rootfsDir)
+        installHandlerStubs(rootfsManager.rootfsDir)
 
         // T219-6: materialize /var/minis/mounts/<name> placeholder dirs that
         // PRoot's `-b` needs as bind targets — the pre-boot snapshot in
@@ -351,12 +343,6 @@ object PRootKernel {
         applyMountedFoldersSnapshot(context)
 
         isBooted = true
-        HostStatusPublisher.start(context, rootfsManager.rootfsDir)
-        // [GH#511] Rootfs is ready — fire the user boot hook asynchronously.
-        // Never await it here: a slow/hung script must not delay the first
-        // shell command or the app UI. See BootHook for the PRoot /proc and
-        // flock caveats that script authors need to know.
-        BootHook.launch(context, rootfsManager.rootfsDir)
         Log.i(TAG, "PRoot kernel booted " +
             "rootfs=${rootfsManager.rootfsDir.absolutePath} " +
             "nativeLibDir=$nativeLibDir " +
@@ -489,70 +475,6 @@ object PRootKernel {
                 "applyMountedFoldersSnapshot: ${entryCount - desired.size} mount(s) dropped — host path " +
                     "unresolved or unreadable (see resolveTreeUriToHostPath warnings above)",
             )
-        }
-    }
-
-    /**
-     * Bind host shared storage into the guest when All Files Access (or
-     * legacy WRITE_EXTERNAL_STORAGE on API 29) is granted. PRoot `-b` then
-     * gives POSIX read/write without going back through SAF DocumentFile.
-     * Does not override a user mount already named `sdcard`.
-     */
-    private fun applySharedStorageBinds(context: Context, desired: MutableMap<String, String>) {
-        val userNamed = desired.keys.any { it.removePrefix(MOUNTS_LINUX_PREFIX) == "sdcard" }
-        val plan = sharedStoragePlan(context, userNamed)
-        syncSharedStorageBindMounts(plan, userNamed)
-        val mounted = plan[SharedStorageBindPlan.MOUNTS_SDCARD]
-        if (mounted != null) desired[SharedStorageBindPlan.MOUNTS_SDCARD] = mounted
-        if (plan.isNotEmpty()) materializeSharedStorageTargets(context, plan.keys)
-    }
-
-    /**
-     * Binds [PersistentShell] must pass on `-b`. [bindMounts] alone is not
-     * that argv, so a grant that only updated the kernel map left `/sdcard`
-     * as an empty rootfs directory inside `shell_execute`.
-     */
-    fun shellSharedStorageBinds(context: Context, publish: Boolean = true): Map<String, String> {
-        val userNamed = mountedFoldersStore?.entries?.value?.any { it.name == "sdcard" } == true
-        val plan = sharedStoragePlan(context, userNamed)
-        if (!publish) return plan
-        syncSharedStorageBindMounts(plan, userNamed)
-        if (plan.isNotEmpty()) materializeSharedStorageTargets(context, plan.keys)
-        return plan
-    }
-
-    private fun sharedStoragePlan(context: Context, userNamedSdcard: Boolean): Map<String, String> {
-        val host = Environment.getExternalStorageDirectory()?.absolutePath
-        val granted = !host.isNullOrBlank() &&
-            hasSharedStorageAccess(context) &&
-            File(host).canRead()
-        return SharedStorageBindPlan.plan(if (granted) host else null, userNamedSdcard)
-    }
-
-    private fun syncSharedStorageBindMounts(plan: Map<String, String>, userNamedSdcard: Boolean) {
-        for (linux in listOf(SharedStorageBindPlan.SDCARD, SharedStorageBindPlan.EMULATED)) {
-            val host = plan[linux]
-            if (host == null) bindMounts.remove(linux) else bindMounts[linux] = host
-        }
-        val mounted = SharedStorageBindPlan.MOUNTS_SDCARD
-        if (mounted in plan) bindMounts[mounted] = plan.getValue(mounted)
-        else if (!userNamedSdcard) bindMounts.remove(mounted)
-    }
-
-    private fun materializeSharedStorageTargets(context: Context, linuxPaths: Collection<String>) {
-        materializeAbsoluteTargets(
-            context,
-            linuxPaths.filter { !it.startsWith(MOUNTS_LINUX_PREFIX) },
-        )
-        val rootfs = try {
-            RootfsManager.getInstance(context).rootfsDir
-        } catch (t: Throwable) {
-            Log.w(TAG, "materializeSharedStorageTargets: rootfs not yet available: ${t.message}")
-            return
-        }
-        for (linux in linuxPaths) {
-            if (!linux.startsWith(MOUNTS_LINUX_PREFIX)) continue
-            File(rootfs, linux.removePrefix("/")).mkdirs()
         }
     }
 
@@ -817,7 +739,7 @@ object PRootKernel {
      * fall back to the symlink, which otherwise stays on the zone from boot.
      */
     suspend fun syncHostTimezoneFiles() {
-        if (rootfsManagerRef == null) return
+        if (!::rootfsManager.isInitialized) return
         rootfsManager.applyHostTimezone()
     }
 
@@ -876,7 +798,10 @@ object PRootKernel {
      * [ExecutionCoordinator.broadcastProxyChange].
      */
     fun updateProxy(context: Context): Map<String, String> {
-        val env = SandboxHttpProxy.envBlock() ?: systemProxyEnv(context)
+        // Ultra port note: fork preferred SandboxHttpProxy.envBlock() (a
+        // dedicated sandbox proxy module, not ported); upstream reads the
+        // system proxy directly.
+        val env = systemProxyEnv(context)
         customEnvironment.putAll(env)
         val hasProxy = env["http_proxy"].orEmpty().isNotEmpty()
         Log.i(TAG, "Updated proxy — ${if (hasProxy) "active" else "cleared"}")
@@ -934,7 +859,7 @@ object PRootKernel {
         // Shell command
         cmd.add("/bin/bash")
         cmd.add("-c")
-        cmd.add(GuestLimits.wrap(shellCommand))
+        cmd.add(shellCommand)
 
         Log.d(TAG, "proot cmd: ${cmd.take(cmd.size - 1).joinToString(" ")} <shellCommand ${shellCommand.length} bytes>")
         return cmd

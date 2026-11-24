@@ -61,7 +61,7 @@ object OffloadDenial {
             // implying the user explicitly chose "Not Allowed".
             "ASK_ONCE" ->
                 "level ASK_ONCE — the approval prompt was denied or went unanswered within " +
-                    "${OffloadPermissionManager.INTERACTIVE_BUDGET_MS / 1000}s"
+                    "${OffloadPermissionManager.DECISION_TIMEOUT_MS / 1000}s"
             null -> "current policy"
             else -> "level $level"
         }

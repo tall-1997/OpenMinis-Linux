@@ -178,8 +178,6 @@ class SuOffloadHandler(
     // -- Ultra port: inlined safety rails (fork had them in
     //    GuestWorkloadPolicy / sandbox.kernel, which are not ported) --------
 
-    /** Host `su` wall-clock ceiling: fork's GuestWorkloadPolicy constant. */
-    private const val HOST_SU_MAX_TIMEOUT_MS = 120_000L
 
     /**
      * Hard refusals for the host-su lane: block-device writes / formatting and
@@ -397,3 +395,6 @@ internal object SuCommand {
         return low.startsWith("su:")
     }
 }
+
+/** Host `su` wall-clock ceiling: fork GuestWorkloadPolicy constant, top-level so SuCommand.parse can see it. */
+internal const val HOST_SU_MAX_TIMEOUT_MS: Long = 120_000L

@@ -237,7 +237,6 @@ class RootfsManager private constructor(private val context: Context) {
                 }
             }
 
-            HostStatusPublisher.stop()
             rootfsDir.deleteRecursively()
             installIfNeeded()
 
