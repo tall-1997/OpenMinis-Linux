@@ -80,8 +80,7 @@ internal class OpenAIRequestBodies(
         // user sent image to GPT-5.5 then switched provider), serialize a
         // text placeholder instead of an image_url block — otherwise the
         // server returns "400 unknown variant `image_url`". Decided once
-        // here so the structured-contentParts loop and the legacy
-        // imageParts loop below stay consistent.
+        // here so the structured-contentParts loop and the legacy imageParts loop below stay consistent.
         // [T-android-vision-native-check-misses-image_input] hasImageInput, not a
         // raw membership test: this compared the catalog string EXACTLY, so
         // "image_input" (OpenAI/OpenRouter) and "Image" both read as "no vision"
@@ -720,10 +719,11 @@ internal class OpenAIRequestBodies(
             isDashScope = host.isDashScope,
             isXAI = host.isXAI,
             offEffort = host.explicitOffEffort(),
+            endpointHost = host.basePath, // [T-thinking-one-contract] vendor host vs relay
         )
         val trace = ThinkingRuleResolver.apply(body, ctx)
-        // [T-thinking-rules-observability] Design §8 / GH OpenMinis#100: which rule won
-        // must be inspectable, or a rule layer just swaps one hidden variable for another.
+        // [T-thinking-rules-observability] Design §8 / GH OpenMinis#100: which rule
+        // won must be inspectable, or a rule layer just swaps one hidden variable for another.
         com.openminis.app.logging.AppLogger.info(
             "Thinking",
             "[resolve] model=${host.model.id} level=${level.name} ${trace.logLine}",

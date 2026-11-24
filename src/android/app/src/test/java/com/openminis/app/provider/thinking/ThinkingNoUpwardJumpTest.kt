@@ -179,4 +179,41 @@ class ThinkingNoUpwardJumpTest {
         assertEquals("enabled", body.optJSONObject("thinking")?.optString("type"))
         assertEquals("high", body.optString("reasoning_effort", null))
     }
+
+    // ── [T-thinking-one-contract] one wire contract per request ───────────
+
+    @Test
+    fun `relay carrying a deepseek id gets ONLY the declared effort contract`() {
+        // Field evidence: on a relay the request carried `thinking:{type:enabled}`
+        // AND `reasoning_effort:"high"`, and the stream contained no reasoning at
+        // all — two conflicting contracts honoured as neither.
+        val body = JSONObject()
+        ThinkingRuleResolver.apply(
+            body,
+            ctx(
+             modelId = "deepseek-v4.1-flash",
+             declared = listOf("none", "low", "high", "max"),
+             level = ThinkingLevel.HIGH,
+            ).copy(endpointHost = "https://susu.wiki/v1"),
+        )
+        assertFalse(
+            "a relay must not receive the vendor thinking object: $body",
+            body.has("thinking"),
+        )
+        assertEquals("high", body.optString("reasoning_effort", null))
+    }
+
+    @Test
+    fun `official deepseek host keeps its vendor contract`() {
+        val body = JSONObject()
+        ThinkingRuleResolver.apply(
+            body,
+            ctx(
+             modelId = "deepseek-v4.1-flash",
+             declared = listOf("none", "low", "high", "max"),
+             level = ThinkingLevel.HIGH,
+            ).copy(endpointHost = "https://api.deepseek.com/v1"),
+        )
+        assertEquals("enabled", body.optJSONObject("thinking")?.optString("type"))
+    }
 }

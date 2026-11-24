@@ -64,6 +64,14 @@ data class ThinkingResolveContext(
      * Already an ALLOWLIST decision made by the caller (iOS ff60c818).
      */
     val offEffort: String?,
+ /**
+ * [T-thinking-one-contract] Base URL of the endpoint serving this request.
+ *
+ * The vendor-shaped rules match on MODEL ID, which cannot tell the vendor's
+ * own host from a third-party relay carrying the same ids. Null keeps the
+ * pre-existing behaviour (call sites that do not know their host).
+ */
+ val endpointHost: String? = null,
 )
 
 /**
@@ -286,13 +294,39 @@ object ThinkingRuleResolver {
 
         // ---- Stage B: fill in what the rule left unspecified ----
         var formatSource = "rule"
-        val format = winner.wireFormat ?: run {
+        val declaredFormat = winner.wireFormat ?: run {
             formatSource = "providerTypeDefault"
             ThinkingWireFormat.ReasoningEffort(ctx.offEffort)
         }
 
-        val clamp = emit(format, ctx, body)
+        // [T-thinking-one-contract] A model-id rule describes how the VENDOR spells
+        // "reasoning on"; it says nothing about the endpoint serving the request.
+        // When the endpoint itself declares the effort tiers it accepts
+        // ([ThinkingResolveContext.declaredEffortValues]), that declaration is the
+        // better contract, so use it INSTEAD of the vendor shape, not in addition.
+        //
+        // Field evidence (relay `susu.wiki`, model `deepseek-v4.1-flash`, session
+        // level HIGH): the request carried BOTH `thinking:{type:enabled}` (from the
+        // `*deepseek-v4*` vendor rule) and `reasoning_effort:"high"`, and the stream
+        // returned ~180 text chunks and ZERO reasoning chunks — two conflicting
+        // contracts in one body, honoured as neither. Emitting the single contract
+        // the endpoint declares removes the conflict; the vendor shape stays for
+        // endpoints that declare nothing (official hosts).
+        // A vendor-shaped rule is only correct on the vendor host itself; a relay
+        // carrying the same model id does not accept the vendor spelling.
+        val vendorHost = ctx.endpointHost?.contains("deepseek", ignoreCase = true) ?: true
+        val format = if (
+            !vendorHost &&
+            declaredFormat is ThinkingWireFormat.DeepSeekSibling &&
+            !ctx.declaredEffortValues.isNullOrEmpty()
+        ) {
+            formatSource = "declaredEffort"
+            ThinkingWireFormat.ReasoningEffort(ctx.offEffort)
+        } else {
+            declaredFormat
+        }
 
+        val clamp = emit(format, ctx, body)
         val emitted = body.keys().asSequence().toSet() - before
         return ThinkingResolveTrace(
             matchedRuleLabel = winner.label,
