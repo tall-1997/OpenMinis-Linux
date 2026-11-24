@@ -169,8 +169,24 @@ internal object ThinkingEffort {
      * out at high. Matches the FAMILY substring, not one spelling — the live API serves
      * `mimo-v2.5` while docs say `mimo-2.5` (iOS 72968c4f).
      */
-    fun clampEffortForModel(effort: String, lid: String): String =
-        if (effort == "xhigh" && (lid.contains("mimo") || lid.contains("agnes"))) "high" else effort
+    fun clampEffortForModel(effort: String, lid: String): String = when {
+        (effort == "xhigh" || effort == "ultra") &&
+        (lid.contains("mimo") || lid.contains("agnes") || isDeepSeekFamily(lid)) ->
+        if (effort == "ultra") "max" else "high"
+        else -> effort
+    }
+
+    /**
+     * [T-thinking-vendor-shape-scope] Tier vocabulary belongs to the MODEL FAMILY,
+     * not to the wire shape that happens to render it.
+     *
+     * DeepSeek's legal set (low/medium/high/max) used to be applied only inside the
+     * vendor `DeepSeekSibling` emitter. When a relay serves the same id the resolver
+     * falls back to portable `reasoning_effort`, and the vocabulary went with the
+     * shape: an xhigh/ultra ask reached a relay that only knows the V4 ladder.
+     * Keeping the family rule here makes BOTH renderers clamp identically.
+     */
+    internal fun isDeepSeekFamily(lid: String): Boolean = lid.contains("deepseek")
 
     /**
      * Snap a requested tier onto the model's declared set, walking DOWN only.
