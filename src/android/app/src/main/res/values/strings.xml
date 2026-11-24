@@ -306,7 +306,7 @@
     <string name="soul_section_preview">Preview</string>
     <string name="soul_section_identity">Identity</string>
     <string name="soul_section_personality">Personality Prompt</string>
-    <string name="soul_personality_footer">Edited as the Markdown body of SOUL.md. Length cap is language-aware: Chinese ≤ 1600 characters OR English ≤ 1000 words (the rule is picked by the majority language). Over-limit bodies are rejected on save and ignored at prompt-build time.</string>
+    <string name="soul_personality_footer">Edited as the Markdown body of SOUL.md. There is no length cap — the model\'s context window is the budget.</string>
     <string name="soul_field_name">Name</string>
     <string name="soul_field_style">Style</string>
     <string name="soul_field_lang">Language</string>
@@ -318,6 +318,8 @@
     <string name="soul_count_zero">0 chars</string>
     <string name="soul_count_chars">%1$d / %2$d chars</string>
     <string name="soul_count_words">%1$d / %2$d words</string>
+    <string name="soul_count_plain_chars">%1$d chars</string>
+    <string name="soul_count_plain_words">%1$d words</string>
     <string name="soul_over_limit_chinese">Over limit: %1$d / %2$d chars. Chinese ≤ %2$d chars or English ≤ %3$d words.</string>
     <string name="soul_over_limit_english">Over limit: %1$d / %2$d words. Chinese ≤ %3$d chars or English ≤ %2$d words.</string>
     <string name="soul_save">Save</string>

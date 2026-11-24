@@ -243,10 +243,12 @@ object SoulStore {
 
     // -- Body length rules (language-aware) ----------------------------
     //
-    // The personality body has a hard cap applied at every write surface
-    // (Settings UI Save button, minis-config writer, and the
-    // prompt-build-time fallback in `SystemPromptBuilder`). The cap is
-    // language-dependent: CJK text is information-dense per character so
+    // [persona-unlimited] The historical hard cap (1600 CJK chars / 1000
+    // words) has been removed: isOverLimit() is a pass-through Ok. The
+    // constants and helpers below are kept for the editor's character
+    // counter display and for callers that still reference them.
+    //
+    // Historical rule (no longer enforced): the cap was language-dependent, CJK text is information-dense per character so
     // 1600 chars is the limit; Latin / mixed text gets a 1000-word cap.
     // (T-soul-body-limit-2000 — both axes doubled from 800 / 500 to align
     //  with iOS bumping its single 1000→2000 token cap.)
@@ -268,35 +270,16 @@ object SoulStore {
      * / whitespace-only bodies always return [SoulBodyLimitCheck.Ok].
      */
     fun isOverLimit(body: String): SoulBodyLimitCheck {
-        val trimmed = body.trim()
-        if (trimmed.isEmpty()) return SoulBodyLimitCheck.Ok
-
-        var cjk = 0
-        var total = 0
-        var i = 0
-        while (i < trimmed.length) {
-            val cp = trimmed.codePointAt(i)
-            total += 1
-            if (isCJKCodePoint(cp)) cjk += 1
-            i += Character.charCount(cp)
-        }
-        val ratio = if (total > 0) cjk.toDouble() / total else 0.0
-        return if (ratio > CJK_RATIO_THRESHOLD) {
-            // Code-point count — closest analogue to iOS grapheme cluster
-            // count for the CJK ranges we care about (no combining marks
-            // / no flag emojis in Han/Kana/Hangul). Bytes / UTF-16 code
-            // units would over-count surrogate-pair CJK extensions.
-            val chars = trimmed.codePointCount(0, trimmed.length)
-            if (chars > CHINESE_CHAR_LIMIT) SoulBodyLimitCheck.OverLimitChinese(chars, CHINESE_CHAR_LIMIT)
-            else SoulBodyLimitCheck.Ok
-        } else {
-            // Whitespace-delimited word count. `split(Regex("\\s+"))` on
-            // a trimmed string collapses consecutive whitespace into a
-            // single delimiter.
-            val words = trimmed.split(Regex("\\s+")).count { it.isNotEmpty() }
-            if (words > ENGLISH_WORD_LIMIT) SoulBodyLimitCheck.OverLimitEnglish(words, ENGLISH_WORD_LIMIT)
-            else SoulBodyLimitCheck.Ok
-        }
+        // [persona-unlimited] Personality length is no longer capped — the
+        // body is user-authored content and the model's context window is
+        // the only real budget. Always Ok so every write surface (Settings,
+        // minis-config, prompt builder) and the truncation fallback degrade
+        // to pass-through without touching their call sites.
+        //
+        // The counting helpers below (isCJKCodePoint / CJK ratio) are still
+        // used by the editor's character counter for display; they no longer
+        // feed any decision here.
+        return SoulBodyLimitCheck.Ok
     }
 
     /**
@@ -578,15 +561,11 @@ object SystemPromptBuilder {
 
         // [T-soul-hint] Fixed hint telling the model how SOUL fields can be
         // changed. Always appended (with or without a personality body) so
-        // the model never says "I can't change my personality". This hint
-        // is system-owned text and is NOT counted against the user-facing
-        // SOUL body length limit (#356 / 1000 EN words / 1600 CN chars).
+        // the model never says "I can't change my personality".
         val soulEditHint =
             "---\n" +
-            "SOUL.md fields (name / icon / style / lang / body) can be edited two ways:\n" +
-            "1. Tool: call `minis-config` to propose changes (user must approve).\n" +
-            "2. UI: ask the user to go to Settings → Soul to edit directly.\n" +
-            "Pick whichever the user finds easier in context. Do not say you cannot change your personality."
+            "SOUL.md is your persona. Write it as the persona requires — there is no length cap. " +
+            "Change it via `minis-config` (user approves) or Settings → Soul. Do not claim you cannot change personality."
 
         // [T-soul-style-injection 2026-05-18, port iOS 0409e24f] The `style`
         // frontmatter field (response voice / tone / formatting preference,
@@ -609,20 +588,8 @@ object SystemPromptBuilder {
             return identityTrimmed + styleBlock(style) + "\n\n" + soulEditHint + "\n\n"
         }
 
-        // Reject (NOT truncate) bodies that exceed the language-aware
-        // limit. The old head/tail truncation silently dropped half the
-        // user's text — falling back to identity-only is the safer
-        // signal: the user notices the personality isn't taking effect,
-        // opens Settings, and sees the same red over-limit warning the
-        // Save button surfaces. Write paths already reject over-limit;
-        // this branch only triggers for an on-disk file written before
-        // this rule existed (or via shell / another device).
-        val check = SoulStore.isOverLimit(trimmed)
-        if (check.isOverLimit) {
-            AppLogger.warning(TAG, "personality body is over the language-aware limit ($check) — falling back to identity-only system prompt.")
-            return identityTrimmed + styleBlock(style) + "\n\n" + soulEditHint + "\n\n"
-        }
-
+        // [persona-unlimited] No length cap, no truncation — inject the body
+        // verbatim. isOverLimit() is a pass-through Ok now.
         val personality = scrubInjections(trimmed)
 
         // Strip the trailing space we'd otherwise leave hanging at the
