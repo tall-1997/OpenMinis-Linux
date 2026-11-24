@@ -3388,4 +3388,10 @@
  <string name="tool_detail_open_full_output">Otwórz pełne wyjście</string>
  <string name="tool_detail_open_in_terminal">Otwórz w terminalu</string>
  <string name="tool_detail_open_in_session_browser">Otwórz w przeglądarce sesji</string>
+ <!-- [T-a11y-cd-labels] -->
+ <string name="cd_browser_screenshot">Zrzut ekranu przeglądarki</string>
+ <string name="cd_withdraw_queued_message">Wycofaj wiadomość w kolejce</string>
+ <string name="cd_image_attachment">Załącznik obrazu</string>
+ <string name="cd_play_video">Odtwórz film</string>
+ <string name="cd_copy_code">Kopiuj kod</string>
 </resources>

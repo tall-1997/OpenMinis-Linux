@@ -81,8 +81,7 @@ import com.openminis.app.ui.theme.ChatColors
 // call chain (ChatLinkResolver.minisPathCandidates / PRootKernel) is chat
 // territory. Parameterizing MarkdownText(sessionId=…) is not viable either:
 // this composable's chat caller (ChatSubAgentBar) is outside this wave and
-// would keep rendering with the default null. Report documents the retained
-// dependency.
+// would keep rendering with the default null. Report documents the retained dependency.
 import com.openminis.app.ui.chat.LocalMarkdownSessionId
 import com.openminis.app.ui.chat.resolveMdMediaFile
 import kotlinx.coroutines.Dispatchers
@@ -110,6 +109,8 @@ import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.openminis.app.R
 /**
  * Renders markdown text with full formatting support.
  * Supports: headings, bold, italic, strikethrough, inline code, code blocks (with copy),
@@ -134,11 +135,9 @@ fun MarkdownText(
     // text but was remembered per (markdown) INSIDE composition, so every
     // markdown mutation re-parsed synchronously on the frame the state landed
     // — for streaming-sized inputs that stalled the frame, and the un-keyed
-    // block loop then re-ran structural diff over every block (O(n²) in
-    // practice).
+    // block loop then re-ran structural diff over every block (O(n²) in practice).
     //
-    // Two-phase fix:
-    //  a) Short documents (< [ASYNC_PARSE_THRESHOLD_CHARS], where a full
+    // Two-phase fix: a) Short documents (< [ASYNC_PARSE_THRESHOLD_CHARS], where a full
     //     parse is single-digit ms — see MarkdownParser's BoundedText notes)
     //     still parse synchronously so the first frame never flashes empty.
     //     Longer documents parse on Dispatchers.Default and publish when
@@ -347,7 +346,7 @@ private fun CodeBlockView(
             ) {
                 Icon(
                     m3Icon(Icons.Default.ContentCopy),
-                    contentDescription = "Copy code",
+                    contentDescription = stringResource(R.string.cd_copy_code),
                     modifier = Modifier.height(16.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

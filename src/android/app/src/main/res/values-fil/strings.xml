@@ -3381,4 +3381,10 @@
  <string name="tool_detail_open_full_output">Buksan ang buong output</string>
  <string name="tool_detail_open_in_terminal">Buksan sa terminal</string>
  <string name="tool_detail_open_in_session_browser">Buksan sa browser ng session</string>
+ <!-- [T-a11y-cd-labels] -->
+ <string name="cd_browser_screenshot">Screenshot ng browser</string>
+ <string name="cd_withdraw_queued_message">Bawiin ang naka-queue na mensahe</string>
+ <string name="cd_image_attachment">Kalakip na larawan</string>
+ <string name="cd_play_video">I-play ang video</string>
+ <string name="cd_copy_code">Kopyahin ang code</string>
 </resources>

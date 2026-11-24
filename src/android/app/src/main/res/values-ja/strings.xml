@@ -3380,4 +3380,10 @@
  <string name="tool_detail_open_full_output">出力全体を開く</string>
  <string name="tool_detail_open_in_terminal">ターミナルで開く</string>
  <string name="tool_detail_open_in_session_browser">セッションブラウザで開く</string>
+ <!-- [T-a11y-cd-labels] -->
+ <string name="cd_browser_screenshot">ブラウザのスクリーンショット</string>
+ <string name="cd_withdraw_queued_message">送信待ちメッセージを取り消す</string>
+ <string name="cd_image_attachment">画像の添付ファイル</string>
+ <string name="cd_play_video">動画を再生</string>
+ <string name="cd_copy_code">コードをコピー</string>
 </resources>

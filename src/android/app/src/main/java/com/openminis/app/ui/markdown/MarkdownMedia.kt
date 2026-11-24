@@ -110,6 +110,8 @@ import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.openminis.app.R
 // ─── Media blocks (inline image / video / audio) ────────────────────────────
 
 // [T-minis-decode-unify] The old local resolver (resolveMediaFile) used the
@@ -306,7 +308,7 @@ internal fun MinisVideoBlock(block: MarkdownParser.Block.Video) {
             }
             Icon(
                 imageVector = m3Icon(Icons.Filled.PlayCircleFilled),
-                contentDescription = "Play video",
+                contentDescription = stringResource(R.string.cd_play_video),
                 tint = Color.White.copy(alpha = 0.9f),
                 modifier = Modifier.width(56.dp).height(56.dp),
             )

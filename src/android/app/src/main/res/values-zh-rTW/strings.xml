@@ -3378,4 +3378,10 @@
  <string name="tool_detail_open_full_output">開啟完整輸出</string>
  <string name="tool_detail_open_in_terminal">在終端機中開啟</string>
  <string name="tool_detail_open_in_session_browser">在工作階段瀏覽器中開啟</string>
+ <!-- [T-a11y-cd-labels] -->
+ <string name="cd_browser_screenshot">瀏覽器截圖</string>
+ <string name="cd_withdraw_queued_message">撤回排隊中的訊息</string>
+ <string name="cd_image_attachment">圖片附件</string>
+ <string name="cd_play_video">播放影片</string>
+ <string name="cd_copy_code">複製程式碼</string>
 </resources>

@@ -40,6 +40,8 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.openminis.app.ui.theme.m3Icon
+import androidx.compose.ui.res.stringResource
+import com.openminis.app.R
 
 @Composable
 internal fun RenderMdVideo(block: MdBlock.Video) {
@@ -111,7 +113,7 @@ internal fun RenderMdVideo(block: MdBlock.Video) {
             }
             Icon(
                 imageVector = m3Icon(Icons.Filled.PlayCircleFilled),
-                contentDescription = "Play video",
+                contentDescription = stringResource(R.string.cd_play_video),
                 tint = Color.White.copy(alpha = 0.9f),
                 modifier = Modifier.size(56.dp),
             )

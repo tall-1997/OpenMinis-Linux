@@ -267,7 +267,7 @@ internal fun UserMessageBubble(
                             ) {
                                 Icon(
                                     imageVector = m3Icon(Icons.Filled.Cancel),
-                                    contentDescription = "Withdraw queued message",
+                                    contentDescription = stringResource(R.string.cd_withdraw_queued_message),
                                     tint = Color(0xFFFF3B30),
                                     modifier = Modifier.size(24.dp),
                                 )
@@ -480,7 +480,7 @@ internal fun UserAttachmentList(
                     .data(uri)
                     .limitDisplaySize()
                     .build(),
-                contentDescription = "Image attachment",
+                contentDescription = stringResource(R.string.cd_image_attachment),
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .size(tileSize)

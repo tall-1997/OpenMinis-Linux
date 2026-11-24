@@ -3141,4 +3141,10 @@
  <string name="subagent_tool_browser">Browser</string>
  <string name="subagent_tool_memory">Memory</string>
  <string name="subagent_tool_spawn">Sub-agent</string>
+ <!-- [T-a11y-cd-labels] -->
+ <string name="cd_browser_screenshot">Browser screenshot</string>
+ <string name="cd_withdraw_queued_message">Withdraw queued message</string>
+ <string name="cd_image_attachment">Image attachment</string>
+ <string name="cd_play_video">Play video</string>
+ <string name="cd_copy_code">Copy code</string>
 </resources>

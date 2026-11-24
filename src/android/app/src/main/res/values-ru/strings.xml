@@ -3389,4 +3389,10 @@
  <string name="tool_detail_open_full_output">Открыть весь вывод</string>
  <string name="tool_detail_open_in_terminal">Открыть в терминале</string>
  <string name="tool_detail_open_in_session_browser">Открыть в браузере сеанса</string>
+ <!-- [T-a11y-cd-labels] -->
+ <string name="cd_browser_screenshot">Снимок браузера</string>
+ <string name="cd_withdraw_queued_message">Отозвать сообщение из очереди</string>
+ <string name="cd_image_attachment">Вложение-изображение</string>
+ <string name="cd_play_video">Воспроизвести видео</string>
+ <string name="cd_copy_code">Копировать код</string>
 </resources>

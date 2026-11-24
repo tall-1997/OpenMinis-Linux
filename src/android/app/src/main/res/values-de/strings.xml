@@ -3227,4 +3227,10 @@
  <string name="subagent_tool_browser">Browser</string>
  <string name="subagent_tool_memory">Gedächtnis</string>
  <string name="subagent_tool_spawn">Sub-Agent</string>
+ <!-- [T-a11y-cd-labels] -->
+ <string name="cd_browser_screenshot">Browser-Screenshot</string>
+ <string name="cd_withdraw_queued_message">Wartende Nachricht zurückziehen</string>
+ <string name="cd_image_attachment">Bildanhang</string>
+ <string name="cd_play_video">Video abspielen</string>
+ <string name="cd_copy_code">Code kopieren</string>
 </resources>

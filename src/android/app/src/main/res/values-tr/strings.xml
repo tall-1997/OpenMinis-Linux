@@ -3381,4 +3381,10 @@
  <string name="tool_detail_open_full_output">Tam çıktıyı aç</string>
  <string name="tool_detail_open_in_terminal">Terminalde aç</string>
  <string name="tool_detail_open_in_session_browser">Oturum tarayıcısında aç</string>
+ <!-- [T-a11y-cd-labels] -->
+ <string name="cd_browser_screenshot">Tarayıcı ekran görüntüsü</string>
+ <string name="cd_withdraw_queued_message">Kuyruktaki iletiyi geri çek</string>
+ <string name="cd_image_attachment">Görsel eki</string>
+ <string name="cd_play_video">Videoyu oynat</string>
+ <string name="cd_copy_code">Kodu kopyala</string>
 </resources>

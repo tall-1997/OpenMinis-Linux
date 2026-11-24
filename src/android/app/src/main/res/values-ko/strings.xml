@@ -3380,4 +3380,10 @@
  <string name="tool_detail_open_full_output">전체 출력 열기</string>
  <string name="tool_detail_open_in_terminal">터미널에서 열기</string>
  <string name="tool_detail_open_in_session_browser">세션 브라우저에서 열기</string>
+ <!-- [T-a11y-cd-labels] -->
+ <string name="cd_browser_screenshot">브라우저 스크린샷</string>
+ <string name="cd_withdraw_queued_message">대기 중인 메시지 철회</string>
+ <string name="cd_image_attachment">이미지 첨부 파일</string>
+ <string name="cd_play_video">동영상 재생</string>
+ <string name="cd_copy_code">코드 복사</string>
 </resources>

@@ -3386,4 +3386,10 @@
  <string name="tool_detail_open_full_output">Buka keluaran lengkap</string>
  <string name="tool_detail_open_in_terminal">Buka di terminal</string>
  <string name="tool_detail_open_in_session_browser">Buka di browser sesi</string>
+ <!-- [T-a11y-cd-labels] -->
+ <string name="cd_browser_screenshot">Tangkapan peramban</string>
+ <string name="cd_withdraw_queued_message">Tarik pesan dalam antrean</string>
+ <string name="cd_image_attachment">Lampiran gambar</string>
+ <string name="cd_play_video">Putar video</string>
+ <string name="cd_copy_code">Salin kode</string>
 </resources>

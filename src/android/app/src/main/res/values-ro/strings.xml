@@ -3385,4 +3385,10 @@
  <string name="tool_detail_open_full_output">Deschide ieșirea completă</string>
  <string name="tool_detail_open_in_terminal">Deschide în terminal</string>
  <string name="tool_detail_open_in_session_browser">Deschide în browserul sesiunii</string>
+ <!-- [T-a11y-cd-labels] -->
+ <string name="cd_browser_screenshot">Captură din browser</string>
+ <string name="cd_withdraw_queued_message">Retrage mesajul din coadă</string>
+ <string name="cd_image_attachment">Fișier imagine atașat</string>
+ <string name="cd_play_video">Redă videoclipul</string>
+ <string name="cd_copy_code">Copiază codul</string>
 </resources>

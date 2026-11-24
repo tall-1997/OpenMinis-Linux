@@ -3010,4 +3010,10 @@
  <string name="subagent_tool_browser">浏览器</string>
  <string name="subagent_tool_memory">记忆</string>
  <string name="subagent_tool_spawn">子代理</string>
+ <!-- [T-a11y-cd-labels] -->
+ <string name="cd_browser_screenshot">浏览器截图</string>
+ <string name="cd_withdraw_queued_message">撤回排队中的消息</string>
+ <string name="cd_image_attachment">图片附件</string>
+ <string name="cd_play_video">播放视频</string>
+ <string name="cd_copy_code">复制代码</string>
 </resources>
