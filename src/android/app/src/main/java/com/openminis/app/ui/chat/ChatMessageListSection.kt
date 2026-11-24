@@ -536,7 +536,14 @@ private fun MessageUsageFooterLine(stats: MessageUsageStats) {
         stringResource(R.string.chat_usage_footer_cache, (stats.cacheHitRatio * 100).toInt())
     } else null
     val speedPart = stats.outputTokensPerSecond?.let { "$it tok/s" }
-    val parts = listOfNotNull(tokensPart, cachePart, speedPart)
+    // [T-thinking-tokens-only] The gateway billed reasoning tokens but streamed
+    // no reasoning body, so the process card has nothing to show. Say it in the
+    // metadata line the user already reads for token counts, so "thinking is
+    // invisible" reads as a provider fact rather than as a broken app.
+    val reasoningPart = if (stats.hasReasoningWithoutText) {
+        stringResource(R.string.chat_usage_footer_reasoning, stats.reasoningTokens)
+    } else null
+    val parts = listOfNotNull(tokensPart, cachePart, speedPart, reasoningPart)
     Text(
         text = parts.joinToString(" · "),
         fontSize = 11.sp,

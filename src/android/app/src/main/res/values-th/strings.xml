@@ -3387,4 +3387,5 @@
  <string name="cd_image_attachment">ไฟล์แนบรูปภาพ</string>
  <string name="cd_play_video">เล่นวิดีโอ</string>
  <string name="cd_copy_code">คัดลอกโค้ด</string>
+ <string name="chat_usage_footer_reasoning">โทเค็นการคิด %1$d รายการ (ไม่ได้ส่งเนื้อหา)</string>
 </resources>

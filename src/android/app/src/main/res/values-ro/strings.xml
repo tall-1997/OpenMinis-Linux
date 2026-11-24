@@ -3391,4 +3391,5 @@
  <string name="cd_image_attachment">Fișier imagine atașat</string>
  <string name="cd_play_video">Redă videoclipul</string>
  <string name="cd_copy_code">Copiază codul</string>
+ <string name="chat_usage_footer_reasoning">%1$d tokeni de raționament (textul nu este transmis)</string>
 </resources>

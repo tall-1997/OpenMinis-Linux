@@ -3386,4 +3386,5 @@
  <string name="cd_image_attachment">画像の添付ファイル</string>
  <string name="cd_play_video">動画を再生</string>
  <string name="cd_copy_code">コードをコピー</string>
+ <string name="chat_usage_footer_reasoning">思考 %1$dトークン（本文は返されません）</string>
 </resources>

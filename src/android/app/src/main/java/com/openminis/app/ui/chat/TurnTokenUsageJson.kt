@@ -36,6 +36,9 @@ internal fun buildTurnTokenUsageJson(
         put("cacheCreationTokens", usage.cacheCreationInputTokens ?: 0)
         put("cacheReadTokens", usage.cacheReadInputTokens ?: 0)
         put("latestContextTokens", usage.latestContextTokens)
+ // [T-thinking-tokens-only] Count only; a provider that also streams
+ // reasoning text gets its body from the thinking block instead.
+ usage.reasoningTokens?.let { put("reasoningTokens", it) }
         streamDurationMs?.let { put("streamDurationMs", it) }
         thinkingUsage?.let {
             put("thinkingLevelRequested", it.requested)

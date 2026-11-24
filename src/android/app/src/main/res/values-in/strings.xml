@@ -3392,4 +3392,5 @@
  <string name="cd_image_attachment">Lampiran gambar</string>
  <string name="cd_play_video">Putar video</string>
  <string name="cd_copy_code">Salin kode</string>
+ <string name="chat_usage_footer_reasoning">%1$d token penalaran (teks tidak dikirim)</string>
 </resources>

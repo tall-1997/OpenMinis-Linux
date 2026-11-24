@@ -3394,4 +3394,5 @@
  <string name="cd_image_attachment">Załącznik obrazu</string>
  <string name="cd_play_video">Odtwórz film</string>
  <string name="cd_copy_code">Kopiuj kod</string>
+ <string name="chat_usage_footer_reasoning">%1$d tokenów rozumowania (treść nieprzesłana)</string>
 </resources>

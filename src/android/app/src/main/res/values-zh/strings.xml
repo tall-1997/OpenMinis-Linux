@@ -3016,4 +3016,5 @@
  <string name="cd_image_attachment">图片附件</string>
  <string name="cd_play_video">播放视频</string>
  <string name="cd_copy_code">复制代码</string>
+ <string name="chat_usage_footer_reasoning">思考 %1$d tokens（未返回正文）</string>
 </resources>

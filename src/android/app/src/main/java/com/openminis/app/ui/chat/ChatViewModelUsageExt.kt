@@ -34,6 +34,15 @@ internal data class MessageUsageStats(
     val cacheReadTokens: Int,
     val cacheCreationTokens: Int,
     val streamDurationMs: Long? = null,
+ /**
+ * [T-thinking-tokens-only] Reasoning tokens billed for this reply. Shown in
+ * the footer ONLY when the reply carries no thinking text: a gateway that
+ * reasons server-side but strips the reasoning body otherwise looks like a
+ * model that never thought at all.
+ */
+    val reasoningTokens: Int =0,
+    /** False when the reply has no readable thinking block (see the join site). */
+    val thinkingTextShown: Boolean = true,
 ) {
     val promptTotalTokens: Int get() = inputTokens + cacheReadTokens + cacheCreationTokens
 
@@ -42,6 +51,10 @@ internal data class MessageUsageStats(
 
     /** True when the row carries anything worth rendering. */
     val hasData: Boolean get() = inputTokens > 0 || outputTokens > 0 || hasCacheData
+
+    /** [T-thinking-tokens-only] Billed reasoning with no readable thinking body. */
+    val hasReasoningWithoutText: Boolean
+        get() = reasoningTokens >0 && !thinkingTextShown
 
     /** 0.0..1.0 — cached fraction of the prompt; 0 when there is no data. */
     val cacheHitRatio: Float
@@ -57,6 +70,8 @@ internal data class MessageUsageStats(
         outputTokens = outputTokens + other.outputTokens,
         cacheReadTokens = cacheReadTokens + other.cacheReadTokens,
         cacheCreationTokens = cacheCreationTokens + other.cacheCreationTokens,
+        reasoningTokens = reasoningTokens + other.reasoningTokens,
+        thinkingTextShown = thinkingTextShown && other.thinkingTextShown,
         // Sum only when every merged row carried a window — one missing window
         // would otherwise divide summed tokens by a partial duration.
         streamDurationMs = if (streamDurationMs != null && other.streamDurationMs != null) {
@@ -80,7 +95,8 @@ internal data class MessageUsageStats(
                     outputTokens = obj.optInt("outputTokens", 0),
                     cacheReadTokens = obj.optInt("cacheReadTokens", 0),
                     cacheCreationTokens = obj.optInt("cacheCreationTokens", 0),
-                    streamDurationMs = obj.optLong("streamDurationMs", 0L).takeIf { it > 0L },
+                    streamDurationMs = obj.optLong("streamDurationMs",0L).takeIf { it >0L },
+                    reasoningTokens = obj.optInt("reasoningTokens",0),
                 )
             } catch (_: Exception) {
                 null
@@ -164,13 +180,23 @@ internal fun computeUsageFooterRows(
 ): Map<String, MessageUsageStats> {
     if (usageByMessageId.isEmpty() || flatItems.isEmpty()) return emptyMap()
     val lastKeyByMessage = HashMap<String, String>()
+    // [T-thinking-tokens-only] Which replies actually SHOW a non-blank thinking
+    // block. A billed `reasoning_tokens` count with none of them is exactly the
+    // "gateway reasoned but stripped the body" case the footer must explain.
+    val thinkingShownIds = HashSet<String>()
     for (item in flatItems) {
         val messageId = FlatKeys.parse(item.key)?.messageId ?: continue
         lastKeyByMessage[messageId] = item.key
+        if (item is FlatChatItem.AssistantThinking && item.block.content.isNotBlank()) {
+            thinkingShownIds += messageId
+        }
     }
     val out = HashMap<String, MessageUsageStats>()
     for ((messageId, stats) in usageByMessageId) {
-        lastKeyByMessage[messageId]?.let { out[it] = stats }
+        lastKeyByMessage[messageId]?.let { key ->
+            out[key] = stats.copy(thinkingTextShown = messageId in thinkingShownIds)
+        }
     }
     return out
 }
+

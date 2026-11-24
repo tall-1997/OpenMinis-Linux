@@ -15,4 +15,14 @@ data class LLMUsage(
      * Mirrors iOS's latestContextTokens.
      */
     val latestContextTokens: Int = 0,
+
+    /**
+     * [T-thinking-tokens-only] Reasoning tokens the provider BILLED for this
+     * call. Some OpenAI-compatible gateways reason server-side but strip the
+     * reasoning text from the stream - observably `reasoning_tokens` above zero
+     * with zero reasoning content. Recording the count lets the UI say
+     * "reasoned, text not returned" instead of looking like the model never
+     * thought. Null = the provider reported no such counter.
+     */
+    val reasoningTokens: Int? = null,
 )

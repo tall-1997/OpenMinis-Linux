@@ -3387,4 +3387,5 @@
  <string name="cd_image_attachment">Görsel eki</string>
  <string name="cd_play_video">Videoyu oynat</string>
  <string name="cd_copy_code">Kodu kopyala</string>
+ <string name="chat_usage_footer_reasoning">%1$d akıl yürütme tokenı (metin gönderilmedi)</string>
 </resources>

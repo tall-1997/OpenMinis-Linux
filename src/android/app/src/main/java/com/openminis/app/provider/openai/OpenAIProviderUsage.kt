@@ -29,6 +29,8 @@ internal fun OpenAIProvider.parseChatCompletionsUsage(usage: JSONObject): LLMUsa
         outputTokens = usage.optInt("completion_tokens", 0),
         cacheReadInputTokens = cacheRead,
         latestContextTokens = promptTokens,
+            reasoningTokens = usage.optJSONObject("completion_tokens_details")
+            ?.optInt("reasoning_tokens")?.takeIf { it >0 },
     )
 }
 
@@ -53,5 +55,7 @@ internal fun OpenAIProvider.parseResponsesAPIUsage(usage: JSONObject): LLMUsage 
         outputTokens = usage.optInt("output_tokens", 0),
         cacheReadInputTokens = cacheRead,
         latestContextTokens = inputTokens,
+            reasoningTokens = usage.optJSONObject("output_tokens_details")
+            ?.optInt("reasoning_tokens")?.takeIf { it >0 },
     )
 }
