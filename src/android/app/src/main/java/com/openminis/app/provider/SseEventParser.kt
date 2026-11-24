@@ -96,8 +96,17 @@ internal fun ssePayloads(
             throw e
         } ?: break
         val event = parser.feed(line) ?: continue
-        if (event.data.isNotEmpty()) yield(event.data)
+        if (event.data.isNotEmpty()) {
+            // [T-thinking-raw-sse] Record the RAW event text when tracing is on: the
+            // decoded-chunk trace cannot tell "the endpoint sent no reasoning" from
+            // "it sent reasoning in a field we do not parse".
+            StreamTraceRecorder.recordRawSse(event.data)
+            yield(event.data)
+        }
     }
     val tail = parser.finish() ?: return@sequence
-    if (tail.data.isNotEmpty()) yield(tail.data)
+    if (tail.data.isNotEmpty()) {
+        StreamTraceRecorder.recordRawSse(tail.data)
+        yield(tail.data)
+    }
 }
