@@ -548,7 +548,11 @@ object SystemPromptBuilder {
      * sentence alone is the safe fallback when SOUL.md is missing or
      * empty, matching pre-SOUL behavior.
      */
-    fun identitySection(context: Context): String {
+    fun identitySection(
+        context: Context,
+        providerInstanceId: String? = null,
+        sessionId: String? = null,
+    ): String {
         val file = SoulStore.load(context)
         val name = (file?.metadata?.name ?: SoulMetadata.DEFAULT.name)
             .trim()
@@ -582,8 +586,11 @@ object SystemPromptBuilder {
             return "\n\nResponse style (from SOUL.md `style` — apply to every reply unless the user explicitly asks otherwise; if it prescribes a reply language, it overrides the default match-the-user's-language rule):\n$s"
         }
 
-        val body = file?.body
-        val trimmed = body?.trim().orEmpty()
+        // [persona-import] The persona library resolves per-session →
+        // per-provider → global → builtin (SOUL.md), so an imported persona
+        // file can win without modifying SOUL.md itself.
+        val resolved = PersonaPromptLibrary.resolve(context, providerInstanceId, sessionId)
+        val trimmed = resolved.body.trim()
         if (trimmed.isEmpty()) {
             return identityTrimmed + styleBlock(style) + "\n\n" + soulEditHint + "\n\n"
         }
@@ -591,11 +598,12 @@ object SystemPromptBuilder {
         // [persona-unlimited] No length cap, no truncation — inject the body
         // verbatim. isOverLimit() is a pass-through Ok now.
         val personality = scrubInjections(trimmed)
+        val sourceLabel = resolved.fileName.ifBlank { PersonaPromptLogic.BUILTIN_FILE_NAME }
 
         // Strip the trailing space we'd otherwise leave hanging at the
         // end of the first paragraph when a personality block follows.
         return identityTrimmed +
-            "\n\nPersonality (from SOUL.md — your character and voice; defer to the user's latest message when it conflicts with anything here):\n" +
+            "\n\nPersonality (from $sourceLabel — voice and stance only. It stacks on the instructions above and does not replace them, the tools, or the user's latest message. Earlier assistant replies are history; do not copy an old voice, and do not resume an old task from this persona):\n" +
             personality +
             styleBlock(style) +
             "\n\n" +

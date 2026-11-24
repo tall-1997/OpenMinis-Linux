@@ -1,6 +1,8 @@
 package com.openminis.app.ui.settings
 
 import android.graphics.BitmapFactory
+import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -18,27 +20,33 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,18 +57,27 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openminis.app.R
+import com.openminis.app.agent.PersonaImportConflictKind
+import com.openminis.app.agent.PersonaImportError
+import com.openminis.app.agent.PersonaImportPreview
+import com.openminis.app.agent.PersonaImportResult
+import com.openminis.app.agent.PersonaPromptEntry
+import com.openminis.app.agent.PersonaPromptLibrary
+import com.openminis.app.agent.PersonaPromptLogic
 import com.openminis.app.ui.components.MinisButton
 import com.openminis.app.ui.components.MinisOutlinedButton
 import com.openminis.app.ui.components.MinisTextButton
@@ -78,8 +95,8 @@ import kotlinx.coroutines.withContext
 /**
  * [T-soul-md] Settings page for editing SOUL.md. Mirrors iOS
  * `SoulSettingsView` (commit 6370d5a):
- *   - Header preview card showing `鉁?[name]` + `[style]` (emoji is
- *     locked to 鉁? the editable emoji field was removed to keep
+ *   - Header preview card showing `✨ [name]` + `[style]` (emoji is
+ *     locked to ✨; the editable emoji field was removed to keep
  *     identity surface consistent across the app)
  *   - Identity fields: name, style, lang (Auto / Chinese / English)
  *   - Personality prompt (multiline) with soft-warning + hard-truncate
@@ -91,7 +108,10 @@ import kotlinx.coroutines.withContext
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SoulSettingsScreen(onBack: () -> Unit) {
+fun SoulSettingsScreen(
+    onBack: () -> Unit,
+    providerRepository: com.openminis.app.data.repository.ProviderRepository,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -104,8 +124,8 @@ fun SoulSettingsScreen(onBack: () -> Unit) {
     var saveError by remember { mutableStateOf<String?>(null) }
     // Preserve the raw `emoji` field exactly as it appears in SOUL.md so
     // Save round-trips without clobbering a value the user may have set
-    // on another device (or an older build). Not surfaced in the UI 鈥?
-    // the identity emoji shown to the user is locked to 鉁?everywhere
+    // on another device (or an older build). Not surfaced in the UI —
+    // the identity emoji shown to the user is locked to ✨ everywhere
     // (see [SoulMetadata.displayEmoji]).
     var preservedEmoji by remember { mutableStateOf(SoulMetadata.DEFAULT.emoji) }
     // [T-android-soul-custom-icon] The user-settable identity icon: an emoji
@@ -115,18 +135,37 @@ fun SoulSettingsScreen(onBack: () -> Unit) {
     var showEmojiSheet by remember { mutableStateOf(false) }
     var iconError by remember { mutableStateOf<String?>(null) }
 
+    // [persona-import] Persona prompt library state: which prompt file is
+    // being edited, an in-flight import (preview awaiting conflict verdict),
+    // and the entry pending delete confirmation.
+    var editingPromptId by remember { mutableStateOf<String?>(null) }
+    var importError by remember { mutableStateOf<String?>(null) }
+    var pendingImport by remember { mutableStateOf<PersonaImportPreview.Ready?>(null) }
+    var pendingDelete by remember { mutableStateOf<PersonaPromptEntry?>(null) }
+    // [persona-unlimited] Restore Default defers the body write to Save so a
+    // discarded editor never clobbers the persona file on disk.
+    var pendingRestoreBody by remember { mutableStateOf<String?>(null) }
+    val promptRevision by PersonaPromptLibrary.revision.collectAsState()
+    val providerConfig by providerRepository.config.collectAsState()
+    var promptIndex by remember { mutableStateOf(PersonaPromptLogic.emptyIndex()) }
+    LaunchedEffect(promptRevision) {
+        promptIndex = withContext(Dispatchers.IO) {
+            PersonaPromptLibrary.loadIndex(context)
+        }
+    }
+
     // [T-android-soul-save-in-appbar] What was loaded from disk, kept so
     // "has the user changed anything" is a comparison rather than a flag.
     //
     // A boolean set by every onValueChange would report dirty after a round
     // trip that lands back on the original text (type a character, delete it),
     // and would need a reset at each of the several places state is
-    // reassigned 鈥?the load, the restore-default, and the save itself. A
+    // reassigned — the load, the restore-default, and the save itself. A
     // snapshot compared by value cannot drift out of sync with the fields.
     var baseline by remember { mutableStateOf<SoulFile?>(null) }
 
-    // [T-android-soul-custom-icon] Image import: decode 鈫?reject opaque 鈫?
-    // centre-crop 鈫?96px 鈫?PNG 鈫?base64 data URI. Runs off the main thread
+    // [T-android-soul-custom-icon] Image import: decode → reject opaque →
+    // centre-crop → 96px → PNG → base64 data URI. Runs off the main thread
     // because a full-resolution camera photo is expensive to decode and scan.
     val iconUnreadableMsg = stringResource(R.string.soul_icon_error_unreadable)
     val iconTooLargeMsg = stringResource(R.string.soul_icon_error_too_large)
@@ -192,10 +231,72 @@ fun SoulSettingsScreen(onBack: () -> Unit) {
         loaded = true
     }
 
-    // Language-aware length check used by both the editor counter and the
-    // Save button's enabled state. See [SoulStore.isOverLimit] for the rule.
-    val bodyLimitCheck by remember(body) { derivedStateOf { SoulStore.isOverLimit(body) } }
+    // [persona-import] File import flow: SAF picker → preview (type / size /
+    // conflict check) → either commit straight away or ask the user about a
+    // name conflict. Commit runs on IO; the revision flow refreshes the
+    // dropdowns via promptRevision above.
+    val importUnsupportedMsg = stringResource(R.string.soul_prompt_import_bad_type)
+    val importEmptyMsg = stringResource(R.string.soul_prompt_import_empty)
+    val importTooLargeMsg = stringResource(R.string.soul_prompt_import_too_large)
+    val importUnreadableMsg = stringResource(R.string.soul_prompt_import_unreadable)
+    suspend fun commitPromptImport(
+        ready: PersonaImportPreview.Ready,
+        overwrite: Boolean,
+    ) {
+        val result = withContext(Dispatchers.IO) {
+            PersonaPromptLibrary.commitPrepared(
+                context,
+                ready.fileName,
+                ready.body,
+                overwrite = overwrite && ready.conflict.canOverwrite,
+            )
+        }
+        when (result) {
+            is PersonaImportResult.Success -> {
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.soul_prompt_import_ok, result.entry.fileName),
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+            is PersonaImportResult.Failure -> importError = when (result.reason) {
+                PersonaImportError.BAD_TYPE -> importUnsupportedMsg
+                PersonaImportError.EMPTY -> importEmptyMsg
+                PersonaImportError.TOO_LARGE -> importTooLargeMsg
+                PersonaImportError.UNREADABLE -> importUnreadableMsg
+            }
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val preview = withContext(Dispatchers.IO) {
+                PersonaPromptLibrary.previewImport(context, uri)
+            }
+            when (preview) {
+                is PersonaImportPreview.Failure -> importError = when (preview.reason) {
+                    PersonaImportError.BAD_TYPE -> importUnsupportedMsg
+                    PersonaImportError.EMPTY -> importEmptyMsg
+                    PersonaImportError.TOO_LARGE -> importTooLargeMsg
+                    PersonaImportError.UNREADABLE -> importUnreadableMsg
+                }
+                is PersonaImportPreview.Ready -> {
+                    if (preview.conflict.kind == PersonaImportConflictKind.NONE) {
+                        commitPromptImport(preview, overwrite = false)
+                    } else {
+                        pendingImport = preview
+                    }
+                }
+            }
+        }
+    }
 
+    // [persona-import] This screen edits identity only (name / style / lang /
+    // icon). The persona body lives in the prompt library — edited per file in
+    // SoulPromptEditorScreen — so Save preserves whatever body is on disk
+    // (or the pending restore-default body) instead of writing a stale copy.
     val currentFile = SoulFile(
         metadata = SoulMetadata(
             name = name.ifBlank { SoulMetadata.DEFAULT.name },
@@ -204,15 +305,28 @@ fun SoulSettingsScreen(onBack: () -> Unit) {
             style = style,
             lang = lang.ifBlank { SoulMetadata.DEFAULT.lang },
         ),
-        body = body,
+        body = pendingRestoreBody ?: body,
     )
-    val isDirty = loaded && baseline != null && currentFile != baseline
+    val isDirty = loaded && baseline != null && (
+        currentFile.metadata != baseline?.metadata || pendingRestoreBody != null
+    )
     var showDiscardDialog by remember { mutableStateOf(false) }
 
     val save: () -> Unit = {
         scope.launch {
             try {
-                withContext(Dispatchers.IO) { SoulStore.save(context, currentFile) }
+                val snapshot = currentFile
+                withContext(Dispatchers.IO) {
+                    val diskBody = if (snapshot.body == body && pendingRestoreBody == null) {
+                        // Identity-only change: keep whatever body the file
+                        // holds right now (a prompt editor may have written it
+                        // since this screen loaded).
+                        SoulStore.load(context)?.body.orEmpty()
+                    } else {
+                        snapshot.body
+                    }
+                    SoulStore.save(context, snapshot.copy(body = diskBody))
+                }
                 onBack()
             } catch (t: Throwable) {
                 saveError = t.message ?: "save failed"
@@ -229,6 +343,16 @@ fun SoulSettingsScreen(onBack: () -> Unit) {
     }
     BackHandler(enabled = isDirty) { showDiscardDialog = true }
 
+    // [persona-import] A prompt file is open in the full-screen editor: it
+    // owns the back stack until the user closes it.
+    if (editingPromptId != null) {
+        SoulPromptEditorScreen(
+            promptId = editingPromptId!!,
+            onBack = { editingPromptId = null },
+        )
+        return
+    }
+
     SettingsScaffold(
         title = stringResource(R.string.soul_settings_title),
         onBack = attemptBack,
@@ -238,7 +362,7 @@ fun SoulSettingsScreen(onBack: () -> Unit) {
             // (long) prompt editor to the bottom.
             MinisTextButton(
                 onClick = save,
-                enabled = loaded && isDirty && !bodyLimitCheck.isOverLimit,
+                enabled = loaded && isDirty,
             ) { Text(stringResource(R.string.soul_save)) }
         },
     ) {
@@ -252,7 +376,7 @@ fun SoulSettingsScreen(onBack: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 // [T-android-soul-custom-icon] A bare glyph does not read as
-                // tappable 鈥?reported on iOS review 鈥?so the icon sits on a
+                // tappable — reported on iOS review — so the icon sits on a
                 // filled circle with a hairline border and a pencil badge.
                 // The circle doubles as the backdrop for transparent PNGs,
                 // which by definition have no background of their own.
@@ -335,8 +459,8 @@ fun SoulSettingsScreen(onBack: () -> Unit) {
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(8.dp))
-                // Emoji field intentionally removed 鈥?identity emoji is
-                // locked to 鉁? only name / style / lang are editable.
+                // Emoji field intentionally removed — identity emoji is
+                // locked to ✨; only name / style / lang are editable.
                 OutlinedTextField(
                     value = style,
                     onValueChange = { style = it },
@@ -349,37 +473,80 @@ fun SoulSettingsScreen(onBack: () -> Unit) {
             }
         }
 
+        // [persona-import] The personality body is managed as a library of
+        // persona files: the builtin SOUL.md plus anything the user imports.
+        // Body editing happens in SoulPromptEditorScreen, opened from the
+        // file row below.
+        val selectedPrompt = promptIndex.prompts.find { it.id == promptIndex.selectedId }
+            ?: PersonaPromptLogic.builtinEntry()
         SettingsSection(
             header = stringResource(R.string.soul_section_personality),
             footer = stringResource(R.string.soul_personality_footer),
         ) {
-            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                // [T-android-editor-keyboard-overlap] The page scrolls and
-                // pads for the keyboard (SettingsScaffold); this field asks
-                // it to keep the caret's line in view, not just the field.
-                com.openminis.app.ui.components.DocumentEditorField(
-                    value = body,
-                    onValueChange = { body = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(
-                        fontFamily = FontFamily.Monospace,
-                    ),
-                    placeholder = stringResource(R.string.soul_body_placeholder),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                    outlined = true,
-                    ownScroll = false,
-                    minHeight = 240.dp,
+            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                SoulPromptFileRow(
+                    fileName = selectedPrompt.fileName,
+                    onOpen = { editingPromptId = selectedPrompt.id },
+                    onImport = {
+                        importLauncher.launch(
+                            arrayOf(
+                                "text/plain",
+                                "text/markdown",
+                                "text/x-markdown",
+                                "*/*",
+                            ),
+                        )
+                    },
                 )
-                Spacer(Modifier.height(6.dp))
-                // [persona-unlimited] No length state to track 鈥?the editor
-                // shows a plain count; isOverLimit() is a pass-through Ok so
-                // the over-limit branches below are unreachable.
-                val indicatorText: String = soulBodyCountTextAndroid(body)
-                Text(
-                    text = indicatorText,
-                    fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                SoulPromptDropdown(
+                    label = stringResource(R.string.soul_prompt_select),
+                    prompts = promptIndex.prompts,
+                    selectedId = selectedPrompt.id,
+                    onSelect = { id ->
+                        scope.launch(Dispatchers.IO) {
+                            PersonaPromptLibrary.setSelected(context, id)
+                        }
+                    },
+                    onDelete = { pendingDelete = it },
                 )
+            }
+        }
+
+        // [persona-import] Per-provider persona: an instance can pin its own
+        // persona file, or follow the global selection.
+        val instances = providerConfig.instances
+        if (instances.isNotEmpty()) {
+            SettingsSection(
+                header = stringResource(R.string.soul_section_provider_prompts),
+                footer = stringResource(R.string.soul_provider_prompts_footer),
+            ) {
+                Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                    instances.forEachIndexed { index, instance ->
+                        val mapped = promptIndex.providerSelections[instance.id]
+                        val label = instance.label.ifBlank { instance.providerType.displayName }
+                        SoulPromptDropdown(
+                            label = label,
+                            prompts = promptIndex.prompts,
+                            selectedId = mapped ?: PersonaPromptLogic.FOLLOW_DEFAULT,
+                            onSelect = { id ->
+                                scope.launch(Dispatchers.IO) {
+                                    PersonaPromptLibrary.setProviderPrompt(
+                                        context,
+                                        instance.id,
+                                        id.takeIf { it.isNotBlank() },
+                                    )
+                                }
+                            },
+                            onDelete = { pendingDelete = it },
+                            followDefaultLabel = stringResource(
+                                R.string.soul_prompt_follow_default,
+                                selectedPrompt.fileName,
+                            ),
+                            leadingGlyph = true,
+                            showDivider = index < instances.lastIndex,
+                        )
+                    }
+                }
             }
         }
 
@@ -405,11 +572,11 @@ fun SoulSettingsScreen(onBack: () -> Unit) {
     //
     // Each button leads with the verdict and then names the consequence
     // ("OK, discard" / "Cancel, keep editing"), so the row scans correctly
-    // whether the user reads the leading word or the trailing one 鈥?a bare
+    // whether the user reads the leading word or the trailing one — a bare
     // "Discard"/"Keep editing" pair reads fine but gives no cue about which
     // side is the safe one.
     //
-    // Dismissing the dialog by tapping outside keeps the edits 鈥?the
+    // Dismissing the dialog by tapping outside keeps the edits — the
     // conservative reading of an ambiguous gesture.
     if (showDiscardDialog) {
         AlertDialog(
@@ -443,12 +610,108 @@ fun SoulSettingsScreen(onBack: () -> Unit) {
                     icon = parsed.metadata.icon
                     style = parsed.metadata.style
                     lang = parsed.metadata.lang
-                    body = parsed.body
+                    // [persona-unlimited] The body write is deferred to Save
+                    // (pendingRestoreBody) so backing out of the screen never
+                    // rewrites the persona file the user may have imported.
+                    pendingRestoreBody = parsed.body
                     showRestoreDialog = false
                 }) { Text(stringResource(R.string.soul_restore_default)) }
             },
             dismissButton = {
                 MinisOutlinedButton(onClick = { showRestoreDialog = false }) {
+                    Text(stringResource(R.string.soul_cancel))
+                }
+            },
+        )
+    }
+
+    // [persona-import] Import failures explain themselves in one dialog.
+    importError?.let { err ->
+        AlertDialog(
+            onDismissRequest = { importError = null },
+            title = { Text(stringResource(R.string.soul_prompt_import_error_title)) },
+            text = { Text(err) },
+            confirmButton = {
+                MinisTextButton(onClick = { importError = null }) {
+                    Text(stringResource(R.string.soul_ok))
+                }
+            },
+        )
+    }
+
+    // [persona-import] Name conflict: same-name different-content asks for an
+    // overwrite verdict; identical content only offers "close".
+    pendingImport?.let { ready ->
+        val sameContent = ready.conflict.kind == PersonaImportConflictKind.SAME_CONTENT
+        AlertDialog(
+            onDismissRequest = { pendingImport = null },
+            text = {
+                Text(
+                    stringResource(
+                        if (sameContent) {
+                            R.string.soul_prompt_import_same_content
+                        } else {
+                            R.string.soul_prompt_import_same_name
+                        },
+                        ready.conflict.existingName,
+                    ),
+                )
+            },
+            confirmButton = {
+                MinisTextButton(onClick = {
+                    val snapshot = ready
+                    pendingImport = null
+                    scope.launch {
+                        commitPromptImport(
+                            snapshot,
+                            overwrite = !sameContent && snapshot.conflict.canOverwrite,
+                        )
+                    }
+                }) {
+                    Text(
+                        stringResource(
+                            if (sameContent) R.string.soul_prompt_import_confirm
+                            else R.string.soul_prompt_overwrite_confirm,
+                        ),
+                    )
+                }
+            },
+            dismissButton = {
+                MinisTextButton(onClick = {
+                    val snapshot = ready
+                    pendingImport = null
+                    if (!sameContent) {
+                        scope.launch { commitPromptImport(snapshot, overwrite = false) }
+                    }
+                }) {
+                    Text(
+                        stringResource(
+                            if (sameContent) R.string.soul_cancel
+                            else R.string.soul_prompt_import_suffix,
+                        ),
+                    )
+                }
+            },
+        )
+    }
+
+    // [persona-import] Delete confirmation for imported persona files.
+    pendingDelete?.takeIf { !it.builtin }?.let { entry ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text(stringResource(R.string.soul_prompt_delete_title)) },
+            text = { Text(stringResource(R.string.soul_prompt_delete_body, entry.fileName)) },
+            confirmButton = {
+                MinisTextButton(onClick = {
+                    val id = entry.id
+                    pendingDelete = null
+                    scope.launch(Dispatchers.IO) {
+                        PersonaPromptLibrary.deleteImported(context, id)
+                    }
+                }) { Text(stringResource(R.string.soul_prompt_delete)) }
+            },
+            dismissButton = {
+                MinisTextButton(onClick = { pendingDelete = null }) {
                     Text(stringResource(R.string.soul_cancel))
                 }
             },
@@ -468,7 +731,7 @@ fun SoulSettingsScreen(onBack: () -> Unit) {
 
     // [T-android-soul-custom-icon] Image rejection is explained after the
     // fact here. There is no longer a transparency requirement to state up
-    // front 鈥?any image is accepted (see soul_icon_image_hint) 鈥?so the only
+    // front — any image is accepted (see soul_icon_image_hint) — so the only
     // remaining rejections are "couldn't be read" and "too large", neither of
     // which can be predicted before the user picks a file.
     iconError?.let { err ->
@@ -496,7 +759,7 @@ fun SoulSettingsScreen(onBack: () -> Unit) {
  * everywhere it appears: a decoded bitmap, an emoji, or the default sparkle.
  *
  * The bitmap decode is `remember`ed on the icon string. Without that, the
- * chat header would re-decode base64 on every recomposition 鈥?and headers
+ * chat header would re-decode base64 on every recomposition — and headers
  * recompose on every streaming tick.
  */
 @Composable
@@ -510,7 +773,7 @@ internal fun SoulIconGlyph(
     when {
         // Rounded rectangle, NOT a circle: at 18dp in the chat header a circle
         // eats the corners of a small avatar. Clipping here is also what makes
-        // an opaque image acceptable at all 鈥?the refusal that used to guard
+        // an opaque image acceptable at all — the refusal that used to guard
         // against "opaque rectangle reads as a broken tile" was a presentation
         // concern, and this is the presentation fix.
         bitmap != null -> Image(
@@ -671,11 +934,11 @@ private fun SoulEmojiPickerSheet(
     }
 }
 
-/// Render the within-budget counter 鈥?picks the CJK character unit vs "words" depending on
+/// Render the within-budget counter — picks the CJK character unit vs "words" depending on
 /// the same CJK ratio rule that decides which cap applies. Standalone
 /// helper so it stays out of the Composable hot-path's expression budget.
 @Composable
-private fun soulBodyCountTextAndroid(body: String): String {
+internal fun soulBodyCountTextAndroid(body: String): String {
     val trimmed = body.trim()
     if (trimmed.isEmpty()) return stringResource(R.string.soul_count_zero)
     var cjk = 0
@@ -694,7 +957,7 @@ private fun soulBodyCountTextAndroid(body: String): String {
         i += Character.charCount(cp)
     }
     val ratio = if (total > 0) cjk.toDouble() / total else 0.0
-    // [persona-unlimited] Pure count display 鈥?no cap referenced.
+    // [persona-unlimited] Pure count display — no cap referenced.
     return if (ratio > SoulStore.CJK_RATIO_THRESHOLD) {
         val chars = trimmed.codePointCount(0, trimmed.length)
         stringResource(R.string.soul_count_plain_chars, chars)
@@ -723,7 +986,7 @@ private fun LangPicker(lang: String, onLangChange: (String) -> Unit) {
     val current = options.firstOrNull { it.first == lang } ?: options.first()
     var expanded by remember { mutableStateOf(false) }
     // Render the picker as a simple labeled row of buttons. Three options
-    // (auto / Chinese / English) fit comfortably without a dropdown 鈥?avoids
+    // (auto / Chinese / English) fit comfortably without a dropdown — avoids
     // depending on material3 ExposedDropdownMenu, which has a fragile
     // alignment story across compose versions.
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -757,4 +1020,175 @@ private fun LangPicker(lang: String, onLangChange: (String) -> Unit) {
         }
     }
     expanded // suppress unused-var warning
+}
+
+// -- [persona-import] Persona prompt library UI ----------------------------
+
+@Composable
+private fun SoulPromptFileRow(
+    fileName: String,
+    onOpen: () -> Unit,
+    onImport: () -> Unit,
+) {
+    val muted = MaterialTheme.colorScheme.onSurfaceVariant
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onOpen)
+            .padding(start = 14.dp, end = 6.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.Filled.Edit,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(18.dp),
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = fileName,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = stringResource(R.string.soul_prompt_tap_to_edit),
+                style = MaterialTheme.typography.bodySmall,
+                color = muted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        val importCd = stringResource(R.string.soul_prompt_import)
+        IconButton(
+            onClick = onImport,
+            modifier = Modifier.semantics { contentDescription = importCd },
+        ) {
+            Icon(
+                Icons.Filled.Add,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        }
+        Icon(
+            Icons.Filled.ChevronRight,
+            contentDescription = null,
+            tint = muted.copy(alpha = 0.7f),
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(8.dp))
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SoulPromptDropdown(
+    label: String,
+    prompts: List<PersonaPromptEntry>,
+    selectedId: String,
+    onSelect: (String) -> Unit,
+    onDelete: ((PersonaPromptEntry) -> Unit)? = null,
+    followDefaultLabel: String? = null,
+    leadingGlyph: Boolean = false,
+    showDivider: Boolean = false,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedName = when {
+        selectedId.isBlank() || selectedId == PersonaPromptLogic.FOLLOW_DEFAULT ->
+            followDefaultLabel ?: prompts.firstOrNull()?.fileName.orEmpty()
+        else -> prompts.find { it.id == selectedId }?.fileName
+            ?: followDefaultLabel
+            ?: prompts.firstOrNull()?.fileName.orEmpty()
+    }
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (leadingGlyph) {
+                Icon(
+                    Icons.Filled.AutoAwesome,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+            }
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = it },
+                modifier = Modifier.weight(1f),
+            ) {
+                OutlinedTextField(
+                    value = selectedName,
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text(label) },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
+                    modifier = Modifier
+                        .menuAnchor(MenuAnchorType.PrimaryNotEditable)
+                        .fillMaxWidth(),
+                    singleLine = true,
+                )
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false },
+                ) {
+                    if (followDefaultLabel != null) {
+                        DropdownMenuItem(
+                            text = { Text(followDefaultLabel) },
+                            onClick = {
+                                onSelect(PersonaPromptLogic.FOLLOW_DEFAULT)
+                                expanded = false
+                            },
+                        )
+                    }
+                    prompts.forEach { prompt ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    prompt.fileName,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            },
+                            onClick = {
+                                onSelect(prompt.id)
+                                expanded = false
+                            },
+                            trailingIcon = if (!prompt.builtin && onDelete != null) {
+                                {
+                                    IconButton(
+                                        onClick = {
+                                            expanded = false
+                                            onDelete(prompt)
+                                        },
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.Delete,
+                                            contentDescription = stringResource(R.string.soul_prompt_delete),
+                                        )
+                                    }
+                                }
+                            } else {
+                                null
+                            },
+                        )
+                    }
+                }
+            }
+        }
+        if (showDivider) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 14.dp, end = 14.dp)
+                    .height(0.5.dp)
+                    .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+            )
+        }
+    }
 }

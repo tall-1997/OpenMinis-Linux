@@ -1432,6 +1432,7 @@ fun AppNavigation(
         composable(Routes.SOUL) {
             com.openminis.app.ui.settings.SoulSettingsScreen(
                 onBack = { navController.safePopBackStack() },
+                providerRepository = providerRepository,
             )
         }
 
