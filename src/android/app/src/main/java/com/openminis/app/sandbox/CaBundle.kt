@@ -1,6 +1,5 @@
 package com.openminis.app.sandbox
 
-import com.openminis.app.util.Digest
 import java.io.File
 import java.util.Base64
 
@@ -18,8 +17,12 @@ object CaBundle {
         "-----BEGIN CERTIFICATE-----\\s+([A-Za-z0-9+/=\r\n]+)\\s+-----END CERTIFICATE-----",
     )
 
-    /** [T-sha256-single-source] Delegates to the shared [Digest] hex form. */
-    fun sha256Hex(bytes: ByteArray): String = Digest.sha256Hex(bytes)
+    /** [T-sha256-single-source] Ultra port: fork delegated to util.Digest
+     *  (not ported); the SHA-256 hex form is inlined here. */
+    fun sha256Hex(bytes: ByteArray): String =
+        java.security.MessageDigest.getInstance("SHA-256")
+            .digest(bytes)
+            .joinToString("") { "%02x".format(it) }
 
     fun fingerprintDer(der: ByteArray): String = sha256Hex(der)
 

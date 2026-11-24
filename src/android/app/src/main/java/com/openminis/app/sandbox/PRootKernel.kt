@@ -10,7 +10,6 @@ import android.provider.DocumentsContract
 import android.util.Log
 import kotlinx.coroutines.sync.withLock
 import com.openminis.app.data.FileMentionIndex
-import com.openminis.app.di.AppGraph
 import java.io.File
 import java.util.TimeZone
 import java.util.concurrent.ConcurrentNavigableMap
@@ -423,7 +422,8 @@ object PRootKernel {
 
     /**
      * Reconcile [bindMounts] keys under `/var/minis/mounts/` with the
-     * current snapshot of the user-mounted folders store in [AppGraph]
+     * current snapshot of the user-mounted folders store
+ * ([mountedFoldersStore])
      * (installed by MinisApp at launch; nullable — tools and the
      * file-mention index tolerate `null` and treat it as "no mounts").
      * Removes stale entries, adds new ones, updates host paths in place
@@ -513,7 +513,7 @@ object PRootKernel {
      * as an empty rootfs directory inside `shell_execute`.
      */
     fun shellSharedStorageBinds(context: Context, publish: Boolean = true): Map<String, String> {
-        val userNamed = AppGraph.mountedFoldersStoreOrNull()?.entries?.value?.any { it.name == "sdcard" } == true
+        val userNamed = mountedFoldersStore?.entries?.value?.any { it.name == "sdcard" } == true
         val plan = sharedStoragePlan(context, userNamed)
         if (!publish) return plan
         syncSharedStorageBindMounts(plan, userNamed)
@@ -624,7 +624,7 @@ object PRootKernel {
      */
     fun isLinuxPathUnderReadOnlyMount(linuxPath: String): Boolean {
         if (!linuxPath.startsWith(MOUNTS_LINUX_PREFIX)) return false
-        val store = AppGraph.mountedFoldersStoreOrNull() ?: return false
+        val store = mountedFoldersStore ?: return false
         val rest = linuxPath.removePrefix(MOUNTS_LINUX_PREFIX)
         val name = rest.substringBefore('/')
         if (name.isEmpty()) return false
@@ -637,7 +637,7 @@ object PRootKernel {
      * whose tree URI doesn't resolve to a POSIX path on this device.
      */
     fun mountEntriesForIndex(context: Context): List<FileMentionIndex.MountEntry> {
-        val store = AppGraph.mountedFoldersStoreOrNull() ?: return emptyList()
+        val store = mountedFoldersStore ?: return emptyList()
         return store.entries.value.mapNotNull { entry ->
             val host = resolveTreeUriToHostPath(entry.treeUri, context) ?: return@mapNotNull null
             FileMentionIndex.MountEntry(name = entry.name, root = File(host))
