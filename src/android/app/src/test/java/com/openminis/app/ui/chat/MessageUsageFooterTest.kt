@@ -194,7 +194,13 @@ class MessageUsageFooterTest {
         assertEquals(1, rows.size)
         // The LAST flat row of a1 — the second markdown block, not the tool
         // pill and not the header.
-        assertEquals(stats, rows[FlatKeys.of(FlatKeys.KIND_MDBLOCK, "a1", "b1", 1)])
+        // [T-thinking-tokens-only] computeUsageFooterRows also reports whether the
+        // reply SHOWED its thinking body; this fixture has no thinking block, so the
+        // resolved copy carries thinkingTextShown = false.
+        assertEquals(
+            stats.copy(thinkingTextShown = false),
+            rows[FlatKeys.of(FlatKeys.KIND_MDBLOCK, "a1", "b1",1)],
+        )
     }
 
     @Test
