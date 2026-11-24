@@ -621,7 +621,13 @@ class ThinkingRulesRegressionTest {
      */
     @Test
     fun `qwen dual-sends thinking params at root and extra_body`() {
-        val body = capture(model = model("qwen3-32b"), level = ThinkingLevel.MEDIUM)
+        // [T-thinking-vendor-shape-scope] The dual shape belongs to the DashScope
+        // hosts; a local MockWebServer is a relay and gets `reasoning_effort`.
+        val body = capture(
+            model = model("qwen3-32b"),
+            level = ThinkingLevel.MEDIUM,
+            basePath = "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        )
         assertTrue("root enable_thinking expected: $body", body.has("enable_thinking"))
         assertTrue(
             "extra_body.enable_thinking expected (DashScope reads it there): $body",
@@ -837,6 +843,9 @@ class ThinkingRulesRegressionTest {
         val body = capture(
             model = model("deepseek-flash", reasoningEffortValues = null),
             level = ThinkingLevel.XHIGH,
+            // [T-thinking-vendor-shape-scope] The sibling shape is only sent to the
+            // vendor OWN host; capture() defaults to a MockWebServer relay.
+            basePath = "https://api.deepseek.com/v1",
         )
         val thinking = body.optJSONObject("thinking")
         assertTrue("`thinking` switch must be present for the alias: $body", thinking != null)

@@ -41,9 +41,23 @@ class HarnessWiringTest {
         val dispatch = src("ui/chat/ChatViewModelDispatchProjection.kt")
         val projection = src("ui/chat/ChatViewModelRequestProjection.kt")
         val loop = src("ui/chat/ChatViewModelAgentLoopExt.kt")
-        assertTrue(dispatch.contains("requestClockNote(sessionId, history)"))
+        // [T-clock-note-removed] The request-level clock note is gone: the runtime
+        // context already carries the date, and the note throttled unreliably in the
+        // field. What must stay true is that NOTHING re-introduces it silently: the
+        // dispatch projection no longer calls requestClockNote, and the projection
+        // no longer renders the clock reminder.
+        assertFalse(
+ "the dispatch projection must not call requestClockNote again",
+ dispatch.contains("requestClockNote(sessionId, history)"),
+        )
+        assertTrue(dispatch.contains("val clock: RequestClockNote? = null"))
         assertTrue(dispatch.contains("clockNote = clock"))
-        assertTrue(projection.contains(".withRequestReminder(clockNote?.text)"))
+        assertFalse(
+ "the clock reminder must not be appended to the request",
+ projection.contains(".withRequestReminder(clockNote?.text)"),
+        )
+        // The progress hook itself stays wired even though its clock half is a no-op
+        // today: it is the seam a working throttle would use.
         assertTrue(loop.contains("if (streamPhase.onChunk(chunk)) projection.markModelProgress(loopSessionId)"))
         assertFalse(projection.contains(".confirm("))
     }
