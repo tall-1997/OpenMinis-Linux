@@ -28,6 +28,9 @@ render.experimental.xml
 # Keystore files
 *.jks
 *.keystore
+# The repo's public upload certificate is committed on purpose (fork main
+# does the same): the workflow signs with it when no keystore secret is set.
+!src/android/release.keystore
 
 # Google Services (e.g. APIs or Firebase)
 google-services.json
