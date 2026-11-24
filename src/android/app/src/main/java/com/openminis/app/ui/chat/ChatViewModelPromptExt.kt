@@ -345,7 +345,17 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
     } else null
     val standing = listOfNotNull(
         projectRulesFragment?.let { MemoryPromptBudget.Fragment("project-rules", it, MemoryPromptBudget.PRIORITY_PROJECT, false) },
-        sessionGlobal?.let { MemoryPromptBudget.Fragment("session-global", it, MemoryPromptBudget.PRIORITY_SESSION, false) },
+        // [T-standing-rules-authority] Mark the session block's scope so a
+        // "this chat" rule outranks the app-wide one it sits next to. A scope
+        // label, not an instruction.
+        sessionGlobal?.let {
+            MemoryPromptBudget.Fragment(
+                "session-global",
+                "These rules govern THIS chat and take precedence over the app-wide rules that follow.\n\n$it",
+                MemoryPromptBudget.PRIORITY_SESSION,
+                false,
+            )
+        },
         standingGlobal?.let { MemoryPromptBudget.Fragment("app-global", it, MemoryPromptBudget.PRIORITY_APP, true) },
     )
     // A read-only build still displays the current diary window. The same inputs
@@ -414,6 +424,20 @@ Scheduled tasks: crontab / at / nohup loops will stop when the app is suspended,
             omittedRules = standingRules.omittedBlocks,
         ),
         taskAnchor = taskAnchorFragment(),
+        // [T-standing-rules-authority] Anchor the rule blocks near the end of the
+        // prompt so a long tool loop cannot outrun them. State declaration only —
+        // and it names the SAME set the rules line claims, so an anchored scope
+        // can never contradict an "omitted" warning above it.
+        standingRulesAnchor = run {
+            val inForce = listOfNotNull(
+                "session-scoped".takeIf { standingRules.hasSessionRules },
+                "global".takeIf { standingRules.hasGlobalRules },
+                "project".takeIf { standingRules.hasProjectRules },
+            )
+            if (inForce.isEmpty()) null
+            else "Standing rules still in force for this chat: ${inForce.joinToString(", ")}. " +
+                "Their constraints are not time-limited."
+        },
         // [T-daily-memory-window] The transient block (recent daily logs + TOC
         // + budget note) is COMPUTED above (memoryBlocks.transient) but the
         // call stopped passing it (#325 introduced the split; the parameter
@@ -528,8 +552,8 @@ internal fun assembleDynamicTail(
     dailyMemoryFragment: String? = null,
 ): String = assembleDynamicTailWithDailySlot(
     worldBookFragment, learnedPrefsFragment, recalledMemoryFragment, runtimeContext,
-    personalityReminder, taskAnchor, dailyMemoryFragment,
-) { }
+    personalityReminder, taskAnchor, dailyMemoryFragment, { }, standingRulesAnchor = null,
+)
 
 internal fun assembleDynamicTailWithDailySlot(
     worldBookFragment: String,
@@ -540,6 +564,7 @@ internal fun assembleDynamicTailWithDailySlot(
     taskAnchor: String?,
     dailyMemoryFragment: String?,
     onDailySlot: (Int) -> Unit,
+    standingRulesAnchor: String? = null,
 ): String = buildString {
     if (worldBookFragment.isNotEmpty()) append(worldBookFragment)
     if (learnedPrefsFragment != null) {
@@ -565,6 +590,15 @@ internal fun assembleDynamicTailWithDailySlot(
         append(taskAnchor)
     }
     append(runtimeContext)
+    // [T-standing-rules-authority] Rules anchor, placed AFTER the rules body (up
+    // in the stable prefix) and BEFORE the persona reminder, so a long tool loop
+    // cannot outrun the constraint while the persona keeps its recency edge. A
+    // pure state declaration — an imperative here would restart the
+    // fragmentation loop #434 closed on the tool-result side.
+    if (standingRulesAnchor != null) {
+        append("\n\n")
+        append(standingRulesAnchor)
+    }
     if (personalityReminder != null) {
         append("\n\n")
         append(personalityReminder)

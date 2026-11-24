@@ -30,8 +30,8 @@ internal object TaskAnchor {
 
     const val HEADER =
         "Current task anchor (the latest substantive request from the user in this " +
-            "session; re-read it if a long tool loop made you lose track. If the latest " +
-            "user message starts a different task, that message replaces this anchor):"
+            "session; if the latest user message starts a different task, that message " +
+            "replaces this anchor):"
 
     /**
      * [T-task-anchor-current] Follow-up tokens that name no task of their own.
@@ -149,8 +149,8 @@ internal object TaskAnchor {
  * JVM (same constraint as TaskAnchor).
  */
 internal object StandingContract {
-    /** Persona (~250) + present-rules (~220) + omission note (~220) fit. */
-    const val MAX_CHARS = 900
+    /** Persona (~300) + rules (~400) + omission note (~200) fit with headroom. */
+    const val MAX_CHARS = 1200
 
     /**
      * [T-standing-contract-rules-line] Lists ONLY the rule blocks actually
@@ -180,18 +180,19 @@ internal object StandingContract {
         val present = if (blocks.isEmpty()) {
             null
         } else {
-            val listed = blocks.joinToString(", the ", prefix = "the ", postfix = " blocks in this prompt")
-            "Standing-rules reminder: $listed are BINDING instructions — " +
-                "re-read them before starting any multi-step or destructive action; " +
-                "the user's latest message still wins any conflict."
+            val listed = blocks.joinToString(", the ", prefix = "the ", postfix = " blocks")
+            "STANDING RULES IN FORCE: $listed.\n" +
+                "These are binding constraints on every reply in this session, not " +
+                "background. Where a rule conflicts with persona tone, formatting, or " +
+                "brevity preference, the rule governs. The user's latest message still " +
+                "wins any conflict."
         }
         val omitted = if (omittedBlocks.isEmpty()) {
             null
         } else {
             "Standing-rules note: " + omittedBlocks.joinToString(", ") +
-                " were NOT included in this prompt. " +
-                "Do not assume you have read them; if the task depends on standing " +
-                "rules, ask the user or re-read the file before acting."
+                " are not present in this prompt, so nothing in this reply could rest " +
+                "on their content."
         }
         return listOfNotNull(present, omitted).takeIf { it.isNotEmpty() }?.joinToString("\n\n")
     }
@@ -213,14 +214,29 @@ internal object StandingContract {
         omittedRules: List<String> = emptyList(),
         maxChars: Int = MAX_CHARS,
     ): String {
-        val lines = buildList {
-            add(personalityLine(soulName))
-            rulesLine(hasSessionRules, hasGlobalRules, hasProjectRules, omittedRules)?.let { add(it) }
-        }
-        val block = lines.joinToString("\n\n")
-        if (block.length <= maxChars) return block
-        return block.take(maxChars).trimEnd() + "…"
+        // [T-standing-rules-authority] ONE allocation path, no early return.
+        // The first cut had a "fits as-is" fast path that omitted the warning in
+        // a different position than the clipped path — two shapes for one
+        // contract. Persona and rules get separate quotas; the omission warning
+        // is ALWAYS appended last and never clipped, so a long persona can no
+        // longer silently swallow "the rules were not in this prompt".
+        val personaCap = maxChars * 2 / 5
+        val rulesCap = maxChars - personaCap
+        val persona = clip(personalityLine(soulName), personaCap)
+        val rules = if (hasSessionRules || hasGlobalRules || hasProjectRules) {
+            rulesLine(hasSessionRules, hasGlobalRules, hasProjectRules)?.let { clip(it, rulesCap) }
+        } else null
+        val omitted = if (omittedRules.isEmpty()) null else rulesLine(
+            hasSession = false,
+            hasGlobal = false,
+            hasProject = false,
+            omittedBlocks = omittedRules,
+        )
+        return listOfNotNull(persona, rules, omitted).joinToString("\n\n")
     }
+
+    private fun clip(text: String, cap: Int): String =
+        if (text.length <= cap) text else text.take(cap).trimEnd() + "…"
 }
 
 /**

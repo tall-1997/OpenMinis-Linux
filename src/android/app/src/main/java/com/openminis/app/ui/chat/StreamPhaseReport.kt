@@ -25,16 +25,22 @@ internal class StreamPhaseReport {
         firstTokenAtNanos = 0L
     }
 
-    /** True only for the first chunk that proves model progress in this attempt. */
+    /** True for every chunk that proves model progress in this attempt. */
     fun onChunk(chunk: LLMStreamChunk): Boolean {
         val chunkAt = System.nanoTime()
         if (chunk is LLMStreamChunk.Started) {
             if (headersAtNanos == 0L) headersAtNanos = chunkAt
-        } else if (firstTokenAtNanos == 0L && chunk.countsAsFirstTokenProgress()) {
-            firstTokenAtNanos = chunkAt
-            return true
+            return false
         }
-        return false
+        if (!chunk.countsAsFirstTokenProgress()) return false
+        if (firstTokenAtNanos == 0L) firstTokenAtNanos = chunkAt
+        // [T-clock-throttle-progress] Return true for EVERY progress chunk, not
+        // only the first. `markModelProgress` is the sole caller of
+        // TimeContextGate.markInjected; while this returned true at most once —
+        // and never at all when the first chunk was not progress — the clock
+        // throttle never recorded an injection and the note re-fired on every
+        // request ("since previous message: 0s" on each turn).
+        return true
     }
 
     fun logSuccess(turn: Int, sessionId: String, modelId: String) {

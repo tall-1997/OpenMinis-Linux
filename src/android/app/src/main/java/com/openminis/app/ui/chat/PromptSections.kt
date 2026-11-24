@@ -55,6 +55,17 @@ internal object PromptSections {
     // GLOBAL.md after dedupe) — the byte-stable memory half (GH#357 split).
     const val MEMORY_STANDING = "memory_standing"
 
+    /**
+     * [T-standing-rules-authority] Constraint header for the standing-rules
+     * section. It states a HIERARCHY (rules outrank persona/formatting) rather
+     * than ordering an action — an imperative here would make the model break
+     * off mid-task to "go re-read" the rules, which is the fragmentation
+     * mechanism #434 removed from the tool-result side.
+     */
+    private const val STANDING_RULES_HEADER =
+        "STANDING RULES — binding constraints, not background. " +
+            "Where a rule conflicts with tone, persona, or formatting guidance, the rule governs."
+
     // Per-turn dynamic tail (WorldBook / learned prefs / daily window / task
     // anchor / runtime context / standing-contract reminder), pre-assembled by
     // assembleDynamicTail. 1:1 with ContextBlockKey.RUNTIME_TAIL.
@@ -80,7 +91,11 @@ internal object PromptSections {
         add(PromptSection(SYSTEM_TOOLS, base))
         if (skillFragment != null) add(PromptSection(SKILLS, "\n\n$skillFragment"))
         if (mcpFragment != null) add(PromptSection(MCP, "\n\n$mcpFragment"))
-        if (globalMemoryFragment != null) add(PromptSection(MEMORY_STANDING, "\n\n$globalMemoryFragment"))
+        if (globalMemoryFragment != null) {
+            // [T-standing-rules-authority] Header is additive; the rules body and
+            // the section order are byte-preserved.
+            add(PromptSection(MEMORY_STANDING, "\n\n" + STANDING_RULES_HEADER + "\n\n" + globalMemoryFragment))
+        }
         add(PromptSection(RUNTIME_TAIL, dynamicTail))
     }
 
