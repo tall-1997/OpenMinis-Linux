@@ -21,7 +21,10 @@ class MemoryDeliveryProjectionTest {
         val stable = "identity\n$daily"
         val runtime = renderRuntimeContext("2026-12-25", "UTC", "en", 1)
         var local = -1
-        val tail = assembleDynamicTailWithDailySlot("\n\n$daily", null, null, runtime, null, daily, daily) { local = it }
+        val tail = assembleDynamicTailWithDailySlot(
+ "\n\n$daily", null, null, runtime, null, daily, daily,
+ onDailySlot = { local = it },
+ )
         val prompt = stable + tail
         val start = stable.length + local
         val end = start + dailyMemorySlot(daily).length
