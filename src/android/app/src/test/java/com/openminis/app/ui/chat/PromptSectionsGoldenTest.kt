@@ -223,7 +223,17 @@ class PromptSectionsGoldenTest {
     @Test
     fun `added sections are reported as new content`() {
         val patches = PromptSections.diffSections(sections(memory = null), sections())
-        assertEquals(listOf(PromptSections.SectionPatch(PromptSections.MEMORY_STANDING, "\n\n$MEMORY")), patches)
+        // [T-standing-rules-authority] The memory section now opens with the
+        // standing-rules header, so the "added section" patch carries it too.
+        assertEquals(
+            listOf(
+                PromptSections.SectionPatch(
+                    PromptSections.MEMORY_STANDING,
+                    "\n\n" + STANDING_RULES_HEADER + "\n\n$MEMORY",
+                ),
+            ),
+            patches,
+        )
     }
 
     // ------------------------------------------------------------------
