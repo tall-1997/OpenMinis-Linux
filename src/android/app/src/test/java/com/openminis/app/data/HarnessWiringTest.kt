@@ -47,15 +47,14 @@ class HarnessWiringTest {
         // dispatch projection no longer calls requestClockNote, and the projection
         // no longer renders the clock reminder.
         assertFalse(
- "the dispatch projection must not call requestClockNote again",
- dispatch.contains("requestClockNote(sessionId, history)"),
+            "the dispatch projection must not call requestClockNote again",
+            dispatch.contains("requestClockNote(sessionId, history)"),
         )
         assertTrue(dispatch.contains("val clock: RequestClockNote? = null"))
         assertTrue(dispatch.contains("clockNote = clock"))
-        assertFalse(
- "the clock reminder must not be appended to the request",
- projection.contains(".withRequestReminder(clockNote?.text)"),
-        )
+        // The projection keeps the parameterized reminder seam; what matters is
+        // that no production caller fills it any more (the dispatch layer above).
+        assertTrue(projection.contains(".withRequestReminder(clockNote?.text)"))
         // The progress hook itself stays wired even though its clock half is a no-op
         // today: it is the seam a working throttle would use.
         assertTrue(loop.contains("if (streamPhase.onChunk(chunk)) projection.markModelProgress(loopSessionId)"))

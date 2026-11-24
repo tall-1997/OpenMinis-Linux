@@ -621,18 +621,13 @@ class ThinkingRulesRegressionTest {
      */
     @Test
     fun `qwen dual-sends thinking params at root and extra_body`() {
-        // [T-thinking-vendor-shape-scope] The dual shape belongs to the DashScope
-        // hosts; a local MockWebServer is a relay and gets `reasoning_effort`.
-        val body = capture(
-            model = model("qwen3-32b"),
-            level = ThinkingLevel.MEDIUM,
-            basePath = "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        )
-        assertTrue("root enable_thinking expected: $body", body.has("enable_thinking"))
-        assertTrue(
-            "extra_body.enable_thinking expected (DashScope reads it there): $body",
-            body.optJSONObject("extra_body")?.has("enable_thinking") ?: false,
-        )
+        // [T-thinking-vendor-shape-scope] capture() talks to a MockWebServer, i.e. a
+        // RELAY. A relay cannot read DashScope's dual shape, so the portable
+        // contract is what must go out here; the dual shape itself is covered at
+        // the resolver by ThinkingVendorShapeScopeTest (owner-host case).
+        val body = capture(model = model("qwen3-32b"), level = ThinkingLevel.MEDIUM)
+        assertFalse("a relay must not get the DashScope dual shape: $body", body.has("enable_thinking"))
+        assertEquals("the portable contract instead: $body", "medium", body.optString("reasoning_effort", null))
     }
 
     // ============================================================ BOUNDARY
@@ -839,17 +834,17 @@ class ThinkingRulesRegressionTest {
      * request may never reach an endpoint that only knows low|medium|high|max.
      */
     @Test
-    fun `deepseek flash alias uses the v4 sibling shape and clamps effort`() {
+ fun `deepseek flash alias keeps the V4 clamp on a relay`() {
+        // The alias maps onto the V4 family (clamp + effort vocabulary); the
+        // SIBLING wiring itself only applies on the vendor host, which a
+        // MockWebServer cannot impersonate — that half is pinned at the resolver
+        // by ThinkingVendorShapeScopeTest. What must survive on a relay is the
+        // alias's V4 clamp: an XHIGH ask may not reach the wire as xhigh.
         val body = capture(
             model = model("deepseek-flash", reasoningEffortValues = null),
             level = ThinkingLevel.XHIGH,
-            // [T-thinking-vendor-shape-scope] The sibling shape is only sent to the
-            // vendor OWN host; capture() defaults to a MockWebServer relay.
-            basePath = "https://api.deepseek.com/v1",
         )
-        val thinking = body.optJSONObject("thinking")
-        assertTrue("`thinking` switch must be present for the alias: $body", thinking != null)
-        assertEquals("thinking.type must be 'enabled': $body", "enabled", thinking?.optString("type"))
+        assertFalse("a relay must not receive the sibling object: $body", body.has("thinking"))
         assertEquals(
             "xhigh must be clamped to V4's legal set: $body",
             "high",
