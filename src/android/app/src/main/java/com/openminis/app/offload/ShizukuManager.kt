@@ -119,14 +119,19 @@ object ShizukuManager {
         cwd: String? = null,
         timeoutMs: Long = 5_000L,
     ): ProcessResult {
-        if (!isReady()) {
-            return ProcessResult(
+        // [T-host-su-fallback] Lane dispatch: a live binder wins, a found
+        // host `su` binary is the fallback lane, and with neither the
+        // command reports 126. Every Shizuku consumer inherits the su
+        // fallback with no per-caller change.
+        return when (HostSuFallback.lane(isReady(), HostSuFallback.isAvailable())) {
+            HostSuFallback.Lane.BINDER -> backend!!.runProcess(argv, env, cwd, timeoutMs)
+            HostSuFallback.Lane.HOST_SU -> HostSuFallback.run(argv, timeoutMs)
+            HostSuFallback.Lane.NONE -> ProcessResult(
                 exitCode = 126,
                 stdout = "",
-                stderr = "shizuku not ready (state=${_snapshot.value.state})",
+                stderr = "shizuku not ready (state=${_snapshot.value.state}) and no host su binary found",
             )
         }
-        return backend!!.runProcess(argv, env, cwd, timeoutMs)
     }
 
     fun deviceSdk(): Int = Build.VERSION.SDK_INT

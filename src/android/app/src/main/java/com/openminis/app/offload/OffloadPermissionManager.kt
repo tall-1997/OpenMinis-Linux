@@ -89,6 +89,12 @@ object OffloadPermissionManager {
         // is already authorized.
         ToolPermissionInfo("a11y_cli", "android-a11y-cli", PermissionCategory.INTEGRATIONS, PermissionLevel.NOT_ALLOWED),
         ToolPermissionInfo("shizuku_cli", "android-shizuku-cli", PermissionCategory.INTEGRATIONS, PermissionLevel.NOT_ALLOWED),
+        // [T-su-first] Host superuser lane (Magisk/KernelSU `su -c`, Shizuku
+        // fallback). BYPASS: the guest-side gate that reaches this tool is the
+        // su stub itself, and Magisk/KernelSU shows its own authorization
+        // prompt on first use — an extra app-level ask would only train the
+        // user to tap through.
+        ToolPermissionInfo("su_cli", "android-su", PermissionCategory.INTEGRATIONS, PermissionLevel.BYPASS),
     )
 
     /** Stable session-id used by NativeOffloadHandlers when calling
@@ -435,6 +441,13 @@ object OffloadPermissionManager {
      *                    keep nagging. Cleared with the session.
      */
     enum class Response { ALLOW_SESSION, ALLOW_ONCE, DENY_SESSION }
+
+    /** True when [toolName] has a registry entry. Handlers whose deny body is
+     *  a contract (exit 126 + PERMISSION_DENIED JSON) must fail closed when
+     *  this returns false — checkPermission() alone would silently allow an
+     *  unregistered tool (unknown tools default to BYPASS there). */
+    fun isRegistered(toolName: String): Boolean =
+        toolRegistry.any { it.toolName == toolName }
 
     /**
      * Check permission for a tool in the given session.
