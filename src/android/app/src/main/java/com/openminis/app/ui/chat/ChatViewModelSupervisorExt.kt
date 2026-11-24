@@ -391,8 +391,6 @@ private suspend fun ChatViewModel.runSupervisorSession(
     }
 
     supervisorNotice("Supervisor session started — objective: $objective")
-    val receiptNotice = pendingToolReceiptNotice(sessionId)
-    if (receiptNotice != null) supervisorNotice(receiptNotice)
 
     // An interrupted round uses the same ordinal after recovery. Only the
     // committed round report advances the recovered counter.
@@ -413,7 +411,7 @@ private suspend fun ChatViewModel.runSupervisorSession(
                 provider = supervisorProvider,
                 // [T-lanes-inherit-session-rules] The supervisor is a session
                 // lane: the session's standing rules ride its prompt.
-                system = laneSystemWithRules(listOfNotNull(system, receiptNotice).joinToString("\n\n")),
+                system = laneSystemWithRules(listOfNotNull(system).joinToString("\n\n")),
                 user = user,
                 tools = SupervisorSeats.supervisorTools(supervisorBaseTools(supervisorEntry)),
                 toolGate = null,
@@ -457,7 +455,7 @@ private suspend fun ChatViewModel.runSupervisorSession(
                 sessionId = sessionId,
                 // [T-lanes-inherit-session-rules] Supervisor workers inherit the
                 // session rules too — same lane contract as spawn_agent.
-                sessionRules = listOfNotNull(sessionRulesForLanes(), receiptNotice).joinToString("\n\n"),
+                sessionRules = listOfNotNull(sessionRulesForLanes()).joinToString("\n\n"),
                 historySanitizer = { neutralizeRemoteToolResults(it) },
                 skillsHint = null,
                 tools = SupervisorSeats.workerTools(supervisorBaseTools(workerEntry)),

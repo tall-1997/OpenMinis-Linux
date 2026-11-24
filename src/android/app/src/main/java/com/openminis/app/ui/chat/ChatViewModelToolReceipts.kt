@@ -8,7 +8,6 @@ import com.openminis.app.data.repository.receiptHistoryContext
 import com.openminis.app.data.repository.receiptPartsJson
 import com.openminis.app.service.ActiveRunContext
 import com.openminis.app.tools.SubAgentLane
-import com.openminis.app.tools.TOOL_RECEIPT_NOTICE
 import com.openminis.app.tools.ToolErrorCode
 import com.openminis.app.tools.ToolExecutionResult
 import com.openminis.app.tools.ToolReceiptDispatch
@@ -123,20 +122,6 @@ internal suspend fun ChatViewModel.logLegacyToolReceiptDiagnostics(sessionId: St
     }
 }
 
-internal suspend fun ChatViewModel.pendingToolReceiptNotice(sessionId: String, userTurnId: String? = null): String? {
-    if (sessionId.isBlank()) return null
-    return toolReceiptNotice(sessionId, ToolReceiptScope.userTurn(sessionId, userTurnId))
-}
-
-internal suspend fun ChatViewModel.toolReceiptNotice(sessionId: String, scope: ToolReceiptScope?): String? =
-    withContext(Dispatchers.IO) {
-        val status = toolReceiptStore().pending(ToolReceiptScope.sessionDigest(sessionId), scope?.parentSha)
-            ?: return@withContext "$TOOL_RECEIPT_NOTICE Tool receipts could not be checked. Do not repeat earlier operations until verified."
-        if (!status.hasUnpaired) return@withContext null
-        "$TOOL_RECEIPT_NOTICE Delivery pending confirmation: ${status.unknown}. " +
-            "Accepted without verified completion: ${status.acceptedWithoutResult}. " +
-            "Verify before retrying; neither status establishes business success."
-    }
 
 private const val MAX_RECEIPT_PAGE_ROWS = 512
 private const val MAX_RECEIPT_LOOKBACK = 64

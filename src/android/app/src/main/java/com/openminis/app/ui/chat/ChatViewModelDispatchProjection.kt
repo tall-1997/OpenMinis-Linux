@@ -25,8 +25,7 @@ internal data class DispatchProjectionKey(
     val saver: ContextSaverPrefs.Mode,
     val outboundMask: Boolean,
     val stall: String?,
-    val receiptNotice: String?,
-    val coverageGap: Boolean,
+       val coverageGap: Boolean,
     val date: LocalDate,
     val digest: String?,
 )
@@ -80,8 +79,7 @@ internal suspend fun ChatViewModel.buildDispatchProjection(
     val window = requestContextWindow(provider, model)
     val policy = ContextPolicy.forContextWindow(window, effectiveCompactPercent())
     val harness = activeHarnessConfig(requestEntryId(model))
-    val receipt = pendingToolReceiptNotice(sessionId)
-    val compact = requestCompactStateFor(history, sessionId)
+       val compact = requestCompactStateFor(history, sessionId)
     if (activeSessionId != sessionId) return@withContext null
     val clock = requestClockNote(sessionId, history)
     val digest = HistoryDigest.render(llmDigestLines, llmDigestOmitted)
@@ -98,7 +96,7 @@ internal suspend fun ChatViewModel.buildDispatchProjection(
     val key = DispatchProjectionKey(
         sessionId, model, harness, policy, window, compact.marker?.id,
         requestThinkingLevel(provider), ContextSaverPrefs.mode(), OutboundMaskPrefs.isEnabled, stallNote,
-        receipt, compact.hasCoverageGap, LocalDate.now(), digest,
+        compact.hasCoverageGap, LocalDate.now(), digest,
     )
     // On disk, diary governance and TTL may have changed without editing the transcript.
     val reusable = !_memoryEnabled.value && clock == null && model.contextRouteId != null
@@ -108,7 +106,7 @@ internal suspend fun ChatViewModel.buildDispatchProjection(
     prefetchSemanticRecallForRequest(history)
     val projected = projectChatRequest(
         provider, prompt, history, tools, key.thinking,
-        stallNote = stallNote, receiptNotice = receipt, uncoveredBeforeResident = compact.hasCoverageGap,
+        stallNote = stallNote, uncoveredBeforeResident = compact.hasCoverageGap,
         persistImageSpillover = true, requestSessionId = sessionId, clockNote = clock,
         attribution = model, harnessConfig = harness, window = window, policy = policy,
         historyDigest = digest, saverMode = key.saver, outboundMask = key.outboundMask, marker = compact.marker,
