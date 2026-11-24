@@ -894,10 +894,21 @@ internal fun ModelPickerSheet(
                                                     modifier = Modifier.size(17.dp),
                                                 )
                                                 Spacer(Modifier.width(10.dp))
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(6.dp)
-                                                        .background(providerDotColor(instance?.providerType), CircleShape),
+                                                // [T-brand-icon-in-picker] Vendor
+                                                // LOGO, not a provider-color dot:
+                                                // the dot only encoded the
+                                                // relay's ProviderType, so every
+                                                // OpenAI-typed relay looked
+                                                // identical. Resolve(modelId,
+                                                // displayName) — the type is NOT
+                                                // passed: a relay serves any
+                                                // vendor.
+                                                ModelBrandIcon(
+                                                    slug = ModelBrandResolver.resolve(
+                                                        entry.model.id,
+                                                        entry.model.displayName,
+                                                    ),
+                                                    sizeDp = 16.dp,
                                                 )
                                                 Spacer(Modifier.width(8.dp))
                                                 Column(modifier = Modifier.weight(1f)) {
@@ -1130,10 +1141,12 @@ internal fun ModelPickerSheet(
                                                 modifier = Modifier.size(20.dp),
                                             )
                                             Spacer(Modifier.width(10.dp))
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(6.dp)
-                                                    .background(dotColor, CircleShape),
+                                            ModelBrandIcon(
+                                                slug = ModelBrandResolver.resolve(
+                                                    displayEntry.model.id,
+                                                    displayEntry.model.displayName,
+                                                ),
+                                                sizeDp = 16.dp,
                                             )
                                             Spacer(Modifier.width(10.dp))
                                             // [T-model-row-premature-wrap] The collapsed
@@ -1262,10 +1275,12 @@ internal fun ModelPickerSheet(
                                                 modifier = Modifier.size(20.dp),
                                             )
                                             Spacer(Modifier.width(10.dp))
-                                            Box(
-                                                modifier = Modifier
-                                                    .size(6.dp)
-                                                    .background(dotColor, CircleShape),
+                                            ModelBrandIcon(
+                                                slug = ModelBrandResolver.resolve(
+                                                    entry.model.id,
+                                                    entry.model.displayName,
+                                                ),
+                                                sizeDp = 16.dp,
                                             )
                                             Spacer(Modifier.width(10.dp))
                                             ProviderEntryRowText(

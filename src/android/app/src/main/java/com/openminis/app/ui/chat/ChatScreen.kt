@@ -3116,6 +3116,16 @@ fun ChatScreen(
                                         activeEntryId = viewModel.activeEntryId,
                                         providerRepository = providerRepository,
                                     )
+                                    // [T-usage-topbar-brand-icon] Vendor logo by
+                                    // model-name keyword scoring (relay labels
+                                    // carry no brand); silently absent when the
+                                    // name maps to no vendor mark.
+                                    val topBarBrandSlug = remember(modelName) {
+                                        ModelBrandResolver.resolve(modelName)
+                                    }
+                                    if (topBarBrandSlug != null) {
+                                        ModelBrandIcon(slug = topBarBrandSlug, sizeDp = 13.dp)
+                                    }
                                     // T-android-topbar-group-name-fallback:
                                     // _selectedGroupName is empty during the
                                     // brief window before loadSession's group

@@ -69,6 +69,8 @@ import androidx.compose.ui.res.stringResource
 import com.openminis.app.data.model.ProviderType
 import com.openminis.app.data.repository.ProviderRepository
 import com.openminis.app.logging.AppLogger
+import com.openminis.app.ui.chat.ModelBrandIcon
+import com.openminis.app.ui.chat.ModelBrandResolver
 import com.openminis.app.ui.components.MinisAlertDialog
 import com.openminis.app.ui.util.bringIntoViewOnFocus
 import com.openminis.app.R
@@ -705,12 +707,23 @@ fun ProviderDetailScreen(
                     val outputModalities = entry.model.outputModalities.orEmpty()
                     val hasBadge = inputModalities.any { it in modalityIconKeys } ||
                         outputModalities.any { it in modalityOutputIconKeys }
+                    // [T-usage-topbar-brand-icon] Vendor logo ahead of the model
+                    // name, resolved by keyword scoring over id + displayName
+                    // (the instance type is a relay, not a brand).
+                    val brandSlug = remember(entry.model.id, entry.model.displayName) {
+                        ModelBrandResolver.resolve(entry.model.id, entry.model.displayName)
+                    }
                     SettingsRow(
                         title = entry.model.displayName,
                         // [T-android-hidden-models-group] No " • Hidden"
                         // suffix: a hidden row now sits under the Hidden
                         // models group, which already says so.
                         subtitle = entry.model.id,
+                        leading = if (brandSlug != null) {
+                            {
+                                ModelBrandIcon(slug = brandSlug, sizeDp = 24.dp)
+                            }
+                        } else null,
                         // onClick = null so SettingsRow doesn't add a second
                         // clickable that would swallow the long-press. The
                         // wrapping Box owns both gestures.

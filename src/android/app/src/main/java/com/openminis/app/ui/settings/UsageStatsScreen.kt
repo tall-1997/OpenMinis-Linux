@@ -1,6 +1,9 @@
 package com.openminis.app.ui.settings
 
 import com.openminis.app.R
+import com.openminis.app.ui.chat.ModelBrandIcon
+import com.openminis.app.ui.chat.ModelBrandResolver
+import com.openminis.app.ui.chat.brandAccentFor
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Canvas
@@ -588,6 +591,20 @@ private fun GroupRow(g: UsageGroup, reportTotal: Long, byModel: Boolean, merged:
             Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // [T-usage-topbar-brand-icon] Model rows carry the vendor logo;
+                // unknown/unmapped vendors fall back to the accent initial.
+                if (byModel) {
+                    val title = groupTitle(g, byModel)
+                    val brandSlug = remember(g.key) {
+                        ModelBrandResolver.resolveExact(g.key, title)
+                    }
+                    BrandAvatar(
+                        slug = brandSlug,
+                        fallbackName = title,
+                        accent = brandAccentFor(g.key, title),
+                    )
+                    Spacer(Modifier.width(11.dp))
+                }
                 Text(
                     groupTitle(g, byModel),
                     style = MaterialTheme.typography.bodyLarge,
@@ -635,6 +652,29 @@ private fun GroupRow(g: UsageGroup, reportTotal: Long, byModel: Boolean, merged:
             }
         }
         if (divider) RowDivider()
+    }
+}
+
+@Composable
+private fun BrandAvatar(slug: String?, fallbackName: String, accent: Color) {
+    val resId = remember(slug) { slug?.let { ModelBrandResolver.iconResId(it) } }
+    Box(
+        modifier = Modifier
+            .size(28.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(MaterialTheme.colorScheme.surface),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (resId != null) {
+            ModelBrandIcon(slug = slug, sizeDp = 17.dp)
+        } else {
+            Text(
+                text = fallbackName.take(1),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = accent,
+            )
+        }
     }
 }
 
