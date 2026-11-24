@@ -559,44 +559,39 @@ class ThinkingRulesRegressionTest {
     // ============================================================ STRUCTURE
 
     /**
-     * Rule: DeepSeek V4 carries the switch and the tier as ROOT SIBLINGS —
-     * `{"thinking":{"type":"enabled"}, "reasoning_effort":"high"}`. The tier must NOT
-     * be nested inside the `thinking` object; doing so made it an unknown nested key
-     * with no root tier at all, so every V4 request silently ran at the vendor default.
-     * The paired negative assertion is the whole point: the positive one alone passed
-     * for 3 months. evidence §A "[DeepSeek V4] …根级兄弟" · 847822eb.
+     * [T-thinking-one-contract] On a RELAY (any non-vendor host) carrying a DeepSeek
+     * id, the endpoint's own declared effort tiers are the contract: send
+     * `reasoning_effort` ALONE.
+     *
+     * Field evidence: the relay body carried BOTH `thinking:{type:enabled}` (the
+     * vendor spelling, matched on model id) and `reasoning_effort:"high"`, and the
+     * stream came back with no reasoning at all — two conflicting contracts in one
+     * body, honoured as neither. The vendor spelling is only correct on the vendor's
+     * own host (pinned by [ark hosted deepseek ...] above).
      */
     @Test
-    fun `deepseek v4 sends thinking and reasoning_effort as root siblings`() {
+    fun `deepseek v4 on a relay sends only the declared effort contract`() {
         val body = capture(
             model = model("deepseek-v4-pro", reasoningEffortValues = listOf("high", "max")),
             level = ThinkingLevel.HIGH,
         )
-        val thinking = body.optJSONObject("thinking")
-        assertTrue("`thinking` object must be present when enabled: $body", thinking != null)
-        assertEquals("thinking.type must be 'enabled': $body", "enabled", thinking?.optString("type"))
-        assertTrue("root reasoning_effort must be present: $body", body.has("reasoning_effort"))
-        assertFalse(
-            "reasoning_effort must NOT be nested inside thinking{} — that is the silent 847822eb bug: $body",
-            thinking?.has("reasoning_effort") ?: false,
-        )
+        assertFalse("a relay must not receive the vendor thinking object: $body", body.has("thinking"))
+        assertEquals("high", body.optString("reasoning_effort", null))
     }
 
     /**
-     * Rule: thinking is ON by default on DeepSeek V4, so OFF must be sent EXPLICITLY.
-     * evidence §A · 9d4d4f2e / 847822eb.
+     * [T-thinking-one-contract] On a relay, OFF stays silent: the declared set is
+     * `[high,max]` (no "none"), so there is no legal OFF tier to name and the
+     * contract omits the field rather than inventing one.
      */
     @Test
-    fun `deepseek v4 explicitly disables when off`() {
+    fun `deepseek v4 on a relay omits the field when the declared set has no off tier`() {
         val body = capture(
             model = model("deepseek-v4-pro", reasoningEffortValues = listOf("high", "max")),
             level = ThinkingLevel.OFF,
         )
-        assertEquals(
-            "V4 reasons by default, so OFF must be explicit: $body",
-            "disabled",
-            body.optJSONObject("thinking")?.optString("type"),
-        )
+        assertFalse("no vendor object on a relay: $body", body.has("thinking"))
+        assertFalse("no legal OFF tier to name: $body", body.has("reasoning_effort"))
     }
 
     /**
