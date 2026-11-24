@@ -3383,7 +3383,7 @@
  <string name="tool_detail_open_in_session_browser">Ouvrir dans le navigateur de la session</string>
  <!-- [T-a11y-cd-labels] -->
  <string name="cd_browser_screenshot">Capture du navigateur</string>
- <string name="cd_withdraw_queued_message">Retirer le message en file d'attente</string>
+ <string name="cd_withdraw_queued_message">Retirer le message en file d\'attente</string>
  <string name="cd_image_attachment">Pièce jointe image</string>
  <string name="cd_play_video">Lire la vidéo</string>
  <string name="cd_copy_code">Copier le code</string>
