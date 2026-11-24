@@ -21,7 +21,7 @@
     "src/android/app/src/main/java/com/openminis/app/accessibility/A11yAppPolicy.kt": 8,
     "src/android/app/src/main/java/com/openminis/app/accessibility/SkillReplayEngine.kt": 11,
     "src/android/app/src/main/java/com/openminis/app/agent/ContextAssemblySnapshot.kt": 6,
-    "src/android/app/src/main/java/com/openminis/app/agent/MessageTransformers.kt": 15,
+    "src/android/app/src/main/java/com/openminis/app/agent/MessageTransformers.kt": 8,
     "src/android/app/src/main/java/com/openminis/app/agent/SoulStore.kt": 1,
     "src/android/app/src/main/java/com/openminis/app/config/ConfigBuiltins.kt": 3,
     "src/android/app/src/main/java/com/openminis/app/data/CapabilityRouter.kt": 6,

@@ -181,12 +181,43 @@ object MessageTransformerChain {
 
     private const val CLOCK_HEAD = "<system-note>当前时间"
     private val clockFormat = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
-    private val timeHints = listOf(
-        "现在", "now", "today", "今天", "几点", "时间", "weather", "天气",
-        "remind", "提醒", "schedule", "安排", "分钟", "小时", "minute", "hour",
+    /**
+     * [T-time-hint-precision] One pattern matching phrases that actually ASK
+     * for the clock. The old list mixed in everyday words ("时间", "提醒",
+     * "分钟", "小时", "今天", "安排"), so nearly any user turn counted as a
+     * time question and — under the projector's "hint bypasses the throttle"
+     * branch — re-opened the clock on every request.
+     */
+    private val timeHintPattern = Regex(
+        "现在几点|几点了|几点钟|当前时间|现在时间|什么时间|几号|日期|几月几号|星期几|周几|" +
+            "what time|current time|today's date|what day|weather|天气",
+        RegexOption.IGNORE_CASE,
     )
 
-    internal fun hasTimeHint(text: String): Boolean = timeHints.any { text.contains(it, ignoreCase = true) }
+    /**
+     * [T-time-hint-precision] Whether the user is ASKING for the clock right now.
+     *
+     * The clock head is stripped first: `<system-note>当前时间: …` is a note WE
+     * appended to an earlier message, and it contains "当前时间" — the very
+     * phrase this pattern looks for. Without the strip, once a note was
+     * appended the message kept looking like a time question forever, so
+     * `requestClockNote` re-opened on every later request and the model read a
+     * fresh "(since previous message: …)" cue each turn.
+     */
+    internal fun hasTimeHint(text: String): Boolean {
+        // [T-time-hint-precision] Cut out each `<system-note>…</system-note>`
+        // span (there can be several: appendUserText stacks them) instead of
+        // taking the substring AFTER the head. The note carries "当前时间", a
+        // phrase this pattern looks for, so leaving any note in the text made
+        // the message look like a permanent time question.
+        val bare = NOTE_SPAN.replace(text, " ")
+        return timeHintPattern.containsMatchIn(bare)
+    }
+
+    private val NOTE_SPAN = Regex("<system-note>[\\s\\S]*?</system-note>")
+
+    /** True when [text] already declares a clock note — a second one is noise. */
+    internal fun carriesClockNote(text: String): Boolean = text.contains(CLOCK_HEAD)
 
     internal fun clockStamp(nowMs: Long): String = clockFormat.format(
         java.time.Instant.ofEpochMilli(nowMs).atZone(java.time.ZoneId.systemDefault()),
