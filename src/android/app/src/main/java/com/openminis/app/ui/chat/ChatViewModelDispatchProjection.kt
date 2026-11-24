@@ -81,7 +81,20 @@ internal suspend fun ChatViewModel.buildDispatchProjection(
     val harness = activeHarnessConfig(requestEntryId(model))
        val compact = requestCompactStateFor(history, sessionId)
     if (activeSessionId != sessionId) return@withContext null
-    val clock = requestClockNote(sessionId, history)
+    // [T-clock-note-removed] No request-level clock note.
+ //
+ // Runtime context already carries `Current date: …` on every request, and a
+ // task that genuinely needs the minute can read it with `date`. The note was
+ // the noise: its throttle kept failing in the field, so it re-fired on most
+ // requests and appended a "(since previous message:0s)" line the model had
+ // no use for — while injecting nothing the date line did not already say.
+ //
+ // Removing the call is monotone. `clockNote` fed exactly two things: a
+ // request reminder ([appendRequestReminders]) and a throttle stamp
+ // ([markModelProgress]). Nothing branches on it, so no behaviour beyond the
+ // note's disappearance changes. The function itself stays for tests and for
+ // a future re-introduction with a working throttle.
+ val clock: RequestClockNote? = null
     val digest = HistoryDigest.render(llmDigestLines, llmDigestOmitted)
     // [T-digest-covers-gap] Coverage gaps are no longer an input to compaction,
     // so the digest is the only thing standing between the model and a silent

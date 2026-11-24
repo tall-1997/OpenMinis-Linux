@@ -190,6 +190,15 @@ internal fun computeUsageFooterRows(
         if (item is FlatChatItem.AssistantThinking && item.block.content.isNotBlank()) {
             thinkingShownIds += messageId
         }
+        // [T-thinking-tokens-only-card] Thinking folded into a process card
+        // renders INSIDE it, never as a standalone AssistantThinking.
+        // Checking only that item reported "reasoned but no body" for a reply
+        // whose body the user could read once the card expanded.
+        if (item is FlatChatItem.AssistantProcessSummary &&
+            item.steps.any { it.kind == "thinking" && it.block.content.isNotBlank() }
+        ) {
+            thinkingShownIds += messageId
+        }
     }
     val out = HashMap<String, MessageUsageStats>()
     for ((messageId, stats) in usageByMessageId) {

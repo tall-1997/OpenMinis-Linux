@@ -72,6 +72,17 @@ data class ThinkingResolveContext(
  * pre-existing behaviour (call sites that do not know their host).
  */
  val endpointHost: String? = null,
+ /**
+ * [T-thinking-vendor-shape-scope] TRUE when the endpoint is provably NOT the
+ * vendor's own host, i.e. a vendor-private shape cannot apply here.
+ *
+ * Set by the resolver itself when it falls back to the portable contract, so
+ * the emitters do not have to repeat the host reasoning. The domain-family
+ * skip (`isSelfReasoningFamily`) exists to let the VENDOR handle reasoning on
+ * ITS OWN host; on a relay that premise is void, and keeping the skip would
+ * emit NOTHING — strictly worse than emitting the wrong field.
+ */
+ val vendorShapeRuledOut: Boolean = false,
 )
 
 /**
@@ -299,34 +310,41 @@ object ThinkingRuleResolver {
             ThinkingWireFormat.ReasoningEffort(ctx.offEffort)
         }
 
-        // [T-thinking-one-contract] A model-id rule describes how the VENDOR spells
-        // "reasoning on"; it says nothing about the endpoint serving the request.
-        // When the endpoint itself declares the effort tiers it accepts
-        // ([ThinkingResolveContext.declaredEffortValues]), that declaration is the
-        // better contract, so use it INSTEAD of the vendor shape, not in addition.
+        // [T-thinking-vendor-shape-scope] A model-id rule describes how the
+        // VENDOR spells "reasoning on"; it says nothing about the endpoint
+        // serving the request. A vendor-PRIVATE shape is only correct on the
+        // vendor's own host: a third-party relay is OpenAI-compatible and
+        // silently ignores fields it does not know, so the body carries a
+        // contract the endpoint cannot read.
         //
-        // Field evidence (relay `susu.wiki`, model `deepseek-v4.1-flash`, session
-        // level HIGH): the request carried BOTH `thinking:{type:enabled}` (from the
-        // `*deepseek-v4*` vendor rule) and `reasoning_effort:"high"`, and the stream
-        // returned ~180 text chunks and ZERO reasoning chunks — two conflicting
-        // contracts in one body, honoured as neither. Emitting the single contract
-        // the endpoint declares removes the conflict; the vendor shape stays for
-        // endpoints that declare nothing (official hosts).
-        // A vendor-shaped rule is only correct on the vendor host itself; a relay
-        // carrying the same model id does not accept the vendor spelling.
-        val vendorHost = ctx.endpointHost?.contains("deepseek", ignoreCase = true) ?: true
-        val format = if (
-            !vendorHost &&
-            declaredFormat is ThinkingWireFormat.DeepSeekSibling &&
-            !ctx.declaredEffortValues.isNullOrEmpty()
-        ) {
-            formatSource = "declaredEffort"
+        // Field evidence (relay `susu.wiki`, `deepseek-v4.1-flash`, HIGH):
+        // ~180 text chunks and ZERO reasoning chunks — the private `thinking`
+        // object simply was not understood.
+        //
+        // Stated once, for EVERY vendor: private shape => only its owner host
+        // may receive it, otherwise the PORTABLE shape (plain OpenAI
+        // `reasoning_effort`) is used instead. Adding a vendor is data in
+        // [owningHostOf], never a new branch here.
+        //
+        // An UNKNOWN host keeps the declared shape — guessing is what produced
+        // the bug. This deliberately does NOT require the endpoint to declare
+        // effort tiers: a manually configured relay never does, and gating on
+        // that declaration is exactly why the previous attempt fixed nothing
+        // in the field.
+        val requestHost = hostOf(ctx.endpointHost)
+        val owner = owningHostOf(declaredFormat, ctx.endpointHost)
+        val fellBack = requestHost != null && owner != null && !owner(requestHost)
+        val format = if (fellBack) {
+            formatSource = "relayPortableFallback"
             ThinkingWireFormat.ReasoningEffort(ctx.offEffort)
         } else {
             declaredFormat
         }
 
-        val clamp = emit(format, ctx, body)
+        // The emitters must know WHY this shape was chosen: the domain-family
+        // skip only makes sense on the vendor's own host.
+        val emitCtx = if (fellBack) ctx.copy(vendorShapeRuledOut = true) else ctx
+        val clamp = emit(format, emitCtx, body)
         val emitted = body.keys().asSequence().toSet() - before
         return ThinkingResolveTrace(
             matchedRuleLabel = winner.label,
@@ -386,6 +404,11 @@ object ThinkingRuleResolver {
                     // `offEffort` is already snapped by clampOffEffort (null when
                     // no legal off tier) and NOT re-clamped — clampEffort walks
                     // UP, which would invert an OFF intent.
+                    // [T-thinking-vendor-shape-scope] A null offEffort IS the
+                    // safe default and comes first on purpose: with no legal
+                    // "off" tier there is no value to send, relay or not. The
+                    // host exemption below therefore only decides what to do
+                    // once a value exists — it must not invent one.
                     if (offEffort == null) return null to null
                     when {
                         isOpenAINative -> {
@@ -393,13 +416,21 @@ object ThinkingRuleResolver {
                             return offEffort to offEffort
                         }
                         isSelfReasoningFamily(lid) -> {
-                            if (ctx.usesUnifiedReasoningEffort ||
-                                ThinkingEffort.declaresTier(ctx.declaredEffortValues, offEffort)
-                            ) {
-                                body.put("reasoning_effort", offEffort)
-                                return offEffort to offEffort
-                            }
-                            return null to null
+                         if (ctx.usesUnifiedReasoningEffort ||
+                         ThinkingEffort.declaresTier(ctx.declaredEffortValues, offEffort)
+                         ) {
+                         body.put("reasoning_effort", offEffort)
+                         return offEffort to offEffort
+                         }
+                         // [T-thinking-vendor-shape-scope] The family skip is a statement
+                         // about the VENDOR's own host; a relay has no such handler, so
+                         // skipping here would emit nothing at all — worse than a field
+                         // the endpoint merely ignores.
+                         if (ctx.vendorShapeRuledOut) {
+                         body.put("reasoning_effort", offEffort)
+                         return offEffort to offEffort
+                         }
+                         return null to null
                         }
                         ctx.supportsReasoning != false -> {
                             if (!ThinkingEffort.declaresTier(ctx.declaredEffortValues, offEffort, absent = true)) {
@@ -424,10 +455,14 @@ object ThinkingRuleResolver {
                 // id-substring skip-list after GLM behind a relay silently received no
                 // thinking field at all.
                 val declaresEffort = !ctx.declaredEffortValues.isNullOrEmpty()
+                // [T-thinking-vendor-shape-scope] `vendorShapeRuledOut` exempts the skip
+                // on a relay: the skip means "the vendor's own endpoint handles
+                // reasoning", and a relay has no such handler. Skipping there would
+                // send NOTHING — strictly worse than a portable field it may ignore.
                 if (!ctx.usesUnifiedReasoningEffort && !declaresEffort &&
-                    isSelfReasoningFamily(lid)
+                 isSelfReasoningFamily(lid) && !ctx.vendorShapeRuledOut
                 ) {
-                    return null to null
+                 return null to null
                 }
                 // [OpenMinis#163] xAI-scoped skip: grok-build-0.1 400s on
                 // reasoning_effort; the catalog describes that state as
@@ -739,4 +774,5 @@ object ThinkingRuleResolver {
      *  by the OFF and generic ReasoningEffort branches (was two inline copies). */
     private fun isSelfReasoningFamily(lid: String): Boolean =
         listOf("deepseek", "glm", "kimi", "minimax").any { lid.contains(it) }
+
 }

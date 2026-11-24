@@ -642,7 +642,7 @@ internal fun OpenAIProvider.rawStreamMessage(
                                     combined, acc.name, args,
                                     rawArgs = argsStr.takeIf { parsed == null && it.isNotBlank() },
                                 ))
-                            } else if (android.util.Log.isLoggable("ToolChain[Provider]", android.util.Log.VERBOSE)) android.util.Log.d("ToolChain[Provider]", "output_item.done type=$itemType id=${item.optString("id", "")} — acknowledged") // [T-responses-unknown-item] Acknowledge only, NEVER re-send item.content: for message/reasoning items `content` is a JSON ARRAY, so optString would dump raw JSON into the visible stream, and the text already streamed via response.output_text.delta.
+                            } else if (itemType == "reasoning") { if (!sawReasoningDelta) reasoningThinkingDelta(item)?.let { sawReasoningDelta = true; send(it) } } else if (android.util.Log.isLoggable("ToolChain[Provider]", android.util.Log.VERBOSE)) android.util.Log.d("ToolChain[Provider]", "output_item.done type=$itemType")
                         }
                         type == "response.failed" -> {
                             // [T-responses-terminal-events] Explicit terminal
