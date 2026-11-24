@@ -1,0 +1,488 @@
+#!/bin/sh
+# minis-mirror — sandbox apt mirror selector with automatic fallback chain.
+#
+# Design goal — 验证优先于能力:
+#   * The sandbox must not die with its first mirror. TUNA hiccups, DNS
+#     fails, a campus firewall blocks ports — apt should self-heal instead
+#     of bubbling "Unable to fetch" to the user.
+#   * Plain /bin/sh + curl only — no hard runtime deps. jq is used by
+#     `status` when present and silently falls back to a raw JSON print
+#     otherwise; the minbase rootfs does not ship jq by default.
+#   * Writes only /etc/apt/sources.list (this fork's classic apt file).
+#     The stock file is archived once as sources.list.stock so the chain
+#     can always be reset.
+#
+# Usage:
+#   minis-mirror auto                 # probe chain, apply fastest working mirror
+#   minis-mirror set <id> [id...]     # manually pin the chain order
+#   minis-mirror reset                # restore stock (tuna first)
+#   minis-mirror status               # JSON: current + chain + last probe
+#   minis-mirror probe [--json]      # probe every mirror, print ranking
+#
+# Exit codes: 0 ok, 1 no mirror reachable, 2 usage error, 3 apt update failed
+# after switching.
+
+set -u
+
+# This fork's MirrorSettingsScreen writes classic /etc/apt/sources.list.
+# Keep minis-mirror on the same file so auto-fallback and the in-app picker
+# do not fight over minis.sources vs sources.list.
+SOURCES_DIR="/etc/apt"
+SOURCES_FILE="$SOURCES_DIR/sources.list"
+STOCK_FILE="$SOURCES_DIR/sources.list.stock"
+STATE_DIR="/var/lib/minis-mirror"
+STATE_FILE="$STATE_DIR/state.json"
+LOG_FILE="$STATE_DIR/probe.log"
+LOCK_FILE="$STATE_DIR/apt.lock"
+APPLY_USER="${SUDO_USER:-$(id -un)}"
+APPLY_GROUP="$(id -gn "$APPLY_USER" 2>/dev/null || echo "$APPLY_USER")"
+
+# Ordered fallback chain. First entry = preferred (default: TUNA, matching
+# the stock rootfs). cmd_auto uses apt-get itself as the health check so
+# curl is optional; HTTPS→HTTP rewrite is tried when CA verify fails.
+MIRRORS="tuna:https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/ \
+ustc:https://mirrors.ustc.edu.cn/ubuntu-ports/ \
+sjtu:https://mirror.sjtu.edu.cn/ubuntu-ports/ \
+aliyun:https://mirrors.aliyun.com/ubuntu-ports/ \
+huawei:https://mirrors.huaweicloud.com/ubuntu-ports/ \
+tencent:https://mirrors.cloud.tencent.com/ubuntu-ports/ \
+nju:https://mirrors.nju.edu.cn/ubuntu-ports/ \
+bfsu:https://mirrors.bfsu.edu.cn/ubuntu-ports/ \
+official:http://ports.ubuntu.com/ubuntu-ports/"
+
+PROBE_PATH="dists/noble/Release"
+PROBE_TIMEOUT=5
+# A dead mirror must not sit for two minutes before the next candidate.
+UPDATE_TIMEOUT=45
+APT_HELPER="/usr/local/lib/minis-mirror/apt-helper"
+
+log() { printf '%s\n' "$*" >&2; }
+
+die() { log "minis-mirror: $*"; exit "${2:-1}"; }
+
+now_iso() { date -u +%Y-%m-%dT%H:%M:%SZ; }
+
+chown_apply() {
+    # Rootfs files are owned by the app-uid user; keep them that way after
+    # we rewrite them so the app can still manage the file.
+    chown "$APPLY_USER:$APPLY_GROUP" "$1" 2>/dev/null || true
+}
+
+write_state() {
+    # $1 = json payload
+    mkdir -p "$STATE_DIR"
+    printf '%s\n' "$1" > "$STATE_FILE.tmp" && mv "$STATE_FILE.tmp" "$STATE_FILE"
+    chown_apply "$STATE_FILE"
+}
+
+require_state_dir() {
+    mkdir -p "$STATE_DIR"
+    chown_apply "$STATE_DIR"
+}
+
+# ── stock archive ────────────────────────────────────────────────────────────
+ensure_stock() {
+    [ -f "$STOCK_FILE" ] && return 0
+    if [ -f "$SOURCES_FILE" ]; then
+        cp "$SOURCES_FILE" "$STOCK_FILE"
+    else
+        # Synthetic stock from the default chain head (tuna) — matches what
+        # the app's MirrorSettings writes and what the rootfs ships.
+        gen_sources "https://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports/" > "$STOCK_FILE"
+    fi
+    chown_apply "$STOCK_FILE"
+}
+
+# ── template writer ──────────────────────────────────────────────────────────
+gen_sources() {
+    # $1 = mirror base URI. Classic sources.list — matches overlay + MirrorSettings.
+    cat <<EOF
+deb $1 noble main universe
+deb $1 noble-updates main universe
+deb $1 noble-security main universe
+EOF
+}
+
+# ── state ────────────────────────────────────────────────────────────────────
+current_uri() {
+    # Current base URI from the live sources file, "" when unreadable.
+    [ -f "$SOURCES_FILE" ] || { echo ""; return; }
+    awk '/^deb /{print $2; exit}' "$SOURCES_FILE"
+}
+
+id_for_uri() {
+    case "$1" in
+        *tuna.tsinghua*)     echo "tuna" ;;
+        *ustc.edu.cn*)       echo "ustc" ;;
+        *aliyun.com*)        echo "aliyun" ;;
+        *huaweicloud.com*)   echo "huawei" ;;
+        *cloud.tencent.com*) echo "tencent" ;;
+        *nju.edu.cn*)        echo "nju" ;;
+        *bfsu.edu.cn*)       echo "bfsu" ;;
+        *sjtu.edu.cn*)       echo "sjtu" ;;
+        *ports.ubuntu.com*)  echo "official" ;;
+        *)                   echo "unknown" ;;
+    esac
+}
+
+id_position() {
+    _pos=1
+    for _entry in $MIRRORS; do
+        [ "${_entry%%:*}" = "$1" ] && { echo "$_pos"; return; }
+        _pos=$((_pos + 1))
+    done
+    echo 999
+}
+
+# ── probing ──────────────────────────────────────────────────────────────────
+# bash /dev/tcp HEAD — no curl/wget. HTTPS is not TLS; we always hit :80.
+http_head() {
+    # $1=host $2=path $3=port
+    command -v bash >/dev/null 2>&1 || return 1
+    command -v timeout >/dev/null 2>&1 || return 1
+    _code=$(timeout "$PROBE_TIMEOUT" bash -c '
+        exec 3<>"/dev/tcp/$1/$3" 2>/dev/null || exit 1
+        printf "HEAD %s HTTP/1.0\r\nHost: %s\r\nConnection: close\r\n\r\n" "$2" "$1" >&3
+        IFS=" " read -r -t 3 _ c _ <&3
+        exec 3<&- 3>&-
+        echo "$c"
+    ' _ "$1" "$2" "${3:-80}" 2>/dev/null) || return 1
+    [ "$_code" = "200" ] || [ "$_code" = "301" ] || [ "$_code" = "302" ]
+}
+
+probe_http_url() {
+    # $1 = base url (http or https). Fast TCP+HTTP filter on port 80.
+    _u="${1#http://}"
+    _u="${_u#https://}"
+    _host="${_u%%/*}"
+    _rest="/${_u#*/}"
+    _path="${_rest%/}/$PROBE_PATH"
+    http_head "$_host" "$_path" 80
+}
+
+probe_one() {
+    # $1 = base url; prints "<ms> <http_code>" or "999999 000" on failure.
+    _url="$1$PROBE_PATH"
+    if command -v curl >/dev/null 2>&1; then
+        _out="$(curl -sL -o /dev/null --max-time "$PROBE_TIMEOUT" \
+            -w '%{time_total} %{http_code}' "$_url" 2>/dev/null)" || true
+        [ -n "$_out" ] || _out="999999 000"
+        echo "$_out"
+        return
+    fi
+    if command -v wget >/dev/null 2>&1; then
+        if wget -q -O /dev/null --timeout="$PROBE_TIMEOUT" --tries=1 "$_url"; then
+            echo "1 200"
+        else
+            echo "999999 000"
+        fi
+        return
+    fi
+    if probe_http_url "$1"; then
+        echo "1 200"
+    else
+        echo "999999 000"
+    fi
+}
+
+mirror_ok() {
+    # $1 = base url; 0 when probe returns HTTP 200 within the timeout.
+    _r="$(probe_one "$1")"
+    _code="${_r#* }"
+    [ "$_code" = "200" ]
+}
+
+cmd_probe() {
+    json_out=0
+    for a in "$@"; do
+        [ "$a" = "--json" ] && json_out=1
+    done
+    require_state_dir
+    : > "$LOG_FILE"
+    chown_apply "$LOG_FILE"
+    if [ "$json_out" = "1" ]; then printf '['; _first=1; fi
+    for entry in $MIRRORS; do
+        _id="${entry%%:*}"
+        _url="${entry#*:}"
+        _r="$(probe_one "$_url")"
+        _ms="$(echo "$_r" | cut -d' ' -f1)"
+        _code="$(echo "$_r" | cut -d' ' -f2)"
+        case "$_code" in 200) ok=true ;; *) ok=false ;; esac
+        printf '%s %8s ms  HTTP %s  %s\n' "$_id" "$_ms" "$_code" "$_url" >&2
+        printf '%s|%s|%s|%s\n' "$_id" "$_ms" "$_code" "$(now_iso)" >> "$LOG_FILE"
+        if [ "$json_out" = "1" ]; then
+            [ $_first = 0 ] && printf ','
+            printf '{"id":"%s","ms":%s,"http":%s,"url":"%s"}' \
+                "$_id" "$_ms" "$_code" "$_url"
+            _first=0
+        fi
+    done
+    if [ "$json_out" = "1" ]; then printf ']\n'; fi
+    return 0
+}
+
+# ── apt serialization (flock, then stale dpkg locks; mkdir fallback) ────────
+acquire_lock() {
+    require_state_dir
+    if [ -f /usr/local/lib/minis/apt-lock.sh ]; then
+        # shellcheck source=/dev/null
+        . /usr/local/lib/minis/apt-lock.sh
+        minis_acquire_apt_lock 180 && return 0
+        die "another apt/mirror operation appears to hold the lock" 1
+    fi
+    if mkdir "$LOCK_FILE.d" 2>/dev/null; then
+        echo $$ > "$LOCK_FILE.d/pid"
+        return 0
+    fi
+    _pid="$(cat "$LOCK_FILE.d/pid" 2>/dev/null)"
+    if [ -n "$_pid" ] && ! kill -0 "$_pid" 2>/dev/null; then
+        rm -rf "$LOCK_FILE.d"
+        mkdir "$LOCK_FILE.d" 2>/dev/null && { echo $$ > "$LOCK_FILE.d/pid"; return 0; }
+    fi
+    die "another apt/mirror operation appears to hold the lock" 1
+}
+
+release_lock() {
+    if type minis_release_apt_lock >/dev/null 2>&1; then
+        minis_release_apt_lock 2>/dev/null || true
+    fi
+    rm -rf "$LOCK_FILE.d" 2>/dev/null || true
+    return 0
+}
+
+# ── apply ────────────────────────────────────────────────────────────────────
+apply_uri() {
+    # $1 = uri; rewrite /etc/apt/sources.list atomically.
+    # Drop leftover deb822 ubuntu.sources so noble archive URIs cannot 404
+    # alongside the classic list (apt merges both and the error looks like
+    # the mirror we just selected is broken).
+    rm -f /etc/apt/sources.list.d/*.sources
+    _tmp="$SOURCES_FILE.tmp.$$"
+    gen_sources "$1" > "$_tmp"
+    chown_apply "$_tmp"
+    mv "$_tmp" "$SOURCES_FILE"
+    chown_apply "$SOURCES_FILE"
+}
+
+apt_update_ok() {
+    # Run apt update with a hard timeout. Uses the app's serialized-apt
+    # helper when present (it owns the dpkg/fetch locks); falls back to a
+    # plain apt-get otherwise.
+    #
+    # apt's exit code alone is NOT a truth signal: a mirror that fails to
+    # download only produces `W:`/`Err:` lines and apt still exits 0
+    # (observed on noble). Treat error lines in the output as failure too.
+    export TMPDIR=/tmp TMP=/tmp TEMP=/tmp
+    export SSL_CERT_FILE="${SSL_CERT_FILE:-/etc/ssl/certs/ca-certificates.crt}"
+    export CURL_CA_BUNDLE="${CURL_CA_BUNDLE:-$SSL_CERT_FILE}"
+    # stdout, so both debug (stderr split to logcat) and release see it.
+    # apt's own output stays in the temp file used for the Err:/E: check.
+    printf '%s\n' "minis-mirror: apt update, timeout ${UPDATE_TIMEOUT}s"
+    _out="$(mktemp)"
+    # Verify TLS. A CA failure is handled by cmd_auto's HTTPS→HTTP rewrite,
+    # not by turning verification off.
+    if [ -x "$APT_HELPER" ]; then
+        timeout "$UPDATE_TIMEOUT" "$APT_HELPER" update > "$_out" 2>&1
+    else
+        timeout "$UPDATE_TIMEOUT" apt-get update > "$_out" 2>&1
+    fi
+    _rc=$?
+    if [ $_rc = 0 ] && ! grep -qE '^Err:|^E: |^W: Some index files failed' "$_out"; then
+        rm -f "$_out"
+        return 0
+    fi
+    # Keep the tail for diagnostics; apt errors are the reason we switched.
+    log "apt update failed (rc=$_rc), tail of output:"
+    tail -5 "$_out" >&2
+    rm -f "$_out"
+    return 1
+}
+
+apt_probe_uri() {
+    # End-to-end apt check against $1 without rewriting the live sources.
+    # Dir::Etc::sourceparts=- so ubuntu.sources leftovers cannot mask failure.
+    _list="/tmp/minis-probe.list"
+    gen_sources "$1" > "$_list"
+    printf '%s\n' "minis-mirror: probing $1"
+    _out="$(mktemp)"
+    timeout 20 apt-get \
+        -o Dir::Etc::sourcelist="$_list" \
+        -o Dir::Etc::sourceparts=- \
+        -o APT::Get::List-Cleanup=0 \
+        -o Acquire::Retries=0 \
+        update > "$_out" 2>&1
+    _rc=$?
+    if [ $_rc = 0 ] && ! grep -qE '^Err:|^E: |^W: Some index files failed' "$_out"; then
+        rm -f "$_out" "$_list"
+        return 0
+    fi
+    log "apt probe failed for $1 (rc=$_rc)"
+    tail -3 "$_out" >&2
+    rm -f "$_out" "$_list"
+    return 1
+}
+
+switch_to() {
+    # $1 = id, $2 = uri. Writes sources, runs apt update, records state.
+    log "switching apt mirror -> $1 ($2)"
+    apply_uri "$2"
+    if apt_update_ok; then
+        write_state "{\"current\":\"$1\",\"uri\":\"$2\",\"updated\":\"$(now_iso)\",\"auto\":true,\"ok\":true}"
+        return 0
+    fi
+    write_state "{\"current\":\"$1\",\"uri\":\"$2\",\"updated\":\"$(now_iso)\",\"auto\":true,\"ok\":false}"
+    return 1
+}
+
+cmd_auto() {
+    ensure_stock
+    require_state_dir
+    cur="$(current_uri)"
+    [ -n "$cur" ] || cur="http://ports.ubuntu.com/ubuntu-ports/"
+
+    acquire_lock
+    # apt-get is always present; curl is not. Use apt update as the health
+    # check so a missing curl cannot strand HTTPS SJTU / TUNA sources.
+    if apt_update_ok; then
+        log "current mirror OK ($(id_for_uri "$cur")) — no switch"
+        write_state "{\"current\":\"$(id_for_uri "$cur")\",\"uri\":\"$cur\",\"probed\":\"$(now_iso)\",\"auto\":true,\"ok\":true}"
+        release_lock
+        return 0
+    fi
+
+    case "$cur" in
+        https://*)
+            _http="http://${cur#https://}"
+            log "current HTTPS mirror failed — trying HTTP rewrite"
+            if switch_to "$(id_for_uri "$cur")" "$_http"; then
+                log "HTTP rewrite of current mirror works"
+                release_lock
+                return 0
+            fi
+            apply_uri "$cur"
+            ;;
+    esac
+
+    log "current mirror ($(id_for_uri "$cur")) unhealthy — walking fallback chain"
+    for entry in $MIRRORS; do
+        _id="${entry%%:*}"
+        _url="${entry#*:}"
+        [ "$_url" = "$cur" ] && continue
+        # Fast TCP+HTTP filter when bash is present; skip dead hosts.
+        if command -v bash >/dev/null 2>&1; then
+            probe_http_url "$_url" || {
+                case "$_url" in
+                    https://*) probe_http_url "http://${_url#https://}" || continue ;;
+                    *) continue ;;
+                esac
+            }
+        fi
+        if apt_probe_uri "$_url" && switch_to "$_id" "$_url"; then
+            log "fallback complete: now on $_id"
+            release_lock
+            return 0
+        fi
+        case "$_url" in
+            https://*)
+                _http="http://${_url#https://}"
+                if apt_probe_uri "$_http" && switch_to "$_id" "$_http"; then
+                    log "fallback complete: now on $_id (http)"
+                    release_lock
+                    return 0
+                fi
+                ;;
+        esac
+    done
+    release_lock
+    write_state "{\"current\":\"none\",\"uri\":\"\",\"updated\":\"$(now_iso)\",\"auto\":true,\"ok\":false}"
+    die "no mirror in the chain is reachable" 1
+}
+
+cmd_set() {
+    [ $# -ge 1 ] || die "usage: minis-mirror set <id> [id...]" 2
+    ensure_stock
+    require_state_dir
+    _chain=""
+    _first_uri=""
+    for want in "$@"; do
+        found=""
+        for entry in $MIRRORS; do
+            [ "${entry%%:*}" = "$want" ] && { found="$entry"; break; }
+        done
+        [ -n "$found" ] || die "unknown mirror id: $want (see 'minis-mirror probe')" 2
+        _chain="$_chain $want"
+        [ -n "$_first_uri" ] || _first_uri="${found#*:}"
+    done
+    acquire_lock
+    log "setting chain:$_chain (head: $_first_uri)"
+    _prev_uri="$(current_uri)"
+    apply_uri "$_first_uri"
+    if apt_update_ok; then
+        write_state "{\"current\":\"$1\",\"uri\":\"$_first_uri\",\"updated\":\"$(now_iso)\",\"auto\":false,\"ok\":true,\"chain\":\"$_chain\"}"
+        release_lock
+        log "active mirror: $1"
+        return 0
+    fi
+    # Roll back to the previous (known-working) sources so a bad `set`
+    # never leaves the sandbox with a dead mirror.
+    if [ -n "$_prev_uri" ] && [ "$_prev_uri" != "$_first_uri" ]; then
+        log "rolling back to previous mirror: $_prev_uri"
+        apply_uri "$_prev_uri"
+        apt_update_ok || true
+    fi
+    release_lock
+    write_state "{\"current\":\"$1\",\"uri\":\"$_first_uri\",\"updated\":\"$(now_iso)\",\"auto\":false,\"ok\":false,\"chain\":\"$_chain\"}"
+    die "apt update failed on $1 — run 'minis-mirror auto' to fall back" 3
+}
+
+cmd_reset() {
+    ensure_stock
+    require_state_dir
+    acquire_lock
+    cp "$STOCK_FILE" "$SOURCES_FILE"
+    chown_apply "$SOURCES_FILE"
+    release_lock
+    write_state "{\"current\":\"stock\",\"uri\":\"$(current_uri)\",\"updated\":\"$(now_iso)\",\"auto\":false,\"ok\":true}"
+    log "restored stock sources ($(current_uri))"
+}
+
+cmd_status() {
+    cur="$(current_uri)"
+    if [ -f "$STATE_FILE" ]; then
+        state="$(cat "$STATE_FILE")"
+    else
+        state="{\"current\":\"$(id_for_uri "$cur")\",\"uri\":\"$cur\",\"probed\":null,\"auto\":false,\"ok\":null}"
+    fi
+    if command -v jq >/dev/null 2>&1; then
+        jq -n --arg uri "$cur" --argjson state "$state" \
+            '{uri:$uri, id:($state.current // "unknown"), state:$state}'
+    else
+        printf '{"uri":"%s","state":%s}\n' "$cur" "$state"
+    fi
+}
+
+usage() {
+    cat <<'USAGE'
+minis-mirror — apt mirror selector with automatic fallback chain
+
+Usage:
+  minis-mirror auto                 probe chain, switch to first healthy mirror (apt-verified)
+  minis-mirror set <id> [id...]     pin the chain, e.g. `minis-mirror set ustc tuna official`
+  minis-mirror reset                restore the stock sources file (tuna first)
+  minis-mirror status               print current mirror + last probe state (JSON)
+  minis-mirror probe [--json]       probe every mirror and rank by latency
+
+Mirrors: tuna ustc sjtu aliyun huawei tencent nju bfsu official
+USAGE
+}
+
+[ $# -ge 1 ] || { usage; exit 0; }
+case "$1" in
+    auto)   shift; cmd_auto "$@" ;;
+    set)    shift; cmd_set "$@" ;;
+    reset)  shift; cmd_reset "$@" ;;
+    status) shift; cmd_status "$@" ;;
+    probe)  shift; cmd_probe "$@" ;;
+    -h|--help|help) usage ;;
+    *) usage; die "unknown command: $1" 2 ;;
+esac

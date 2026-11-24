@@ -1,0 +1,2 @@
+#!/bin/sh
+exec /usr/local/bin/minis-apt-wrap /usr/bin/apt-get "$@"

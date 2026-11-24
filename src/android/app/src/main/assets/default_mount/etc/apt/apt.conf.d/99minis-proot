@@ -1,0 +1,14 @@
+// PRoot fake-root cannot drop privileges to the `_apt` sandbox user.
+APT::Sandbox::User "root";
+Dpkg::Use-Pty "false";
+DPkg::Options { "--force-confdef"; "--force-confold"; "--force-unsafe-io"; };
+Acquire::Languages "none";
+// Do not inherit Android's host cache dir via TMPDIR for apt-extracttemplates.
+APT::ExtractTemplates::TempDir "/tmp";
+Acquire::https::CaInfo "/etc/ssl/certs/ca-certificates.crt";
+Acquire::Retries "2";
+// Idle timeout, not a total transfer cap. A stalled mirror used to sit on
+// the 120s default, three times, with no newline for the chat card.
+Acquire::http::Timeout "30";
+Acquire::https::Timeout "30";
+Acquire::ftp::Timeout "30";

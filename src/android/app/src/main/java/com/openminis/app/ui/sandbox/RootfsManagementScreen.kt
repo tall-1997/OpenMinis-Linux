@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -36,13 +35,12 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.openminis.app.ui.components.MinisCenterTopBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,8 +51,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.openminis.app.ui.components.SettingsRowDivider
-import com.openminis.app.ui.components.SettingsSection
+import com.openminis.app.ui.settings.SettingsRowDivider
+import com.openminis.app.ui.settings.SettingsSection
+import com.openminis.app.ui.theme.m3Icon
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,7 +63,7 @@ fun RootfsManagementScreen(
     onMirrorCategoryClick: (MirrorCategory) -> Unit = {},
     viewModel: RootfsManagementViewModel = viewModel(),
 ) {
-    val state by viewModel.uiState.collectAsState()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     var showResetDialog by remember { mutableStateOf(false) }
@@ -80,14 +79,14 @@ fun RootfsManagementScreen(
     val groupedBg = MaterialTheme.colorScheme.surfaceContainerLowest
     Scaffold(
         topBar = {
-            TopAppBar(
+            MinisCenterTopBar(
                 title = { Text(stringResource(R.string.rootfs_management_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.common_back))
+                        Icon(m3Icon(Icons.AutoMirrored.Filled.ArrowBack), contentDescription = stringResource(R.string.common_back))
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = groupedBg),
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = groupedBg),
             )
         },
         containerColor = groupedBg,
@@ -102,12 +101,12 @@ fun RootfsManagementScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             // --- Status section ---
-            SettingsSection(title = stringResource(R.string.rootfs_status_section)) {
+            SettingsSection(header = stringResource(R.string.rootfs_status_section)) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.rootfs_installed_label)) },
                     trailingContent = {
                         Icon(
-                            if (state.isInstalled) Icons.Filled.CheckCircle else Icons.Filled.Cancel,
+                            m3Icon(if (state.isInstalled) Icons.Filled.CheckCircle else Icons.Filled.Cancel),
                             contentDescription = null,
                             tint = if (state.isInstalled)
                                 MaterialTheme.colorScheme.primary
@@ -151,18 +150,18 @@ fun RootfsManagementScreen(
 
             if (state.isInstalled) {
                 // --- Browse section ---
-                SettingsSection(title = stringResource(R.string.rootfs_browse_section)) {
+                SettingsSection(header = stringResource(R.string.rootfs_browse_section)) {
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.rootfs_browse_files_label)) },
                         leadingContent = {
                             Icon(
-                                Icons.Filled.Folder,
+                                m3Icon(Icons.Filled.Folder),
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                             )
                         },
                         trailingContent = {
-                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
+                            Icon(m3Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight), contentDescription = null)
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -172,7 +171,7 @@ fun RootfsManagementScreen(
                 }
 
                 // --- Mirrors section ---
-                SettingsSection(title = stringResource(R.string.rootfs_mirrors_section)) {
+                SettingsSection(header = stringResource(R.string.rootfs_mirrors_section)) {
                     MirrorsSectionView(onNavigate = onMirrorCategoryClick)
                 }
             }
@@ -185,12 +184,12 @@ fun RootfsManagementScreen(
             }
 
             // --- Actions section ---
-            SettingsSection(title = stringResource(R.string.rootfs_actions_section)) {
+            SettingsSection(header = stringResource(R.string.rootfs_actions_section)) {
                 if (!state.isInstalled) {
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.rootfs_install_label)) },
                         leadingContent = {
-                            Icon(Icons.Filled.Download, contentDescription = null)
+                            Icon(m3Icon(Icons.Filled.Download), contentDescription = null)
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -205,7 +204,7 @@ fun RootfsManagementScreen(
                         headlineContent = { Text(stringResource(R.string.rootfs_reset_label)) },
                         supportingContent = { Text(stringResource(R.string.rootfs_reset_description)) },
                         leadingContent = {
-                            Icon(Icons.Filled.Refresh, contentDescription = null)
+                            Icon(m3Icon(Icons.Filled.Refresh), contentDescription = null)
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -220,7 +219,7 @@ fun RootfsManagementScreen(
                         headlineContent = { Text(stringResource(R.string.rootfs_reset_backup_label)) },
                         supportingContent = { Text(stringResource(R.string.rootfs_reset_backup_description)) },
                         leadingContent = {
-                            Icon(Icons.Filled.Archive, contentDescription = null)
+                            Icon(m3Icon(Icons.Filled.Archive), contentDescription = null)
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -238,7 +237,7 @@ fun RootfsManagementScreen(
                         headlineContent = { Text(stringResource(R.string.rootfs_restore_label)) },
                         supportingContent = { Text(stringResource(R.string.rootfs_restore_description)) },
                         leadingContent = {
-                            Icon(Icons.Filled.Restore, contentDescription = null)
+                            Icon(m3Icon(Icons.Filled.Restore), contentDescription = null)
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -253,7 +252,7 @@ fun RootfsManagementScreen(
 
             // --- Progress / Result ---
             if (state.isProcessing) {
-                SettingsSection(title = stringResource(R.string.rootfs_progress_section)) {
+                SettingsSection(header = stringResource(R.string.rootfs_progress_section)) {
                     ListItem(
                         headlineContent = { Text(state.statusMessage) },
                         supportingContent = state.installProgress?.let { p ->
@@ -273,7 +272,7 @@ fun RootfsManagementScreen(
             }
 
             state.resultMessage?.let { msg ->
-                SettingsSection(title = stringResource(R.string.rootfs_result_section)) {
+                SettingsSection(header = stringResource(R.string.rootfs_result_section)) {
                     Text(
                         text = msg,
                         style = MaterialTheme.typography.bodyMedium,
@@ -287,7 +286,7 @@ fun RootfsManagementScreen(
             }
 
             // --- Info section ---
-            SettingsSection(title = stringResource(R.string.rootfs_info_section)) {
+            SettingsSection(header = stringResource(R.string.rootfs_info_section)) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         text = stringResource(R.string.rootfs_about_title),
@@ -295,17 +294,13 @@ fun RootfsManagementScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "The rootfs contains the Alpine Linux filesystem used by " +
-                            "the sandbox. Resetting will delete all data and restore to " +
-                            "factory state.",
+                        text = stringResource(R.string.rootfs_explain),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Reset: Delete everything\n" +
-                            "Backup: Save /root directory\n" +
-                            "Restore: Recover saved data",
+                        text = stringResource(R.string.rootfs_actions_help),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -327,7 +322,7 @@ fun RootfsManagementScreen(
                     showResetDialog = false
                     viewModel.resetRootfs(context, keepUserData = false)
                 }) {
-                    Text("Reset", color = MaterialTheme.colorScheme.error)
+                    Text(stringResource(R.string.action_reset), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {

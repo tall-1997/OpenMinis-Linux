@@ -1,0 +1,91 @@
+#!/bin/sh
+# yum/dnf compatibility shim over Ubuntu apt-get.
+# Not a real RPM package manager — maps the common verbs so scripts that
+# type `yum install` keep working on this glibc Ubuntu guest.
+set -e
+
+cmd=$(basename "$0")
+export DEBIAN_FRONTEND=noninteractive
+
+usage() {
+  cat <<EOF
+$cmd — apt-get compatibility shim (Ubuntu, not RPM)
+
+Usage:
+  $cmd install [-y] <pkg...>     apt-get install -y
+  $cmd remove|erase [-y] <pkg>   apt-get remove -y
+  $cmd update|upgrade [-y]       apt-get update && apt-get upgrade -y
+  $cmd makecache                 apt-get update
+  $cmd search <query>            apt-cache search
+  $cmd info <pkg>                apt-cache show
+  $cmd list                      apt list --installed
+  $cmd clean all                 apt-get clean
+
+This guest is Ubuntu 24.04 arm64 (glibc) under PRoot. Prefer \`apt-get\`
+or run \`minis-dev-setup\` for a compiler toolchain.
+EOF
+}
+
+filter() {
+  for a in "$@"; do
+    case "$a" in
+      -y|--assumeyes|--allowerasing|--nobest|--skip-broken) ;;
+      *) printf '%s\n' "$a" ;;
+    esac
+  done
+}
+
+if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ] || [ "$1" = "help" ]; then
+  usage
+  exit 0
+fi
+
+verb=$1
+shift
+# shellcheck disable=SC2046
+set -- $(filter "$@")
+
+case "$verb" in
+  install)
+    [ $# -gt 0 ] || { echo "$cmd install: missing package name" >&2; exit 2; }
+    apt-get update
+    exec apt-get install -y --no-install-recommends "$@"
+    ;;
+  remove|erase|uninstall)
+    [ $# -gt 0 ] || { echo "$cmd $verb: missing package name" >&2; exit 2; }
+    exec apt-get remove -y "$@"
+    ;;
+  update|upgrade)
+    apt-get update
+    exec apt-get upgrade -y "$@"
+    ;;
+  makecache|check-update)
+    exec apt-get update
+    ;;
+  search)
+    [ $# -gt 0 ] || { echo "$cmd search: missing query" >&2; exit 2; }
+    exec apt-cache search "$@"
+    ;;
+  info)
+    [ $# -gt 0 ] || { echo "$cmd info: missing package name" >&2; exit 2; }
+    exec apt-cache show "$@"
+    ;;
+  list)
+    exec apt list --installed
+    ;;
+  clean)
+    apt-get clean
+    rm -rf /var/cache/apt/archives/*.deb 2>/dev/null || true
+    echo "cache cleaned"
+    ;;
+  groupinstall|groupremove|repolist)
+    echo "$cmd: '$verb' is an RPM concept; this guest uses apt." >&2
+    echo "Use \`apt-cache search\` / \`apt-get install\` or run minis-dev-setup." >&2
+    exit 2
+    ;;
+  *)
+    echo "$cmd: unknown verb '$verb' (this is an apt shim, not real yum)." >&2
+    usage >&2
+    exit 2
+    ;;
+esac

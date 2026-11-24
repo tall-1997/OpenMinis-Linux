@@ -1,0 +1,4 @@
+# Skip per-file fsync. Under PRoot each fsync is a host round-trip and
+# dominates unpack time. A power loss mid-install can leave the guest dpkg
+# database inconsistent; re-run the install or reset the rootfs.
+force-unsafe-io

@@ -67,20 +67,31 @@ class RootfsManagerInstrumentedTest {
     }
 
     @Test
-    fun isInstalledWhenRootfsAndArchPresent() {
+    fun isInstalledWhenRootfsArchAndDistroPresent() {
         manager.rootfsDir.mkdirs()
         File(manager.rootfsDir, ".arch").writeText("aarch64")
+        File(manager.rootfsDir, ".distro").writeText("ubuntu-noble")
         assertTrue(manager.isInstalled)
+    }
+
+    @Test
+    fun legacyUbuntuTreeWithoutDistroMarkerIsKept() {
+        manager.rootfsDir.mkdirs()
+        File(manager.rootfsDir, ".arch").writeText("aarch64")
+        File(manager.rootfsDir, "usr/bin").mkdirs()
+        assertTrue(manager.isInstalled)
+        assertEquals("ubuntu-noble", File(manager.rootfsDir, ".distro").readText().trim())
     }
 
     // ==================== installIfNeeded ====================
 
     @Test
     fun installIfNeededExtractsRootfsFromAssets() = runBlocking {
-        // This test requires alpine-minirootfs.tar.gz in assets.
+        // This test requires the embedded rootfs (ubuntu-base.tgz, or the
+        // legacy ubuntu-base.tar.gz/.tar names) in assets.
         // Skip if not present (CI or pre-asset-download)
-        if (!hasAsset("alpine-minirootfs.tar.gz")) {
-            println("SKIP: alpine-minirootfs.tar.gz not in assets")
+        if (!rootfsAssetPresent()) {
+            println("SKIP: rootfs asset not in assets")
             return@runBlocking
         }
 
@@ -111,8 +122,8 @@ class RootfsManagerInstrumentedTest {
 
     @Test
     fun installIfNeededIsIdempotent() = runBlocking {
-        if (!hasAsset("alpine-minirootfs.tar.gz")) {
-            println("SKIP: alpine-minirootfs.tar.gz not in assets")
+        if (!rootfsAssetPresent()) {
+            println("SKIP: rootfs asset not in assets")
             return@runBlocking
         }
 
@@ -130,8 +141,8 @@ class RootfsManagerInstrumentedTest {
 
     @Test
     fun installIfNeededCleansPartialInstall() = runBlocking {
-        if (!hasAsset("alpine-minirootfs.tar.gz")) {
-            println("SKIP: alpine-minirootfs.tar.gz not in assets")
+        if (!rootfsAssetPresent()) {
+            println("SKIP: rootfs asset not in assets")
             return@runBlocking
         }
 
@@ -187,7 +198,7 @@ class RootfsManagerInstrumentedTest {
         val sessionBase = File(context.filesDir, "minis-sessions/$sessionId")
         assertTrue(sessionBase.exists())
 
-        val expectedSubdirs = listOf("attachments", "offloads", "workspace", "browser")
+        val expectedSubdirs = listOf("attachments", "offloads", "workspace", "browser", "memory")
         for (subdir in expectedSubdirs) {
             val dir = File(sessionBase, subdir)
             assertTrue("$subdir should exist", dir.exists())
@@ -213,8 +224,8 @@ class RootfsManagerInstrumentedTest {
 
     @Test
     fun resetDeletesAndReinstalls() = runBlocking {
-        if (!hasAsset("alpine-minirootfs.tar.gz")) {
-            println("SKIP: alpine-minirootfs.tar.gz not in assets")
+        if (!rootfsAssetPresent()) {
+            println("SKIP: rootfs asset not in assets")
             return@runBlocking
         }
 
@@ -232,8 +243,8 @@ class RootfsManagerInstrumentedTest {
 
     @Test
     fun resetKeepsUserDataWhenRequested() = runBlocking {
-        if (!hasAsset("alpine-minirootfs.tar.gz")) {
-            println("SKIP: alpine-minirootfs.tar.gz not in assets")
+        if (!rootfsAssetPresent()) {
+            println("SKIP: rootfs asset not in assets")
             return@runBlocking
         }
 
@@ -268,7 +279,7 @@ class RootfsManagerInstrumentedTest {
         try {
             testDir.mkdirs()
             java.util.zip.GZIPInputStream(ByteArrayInputStream(gzBytes)).use { gzStream ->
-                manager.extractTar(gzStream, testDir)
+                extractTar(gzStream, testDir)
             }
 
             assertTrue(File(testDir, "hello.txt").exists())
@@ -286,7 +297,7 @@ class RootfsManagerInstrumentedTest {
         val testDir = File(context.cacheDir, "empty-tar-test-${System.nanoTime()}")
         try {
             testDir.mkdirs()
-            manager.extractTar(ByteArrayInputStream(emptyTar), testDir)
+            extractTar(ByteArrayInputStream(emptyTar), testDir)
 
             // Should create no files (only the dir itself)
             assertEquals(0, testDir.listFiles()?.size ?: 0)
@@ -304,7 +315,7 @@ class RootfsManagerInstrumentedTest {
         val testDir = File(context.cacheDir, "large-tar-test-${System.nanoTime()}")
         try {
             testDir.mkdirs()
-            manager.extractTar(ByteArrayInputStream(tarBytes), testDir)
+            extractTar(ByteArrayInputStream(tarBytes), testDir)
 
             assertEquals(largeContent, File(testDir, "large.txt").readText())
         } finally {
@@ -322,6 +333,10 @@ class RootfsManagerInstrumentedTest {
     }
 
     // ==================== Helpers ====================
+
+    /** The embedded rootfs under any name an APK may carry (.tgz now, legacy .tar.gz/.tar). */
+    private fun rootfsAssetPresent(): Boolean =
+        hasAsset("ubuntu-base.tgz") || hasAsset("ubuntu-base.tar.gz") || hasAsset("ubuntu-base.tar")
 
     private fun hasAsset(name: String): Boolean {
         return try {

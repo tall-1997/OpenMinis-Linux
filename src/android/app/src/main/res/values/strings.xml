@@ -363,6 +363,9 @@
     <string name="soul_prompt_import">Import prompt</string>
     <string name="soul_section_provider_prompts">Prompt by provider</string>
     <string name="soul_provider_prompts_footer">Each provider can use a different personality file. \"Follow default\" uses the file selected above.</string>
+    <string name="rootfs_actions_help">Reset: Delete everything\nBackup: Save /root directory\nRestore: Recover saved data</string>
+    <string name="rootfs_explain">The rootfs contains the Ubuntu Linux filesystem used by the sandbox. Resetting will delete all data and restore to factory state.</string>
+    <string name="action_reset">Reset</string>
     <string name="settings_env_vars">Environment Variables</string>
     <string name="settings_env_vars_subtitle">Variables injected into the sandbox</string>
     <string name="settings_section_storage">Storage</string>

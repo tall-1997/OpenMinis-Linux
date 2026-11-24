@@ -10,10 +10,17 @@ import android.provider.DocumentsContract
 import android.util.Log
 import kotlinx.coroutines.sync.withLock
 import com.openminis.app.data.FileMentionIndex
-import com.openminis.app.data.MountedFoldersStore
+import com.openminis.app.di.AppGraph
 import java.io.File
 import java.util.TimeZone
+import java.util.concurrent.ConcurrentNavigableMap
+import java.util.concurrent.ConcurrentSkipListMap
 import kotlin.math.abs
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * PRoot configuration holder and command builder.
@@ -25,8 +32,24 @@ object PRootKernel {
 
     private const val TAG = "PRootKernel"
 
+    // @Volatile: the fast-path `if (isBooted) return` in boot() and the
+    // ExecutionCoordinator auto-boot check run on arbitrary threads; without
+    // volatile a caller could re-run the whole boot body (double install,
+    // double NativeOffloadServer.start) after another caller had finished it.
+    @Volatile
     var isBooted: Boolean = false
         private set
+
+    /**
+     * Serializes the boot body. Two concurrent first-boot entries exist —
+     * ExecutionCoordinator's auto-boot inside its session mutex, and
+     * TerminalSession.start() — both can hit boot() before either finished.
+     * A Mutex (not `synchronized`) because the guarded region contains
+     * suspension points: a monitor held across a suspend leaks the lock when
+     * the coroutine resumes on another thread. Mirrors the double-checked
+     * pattern of RootfsManager.getInstance.
+     */
+    private val bootMutex = Mutex()
 
     /** Path to native library directory (for LD_LIBRARY_PATH). */
     var nativeLibDir: String = ""
@@ -40,7 +63,8 @@ object PRootKernel {
     var prootLoader32Path: String = ""
         private set
 
-    private lateinit var rootfsManager: RootfsManager
+    private var rootfsManagerRef: RootfsManager? = null
+    private val rootfsManager: RootfsManager get() = checkNotNull(rootfsManagerRef) { "PRootKernel.boot must be called first" }
 
     /**
      * [T-android-env-first-turn] Guards [boot]. See the comment there: the
@@ -53,16 +77,20 @@ object PRootKernel {
     val customEnvironment: MutableMap<String, String> = mutableMapOf()
 
     /**
-     * Bind mounts: Linux path -> host filesystem path. GLOBAL mounts only —
-     * `memory`, `skills`, `shared`, `mcp-servers` and `mounts/<name>`.
+     * Bind mounts: Linux path -> host filesystem path.
      *
-     * [T-android-session-private-mounts] Per-session directories (workspace,
-     * attachments, offloads, browser) must never be in here: this map is
-     * process-wide, so a session dir written into it is whichever session
-     * wrote last. Those mounts live in each shell's own argv
-     * ([SessionMounts]); [addBindMount] refuses them.
+     * ConcurrentSkipListMap, not LinkedHashMap: writers (addBindMount /
+     * applyMountedFoldersSnapshot / syncSharedStorageBindMounts, from boot and
+     * mounted-folder CRUD) raced readers (buildProotCommand, resolveHostPath,
+     * TerminalSession.buildTermuxArgs) with no lock — a resize during iteration
+     * could throw CME or observe torn state. Iteration order changes from
+     * insertion order to lexicographic, which is safe everywhere it is
+     * consumed: the map never holds nested guest prefixes (no key is a path
+     * prefix of another key), so proot's `-b host:linux` list is
+     * order-independent, and resolveHostPath does its own longest-prefix
+     * ordering via descendingMap().
      */
-    val bindMounts: MutableMap<String, String> = linkedMapOf()
+    val bindMounts: ConcurrentNavigableMap<String, String> = ConcurrentSkipListMap()
 
     /**
      * [T-android-session-private-mounts] LEGACY fallback for readers that
@@ -117,15 +145,29 @@ object PRootKernel {
         }
     }
 
+    /**
+     * The blocking boot body, serialized by [boot] and forced onto IO.
+     * [T-android-startup-splash-hang] The dispatcher switch used to be
+     * missing, so the first terminal open (or auto-boot) ran the whole
+     * install on the caller's thread.
+     */
     private suspend fun bootLocked(context: Context) {
-        rootfsManager = RootfsManager.getInstance(context)
+        if (isBooted) {
+            Log.d(TAG, "Already booted (double-checked)")
+            return
+        }
+        withContext(Dispatchers.IO) {
+        rootfsManagerRef = RootfsManager.getInstance(context)
         rootfsManager.installIfNeeded()
         rootfsManager.installProotIfNeeded()
 
-        // Overlay assets/default_mount/ onto the rootfs on every boot so
-        // updated profile scripts and URL-interception wrappers ship with
-        // each app update. Mirrors iOS RootfsManager.applyDefaultMountOverlay.
+        // Overlay assets/default_mount/ onto the rootfs so updated profile
+        // scripts and URL-interception wrappers ship with each app update
+        // (version-stamped inside applyDefaultMountOverlay — repeat boots of
+        // the same build skip the copy). Mirrors iOS
+        // RootfsManager.applyDefaultMountOverlay.
         rootfsManager.applyDefaultMountOverlay()
+        rootfsManager.applyHostTimezone()
 
         // Re-apply user mirror selections — the overlay above ships stock
         // config files (pip.conf, .npmrc, repositories) and would otherwise
@@ -133,6 +175,26 @@ object PRootKernel {
         // ISHTerminalView.startShell().
         com.openminis.app.ui.sandbox.MirrorSpeedTestViewModel.applyAllActiveMirrors(context)
         com.openminis.app.ui.sandbox.MirrorSpeedTestViewModel.autoDetectOnceIfNeeded(context)
+
+        // Off the critical boot path: heal mirrors first so a dead apt
+        // source cannot burn dpkg/pip retry strikes, then retry failed
+        // restores, then snapshot. One IO job so these never interleave
+        // (they also serialize on RootfsManager.aptMutex).
+        (context.applicationContext as? com.openminis.app.MinisApp)
+            ?.appCoroutineScopes?.io?.launch {
+            runCatching { rootfsManager.runMinisMirrorAuto() }
+                .onFailure { Log.e(TAG, "[boot] mirror auto failed", it) }
+            runCatching { rootfsManager.seedNetworkTools() }
+                .onFailure { Log.e(TAG, "[boot] seed network tools failed", it) }
+            runCatching { rootfsManager.retryFailedDpkgWorld() }
+                .onFailure { Log.e(TAG, "[boot] retry dpkg world failed", it) }
+            runCatching { rootfsManager.retryFailedPipWorld() }
+                .onFailure { Log.e(TAG, "[boot] retry pip world failed", it) }
+            runCatching { rootfsManager.dumpDpkgWorld() }
+                .onFailure { Log.e(TAG, "[boot] dump dpkg world failed", it) }
+            runCatching { rootfsManager.dumpPipWorld() }
+                .onFailure { Log.e(TAG, "[boot] dump pip world failed", it) }
+        }
 
         // Refresh DNS from system (mirrors iOS ISHKernel.configureDns)
         rootfsManager.refreshDns()
@@ -151,8 +213,20 @@ object PRootKernel {
         if (loaderPath.exists()) prootLoaderPath = loaderPath.absolutePath
         if (loader32Path.exists()) prootLoader32Path = loader32Path.absolutePath
 
-        // Set default PATH for Alpine Linux
-        customEnvironment.putIfAbsent("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/bin")
+        // Set default PATH for Ubuntu Linux
+        customEnvironment.putIfAbsent(
+            "PATH",
+            "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/bin:" +
+                "/opt/android-sdk/cmdline-tools/latest/bin:/opt/android-sdk/platform-tools:" +
+                "/opt/android-sdk/build-tools/35.0.2:/opt/android-sdk/cmake/3.22.1/bin:/opt/gradle/bin",
+        )
+        customEnvironment.putIfAbsent("DEBIAN_FRONTEND", "noninteractive")
+        // pip/python block-buffer on a pipe. Without this, a package install
+        // prints nothing until the process exits.
+        customEnvironment.putIfAbsent("PYTHONUNBUFFERED", "1")
+        customEnvironment.putIfAbsent("SHELL", "/bin/bash")
+        customEnvironment.putIfAbsent("ANDROID_HOME", "/opt/android-sdk")
+        customEnvironment.putIfAbsent("ANDROID_SDK_ROOT", "/opt/android-sdk")
         customEnvironment.putIfAbsent("HOME", "/root")
 
         // URL interception: seed $BROWSER directly into every process envp
@@ -173,18 +247,32 @@ object PRootKernel {
         // this in ISHShellExecutor.m:325.
         customEnvironment.putIfAbsent("CHARSET", "UTF-8")
 
-        // Tool-compat env — match iOS ISHShellExecutor.m:358-360 so scripts
-        // that run identically in both sandboxes produce identical output.
-        // NO_COLOR: suppress ANSI color in shell tools that honor the
-        //   informal NO_COLOR standard (curl, ls --color=auto, etc.).
-        // PYTHONDONTWRITEBYTECODE: don't litter the rootfs with .pyc files
-        //   next to user scripts.
-        // GOMAXPROCS=2: keep Go runtimes modest on mobile; iOS caps at 2
-        //   for the iSH emulator, same cap is a sensible default under
-        //   PRoot on Android where the sandbox is also IO-bound.
+        // [T-android-guest-utf8-locale] Under the POSIX default locale,
+        // locale-dependent output (ncurses, coreutils, Python) mangles
+        // non-ASCII; only the interactive terminal ever set a LANG. C.UTF-8
+        // is always present in the rootfs; a user/exported LANG wins via
+        // putIfAbsent.
+        customEnvironment.putIfAbsent("LANG", "C.UTF-8")
+
+        // Tool-compat env — match iOS ISHShellExecutor.m:358-360 so identical
+        // scripts produce identical output. NO_COLOR: suppress ANSI color
+        // (informal standard). PYTHONDONTWRITEBYTECODE: no .pyc litter.
+        // GOMAXPROCS=2: keep Go runtimes modest, as iOS does.
         customEnvironment.putIfAbsent("NO_COLOR", "1")
         customEnvironment.putIfAbsent("PYTHONDONTWRITEBYTECODE", "1")
         customEnvironment.putIfAbsent("GOMAXPROCS", "2")
+
+        // [T-android-git-safe-directory / port-upstream-1.16 gitconfig preset]
+        // The workspace is bind-mounted from the app's data dir; inside proot
+        // the uid does not match the owner git recorded, so every git command
+        // died with "detected dubious ownership". Preset through the documented
+        // GIT_CONFIG_* env channel (no file writes); a user-supplied
+        // GIT_CONFIG_COUNT wins via putIfAbsent.
+        customEnvironment.putIfAbsent("GIT_CONFIG_COUNT", "2")
+        customEnvironment.putIfAbsent("GIT_CONFIG_KEY_0", "safe.directory")
+        customEnvironment.putIfAbsent("GIT_CONFIG_VALUE_0", "*")
+        customEnvironment.putIfAbsent("GIT_CONFIG_KEY_1", "core.createObject")
+        customEnvironment.putIfAbsent("GIT_CONFIG_VALUE_1", "rename")
 
         // T222: PRoot's link2symlink extension creates .l2s.* sentinel files
         // alongside every hardlinked file. uv's default `hardlink` mode tries
@@ -210,12 +298,31 @@ object PRootKernel {
             customEnvironment.putIfAbsent("GIT_CONFIG_VALUE_0", "rename")
         }
 
+        // ProcessBuilder inherits Android's TMPDIR (the host cache); PRoot
+        // treats it as a *guest* path, and dpkg/apt then fail unpacking. Always
+        // pin guest temp to /tmp. Mirrored in default_mount's minis.sh and the
+        // setup scripts.
+        customEnvironment["TMPDIR"] = "/tmp"
+        customEnvironment["TMP"] = "/tmp"
+        customEnvironment["TEMP"] = "/tmp"
+
+        // Guest TLS: point every common client at the Android-injected bundle
+        // so HTTPS works even when ubuntu-base CA hash-symlinks did not extract.
+        customEnvironment["SSL_CERT_FILE"] = "/etc/ssl/certs/ca-certificates.crt"
+        customEnvironment["SSL_CERT_DIR"] = "/etc/ssl/certs"
+        customEnvironment["CURL_CA_BUNDLE"] = "/etc/ssl/certs/ca-certificates.crt"
+        customEnvironment["REQUESTS_CA_BUNDLE"] = "/etc/ssl/certs/ca-certificates.crt"
+        customEnvironment["GIT_SSL_CAINFO"] = "/etc/ssl/certs/ca-certificates.crt"
+        customEnvironment["PIP_CERT"] = "/etc/ssl/certs/ca-certificates.crt"
+        customEnvironment["NODE_EXTRA_CA_CERTS"] = "/etc/ssl/certs/ca-certificates.crt"
+        customEnvironment["BASH_ENV"] = "/etc/profile.d/minis-limits.sh"
+
         // Inject device timezone so Alpine userspace sees local time.
         // Mirrors iOS ISHShellExecutor.m:335-353 — uses POSIX TZ format with a
         // fixed name ("LCL") to avoid abbreviations like "GMT+8" which contain
         // +/- and confuse musl's TZ parser. POSIX sign is reversed from UTC
         // offset (UTC+8 → "LCL-8"), matching iOS exactly.
-        customEnvironment["TZ"] = posixTz()
+        customEnvironment["TZ"] = guestTz()
 
         // Propagate the Android system HTTP proxy into every sandboxed
         // process so curl/wget/pip/npm reuse the user's system or enterprise
@@ -237,22 +344,27 @@ object PRootKernel {
         // /bin/sh's PATH search succeeds and triggers an execve the extension
         // can intercept. The stub's content is irrelevant — proot rewrites
         // the execve before it runs.
-        installHandlerStubs(rootfsManager.rootfsDir)
+        installOffloadHandlerStubs(rootfsManager.rootfsDir)
 
-        // T219-6: now that rootfs is on disk, materialize /var/minis/mounts/<name>
-        // placeholder dirs that PRoot's `-b` needs as bind targets. The earlier
-        // applyMountedFoldersSnapshot in MinisApp.onCreate ran before boot and
-        // its mkdirs went nowhere; this re-run covers the mount entries that
-        // were known at app launch.
+        // T219-6: materialize /var/minis/mounts/<name> placeholder dirs that
+        // PRoot's `-b` needs as bind targets — the pre-boot snapshot in
+        // MinisApp.onCreate ran before the rootfs existed.
         applyMountedFoldersSnapshot(context)
 
         isBooted = true
+        HostStatusPublisher.start(context, rootfsManager.rootfsDir)
+        // [GH#511] Rootfs is ready — fire the user boot hook asynchronously.
+        // Never await it here: a slow/hung script must not delay the first
+        // shell command or the app UI. See BootHook for the PRoot /proc and
+        // flock caveats that script authors need to know.
+        BootHook.launch(context, rootfsManager.rootfsDir)
         Log.i(TAG, "PRoot kernel booted " +
             "rootfs=${rootfsManager.rootfsDir.absolutePath} " +
             "nativeLibDir=$nativeLibDir " +
             "loader=$prootLoaderPath " +
             "bindMounts=${bindMounts.size} " +
             "offloadHandlers=${NativeOffloadServer.registeredHandlers.sorted()}")
+        }
     }
 
     fun addBindMount(linuxPath: String, hostPath: String) {
@@ -274,8 +386,9 @@ object PRootKernel {
     /**
      * Register the global (session-independent) Minis bind mounts so direct
      * file I/O tools (file_read, file_edit) can resolve
-     * `/var/minis/{memory,skills,shared}/...` without needing PRoot to be
-     * booted or any shell to have started. Safe to call repeatedly.
+     * `/var/minis/{skills,shared}/...` without needing PRoot to be
+     * booted or any shell to have started. Memory is per-session.
+     * Safe to call repeatedly.
      */
     fun registerGlobalBindMounts(context: Context) {
         val globalBase = File(context.filesDir, "minis-global")
@@ -302,28 +415,20 @@ object PRootKernel {
     // PRoot's `-b host:linux` flag is per-invocation, so the diff-sync
     // applied via [applyMountedFoldersSnapshot] only affects subsequent
     // shell_execute calls — live processes won't observe a CRUD mid-flight.
-    private const val MOUNTS_LINUX_PREFIX = "/var/minis/mounts/"
+    internal const val MOUNTS_LINUX_PREFIX = "/var/minis/mounts/"
 
     // Sentinel in the read-only write-guard wrapper scripts so we can recognize
     // and remove our own wrappers (vs a user/busybox binary of the same name).
     private const val GUARD_MARKER = "minis-mount-readonly-guard"
 
     /**
-     * Reference to the user-mounted folders store, set by [MinisApp] at
-     * launch (the file is owned by T219-1 / worker A — we cannot touch it
-     * from here, so we receive the instance via this setter instead of a
-     * top-level singleton). Nullable: tools and the file-mention index
-     * tolerate `null` and treat it as "no mounts".
-     */
-    @Volatile
-    var mountedFoldersStore: MountedFoldersStore? = null
-
-    /**
      * Reconcile [bindMounts] keys under `/var/minis/mounts/` with the
-     * current snapshot of [mountedFoldersStore]. Removes stale entries,
-     * adds new ones, updates host paths in place when the user re-points
-     * a mount. Idempotent — call from boot + after every CRUD on the
-     * store.
+     * current snapshot of the user-mounted folders store in [AppGraph]
+     * (installed by MinisApp at launch; nullable — tools and the
+     * file-mention index tolerate `null` and treat it as "no mounts").
+     * Removes stale entries, adds new ones, updates host paths in place
+     * when the user re-points a mount. Idempotent — call from boot +
+     * after every CRUD on the store.
      *
      * Mounts whose tree URI doesn't decode to a POSIX path readable by
      * us (cloud-only providers, `Android/data/<otherPkg>` under strict
@@ -388,6 +493,93 @@ object PRootKernel {
     }
 
     /**
+     * Bind host shared storage into the guest when All Files Access (or
+     * legacy WRITE_EXTERNAL_STORAGE on API 29) is granted. PRoot `-b` then
+     * gives POSIX read/write without going back through SAF DocumentFile.
+     * Does not override a user mount already named `sdcard`.
+     */
+    private fun applySharedStorageBinds(context: Context, desired: MutableMap<String, String>) {
+        val userNamed = desired.keys.any { it.removePrefix(MOUNTS_LINUX_PREFIX) == "sdcard" }
+        val plan = sharedStoragePlan(context, userNamed)
+        syncSharedStorageBindMounts(plan, userNamed)
+        val mounted = plan[SharedStorageBindPlan.MOUNTS_SDCARD]
+        if (mounted != null) desired[SharedStorageBindPlan.MOUNTS_SDCARD] = mounted
+        if (plan.isNotEmpty()) materializeSharedStorageTargets(context, plan.keys)
+    }
+
+    /**
+     * Binds [PersistentShell] must pass on `-b`. [bindMounts] alone is not
+     * that argv, so a grant that only updated the kernel map left `/sdcard`
+     * as an empty rootfs directory inside `shell_execute`.
+     */
+    fun shellSharedStorageBinds(context: Context, publish: Boolean = true): Map<String, String> {
+        val userNamed = AppGraph.mountedFoldersStoreOrNull()?.entries?.value?.any { it.name == "sdcard" } == true
+        val plan = sharedStoragePlan(context, userNamed)
+        if (!publish) return plan
+        syncSharedStorageBindMounts(plan, userNamed)
+        if (plan.isNotEmpty()) materializeSharedStorageTargets(context, plan.keys)
+        return plan
+    }
+
+    private fun sharedStoragePlan(context: Context, userNamedSdcard: Boolean): Map<String, String> {
+        val host = Environment.getExternalStorageDirectory()?.absolutePath
+        val granted = !host.isNullOrBlank() &&
+            hasSharedStorageAccess(context) &&
+            File(host).canRead()
+        return SharedStorageBindPlan.plan(if (granted) host else null, userNamedSdcard)
+    }
+
+    private fun syncSharedStorageBindMounts(plan: Map<String, String>, userNamedSdcard: Boolean) {
+        for (linux in listOf(SharedStorageBindPlan.SDCARD, SharedStorageBindPlan.EMULATED)) {
+            val host = plan[linux]
+            if (host == null) bindMounts.remove(linux) else bindMounts[linux] = host
+        }
+        val mounted = SharedStorageBindPlan.MOUNTS_SDCARD
+        if (mounted in plan) bindMounts[mounted] = plan.getValue(mounted)
+        else if (!userNamedSdcard) bindMounts.remove(mounted)
+    }
+
+    private fun materializeSharedStorageTargets(context: Context, linuxPaths: Collection<String>) {
+        materializeAbsoluteTargets(
+            context,
+            linuxPaths.filter { !it.startsWith(MOUNTS_LINUX_PREFIX) },
+        )
+        val rootfs = try {
+            RootfsManager.getInstance(context).rootfsDir
+        } catch (t: Throwable) {
+            Log.w(TAG, "materializeSharedStorageTargets: rootfs not yet available: ${t.message}")
+            return
+        }
+        for (linux in linuxPaths) {
+            if (!linux.startsWith(MOUNTS_LINUX_PREFIX)) continue
+            File(rootfs, linux.removePrefix("/")).mkdirs()
+        }
+    }
+
+    private fun hasSharedStorageAccess(context: Context): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            Environment.isExternalStorageManager()
+        } else {
+            context.checkSelfPermission(android.Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED ||
+                context.checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
+    }
+
+    private fun materializeAbsoluteTargets(context: Context, linuxPaths: List<String>) {
+        val rootfs = try {
+            RootfsManager.getInstance(context).rootfsDir
+        } catch (t: Throwable) {
+            Log.w(TAG, "materializeAbsoluteTargets: rootfs not yet available: ${t.message}")
+            return
+        }
+        for (linuxPath in linuxPaths) {
+            File(rootfs, linuxPath.removePrefix("/")).mkdirs()
+        }
+    }
+
+    /**
      * Ensure each `/var/minis/mounts/<name>` has a real (empty) directory
      * inside the rootfs that PRoot can bind onto. Also removes stale
      * placeholder dirs whose mount entry was unmounted, so old names don't
@@ -432,7 +624,7 @@ object PRootKernel {
      */
     fun isLinuxPathUnderReadOnlyMount(linuxPath: String): Boolean {
         if (!linuxPath.startsWith(MOUNTS_LINUX_PREFIX)) return false
-        val store = mountedFoldersStore ?: return false
+        val store = AppGraph.mountedFoldersStoreOrNull() ?: return false
         val rest = linuxPath.removePrefix(MOUNTS_LINUX_PREFIX)
         val name = rest.substringBefore('/')
         if (name.isEmpty()) return false
@@ -445,7 +637,7 @@ object PRootKernel {
      * whose tree URI doesn't resolve to a POSIX path on this device.
      */
     fun mountEntriesForIndex(context: Context): List<FileMentionIndex.MountEntry> {
-        val store = mountedFoldersStore ?: return emptyList()
+        val store = AppGraph.mountedFoldersStoreOrNull() ?: return emptyList()
         return store.entries.value.mapNotNull { entry ->
             val host = resolveTreeUriToHostPath(entry.treeUri, context) ?: return@mapNotNull null
             FileMentionIndex.MountEntry(name = entry.name, root = File(host))
@@ -539,14 +731,10 @@ object PRootKernel {
             else -> {
                 val granted = context.checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) ==
                     android.content.pm.PackageManager.PERMISSION_GRANTED
-                // Issue #118: Environment.isExternalStorageLegacy() is API 29.
-                // This branch covers everything below R (30), so on our minSdk
-                // 26..28 floor the unguarded call was a hard NoSuchMethodError —
-                // and because it sits on the boot path it killed the process in
-                // Application.onCreate, ~250ms restart loop, before any user data
-                // was touched (hence "clear app data" not helping). Below 29 the
-                // scoped-storage opt-out doesn't exist as a concept: storage is
-                // unconditionally legacy, so report that statically.
+                // Issue #118: isExternalStorageLegacy() is API 29; on our
+                // minSdk 26..28 floor the unguarded call was a hard
+                // NoSuchMethodError on the boot path (a ~250ms crash loop).
+                // Below 29 storage is unconditionally legacy.
                 val legacyOptIn = if (sdk >= Build.VERSION_CODES.Q) {
                     Environment.isExternalStorageLegacy().toString()
                 } else {
@@ -561,13 +749,14 @@ object PRootKernel {
         if (volumeId.equals("primary", ignoreCase = true) || volumeId.isEmpty()) {
             return Environment.getExternalStorageDirectory()?.absolutePath
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            val sm = context.getSystemService(Context.STORAGE_SERVICE) as? StorageManager ?: return null
-            for (volume in sm.storageVolumes) {
-                if (volume.uuid?.equals(volumeId, ignoreCase = true) == true) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        return volume.directory?.absolutePath
-                    }
+        // getStorageVolumes() is API 24; with minSdk 26 the old `>= N` gate was
+        // always true, so it is unwrapped. `volume.directory` is API 30 (R) —
+        // that gate stays, it is real.
+        val sm = context.getSystemService(Context.STORAGE_SERVICE) as? StorageManager ?: return null
+        for (volume in sm.storageVolumes) {
+            if (volume.uuid?.equals(volumeId, ignoreCase = true) == true) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    return volume.directory?.absolutePath
                 }
             }
         }
@@ -586,6 +775,15 @@ object PRootKernel {
      * name "LCL" to avoid musl's confused parsing of abbreviations like
      * "GMT+8" (which contain an embedded sign).
      */
+    /**
+     * Zone id when the phone has one (`Asia/Shanghai`). POSIX `LCL-8` makes
+     * `date +%Z` print LCL even after `/etc/localtime` is correct.
+     */
+    fun guestTz(): String {
+        val id = TimeZone.getDefault().id
+        return if (id.contains('/') && !id.startsWith("GMT")) id else posixTz()
+    }
+
     fun posixTz(): String {
         val offsetMs = TimeZone.getDefault().getOffset(System.currentTimeMillis())
         val secs = offsetMs / 1000L
@@ -607,10 +805,20 @@ object PRootKernel {
      * [ExecutionCoordinator.broadcastTimezoneChange].
      */
     fun updateTimezone(): String {
-        val tz = posixTz()
+        val tz = guestTz()
         customEnvironment["TZ"] = tz
         Log.i(TAG, "Updated TZ=$tz")
         return tz
+    }
+
+    /**
+     * Rewrite guest `/etc/localtime` after a timezone change. [updateTimezone]
+     * only updates the env var used by new shells; glibc `date` and Python
+     * fall back to the symlink, which otherwise stays on the zone from boot.
+     */
+    suspend fun syncHostTimezoneFiles() {
+        if (rootfsManagerRef == null) return
+        rootfsManager.applyHostTimezone()
     }
 
     /**
@@ -668,10 +876,10 @@ object PRootKernel {
      * [ExecutionCoordinator.broadcastProxyChange].
      */
     fun updateProxy(context: Context): Map<String, String> {
-        val env = systemProxyEnv(context)
+        val env = SandboxHttpProxy.envBlock() ?: systemProxyEnv(context)
         customEnvironment.putAll(env)
         val hasProxy = env["http_proxy"].orEmpty().isNotEmpty()
-        Log.i(TAG, "Updated proxy — ${if (hasProxy) "active=${env["http_proxy"]}" else "cleared"}")
+        Log.i(TAG, "Updated proxy — ${if (hasProxy) "active" else "cleared"}")
         return env
     }
 
@@ -682,66 +890,19 @@ object PRootKernel {
      * ```
      * <proot> -0 --link2symlink -r <rootfs> -b /dev -b /proc -b /sys -w /root
      *         [-b <host>:<linux> ...for each bind mount]
-     *         /bin/sh -c "<command>"
+     *         /bin/bash -c "<command>"
      * ```
      */
     fun buildProotCommand(shellCommand: String): List<String> {
         check(isBooted) { "PRootKernel.boot() must be called before building commands" }
 
-        val cmd = mutableListOf<String>()
-
-        cmd.add(rootfsManager.prootBinary.absolutePath)
-
-        // Run as fake root (uid 0)
-        cmd.add("-0")
-
-        // T141: Translate hardlink() syscalls to symlink(). Android's /data
-        // (ext4/F2FS as mounted by zygote) refuses cross-directory hardlinks
-        // for app uids, so PRoot would otherwise pass link() straight through
-        // to the host kernel and the host kernel rejects with EPERM. Alpine's
-        // apk installs busybox-applet packages (binutils, gcc deps, etc.) by
-        // hardlinking ar/ld/nm/strip → busybox; without this flag every such
-        // install fails with "Permission denied". Symlinks are functionally
-        // equivalent for the apk consumer.
-        cmd.add("--link2symlink")
-
-        // Set rootfs
-        cmd.add("-r")
-        cmd.add(rootfsManager.rootfsDir.absolutePath)
-
-        // Bind essential pseudo-filesystems
-        cmd.add("-b")
-        cmd.add("/dev")
-        cmd.add("-b")
-        cmd.add("/proc")
-        cmd.add("-b")
-        cmd.add("/sys")
-
-        // Working directory
-        cmd.add("-w")
-        cmd.add("/root")
-
-        // User bind mounts
-        for ((linuxPath, hostPath) in bindMounts) {
-            cmd.add("-b")
-            cmd.add("$hostPath:$linuxPath")
-            // Log external-folder binds specifically — these are the ones that
-            // read empty when the host view is filtered, and the proot child's
-            // own EACCES on readdir is otherwise invisible in the log file.
-            if (linuxPath.startsWith(MOUNTS_LINUX_PREFIX)) {
-                Log.i(TAG, "proot bind mount: $hostPath -> $linuxPath")
-            }
-        }
-
-        // Native offload: route registered handler names to the host-side
-        // NativeOffloadServer over the abstract unix socket.
-        val handlers = NativeOffloadServer.registeredHandlers
-        // [T-native-offload-bind] Only when our server is listening: otherwise
-        // the handler stubs run and report the CLI unavailable, instead of
-        // proot connecting to a name another process holds (and hanging).
-        if (handlers.isNotEmpty() && NativeOffloadServer.awaitListening()) {
-            cmd.add("--native-offload=${NativeOffloadServer.socketName}:${handlers.joinToString(",")}")
-        }
+        val cmd = commonArgv(
+            prootPath = rootfsManager.prootBinary.absolutePath,
+            rootfsDir = rootfsManager.rootfsDir.absolutePath,
+            bindMounts = bindMounts,
+            includeSys = true,
+            includeNativeOffload = true,
+        )
 
         // [T-android-fake-netlink] Emulate rtnetlink inside the sandbox.
         //
@@ -771,9 +932,9 @@ object PRootKernel {
         cmd.addAll(com.openminis.app.network.ShellTransparentNet.prootArgs(rootfsManager.prootBinary))
 
         // Shell command
-        cmd.add("/bin/sh")
+        cmd.add("/bin/bash")
         cmd.add("-c")
-        cmd.add(shellCommand)
+        cmd.add(GuestLimits.wrap(shellCommand))
 
         Log.d(TAG, "proot cmd: ${cmd.take(cmd.size - 1).joinToString(" ")} <shellCommand ${shellCommand.length} bytes>")
         return cmd
@@ -783,14 +944,15 @@ object PRootKernel {
     private val perSessionSubdirs = SessionMounts.SESSION_SUBDIRS.toSet()
 
     /**
-     * Resolve a `/var/minis/...` Linux path directly against a specific session's
-     * host directory, bypassing the global [bindMounts] map. Use this when the
-     * caller knows the owning session (chat link resolver, file preview, etc.) —
-     * the global map is overwritten every time another session boots its shell,
-     * so its answer is last-writer-wins rather than "this session's view".
+     * Resolve a `/var/minis/...` Linux path against the same host directory the
+     * session shell bind-mounts. Use this when the caller knows the owning
+     * session (file tools, chat link resolver, file preview). The global
+     * [bindMounts] map is last-writer-wins and must not be used for per-session
+     * paths — that split is what made `file_write` and `shell_execute` see two
+     * different `/var/minis/workspace` trees.
      *
-     * Falls back to [resolveHostPath] for paths outside `/var/minis/` or for the
-     * shared subdirs (memory/skills/shared) which don't depend on sessionId.
+     * Falls back to [resolveHostPath] for paths this layout does not own
+     * (rootfs files, external SAF mounts).
      */
     fun resolveSessionHostPath(sessionId: String, linuxPath: String, context: Context): File? {
         if (!linuxPath.startsWith("/var/minis/")) return resolveHostPath(linuxPath)
@@ -805,7 +967,14 @@ object PRootKernel {
 
     /**
      * Resolve a Linux path to a host filesystem File by checking bind mounts.
-     * Returns null if no matching mount is found.
+     * Returns null if no matching mount is found, or if `..` walks out of the
+     * matched bind root / rootfs (that is how one session's file tool used to
+     * read another's private tree).
+     *
+     * [T-path-resolver] Bind-map prefix match delegated to [PathResolver]
+     * (#22); longest-prefix + [SessionWorkspace.staysInside] semantics
+     * unchanged. The rootfs fallback stays here — it is the container root,
+     * not a bind mapping, and exists only once [boot] has run.
      */
     fun resolveHostPath(linuxPath: String): File? {
         // Check bind mounts (longest prefix match)
@@ -1004,10 +1173,26 @@ object PRootKernel {
      * the wrappers are removed entirely so they add zero overhead in the common
      * case (every argument would pass the check anyway).
      *
-     * Coverage note: this catches the argv-target commands agents actually use
-     * (touch/cp/mv/tee/mkdir/rm/…). Pure shell `>` redirects are handled by the
-     * OS itself — proot forwards the open(2) to the host FS, which returns EACCES
-     * for a read-only mount — so those already fail truthfully.
+     * Coverage note ([T-mount-guard-bypass]): this catches the argv-target
+     * commands agents actually use (touch/cp/mv/tee/mkdir/rm/dd/ln/…), and the
+     * candidate write target is CANONICALISED with `realpath -m` before matching,
+     * so `..` hops, relative paths, symlinks-out-of-the-jail and `dd of=…` no
+     * longer slip past the old literal `"$prefix"`-prefixed glob match. `-T` /
+     * `--target-directory` indirection is peeled, and when a real path argument
+     * cannot be canonicalised the wrapper FAILS CLOSED (denies).
+     *
+     * Residual holes this wrapper structurally CANNOT close (argv-only,
+     * installed per-command):
+     *  - a program outside the guarded argv names writing the tree directly
+     *    (an interpreter like `python -c`, or an unwrapped binary);
+     *  - shell redirection / heredoc targets (`> /var/minis/mounts/<ro>/f`) —
+     *    opened by the calling shell, never passed through this argv. proot
+     *    forwards the open(2) to the host FS, which returns EACCES for a
+     *    genuinely read-only SAF view, but the wrapper cannot see the path;
+     *  - a file operand that begins with `-` (treated as a flag, skipped).
+     * These are named here so the next reader does not mistake the guard for a
+     * sandbox-wide invariant. The guarded trees are SAF-mounted user data, so the
+     * defense is layered with the FileWriteTool/FileEditTool host-side guard.
      */
     private fun installMountWriteGuards(context: Context, readOnlyLinuxPrefixes: List<String>) {
         val rootfs = try {
@@ -1039,21 +1224,46 @@ object PRootKernel {
             wrapper.writeText(
                 """#!/bin/sh
                 |# $GUARD_MARKER — reject writes into read-only mounted folders.
-                |# Auto-installed by MinisApp PRootKernel (T219-4).
+                |# Auto-installed by MinisApp PRootKernel (T219-4, T-mount-guard-bypass).
                 |cfg=/var/minis/.mount-readonly-prefixes
                 |if [ -f "${'$'}cfg" ]; then
-                |    for arg in "${'$'}@"; do
-                |        case "${'$'}arg" in
-                |            -*) continue;;  # skip flags
-                |        esac
+                |    if command -v realpath >/dev/null 2>&1; then have_rp=1; else have_rp=0; fi
+                |    # canonicalise a write target and match it against every
+                |    # read-only prefix; realpath resolves '..'/symlinks and works
+                |    # on not-yet-existing paths. Fail closed when a real path
+                |    # argument cannot be canonicalised.
+                |    check() {
+                |        t="${'$'}1"
+                |        [ -n "${'$'}t" ] || return 0
+                |        if [ "${'$'}have_rp" = 1 ]; then
+                |            c="${'$'}(realpath -m -- "${'$'}t" 2>/dev/null)"
+                |            if [ -z "${'$'}c" ]; then
+                |                echo "$name: ${'$'}t: read-only mounted folder — target could not be resolved (write blocked)" >&2
+                |                exit 1
+                |            fi
+                |        else
+                |            c="${'$'}t"
+                |        fi
                 |        while IFS= read -r prefix; do
                 |            [ -z "${'$'}prefix" ] && continue
-                |            case "${'$'}arg" in
+                |            case "${'$'}c" in
                 |                "${'$'}prefix"|"${'$'}prefix"/*)
-                |                    echo "$name: ${'$'}arg: read-only mounted folder — writes are disabled (toggle in Settings → Mount External Folders)" >&2
+                |                    echo "$name: ${'$'}t: read-only mounted folder — writes are disabled (toggle in Settings → Mount External Folders)" >&2
                 |                    exit 1;;
                 |            esac
                 |        done < "${'$'}cfg"
+                |        return 0
+                |    }
+                |    expect=0
+                |    for arg in "${'$'}@"; do
+                |        if [ "${'$'}expect" = 1 ]; then expect=0; check "${'$'}arg"; continue; fi
+                |        case "${'$'}arg" in
+                |            -T|--target-directory) expect=1;;
+                |            --target-directory=*) check "${'$'}{arg#--target-directory=}";;
+                |            of=*) check "${'$'}{arg#of=}";;
+                |            -*) : ;;
+                |            *) check "${'$'}arg";;
+                |        esac
                 |    done
                 |fi
                 |exec /bin/busybox $name "${'$'}@"

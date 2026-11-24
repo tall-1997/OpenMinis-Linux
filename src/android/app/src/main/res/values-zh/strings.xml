@@ -322,6 +322,9 @@
     <string name="soul_prompt_import">导入提示词</string>
     <string name="soul_section_provider_prompts">按供应商选择提示词</string>
     <string name="soul_provider_prompts_footer">每个供应商可以绑定不同的人格文件。“跟随默认”使用上方选中的文件。</string>
+    <string name="rootfs_actions_help">重置：删除全部数据\n备份：保存 /root 目录\n恢复：还原已保存的数据</string>
+    <string name="rootfs_explain">根文件系统是沙箱使用的 Ubuntu Linux 文件系统。重置将删除全部数据并恢复出厂状态。</string>
+    <string name="action_reset">重置</string>
     <string name="settings_env_vars">环境变量</string>
     <string name="settings_env_vars_subtitle">注入到沙箱内的变量</string>
     <string name="settings_section_storage">存储</string>

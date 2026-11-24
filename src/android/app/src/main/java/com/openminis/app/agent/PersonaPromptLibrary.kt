@@ -411,7 +411,9 @@ object PersonaPromptLibrary {
         if (sessionId != null) {
             scan(
                 File(
-                    com.openminis.app.sandbox.SessionWorkspace.memoryDir(context.filesDir, sessionId),
+                    // Ultra port: upstream 1.15 has no SessionWorkspace layout;
+                    // same root sessionPersonaFile uses.
+                    File(context.filesDir, "minis-sessions/$sessionId"),
                     SESSION_PERSONA_FILE,
                 ),
             )

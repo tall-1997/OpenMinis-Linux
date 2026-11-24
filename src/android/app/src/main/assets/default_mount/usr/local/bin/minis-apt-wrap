@@ -1,0 +1,78 @@
+#!/bin/sh
+# Newline progress for apt/apt-get under PRoot.
+#
+# The chat tool card only refreshes on newlines. apt hides its meter when
+# stdout is not a tty, so a multi-hundred-MB download looks frozen. This
+# wrapper is ahead of /usr/bin on PATH. It must exec the real binary by
+# absolute path or it will recurse.
+#
+# Usage: minis-apt-wrap /usr/bin/apt-get [args...]
+# MINIS_APT_RAW=1 skips the progress loop (callers that need raw apt).
+
+set -u
+
+real=${1:-}
+if [ -z "$real" ] || [ ! -x "$real" ]; then
+  echo "minis-apt-wrap: real apt binary missing" >&2
+  exit 127
+fi
+shift
+
+if [ -n "${MINIS_APT_RAW:-}" ]; then
+  exec "$real" "$@"
+fi
+
+for _arg in "$@"; do
+  case "$_arg" in
+    --version|-v|--help|-h)
+      exec "$real" "$@"
+      ;;
+  esac
+done
+
+echo "apt 已开始。管道里没有进度条，每 8 秒汇报一次（下载时缓存变大，解包时不变，都属正常）。"
+
+"$real" "$@" &
+pid=$!
+
+cleanup() {
+  if kill -0 "$pid" 2>/dev/null; then
+    kill "$pid" 2>/dev/null || true
+  fi
+}
+trap cleanup INT TERM
+
+elapsed=0
+last=0
+while kill -0 "$pid" 2>/dev/null; do
+  sleep 1
+  if ! kill -0 "$pid" 2>/dev/null; then
+    break
+  fi
+  elapsed=$((elapsed + 1))
+  if [ $((elapsed % 8)) -ne 0 ]; then
+    continue
+  fi
+  bytes=0
+  for dir in /var/cache/apt/archives/partial /var/lib/apt/lists/partial; do
+    if [ -d "$dir" ]; then
+      part=$(du -sb "$dir" 2>/dev/null | awk '{print $1+0}')
+      bytes=$((bytes + ${part:-0}))
+    fi
+  done
+  if [ "$bytes" -gt "$last" ]; then
+    if [ "$bytes" -ge 1048576 ]; then
+      echo "正在下载… 缓存约 $((bytes / 1048576)) MB（已 ${elapsed}s）"
+    else
+      echo "正在下载… 缓存约 $((bytes / 1024)) KB（已 ${elapsed}s）"
+    fi
+    last=$bytes
+  else
+    echo "apt 仍在运行，已 ${elapsed}s（索引更新或解包时缓存不会变大）"
+  fi
+done
+
+wait "$pid"
+rc=$?
+trap - INT TERM
+exit "$rc"

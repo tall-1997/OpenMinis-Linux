@@ -1,0 +1,4 @@
+#!/bin/sh
+# run-parts hook: update-ca-certificates finished rewriting the bundle.
+[ -x /usr/local/bin/minis-ca-dedup ] || exit 0
+exec /usr/local/bin/minis-ca-dedup

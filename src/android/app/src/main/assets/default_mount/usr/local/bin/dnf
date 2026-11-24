@@ -1,0 +1,3 @@
+#!/bin/sh
+# dnf → yum shim (both wrap Ubuntu apt-get).
+exec /usr/local/bin/yum "$@"
