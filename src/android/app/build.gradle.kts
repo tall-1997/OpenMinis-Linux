@@ -22,6 +22,12 @@ val appCustomization = Properties().apply {
 fun customizationValue(key: String): String =
     (appCustomization.getProperty(key) ?: "").replace("\"", "\\\"")
 
+// [ultra] Parsed by .github/workflows/android-apk.yml (Read app version step).
+// Version scheme: base follows the upstream tag (1.15), ultra iteration suffix
+// 001-999; versionCode = upstream versionCode * 1000 + suffix (37001).
+val minisBaseVersionName = "1.15.001"
+val ultraVersionCode = 37001
+
 android {
     namespace = "com.openminis.app"
     // [T-android-dynamic-island] Bumped 35→36 so the Android 16 (Baklava)
@@ -44,8 +50,7 @@ android {
         // ultra iteration suffix increments 001-999 between upstream bumps.
         // versionCode encodes both so it stays monotonic across upstream
         // rebases: 37*1000 + 1 = 37001.
-        versionCode = 37001
-        minisBaseVersionName = "1.15.001"
+        versionCode = ultraVersionCode
         versionName = minisBaseVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
