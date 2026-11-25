@@ -199,7 +199,7 @@ internal class StorageUsageViewModel(
                 }
                 UiState(
                     isLoading = false,
-                    shellSize = SessionStorage.directorySize(File(appContext.filesDir, "alpine-rootfs")),
+                    shellSize = SessionStorage.directorySize(File(appContext.filesDir, "ubuntu-rootfs")),
                     dbSize = databaseSize(appContext),
                     logsCachesSize = LogsAndCachesCleaner.size(appContext),
                     orphanBytes = orphanScan.totalBytes,
@@ -220,7 +220,7 @@ internal class StorageUsageViewModel(
         shellStale = false
         viewModelScope.launch {
             val size = withContext(Dispatchers.IO) {
-                SessionStorage.directorySize(File(appContext.filesDir, "alpine-rootfs"))
+                SessionStorage.directorySize(File(appContext.filesDir, "ubuntu-rootfs"))
             }
             _state.update { it.copy(shellSize = size) }
         }

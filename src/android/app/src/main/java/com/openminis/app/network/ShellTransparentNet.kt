@@ -77,7 +77,7 @@ object ShellTransparentNet {
         val dir = File(context.filesDir, "net").apply { mkdirs() }
         routesFile = File(dir, "xnet.routes")
         mapDir = File(dir, "xnet-map")
-        guestResolvConf = File(context.filesDir, "alpine-rootfs/etc/resolv.conf")
+        guestResolvConf = File(context.filesDir, "ubuntu-rootfs/etc/resolv.conf")
         routesPath = routesFile.absolutePath
         // A file from an earlier process names a listener that is gone.
         if (routesFile.delete()) AppLogger.info(TAG, "[Net][Xparent] removed the routes file of an earlier process")
