@@ -32,6 +32,8 @@
 | `b6bdc6d` | 系统提示 Ubuntu 化 | SoulStore 身份模板、HelperRunner、AgentTools、ChatViewModel 系统提示；alpine-rootfs 路径残留修复 |
 | `fb0bade` | 特权后端 UI | `OffloadPermissionScreen` su_cli 卡片、新增 `SuPermissionScreen`、`Routes.HOST_SU`、DeepLink、23 组字符串 |
 | `14286f6` | 品牌切换 Minis Ultra | applicationId/version、53 个 launcher 图标、签名链、23 语言文案、包名依赖点 |
+| `06ce84c` | 修改清单文档 |本文件（docs/ULTRA-CHANGES.md） |
+| `edcdefa` | 顶层版本变量修复 | `build.gradle.kts` 顶层 `val minisBaseVersionName = "1.15.001"`、`val ultraVersionCode = 37001`（曾误写在 defaultConfig 内导致 DSL 编译失败） |
 
 ## 三、功能域 → 文件映射（rebase 时重点盯这些）
 
@@ -87,8 +89,15 @@ git rebase origin/main                 # 或 rebase 到指定 tag：git rebase <
    系统提示区冲突时以上游新结构为骨架、把 Ubuntu/Minis Ultra 措辞重新套回去。
 3. **版本号**：rebase 到上游新 tag 后，把 `build.gradle.kts` 的 `versionCode = 37001` 改为
    `上游vc*1000+001`、`minisBaseVersionName = "<上游版本>.001"`。
-4. **CI**：ultra 的 workflow 只在 `ultra` 分支触发；`sandbox-assets` 的缓存键基于
-   `prepare_android_sandbox.sh` 的 hash，改脚本会自动重建 rootfs。
+3. **版本号**：rebase 到上游新 tag 后，改 `build.gradle.kts` **顶层两个 val**：
+   `ultraVersionCode = <上游vc*1000+001>`、`minisBaseVersionName = "<上游版本>.001"`。
+   **每次发布要手动把后缀 +1**（当前静态 `001`，不按 PR 号自动递增），
+   否则两次构建的版本名/版本号相同，Android只视为同版本重装而非升级。
+4. **CI 版本读取**：`.github/workflows/android-apk.yml` 的 "Read app version" 步骤
+   靠**顶层** `minisBaseVersionName = "..."` 声明行和 `versionCode = ultraVersionCode`
+   正则解析——**不要**把它们挪回 `defaultConfig` 块内（上次就是那样编译挂掉的）。
+   ultra 分支 push 不触发 `MINIS_VERSION_SUFFIX`（那步只对 main 生效）。
+   `sandbox-assets` 的缓存键基于 `prepare_android_sandbox.sh` 的 hash，改脚本会自动重建 rootfs。
 5. **验证**：推送后看 Actions 的 APK 构建；绿色后再真机冒烟（见第六节）。
 
 ## 五、已知未移植 / 有意不移植
