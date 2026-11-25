@@ -270,7 +270,7 @@ private fun lemonCall(deps: McpToolDeps, arguments: JSONObject): McpServerCore.C
  * execution. Missing required parameters fail loudly instead of silently
  * expanding to an empty string.
  */
-private fun buildCommand(tool: LemonCatalog.Tool, argv: JSONObject): String {
+internal fun buildCommand(tool: LemonCatalog.Tool, argv: JSONObject): String {
     val required = tool.required.split('|').map { it.trim() }.filter { it.isNotEmpty() }
     val missing = required.filter { argv.optString(it, "").isEmpty() }
     if (missing.isNotEmpty()) {
@@ -281,8 +281,28 @@ private fun buildCommand(tool: LemonCatalog.Tool, argv: JSONObject): String {
     while (keys.hasNext()) {
         val k = keys.next()
         if (k == "_reason") continue
-        val v = argv.optString(k, "")
-        out = out.replace("${'$'}$k", McpToolShared.shellEscape(v))
+        val raw = argv.optString(k, "")
+        val esc = McpToolShared.shellEscape(raw)
+
+        // [T-lemon-braced-params] 先处理 ${k} / ${k:-default} / ${k-default}。
+        //
+        // 71 个上游插件的命令体写成 `... | head -${lines:-100}` 这种形式。
+        // 旧的裸替换 `replace("$k", value)` 命中 `$lines` 后会把花括号展开
+        // 打断成 `${'100':-100}` —— bash 报 bad substitution，工具直接失败。
+        //
+        // 语义按 shell 的来：有值就整体替换成转义后的值；没值就**保留原样**
+        // 让 bash 用它自己的默认值（这正是 `${k:-d}` 存在的意义）。
+        out = out.replace(Regex("\\$\\{" + Regex.escape(k) + "(:?-?)([^}]*)\\}")) { m ->
+            when {
+                raw.isNotEmpty() -> esc
+                m.groupValues[1].isNotEmpty() -> m.value   // 无值有默认 → 交给 bash
+                else -> ""                                 // ${k} 无值无默认 → 空
+            }
+        }
+
+        // 再处理裸 $k：后面不能跟字母数字下划线或 `{`，否则是别的变量名
+        // （$path 不该吃掉 $path2，也不该碰已经处理过的 ${...}）。
+        out = out.replace(Regex("\\$" + Regex.escape(k) + "(?![A-Za-z0-9_{])"), esc)
     }
     return out
 }
