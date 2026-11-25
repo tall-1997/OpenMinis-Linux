@@ -205,7 +205,7 @@ class WebAppActivity : ComponentActivity() {
 
     /**
      * T-pwa-3: replaces the prior toast-and-finish with an inline error
-     * screen offering an "Open in Minis" escape hatch.
+     * screen offering an "Open in Minis Ultra" escape hatch.
      */
     @OptIn(ExperimentalMaterial3Api::class)
     private fun renderSourceMissing(sourceSessionId: String?) {
@@ -566,7 +566,7 @@ class WebAppActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_SHORTCUT_ID = "webapp_shortcut_id"
-        const val ACTION_OPEN_WEBAPP = "com.openminis.app.action.OPEN_WEBAPP"
+        const val ACTION_OPEN_WEBAPP = "com.openminis.ultra.action.OPEN_WEBAPP"
         const val EXTRA_TARGET_SESSION_ID = "target_session_id"
         private const val ASSET_LOADER_HOST = "appassets.androidplatform.net"
         private const val AUTO_HIDE_MS = 4000L

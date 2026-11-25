@@ -79,7 +79,7 @@ import java.util.Locale
 
 /*
  * [T-subagent-detail-rich] What the sub agent detail card (HelperDetailContent,
- * in the "Minis Computer" sheet) shows beyond status and model: the task it was
+ * in the "Minis Ultra Computer" sheet) shows beyond status and model: the task it was
  * given, how much it has done (tool calls, turns, tokens, time against its
  * budget), its recent tool calls and what it last said — plus Stop and a course
  * correction while it runs. Port of iOS SubAgentRunDetail.swift.

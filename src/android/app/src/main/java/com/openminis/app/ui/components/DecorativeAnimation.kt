@@ -130,7 +130,7 @@ fun rememberDecorativeTick(): State<Long> {
     // clock runs on AndroidUiDispatcher's frame clock, which - unlike
     // Compose's own - is not paused when the screen stops, so a reader left
     // composed in the background (a group tile's comet or a row's ring while
-    // a long turn runs with Minis in the background) woke the main thread
+    // a long turn runs with Minis Ultra in the background) woke the main thread
     // every vsync with nothing drawn. A screen behind another one in the
     // back stack (CREATED) releases it too. The floating tool capsule is
     // plain Views and does not use this clock.

@@ -10,7 +10,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * [T-android-global-shell-throttle] Admits agent shell commands against a
- * budget of Minis child processes, across ALL sessions. A command that does
+ * budget of Minis Ultra child processes, across ALL sessions. A command that does
  * not fit waits in a FIFO queue; it is never refused.
  *
  * Why: every running command is a PRoot process tree (libproot + /bin/sh +
@@ -51,7 +51,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 object GlobalShellThrottle {
     private const val TAG = "GlobalShellThrottle"
 
-    /** Live Minis child processes the gate admits up to. */
+    /** Live Minis Ultra child processes the gate admits up to. */
     const val PROCESS_BUDGET = 16
 
     /**

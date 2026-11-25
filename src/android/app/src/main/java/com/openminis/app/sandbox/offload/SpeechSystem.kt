@@ -102,7 +102,7 @@ internal sealed class RecognizeOutcome {
  * SIGINT does not end it until proot gets back to it - which is after the host
  * replies. The process therefore stays in /proc; what changes at once is the
  * pending-signal mask (checked on a Pixel 4a: ShdPnd 0x4000 after SIGTERM).
- * Minis' own stop sends SIGTERM then SIGKILL to the group, a terminal Ctrl-C
+ * Minis Ultra' own stop sends SIGTERM then SIGKILL to the group, a terminal Ctrl-C
  * SIGINT; a SIGKILLed process becomes a zombie.
  */
 internal object CallerStatus {
@@ -316,7 +316,7 @@ internal class AndroidSpeechSystem(private val context: Context) : SpeechSystem 
                 OffloadPermissionManager.SettingsGateRequest(
                     id = Manifest.permission.RECORD_AUDIO,
                     title = "Microphone permission needed",
-                    message = "Minis needs microphone permission to transcribe speech. Open Settings to allow it.",
+                    message = "Minis Ultra needs microphone permission to transcribe speech. Open Settings to allow it.",
                     settingsAction = Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                     requiresPackageUri = true,
                     positiveLabel = "Open Settings",

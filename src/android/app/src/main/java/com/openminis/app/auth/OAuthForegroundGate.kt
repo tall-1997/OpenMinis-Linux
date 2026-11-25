@@ -15,10 +15,10 @@ import kotlin.coroutines.resume
 
 /**
  * [T-android-oauth-foreground-exchange] Hold a loopback-OAuth token exchange
- * until Minis is back in the foreground.
+ * until Minis Ultra is back in the foreground.
  *
  * Reported: after authorizing Anthropic in the browser — which then said the
- * tab could be closed — returning to Minis showed no sign-in at all. The
+ * tab could be closed — returning to Minis Ultra showed no sign-in at all. The
  * authorization had succeeded; the token exchange had not. Logcat on a Pixel 6
  * (Android 17 beta, WireGuard up):
  *
@@ -29,7 +29,7 @@ import kotlin.coroutines.resume
  *
  * 10 ms from POST to failure: not a timeout, a refusal. `dumpsys netpolicy` for
  * the app's uid shows `blocked=APP_BACKGROUND, allowed=FOREGROUND|TOP|…`.
- * While the user is in the Custom Tab, Minis is a background app and the OS
+ * While the user is in the Custom Tab, Minis Ultra is a background app and the OS
  * denies it the network — DNS answers "no address" at once — but the loopback
  * callback server still works, because localhost is never blocked. So the
  * redirect lands, the browser reports success, and the exchange fires into a
@@ -92,7 +92,7 @@ object OAuthForegroundGate {
         AppLogger.info(
             tag,
             "[OAuth] callback arrived with the app in the background ($state) — " +
-                "holding the token exchange until Minis is foreground (background network is blocked)",
+                "holding the token exchange until Minis Ultra is foreground (background network is blocked)",
         )
         val started = System.currentTimeMillis()
         val arrived = withTimeoutOrNull(MAX_WAIT_MS) {

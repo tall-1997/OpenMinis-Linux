@@ -134,7 +134,7 @@ class GeminiProvider(
                 .url(url)
                 .post(body.toString().toRequestBody("application/json".toMediaType()))
                 // [T-android-default-ua] Brand the outbound UA so server logs
-                // can trace the request back to the Minis build. Gemini has no
+                // can trace the request back to the Minis Ultra build. Gemini has no
                 // SDK-specific UA requirement, so the helper's default kicks in.
                 .applyUserAgentOverride(null)
                 .build(),

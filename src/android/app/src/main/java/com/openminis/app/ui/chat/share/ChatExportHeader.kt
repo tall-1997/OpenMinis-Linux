@@ -49,7 +49,7 @@ import java.util.Locale
 /**
  * [T-multi-select-share] The export's header (iOS ChatExportHeaderView): the
  * assistant's avatar as a ringed circle, the title and "<model> · <date>" under it,
- * the Open Minis icon and name at the right — avatar, title block and brand on one
+ * the Open Minis Ultra icon and name at the right — avatar, title block and brand on one
  * centre line — and a hairline below. Shared by the long image and the PDF.
  */
 @Composable
@@ -93,7 +93,7 @@ internal fun ChatExportHeaderView(title: String, subtitle: List<String>, widthDp
                 }
                 // Product name: not localized.
                 Text(
-                    text = "Open Minis",
+                    text = "Open Minis Ultra",
                     style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.sp),
                     color = palette.primaryText,
                     maxLines = 1,

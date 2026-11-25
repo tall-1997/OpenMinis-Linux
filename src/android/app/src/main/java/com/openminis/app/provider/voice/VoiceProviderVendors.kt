@@ -1040,7 +1040,7 @@ class OpenRouterVoiceProvider(providerId: String, baseURL: String, apiKey: Strin
     override fun applyVoiceAuth(builder: Request.Builder) {
         super.applyVoiceAuth(builder)
         builder.header("HTTP-Referer", "https://github.com/OpenMinis/OpenMinis")
-        builder.header("X-Title", "Minis App")
+        builder.header("X-Title", "Minis Ultra App")
     }
 
     // -- ASR ------------------------------------------------------------------

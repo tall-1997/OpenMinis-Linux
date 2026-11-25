@@ -957,7 +957,7 @@ private fun parseInlineMarkdown(
 //
 // Mirrors iOS `takeBrowserSnapshot()` timer (ToolLiveSheet.swift:1803-1825):
 // while a browser_use block is RUNNING/STREAMING, poll the active WebView at
-// a fixed interval so the Minis Computer sheet, detail sheet, and floating
+// a fixed interval so the Minis Ultra Computer sheet, detail sheet, and floating
 // thumbnail can show the current page state — not just screenshots saved by
 // visualChangeActions (NAVIGATE/CLICK/SCROLL/HOVER/TYPE). Actions like
 // get_readable, get_text, execute_js, fetch never save an imageFilePath, so

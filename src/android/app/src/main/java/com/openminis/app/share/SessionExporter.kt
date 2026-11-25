@@ -39,7 +39,7 @@ import java.util.zip.ZipOutputStream
  *    `tool_result{tool, success, output?}` with output capped at 2000 chars,
  *    `media` as a note).
  *  - Plain text: per session a `# title / Model / Created` header, then
- *    `[User]|[Minis] HH:mm` blocks separated by `---`; sessions separated by a
+ *    `[User]|[Minis Ultra] HH:mm` blocks separated by `---`; sessions separated by a
  *    line of 60 `=`.
  *  - Both start each session at its first user message, skip rows that are
  *    only tool results, and skip a session with no user message at all.
@@ -321,7 +321,7 @@ object SessionExporter {
                 }
                 val body = lines.joinToString("\n")
                 if (body.isNotEmpty()) {
-                    val role = if (row.role == "user") "User" else "Minis"
+                    val role = if (row.role == "user") "User" else "Minis Ultra"
                     out.write("\n[$role] ${timeFmt.format(Date(row.createdAt))}\n$body\n---\n")
                     summary = summary.countMessage(row.createdAt)
                 }

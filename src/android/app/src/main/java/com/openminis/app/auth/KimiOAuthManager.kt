@@ -37,7 +37,7 @@ class KimiOAuthManager(
 
         /**
          * Official Kimi Code CLI OAuth client id (observed in CLIProxyAPI's
-         * public source). It is not issued to Minis, so it may be rotated,
+         * public source). It is not issued to Minis Ultra, so it may be rotated,
          * rate-limited or revoked upstream. Overridable via AndroidManifest
          * meta-data
          * "KimiOAuthClientID" (the Android analog of iOS's Info.plist key);

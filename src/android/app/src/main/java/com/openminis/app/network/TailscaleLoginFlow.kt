@@ -29,7 +29,7 @@ import kotlinx.coroutines.launch
  * GitHub / Microsoft sign-in or passkey is reused).
  *
  * While the browser is open the node is polled until it is Running; then
- * [returnToApp] brings Minis back (which also closes the tab, see
+ * [returnToApp] brings Minis Ultra back (which also closes the tab, see
  * NetworkSettingsScreen). Leaving the browser without signing in returns to
  * the not-signed-in state silently, and a new tap starts over.
  *

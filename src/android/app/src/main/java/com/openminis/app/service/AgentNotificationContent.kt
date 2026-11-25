@@ -77,7 +77,7 @@ internal fun notificationSmallIconFor(phase: AgentPhase, toolName: String?, wait
  * Title for the [AgentPhase.TOOL] row: the model-supplied `tool_title`
  * ("Open Baidu home page") when there is one, otherwise the per-tool label
  * the overlay uses ("Execute Shell"). Both are far shorter than the old
- * "Minis is using Shell" sentence, which matters on OEM chips that fall
+ * "Minis Ultra is using Shell" sentence, which matters on OEM chips that fall
  * back to the content title (see [chipTimerText]).
  */
 internal fun toolRowTitle(toolName: String, toolTitle: String?): String =

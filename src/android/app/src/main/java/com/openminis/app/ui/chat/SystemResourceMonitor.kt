@@ -56,7 +56,7 @@ import java.io.File
  *   (`Pss` + `SwapPss`, the same total `Debug.MemoryInfo.getTotalPss()`
  *   reports), falling back to `Debug.getMemoryInfo()` where the rollup file
  *   is missing. `Debug.getMemoryInfo()` parses the FULL `/proc/self/smaps`,
- *   one record per mapping, and Minis maps a lot (WebView, the ONNX runtime,
+ *   one record per mapping, and Minis Ultra maps a lot (WebView, the ONNX runtime,
  *   the proot loaders): profiled on a Pixel 6 perf build it cost ~20-25 ms
  *   per call — 5% of all app CPU during a shell run — and it ran on the main
  *   thread every 2 s, dropping a frame or two each time. The rollup is the

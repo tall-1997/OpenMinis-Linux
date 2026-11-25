@@ -288,7 +288,7 @@ data class ProviderInstance(
     var appendV1Suffix: Boolean = true,
     // [T-provider-custom-user-agent] Optional per-provider User-Agent
     // override. Some relay gateways only accept requests whose UA looks like
-    // an official client (e.g. Claude Code); Minis' default UA gets rejected.
+    // an official client (e.g. Claude Code); Minis Ultra' default UA gets rejected.
     // null/blank → keep the default UA; non-blank → replace the User-Agent
     // header on every outbound request (chat / models / responses) for this
     // instance. Only surfaced in the UI for custom-base OpenAI-/Anthropic-

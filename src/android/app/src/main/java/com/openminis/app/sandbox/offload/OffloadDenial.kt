@@ -29,7 +29,7 @@ object OffloadDenial {
         /** Service connected/authorized: the gate is the only possible refuser. */
         RUNNING,
 
-        /** Service running, but Minis has not been granted access to it. */
+        /** Service running, but Minis Ultra has not been granted access to it. */
         NOT_AUTHORIZED,
 
         /** Shizuku app is not installed at all. */
@@ -69,7 +69,7 @@ object OffloadDenial {
         if (!OffloadPermissionManager.isRegistered(toolName)) {
             return "$displayName is not registered in this build's agent permission table, " +
                 "so the call is refused instead of being silently allowed. This is a CLI/registry " +
-                "mismatch in the build — update Minis or report a bug; changing $settingsPath " +
+                "mismatch in the build — update Minis Ultra or report a bug; changing $settingsPath " +
                 "cannot create the missing entry."
         }
 
@@ -80,7 +80,7 @@ object OffloadDenial {
                     "service itself needs no attention."
 
             SystemLayer.NOT_AUTHORIZED ->
-                "$systemName is running, but Minis is not authorized for it. $systemFix " +
+                "$systemName is running, but Minis Ultra is not authorized for it. $systemFix " +
                     "Separately, the Agent permission gate for $displayName refused this call " +
                     "($gate); both layers have to allow the tool."
 

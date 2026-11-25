@@ -635,7 +635,7 @@ Notes:
   - `status` shows the Voice Input model (name and host, never the key) and
     what `--engine auto` would use.
   - `languages` fails with error.code "unavailable" when the system does not
-    report its languages; error.fallback then lists Minis' built-in locales,
+    report its languages; error.fallback then lists Minis Ultra' built-in locales,
     which are not a report from this device.
 """
     }

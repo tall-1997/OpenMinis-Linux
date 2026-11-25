@@ -20,7 +20,7 @@ internal object HandlerStub {
 
     fun content(name: String): String =
         "#!/bin/sh\n" +
-            "echo \"$name: unavailable - Minis could not start its native offload service. " +
-            "Restart the Minis app and try again.\" >&2\n" +
+            "echo \"$name: unavailable - Minis Ultra could not start its native offload service. " +
+            "Restart the Minis Ultra app and try again.\" >&2\n" +
             "exit $EXIT_UNAVAILABLE\n"
 }

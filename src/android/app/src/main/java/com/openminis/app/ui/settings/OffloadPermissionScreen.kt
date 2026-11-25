@@ -198,7 +198,7 @@ fun OffloadPermissionScreen(
                 SettingsRow(
                     title = stringResource(R.string.system_permissions_a11y_restricted_manual),
                     subtitle = stringResource(R.string.system_permissions_a11y_restricted_manual_sub),
-                    // Lands on Minis' own App info page, where "Allow
+                    // Lands on Minis Ultra' own App info page, where "Allow
                     // restricted settings" lives in the overflow menu.
                     onClick = { openAppDetailsSettings(context) },
                     showDivider = false,
@@ -537,7 +537,7 @@ private fun openAccessibilitySettings(context: Context) {
 }
 
 /**
- * [T-android-restricted-settings] Open Minis' own App info page — "Allow
+ * [T-android-restricted-settings] Open Minis Ultra' own App info page — "Allow
  * restricted settings" lives in that page's overflow (⋮) menu, and there is no
  * public intent that opens the menu item directly.
  */

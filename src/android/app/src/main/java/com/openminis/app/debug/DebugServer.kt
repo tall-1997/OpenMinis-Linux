@@ -62,7 +62,7 @@ class DebugServer(
      * [T-android-debugserver-auth] Per-install token required from
      * non-loopback clients. Generated once, persisted in filesDir so the
      * developer can read it with:
-     *   adb shell run-as com.openminis.app cat files/debug_server_token
+     *   adb shell run-as com.openminis.ultra cat files/debug_server_token
      * Also logged at startup (logcat is adb-only — not readable remotely).
      */
     private val authToken: String by lazy {
@@ -95,7 +95,7 @@ class DebugServer(
                 val ss = ServerSocket(port, 10)
                 serverSocket = ss
                 Log.i(TAG, "Debug server listening on port $port (all interfaces)")
-                Log.i(TAG, "Remote (non-loopback) clients must send X-Minis-Token: $authToken")
+                Log.i(TAG, "Remote (non-loopback) clients must send X-Minis Ultra-Token: $authToken")
 
                 while (!stopped) {
                     try {
@@ -162,7 +162,7 @@ class DebugServer(
                     if (lower.startsWith("accept:")) {
                         accept = lower.substringAfter(":").trim()
                     }
-                    // [T-android-debugserver-auth] Token via X-Minis-Token or
+                    // [T-android-debugserver-auth] Token via X-Minis Ultra-Token or
                     // Authorization: Bearer — either spelling accepted.
                     if (lower.startsWith("x-minis-token:")) {
                         providedToken = headerLine.substringAfter(":").trim()
@@ -180,7 +180,7 @@ class DebugServer(
                 val isLoopback = s.inetAddress?.isLoopbackAddress == true
                 if (!isAuthorized(isLoopback, providedToken, authToken)) {
                     Log.w(TAG, "401 unauthorized ${if (isLoopback) "loopback" else s.inetAddress?.hostAddress ?: "?"} (missing/wrong token)")
-                    sendResponse(writer, 401, rpcHandler.errorJSON(-32000, "Unauthorized — send X-Minis-Token (see `adb shell run-as com.openminis.app cat files/debug_server_token`)"))
+                    sendResponse(writer, 401, rpcHandler.errorJSON(-32000, "Unauthorized — send X-Minis Ultra-Token (see `adb shell run-as com.openminis.ultra cat files/debug_server_token`)"))
                     return
                 }
 
@@ -345,7 +345,7 @@ class DebugServer(
         writer.print("Connection: close\r\n")
         writer.print("Access-Control-Allow-Origin: *\r\n")
         writer.print("Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n")
-        writer.print("Access-Control-Allow-Headers: Content-Type, X-Minis-Token, Authorization\r\n")
+        writer.print("Access-Control-Allow-Headers: Content-Type, X-Minis Ultra-Token, Authorization\r\n")
         writer.print("\r\n")
         writer.print(body)
         writer.flush()
@@ -386,7 +386,7 @@ class DebugServer(
         writer.print("HTTP/1.1 204 No Content\r\n")
         writer.print("Access-Control-Allow-Origin: *\r\n")
         writer.print("Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n")
-        writer.print("Access-Control-Allow-Headers: Content-Type, X-Minis-Token, Authorization\r\n")
+        writer.print("Access-Control-Allow-Headers: Content-Type, X-Minis Ultra-Token, Authorization\r\n")
         writer.print("Access-Control-Max-Age: 86400\r\n")
         writer.print("Connection: close\r\n")
         writer.print("\r\n")

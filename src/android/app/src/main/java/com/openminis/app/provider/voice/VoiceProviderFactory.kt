@@ -8,7 +8,7 @@ import com.openminis.app.data.model.ProviderType
  * [T-android-provider-voice] Maps a configured ProviderInstance to a concrete
  * VoiceProvider — Android port of iOS VoiceProviderFactory.swift.
  *
- * Minis has no dedicated "voice provider type": vendors riding on an
+ * Minis Ultra has no dedicated "voice provider type": vendors riding on an
  * OpenAI/Anthropic-compatible instance (Groq, MiniMax, Doubao, Xunfei, Alibaba,
  * MiMo …) are detected from the instance's custom base URL. Returns null when
  * the instance cannot serve voice.

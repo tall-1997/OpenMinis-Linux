@@ -673,7 +673,7 @@ object OpenRouterQuotaAdapter : ProviderQuotaAdapter {
 /**
  * [T-quota-console-links] The vendor's own page for usage or balance, opened
  * in the in-app browser from the quota section and sheet. Offered even where
- * Minis cannot query the figure itself. Fixed per vendor: never built from a
+ * Minis Ultra cannot query the figure itself. Fixed per vendor: never built from a
  * user-supplied base URL, and null for relays and unknown hosts.
  */
 object QuotaConsoleLink {
@@ -1104,10 +1104,10 @@ object CodexSubscriptionQuotaAdapter : ProviderQuotaAdapter {
  * Claude's / Codex's: the worst window decides the status. A window carries
  * the upstream counts (total = limit, used / remaining as given); its percent
  * is computed from them. An entry without a positive limit and a used or
- * remaining count is skipped - the CLI shows such a row as "0 used", Minis
+ * remaining count is skipped - the CLI shows such a row as "0 used", Minis Ultra
  * shows nothing rather than an invented number.
  *
- * The request carries Minis's own User-Agent and nothing else: Kimi Code's
+ * The request carries Minis Ultra's own User-Agent and nothing else: Kimi Code's
  * terms forbid spoofing the client identity. (Android sets it explicitly; the
  * shared OkHttp transport would otherwise send `okhttp/<version>`.)
  */
@@ -1116,7 +1116,7 @@ object KimiCodeQuotaAdapter : ProviderQuotaAdapter {
     override val vendor = QuotaVendor.kimiCode
     val hosts = listOf("api.kimi.com", "api.kimi.ai")
 
-    /** Minis's own UA (`Minis/<version> (Android <release>; <model>)`). Replaceable in tests. */
+    /** Minis Ultra's own UA (`Minis Ultra/<version> (Android <release>; <model>)`). Replaceable in tests. */
     internal var userAgent: () -> String = { com.openminis.app.provider.MinisUserAgent.DEFAULT }
 
     fun endpoint(host: String): String = "$host/coding/v1/usages"

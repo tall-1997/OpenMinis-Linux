@@ -22,7 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * State machine ([T-android-sui-support]: binder-first — a live binder wins
  * before any package check, which is what lets APK-less Sui be detected):
  *   READY              Binder up + permission held — calls work.
- *   NEED_PERMISSION    Binder up but Minis not authorized.
+ *   NEED_PERMISSION    Binder up but Minis Ultra not authorized.
  *   NOT_RUNNING        No binder, but a manager APK is installed — start it.
  *   NOT_INSTALLED      No binder and no manager APK — nothing available.
  */

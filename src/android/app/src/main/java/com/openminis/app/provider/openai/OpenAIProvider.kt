@@ -3006,7 +3006,7 @@ class OpenAIProvider private constructor(
             // [T-android-default-ua] `defaultUserAgent = null` — keep the
             // codex_cli_rs fingerprint set above when no per-provider
             // override is configured. We must NOT fall back to the branded
-            // Minis UA here: the ChatGPT OAuth backend validates the
+            // Minis Ultra UA here: the ChatGPT OAuth backend validates the
             // client identity against this header.
             builder.applyUserAgentOverride(customUserAgent, defaultUserAgent = null)
             return builder.build()
@@ -3058,7 +3058,7 @@ class OpenAIProvider private constructor(
         // carries a User-Agent, which means the provider's identity is part of
         // its PROTOCOL rather than branding. Copilot is the case: it rejects
         // requests that do not look like the editor plugin, and the branded
-        // `Minis/…` default was overwriting `GitHubCopilotChat/…` on every
+        // `Minis Ultra/…` default was overwriting `GitHubCopilotChat/…` on every
         // chat request — visible in a captured trace. The same reasoning the
         // Codex path expresses by passing `defaultUserAgent = null` a few
         // hundred lines above; here it is derived so no provider has to

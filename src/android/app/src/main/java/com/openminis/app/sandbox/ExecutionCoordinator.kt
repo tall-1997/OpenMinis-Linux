@@ -321,7 +321,7 @@ object ExecutionCoordinator {
         // that owns its own process cannot collide with another one, so the
         // serialisation the warm path requires is simply absent here.
         // [T-android-global-shell-throttle] Commands are admitted against a
-        // budget of live Minis child processes across every session; the rest
+        // budget of live Minis Ultra child processes across every session; the rest
         // queue. Taken BEFORE the pool lease, so a queued command holds no
         // shell slot.
         // [T-android-shell-process-budget] The queue does not eat the
@@ -387,7 +387,7 @@ object ExecutionCoordinator {
             }
             is GlobalShellThrottle.Outcome.QueueTimedOut -> CommandResult(
                 output = "Not run: waited ${outcome.waitedMs / 1000}s for Android's per-app process limit to " +
-                    "free up (${outcome.lastLiveCount} Minis processes running, budget " +
+                    "free up (${outcome.lastLiveCount} Minis Ultra processes running, budget " +
                     "${GlobalShellThrottle.PROCESS_BUDGET}), or for the shell to start. Nothing was executed; " +
                     "retry once other commands or background processes have finished.",
                 exitCode = 124,

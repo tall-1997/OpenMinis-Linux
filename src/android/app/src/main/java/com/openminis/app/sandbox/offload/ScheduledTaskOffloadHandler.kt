@@ -613,7 +613,7 @@ class ScheduledTaskOffloadHandler(private val context: Context) : NativeOffloadH
               A failing command is not a failed task: the model sees its output and exit
               status and decides what to do (explain, retry, or report).
 
-            Tasks are kept by the system alarm service: they fire even when Minis is in the
+            Tasks are kept by the system alarm service: they fire even when Minis Ultra is in the
             background or closed, and survive a reboot (a force-stop pauses them until the
             app is next opened).
 

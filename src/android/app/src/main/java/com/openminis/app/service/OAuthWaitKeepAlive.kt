@@ -54,13 +54,13 @@ internal class OAuthWaitFlows(private val maxHoldMs: Long) {
 }
 
 /**
- * [T-oauth-wait-fgs] Keeps Minis from being frozen while a sign-in waits for its
+ * [T-oauth-wait-fgs] Keeps Minis Ultra from being frozen while a sign-in waits for its
  * localhost redirect.
  *
  * Field log (HUAWEI tablet, Android 12): the Custom Tab opened at 15:19:36.160,
  * the whole process stopped a second later, and the redirect was served at
  * 15:20:16.278 - in the same millisecond the process thawed. With the browser
- * on top, Minis is a cached background process and the cached-apps freezer
+ * on top, Minis Ultra is a cached background process and the cached-apps freezer
  * stops it; the kernel still accepts the browser's connection to
  * localhost:1455, but the thread that would answer it is frozen, so the page
  * spins (~17 s for OpenAI in the user's video, who then gave up).

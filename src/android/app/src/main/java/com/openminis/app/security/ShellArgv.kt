@@ -37,8 +37,8 @@ fun tokenizeCommand(raw: String): List<String> {
 }
 
 val APP_DATA_ROOTS = listOf(
-    "/data/data/com.openminis.linux",
-    "/data/user/0/com.openminis.linux",
+    "/data/data/com.openminis.ultra",
+    "/data/user/0/com.openminis.ultra",
 )
 
 fun containsShellExpansionSyntax(raw: String): Boolean {

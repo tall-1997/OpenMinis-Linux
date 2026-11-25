@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Minis</string>
+    <string name="app_name">Minis Ultra</string>
     <string name="new_chat">Novi razgovor</string>
     <string name="settings">Postavke</string>
     <string name="providers">Pružatelji</string>
@@ -57,7 +57,7 @@
     <string name="check_update_later">Kasnije</string>
     <string name="check_update_open_release">Otvori stranicu izdanja</string>
     <string name="check_update_verify_failed">Preuzeta datoteka nije prošla provjeru. Pokušajte ponovno.</string>
-    <string name="check_update_package_invalid">Preuzeti paket nije novija verzija aplikacije Minis pa nije instaliran.</string>
+    <string name="check_update_package_invalid">Preuzeti paket nije novija verzija aplikacije Minis Ultra pa nije instaliran.</string>
     <string name="check_update_checking">Provjera…</string>
     <string name="check_update_up_to_date">Koristite najnoviju verziju.</string>
     <string name="check_update_no_release">Još nema objavljenog izdanja.</string>
@@ -104,7 +104,7 @@
 
     <!-- T67: Voice permission settings-gate dialog (shown when RECORD_AUDIO is permanently denied) -->
     <string name="mic_permission_title">Potrebno dopuštenje za mikrofon</string>
-    <string name="mic_permission_message">Glasovni unos treba dopuštenje za mikrofon. Dodirnite Otvori postavke da ga odobrite za Minis.</string>
+    <string name="mic_permission_message">Glasovni unos treba dopuštenje za mikrofon. Dodirnite Otvori postavke da ga odobrite za Minis Ultra.</string>
     <string name="mic_permission_open_settings">Otvori postavke</string>
     <string name="mic_permission_cancel">Odustani</string>
 
@@ -118,7 +118,7 @@
     <string name="bg_overlay_nudge_channel_name">Dopuštenje za pozadinski sloj</string>
     <string name="bg_overlay_nudge_channel_description">Podsjeća vas da odobrite sistemsko dopuštenje za prikaz preko drugih aplikacija kako bi se pozadinski sloj zadatka mogao prikazati.</string>
     <string name="bg_overlay_nudge_title">Omogući pozadinski sloj</string>
-    <string name="bg_overlay_nudge_body">Odobrite "Prikaz preko drugih aplikacija" kako bi Minis mogao prikazati trenutni alat dok radite u drugoj aplikaciji. Dodirnite za otvaranje zaslona s dopuštenjima.</string>
+    <string name="bg_overlay_nudge_body">Odobrite "Prikaz preko drugih aplikacija" kako bi Minis Ultra mogao prikazati trenutni alat dok radite u drugoj aplikaciji. Dodirnite za otvaranje zaslona s dopuštenjima.</string>
     <!-- T-android-overlay-reply-status-34599 — manual-dismiss button on the floating overlay -->
     <string name="overlay_dismiss">Odbaci</string>
     <string name="overlay_streaming">Generiranje…</string>
@@ -130,8 +130,8 @@
     <!-- [T-android-a11y-force-stop-recovery] Accessibility grant repair. Shown
          when a force-stop has stripped the service out of Settings.Secure. -->
     <string name="a11y_repair_dialog_title">Pristupačnost isključena</string>
-    <string name="a11y_repair_dialog_message_shizuku">Minis je izgubio dopuštenje za pristupačnost — to se događa nakon prisilnog zaustavljanja aplikacije. Shizuku je dostupan pa se dopuštenje može odmah vratiti bez otvaranja postavki.</string>
-    <string name="a11y_repair_dialog_message_manual">Minis je izgubio dopuštenje za pristupačnost — to se događa nakon prisilnog zaustavljanja aplikacije. Ponovno omogućite Minis u Postavke → Pristupačnost za nastavak.</string>
+    <string name="a11y_repair_dialog_message_shizuku">Minis Ultra je izgubio dopuštenje za pristupačnost — to se događa nakon prisilnog zaustavljanja aplikacije. Shizuku je dostupan pa se dopuštenje može odmah vratiti bez otvaranja postavki.</string>
+    <string name="a11y_repair_dialog_message_manual">Minis Ultra je izgubio dopuštenje za pristupačnost — to se događa nakon prisilnog zaustavljanja aplikacije. Ponovno omogućite Minis Ultra u Postavke → Pristupačnost za nastavak.</string>
     <string name="a11y_repair_action_repair">Popravi sada</string>
     <string name="a11y_repair_action_open_settings">Otvori postavke</string>
     <string name="a11y_repair_cancel">Ne sada</string>
@@ -143,7 +143,7 @@
     <string name="a11y_repair_failed">Popravak nije uspio — pokušajte ga omogućiti u Postavkama</string>
     <string name="a11y_repair_footer_shizuku">Android uklanja dopuštenje za pristupačnost svaki put kad se aplikacija prisilno zaustavi i ne vraća ga automatski. Shizuku ga može izravno vratiti.</string>
     <string name="a11y_repair_footer_manual">Android uklanja dopuštenje za pristupačnost svaki put kad se aplikacija prisilno zaustavi i ne vraća ga automatski. Instalirajte i autorizirajte Shizuku da ubuduće ovo popravite jednim dodirom.</string>
-    <string name="bg_service_notification_title">Minis Agent aktivan</string>
+    <string name="bg_service_notification_title">Minis Ultra Agent aktivan</string>
     <string name="bg_service_notification_text">%1$s | %2$s | %3$s</string>
     <!-- Shown on the ongoing notification / Live Update chip once the agent
          task has finished but the service is still alive because the user is
@@ -162,9 +162,9 @@
     <string name="battery_opt_already_exempt">Već dopušteno</string>
     <string name="battery_opt_request_subtitle">Dodirnite da dopustite Minisu neprekinut rad</string>
     <string name="rom_autostart_section_title">Dopuštenje za automatsko pokretanje</string>
-    <string name="rom_autostart_section_footer">Neka Android sučelja (%1$s) zahtijevaju dodatno dopuštenje za automatsko pokretanje uz standardne postavke sustava. Bez njega Minis može biti zaustavljen već nekoliko minuta nakon odlaska u pozadinu.</string>
+    <string name="rom_autostart_section_footer">Neka Android sučelja (%1$s) zahtijevaju dodatno dopuštenje za automatsko pokretanje uz standardne postavke sustava. Bez njega Minis Ultra može biti zaustavljen već nekoliko minuta nakon odlaska u pozadinu.</string>
     <string name="rom_autostart_row_title">Otvori postavke automatskog pokretanja</string>
-    <string name="rom_autostart_row_subtitle">Omogući Minis na %1$s</string>
+    <string name="rom_autostart_row_subtitle">Omogući Minis Ultra na %1$s</string>
 
     <!-- T68: Browser settings — UA list "Not set" placeholder for empty Custom UA -->
     <string name="browser_settings_ua_not_set">Nije postavljeno</string>
@@ -183,7 +183,7 @@
     <string name="settings_appearance_subtitle">Tema, veličina fonta i prikaz</string>
     <string name="settings_section_agent_runtime">Okruženje Agenta</string>
     <string name="settings_skills">Vještine</string>
-    <string name="settings_skills_subtitle">Upravljajte vještinama i uputama Minis Agenta</string>
+    <string name="settings_skills_subtitle">Upravljajte vještinama i uputama Minis Ultra Agenta</string>
     <string name="settings_memory">Memorija</string>
     <string name="settings_memory_subtitle">Trajno znanje kroz sesije</string>
     <!-- [T-mcp-integration-android] MCP Integrations settings entry + management screen -->
@@ -336,7 +336,7 @@
     <string name="settings_section_logs">Zapisi</string>
     <string name="settings_logs_subtitle">Pregledajte i izvezite zapise aplikacije</string>
     <string name="settings_section_about">O aplikaciji</string>
-    <string name="settings_about_minis">O aplikaciji Minis</string>
+    <string name="settings_about_minis">O aplikaciji Minis Ultra</string>
     <string name="settings_about_subtitle">Verzija i informacije o projektu</string>
     <string name="settings_privacy_policy">Pravila privatnosti</string>
     <string name="settings_feedback">Povratne informacije</string>
@@ -344,7 +344,7 @@
     <string name="settings_feedback_telegram">Povratne informacije (Telegram)</string>
     <string name="settings_feedback_email">Povratne informacije (e-pošta)</string>
     <string name="about_title">O aplikaciji</string>
-    <string name="about_minis_tagline">Minis je AI agent koji živi na vašem uređaju. Vaši ključevi i datoteke ostaju ovdje; razgovori se šalju samo AI pružatelju kojeg odaberete.</string>
+    <string name="about_minis_tagline">Minis Ultra je AI agent koji živi na vašem uređaju. Vaši ključevi i datoteke ostaju ovdje; razgovori se šalju samo AI pružatelju kojeg odaberete.</string>
     <string name="about_links">Poveznice</string>
     <string name="about_github_repository">GitHub repozitorij</string>
     <string name="about_version_format">Verzija %1$s (build %2$s)</string>
@@ -362,7 +362,7 @@
     <string name="time_yesterday">Jučer</string>
     <string name="time_today">Danas</string>
     <string name="offload_perm_dialog_title">Zahtjev za dopuštenje</string>
-    <string name="offload_perm_dialog_intro">Minis Agent želi koristiti:</string>
+    <string name="offload_perm_dialog_intro">Minis Ultra Agent želi koristiti:</string>
     <string name="offload_perm_dialog_tool_label">Alat: %1$s</string>
     <!-- T338: session-scoped tri-action labels for the ASK_ONCE dialog.
          None of these persist a PermissionLevel — the user goes to
@@ -426,8 +426,8 @@
     <string name="common_close">Zatvori</string>
     <string name="common_skip">Preskoči</string>
     <string name="common_next">Dalje</string>
-    <string name="onboarding_welcome_title">Dobro došli u Minis</string>
-    <string name="onboarding_welcome_subtitle">Vaš Minis Agent s terminalom, preglednikom i izravnim pristupom uređaju.</string>
+    <string name="onboarding_welcome_title">Dobro došli u Minis Ultra</string>
+    <string name="onboarding_welcome_subtitle">Vaš Minis Ultra Agent s terminalom, preglednikom i izravnim pristupom uređaju.</string>
     <string name="onboarding_get_started">Započni</string>
     <string name="onboarding_provider_title">Dodajte pružatelja</string>
     <string name="onboarding_provider_subtitle">Za početak unesite API ključ barem jednog pružatelja.</string>
@@ -596,12 +596,12 @@
     <string name="browser_nav_forward">Naprijed</string>
     <string name="browser_stop">Zaustavi</string>
     <string name="browser_reload">Osvježi</string>
-    <string name="browser_minis_browsing">Minis pregledava</string>
-    <!-- Streaming indicator shown while the assistant is composing a reply. %1$s is the Soul-customized assistant name (default "Minis"). -->
+    <string name="browser_minis_browsing">Minis Ultra pregledava</string>
+    <!-- Streaming indicator shown while the assistant is composing a reply. %1$s is the Soul-customized assistant name (default "Minis Ultra"). -->
     <string name="chat_typing_indicator">%1$s razmišlja</string>
     <string name="read_aloud_unavailable">Čitanje naglas nije uspjelo: nema upotrebljivog govornog pogona. Provjerite postavke glasovnog izlaza ili instalirajte sustavski govorni pogon.</string>
     <string name="chat_error_stream_dropped_partial">Veza je prekinuta — ovaj odgovor može biti nepotpun. Dodirnite Pokušaj ponovno za nastavak.</string>
-    <!-- Composer placeholder. %1$s is the Soul-customized assistant name (default "Minis"). The parenthetical is an inline hint reminding the user that typing '@' opens the file-mention picker. T-android-placeholder-single-line collapses the prior two-row (title + hint) layout into a single line, matching iOS 19e1d61f. -->
+    <!-- Composer placeholder. %1$s is the Soul-customized assistant name (default "Minis Ultra"). The parenthetical is an inline hint reminding the user that typing '@' opens the file-mention picker. T-android-placeholder-single-line collapses the prior two-row (title + hint) layout into a single line, matching iOS 19e1d61f. -->
     <string name="chat_input_placeholder">Poruka za %1$s (@ za spominjanje datoteka)</string>
     <string name="chat_input_placeholder_hint_1">Isprobajte @ za spominjanje datoteka koje %1$s treba pročitati</string>
     <string name="chat_input_placeholder_hint_2">Upišite / za SKILL-ove i brze naredbe</string>
@@ -638,7 +638,7 @@
     <string name="browser_history_results">Rezultati</string>
     <string name="browser_history_clear_dialog_title">Očistiti povijest pregledavanja?</string>
     <string name="browser_history_clear_dialog_message">Ovo će ukloniti svu povijest pregledavanja. Ovo se ne može poništiti.</string>
-    <string name="terminal_title">Minis Shell</string>
+    <string name="terminal_title">Minis Ultra Shell</string>
     <string name="terminal_clear">Očisti</string>
     <string name="terminal_show_keyboard">Prikaži</string>
     <string name="terminal_hide_keyboard">Sakrij</string>
@@ -655,7 +655,7 @@
     <!-- [T-android-thinking-rules-phase2] Provider-detail Thinking Rules section -->
     <string name="thinking_rules_section">Pravila razmišljanja</string>
     <string name="thinking_rules_footer">Pravila se procjenjuju odozgo prema dolje. Prvo pravilo koje odgovara modelu određuje koji se parametri razmišljanja šalju. Zadana su pravila ugrađena i ne mogu se izbrisati — dodajte pravilo iznad njih da nadjačate neko od njih.</string>
-    <string name="thinking_rules_official_protocol_notice">Ovaj pružatelj koristi službeni protokol, pa njegove parametre razmišljanja održava Minis. Prilagođena pravila vrijede za pružatelje kompatibilne s OpenAI-jem na Chat Completions API-ju.</string>
+    <string name="thinking_rules_official_protocol_notice">Ovaj pružatelj koristi službeni protokol, pa njegove parametre razmišljanja održava Minis Ultra. Prilagođena pravila vrijede za pružatelje kompatibilne s OpenAI-jem na Chat Completions API-ju.</string>
     <string name="thinking_rules_default_rules_count">Zadana pravila (%1$d)</string>
     <string name="thinking_rules_add_rule">Dodaj pravilo</string>
     <string name="thinking_rules_move_up">Pomakni gore</string>
@@ -842,7 +842,7 @@
     <string name="shizuku_title">Shizuku</string>
     <string name="shizuku_settings_subtitle">Povlaštena kontrola Androida putem Shizukua ili AXManagera</string>
     <string name="shizuku_status_header">Stanje</string>
-    <string name="shizuku_status_footer">Shizuku izlaže povlaštene sustavske API-je korisničkim aplikacijama bez roota, pokretanjem male usluge preko bežičnog ADB-a ili roota. Podržana su tri kompatibilna pružatelja — Shizuku (RikkaApps), AXManager (Axeron) i Sui (Magisk/KernelSU modul za uređaje s rootom); instalirajte bilo koji. Nakon ovlaštenja, Minis može koristiti android-shizuku-cli za upravljanje paketima, dopuštenjima, postavkama, unosom i aktivnostima.</string>
+    <string name="shizuku_status_footer">Shizuku izlaže povlaštene sustavske API-je korisničkim aplikacijama bez roota, pokretanjem male usluge preko bežičnog ADB-a ili roota. Podržana su tri kompatibilna pružatelja — Shizuku (RikkaApps), AXManager (Axeron) i Sui (Magisk/KernelSU modul za uređaje s rootom); instalirajte bilo koji. Nakon ovlaštenja, Minis Ultra može koristiti android-shizuku-cli za upravljanje paketima, dopuštenjima, postavkama, unosom i aktivnostima.</string>
     <string name="shizuku_actions_header">Sljedeći korak</string>
     <string name="shizuku_capabilities_header">Mogućnosti</string>
     <string name="shizuku_capabilities_footer">Pokrenite `android-shizuku-cli --help` u ljusci za potpune upute. Dostupno bez obzira dolazi li binder od Shizukua, AXManagera ili Suija — sučelje naredbi je identično.</string>
@@ -872,15 +872,15 @@
     <string name="shizuku_cap_service_desc">Pozivajte i pregledavajte usluge sustava</string>
     <string name="shizuku_install_footer">Instalirajte bilo koji od Shizuku (RikkaApps), AXManager (Axeron) ili Sui (RikkaApps) — sva tri provode isti protokol i potpuno su zamjenjivi. Shizuku i AXManager su obične aplikacije koje se aktiviraju bežičnim ADB-om. Sui je za uređaje koji već imaju root: instalira se kao Magisk/KernelSU modul, ne treba aplikaciju i ostaje aktivan nakon ponovnog pokretanja. Na KernelSU ili APatch, Sui dodatno zahtijeva Zygisk implementaciju (Zygisk Next / ReZygisk / NeoZygisk) — bez nje se Sui neće učitati. Instalirajte jedan pa se vratite ovamo.</string>
     <string name="shizuku_start_footer">Otvorite aplikaciju upravitelja i pokrenite uslugu putem bežičnog ADB-a (bez računala) ili roota. Kad prikaže da radi, vratite se ovamo.\n\nKoristite AXManager? Omogućite i Postavke → \"AX-Permission Intercept\" unutar AXManagera — samo taj prekidač tjera AXManager da proslijedi svoj Shizuku-kompatibilni binder Minisu.</string>
-    <string name="shizuku_grant_footer">Usluga radi. Dodirnite Ovlasti Minis za dodjelu pristupa. Sustavski dijalog aplikacije upravitelja tražit će potvrdu.</string>
-    <string name="shizuku_grant_footer_sui">Sui radi. Dodirnite Ovlasti Minis za dodjelu pristupa — Sui će sam prikazati dijalog potvrde. Nema zasebne aplikacije upravitelja koju treba otvoriti.</string>
+    <string name="shizuku_grant_footer">Usluga radi. Dodirnite Ovlasti Minis Ultra za dodjelu pristupa. Sustavski dijalog aplikacije upravitelja tražit će potvrdu.</string>
+    <string name="shizuku_grant_footer_sui">Sui radi. Dodirnite Ovlasti Minis Ultra za dodjelu pristupa — Sui će sam prikazati dijalog potvrde. Nema zasebne aplikacije upravitelja koju treba otvoriti.</string>
 
     <string name="shizuku_state_not_installed">Upravitelj nije instaliran</string>
     <string name="shizuku_state_not_installed_subtitle">Instalirajte Shizuku, AXManager ili Sui — bilo koji radi.</string>
     <string name="shizuku_state_not_running">Usluga ne radi</string>
     <string name="shizuku_state_not_running_subtitle">Otvorite aplikaciju upravitelja i pritisnite Pokreni.</string>
     <string name="shizuku_state_need_permission">Potrebno ovlaštenje</string>
-    <string name="shizuku_state_need_permission_subtitle">Usluga radi, ali Minis nije ovlašten.</string>
+    <string name="shizuku_state_need_permission_subtitle">Usluga radi, ali Minis Ultra nije ovlašten.</string>
     <string name="shizuku_state_ready">Spremno</string>
     <string name="shizuku_ready_subtitle">verzija=%1$d, uid=%2$d</string>
     <string name="shizuku_ready_subtitle_sui">Sui (root) · verzija=%1$d, uid=%2$d</string>
@@ -900,7 +900,7 @@
     <string name="shizuku_open_btn_subtitle">Pokrenite instaliranog upravitelja za pokretanje ili upravljanje uslugom</string>
     <string name="shizuku_recheck_btn">Provjeri ponovno</string>
     <string name="shizuku_recheck_subtitle">Ponovno ispitaj stanje nakon pokretanja usluge</string>
-    <string name="shizuku_grant_btn">Ovlasti Minis</string>
+    <string name="shizuku_grant_btn">Ovlasti Minis Ultra</string>
     <string name="shizuku_grant_subtitle">Prikaži dijalog dopuštenja</string>
 
     <!-- [T-android-privileged-backend] Privileged backend (Shizuku / AXManager) -->
@@ -910,11 +910,11 @@
     <string name="skill_title">Vještine</string>
     <string name="skill_add">Dodaj vještinu</string>
     <string name="skill_section_installed">Instalirano</string>
-    <string name="skill_section_footer">Vještine proširuju Minis Agenta specijaliziranim uputama i tijekovima rada. Učitavaju se u sustavski prompt kad su omogućene.</string>
+    <string name="skill_section_footer">Vještine proširuju Minis Ultra Agenta specijaliziranim uputama i tijekovima rada. Učitavaju se u sustavski prompt kad su omogućene.</string>
     <string name="skill_empty_title">Nema instaliranih vještina</string>
-    <string name="skill_empty_action">Dodirnite + za uvoz SKILL.md, .zip ili .skill datoteke ili pregledajte Minis Skills.</string>
+    <string name="skill_empty_action">Dodirnite + za uvoz SKILL.md, .zip ili .skill datoteke ili pregledajte Minis Ultra Skills.</string>
     <string name="skill_import_modal_title">Uvoz vještine</string>
-    <string name="skill_minis_skills_modal">Minis Skills</string>
+    <string name="skill_minis_skills_modal">Minis Ultra Skills</string>
     <string name="skill_delete_confirm_title">Izbrisati %1$s?</string>
     <string name="skill_delete_confirm_text">Ovo će trajno ukloniti vještinu i njezine datoteke.</string>
     <string name="skill_import_sheet_title">Uvoz vještine</string>
@@ -964,7 +964,7 @@
     <string name="skill_detail_source_file">Uvoz datoteke</string>
     <string name="skill_detail_source_bundled">Ugrađeno</string>
     <string name="skill_detail_source_session">Stvoreno u sesiji</string>
-    <string name="skills_browser_title">Minis Skills</string>
+    <string name="skills_browser_title">Minis Ultra Skills</string>
     <string name="skills_browser_import_button">Uvezi ovo</string>
     <string name="skills_browser_hud_importing">Uvoz…</string>
     <string name="skills_browser_error_not_folder">Najprije odaberite mapu vještine</string>
@@ -980,7 +980,7 @@
     <string name="storage_overview_sessions">Datoteke sesija</string>
     <string name="storage_section_sessions">Sesije</string>
     <string name="storage_no_sessions">Nema sesija</string>
-    <string name="storage_section_minis_files">Minis datoteke</string>
+    <string name="storage_section_minis_files">Minis Ultra datoteke</string>
     <string name="storage_no_minis_files">Nema minis datoteka</string>
     <string name="storage_section_media">Medijske datoteke</string>
     <string name="storage_no_media_files">Nema medijskih datoteka</string>
@@ -1059,7 +1059,7 @@
     <string name="provider_list_no_providers_configured">Nema konfiguriranih pružatelja</string>
     <string name="provider_list_add_a_provider_to_get_started">Dodajte pružatelja za početak.</string>
     <string name="provider_list_import_provider">Uvezi pružatelja</string>
-    <!-- [T-android-json-open-provider-import-prompt] Shown when a JSON opened/shared into Minis looks like a Provider export. -->
+    <!-- [T-android-json-open-provider-import-prompt] Shown when a JSON opened/shared into Minis Ultra looks like a Provider export. -->
     <string name="share_provider_json_title">Otkrivena konfiguracija pružatelja</string>
     <string name="share_expired_toast">Podijeljeni sadržaj je istekao. Podijelite ponovno.</string>
     <string name="share_added_new_chat">Dodano u novi razgovor</string>
@@ -1070,7 +1070,7 @@
     <string name="share_provider_json_attach">Dodaj kao privitak razgovoru</string>
     <string name="share_provider_json_imported">Pružatelj \"%1$s\" uvezen</string>
     <string name="share_provider_json_import_failed">Neispravna datoteka konfiguracije pružatelja</string>
-    <string name="share_open_app_failed">Sadržaj je spremljen. Minis se nije mogao automatski otvoriti — otvorite aplikaciju za nastavak.</string>
+    <string name="share_open_app_failed">Sadržaj je spremljen. Minis Ultra se nije mogao automatski otvoriti — otvorite aplikaciju za nastavak.</string>
     <string name="provider_list_api_key">API ključ</string>
     <string name="provider_list_disabled">Onemogućeno</string>
     <string name="provider_detail_export">Izvoz</string>
@@ -1275,8 +1275,8 @@
     <string name="notif_config_confirm_channel_name">Odobrenja konfiguracije</string>
     <string name="notif_config_confirm_channel_description">Obavještava kad promjena konfiguracije čeka vaše odobrenje dok je aplikacija u pozadini.</string>
     <string name="notif_config_confirm_title">⚙️ Promjena konfiguracije čeka odobrenje</string>
-    <string name="notif_config_confirm_body_single">Promjena traži vaš pregled — otvorite Minis za odobrenje ili odbijanje.</string>
-    <string name="notif_config_confirm_body_multi">%d promjena traži vaš pregled — otvorite Minis za odobrenje ili odbijanje.</string>
+    <string name="notif_config_confirm_body_single">Promjena traži vaš pregled — otvorite Minis Ultra za odobrenje ili odbijanje.</string>
+    <string name="notif_config_confirm_body_multi">%d promjena traži vaš pregled — otvorite Minis Ultra za odobrenje ili odbijanje.</string>
     <string name="notif_task_failed_body">Zadatak je završio greškom. Dodirnite za otvaranje razgovora.</string>
 
     <!-- T-selection-add-to-input — long-press text selection menu action -->
@@ -1310,7 +1310,7 @@
 
     <!-- T-bg-overlay phase 2 — floating tool-status overlay toggle. -->
     <string name="settings_bg_overlay">Preklop pozadinskog zadatka</string>
-    <string name="settings_bg_overlay_footer">Prikaži malu plutajuću kapsulu s trenutačnim alatom dok je Minis u pozadini. Zahtijeva dopuštenje za prikaz preko drugih aplikacija. Dodirnite kapsulu da vratite Minis u prvi plan; povucite je za pomicanje.</string>
+    <string name="settings_bg_overlay_footer">Prikaži malu plutajuću kapsulu s trenutačnim alatom dok je Minis Ultra u pozadini. Zahtijeva dopuštenje za prikaz preko drugih aplikacija. Dodirnite kapsulu da vratite Minis Ultra u prvi plan; povucite je za pomicanje.</string>
     <string name="settings_bg_overlay_permission_needed">Dopustite prikaz preko drugih aplikacija za omogućavanje</string>
     <!-- [T-android-dynamic-island] Android 16 Live Updates / dynamic-island toggle. -->
     <string name="settings_dynamic_island">Dynamic Island (Live Updates)</string>
@@ -1318,8 +1318,8 @@
     <string name="settings_dynamic_island_unsupported">Vaša trenutačna verzija sustava još ne podržava Live Updates (potreban je Android 16+ s uključenom značajkom).</string>
 
     <!-- T182 agent loop section i18n -->
-    <string name="agent_loop_section_title">Modeli koje Minis može pozvati pri izvođenju</string>
-    <string name="agent_loop_section_footer">Tijekom Minis zadatka agent poziva ove modele za podzadatke poput generiranja slike ili sažimanja teksta — poslove koje njegov vlastiti model ne može obaviti. Mogu se pozvati i iz terminala putem minis-model-use. Samo su ovi vidljivi Agentu.</string>
+    <string name="agent_loop_section_title">Modeli koje Minis Ultra može pozvati pri izvođenju</string>
+    <string name="agent_loop_section_footer">Tijekom Minis Ultra zadatka agent poziva ove modele za podzadatke poput generiranja slike ili sažimanja teksta — poslove koje njegov vlastiti model ne može obaviti. Mogu se pozvati i iz terminala putem minis-model-use. Samo su ovi vidljivi Agentu.</string>
     <string name="agent_loop_section_empty_hint">Nema dodanih modela ni grupa</string>
     <string name="agent_loop_section_add_models">Dodaj modele</string>
     <string name="agent_loop_section_add_groups">Dodaj grupe</string>
@@ -1385,7 +1385,7 @@
     <string name="settings_shared_folders">Dijeljene mape</string>
     <string name="settings_shared_folders_subtitle">Pregledajte /var/minis shared, skills i memory</string>
     <string name="shared_folders_title">Dijeljene mape</string>
-    <string name="shared_folders_info_banner">Ovi su direktoriji vidljivi unutar Linux sandboxa. Skills i Memory održavaju alati Minis Agenta — nemojte ih ručno uređivati.</string>
+    <string name="shared_folders_info_banner">Ovi su direktoriji vidljivi unutar Linux sandboxa. Skills i Memory održavaju alati Minis Ultra Agenta — nemojte ih ručno uređivati.</string>
     <string name="shared_folder_name_shared">Dijeljeno</string>
     <string name="shared_folder_name_skills">Vještine</string>
     <string name="shared_folder_name_memory">Memorija</string>
@@ -1700,7 +1700,7 @@
     <string name="voice_panel_no_engine_title">Prepoznavanje govora nije dostupno</string>
     <string name="voice_panel_no_engine_body">Glasovni unos treba mehanizam za prepoznavanje. Uključite govornu uslugu uređaja ili postavite pružatelja transkripcije u Minisu.</string>
     <string name="voice_panel_no_engine_open_system">Postavke uređaja</string>
-    <string name="voice_panel_no_engine_open_providers">Minis pružatelji</string>
+    <string name="voice_panel_no_engine_open_providers">Minis Ultra pružatelji</string>
     <string name="voice_panel_expand">Proširi glasovnu ploču</string>
     <string name="voice_panel_language">Jezik prepoznavanja</string>
     <string name="voice_panel_tap_to_speak">Dodirnite za govor</string>
@@ -1770,14 +1770,14 @@
     <string name="system_permissions_title">Dopuštenja sustava</string>
     <string name="system_permissions_subtitle">Dopuštenja na razini sustava odobrena u Postavkama</string>
     <string name="system_permissions_section_a11y">Pristupačnost</string>
-    <string name="system_permissions_a11y_row">Minis usluga pristupačnosti</string>
+    <string name="system_permissions_a11y_row">Minis Ultra usluga pristupačnosti</string>
     <string name="system_permissions_a11y_enabled">Omogućeno — android-a11y-cli je spreman</string>
     <string name="system_permissions_a11y_disabled">Onemogućeno — dodirnite za uključivanje u Postavkama sustava</string>
     <string name="system_permissions_a11y_footer">Potrebno alatu android-a11y-cli za čitanje stabla sučelja, slanje gesta i praćenje događaja. Bez toga Agenti ne mogu upravljati drugim aplikacijama. Na sljedećem zaslonu uključite prekidač ispod Minisa.</string>
     <string name="system_permissions_a11y_oem_header">Uslugu stalno nešto zaustavlja?</string>
     <string name="system_permissions_a11y_oem_footer">%1$s može prikazati \"ova usluga nije uspjela\" i zaustaviti uslugu pristupačnosti u pozadini. Dodajte aplikaciju na popis dopuštenog automatskog pokretanja i uklonite ograničenje baterije kako bi ostala povezana.</string>
     <string name="system_permissions_a11y_oem_autostart">Dodaj na popis automatskog pokretanja</string>
-    <string name="system_permissions_a11y_oem_autostart_sub">Otvorite upravitelj automatskog pokretanja i uključite Minis</string>
+    <string name="system_permissions_a11y_oem_autostart_sub">Otvorite upravitelj automatskog pokretanja i uključite Minis Ultra</string>
     <string name="system_permissions_a11y_oem_battery">Ukloni ograničenje pozadinskog rada / baterije</string>
     <string name="system_permissions_a11y_oem_battery_sub">Postavite potrošnju baterije na \"Bez ograničenja\"</string>
     <string name="system_permissions_a11y_restricted_header">Prekidač je zasivljen? (\"Ograničena postavka\")</string>
@@ -1788,13 +1788,13 @@
     <string name="system_permissions_a11y_restricted_shizuku_sub">Jedan dodir — briše oznaku bez izlaska iz Minisa</string>
     <string name="system_permissions_a11y_restricted_working">Dopuštam…</string>
     <string name="system_permissions_a11y_restricted_failed">Nije uspjelo — upotrijebite ručne korake u nastavku</string>
-    <string name="a11y_service_label">Minis pristupačnost</string>
+    <string name="a11y_service_label">Minis Ultra pristupačnost</string>
     <string name="a11y_service_description">Omogućuje Minisu čitanje strukture sučelja na zaslonu, izvođenje dodira i gesta te primanje sustavskih događaja u ime Agenata koji pozivaju android-a11y-cli.</string>
     <string name="a11y_service_summary">Pozadinski sustav za automatizaciju sučelja u Minisu</string>
     <string name="back">Natrag</string>
 
     <!-- Welcome / onboarding (T332) -->
-    <string name="sessionlist_welcome_title">Dobro došli u Minis</string>
+    <string name="sessionlist_welcome_title">Dobro došli u Minis Ultra</string>
     <string name="sessionlist_welcome_subtitle">Vaš prvi Agent na uređaju gotovo je spreman.</string>
     <string name="sessionlist_welcome_step1_title">Dodajte pružatelja usluge</string>
     <string name="sessionlist_welcome_step1_subtitle">Postavite API ključ ili se prijavite putem OAutha</string>
@@ -1807,7 +1807,7 @@
     <string name="sessionlist_welcome_step_done">Gotovo</string>
 
     <!-- T-pwa-1: WebApp shortcut foundation (renamed from PWA) -->
-    <string name="webapp_activity_label">Minis WebApp</string>
+    <string name="webapp_activity_label">Minis Ultra WebApp</string>
     <string name="webapp_source_missing">Izvorna datoteka više ne postoji.</string>
     <string name="webapp_external_nav_blocked">Vanjska navigacija blokirana.</string>
     <string name="webapp_pin_unsupported">Ovaj pokretač ne podržava prečace na početnom zaslonu.</string>
@@ -1855,11 +1855,11 @@
     <string name="update_error_open_releases">Otvori GitHub Releases</string>
     <!-- T-android-crash-freq-share -->
     <string name="crash_freq_dialog_title">Otkriveno više rušenja</string>
-    <string name="crash_freq_dialog_message">Minis se u posljednjih sat vremena srušio nekoliko puta. Želite li podijeliti zapise o rušenju kako bismo riješili problem?</string>
+    <string name="crash_freq_dialog_message">Minis Ultra se u posljednjih sat vremena srušio nekoliko puta. Želite li podijeliti zapise o rušenju kako bismo riješili problem?</string>
     <string name="crash_freq_dialog_share">Podijeli zapise</string>
     <string name="crash_freq_dialog_dismiss">Ne sada</string>
-    <string name="crash_safe_mode_restart_needed">Minis se mora ponovno pokrenuti da dovrši oporavak. Dodirnite ikonu aplikacije ponovno.</string>
-    <string name="crash_freq_email_subject">Minis izvještaj o rušenju %1$s</string>
+    <string name="crash_safe_mode_restart_needed">Minis Ultra se mora ponovno pokrenuti da dovrši oporavak. Dodirnite ikonu aplikacije ponovno.</string>
+    <string name="crash_freq_email_subject">Minis Ultra izvještaj o rušenju %1$s</string>
     <string name="crash_freq_email_body">Priložen je zip sa zapisima o rušenju. Model uređaja, verzija Minisa i vremenska oznaka nalaze se unutra.</string>
     <string name="crash_freq_share_chooser">Pošalji zapise o rušenju</string>
     <string name="crash_freq_pick_files_title">Otkriveno je više nedavnih rušenja — želite li razvijatelju poslati zapise u nastavku?</string>
@@ -1979,7 +1979,7 @@
     <string name="voice_bare_link">poveznica</string>
     <!-- [T-android-voice-correction] Consent + correction UI -->
     <string name="voice_correction_consent_title">Poboljšati glasovne ispravke?</string>
-    <string name="voice_correction_consent_body">Minis može spremati vaše ispravke transkripta (parove izvorno → ispravljeno) i prihvaćene AI ispravke u lokalnu bazu na uređaju kako bi buduće glasovne ispravke bile pametnije. Ništa se ne šalje na internet. To možete promijeniti ili podatke obrisati u Postavkama u bilo kojem trenutku.</string>
+    <string name="voice_correction_consent_body">Minis Ultra može spremati vaše ispravke transkripta (parove izvorno → ispravljeno) i prihvaćene AI ispravke u lokalnu bazu na uređaju kako bi buduće glasovne ispravke bile pametnije. Ništa se ne šalje na internet. To možete promijeniti ili podatke obrisati u Postavkama u bilo kojem trenutku.</string>
     <string name="voice_correction_consent_enable">Omogući</string>
     <string name="voice_correction_consent_not_now">Ne sada</string>
     <string name="voice_correction_button_a11y">Ispravi transkript pomoću AI-ja</string>
@@ -1994,7 +1994,7 @@
     <string name="voice_provider_system">Sustav</string>
     <string name="add_provider_subtitle_kimi">Kimi Coding Plan — prijavite se svojim Kimi računom</string>
     <string name="kimi_login_title">Prijava putem Kimi Codea</string>
-    <string name="kimi_login_instructions">Otvorite stranicu za potvrdu i unesite ovaj kôd da autorizirate Minis:</string>
+    <string name="kimi_login_instructions">Otvorite stranicu za potvrdu i unesite ovaj kôd da autorizirate Minis Ultra:</string>
     <string name="kimi_login_copy_code">Kopiraj kôd</string>
     <string name="kimi_login_open_verification">Otvori stranicu za potvrdu</string>
     <string name="kimi_login_waiting">Čekam autorizaciju…</string>
@@ -2205,7 +2205,7 @@
     <string name="user_ask_notif_open_app">Otvori aplikaciju</string>
     <string name="user_ask_notif_hidden_body">Jedno pitanje čeka tvoj odgovor</string>
     <string name="user_ask_notif_channel_name">Pitanja za tebe</string>
-    <string name="user_ask_notif_channel_description">Pitanja asistenta dok je Minis u pozadini, na koja možeš odgovoriti iz obavijesti</string>
+    <string name="user_ask_notif_channel_description">Pitanja asistenta dok je Minis Ultra u pozadini, na koja možeš odgovoriti iz obavijesti</string>
     <!-- [T-tool-preview-longpress-close] Long-press the tool status bar preview -->
     <string name="tool_preview_close_menu">Zatvori prozor pregleda</string>
     <string name="tool_preview_closed_toast">Prozor pregleda je zatvoren. Možete ga ponovno uključiti u Postavke &gt; Izgled.</string>

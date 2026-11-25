@@ -6,8 +6,8 @@ package com.openminis.app.share
  *
  * ## Why this exists
  *
- * Field report (vivo V2352A / Android 14, Minis 0.20-preview): sharing into
- * Minis crashed the app immediately and repeatedly (HangDetector recorded
+ * Field report (vivo V2352A / Android 14, Minis Ultra 0.20-preview): sharing into
+ * Minis Ultra crashed the app immediately and repeatedly (HangDetector recorded
  * restartCount=50). The crash is raised inside `startActivity`:
  *
  *     RuntimeException: Unable to start activity …ShareReceiverActivity

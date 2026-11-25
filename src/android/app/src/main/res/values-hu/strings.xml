@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Magyar (hu). Generated from the English base; keep keys in base order. -->
 <resources>
-    <string name="app_name">Minis</string>
+    <string name="app_name">Minis Ultra</string>
     <string name="new_chat">Új csevegés</string>
     <string name="settings">Beállítások</string>
     <string name="providers">Szolgáltatók</string>
@@ -54,7 +54,7 @@
     <string name="check_update_later">Később</string>
     <string name="check_update_open_release">Kiadási oldal megnyitása</string>
     <string name="check_update_verify_failed">A letöltés nem ment át az ellenőrzésen. Próbáld újra.</string>
-    <string name="check_update_package_invalid">A letöltött csomag nem a Minis újabb verziója, ezért nem lett telepítve.</string>
+    <string name="check_update_package_invalid">A letöltött csomag nem a Minis Ultra újabb verziója, ezért nem lett telepítve.</string>
     <string name="check_update_checking">Keresés…</string>
     <string name="check_update_up_to_date">A legújabb verziót használod.</string>
     <string name="check_update_no_release">Még nincs közzétett kiadás.</string>
@@ -89,7 +89,7 @@
     <string name="search_no_results">Nincs találat erre: \"%1$s\"</string>
     <string name="stop_tool">Eszköz leállítása</string>
     <string name="mic_permission_title">Mikrofonengedély szükséges</string>
-    <string name="mic_permission_message">A hangbevitelhez mikrofonengedély szükséges. Koppints a Beállítások megnyitása gombra, és engedélyezd a Minis számára.</string>
+    <string name="mic_permission_message">A hangbevitelhez mikrofonengedély szükséges. Koppints a Beállítások megnyitása gombra, és engedélyezd a Minis Ultra számára.</string>
     <string name="mic_permission_open_settings">Beállítások megnyitása</string>
     <string name="mic_permission_cancel">Mégse</string>
     <string name="bg_section_header">Háttér és értesítések</string>
@@ -100,7 +100,7 @@
     <string name="bg_overlay_nudge_channel_name">Háttérben megjelenő fedvény engedélye</string>
     <string name="bg_overlay_nudge_channel_description">Emlékeztet, hogy add meg a rendszerfedvény-engedélyt, hogy a háttérfeladat fedvénye megjelenhessen.</string>
     <string name="bg_overlay_nudge_title">Háttérfedvény engedélyezése</string>
-    <string name="bg_overlay_nudge_body">Add meg a „Megjelenítés más alkalmazások felett” engedélyt, hogy a Minis mutathassa az aktuális eszközt, miközben másik appra váltasz. Koppints az engedélyképernyő megnyitásához.</string>
+    <string name="bg_overlay_nudge_body">Add meg a „Megjelenítés más alkalmazások felett” engedélyt, hogy a Minis Ultra mutathassa az aktuális eszközt, miközben másik appra váltasz. Koppints az engedélyképernyő megnyitásához.</string>
     <string name="overlay_dismiss">Elvetés</string>
     <string name="overlay_task_index">%1$d / %2$d</string>
     <string name="restore_stop_title">Visszaállítás leállítása</string>
@@ -119,8 +119,8 @@
     <string name="overlay_completion_cancelled">Megszakítva</string>
     <string name="overlay_completion_timeout">Időtúllépés</string>
     <string name="a11y_repair_dialog_title">A kisegítő lehetőség ki van kapcsolva</string>
-    <string name="a11y_repair_dialog_message_shizuku">A Minis elvesztette a kisegítő lehetőségek engedélyét – ez az app kényszerített leállítása után fordul elő. A Shizuku elérhető, így most azonnal visszaállítható a Beállítások megnyitása nélkül.</string>
-    <string name="a11y_repair_dialog_message_manual">A Minis elvesztette a kisegítő lehetőségek engedélyét – ez az app kényszerített leállítása után fordul elő. A folytatáshoz kapcsold be újra a Minist a Beállítások → Kisegítő lehetőségek alatt.</string>
+    <string name="a11y_repair_dialog_message_shizuku">A Minis Ultra elvesztette a kisegítő lehetőségek engedélyét – ez az app kényszerített leállítása után fordul elő. A Shizuku elérhető, így most azonnal visszaállítható a Beállítások megnyitása nélkül.</string>
+    <string name="a11y_repair_dialog_message_manual">A Minis Ultra elvesztette a kisegítő lehetőségek engedélyét – ez az app kényszerített leállítása után fordul elő. A folytatáshoz kapcsold be újra a Minist a Beállítások → Kisegítő lehetőségek alatt.</string>
     <string name="a11y_repair_action_repair">Javítás most</string>
     <string name="a11y_repair_action_open_settings">Beállítások megnyitása</string>
     <string name="a11y_repair_cancel">Most nem</string>
@@ -132,7 +132,7 @@
     <string name="a11y_repair_failed">A javítás sikertelen – próbáld bekapcsolni a Beállításokban</string>
     <string name="a11y_repair_footer_shizuku">Az Android visszavonja a kisegítő lehetőségek engedélyét, valahányszor egy appot kényszerítetten leállítanak, és nem állítja vissza automatikusan. A Shizuku közvetlenül vissza tudja írni.</string>
     <string name="a11y_repair_footer_manual">Az Android visszavonja a kisegítő lehetőségek engedélyét, valahányszor egy appot kényszerítetten leállítanak, és nem állítja vissza automatikusan. Telepítsd és engedélyezd a Shizukut, hogy ezt a jövőben egy koppintással javíthasd.</string>
-    <string name="bg_service_notification_title">A Minis ügynök aktív</string>
+    <string name="bg_service_notification_title">A Minis Ultra ügynök aktív</string>
     <string name="bg_service_notification_text">%1$s | %2$s | %3$s</string>
     <string name="bg_service_notification_text_running">%1$s | %2$s</string>
     <string name="bg_service_notification_title_completed">A feladat befejeződött</string>
@@ -146,11 +146,11 @@
     <string name="battery_opt_section_footer">Ha mentesíted, az Android nem altatja el az appot feladat közben. Minden alkalommal újra ellenőrizzük, amikor visszatérsz erre a képernyőre.</string>
     <string name="battery_opt_row_title">Háttérben végzett munka engedélyezése</string>
     <string name="battery_opt_already_exempt">Már engedélyezve</string>
-    <string name="battery_opt_request_subtitle">Koppints, hogy a Minis megszakítás nélkül futhasson</string>
+    <string name="battery_opt_request_subtitle">Koppints, hogy a Minis Ultra megszakítás nélkül futhasson</string>
     <string name="rom_autostart_section_title">Automatikus indítás engedélye</string>
     <string name="rom_autostart_section_footer">Egyes Android-felületek (%1$s) a szokásos rendszerbeállításokon felül külön automatikusindítás-engedélyt igényelnek. Enélkül a Minist a rendszer perceken belül leállíthatja, miután háttérbe kerül.</string>
     <string name="rom_autostart_row_title">Automatikus indítás beállításainak megnyitása</string>
-    <string name="rom_autostart_row_subtitle">A Minis engedélyezése itt: %1$s</string>
+    <string name="rom_autostart_row_subtitle">A Minis Ultra engedélyezése itt: %1$s</string>
     <string name="browser_settings_ua_not_set">Nincs beállítva</string>
     <string name="settings_back">Vissza</string>
     <string name="settings_title">Beállítások</string>
@@ -166,7 +166,7 @@
     <string name="settings_appearance_subtitle">Téma, betűméret és megjelenítés</string>
     <string name="settings_section_agent_runtime">Ügynök-futtatókörnyezet</string>
     <string name="settings_skills">Készségek</string>
-    <string name="settings_skills_subtitle">A Minis ügynök készségeinek és utasításainak kezelése</string>
+    <string name="settings_skills_subtitle">A Minis Ultra ügynök készségeinek és utasításainak kezelése</string>
     <string name="settings_memory">Memória</string>
     <string name="settings_memory_subtitle">Munkameneteken átívelő állandó tudás</string>
     <string name="settings_mcp">MCP-integrációk</string>
@@ -310,7 +310,7 @@
     <string name="settings_section_logs">Naplók</string>
     <string name="settings_logs_subtitle">Appnaplók megtekintése és exportálása</string>
     <string name="settings_section_about">Névjegy</string>
-    <string name="settings_about_minis">A Minis névjegye</string>
+    <string name="settings_about_minis">A Minis Ultra névjegye</string>
     <string name="settings_about_subtitle">Verzió és projektinformációk</string>
     <string name="settings_privacy_policy">Adatvédelmi irányelvek</string>
     <string name="settings_feedback">Visszajelzés</string>
@@ -318,7 +318,7 @@
     <string name="settings_feedback_telegram">Visszajelzés (Telegram)</string>
     <string name="settings_feedback_email">Visszajelzés (e-mail)</string>
     <string name="about_title">Névjegy</string>
-    <string name="about_minis_tagline">A Minis egy MI-ügynök, amely az eszközödön él. A kulcsaid és fájljaid itt maradnak; a beszélgetéseid csak az általad választott MI-szolgáltatóhoz jutnak el.</string>
+    <string name="about_minis_tagline">A Minis Ultra egy MI-ügynök, amely az eszközödön él. A kulcsaid és fájljaid itt maradnak; a beszélgetéseid csak az általad választott MI-szolgáltatóhoz jutnak el.</string>
     <string name="about_links">Hivatkozások</string>
     <string name="about_github_repository">GitHub-tárház</string>
     <string name="about_version_format">%1$s verzió (build: %2$s)</string>
@@ -332,7 +332,7 @@
     <string name="time_yesterday">Tegnap</string>
     <string name="time_today">Ma</string>
     <string name="offload_perm_dialog_title">Engedélykérés</string>
-    <string name="offload_perm_dialog_intro">A Minis ügynök használni szeretné ezt:</string>
+    <string name="offload_perm_dialog_intro">A Minis Ultra ügynök használni szeretné ezt:</string>
     <string name="offload_perm_dialog_tool_label">Eszköz: %1$s</string>
     <string name="offload_perm_allow_session">Engedélyezés ebben a munkamenetben</string>
     <string name="offload_perm_allow_once">Engedélyezés egyszer</string>
@@ -394,7 +394,7 @@
     <string name="common_skip">Kihagyás</string>
     <string name="common_next">Tovább</string>
     <string name="onboarding_welcome_title">Üdv a Minisben</string>
-    <string name="onboarding_welcome_subtitle">A Minis ügynököd terminállal, böngészővel és natív eszközhozzáféréssel.</string>
+    <string name="onboarding_welcome_subtitle">A Minis Ultra ügynököd terminállal, böngészővel és natív eszközhozzáféréssel.</string>
     <string name="onboarding_get_started">Kezdés</string>
     <string name="onboarding_provider_title">Szolgáltató hozzáadása</string>
     <string name="onboarding_provider_subtitle">A kezdéshez adj meg egy API-kulcsot legalább egy szolgáltatóhoz.</string>
@@ -555,7 +555,7 @@
     <string name="browser_nav_forward">Előre</string>
     <string name="browser_stop">Leállítás</string>
     <string name="browser_reload">Újratöltés</string>
-    <string name="browser_minis_browsing">A Minis böngészik</string>
+    <string name="browser_minis_browsing">A Minis Ultra böngészik</string>
     <string name="chat_typing_indicator">%1$s gondolkodik</string>
     <string name="read_aloud_unavailable">A felolvasás sikertelen: nincs használható hangmotor. Ellenőrizd a Hangkimenet beállításait, vagy telepíts egy rendszer-beszédmotort.</string>
     <string name="chat_error_stream_dropped_partial">A kapcsolat megszakadt – lehet, hogy ez a válasz hiányos. A folytatáshoz koppints az Újra gombra.</string>
@@ -595,7 +595,7 @@
     <string name="browser_history_results">Eredmények</string>
     <string name="browser_history_clear_dialog_title">Törlöd a böngészési előzményeket?</string>
     <string name="browser_history_clear_dialog_message">Ez eltávolítja az összes böngészési előzményt. Nem vonható vissza.</string>
-    <string name="terminal_title">Minis Shell</string>
+    <string name="terminal_title">Minis Ultra Shell</string>
     <string name="terminal_clear">Törlés</string>
     <string name="terminal_show_keyboard">Megjelenítés</string>
     <string name="terminal_hide_keyboard">Elrejtés</string>
@@ -606,7 +606,7 @@
     <string name="common_edit">Szerkesztés</string>
     <string name="thinking_rules_section">Gondolkodási szabályok</string>
     <string name="thinking_rules_footer">A szabályok kiértékelése fentről lefelé történik. A modellre elsőként illeszkedő szabály dönti el, milyen gondolkodási paraméterek kerülnek elküldésre. Az alapértelmezett szabályok beépítettek, és nem törölhetők – felülírásukhoz adj hozzá föléjük egy szabályt.</string>
-    <string name="thinking_rules_official_protocol_notice">Ez a szolgáltató hivatalos protokollt használ, ezért a gondolkodási paramétereit a Minis kezeli. Az egyéni szabályok a Chat Completions API-t használó, OpenAI-kompatibilis szolgáltatókra vonatkoznak.</string>
+    <string name="thinking_rules_official_protocol_notice">Ez a szolgáltató hivatalos protokollt használ, ezért a gondolkodási paramétereit a Minis Ultra kezeli. Az egyéni szabályok a Chat Completions API-t használó, OpenAI-kompatibilis szolgáltatókra vonatkoznak.</string>
     <string name="thinking_rules_default_rules_count">Alapértelmezett szabályok (%1$d)</string>
     <string name="thinking_rules_add_rule">Szabály hozzáadása</string>
     <string name="thinking_rules_move_up">Mozgatás fel</string>
@@ -785,7 +785,7 @@
     <string name="shizuku_title">Shizuku</string>
     <string name="shizuku_settings_subtitle">Privilegizált Android-vezérlés Shizukuval vagy AXManagerrel</string>
     <string name="shizuku_status_header">Állapot</string>
-    <string name="shizuku_status_footer">A Shizuku root nélkül teszi elérhetővé a privilegizált rendszer-API-kat a felhasználói appok számára egy kis szolgáltatás futtatásával, amelyet vezeték nélküli ADB-vel vagy roottal indítasz. Három kompatibilis szolgáltató támogatott – Shizuku (RikkaApps), AXManager (Axeron) és Sui (Magisk/KernelSU-modul rootolt eszközökhöz); bármelyiket telepítheted. Az engedélyezés után a Minis az android-shizuku-cli CLI-t használhatja csomag-, engedély-, beállítás-, bevitel- és activitykezelésre.</string>
+    <string name="shizuku_status_footer">A Shizuku root nélkül teszi elérhetővé a privilegizált rendszer-API-kat a felhasználói appok számára egy kis szolgáltatás futtatásával, amelyet vezeték nélküli ADB-vel vagy roottal indítasz. Három kompatibilis szolgáltató támogatott – Shizuku (RikkaApps), AXManager (Axeron) és Sui (Magisk/KernelSU-modul rootolt eszközökhöz); bármelyiket telepítheted. Az engedélyezés után a Minis Ultra az android-shizuku-cli CLI-t használhatja csomag-, engedély-, beállítás-, bevitel- és activitykezelésre.</string>
     <string name="shizuku_actions_header">Következő lépés</string>
     <string name="shizuku_capabilities_header">Képességek</string>
     <string name="shizuku_capabilities_footer">A teljes használathoz futtasd az `android-shizuku-cli --help` parancsot egy shellben. Akkor is elérhető, ha a binder a Shizukutól, az AXManagertől vagy a Suitól származik – a parancskészlet ugyanaz.</string>
@@ -815,14 +815,14 @@
     <string name="shizuku_cap_service_desc">Rendszerszolgáltatások hívása és vizsgálata</string>
     <string name="shizuku_install_footer">Telepítsd a Shizuku (RikkaApps), az AXManager (Axeron) vagy a Sui (RikkaApps) bármelyikét – mindhárom ugyanazt a protokollt valósítja meg, és teljesen felcserélhetők. A Shizuku és az AXManager vezeték nélküli ADB-vel aktivált hagyományos appok. A Sui már rootolt eszközökhöz való: Magisk/KernelSU-modulként települ, nem kell hozzá app, és újraindítás után is aktív marad. KernelSU vagy APatch esetén a Suihoz Zygisk-megvalósítás is szükséges (Zygisk Next / ReZygisk / NeoZygisk) – enélkül a Sui nem töltődik be. Telepíts egyet, majd térj vissza ide.</string>
     <string name="shizuku_start_footer">Nyisd meg a kezelőappot, és indítsd el a szolgáltatást vezeték nélküli ADB-vel (PC nélkül) vagy roottal. Miután futóként jelenik meg, térj vissza ide.\n\nAXManagert használsz? Az AXManagerben kapcsold be a Beállítások → \"AX-Permission Intercept\" opciót is – csak ez a kapcsoló teszi lehetővé, hogy az AXManager továbbítsa Shizuku-kompatibilis binderét a Minisnek.</string>
-    <string name="shizuku_grant_footer">A szolgáltatás fut. A hozzáférés megadásához koppints a Minis engedélyezése gombra. A kezelőapp rendszerpárbeszédablakban kér megerősítést.</string>
-    <string name="shizuku_grant_footer_sui">A Sui fut. A hozzáférés megadásához koppints a Minis engedélyezése gombra – a megerősítő ablakot maga a Sui jeleníti meg. Nincs külön megnyitandó kezelőapp.</string>
+    <string name="shizuku_grant_footer">A szolgáltatás fut. A hozzáférés megadásához koppints a Minis Ultra engedélyezése gombra. A kezelőapp rendszerpárbeszédablakban kér megerősítést.</string>
+    <string name="shizuku_grant_footer_sui">A Sui fut. A hozzáférés megadásához koppints a Minis Ultra engedélyezése gombra – a megerősítő ablakot maga a Sui jeleníti meg. Nincs külön megnyitandó kezelőapp.</string>
     <string name="shizuku_state_not_installed">Nincs telepítve kezelőapp</string>
     <string name="shizuku_state_not_installed_subtitle">Telepítsd a Shizukut, az AXManagert vagy a Suit – bármelyik megfelel.</string>
     <string name="shizuku_state_not_running">A szolgáltatás nem fut</string>
     <string name="shizuku_state_not_running_subtitle">Nyisd meg a kezelőappot, és nyomd meg a Start gombot.</string>
     <string name="shizuku_state_need_permission">Engedélyezés szükséges</string>
-    <string name="shizuku_state_need_permission_subtitle">A szolgáltatás fut, de a Minis nincs engedélyezve.</string>
+    <string name="shizuku_state_need_permission_subtitle">A szolgáltatás fut, de a Minis Ultra nincs engedélyezve.</string>
     <string name="shizuku_state_ready">Kész</string>
     <string name="shizuku_ready_subtitle">version=%1$d, uid=%2$d</string>
     <string name="shizuku_ready_subtitle_sui">Sui (root) · version=%1$d, uid=%2$d</string>
@@ -840,18 +840,18 @@
     <string name="shizuku_open_btn_subtitle">A telepített kezelő elindítása a szolgáltatás indításához vagy kezeléséhez</string>
     <string name="shizuku_recheck_btn">Újraellenőrzés</string>
     <string name="shizuku_recheck_subtitle">Állapot újbóli lekérdezése a szolgáltatás elindítása után</string>
-    <string name="shizuku_grant_btn">Minis engedélyezése</string>
+    <string name="shizuku_grant_btn">Minis Ultra engedélyezése</string>
     <string name="shizuku_grant_subtitle">Az engedélykérő ablak megjelenítése</string>
     <string name="perm_section_privileged_backend">Privilegizált háttérszolgáltatás</string>
     <string name="perm_privileged_cli_description">Az ügynök ADB-szintű rendszerparancsokat futtathat egy privilegizált háttérszolgáltatáson (Shizuku vagy AXManager) keresztül</string>
     <string name="skill_title">Készségek</string>
     <string name="skill_add">Készség hozzáadása</string>
     <string name="skill_section_installed">Telepítve</string>
-    <string name="skill_section_footer">A készségek speciális utasításokkal és munkafolyamatokkal bővítik a Minis ügynököt. Bekapcsolva a rendszer-promptba töltődnek be.</string>
+    <string name="skill_section_footer">A készségek speciális utasításokkal és munkafolyamatokkal bővítik a Minis Ultra ügynököt. Bekapcsolva a rendszer-promptba töltődnek be.</string>
     <string name="skill_empty_title">Nincsenek telepített készségek</string>
-    <string name="skill_empty_action">Koppints a + gombra egy SKILL.md, .zip vagy .skill fájl importálásához, vagy böngészd a Minis Skillst.</string>
+    <string name="skill_empty_action">Koppints a + gombra egy SKILL.md, .zip vagy .skill fájl importálásához, vagy böngészd a Minis Ultra Skillst.</string>
     <string name="skill_import_modal_title">Készség importálása</string>
-    <string name="skill_minis_skills_modal">Minis-készségek</string>
+    <string name="skill_minis_skills_modal">Minis Ultra-készségek</string>
     <string name="skill_delete_confirm_title">Törlöd ezt: %1$s?</string>
     <string name="skill_delete_confirm_text">Ez véglegesen eltávolítja a készséget és a fájljait.</string>
     <string name="skill_import_sheet_title">Készség importálása</string>
@@ -901,7 +901,7 @@
     <string name="skill_detail_source_file">Fájlimportálás</string>
     <string name="skill_detail_source_bundled">Beépített</string>
     <string name="skill_detail_source_session">Munkamenet létrehozva</string>
-    <string name="skills_browser_title">Minis-készségek</string>
+    <string name="skills_browser_title">Minis Ultra-készségek</string>
     <string name="skills_browser_import_button">Importálás</string>
     <string name="skills_browser_hud_importing">Importálás…</string>
     <string name="skills_browser_error_not_folder">Előbb válassz egy készségmappát</string>
@@ -917,8 +917,8 @@
     <string name="storage_overview_sessions">Munkamenet fájljai</string>
     <string name="storage_section_sessions">Munkamenetek</string>
     <string name="storage_no_sessions">Nincsenek munkamenetek</string>
-    <string name="storage_section_minis_files">Minis-fájlok</string>
-    <string name="storage_no_minis_files">Nincsenek Minis-fájlok</string>
+    <string name="storage_section_minis_files">Minis Ultra-fájlok</string>
+    <string name="storage_no_minis_files">Nincsenek Minis Ultra-fájlok</string>
     <string name="storage_section_media">Médiafájlok</string>
     <string name="storage_no_media_files">Nincsenek médiafájlok</string>
     <string name="storage_clear_session_footer">Eltávolítja a munkamenet által létrehozott összes fájlt. Maga a beszélgetés megmarad.</string>
@@ -959,7 +959,7 @@
     <string name="usage_label_cache_hit_rate">Cache-találati arány</string>
     <string name="usage_detail_input">Bemenet</string>
     <string name="newer_db_title">Az adataid egy újabb verzióból származnak</string>
-    <string name="newer_db_body">A Minis ezen példánya régebbi annál, amelyik az adataidat létrehozta, így nem tudja biztonságosan megnyitni őket.\n\nSemmi sem törlődött – a beszélgetéseid épen megvannak ezen az eszközön. Telepítsd újra a Minis újabb verzióját, és minden ott lesz.</string>
+    <string name="newer_db_body">A Minis Ultra ezen példánya régebbi annál, amelyik az adataidat létrehozta, így nem tudja biztonságosan megnyitni őket.\n\nSemmi sem törlődött – a beszélgetéseid épen megvannak ezen az eszközön. Telepítsd újra a Minis Ultra újabb verzióját, és minden ott lesz.</string>
     <string name="newer_db_versions">Ez a verzió a(z) %1$d. adatformátumot támogatja</string>
     <string name="newer_db_exit">Bezárás</string>
     <string name="usage_attr_unknown_session">Ismeretlen modell – a munkamenet rekordja törölve lett</string>
@@ -1259,13 +1259,13 @@
     <string name="markdown_table_image_copied_toast">Táblázatkép kimásolva</string>
     <string name="markdown_table_image_copy_failed_toast">Nem sikerült kimásolni a táblázatképet</string>
     <string name="settings_bg_overlay">Háttérfeladat-fedvény</string>
-    <string name="settings_bg_overlay_footer">Egy kis lebegő kapszula mutatja az aktuális eszközt, amíg a Minis a háttérben van. Engedély kell a más alkalmazások feletti megjelenítéshez. Koppints a kapszulára a Minis előtérbe hozásához; húzd az áthelyezéshez.</string>
+    <string name="settings_bg_overlay_footer">Egy kis lebegő kapszula mutatja az aktuális eszközt, amíg a Minis Ultra a háttérben van. Engedély kell a más alkalmazások feletti megjelenítéshez. Koppints a kapszulára a Minis Ultra előtérbe hozásához; húzd az áthelyezéshez.</string>
     <string name="settings_bg_overlay_permission_needed">A bekapcsoláshoz engedélyezd a más alkalmazások feletti megjelenítést</string>
     <string name="settings_dynamic_island">Dynamic Island (élő frissítések)</string>
     <string name="settings_dynamic_island_footer">Élő ügynökállapot megjelenítése az Android 16 állapotchipjén. Bekapcsolva ez helyettesíti a lebegő fedvényt, így nem látsz egyszerre két állapotjelzőt.</string>
     <string name="settings_dynamic_island_unsupported">A jelenlegi rendszerverziód még nem támogatja az élő frissítéseket (Android 16 vagy újabb szükséges, bekapcsolt funkcióval).</string>
-    <string name="agent_loop_section_title">Futás közben a Minis által hívható modellek</string>
-    <string name="agent_loop_section_footer">Egy Minis-feladat során az ügynök ezeket a modelleket hívja meg olyan részfeladatokhoz, mint egy kép generálása vagy egy szöveg összefoglalása – olyan munkához, amelyet a saját modellje nem tud elvégezni. A terminálból is hívhatók a minis-model-use segítségével. Csak ezeket látja az ügynök.</string>
+    <string name="agent_loop_section_title">Futás közben a Minis Ultra által hívható modellek</string>
+    <string name="agent_loop_section_footer">Egy Minis Ultra-feladat során az ügynök ezeket a modelleket hívja meg olyan részfeladatokhoz, mint egy kép generálása vagy egy szöveg összefoglalása – olyan munkához, amelyet a saját modellje nem tud elvégezni. A terminálból is hívhatók a minis-model-use segítségével. Csak ezeket látja az ügynök.</string>
     <string name="agent_loop_section_empty_hint">Nincsenek hozzáadott modellek vagy csoportok</string>
     <string name="agent_loop_section_add_models">Modellek hozzáadása</string>
     <string name="agent_loop_section_add_groups">Csoportok hozzáadása</string>
@@ -1334,7 +1334,7 @@
     <string name="settings_shared_folders">Megosztott mappák</string>
     <string name="settings_shared_folders_subtitle">A /var/minis megosztott, készség- és memóriamappáinak böngészése</string>
     <string name="shared_folders_title">Megosztott mappák</string>
-    <string name="shared_folders_info_banner">Ezek a könyvtárak láthatók a Linux sandboxban. A készségeket és a memóriát a Minis ügynök eszközei kezelik – ne szerkeszd őket kézzel.</string>
+    <string name="shared_folders_info_banner">Ezek a könyvtárak láthatók a Linux sandboxban. A készségeket és a memóriát a Minis Ultra ügynök eszközei kezelik – ne szerkeszd őket kézzel.</string>
     <string name="shared_folder_name_shared">Megosztott</string>
     <string name="shared_folder_name_skills">Készségek</string>
     <string name="shared_folder_name_memory">Memória</string>
@@ -1673,7 +1673,7 @@
     <string name="voice_panel_no_engine_title">Nem érhető el beszédfelismerés</string>
     <string name="voice_panel_no_engine_body">A hangbevitelhez felismerőmotor kell. Kapcsold be az eszközöd beszédszolgáltatását, vagy állíts be egy átiratkészítő szolgáltatót a Minisben.</string>
     <string name="voice_panel_no_engine_open_system">Eszközbeállítások</string>
-    <string name="voice_panel_no_engine_open_providers">Minis-szolgáltatók</string>
+    <string name="voice_panel_no_engine_open_providers">Minis Ultra-szolgáltatók</string>
     <string name="voice_panel_expand">Hangpanel kibontása</string>
     <string name="voice_panel_language">Felismerés nyelve</string>
     <string name="voice_panel_tap_to_speak">Koppints a beszédhez</string>
@@ -1739,10 +1739,10 @@
     <string name="system_permissions_title">Rendszerengedélyek</string>
     <string name="system_permissions_subtitle">A rendszerbeállításokban megadott, operációsrendszer-szintű engedélyek</string>
     <string name="system_permissions_section_a11y">Kisegítő lehetőségek</string>
-    <string name="system_permissions_a11y_row">Minis kisegítő szolgáltatás</string>
+    <string name="system_permissions_a11y_row">Minis Ultra kisegítő szolgáltatás</string>
     <string name="system_permissions_a11y_enabled">Bekapcsolva – az android-a11y-cli használatra kész</string>
     <string name="system_permissions_a11y_disabled">Kikapcsolva – koppints a rendszerbeállításokban való bekapcsoláshoz</string>
-    <string name="system_permissions_a11y_footer">Az android-a11y-cli igényli a UI-fa olvasásához, a kézmozdulatok beviteléhez és az események figyeléséhez. Enélkül az ügynökök nem tudnak más appokat vezérelni. A következő képernyőn kapcsold be a Minis alatti kapcsolót.</string>
+    <string name="system_permissions_a11y_footer">Az android-a11y-cli igényli a UI-fa olvasásához, a kézmozdulatok beviteléhez és az események figyeléséhez. Enélkül az ügynökök nem tudnak más appokat vezérelni. A következő képernyőn kapcsold be a Minis Ultra alatti kapcsolót.</string>
     <string name="system_permissions_a11y_oem_header">A szolgáltatás folyton leáll?</string>
     <string name="system_permissions_a11y_oem_footer">A(z) %1$s „ez a szolgáltatás meghibásodott” üzenetet mutathat, és a háttérben leállíthatja a kisegítő szolgáltatást. Vedd fel az automatikus indítás engedélyezőlistájára, és szüntesd meg az akkumulátor-korlátozást, hogy kapcsolatban maradjon.</string>
     <string name="system_permissions_a11y_oem_autostart">Hozzáadás az automatikus indítás engedélyezőlistájához</string>
@@ -1750,16 +1750,16 @@
     <string name="system_permissions_a11y_oem_battery">Háttér-/akkumulátor-korlátozás megszüntetése</string>
     <string name="system_permissions_a11y_oem_battery_sub">Állítsd az akkumulátorhasználatot „Nincs korlátozás” értékre</string>
     <string name="system_permissions_a11y_restricted_header">Szürke a kapcsoló? („Korlátozott beállítás”)</string>
-    <string name="system_permissions_a11y_restricted_footer">Az Android letiltja a kisegítő lehetőségek kapcsolóját a letöltött APK-fájlból telepített appoknál. Ez az operációs rendszer biztonsági szabálya, nem a Minis hibája – a telepítéseddel nincs gond. A korlátozott beállítások engedélyezése csak újra elérhetővé teszi a kapcsolót; önmagában semmit nem enged, és továbbra is te döntöd el, bekapcsolod-e a szolgáltatást.</string>
+    <string name="system_permissions_a11y_restricted_footer">Az Android letiltja a kisegítő lehetőségek kapcsolóját a letöltött APK-fájlból telepített appoknál. Ez az operációs rendszer biztonsági szabálya, nem a Minis Ultra hibája – a telepítéseddel nincs gond. A korlátozott beállítások engedélyezése csak újra elérhetővé teszi a kapcsolót; önmagában semmit nem enged, és továbbra is te döntöd el, bekapcsolod-e a szolgáltatást.</string>
     <string name="system_permissions_a11y_restricted_manual">Korlátozott beállítások engedélyezése</string>
     <string name="system_permissions_a11y_restricted_manual_sub">Alkalmazásinformáció → ⋮ menü (jobb felső sarok) → Korlátozott beállítások engedélyezése</string>
     <string name="system_permissions_a11y_restricted_shizuku">Korlátozott beállítások engedélyezése Shizukuval</string>
-    <string name="system_permissions_a11y_restricted_shizuku_sub">Egy koppintás – a Minis elhagyása nélkül törli a jelzőt</string>
+    <string name="system_permissions_a11y_restricted_shizuku_sub">Egy koppintás – a Minis Ultra elhagyása nélkül törli a jelzőt</string>
     <string name="system_permissions_a11y_restricted_working">Engedélyezés…</string>
     <string name="system_permissions_a11y_restricted_failed">Sikertelen – használd az alábbi kézi lépéseket</string>
-    <string name="a11y_service_label">Minis kisegítő lehetőség</string>
-    <string name="a11y_service_description">Lehetővé teszi, hogy a Minis olvassa a képernyő UI-szerkezetét, koppintásokat és kézmozdulatokat hajtson végre, és rendszereseményeket fogadjon az android-a11y-cli-t meghívó ügynökök nevében.</string>
-    <string name="a11y_service_summary">A Minis UI-szintű automatizálási háttérszolgáltatása</string>
+    <string name="a11y_service_label">Minis Ultra kisegítő lehetőség</string>
+    <string name="a11y_service_description">Lehetővé teszi, hogy a Minis Ultra olvassa a képernyő UI-szerkezetét, koppintásokat és kézmozdulatokat hajtson végre, és rendszereseményeket fogadjon az android-a11y-cli-t meghívó ügynökök nevében.</string>
+    <string name="a11y_service_summary">A Minis Ultra UI-szintű automatizálási háttérszolgáltatása</string>
     <string name="back">Vissza</string>
     <string name="sessionlist_welcome_title">Üdv a Minisben</string>
     <string name="sessionlist_welcome_subtitle">Az első, eszközön futó ügynököd majdnem kész.</string>
@@ -1773,7 +1773,7 @@
     <string name="sessionlist_welcome_step3_locked">Előbb végezd el a 2. lépést</string>
     <string name="sessionlist_welcome_restore_backup">Van biztonsági mentésed? Állítsd vissza belőle</string>
     <string name="sessionlist_welcome_step_done">Kész</string>
-    <string name="webapp_activity_label">Minis WebApp</string>
+    <string name="webapp_activity_label">Minis Ultra WebApp</string>
     <string name="webapp_source_missing">A forrásfájl már nem létezik.</string>
     <string name="webapp_external_nav_blocked">Külső navigáció letiltva.</string>
     <string name="webapp_pin_unsupported">Ez az indító nem támogatja a parancsikonok rögzítését.</string>
@@ -1814,12 +1814,12 @@
     <string name="update_error_forbidden_with_link">Nem sikerült elérni a frissítési szervert, lehet, hogy a hálózatod blokkolja. A kézi letöltéshez nyisd meg a GitHub Releases oldalt.</string>
     <string name="update_error_open_releases">GitHub Releases megnyitása</string>
     <string name="crash_freq_dialog_title">Többszöri összeomlás észlelve</string>
-    <string name="crash_freq_dialog_message">A Minis az elmúlt órában többször összeomlott. Megosztod az összeomlási naplókat, hogy segíts a hiba javításában?</string>
+    <string name="crash_freq_dialog_message">A Minis Ultra az elmúlt órában többször összeomlott. Megosztod az összeomlási naplókat, hogy segíts a hiba javításában?</string>
     <string name="crash_freq_dialog_share">Naplók megosztása</string>
     <string name="crash_freq_dialog_dismiss">Most nem</string>
     <string name="crash_safe_mode_restart_needed">A helyreállítás befejezéséhez a Minisnek újra kell indulnia. Koppints újra az app ikonjára.</string>
-    <string name="crash_freq_email_subject">Minis összeomlási jelentés %1$s</string>
-    <string name="crash_freq_email_body">Az összeomlási naplót tartalmazó zip csatolva. Az eszközmodell, a Minis verziója és az időbélyeg benne található.</string>
+    <string name="crash_freq_email_subject">Minis Ultra összeomlási jelentés %1$s</string>
+    <string name="crash_freq_email_body">Az összeomlási naplót tartalmazó zip csatolva. Az eszközmodell, a Minis Ultra verziója és az időbélyeg benne található.</string>
     <string name="crash_freq_share_chooser">Összeomlási naplók küldése</string>
     <string name="crash_freq_pick_files_title">Több friss összeomlás észlelve – megosztod az alábbi naplókat a fejlesztővel?</string>
     <string name="crash_freq_pick_continue">Folytatás</string>
@@ -1928,7 +1928,7 @@
     <string name="voice_link_to_host">link ide: %1$s</string>
     <string name="voice_bare_link">link</string>
     <string name="voice_correction_consent_title">Javítod a hangjavításokat?</string>
-    <string name="voice_correction_consent_body">A Minis egy helyi, eszközön tárolt adatbázisban tárolhatja az átiratjavításaidat (eredeti → javított párok) és az elfogadott AI-javításokat, hogy a jövőbeli hangjavítások okosabbak legyenek. Semmi sem kerül feltöltésre. Ezt bármikor módosíthatod, vagy törölheted az adatokat a Beállításokban.</string>
+    <string name="voice_correction_consent_body">A Minis Ultra egy helyi, eszközön tárolt adatbázisban tárolhatja az átiratjavításaidat (eredeti → javított párok) és az elfogadott AI-javításokat, hogy a jövőbeli hangjavítások okosabbak legyenek. Semmi sem kerül feltöltésre. Ezt bármikor módosíthatod, vagy törölheted az adatokat a Beállításokban.</string>
     <string name="voice_correction_consent_enable">Bekapcsolás</string>
     <string name="voice_correction_consent_not_now">Most nem</string>
     <string name="voice_correction_button_a11y">Átirat javítása MI-vel</string>
@@ -1956,7 +1956,7 @@
     <string name="voice_provider_system">Rendszer</string>
     <string name="add_provider_subtitle_kimi">Kimi Coding Plan – jelentkezz be a Kimi-fiókoddal</string>
     <string name="kimi_login_title">Bejelentkezés Kimi Code-dal</string>
-    <string name="kimi_login_instructions">Nyisd meg az ellenőrző oldalt, és add meg ezt a kódot a Minis engedélyezéséhez:</string>
+    <string name="kimi_login_instructions">Nyisd meg az ellenőrző oldalt, és add meg ezt a kódot a Minis Ultra engedélyezéséhez:</string>
     <string name="kimi_login_copy_code">Kód másolása</string>
     <string name="kimi_login_open_verification">Ellenőrző oldal megnyitása</string>
     <string name="kimi_login_waiting">Várakozás az engedélyezésre…</string>
@@ -1979,7 +1979,7 @@
     <string name="selection_copy_as_markdown">Másolás Markdownként</string>
     <string name="selection_copy_as_rich_text">Másolás formázott szövegként</string>
     <string name="selection_copy_as_plain_text">Másolás egyszerű szövegként</string>
-    <string name="chat_input_placeholder_hint_5">A Minis beállíthatja, hogy a Return billentyű küldjön vagy új sort szúrjon be</string>
+    <string name="chat_input_placeholder_hint_5">A Minis Ultra beállíthatja, hogy a Return billentyű küldjön vagy új sort szúrjon be</string>
     <string name="chat_context_usage_hint">Kontextus: %1$s felhasználva · %2$s</string>
     <string name="compact_progress">Tömörítés… %1$d mp telt el</string>
     <string name="compact_progress_split">Tömörítés… %1$d mp · összefoglalás szakaszokban (%2$d/%3$d)</string>
@@ -2148,12 +2148,12 @@
     <string name="copilot_login_title">Bejelentkezés GitHubbal</string>
     <string name="copilot_login_instructions">Nyisd meg az ellenőrző oldalt, és add meg ezt a kódot a GitHub-fiókod összekapcsolásához:</string>
     <string name="copilot_disclaimer_title">Figyelmeztetés a nem hivatalos hozzáférésről</string>
-    <string name="copilot_disclaimer_p1">Ez a bejelentkezési módszer nem hivatalosan engedélyezett. A Minis nem áll kapcsolatban a GitHubbal, a GitHub nem hagyta jóvá és nem támogatja, és ezt az integrációt a GitHub nem vizsgálta felül és nem fogadta el.</string>
+    <string name="copilot_disclaimer_p1">Ez a bejelentkezési módszer nem hivatalosan engedélyezett. A Minis Ultra nem áll kapcsolatban a GitHubbal, a GitHub nem hagyta jóvá és nem támogatja, és ezt az integrációt a GitHub nem vizsgálta felül és nem fogadta el.</string>
     <string name="copilot_disclaimer_p2">Az engedélyezés egy harmadik féltől származó fejlesztői eszköznek – és nem a Minisnek – kiadott ügyfélazonosítóval történik, és olyan szolgáltatási felületekre támaszkodik, amelyeket nem erre a célra tettek közzé.</string>
     <string name="copilot_disclaimer_p3">A hozzáférés előzetes értesítés nélkül megszűnhet. A szolgáltató bármikor módosíthatja vagy megszüntetheti ezeket a felületeket, ami miatt a kérések sikertelenek lehetnek, vagy ez a funkció teljesen leállhat.</string>
-    <string name="copilot_disclaimer_p4">A használat sértheti a szolgáltató felhasználási feltételeit, és sebességkorlátozást, felfüggesztést, vagy a Copilot-jogosultságod vagy GitHub-fiókod végleges megszüntetését vonhatja maga után. Minden ilyen következmény a fiókodat érinti, és a Minis nem tudja visszafordítani.</string>
+    <string name="copilot_disclaimer_p4">A használat sértheti a szolgáltató felhasználási feltételeit, és sebességkorlátozást, felfüggesztést, vagy a Copilot-jogosultságod vagy GitHub-fiókod végleges megszüntetését vonhatja maga után. Minden ilyen következmény a fiókodat érinti, és a Minis Ultra nem tudja visszafordítani.</string>
     <string name="copilot_disclaimer_p5">Szervezeti, vállalati vagy éles fiók használata erősen ellenjavallt. Olyan személyes fiókkal jelentkezz be, amelynek elvesztését hajlandó vagy vállalni.</string>
-    <string name="copilot_disclaimer_p6">A hozzáférési tokened az eszköz titkosított tárhelyén van, és csak a szolgáltatónak kerül továbbításra. A Minis nem gyűjti, és nem vezeti át semmilyen általunk üzemeltetett szerveren. Egy általad exportált biztonsági mentés tartalmazhatja.</string>
+    <string name="copilot_disclaimer_p6">A hozzáférési tokened az eszköz titkosított tárhelyén van, és csak a szolgáltatónak kerül továbbításra. A Minis Ultra nem gyűjti, és nem vezeti át semmilyen általunk üzemeltetett szerveren. Egy általad exportált biztonsági mentés tartalmazhatja.</string>
     <string name="copilot_disclaimer_p7">Ezt a funkciót „ahogy van” alapon, mindennemű garancia nélkül biztosítjuk. A folytatással megerősíted, hogy elolvastad ezt a figyelmeztetést, és ezeket a kockázatokat teljes mértékben saját belátásod szerint vállalod.</string>
     <string name="copilot_disclaimer_accept">Elolvastam és elfogadom a feltételeket</string>
     <string name="copilot_disclaimer_cancel">Mégse</string>
@@ -2256,12 +2256,12 @@
     <string name="quota_unsupported_unknown_endpoint">Ennél a végpontnál az egyenleg lekérdezése nem érhető el.</string>
     <string name="quota_unsupported_type">Ennél a szolgáltatónál az egyenleg lekérdezése még nem támogatott.</string>
     <string name="quota_unsupported_passive">Ez a szolgáltató csak a válaszokkal együtt jelzi a kvótát; ennek megjelenítése még nem támogatott.</string>
-    <string name="quota_unsupported_probe_failed">Ez a végpont nem válaszolt az egyenleg-lekérdezésre. A Minis holnap újra ellenőrzi, vagy koppints a frissítésre a mostani ellenőrzéshez.</string>
+    <string name="quota_unsupported_probe_failed">Ez a végpont nem válaszolt az egyenleg-lekérdezésre. A Minis Ultra holnap újra ellenőrzi, vagy koppints a frissítésre a mostani ellenőrzéshez.</string>
     <string name="quota_error_unauthorized">Az API-kulcsot elutasították. Az egyenleg megtekintéséhez frissítsd a kulcsot.</string>
     <string name="quota_error_forbidden">Ez a kulcs nem jogosult az egyenleg lekérdezésére.</string>
     <string name="quota_error_not_found">Ez a végpont nem kínál egyenleg-lekérdezést.</string>
-    <string name="quota_error_rate_limited">A szolgáltató korlátozza az egyenleg-lekérdezések gyakoriságát. A Minis később újrapróbálja.</string>
-    <string name="quota_error_server">A szolgáltató szervere hibát adott vissza. A Minis később újrapróbálja.</string>
+    <string name="quota_error_rate_limited">A szolgáltató korlátozza az egyenleg-lekérdezések gyakoriságát. A Minis Ultra később újrapróbálja.</string>
+    <string name="quota_error_server">A szolgáltató szervere hibát adott vissza. A Minis Ultra később újrapróbálja.</string>
     <string name="quota_error_network">Nem sikerült elérni a szolgáltatót.</string>
     <string name="quota_error_bad_response">A szolgáltató váratlan választ adott.</string>
     <string name="quota_error_missing_credential">Az egyenleg megtekintéséhez adj meg egy API-kulcsot.</string>
@@ -2302,7 +2302,7 @@
     <string name="quota_source_derived">Becsült</string>
     <string name="quota_balance_short">Egyenleg: %1$s</string>
     <string name="quota_account_short">Fiók: %1$s</string>
-    <string name="quota_sheet_footer">Az adatok a szolgáltatótól származnak. A Minis saját tokenszámai nincsenek benne.</string>
+    <string name="quota_sheet_footer">Az adatok a szolgáltatótól származnak. A Minis Ultra saját tokenszámai nincsenek benne.</string>
     <string name="quota_done">Kész</string>
     <string name="quota_account_header">Fiók</string>
     <string name="quota_last_checked">Utolsó ellenőrzés</string>
@@ -2403,7 +2403,7 @@
     <string name="user_ask_notif_open_app">App megnyitása</string>
     <string name="user_ask_notif_hidden_body">Egy kérdés vár a válaszodra</string>
     <string name="user_ask_notif_channel_name">Kérdések neked</string>
-    <string name="user_ask_notif_channel_description">Kérdések, amelyeket az asszisztens tesz fel, amíg a Minis a háttérben van; az értesítésből megválaszolhatók</string>
+    <string name="user_ask_notif_channel_description">Kérdések, amelyeket az asszisztens tesz fel, amíg a Minis Ultra a háttérben van; az értesítésből megválaszolhatók</string>
     <string name="provider_live_check_removed">Szolgáltató eltávolítva</string>
     <string name="provider_live_check_disabled">Szolgáltató kikapcsolva</string>
     <string name="provider_live_check_removed_message">A(z) %1$s szolgáltató el lett távolítva, így a(z) %2$s többé nem használható. A folytatáshoz válassz másik modellt.</string>
@@ -2441,7 +2441,7 @@
     <string name="mcp_form_auth_mode">Engedélyezés</string>
     <string name="mcp_form_auth_none">Nincs</string>
     <string name="mcp_form_auth_browser">Bejelentkezés böngészővel</string>
-    <string name="mcp_signin_intro">A Minis automatikusan megtalálja a szolgáltatás bejelentkezési oldalát. Nincs szükség kliensazonosítóra.</string>
+    <string name="mcp_signin_intro">A Minis Ultra automatikusan megtalálja a szolgáltatás bejelentkezési oldalát. Nincs szükség kliensazonosítóra.</string>
     <string name="mcp_signin_signed_in">Bejelentkezve</string>
     <string name="mcp_signin_expired">A bejelentkezés lejárt</string>
     <string name="mcp_signin_not_signed_in">Nincs bejelentkezve</string>

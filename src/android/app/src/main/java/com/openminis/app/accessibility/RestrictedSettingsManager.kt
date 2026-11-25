@@ -12,13 +12,13 @@ import com.openminis.app.offload.ShizukuManager
  *
  * ## Why this exists
  *
- * A user on Redmi Note 12 Pro+ 5G (HyperOS 2.0.10 / Android 14) updated Minis
+ * A user on Redmi Note 12 Pro+ 5G (HyperOS 2.0.10 / Android 14) updated Minis Ultra
  * from the website and could no longer enable the accessibility service
- * backing `android-a11y-cli`: tapping Minis under Settings → Accessibility
+ * backing `android-a11y-cli`: tapping Minis Ultra under Settings → Accessibility
  * pops "Restricted setting — for your security, this setting is currently
  * unavailable" and the toggle never moves. Older builds enabled fine.
  *
- * ## Root cause (an OS policy, not a Minis regression)
+ * ## Root cause (an OS policy, not a Minis Ultra regression)
  *
  * AOSP `InstallPackageHelper.installPackagesLI` ends with:
  *
@@ -54,7 +54,7 @@ import com.openminis.app.offload.ShizukuManager
  *
  * ### Why the user's "old version worked" and why SAI did not help
  *
- * Nothing changed in Minis. What changed is how that particular copy was
+ * Nothing changed in Minis Ultra. What changed is how that particular copy was
  * installed: an APK opened from a browser/file manager download declares
  * `DOWNLOADED_FILE`, so the flag is applied at install time and then persists
  * across in-place updates. SAI is session-based, but session-based is NOT the
@@ -74,7 +74,7 @@ import com.openminis.app.offload.ShizukuManager
  *
  * ## What this does NOT do
  *
- * It does not change how Minis is packaged or installed, and deliberately so.
+ * It does not change how Minis Ultra is packaged or installed, and deliberately so.
  * We could make the in-app updater install through a `PackageInstaller`
  * session declaring `PACKAGE_SOURCE_STORE` — the framework does not verify
  * that claim — and self-updates would stop being flagged. That is a

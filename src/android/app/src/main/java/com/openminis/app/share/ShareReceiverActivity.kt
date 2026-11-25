@@ -308,7 +308,7 @@ class ShareReceiverActivity : ComponentActivity() {
      * [T-android-share-launch-crash] Hand off to MainActivity, tolerating a
      * failure to start it.
      *
-     * Field report (vivo V2352A / Android 14): sharing into Minis crashed the
+     * Field report (vivo V2352A / Android 14): sharing into Minis Ultra crashed the
      * app on launch, repeatedly —
      *
      *   RuntimeException: Unable to start activity …ShareReceiverActivity
@@ -401,10 +401,10 @@ internal enum class SingleSendSource { TEXT, STREAM }
 /**
  * Where an ACTION_SEND's content is. A text/plain share with text in
  * EXTRA_TEXT is that text; anything else - including a text/plain FILE in
- * EXTRA_STREAM with no EXTRA_TEXT, which is how Minis's own log share and
+ * EXTRA_STREAM with no EXTRA_TEXT, which is how Minis Ultra's own log share and
  * file preview share a .log / .txt, and how file managers share one - is the
  * stream. Reading only EXTRA_TEXT for text/plain dropped those files: the
- * share extracted nothing and Minis just came back to the front (kilolonion,
+ * share extracted nothing and Minis Ultra just came back to the front (kilolonion,
  * 10-19).
  */
 internal fun singleSendSource(type: String, hasText: Boolean): SingleSendSource =

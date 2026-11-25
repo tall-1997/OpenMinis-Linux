@@ -227,7 +227,7 @@ internal class ContextTierCrossingTracker {
  * The rule set, mirroring iOS `rotatePlaceholderOnFocus`:
  *
  *  - **The first focus gain is protected.** After a reply lands, the keyboard
- *    may auto-raise (a Minis setting) and that focus must not instantly swap
+ *    may auto-raise (a Minis Ultra setting) and that focus must not instantly swap
  *    the line the user has not read yet. The user's own first tap is protected
  *    identically — there is no way to tell the two apart, and both deserve it.
  *  - **The second focus retires it**, handing the label back to the ordinary

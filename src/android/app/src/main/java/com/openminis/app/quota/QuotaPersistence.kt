@@ -21,7 +21,7 @@ import java.util.Locale
 
 /**
  * `noBackupFilesDir/quota/store.json`. Device-local only: the directory is
- * excluded from Android backup, the Minis backup exporter never reads it, and
+ * excluded from Android backup, the Minis Ultra backup exporter never reads it, and
  * no sync path carries it.
  *
  * Holds structured, secret-free data only: pools, bindings, subject

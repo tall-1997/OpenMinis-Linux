@@ -1390,7 +1390,7 @@ class DebugRPCHandler(private val context: Context) {
     /**
      * Test fixtures for [handleCalendarExec], never reachable from the CLI:
      *  - `create`  — add a device-only calendar (ACCOUNT_TYPE_LOCAL, never
-     *    syncs) named "Minis Debug (local)"; returns its id.
+     *    syncs) named "Minis Ultra Debug (local)"; returns its id.
      *  - `delete`  — remove it; the provider deletes its events with it.
      *  - `raw <event_id>` — the stored Events row (DTSTART / DTEND / ALL_DAY /
      *    EVENT_TIMEZONE / RRULE), to check what the provider actually kept.
@@ -1414,7 +1414,7 @@ class DebugRPCHandler(private val context: Context) {
                     put(android.provider.CalendarContract.Calendars.ACCOUNT_NAME, account)
                     put(android.provider.CalendarContract.Calendars.ACCOUNT_TYPE, android.provider.CalendarContract.ACCOUNT_TYPE_LOCAL)
                     put(android.provider.CalendarContract.Calendars.NAME, "minis_debug_local")
-                    put(android.provider.CalendarContract.Calendars.CALENDAR_DISPLAY_NAME, "Minis Debug (local)")
+                    put(android.provider.CalendarContract.Calendars.CALENDAR_DISPLAY_NAME, "Minis Ultra Debug (local)")
                     put(android.provider.CalendarContract.Calendars.CALENDAR_COLOR, 0xFF888888.toInt())
                     put(android.provider.CalendarContract.Calendars.CALENDAR_ACCESS_LEVEL, android.provider.CalendarContract.Calendars.CAL_ACCESS_OWNER)
                     put(android.provider.CalendarContract.Calendars.OWNER_ACCOUNT, account)
@@ -1468,7 +1468,7 @@ class DebugRPCHandler(private val context: Context) {
                 val (s0, e0) = com.openminis.app.sandbox.offload.CalendarOffloadHandler.allDayBounds(day, day)
                 val v = android.content.ContentValues().apply {
                     put(android.provider.CalendarContract.Events.CALENDAR_ID, calId)
-                    put(android.provider.CalendarContract.Events.TITLE, "Minis legacy all-day probe")
+                    put(android.provider.CalendarContract.Events.TITLE, "Minis Ultra legacy all-day probe")
                     put(android.provider.CalendarContract.Events.DTSTART, s0)
                     put(android.provider.CalendarContract.Events.DTEND, e0)
                     put(android.provider.CalendarContract.Events.ALL_DAY, 1)

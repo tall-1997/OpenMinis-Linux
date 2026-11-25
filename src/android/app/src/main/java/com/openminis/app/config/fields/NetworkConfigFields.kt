@@ -108,7 +108,7 @@ internal object NetworkConfigFields {
         ClosureField(
             path = "network.tailscale.enabled",
             displayName = "Use Tailscale",
-            description = "Run the built-in Tailscale node (inside Minis, no VPN). Needs network.routingEnabled. After " +
+            description = "Run the built-in Tailscale node (inside Minis Ultra, no VPN). Needs network.routingEnabled. After " +
                 "turning it on, log in with network.tailscale.authKey or open the login link in network.tailscale.status.",
             valueSchema = ConfigSchema.Bool,
             risk = ConfigRisk.SENSITIVE,

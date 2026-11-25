@@ -155,7 +155,7 @@ object ContainerDns {
      * active would reintroduce the system's influence.
      */
     fun customResolvConf(servers: List<String>): String = buildString {
-        append("# Written by Minis: Container Network DNS is set to Custom (Settings > Rootfs).\n")
+        append("# Written by Minis Ultra: Container Network DNS is set to Custom (Settings > Rootfs).\n")
         for (s in servers) append("nameserver ").append(s).append('\n')
     }
 

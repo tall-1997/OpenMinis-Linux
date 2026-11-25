@@ -27,7 +27,7 @@ object WebViewNetworkProxy {
 
     private const val TAG = "Network"
     /** realm the entry's HTTP front sends in its challenge (nethub/httpentry.go). */
-    private const val REALM = "Minis"
+    private const val REALM = "Minis Ultra"
 
     private val direct = Executor { it.run() }
 

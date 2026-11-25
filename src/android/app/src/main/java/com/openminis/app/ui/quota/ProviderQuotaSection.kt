@@ -64,7 +64,7 @@ import kotlinx.coroutines.launch
 
 // [T-provider-quota] "Quota" section of the provider detail page: the upstream
 // balance / quota of this instance's account, from the vendor itself - never
-// Minis's own token counts. Port of iOS ProviderQuotaSection.swift.
+// Minis Ultra's own token counts. Port of iOS ProviderQuotaSection.swift.
 //
 // - Shared pools appear once, labelled as shared by every model on the account.
 // - Amounts are shown in their own unit; a prepaid balance has no bar and no percent.

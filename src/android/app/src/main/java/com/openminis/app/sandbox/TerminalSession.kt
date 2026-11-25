@@ -432,10 +432,10 @@ class TerminalSession(private val context: Context) {
      */
     private fun banner(sessionId: String?): String =
         if (sessionId != null) {
-            "\u001b[2m[Minis] /var/minis/{workspace,attachments,offloads,browser} are this chat's " +
+            "\u001b[2m[Minis Ultra] /var/minis/{workspace,attachments,offloads,browser} are this chat's " +
                 "(session ${sessionId.take(8)}) — the agent in that chat sees the same files.\u001b[0m\r\n"
         } else {
-            "\u001b[2m[Minis] Global terminal — not tied to any chat. /var/minis/workspace here is NOT " +
+            "\u001b[2m[Minis Ultra] Global terminal — not tied to any chat. /var/minis/workspace here is NOT " +
                 "any chat's workspace; open the terminal from a chat's menu to work in its files. " +
                 "Shared: /var/minis/{shared,memory,skills}.\u001b[0m\r\n"
         }

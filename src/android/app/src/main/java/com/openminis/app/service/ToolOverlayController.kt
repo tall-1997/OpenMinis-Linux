@@ -47,11 +47,11 @@ import androidx.compose.ui.graphics.toArgb
  *
  * Adds a small draggable capsule via [WindowManager] using
  * TYPE_APPLICATION_OVERLAY (requires SYSTEM_ALERT_WINDOW). The capsule
- * shows the Minis launcher logo, the running tool's label, and a short
+ * shows the Minis Ultra launcher logo, the running tool's label, and a short
  * status — same data the FGS notification reads
  * (`SessionActivityTracker.currentToolName` / `currentToolStatus`).
  *
- * T-bg-overlay-polish: the per-tool icon was replaced with the Minis
+ * T-bg-overlay-polish: the per-tool icon was replaced with the Minis Ultra
  * launcher icon clipped to a circle, a thin stroke ring rotates around
  * the logo while a tool is running, and a small success/error glyph
  * leads the second row once a tool finishes.
@@ -59,12 +59,12 @@ import androidx.compose.ui.graphics.toArgb
  * Owned by [AgentForegroundService]; created on service start, destroyed
  * on service stop. Visibility is driven by the service's collector:
  *
- *   - Minis foreground OR no tool running OR user toggle OFF OR no perm → hidden
+ *   - Minis Ultra foreground OR no tool running OR user toggle OFF OR no perm → hidden
  *   - otherwise → shown, content updated on each tool-status change
  *
  * Position persists in [com.openminis.app.data.repository.BackgroundSettingsRepository]
  * across process restarts; first run defaults to the bottom-left corner
- * (10 dp from each edge). Tap dismisses to bring Minis back to the
+ * (10 dp from each edge). Tap dismisses to bring Minis Ultra back to the
  * foreground; drag moves the capsule.
  */
 class ToolOverlayController(private val context: Context) {
@@ -909,7 +909,7 @@ class ToolOverlayController(private val context: Context) {
         // [T-android-overlay-no-idle] After a tool completes,
         // SessionActivityTracker resets currentToolStatus to "Idle" and
         // toolName to null — flowing that through verbatim would render a noisy
-        // "Minis / Idle" capsule that tells the user nothing. When not running
+        // "Minis Ultra / Idle" capsule that tells the user nothing. When not running
         // and we have neither a toolTitle nor a real toolName, hide the tool
         // row so only the app/outcome line remains.
         val hasToolIdentity = !toolTitle.isNullOrBlank() || toolName != null
@@ -933,10 +933,10 @@ class ToolOverlayController(private val context: Context) {
         // the current call is doing.
         labelView?.let { lv ->
             // On completion the outcome word stands alone rather than as
-            // "Minis — <outcome>": row 1 shares its width with the status tick
+            // "Minis Ultra — <outcome>": row 1 shares its width with the status tick
             // and the elapsed clock, and the localized words are long enough
             // (zh "执行完成" is four full-width characters) that the combined
-            // string ellipsized to an unreadable "Minis — 执...". The app
+            // string ellipsized to an unreadable "Minis Ultra — 执...". The app
             // identity is already carried by the logo to the left, so dropping
             // it here loses nothing.
             // [T-android-overlay-multitask] Row 1 names the TASK, not the
@@ -1015,7 +1015,7 @@ class ToolOverlayController(private val context: Context) {
         //   tool running  — a named tool is executing. Leading circle shows
         //                   that tool's glyph; row 2 shows its title.
         //   streaming     — the model is producing text with no tool in
-        //                   flight. Leading circle shows the Minis mark (there
+        //                   flight. Leading circle shows the Minis Ultra mark (there
         //                   is no tool to depict) and row 2 says so.
         //   completed     — handled by showReplyVariant below.
         //
@@ -1028,7 +1028,7 @@ class ToolOverlayController(private val context: Context) {
         val showStreamingVariant = isRunning && !isToolRunning
 
         // [T-android-overlay-dynamic-logo] The leading circle follows the tool
-        // that is running RIGHT NOW, and reverts to the Minis mark otherwise —
+        // that is running RIGHT NOW, and reverts to the Minis Ultra mark otherwise —
         // which now includes the streaming stretch, not just completion.
         applyLogoFor(if (isToolRunning) rowToolName else null)
 
@@ -1238,7 +1238,7 @@ class ToolOverlayController(private val context: Context) {
 
     /**
      * [T-android-overlay-dynamic-logo] Point the leading circle at either the
-     * running tool's glyph or the Minis launcher icon.
+     * running tool's glyph or the Minis Ultra launcher icon.
      *
      * The two drawables need DIFFERENT presentation, which is why this is not
      * a bare setImageResource:

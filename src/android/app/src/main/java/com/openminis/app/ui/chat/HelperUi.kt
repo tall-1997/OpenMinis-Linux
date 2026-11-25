@@ -194,7 +194,7 @@ private fun helperModelStrategyLabel(f: HelperPhase.Finished): String? {
  *
  * Deliberately NOT [toolDisplayName] from ChatToolFormatting: that is a
  * different vocabulary ("browser", "terminal", "file reader") built for the
- * "Minis is using X" sentence, and reusing it here would rename the tool the
+ * "Minis Ultra is using X" sentence, and reusing it here would rename the tool the
  * card is reporting.
  */
 internal fun helperToolLabel(name: String): String {

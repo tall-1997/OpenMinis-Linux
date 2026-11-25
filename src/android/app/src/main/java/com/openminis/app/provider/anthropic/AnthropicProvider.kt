@@ -1203,7 +1203,7 @@ class AnthropicProvider(
 
         // [T-provider-custom-user-agent] Applied last so a non-blank override
         // wins over the OAuth claude-cli UA above. null/blank → fall back to
-        // the branded Minis UA on the regular apiKey path, but on the OAuth
+        // the branded Minis Ultra UA on the regular apiKey path, but on the OAuth
         // path keep the claude-cli/2.1.280 fingerprint set above (the
         // Anthropic OAuth backend pairs UA + X-Stainless-* and rejects calls
         // whose UA doesn't match the registered client identity). T-android-

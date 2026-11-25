@@ -965,7 +965,7 @@ private fun ApkPreview(item: FileItem) {
                     null
                 } else {
                     // Without these the icon/label lookups resolve against the
-                    // HOST package and silently return Minis' own assets.
+                    // HOST package and silently return Minis Ultra' own assets.
                     pkg.applicationInfo?.let { app ->
                         app.sourceDir = item.file.absolutePath
                         app.publicSourceDir = item.file.absolutePath
@@ -1451,7 +1451,7 @@ private suspend fun saveImageToGallery(context: Context, src: File): Boolean =
                     put(MediaStore.Images.Media.MIME_TYPE, mime)
                     put(
                         MediaStore.Images.Media.RELATIVE_PATH,
-                        Environment.DIRECTORY_PICTURES + "/Minis",
+                        Environment.DIRECTORY_PICTURES + "/Minis Ultra",
                     )
                     put(MediaStore.Images.Media.IS_PENDING, 1)
                 }
@@ -1469,7 +1469,7 @@ private suspend fun saveImageToGallery(context: Context, src: File): Boolean =
                 val dir = Environment.getExternalStoragePublicDirectory(
                     Environment.DIRECTORY_PICTURES,
                 )
-                val minisDir = File(dir, "Minis").also { it.mkdirs() }
+                val minisDir = File(dir, "Minis Ultra").also { it.mkdirs() }
                 val dest = File(minisDir, filename)
                 src.inputStream().use { input ->
                     dest.outputStream().use { input.copyTo(it) }

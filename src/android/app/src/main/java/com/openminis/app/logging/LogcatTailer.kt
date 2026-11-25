@@ -51,7 +51,7 @@ internal class LogcatTailer(
             // Per-tag silencing via `TagName:S` and a wildcard fallthrough
             // (`*:V`) restricts the suppression to those three tags only —
             // all other framework warnings/errors still flow through, and
-            // app-emitted `Minis.<category>` lines (AppLogger) are
+            // app-emitted `Minis Ultra.<category>` lines (AppLogger) are
             // unaffected. Doing this at the logcat command line keeps the
             // bytes out of the JNI stream → the LogcatTailer reader thread
             // never sees them, no per-line filter cost.

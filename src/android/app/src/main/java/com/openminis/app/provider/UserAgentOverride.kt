@@ -16,7 +16,7 @@ import okhttp3.Request
  * **Fallback policy (T-android-default-ua):** when `customUserAgent` is
  * null/blank, we now apply [MinisUserAgent.DEFAULT] instead of leaving
  * the builder UA-less (which lets OkHttp insert its own `okhttp/4.12.0`).
- * The default carries the Minis version so request logs upstream can be
+ * The default carries the Minis Ultra version so request logs upstream can be
  * traced back to the app build that issued them — matching the
  * "branded UA except where a specific client identity is required"
  * intent of the feature.
@@ -41,14 +41,14 @@ fun Request.Builder.applyUserAgentOverride(
 }
 
 /**
- * [T-android-default-ua] Branded User-Agent used by every Minis-originated
+ * [T-android-default-ua] Branded User-Agent used by every Minis Ultra-originated
  * outbound request that doesn't have a SDK-specific UA requirement.
  *
  * Format mirrors iOS exactly:
- *   `Minis/<version> (Android <release>; <model>)`
+ *   `Minis Ultra/<version> (Android <release>; <model>)`
  *
- * e.g. `Minis/0.14-preview (Android 13; Pixel 4a)` — same shape as iOS's
- * `Minis/1.10 (iOS 26.5; iPhone)`.
+ * e.g. `Minis Ultra/0.14-preview (Android 13; Pixel 4a)` — same shape as iOS's
+ * `Minis Ultra/1.10 (iOS 26.5; iPhone)`.
  *
  * Version comes from BuildConfig (auto-tracks every release). OS release
  * from `Build.VERSION.RELEASE` (the marketing version a user recognises;
@@ -64,6 +64,6 @@ object MinisUserAgent {
     val DEFAULT: String by lazy {
         val release = android.os.Build.VERSION.RELEASE ?: "unknown"
         val model = (android.os.Build.MODEL ?: "unknown").trim().ifEmpty { "unknown" }
-        "Minis/${BuildConfig.VERSION_NAME} (Android $release; $model)"
+        "Minis Ultra/${BuildConfig.VERSION_NAME} (Android $release; $model)"
     }
 }

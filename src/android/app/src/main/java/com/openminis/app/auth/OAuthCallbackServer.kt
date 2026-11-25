@@ -64,15 +64,15 @@ class OAuthCallbackServer(
         /**
          * iOS sendErrorPage: "Authorization Failed" + the `error` value, HTTP 400.
          * [T-oauth-return-to-app] With [packageName], the same "Return to
-         * Minis" link as [successPage]: the app already has the answer, and
+         * Minis Ultra" link as [successPage]: the app already has the answer, and
          * without it the user had to close the tab by hand (MCP A3 device
          * test, bug 2).
          */
         internal fun errorPage(error: String, packageName: String? = null): String {
             val back = packageName?.let {
-                "<p>Return to Minis to continue.</p><p><a href=\"${returnToAppUrl(it)}\" style=\"display:inline-block;" +
+                "<p>Return to Minis Ultra to continue.</p><p><a href=\"${returnToAppUrl(it)}\" style=\"display:inline-block;" +
                     "padding:12px 24px;border-radius:8px;background:#10a37f;color:#fff;text-decoration:none;" +
-                    "font-size:18px\">Return to Minis</a></p>"
+                    "font-size:18px\">Return to Minis Ultra</a></p>"
             }.orEmpty()
             val html = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head>" +
                 "<body style=\"font-family:sans-serif;text-align:center;padding:24px\">" +
@@ -87,7 +87,7 @@ class OAuthCallbackServer(
 
         /**
          * [T-oauth-return-to-app] The page served for a code. It still says
-         * to return to Minis (the exchange runs in the app), and now has a
+         * to return to Minis Ultra (the exchange runs in the app), and now has a
          * link that does it: an intent:// URL for MainActivity's minis://
          * filter. MainActivity is singleTask and the Custom Tab sits above it
          * in the same task, so opening it clears the tab. `window.close()`
@@ -98,9 +98,9 @@ class OAuthCallbackServer(
         internal fun successPage(packageName: String): String =
             "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head>" +
                 "<body style=\"font-family:sans-serif;text-align:center;padding:24px\">" +
-                "<h1>Authorization received</h1><p>Return to Minis to finish signing in.</p>" +
+                "<h1>Authorization received</h1><p>Return to Minis Ultra to finish signing in.</p>" +
                 "<p><a href=\"${returnToAppUrl(packageName)}\" style=\"display:inline-block;padding:12px 24px;" +
-                "border-radius:8px;background:#10a37f;color:#fff;text-decoration:none;font-size:18px\">Return to Minis</a></p>" +
+                "border-radius:8px;background:#10a37f;color:#fff;text-decoration:none;font-size:18px\">Return to Minis Ultra</a></p>" +
                 "<script>window.close()</script></body></html>"
 
         /** `minis://oauth/return` as an intent URL pinned to our package; the deep link itself is a no-op. */
@@ -293,7 +293,7 @@ class OAuthCallbackServer(
                             is CallbackRequest.Code -> {
                                 // [T-android-oauth-foreground-exchange] Not "complete": the app still has
                                 // to exchange the code, and it can only do that once the user is
-                                // back in Minis (background network is blocked). Say so, so the
+                                // back in Minis Ultra (background network is blocked). Say so, so the
                                 // user returns rather than waiting on a tab that already "succeeded".
                                 // ASCII only: Content-Length below is computed from String.length.
                                 val html = successPage(com.openminis.app.BuildConfig.APPLICATION_ID)

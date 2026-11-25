@@ -58,7 +58,7 @@ class ScheduledNotificationReceiver : BroadcastReceiver() {
          * FLAG_IMMUTABLE is mandatory, not defensive: targetSdk 35 means
          * Android 12+ throws if a PendingIntent declares neither mutability.
          * It also stops a malicious app from filling in extras on an intent
-         * that would then be sent AS Minis.
+         * that would then be sent AS Minis Ultra.
          */
         fun contentIntentFor(context: Context, notifId: Int): PendingIntent {
             val launchIntent = Intent(context, MainActivity::class.java).apply {
@@ -78,7 +78,7 @@ class ScheduledNotificationReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val id = intent.getStringExtra(EXTRA_ID) ?: "unknown"
-        val title = intent.getStringExtra(EXTRA_TITLE) ?: "Minis"
+        val title = intent.getStringExtra(EXTRA_TITLE) ?: "Minis Ultra"
         val body = intent.getStringExtra(EXTRA_BODY) ?: ""
         AppLogger.debug(TAG, "scheduled notification fired: id=$id title='$title'")
 

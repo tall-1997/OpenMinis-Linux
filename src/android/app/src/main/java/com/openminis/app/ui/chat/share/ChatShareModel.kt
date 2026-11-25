@@ -187,7 +187,7 @@ object ChatShareCells {
  * the chat's gap.
  *
  * Two rows of the chat are not drawn by the export, and each keeps its space:
- * - the assistant header ("Minis" and its icon) above a reply, which [TURN_GAP] stands
+ * - the assistant header ("Minis Ultra" and its icon) above a reply, which [TURN_GAP] stands
  *   in for. The chat draws it by its own rule ([headerAbove], AssistantHeaderRule): a
  *   reply to a scheduled-task fire or a callback card that follows a reply has none,
  *   so it sits right under its card;

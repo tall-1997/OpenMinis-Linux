@@ -377,7 +377,7 @@ internal fun MinisMarkdownTextToolbarHost(toolbar: MinisMarkdownTextToolbar) {
                     }
                 }
                 // [T-android-selection-readaloud] Speak just the selected
-                // substring through Minis TTS (provider voice with the system
+                // substring through Minis Ultra TTS (provider voice with the system
                 // engine as fallback), mirroring iOS's "Read Aloud / Read
                 // Selection" selection-menu action. Available for any
                 // selection, like Add to Chat Input.

@@ -42,7 +42,7 @@ import com.openminis.app.offload.ShizukuManager
  *                        suits them; Sui is the rooted-user option.
  *   NOT_RUNNING       → "Open Manager App and press Start" — launches the
  *                        installed manager.
- *   NEED_PERMISSION   → "Authorize Minis" CTA → triggers system dialog.
+ *   NEED_PERMISSION   → "Authorize Minis Ultra" CTA → triggers system dialog.
  *   READY             → green status row with version + uid.
  *
  * [T-android-sui-support] (GH#110 / GH#97) Sui is a Magisk/KernelSU module
@@ -69,7 +69,7 @@ fun ShizukuPermissionScreen(onBack: () -> Unit) {
                 title = stringResource(stateTitle(snap.state)),
                 subtitle = if (snap.state == ShizukuManager.State.READY) {
                     // [T-android-sui-support] Name the live provider so a Sui
-                    // user can see their root module is what's serving Minis.
+                    // user can see their root module is what's serving Minis Ultra.
                     if (snap.isSui) {
                         stringResource(R.string.shizuku_ready_subtitle_sui, snap.version, snap.uid)
                     } else {

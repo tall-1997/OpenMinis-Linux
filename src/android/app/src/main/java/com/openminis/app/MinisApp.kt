@@ -284,7 +284,7 @@ class MinisApp : Application(), ImageLoaderFactory {
         // .contentCaptureChangeChecker) at 10.45% of all app CPU — about a
         // quarter of the main thread, more than the frame work itself.
         //
-        // Minis's own UI is unaffected: rendering, accessibility (a separate
+        // Minis Ultra's own UI is unaffected: rendering, accessibility (a separate
         // path), autofill, IME and in-app selection all stay the same. What is
         // lost is system features that read app content through content
         // capture (e.g. text selection in Recents, some screen-content
@@ -1078,9 +1078,9 @@ class MinisApp : Application(), ImageLoaderFactory {
         }
 
         // T268: one-shot migration of pre-T266 internal alarms into the
-        // system Clock app. Pre-T266 builds wrote alarms into Minis's own
+        // system Clock app. Pre-T266 builds wrote alarms into Minis Ultra's own
         // SharedPreferences + AlarmManager; T266 retired that path but old
-        // installs still have ghost entries that fire only inside Minis.
+        // installs still have ghost entries that fire only inside Minis Ultra.
         // Replay each future-dated entry through the same SET_ALARM /
         // SET_TIMER intents the new path uses, then clear prefs so the
         // migration runs at most once. Wrapped in runCatching so an

@@ -104,7 +104,7 @@ internal object SpeechCli {
 
     /**
      * A recognizer the default service names but the package manager does not
-     * list is a recognizer Minis cannot bind - the ROM hides it, or it is
+     * list is a recognizer Minis Ultra cannot bind - the ROM hides it, or it is
      * disabled. Matching is on the component, ignoring the short-class form.
      */
     fun defaultVisible(env: Environment): Boolean {
@@ -130,7 +130,7 @@ internal object SpeechCli {
      */
     fun assess(env: Environment): Pair<Boolean, String?> {
         if (env.services.isEmpty()) {
-            return false to "No speech recognition service is installed or visible to Minis, " +
+            return false to "No speech recognition service is installed or visible to Minis Ultra, " +
                 "so the system recognizer cannot work on this device."
         }
         val def = env.defaultService?.trim().orEmpty()
@@ -141,13 +141,13 @@ internal object SpeechCli {
         }
         if (!defaultVisible(env)) {
             return false to "The default recognition service ($def) is not among the services " +
-                "Minis can see; the ROM hides it from third-party apps or it is disabled, " +
-                "so Android cannot connect Minis to it."
+                "Minis Ultra can see; the ROM hides it from third-party apps or it is disabled, " +
+                "so Android cannot connect Minis Ultra to it."
         }
         val last = env.lastError
         if (last != null && last.code == SpeechRecognizer.ERROR_CLIENT) {
             return false to "The last recognition attempt failed with ERROR_CLIENT: Android could " +
-                "not connect Minis to the recognition service ($def). On some ROMs (e.g. vivo " +
+                "not connect Minis Ultra to the recognition service ($def). On some ROMs (e.g. vivo " +
                 "OriginOS) the default recognizer does not serve third-party apps."
         }
         if (!env.hasMicPermission) {
@@ -267,7 +267,7 @@ internal object SpeechCli {
                         .put("source", "builtin")
                         .put(
                             "note",
-                            "Minis' built-in list (the one the chat voice input offers). It is NOT what " +
+                            "Minis Ultra' built-in list (the one the chat voice input offers). It is NOT what " +
                                 "this device's recognizer reported and may include languages it cannot " +
                                 "recognize.",
                         )
@@ -358,10 +358,10 @@ internal object SpeechCli {
     ): String {
         val base = when (code) {
             SpeechRecognizer.ERROR_CLIENT ->
-                "Android could not connect Minis to a speech recognition service (ERROR_CLIENT). " +
+                "Android could not connect Minis Ultra to a speech recognition service (ERROR_CLIENT). " +
                     "Default service: ${defaultService ?: "none set"}. On some ROMs (e.g. vivo " +
                     "OriginOS and other China ROMs) the default recognizer does not serve " +
-                    "third-party apps; that is a system restriction Minis cannot change."
+                    "third-party apps; that is a system restriction Minis Ultra cannot change."
             RecognizerErrorCodes.LANGUAGE_NOT_SUPPORTED, RecognizerErrorCodes.LANGUAGE_UNAVAILABLE ->
                 RecognizerErrorCodes.describe(code) + " (requested: ${language ?: "device default"})."
             else -> RecognizerErrorCodes.describe(code) + " (${RecognizerErrorCodes.name(code)})."

@@ -364,7 +364,7 @@ class ProvidersCollection(
     /**
      * [T-android-minisconfig-custom-useragent] Per-provider User-Agent
      * override. Empty string clears the override and falls back to the
-     * branded default (Minis/<version> (Android <release>; <model>) — see
+     * branded default (Minis Ultra/<version> (Android <release>; <model>) — see
      * MinisUserAgent.DEFAULT) at request build time. Cloned from
      * [customBaseURL] in shape; the underlying field on ProviderInstance
      * has been wired through ProviderFactory + applyUserAgentOverride

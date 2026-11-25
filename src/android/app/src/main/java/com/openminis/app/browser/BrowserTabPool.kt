@@ -1572,7 +1572,7 @@ class BrowserTabPool(private val context: Context) : BrowserTabPoolRegistry.Regi
      * user WITHOUT destroying anything.
      *
      * This is the "Takeover" action: the user is watching a page the agent is
-     * driving (AgentBrowsingOverlay, "Minis is browsing · Takeover") and wants
+     * driving (AgentBrowsingOverlay, "Minis Ultra is browsing · Takeover") and wants
      * the wheel. Dropping `inUse` is the whole job — the page they are looking
      * at must survive, so this deliberately does NOT release WebView
      * resources. Destroying here would blank the screen at the exact moment

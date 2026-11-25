@@ -214,7 +214,7 @@ object AppLogger {
 
     /**
      * Append a logcat tail line to today's log file. Lines that AppLogger
-     * itself produced (tag prefix `Minis.`) are skipped — [log] already wrote
+     * itself produced (tag prefix `Minis Ultra.`) are skipped — [log] already wrote
      * them via [writer], so without this filter every `info()` / `warning()`
      * / etc. call would appear twice in the file (once from [log], once
      * echoed back through logcat).
@@ -228,7 +228,7 @@ object AppLogger {
         if (slashIdx >= 0 && parenIdx > slashIdx) {
             val tag = rawLine.substring(slashIdx + 1, parenIdx).trim()
             // [T-android-log-stdout-double-write] `System.out` / `System.err`
-            // must be filtered for the same reason `Minis.*` is: startCapture()
+            // must be filtered for the same reason `Minis Ultra.*` is: startCapture()
             // redirects both streams into this file, AND the platform copies
             // them to logcat, where the tailer reads them straight back. Every
             // println — including the per-tick [T-HANG-DIAG] diagnostics —
@@ -241,7 +241,7 @@ object AppLogger {
             // bytes in a file that is already large enough to have needed
             // tag-level suppression at the logcat command line, and makes any
             // frequency read off these logs wrong by 2x.
-            if (tag.startsWith("Minis.") || tag == "AppLogger" ||
+            if (tag.startsWith("Minis Ultra.") || tag == "AppLogger" ||
                 tag == "System.out" || tag == "System.err"
             ) {
                 return
@@ -397,7 +397,7 @@ object AppLogger {
 
     private fun log(level: String, category: String, message: String) {
         // Also output to logcat
-        val logcatTag = "Minis.$category"
+        val logcatTag = "Minis Ultra.$category"
         when (level) {
             "ERROR" -> Log.e(logcatTag, message)
             "WARN" -> Log.w(logcatTag, message)

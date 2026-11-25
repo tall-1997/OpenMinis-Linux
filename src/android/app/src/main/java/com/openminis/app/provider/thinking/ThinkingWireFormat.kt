@@ -95,7 +95,7 @@ sealed interface ThinkingWireFormat {
 
     /**
      * Nested boolean under `extra_body`, e.g. `extra_body.thinking.enabled`. DeepSeek's
-     * official endpoint reasons by default and its real switch lives here; Minis never
+     * official endpoint reasons by default and its real switch lives here; Minis Ultra never
      * sent it, so the official endpoint always ran its default config (GH OpenMinis#171).
      */
     data class ExtraBodyToggle(val path: String) : ThinkingWireFormat

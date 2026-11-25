@@ -160,7 +160,7 @@ object SessionActivityTracker {
      * T-bg-overlay phase 1: true while a tool call is actively executing
      * (between dispatch and result). Drives the notification's
      * indeterminate progress bar so the user can tell at a glance whether
-     * Minis is "between turns" (false → no progress) vs "doing something"
+     * Minis Ultra is "between turns" (false → no progress) vs "doing something"
      * (true → spinning bar).
      */
     private val _isToolRunning = MutableStateFlow(false)
@@ -209,7 +209,7 @@ object SessionActivityTracker {
      * [T-android-overlay-reply-status-34599] Truncated excerpt of the
      * most recent assistant reply for the currently-tracked session.
      * Published by ChatViewModel via [publishLastReply] right before
-     * [setInactive] so the overlay can show "what did Minis just say".
+     * [setInactive] so the overlay can show "what did Minis Ultra just say".
      * Null when no reply has been observed yet this session-cycle;
      * cleared when a fresh session goes active (so the previous
      * session's reply doesn't bleed into a newly-started turn).
@@ -408,10 +408,10 @@ object SessionActivityTracker {
 
     /**
      * [T-android-overlay-hide-camera] True while the user has launched the
-     * system camera (ACTION_IMAGE_CAPTURE) from inside Minis and we're
+     * system camera (ACTION_IMAGE_CAPTURE) from inside Minis Ultra and we're
      * waiting on the ActivityResult callback. The overlay observer in
      * [AgentForegroundService] gates `shouldShow` on this flag so the
-     * floating capsule doesn't obstruct the camera viewfinder — Minis is
+     * floating capsule doesn't obstruct the camera viewfinder — Minis Ultra is
      * technically backgrounded during the capture (the camera Activity is
      * on top), which would otherwise satisfy the bg-only show rule from
      * #451. Cleared in the camera launcher's result callback (success,

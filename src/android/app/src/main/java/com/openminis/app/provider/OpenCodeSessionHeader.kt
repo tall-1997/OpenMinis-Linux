@@ -9,7 +9,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
  * OpenCode Go (`https://opencode.ai/zen/go/v1`, OpenAI-compatible) began
  * enforcing this header on 2026-09-06; without it the endpoint answers
  * `400 "Request is missing x-opencode-session and cannot be routed
- * efficiently"` (GH #327), which left Minis unusable against the service
+ * efficiently"` (GH #327), which left Minis Ultra unusable against the service
  * (GH #304). The value is what the operator calls "one stable ID per
  * conversation" and is used to key their prompt cache.
  *
@@ -24,7 +24,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
  *     fallback, OAuth refresh) — see [headersFor]'s contract about
  *     WHICH id callers must pass.
  *  3. *Keep identifying the client honestly in the User-Agent.* Untouched —
- *     this adds a header and never edits the UA, which still reports Minis
+ *     this adds a header and never edits the UA, which still reports Minis Ultra
  *     via [MinisUserAgent].
  *  4. *No API key or personal information in the id.* Guaranteed by (1).
  *

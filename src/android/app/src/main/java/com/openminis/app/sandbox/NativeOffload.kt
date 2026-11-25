@@ -92,7 +92,7 @@ object NativeOffloadServer {
      *
      * Abstract unix names are global to the network namespace, not to the
      * app. A fixed "native-offload" therefore collided with anything else on
-     * the device holding that name - a second Minis in an app-clone / work
+     * the device holding that name - a second Minis Ultra in an app-clone / work
      * profile / secondary user (same package, different uid), a fork built
      * from this code, or a leftover process. The bind then failed and, since
      * it threw from Application.onCreate, the app could never start again.

@@ -13,7 +13,7 @@ import com.openminis.app.data.repository.SkillRepository
  * copies the URL it was installed from.
  *
  * The URL is `skills.source_url`, written by SkillRepository.importFromGitHub
- * (the URL tab of the import sheet, and Minis Skills). Nothing else records
+ * (the URL tab of the import sheet, and Minis Ultra Skills). Nothing else records
  * one, so file / bundled / session skills offer no such action.
  */
 internal object SkillSourceUrl {

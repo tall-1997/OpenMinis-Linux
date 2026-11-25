@@ -865,7 +865,7 @@ data class SelectionToolbarActions(
     val onAddToInput: ((String) -> Unit)? = null,
     /**
      * [T-android-selection-readaloud] Speak the currently-selected plain text
-     * through Minis TTS. Null hides the button. Mirrors iOS's "Read Selection".
+     * through Minis Ultra TTS. Null hides the button. Mirrors iOS's "Read Selection".
      */
     val onReadAloud: ((String) -> Unit)? = null,
     /**

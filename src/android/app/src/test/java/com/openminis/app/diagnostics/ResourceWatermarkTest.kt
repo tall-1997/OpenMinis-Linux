@@ -134,7 +134,7 @@ class ResourceWatermarkTest {
         assertEquals("[anon:stack_and_tls:#]", ResourceWatermark.mapName("7a00000000-7a00001000 rw-p 00000000 00:00 0  [anon:stack_and_tls:12345]"))
         assertEquals("/system/lib#/libc.so", ResourceWatermark.mapName("7a00000000-7a00001000 r-xp 00000000 fd:00 1234 /system/lib64/libc.so"))
         assertEquals("[anon]", ResourceWatermark.mapName("7a00000000-7a00001000 rw-p 00000000 00:00 0"))
-        assertEquals("<app>/files", ResourceWatermark.mapName("7a00000000-7a00001000 r--p 00000000 fd:00 9 /data/user/0/com.openminis.app/files/alpine-rootfs/usr/lib/x.so"))
+        assertEquals("<app>/files", ResourceWatermark.mapName("7a00000000-7a00001000 r--p 00000000 fd:00 9 /data/user/0/com.openminis.ultra/files/ubuntu-rootfs/usr/lib/x.so"))
     }
 
     @Test

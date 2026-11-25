@@ -49,7 +49,7 @@ class MCPOAuthController(
     },
     /**
      * [T-android-mcp-oauth-foreground-exchange] The loopback callback lands
-     * while the user is still in the Custom Tab, i.e. with Minis in the
+     * while the user is still in the Custom Tab, i.e. with Minis Ultra in the
      * background, where Android blocks the app's network
      * (blocked=APP_BACKGROUND): the exchange failed in ~10 ms with "Unable to
      * resolve host". Same gate the provider OAuth managers use (dcf6085db) —
@@ -62,7 +62,7 @@ class MCPOAuthController(
     /**
      * Calls back when the user has closed the authorization page, and returns
      * how to stop watching. Custom Tabs report no "dismissed", so the default
-     * ([watchForReturnWithoutCallback]) treats Minis coming back to the
+     * ([watchForReturnWithoutCallback]) treats Minis Ultra coming back to the
      * foreground with no redirect as the page being closed (xAI's
      * [T-xai-oauth-stop-resume] detector; iOS SFSafariViewController didFinish).
      */
@@ -228,7 +228,7 @@ class MCPOAuthController(
                         // until the 300 s timeout (A3 device test, bug 1).
                         stopWatching = watchDismissal {
                             if (callbackServer === srv) {
-                                AppLogger.info(TAG, "[Authorize] '$server' Minis is back without an answer - the page was closed")
+                                AppLogger.info(TAG, "[Authorize] '$server' Minis Ultra is back without an answer - the page was closed")
                                 srv.stop()
                             }
                         }
@@ -585,7 +585,7 @@ class MCPOAuthController(
         private const val TAG = "MCPOAuthController"
 
         /** How long a redirect that is already on its way may take to land
-         *  after Minis is back in front (xAI uses the same 1.5 s). */
+         *  after Minis Ultra is back in front (xAI uses the same 1.5 s). */
         private const val DISMISSAL_GRACE_MS = 1_500L
 
         /**

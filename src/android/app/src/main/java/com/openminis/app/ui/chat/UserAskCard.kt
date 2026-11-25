@@ -766,7 +766,7 @@ internal object UserAskResolvedText {
         if (questions.size == 1) questions[0].question
         else questions.joinToString(" · ") { q -> q.header?.takeIf { it.isNotEmpty() } ?: q.question }
 
-    /** The answer digest: chosen labels or typed text, "Left to Minis" when delegated (several only), a cancel reason. */
+    /** The answer digest: chosen labels or typed text, "Left to Minis Ultra" when delegated (several only), a cancel reason. */
     fun digest(results: List<UserAskResolver.Parsed>, dismissed: Boolean, leftToMinis: String): String {
         if (dismissed) return ""
         return results.mapNotNull { r ->

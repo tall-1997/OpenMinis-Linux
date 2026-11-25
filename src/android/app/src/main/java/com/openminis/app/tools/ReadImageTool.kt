@@ -88,7 +88,7 @@ object ReadImageTool {
         heif: Boolean = android.os.Build.VERSION.SDK_INT >= 28,
     ): String {
         if (!resolved || file == null) {
-            return "Error: '$path' is not a readable Minis path. Use a path under /var/minis/ (e.g. /var/minis/workspace/chart.png) or a minis:// URL."
+            return "Error: '$path' is not a readable Minis Ultra path. Use a path under /var/minis/ (e.g. /var/minis/workspace/chart.png) or a minis:// URL."
         }
         if (!file.exists()) {
             return "Error: No file at '$path'. If a command in this same turn creates it, read it in the next turn after that command has finished."

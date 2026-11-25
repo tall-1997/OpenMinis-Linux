@@ -181,7 +181,7 @@ class ClaudeOAuthManager(context: Context, instanceId: String) : OAuthManager(co
 
             // Step 3: Exchange code for tokens (JSON body, NOT form-urlencoded)
             // [T-android-oauth-foreground-exchange] The callback lands while the
-            // user is still in the Custom Tab, i.e. with Minis in the background,
+            // user is still in the Custom Tab, i.e. with Minis Ultra in the background,
             // where the OS blocks this app's network (DNS answers "no address").
             // Exchange only once the user is back.
             OAuthForegroundGate.awaitForeground(TAG)

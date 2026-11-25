@@ -196,7 +196,7 @@ class BackupForegroundService : Service() {
         if (wakeLock == null) {
             wakeLock = runCatching {
                 getSystemService(PowerManager::class.java)
-                    .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Minis:Backup")
+                    .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Minis Ultra:Backup")
                     .apply {
                         setReferenceCounted(false)
                         // Safety cap: a lock must never outlive a wedged run.
@@ -215,7 +215,7 @@ class BackupForegroundService : Service() {
             wifiLock = runCatching {
                 @Suppress("DEPRECATION")
                 (applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager)
-                    .createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "Minis:Backup")
+                    .createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "Minis Ultra:Backup")
                     .apply { setReferenceCounted(false); acquire() }
             }.getOrNull()
         }

@@ -345,7 +345,7 @@ fun ProviderDetailScreen(
                 )
                 // [T-provider-custom-user-agent] Custom User-Agent input —
                 // only for OpenAI-/Anthropic-compat (relay) protocols. Some
-                // gateways reject Minis' default UA and only allow official
+                // gateways reject Minis Ultra' default UA and only allow official
                 // clients (e.g. Claude Code). Blank → default UA. Official
                 // direct OpenAI/Anthropic instances still see the field because
                 // protocol == openAI/anthropic; it's harmless there (the value

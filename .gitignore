@@ -31,6 +31,8 @@ render.experimental.xml
 # The repo's public upload certificate is committed on purpose (fork main
 # does the same): the workflow signs with it when no keystore secret is set.
 !src/android/release.keystore
+# Real credentials for the signing fallback chain — never commit.
+src/android/signing.properties
 
 # Google Services (e.g. APIs or Firebase)
 google-services.json

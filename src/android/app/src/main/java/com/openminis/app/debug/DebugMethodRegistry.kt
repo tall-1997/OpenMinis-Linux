@@ -212,7 +212,7 @@ object DebugMethodRegistry {
                 ParamSpec("categories", "array", required = false, description = "Category keys; default = all in the package."),
             ),
             returns = "{backupId, sourcePlatform, integrityChecked, integrityFailed, warnings, categories:[{category, imported, updated, skipped, unreadable, failed}]}",
-            example = JSONObject().put("path", "/data/user/0/com.openminis.app/files/debug-backup/x.minisbak"),
+            example = JSONObject().put("path", "/data/user/0/com.openminis.ultra/files/debug-backup/x.minisbak"),
         ),
         MethodSpec(
             name = "debug.backup.upload",
@@ -256,7 +256,7 @@ object DebugMethodRegistry {
                 ParamSpec("sessions", "integer", required = false, description = "Agent loop sessions, global, 1..32 (default 6). Raising it admits queued turns. Sub agents do not use these slots."),
                 ParamSpec("childJobs", "integer", required = false, description = "Sub agent jobs PER PARENT conversation, 1..32 (default 3). Raising it drains the queues."),
                 ParamSpec("childJobsPerParent", "integer", required = false, description = "Alias of childJobs (wins when both are given)."),
-                ParamSpec("shellProcessBudget", "integer", required = false, description = "Live Minis child processes the shell gate admits up to, 4..64 (default 16)."),
+                ParamSpec("shellProcessBudget", "integer", required = false, description = "Live Minis Ultra child processes the shell gate admits up to, 4..64 (default 16)."),
             ),
             returns = "the caps in effect (as debug.limits.get)",
             example = ex("sessions" to 10, "childJobs" to 10, "shellProcessBudget" to 32),

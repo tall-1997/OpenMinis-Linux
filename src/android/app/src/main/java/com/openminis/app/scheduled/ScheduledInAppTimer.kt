@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  *   the next run, so an alarm for the taken run that was already on its way
  *   is turned away by [ScheduledTaskManager.rescheduleNext].
  *
- * It fires only while Minis is in front or its foreground service is up: a
+ * It fires only while Minis Ultra is in front or its foreground service is up: a
  * run started from the background would not be allowed to start the service
  * and could be killed after its run was claimed. Otherwise the alarm, which
  * may start the service, keeps the run.
@@ -77,7 +77,7 @@ object ScheduledInAppTimer {
             sleepUntil(due.at)
             tried += due.tryKey
             if (!canFire()) {
-                AppLogger.info(TAG, "task=${due.task.id} due, Minis in background - left to its alarm")
+                AppLogger.info(TAG, "task=${due.task.id} due, Minis Ultra in background - left to its alarm")
                 continue
             }
             // Just before the slot, so the claim takes the run this wait was for.

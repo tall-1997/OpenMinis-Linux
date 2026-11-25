@@ -37,13 +37,13 @@ class OAuthRedirectActivity : Activity() {
         // localhost:1455, the server answered 200 with the code, and Chrome
         // ALSO handed the same URL to this activity, then aborted the tab's
         // navigation - the "Select a workspace" page kept spinning. This
-        // activity used to only finish(), so nothing brought Minis back:
+        // activity used to only finish(), so nothing brought Minis Ultra back:
         // the token exchange waits for the foreground (background network is
         // blocked) and the user waited on the page, until they switched back
         // by hand. Starting MainActivity (singleTask, the Custom Tab sits
         // above it in the same task) with CLEAR_TOP clears the tab and puts
-        // Minis in front, so the exchange runs at once - for an error
-        // redirect too, so a denial shows in Minis instead of a stuck page.
+        // Minis Ultra in front, so the exchange runs at once - for an error
+        // redirect too, so a denial shows in Minis Ultra instead of a stuck page.
         // No data: handleDeepLink(null) is a no-op. We were just started by
         // the browser in the foreground, so this is not a background start.
         bringAppForward()

@@ -62,7 +62,7 @@ object HostSuFallback {
             "Shizuku is not running and no host su was found. Start Shizuku via adb or " +
                 "root, or root with Magisk/KernelSU."
         else ->
-            "Minis is not authorized for Shizuku and no host su was found. Grant " +
+            "Minis Ultra is not authorized for Shizuku and no host su was found. Grant " +
                 "permission in Settings -> Permissions -> Shizuku, or root with Magisk/KernelSU."
     }
 

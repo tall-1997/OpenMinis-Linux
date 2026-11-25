@@ -63,7 +63,7 @@ class MCPRepository(private val context: Context) {
         val env: Map<String, String> = emptyMap(),
         /**
          * Per-server startup/handshake timeout (seconds) for a STDIO server's
-         * first MCP `initialize`. Minis config, not MCP protocol; enforcement is
+         * first MCP `initialize`. Minis Ultra config, not MCP protocol; enforcement is
          * entirely in the in-guest `minis-mcp-cli` daemon. Round-tripped verbatim
          * so an edit/import/export never drops it. Null = daemon default (60s).
          * [T-mcp-startup-timeout]

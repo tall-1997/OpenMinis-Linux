@@ -161,7 +161,7 @@ object HangDetector {
      * ProcessLifecycleOwner observer, read by the watchdog thread.
      *
      * Field log (Android 12 tablet, 2026-09-30): during an OAuth sign-in the
-     * browser was on top, Minis was a cached background process, and the
+     * browser was on top, Minis Ultra was a cached background process, and the
      * cached-apps freezer stopped the whole process for 39 s - this watchdog
      * thread included. On the thaw it saw a 39 089 ms heartbeat gap, counted
      * it as a main-thread hang and tripped the launch breaker
@@ -210,7 +210,7 @@ object HangDetector {
      * watchdog was suspended ([resumedAt] = when it noticed), a gap that is
      * not yet an episode is measured from the resume: the frozen time is no
      * one's hang. The field log's 39 s freeze thawed exactly when the user
-     * came back to Minis, i.e. with the app visible - measured from the
+     * came back to Minis Ultra, i.e. with the app visible - measured from the
      * heartbeat it would be counted again. An episode already running keeps
      * its heartbeat baseline, so a freeze in the middle of a real hang can
      * neither end the episode early nor split it into a second count.

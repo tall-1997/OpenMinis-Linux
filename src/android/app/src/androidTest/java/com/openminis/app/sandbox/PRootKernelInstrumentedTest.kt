@@ -145,12 +145,12 @@ class PRootKernelInstrumentedTest {
         }
         PRootKernel.boot(context)
 
-        PRootKernel.addBindMount("/var/minis/workspace", "/data/user/0/com.openminis.app/workspace")
+        PRootKernel.addBindMount("/var/minis/workspace", "/data/user/0/com.openminis.ultra/workspace")
 
         val cmd = PRootKernel.buildProotCommand("ls /var/minis/workspace")
 
         // Should contain -b host:linux format
-        val bindStr = "/data/user/0/com.openminis.app/workspace:/var/minis/workspace"
+        val bindStr = "/data/user/0/com.openminis.ultra/workspace:/var/minis/workspace"
         assertTrue("Should contain bind mount arg", cmd.contains(bindStr))
     }
 

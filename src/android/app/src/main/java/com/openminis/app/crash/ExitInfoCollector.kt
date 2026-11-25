@@ -137,7 +137,7 @@ object ExitInfoCollector {
         if (out.exists()) return false
 
         val body = buildString {
-            appendLine("=== Minis Process Exit Report ===")
+            appendLine("=== Minis Ultra Process Exit Report ===")
             appendLine("Collected: ${STAMP_FMT.format(Date())}")
             appendLine("Exit time: ${STAMP_FMT.format(Date(info.timestamp))}")
             appendLine("Reason: ${reasonName(info.reason)}")

@@ -691,9 +691,9 @@ class SkillRepository(private val context: Context) {
         val urlString = existing.sourceURL
         if (urlString.isNullOrBlank()) {
             // Older imports (pre-fix) never persisted the source URL. Users need
-            // to re-import the skill from Minis Skills so the URL gets saved.
+            // to re-import the skill from Minis Ultra Skills so the URL gets saved.
             return@withContext UpdateResult.Failure(
-                "No source URL on file. Re-import this skill from Minis Skills to enable updates."
+                "No source URL on file. Re-import this skill from Minis Ultra Skills to enable updates."
             )
         }
 

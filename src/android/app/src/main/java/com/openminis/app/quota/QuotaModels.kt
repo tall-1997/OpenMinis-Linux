@@ -20,7 +20,7 @@ import java.math.BigDecimal
 //
 // "Quota" here means ONLY what the upstream model service itself reports or
 // enforces: prepaid balances, credits, request/token allowances, subscription
-// windows, rate limits. Minis's own token telemetry, cost estimates and relay
+// windows, rate limits. Minis Ultra's own token telemetry, cost estimates and relay
 // usage logs are NOT quota and have no representation in this file - there is
 // deliberately no QuotaSource case for them.
 //
@@ -218,7 +218,7 @@ enum class QuotaSource {
     /** Relay's own enforced quota for this key (One/New API billing). */
     relayAccountLedger,
 
-    /** Minis-computed from the above. */
+    /** Minis Ultra-computed from the above. */
     derived,
 }
 

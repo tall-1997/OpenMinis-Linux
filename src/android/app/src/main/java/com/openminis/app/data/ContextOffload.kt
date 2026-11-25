@@ -39,7 +39,7 @@ object ContextOffload {
      * which is exactly why a model re-issuing its own earlier `file_write`
      * pasted the placeholder back in. Mirrors iOS `offloadedStubNoticeTag`.
      */
-    const val SYSTEM_NOTICE_TAG = "[Minis System Notice]"
+    const val SYSTEM_NOTICE_TAG = "[Minis Ultra System Notice]"
 
     /**
      * Envelope opener for the current stub format. Kept separate from

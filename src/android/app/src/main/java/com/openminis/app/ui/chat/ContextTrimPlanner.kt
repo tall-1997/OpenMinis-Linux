@@ -395,7 +395,7 @@ internal object ContextTrimPlanner {
         val summary = counts.entries.joinToString(", ") { "${it.key} ${it.value}" }
         return buildString {
             append(ContextOffload.SYSTEM_REMINDER_OPEN).append('\n')
-            append("[Minis context] ${collapsed.size} earlier step(s) of this task were collapsed to save context. ")
+            append("[Minis Ultra context] ${collapsed.size} earlier step(s) of this task were collapsed to save context. ")
             append("Their full records stay in the chat history; large outputs are on disk at the paths shown. ")
             append("Do not redo a step listed as ok - read its output path if you need the details.\n")
             append("Tool calls collapsed: $summary\n")

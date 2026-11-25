@@ -41,7 +41,7 @@ object NetworkDiagnostics {
         val failed: Int get() = checks.count { it.result == Result.FAIL }
 
         fun toText(): String = buildString {
-            append("Minis network diagnostics\n")
+            append("Minis Ultra network diagnostics\n")
             for (c in checks) append("[${c.result}] ${c.name}: ${c.detail}\n")
         }
 

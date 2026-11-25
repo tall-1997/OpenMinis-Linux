@@ -27,7 +27,7 @@ import kotlin.coroutines.resume
  * 0, and it never self-heals — waiting does nothing and relaunching the app
  * does nothing. The user has to walk back into Settings → Accessibility.
  *
- * This is deliberate AOSP behaviour, not a Minis defect: the same test against
+ * This is deliberate AOSP behaviour, not a Minis Ultra defect: the same test against
  * Google's own TalkBack, Bitwarden and AutoX reproduced it identically. With
  * two services enabled and only one force-stopped, the framework surgically
  * removes just the stopped one — i.e. it is a security decision (a
@@ -42,7 +42,7 @@ import kotlin.coroutines.resume
  *
  * Writing ENABLED_ACCESSIBILITY_SERVICES requires WRITE_SECURE_SETTINGS, which
  * is not grantable to a normal app. That is why none of the apps surveyed even
- * *detect* the loss. Minis is in a better position because it already ships a
+ * *detect* the loss. Minis Ultra is in a better position because it already ships a
  * Shizuku client: with Shizuku authorized we can run `settings put secure`
  * with shell privilege and repair the grant in place, which was verified to
  * take effect immediately (the service rebinds without a relaunch).

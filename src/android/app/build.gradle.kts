@@ -33,11 +33,20 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.openminis.app"
+        // [ultra] Own applicationId: the Minis Ultra line installs as its own
+        // app (it is NOT an upgrade of com.openminis.app or com.openminis.linux
+        // — fresh install, own data directory, permissions re-granted).
+        applicationId = "com.openminis.ultra"
         minSdk = 26
         targetSdk = 35
-        versionCode = 37
-        versionName = "1.15"
+        // [ultra] Version scheme: base follows the upstream tag the branch is
+        // built on (versionCode 37 / versionName 1.15 of OpenMinis 1.15), the
+        // ultra iteration suffix increments 001-999 between upstream bumps.
+        // versionCode encodes both so it stays monotonic across upstream
+        // rebases: 37*1000 + 1 = 37001.
+        versionCode = 37001
+        minisBaseVersionName = "1.15.001"
+        versionName = minisBaseVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -63,7 +72,7 @@ android {
         // prerelease flag and cut a tag at its first '-') see them as version
         // 0 and never offer them. UPDATE_CHANNEL is the channel a fresh
         // install starts on; the user can switch to beta in About.
-        buildConfigField("String", "RELEASE_REPO", "\"OpenMinis/OpenMinis\"")
+        buildConfigField("String", "RELEASE_REPO", "\"tall-1997/OpenMinis-Linux\"")
         buildConfigField("String", "UPDATE_CHANNEL", "\"stable\"")
 
         ndk {
@@ -82,6 +91,66 @@ android {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
             version = "3.22.1"
+        }
+    }
+
+    // -- Release signing (Minis Ultra upload keystore) ----------------------
+    //
+    // Resolution order: MINIS_UPLOAD_* env vars (CI reads them from repository
+    // secrets), then src/android/signing.properties, then the tracked
+    // src/android/release.keystore. The tracked keystore is the public upload
+    // certificate; the tracked-password caveat is the same as the fork repo's.
+    // Debug keystore is last-resort only (the CI refuses to publish one).
+
+    fun envOrBlank(key: String): String =
+        System.getenv(key)?.takeIf { it.isNotBlank() } ?: ""
+
+    val signingProps = Properties().apply {
+        val f = rootProject.file("signing.properties")
+        if (f.isFile) f.inputStream().use { load(it) }
+    }
+
+    fun resolveSigningStoreFile(): java.io.File? {
+        val fromEnv = envOrBlank("MINIS_UPLOAD_STORE_FILE")
+        if (fromEnv.isNotEmpty()) {
+            val f = file(fromEnv)
+            if (f.isFile) return f
+        }
+        val fromProps = signingProps.getProperty("signing.storeFile")?.trim().orEmpty()
+        if (fromProps.isNotEmpty()) {
+            listOf(rootProject.file(fromProps), file(fromProps))
+                .firstOrNull { it.isFile }
+                ?.let { return it }
+        }
+        return rootProject.file("release.keystore").takeIf { it.isFile }
+    }
+
+    val uploadStoreFile = resolveSigningStoreFile()
+    val hasUploadKeystore = uploadStoreFile != null
+    // A fresh clone with a keystore but no password fails inside apksigner
+    // with a corrupt-file message. Say what is actually missing instead.
+    if (hasUploadKeystore &&
+        envOrBlank("MINIS_UPLOAD_STORE_PASSWORD").isEmpty() &&
+        signingProps.getProperty("signing.storePassword").isNullOrBlank()
+    ) {
+        logger.warn(
+            "Release signing: keystore ${uploadStoreFile?.name} found but no password. " +
+                "Set MINIS_UPLOAD_STORE_PASSWORD (and MINIS_UPLOAD_KEY_*), or copy " +
+                "signing.properties.example to signing.properties and fill it in. " +
+                "Without a password the signRelease task will fail.",
+        )
+    }
+    signingConfigs {
+        if (hasUploadKeystore) {
+            create("releaseUpload") {
+                storeFile = uploadStoreFile!!
+                storePassword = envOrBlank("MINIS_UPLOAD_STORE_PASSWORD")
+                    .ifEmpty { signingProps.getProperty("signing.storePassword") ?: "" }
+                keyAlias = envOrBlank("MINIS_UPLOAD_KEY_ALIAS")
+                    .ifEmpty { signingProps.getProperty("signing.keyAlias") ?: "" }
+                keyPassword = envOrBlank("MINIS_UPLOAD_KEY_PASSWORD")
+                    .ifEmpty { signingProps.getProperty("signing.keyPassword") ?: "" }
+            }
         }
     }
 
@@ -126,7 +195,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            // Upload keystore when resolvable (env → signing.properties →
+            // tracked release.keystore); debug keystore is last-resort only.
+            signingConfig = if (hasUploadKeystore) {
+                signingConfigs.getByName("releaseUpload")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 

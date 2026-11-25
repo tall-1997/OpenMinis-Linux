@@ -114,7 +114,7 @@ object PowerOptimizationManager {
      * True when the device is from a vendor known to enforce
      * autostart-on-top-of-stock-Android — meaning the user almost
      * certainly needs to grant the OEM-specific permission for
-     * Minis to keep running in the background. [Vendor.OTHER]
+     * Minis Ultra to keep running in the background. [Vendor.OTHER]
      * (Pixel, generic AOSP, etc.) returns false because stock
      * Android's own foreground-service guarantees suffice.
      */

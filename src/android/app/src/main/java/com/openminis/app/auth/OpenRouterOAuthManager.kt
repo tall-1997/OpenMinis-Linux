@@ -100,7 +100,7 @@ object OpenRouterOAuthManager {
 
             // Exchange code for permanent API key
             // [T-android-oauth-foreground-exchange] The callback lands while the
-            // user is still in the Custom Tab, i.e. with Minis in the background,
+            // user is still in the Custom Tab, i.e. with Minis Ultra in the background,
             // where the OS blocks this app's network (DNS answers "no address").
             // Exchange only once the user is back.
             OAuthForegroundGate.awaitForeground(TAG)
@@ -170,7 +170,7 @@ object OpenRouterOAuthManager {
             .post(body.toString().toRequestBody("application/json".toMediaType()))
             .header("Content-Type", "application/json")
             .header("HTTP-Referer", "https://github.com/OpenMinis/OpenMinis")
-            .header("X-Title", "Minis App")
+            .header("X-Title", "Minis Ultra App")
             .build()
 
         val response = com.openminis.app.network.NetworkHttp.client(netTag, client).newCall(request).execute()

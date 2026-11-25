@@ -208,7 +208,7 @@ object ResourceWatermark {
      * The name column of one maps line (`[anon]` when it has none), the same
      * digit folding as thread names so numbered stacks and ashmem regions
      * group. A mapping's path is app or system code, never user data - the
-     * only user files Minis maps are under its own data dir, and those paths
+     * only user files Minis Ultra maps are under its own data dir, and those paths
      * are folded to the directory below.
      */
     internal fun mapName(line: String): String {
@@ -221,10 +221,10 @@ object ResourceWatermark {
             field++
         }
         val name = if (field < 5 || i >= line.length) "[anon]" else line.substring(i).trim()
-        val dataDir = name.indexOf("/com.openminis.app/")
+        val dataDir = name.indexOf("/com.openminis.ultra/")
         val short = if (dataDir >= 0 && name.startsWith("/data/")) {
             // Keep the app-relative top directory (files, cache, databases...) only.
-            val rest = name.substring(dataDir + "/com.openminis.app/".length)
+            val rest = name.substring(dataDir + "/com.openminis.ultra/".length)
             "<app>/" + rest.substringBefore('/')
         } else name
         return nameKey(short)
@@ -312,7 +312,7 @@ object ResourceWatermark {
 }
 
 /**
- * [GH #453] Names for threads Minis creates, so a per-name count shows which
+ * [GH #453] Names for threads Minis Ultra creates, so a per-name count shows which
  * component a pile of threads belongs to. Each name is dot-free and at most
  * 15 characters before any per-thread number, because the kernel's comm (what
  * `/proc`, tombstones and [ResourceWatermark.threadNames] see) keeps only 15

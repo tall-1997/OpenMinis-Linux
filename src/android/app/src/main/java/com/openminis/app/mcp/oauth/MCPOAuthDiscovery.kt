@@ -249,7 +249,7 @@ class MCPOAuthDiscovery(
             ?: throw McpDiscoveryException(McpDiscoveryException.Kind.BAD_REGISTRATION_ENDPOINT)
         val body = JSONObject().apply {
             put("redirect_uris", JSONArray().put(redirectUri))
-            put("client_name", "Minis")
+            put("client_name", "Minis Ultra")
             put("grant_types", JSONArray().put("authorization_code").put("refresh_token"))
             put("response_types", JSONArray().put("code"))
             put("token_endpoint_auth_method", "none")

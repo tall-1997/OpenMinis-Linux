@@ -192,7 +192,7 @@ fun SystemPermissionsScreen(onBack: () -> Unit) {
                         iconColor = Color(0xFFFF9500),
                         title = stringResource(R.string.system_permissions_a11y_restricted_manual),
                         subtitle = stringResource(R.string.system_permissions_a11y_restricted_manual_sub),
-                        // Lands on Minis' own App info page, where the
+                        // Lands on Minis Ultra' own App info page, where the
                         // "Allow restricted settings" item lives in the
                         // overflow menu. Reuses the existing helper, which
                         // already falls back when an OEM hides the page.
