@@ -207,6 +207,11 @@ object DeepLinkHandler {
             }
             "dns", "container-dns", "container_dns" -> DeepLinkAction.OpenSettingsScreen(Routes.CONTAINER_DNS)
             "permissions" -> DeepLinkAction.OpenPermissionSettings
+            // [T-host-su-fallback] Host su permission detail screen; "shizuku"
+            // routes to the Shizuku walkthrough the su fallback links to.
+            "shizuku" -> DeepLinkAction.OpenSettingsScreen(Routes.SHIZUKU)
+            "host-su", "host_su", "android-su", "su" ->
+                DeepLinkAction.OpenSettingsScreen(Routes.HOST_SU)
             // mirrors live as a section inside Rootfs management — no
             // standalone destination, so route both /mirrors and /rootfs
             // there. The user lands on the same screen; mirror config is

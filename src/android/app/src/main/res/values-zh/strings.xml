@@ -2545,4 +2545,27 @@
     <string name="mcp_dcr_registration_unreadable">无法读取注册响应。</string>
     <string name="mcp_dcr_http_status">%1$s 返回了 HTTP %2$d。</string>
     <string name="mcp_dcr_unreadable">%1$s 返回的数据无法读取。</string>
+    <string name="perm_tool_su_cli">宿主 su（Magisk / KernelSU）</string>
+    <string name="perm_section_host_su">宿主 su</string>
+    <string name="perm_host_su_cli_description">通过宿主 su 二进制以设备真实 root 身份执行特权命令；su 缺失或拒绝时自动回退到 Shizuku。</string>
+    <string name="perm_host_su_section_footer">优先使用宿主 su 二进制（Magisk / KernelSU）。su 缺失或拒绝授权时，同一命令会自动改走 Shizuku。su 通道不需要 Shizuku 授权。</string>
+    <string name="host_su_title">宿主 su</string>
+    <string name="host_su_status_header">状态</string>
+    <string name="host_su_status_footer">只检测二进制是否存在，不会弹授权框——Magisk / KernelSU 只在命令真正执行时才会弹窗。</string>
+    <string name="host_su_found">已找到宿主 su 二进制</string>
+    <string name="host_su_not_found">未找到宿主 su 二进制</string>
+    <string name="host_su_not_found_hint">请使用 Magisk 或 KernelSU 获取 root，或使用下方的 Shizuku 回退通道</string>
+    <string name="host_su_badge_found">已找到</string>
+    <string name="host_su_badge_not_found">未找到</string>
+    <string name="host_su_recheck">重新检测</string>
+    <string name="host_su_test_header">测试提权</string>
+    <string name="host_su_test_footer">执行 su -c id。首次执行会弹出 Magisk / KernelSU 的授权对话框，输出原样显示。</string>
+    <string name="host_su_test_run">执行 su -c id</string>
+    <string name="host_su_test_running">执行中…</string>
+    <string name="host_su_fallback_header">Shizuku 回退</string>
+    <string name="host_su_fallback_footer">宿主 su 缺失或拒绝授权时，特权命令会自动改走 Shizuku。</string>
+    <string name="host_su_fallback_title">Shizuku 协议后端</string>
+    <string name="host_su_fallback_ready">Shizuku 已就绪——回退通道可用</string>
+    <string name="host_su_fallback_not_ready">Shizuku 未就绪——请先完成配置作为回退</string>
+    <string name="host_su_open_detail">打开详情</string>
 </resources>

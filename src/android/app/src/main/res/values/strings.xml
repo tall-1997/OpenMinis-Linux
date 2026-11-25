@@ -2746,4 +2746,27 @@
     <string name="mcp_dcr_registration_unreadable">The registration response could not be read.</string>
     <string name="mcp_dcr_http_status">%1$s returned HTTP %2$d.</string>
     <string name="mcp_dcr_unreadable">%1$s returned data that could not be read.</string>
+    <string name="perm_tool_su_cli">Host su (Magisk / KernelSU)</string>
+    <string name="perm_section_host_su">Host su</string>
+    <string name="perm_host_su_cli_description">Run privileged commands as the device\'s real root user via the host su binary; falls back to Shizuku when su is missing or refuses.</string>
+    <string name="perm_host_su_section_footer">Prefers the host su binary (Magisk / KernelSU). If su is missing or refuses elevation, the same command is retried via Shizuku automatically. No Shizuku authorization is needed for the su lane.</string>
+    <string name="host_su_title">Host su</string>
+    <string name="host_su_status_header">Status</string>
+    <string name="host_su_status_footer">Binary presence is checked without prompting — Magisk or KernelSU only shows its grant dialog when a command actually runs.</string>
+    <string name="host_su_found">Host su binary found</string>
+    <string name="host_su_not_found">No host su binary</string>
+    <string name="host_su_not_found_hint">Root the device with Magisk or KernelSU, or use the Shizuku fallback below</string>
+    <string name="host_su_badge_found">FOUND</string>
+    <string name="host_su_badge_not_found">NOT FOUND</string>
+    <string name="host_su_recheck">Re-check now</string>
+    <string name="host_su_test_header">Test elevation</string>
+    <string name="host_su_test_footer">Runs su -c id. The first run triggers the Magisk / KernelSU authorization dialog; output is shown verbatim.</string>
+    <string name="host_su_test_run">Run su -c id</string>
+    <string name="host_su_test_running">Running…</string>
+    <string name="host_su_fallback_header">Shizuku fallback</string>
+    <string name="host_su_fallback_footer">When host su is missing or refuses elevation, privileged commands are retried through Shizuku automatically.</string>
+    <string name="host_su_fallback_title">Shizuku protocol backend</string>
+    <string name="host_su_fallback_ready">Shizuku is ready — fallback lane available</string>
+    <string name="host_su_fallback_not_ready">Shizuku is not ready — set it up as the fallback</string>
+    <string name="host_su_open_detail">Open detail</string>
 </resources>

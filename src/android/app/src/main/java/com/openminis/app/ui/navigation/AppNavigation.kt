@@ -73,6 +73,7 @@ import com.openminis.app.ui.settings.MemoryFileEditScreen
 import com.openminis.app.ui.settings.MemoryManagementScreen
 import com.openminis.app.ui.settings.OffloadPermissionScreen
 import com.openminis.app.ui.settings.ShizukuPermissionScreen
+import com.openminis.app.ui.settings.SuPermissionScreen
 import com.openminis.app.sandbox.RootfsManager
 import com.openminis.app.sandbox.TerminalSession
 import com.openminis.app.ui.terminal.TerminalScreen
@@ -191,6 +192,8 @@ object Routes {
      * binder protocol + client SDK).
      */
     const val SHIZUKU = "shizuku"
+    /** [T-host-su-fallback] Host Magisk/KernelSU su permission detail. */
+    const val HOST_SU = "host_su"
     /** T323: System Permissions (Accessibility service status, etc.). */
     const val SYSTEM_PERMISSIONS = "system_permissions"
     const val USAGE_STATS = "usage_stats"
@@ -1464,12 +1467,21 @@ fun AppNavigation(
                 // surface (the two managers share one binder slot, so a
                 // multi-backend abstraction was misleading).
                 onOpenPrivilegedBackend = { navController.safeNavigate(Routes.SHIZUKU) },
+                // [T-host-su-fallback] Host su detail screen from the su_cli card.
+                onOpenHostSu = { navController.safeNavigate(Routes.HOST_SU) },
             )
         }
 
         composable(Routes.SHIZUKU) {
             ShizukuPermissionScreen(
                 onBack = { navController.safePopBackStack() },
+            )
+        }
+
+        composable(Routes.HOST_SU) {
+            SuPermissionScreen(
+                onBack = { navController.safePopBackStack() },
+                onOpenShizuku = { navController.safeNavigate(Routes.SHIZUKU) },
             )
         }
 
