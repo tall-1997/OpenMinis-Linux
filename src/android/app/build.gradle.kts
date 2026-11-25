@@ -38,8 +38,11 @@ fun ultraSuffix(): Int =
             .directory(rootProject.projectDir)
             .redirectErrorStream(true)
             .start()
-        if (p.waitFor() != 0) return 1
-        p.inputStream.bufferedReader().readText().trim().toIntOrNull() ?: 1
+        if (p.waitFor() == 0) {
+            p.inputStream.bufferedReader().readText().trim().toIntOrNull() ?: 1
+        } else {
+            1
+        }
     } catch (e: Exception) {
         1
     }
