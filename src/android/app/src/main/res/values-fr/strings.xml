@@ -3388,4 +3388,6 @@
  <string name="cd_play_video">Lire la vidéo</string>
  <string name="cd_copy_code">Copier le code</string>
  <string name="chat_usage_footer_reasoning">%1$d jetons de raisonnement (texte non transmis)</string>
+    <string name="mcp_lemon_panel">Panneau du catalogue d\'outils</string>
+    <string name="mcp_lemon_panel_sub">%1$d outils sur l\'appareil (système, fichiers, applis, réseau, noyau, débogage) passent par ce serveur et le portail de sécurité</string>
 </resources>

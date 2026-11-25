@@ -3385,4 +3385,6 @@
  <string name="cd_play_video">播放影片</string>
  <string name="cd_copy_code">複製程式碼</string>
  <string name="chat_usage_footer_reasoning">思考 %1$d tokens（未回傳正文）</string>
+    <string name="mcp_lemon_panel">工具目錄面板</string>
+    <string name="mcp_lemon_panel_sub">%1$d 個裝置工具（系統、檔案、應用程式、網路、核心、偵錯）經由本伺服器與安全閘門執行</string>
 </resources>

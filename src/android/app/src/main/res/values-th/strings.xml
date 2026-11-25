@@ -3388,4 +3388,6 @@
  <string name="cd_play_video">เล่นวิดีโอ</string>
  <string name="cd_copy_code">คัดลอกโค้ด</string>
  <string name="chat_usage_footer_reasoning">โทเค็นการคิด %1$d รายการ (ไม่ได้ส่งเนื้อหา)</string>
+    <string name="mcp_lemon_panel">แผงแคตตาล็อกเครื่องมือ</string>
+    <string name="mcp_lemon_panel_sub">เครื่องมืออุปกรณ์ %1$d รายการ (ระบบ ไฟล์ แอป เครือข่าย เคอร์เนล ดีบัก) ทำงานผ่านเซิร์ฟเวอร์และประตูความปลอดภัยนี้</string>
 </resources>

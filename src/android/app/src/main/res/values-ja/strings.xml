@@ -3387,4 +3387,6 @@
  <string name="cd_play_video">動画を再生</string>
  <string name="cd_copy_code">コードをコピー</string>
  <string name="chat_usage_footer_reasoning">思考 %1$dトークン（本文は返されません）</string>
+    <string name="mcp_lemon_panel">ツールカタログパネル</string>
+    <string name="mcp_lemon_panel_sub">%1$d 個のデバイスツール（システム・ファイル・アプリ・ネットワーク・カーネル・デバッグ）がこのサーバーとセキュリティゲートを経由して実行されます</string>
 </resources>

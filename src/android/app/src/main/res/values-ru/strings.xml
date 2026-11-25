@@ -3396,4 +3396,6 @@
  <string name="cd_play_video">Воспроизвести видео</string>
  <string name="cd_copy_code">Копировать код</string>
  <string name="chat_usage_footer_reasoning">%1$d токенов размышления (текст не передан)</string>
+    <string name="mcp_lemon_panel">Панель каталога инструментов</string>
+    <string name="mcp_lemon_panel_sub">%1$d инструментов устройства (система, файлы, приложения, сеть, ядро, отладка) работают через этот сервер и шлюз безопасности</string>
 </resources>

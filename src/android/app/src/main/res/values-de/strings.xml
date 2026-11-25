@@ -3234,4 +3234,6 @@
  <string name="cd_play_video">Video abspielen</string>
  <string name="cd_copy_code">Code kopieren</string>
  <string name="chat_usage_footer_reasoning">%1$d Reasoning-Tokens (Text nicht übermittelt)</string>
+    <string name="mcp_lemon_panel">Werkzeugkatalog-Leiste</string>
+    <string name="mcp_lemon_panel_sub">%1$d Gerätewerkzeuge (System, Dateien, Apps, Netzwerk, Kernel, Debug) laufen über diesen Server und die Sicherheitsfreigabe</string>
 </resources>

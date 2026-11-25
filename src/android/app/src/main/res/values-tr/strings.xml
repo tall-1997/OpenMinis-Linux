@@ -3388,4 +3388,6 @@
  <string name="cd_play_video">Videoyu oynat</string>
  <string name="cd_copy_code">Kodu kopyala</string>
  <string name="chat_usage_footer_reasoning">%1$d akıl yürütme tokenı (metin gönderilmedi)</string>
+    <string name="mcp_lemon_panel">Araç kataloğu paneli</string>
+    <string name="mcp_lemon_panel_sub">%1$d cihaz aracı (sistem, dosya, uygulama, ağ, çekirdek, hata ayıklama) bu sunucu ve güvenlik geçidinden çalışır</string>
 </resources>
