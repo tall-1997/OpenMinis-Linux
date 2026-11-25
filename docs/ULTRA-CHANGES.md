@@ -11,8 +11,8 @@
 | 基线 | 上游 `1a71df0`（1.15，versionCode 37） | `git merge-base ultra origin/main` 应始终等于或接近基线 |
 | applicationId | `com.openminis.ultra` | 独立安装，与 `com.openminis.app` / `com.openminis.linux` 并存，数据不迁移 |
 | namespace | `com.openminis.app`（不变） | 与上游一致，JNI/R 类/MainActivity 类名都不受影响 |
-| versionCode | `37001` | 方案：上游 versionCode × 1000 + ultra 后缀（001-999） |
-| versionName | `1.15.001` | 上游版本名 + ultra 后缀；上游升 1.16 时改为 `1.16.001`（versionCode 38001） |
+| versionCode | 上游vc×1000 + 提交数后缀 | 方案：`upstreamVersionCode(37) × 1000 + git rev-list --count 1a71df0..HEAD`，按提交自动递增（当前 ~37018） |
+| versionName | 上游版本名 + 提交数后缀 | `1.15.` + 三位提交数（如 `1.15.018`）；上游升 1.16 时改 `upstreamVersionCode=38`、`upstreamVersionName="1.16"` 并把 `ultraBaseline` 换成新 tag的 commit |
 | 签名 | fork 仓库的 `src/android/release.keystore`（跟踪在 git） | 密码从 `MINIS_UPLOAD_*` 环境变量或 `src/android/signing.properties` 读取；debug 兜底 |
 
 ## 二、提交清单（按移植批次）
@@ -34,6 +34,8 @@
 | `14286f6` | 品牌切换 Minis Ultra | applicationId/version、53 个 launcher 图标、签名链、23 语言文案、包名依赖点 |
 | `06ce84c` | 修改清单文档 |本文件（docs/ULTRA-CHANGES.md） |
 | `edcdefa` | 顶层版本变量修复 | `build.gradle.kts` 顶层 `val minisBaseVersionName = "1.15.001"`、`val ultraVersionCode = 37001`（曾误写在 defaultConfig 内导致 DSL 编译失败） |
+| `62db17a` | 清单文档修正 | 补提交清单、版本号规则改为顶层 val |
+| `版本自动递增` | 版本后缀按提交自动递增 | `build.gradle.kts` 用 `git rev-list --count 1a71df0..HEAD` 算后缀（无需手动改）；workflow 的 Read app version 同步改为 git 计算 |
 
 ## 三、功能域 → 文件映射（rebase 时重点盯这些）
 
@@ -89,14 +91,14 @@ git rebase origin/main                 # 或 rebase 到指定 tag：git rebase <
    系统提示区冲突时以上游新结构为骨架、把 Ubuntu/Minis Ultra 措辞重新套回去。
 3. **版本号**：rebase 到上游新 tag 后，把 `build.gradle.kts` 的 `versionCode = 37001` 改为
    `上游vc*1000+001`、`minisBaseVersionName = "<上游版本>.001"`。
-3. **版本号**：rebase 到上游新 tag 后，改 `build.gradle.kts` **顶层两个 val**：
-   `ultraVersionCode = <上游vc*1000+001>`、`minisBaseVersionName = "<上游版本>.001"`。
-   **每次发布要手动把后缀 +1**（当前静态 `001`，不按 PR 号自动递增），
-   否则两次构建的版本名/版本号相同，Android只视为同版本重装而非升级。
-4. **CI 版本读取**：`.github/workflows/android-apk.yml` 的 "Read app version" 步骤
-   靠**顶层** `minisBaseVersionName = "..."` 声明行和 `versionCode = ultraVersionCode`
-   正则解析——**不要**把它们挪回 `defaultConfig` 块内（上次就是那样编译挂掉的）。
-   ultra 分支 push 不触发 `MINIS_VERSION_SUFFIX`（那步只对 main 生效）。
+3. **版本号（按提交自动递增）**：后缀 = `git rev-list --count 1a71df0..HEAD`，
+   每次提交构建自动 +1，无需手动改。rebase 到上游新 tag 时，把
+   `build.gradle.kts` 顶层的 `upstreamVersionCode`、`upstreamVersionName`
+   改成新上游的值，并把 `ultraBaseline` 换成新 tag 的 commit（提交数会继续
+   从旧基线累加，所以 versionCode 仍单调递增）。
+4. **CI 版本读取**：workflow 的 "Compute ultra version suffix" / "Read app version"
+   步骤用 `git rev-list --count 1a71df0..HEAD` 与 Gradle 内的 `ultraSuffix()`
+   计算同一个数（CI 用 `fetch-depth: 0` 保证全量历史），别改回静态字面量。
    `sandbox-assets` 的缓存键基于 `prepare_android_sandbox.sh` 的 hash，改脚本会自动重建 rootfs。
 5. **验证**：推送后看 Actions 的 APK 构建；绿色后再真机冒烟（见第六节）。
 

@@ -22,11 +22,31 @@ val appCustomization = Properties().apply {
 fun customizationValue(key: String): String =
     (appCustomization.getProperty(key) ?: "").replace("\"", "\\\"")
 
-// [ultra] Parsed by .github/workflows/android-apk.yml (Read app version step).
-// Version scheme: base follows the upstream tag (1.15), ultra iteration suffix
-// 001-999; versionCode = upstream versionCode * 1000 + suffix (37001).
-val minisBaseVersionName = "1.15.001"
-val ultraVersionCode = 37001
+// [ultra] Version scheme: base follows the upstream tag the branch is built on
+// (1.15 / versionCode 37), ultra iteration suffix auto-increments by COMMIT
+// count since the baseline (001-999), so every build has a unique version.
+// versionCode = upstream versionCode * 1000 + suffix → monotonic across
+// upstream rebases (bump upstreamVersionCode/Name and reset the baseline hash
+// when rebasing onto a newer upstream tag).
+val upstreamVersionCode = 37
+val upstreamVersionName = "1.15"
+val ultraBaseline = "1a71df0" // upstream 1.15 commit, parent of ultra's first commit
+
+fun ultraSuffix(): Int =
+    try {
+        val p = ProcessBuilder("git", "rev-list", "--count", "$ultraBaseline..HEAD")
+            .directory(rootProject.projectDir)
+            .redirectErrorStream(true)
+            .start()
+        if (p.waitFor() != 0) return 1
+        p.inputStream.bufferedReader().readText().trim().toIntOrNull() ?: 1
+    } catch (e: Exception) {
+        1
+    }
+
+val ultraSuffixNum = ultraSuffix()
+val minisBaseVersionName = upstreamVersionName + "." + ultraSuffixNum.toString().padStart(3, '0')
+val ultraVersionCode = upstreamVersionCode * 1000 + ultraSuffixNum
 
 android {
     namespace = "com.openminis.app"
