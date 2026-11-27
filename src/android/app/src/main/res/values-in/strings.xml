@@ -3393,4 +3393,6 @@
  <string name="cd_play_video">Putar video</string>
  <string name="cd_copy_code">Salin kode</string>
  <string name="chat_usage_footer_reasoning">%1$d token penalaran (teks tidak dikirim)</string>
+    <string name="mcp_lemon_panel">Panel katalog alat</string>
+    <string name="mcp_lemon_panel_sub">%1$d alat perangkat (sistem, berkas, aplikasi, jaringan, kernel, debug) berjalan melalui server dan gerbang keamanan ini</string>
 </resources>

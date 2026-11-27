@@ -65,6 +65,8 @@ fun MCPIntegrationsScreen(
     mcpRepository: MCPRepository,
     onBack: () -> Unit,
     onOpenTools: (MCPRepository.MCPServerConfig) -> Unit = {},
+    /** [T-lemon-integration] Opens the bundled tool panel (assets/lemon/panel.html). */
+    onOpenLemonPanel: (Int) -> Unit = {},
     // [T-mcp-env-var-picker-android] App env vars for the STDIO env "insert app var" picker; null hides the affordance.
     envVarRepository: com.openminis.app.data.repository.EnvVarRepository? = null,
 ) {
@@ -191,7 +193,15 @@ fun MCPIntegrationsScreen(
                 subtitle = stringResource(R.string.mcp_builtin_pc_connect_sub, builtInPort),
                 icon = Icons.Outlined.Language,
                 showChevron = false,
-                showDivider = false,
+            )
+            com.openminis.app.ui.lemon.LemonPanelLauncherRow(
+                port = builtInPort,
+                enabled = mcpConfig.enabled,
+                onEnableServer = {
+                    mcpStore?.setEnabled(true)
+                    McpServerManager.start()
+                },
+                onOpen = onOpenLemonPanel,
             )
         }
         // [T-mcp-approval-ui] Decision inbox for waiting clients; silent when idle.
@@ -1071,23 +1081,4 @@ private fun shareMcpServerJson(context: android.content.Context, serverId: Strin
         context, file, "application/json",
         context.getString(R.string.mcp_share_chooser_title),
     )
-}
-
-private fun mapToLines(map: Map<String, String>?, joiner: String): String {
-    if (map.isNullOrEmpty()) return ""
-    return map.entries.joinToString("\n") { "${it.key}$joiner${it.value}" }
-}
-
-private fun parseKeyValueLines(text: String, sep: Char): Map<String, String> {
-    val out = LinkedHashMap<String, String>()
-    for (line in text.lines()) {
-        val trimmed = line.trim()
-        if (trimmed.isEmpty()) continue
-        val idx = trimmed.indexOf(sep)
-        if (idx <= 0) continue
-        val key = trimmed.substring(0, idx).trim()
-        val value = trimmed.substring(idx + 1).trim()
-        if (key.isNotEmpty()) out[key] = value
-    }
-    return out
 }

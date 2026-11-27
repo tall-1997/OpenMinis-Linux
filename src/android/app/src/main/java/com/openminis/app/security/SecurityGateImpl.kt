@@ -498,9 +498,8 @@ class SecurityGateImpl : SecurityGate {
     }
 
     private fun commandRisk(cmd: GateCommand, command: String): RiskLevel {
-        if (cmd.toolName in SHELL_TOOLS || cmd.toolName == "shell_exec") {
-            return classifyRisk(command)
-        }
+        // [T-lemon-risk] lemon_* 与 shell 同判据，否则恒 NORMAL → GUARDED 放行高危。
+        if (cmd.toolName in SHELL_TOOLS || cmd.toolName.startsWith("lemon_")) return classifyRisk(command)
         return RiskLevel.NORMAL
     }
 
@@ -648,7 +647,10 @@ class SecurityGateImpl : SecurityGate {
                 joined.ifBlank { "file_checkpoint ${a.optString("op", "")}" }
             } catch (_: Exception) { "file_checkpoint" }
         }
-        else -> cmd.toolArgs
+        // [T-lemon-risk] 命令体在 {"command": ...} 里，不取出来分词首 token 是 JSON 片段。
+        else -> if (cmd.toolName.startsWith("lemon_")) {
+            try { JSONObject(cmd.toolArgs).optString("command", cmd.toolArgs) } catch (_: Exception) { cmd.toolArgs }
+        } else cmd.toolArgs
     }
 
     private fun extractPath(cmd: GateCommand): String? {

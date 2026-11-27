@@ -738,39 +738,10 @@ fun AppNavigation(
         // inside its line ceiling.
         memoryNavGraph(navController, memoryRepository)
 
-        // [T-mcp-integration-android] MCP Integrations management screen.
-        composable(Routes.MCP) {
-            if (mcpRepository != null) {
-                com.openminis.app.ui.settings.MCPIntegrationsScreen(
-                    mcpRepository = mcpRepository,
-                    onBack = { navController.safePopBackStack() },
-                    envVarRepository = envVarRepository,
-                    onOpenTools = { server -> navController.safeNavigate(Routes.mcpTools(server.id)) },
-                )
-            }
-        }
+        // [T-lemon-integration] MCP screens (management, catalog panel) live in
+        // LemonPanelNav.kt — this file is on the architecture baseline.
+        mcpNavDestinations(navController, mcpRepository, envVarRepository)
 
-        composable(
-            Routes.MCP_TOOLS,
-            arguments = listOf(navArgument("serverId") { type = NavType.StringType }),
-        ) { entry ->
-            val repo = mcpRepository
-            // StringType already Uri.decode()s the segment (see
-            // [T-android-double-decode-percent-crash] above), so the second
-            // manual Uri.decode here only mangled server ids carrying a real
-            // '%'. Routes.mcpTools' Uri.encode is undone by the nav argument.
-            val serverId = entry.arguments?.getString("serverId").orEmpty()
-            if (repo == null) {
-                LaunchedEffect(serverId) { navController.safePopBackStack() }
-            } else {
-                com.openminis.app.ui.settings.MCPToolsScreen(
-                    mcpRepository = repo,
-                    serverId = serverId,
-                    onBack = { navController.safePopBackStack() },
-                    onManage = { navController.safePopBackStack() },
-                )
-            }
-        }
         composable(Routes.PLUGIN_MARKET) {
             com.openminis.app.ui.settings.PluginMarketScreen(
                 mcpRepository = mcpRepository,

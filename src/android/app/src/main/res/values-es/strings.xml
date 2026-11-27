@@ -3234,4 +3234,6 @@
  <string name="cd_play_video">Reproducir vídeo</string>
  <string name="cd_copy_code">Copiar código</string>
  <string name="chat_usage_footer_reasoning">%1$d tokens de razonamiento (texto no enviado)</string>
+    <string name="mcp_lemon_panel">Panel del catálogo de herramientas</string>
+    <string name="mcp_lemon_panel_sub">%1$d herramientas del dispositivo (sistema, archivos, apps, red, kernel, depuración) se ejecutan a través de este servidor y la puerta de seguridad</string>
 </resources>

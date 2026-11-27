@@ -3395,4 +3395,6 @@
  <string name="cd_play_video">Odtwórz film</string>
  <string name="cd_copy_code">Kopiuj kod</string>
  <string name="chat_usage_footer_reasoning">%1$d tokenów rozumowania (treść nieprzesłana)</string>
+    <string name="mcp_lemon_panel">Panel katalogu narzędzi</string>
+    <string name="mcp_lemon_panel_sub">%1$d narzędzi urządzenia (system, pliki, aplikacje, sieć, jądro, debug) działa przez ten serwer i bramę bezpieczeństwa</string>
 </resources>

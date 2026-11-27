@@ -3017,4 +3017,6 @@
  <string name="cd_play_video">播放视频</string>
  <string name="cd_copy_code">复制代码</string>
  <string name="chat_usage_footer_reasoning">思考 %1$d tokens（未返回正文）</string>
+    <string name="mcp_lemon_panel">工具目录面板</string>
+    <string name="mcp_lemon_panel_sub">%1$d 个设备工具（系统、文件、应用、网络、内核、调试）经由本服务器与安全门执行</string>
 </resources>

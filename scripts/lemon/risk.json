@@ -1,0 +1,1447 @@
+{
+ "_comment": [
+  "工具风险表 —— 由 tools/gen_risk.py 从各插件 cmd 推导的初始值。",
+  "risk: low(只读) / medium(有写入) / high(破坏性)；readOnlyHint 影响确认逻辑。",
+  "要改某个工具的等级，直接在这里 override；面板读这份文件，不读 /data 下的旧注册表。"
+ ],
+ "generatedFrom": "plugins",
+ "counts": {
+  "medium": 96,
+  "high": 43,
+  "low": 219
+ },
+ "tools": {
+  "am_broadcast": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "am_force_stop": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "am_kill": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "am_start": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "appops_get": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "appops_set": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "audio_amp": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "audio_codec": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "audio_dump": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "audio_swr": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "audit_learn": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "batt_param_noplug": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "binder_stats": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "block_dev_stats": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "block_list": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "bpf_dump": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "bpf_execmon_on": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "bpf_kernel_cap": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "bpf_killmon_on": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "bpf_opencap_on": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "bpf_selftest": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "bpf_status": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "bpf_stop": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "bpf_syscount_on": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "bpf_track": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "brain_ai_call": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "buddyinfo": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "call_log_list": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "cam_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "cam_photo": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "chain_health": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "charger_cycle": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "charger_full": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "charger_proc": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "cmd_awk": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "cmd_bc": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "cmd_device_config": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "cmd_file_type": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "cmd_lsof": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "cmd_nc_probe": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "cmd_package_list": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "cmd_readelf": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "cmd_seq": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "cmd_settings_get": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "cmd_settings_put": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "cmd_strings": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "cmd_tcpdump": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "cmd_timeout_run": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "cmd_unzip": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "cmd_watch": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "cmd_wm_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "cmd_zip": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "contact_list": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "coresight_list": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "cpu_freq": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "cpu_freq_lock": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "cpu_freq_table": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "cpu_freq_unlock": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "cpu_gov_get": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "cpu_gov_set": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "cpu_online_list": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "cpu_perf_mode": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "daily_report": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "dbg_crash_cause": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "dbg_dynamic_debug": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "dbg_fdleak": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "dbg_kprobe": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "dbg_last_boot_reason": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "dbg_locks": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "dbg_minidump": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "dbg_schedstat": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "dbg_shutdown_detect": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "dbg_shutdown_recorder": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "dbg_task_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "dbg_uid_cputime": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "dbg_uid_io": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "dcc_sram_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "debug_anr_list": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "debug_dropbox_list": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "debug_last_kmsg": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "debug_proc_cmdline": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "debug_proc_env": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "debug_proc_fd": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "debug_proc_maps": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "debug_proc_status": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "debug_ramdump_list": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "debug_tombstone_list": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "debug_tombstone_read": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "demo_echo": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "devcoredump_list": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "devfreq_list": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "devfreq_set": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "device_battery_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "dict_define": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "dumpsys_list": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "dumpsys_service": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "echo_dump_clean": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "echo_dump_latest": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "echo_dump_list": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "echo_status": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "fg_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "fg_protect": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "fg_protect_set": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "forum_hot": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "forum_read": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "forum_search": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "fs_chattr": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "fs_chmod": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "fs_chown": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "fs_cp": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "fs_dir_size": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "fs_diskusage": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "fs_file_find": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "fs_file_grep": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "fs_file_hash": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "fs_file_hex": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "fs_file_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "fs_inode": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "fs_lsattr": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "fs_lsof": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "fs_mkdir": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "fs_mv": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "fs_readlink": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "fs_rm": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "fs_setattr": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "fs_symlink": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "fs_tar_extract": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "fs_tar_list": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "fs_touch": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "fs_trime": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "fs_zip_list": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "fx_erapi": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "fx_frankfurter": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "game_opt_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "github_api": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "github_repo": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "hardware_sensors": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "hn_top": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "homeostasis": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "inet_arxiv": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "inet_crtsh": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "inet_exploitdb": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "inet_fdroid": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "inet_godbolt": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "inet_httpbin": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "inet_ipapi": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "inet_mcp_registry": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "inet_s2": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "inet_stackexchange": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "inet_tts": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "inet_webhook": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "inet_wttr": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "input_keyevent": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "input_text": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "intent_router": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "io_readahead_set": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "io_scheduler_get": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "io_scheduler_set": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "iomem_map": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "iommu_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "ion_heap_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "ioports_map": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "ip_geo": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "ipa_conntrack": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "ipa_nat_table": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "ipa_stats": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "ipt_filter": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "ipt_nat": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "jank_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "kallsyms_find": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "kernel_cmdline": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "kernel_module_list": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "kernel_random_entropy": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "kernel_sched_features": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "kernel_taint": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "kernel_version": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "kgsl_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "kmsg_dump": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "lemon_call_tool": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "lemon_list_tools": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "lemon_tool_info": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "llm_route": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "loc_fresh": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "loc_last": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "log_events": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "log_main": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "log_radio": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "log_rotate": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "magisk_boot_backup": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "magisk_denylist": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "magisk_denylist_ls": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "magisk_module_list": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "magisk_module_toggle": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "magisk_prop_get": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "magisk_prop_set": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "magisk_settings": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "magisk_status": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "magisk_su_policies": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "mem_curate": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "mem_dirty_ratio": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "mem_lmk_dump": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "mem_min_free_kb": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "mem_overcommit": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "mem_pressure": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "mem_semantic_search": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "mem_swappiness": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "mic_record": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "mount_full": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "mount_readonly": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "mount_rw": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "net_arp": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "net_conntrack": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "net_iface_stats": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "net_route": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "net_rule": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "net_sockets": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "net_ss": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "net_tcp_params": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "notif_list": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "oplus_binder_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "oplus_cpu_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "oplus_display_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "oplus_frame_boost": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "oplus_health_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "oplus_lpm_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "oplus_mem_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "oplus_qos_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "oplus_rf_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "oplus_sched_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "oplus_storage_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "oplus_touch_boost": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "pkg_disable": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "pkg_enable": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "pkg_freeze": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "pkg_grant": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "pkg_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "pkg_revoke": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "pkg_unfreeze": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "pm_clear": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "pm_install": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "pm_list_perm": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "pm_list_pkg": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "pm_path": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "pm_permissions": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "pm_reset_perm": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "pm_uninstall": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "pmicwd_config": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "pmicwd_test": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "power_governor": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "power_state": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "power_suspend_stats": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "power_wakelock": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "power_wakeup_toggle": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "proc_ionice": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "proc_taskset": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "ps_full": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "qce_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "qr_generate": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "qwen2api_ensure": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "qwen2api_refresh": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "qwen2api_status": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "qwen2api_stop": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "regulator_dump": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "remoteproc_ctl": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "remoteproc_list": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "rfkill_list": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "rfkill_toggle": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "sched_policy_set": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "screen_capture": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "screen_understand": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "self_audit": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "selinux_avc": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "selinux_avc_summary": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "selinux_bool_list": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "selinux_bool_set": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "selinux_chcon": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "selinux_file_ctx": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "selinux_policy_inject": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "selinux_restorecon": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "selinux_set": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "selinux_status": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "sensor_list": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "sensor_proc": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "shell_exec_root": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "sherry_ai_clean": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "sherry_chat": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "sherry_clean": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "sherry_deep_scan": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "sherry_dispatch": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "sherry_menu": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "sherry_organize": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "sherry_status": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "slab_top": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "smcinvoke_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "sms_list": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "softirq_stat": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "spcom_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "stats_dump": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "subsys_sleepmon": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "svc_data": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "svc_power": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "svc_wifi": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "swap_status": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "sys_cgroups": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "sys_crypto": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "sys_devices_tree": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "sys_filesystems": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "sys_fscaps": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "sys_ipc_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "sys_key_list": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "sys_modules_extra": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "sys_mountinfo": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "sys_partitions": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "sys_timer_list": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "sys_uptime_load": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "sysctl_dump": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "sysctl_get": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "sysctl_set": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "sysprop_get": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "sysprop_list": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "sysprop_set": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "tbatt_pwroff": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "thermal_get": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "thermal_list": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "threat_check": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "tms_info": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "tts_say": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "typec_state": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "usb_state": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "vdc_diskstats": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "vm_dropcache": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "vm_stat_full": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "vmstat": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "voocphy_fake_soc": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "voocphy_fake_temp": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "voocphy_loglevel": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "waker_identify": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "wakeup_reason": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "watchdog_status": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "web_fetch": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "web_search": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "workqueue_dump": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "xb_apk": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "xb_current": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "xb_download": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "xb_dump": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "xb_fetch": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "xb_open": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "xb_search": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "xb_start": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "xb_stop": {
+   "risk": "high",
+   "readOnlyHint": false
+  },
+  "yzt_dialect": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "yzt_iptv": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "yzt_movie": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "yzt_netdisk": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "yzt_res": {
+   "risk": "medium",
+   "readOnlyHint": false
+  },
+  "yzt_video": {
+   "risk": "low",
+   "readOnlyHint": true
+  },
+  "zoneinfo": {
+   "risk": "low",
+   "readOnlyHint": true
+  }
+ }
+}

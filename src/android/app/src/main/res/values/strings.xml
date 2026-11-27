@@ -2712,6 +2712,8 @@
     <string name="mcp_builtin_shell_policy">Shell policy</string>
     <string name="mcp_builtin_shell_strict">strict: only read-only and safe commands are allowed; everything else returns an error asking for confirmation</string>
     <string name="mcp_builtin_shell_auto">auto: allow every command except high-risk ones</string>
+    <string name="mcp_lemon_panel">Tool catalog panel</string>
+    <string name="mcp_lemon_panel_sub">%1$d on-device tools (system, file, app, network, kernel, debug) run through this server and security gate</string>
     <string name="mcp_builtin_pc_connect">Connect from a PC</string>
     <string name="mcp_builtin_pc_connect_sub">Run adb reverse tcp:%1$d tcp:%1$d, then add http://127.0.0.1:%1$d/mcp (Streamable HTTP, Bearer token required) to your MCP client</string>
     <string name="mcp_builtin_port_edit">Change port</string>

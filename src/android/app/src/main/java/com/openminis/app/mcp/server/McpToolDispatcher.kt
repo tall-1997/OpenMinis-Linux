@@ -13,6 +13,7 @@ import com.openminis.app.mcp.server.tools.appsTools
 import com.openminis.app.mcp.server.tools.deviceTools
 import com.openminis.app.mcp.server.tools.fileTools
 import com.openminis.app.mcp.server.tools.scheduleTools
+import com.openminis.app.mcp.server.tools.lemonTools
 import com.openminis.app.mcp.server.tools.shellTools
 import com.openminis.app.mcp.server.tools.uiTools
 import com.openminis.app.security.PermissionMode
@@ -76,6 +77,10 @@ class McpToolDispatcher(
         addAll(fileTools(deps))
         addAll(scheduleTools(deps))
         addAll(appsTools(deps))
+        // [T-lemon-integration] The on-device catalog lives in assets and runs
+        // through this same gate — no second permission model, no second
+        // process. Two entries, 358 reachable tools.
+        addAll(lemonTools(deps))
         // Approval tools appear only when a runtime exists: advertising a tool
         // whose handler has no store behind it is the defect the announced-tool
         // gate exists for.

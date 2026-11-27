@@ -3387,4 +3387,6 @@
  <string name="cd_play_video">동영상 재생</string>
  <string name="cd_copy_code">코드 복사</string>
  <string name="chat_usage_footer_reasoning">추론 %1$d 토큰(본문 미반환)</string>
+    <string name="mcp_lemon_panel">도구 카탈로그 패널</string>
+    <string name="mcp_lemon_panel_sub">%1$d개의 기기 도구(시스템, 파일, 앱, 네트워크, 커널, 디버그)가 이 서버와 보안 게이트를 통해 실행됩니다</string>
 </resources>
